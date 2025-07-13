@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+
+{% block title %}Add Team{% endblock %}
+
+{% block heading %}Add New Team{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Team Information</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('teams.add') }}">
+                    <div class="mb-3">
+                        <label for="team_number" class="form-label">Team Number <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="team_number" name="team_number" required>
+                        <div class="form-text">Enter the FRC team number (e.g., 5454)</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="team_name" class="form-label">Team Name</label>
+                        <input type="text" class="form-control" id="team_name" name="team_name">
+                        <div class="form-text">Enter the team's name (e.g., Patribots)</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="location" class="form-label">Location</label>
+                        <input type="text" class="form-control" id="location" name="location">
+                        <div class="form-text">Enter the team's location (e.g., San Diego, CA)</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="events" class="form-label">Associated Events</label>
+                        <select multiple class="form-select" id="events" name="events" size="5">
+                            {% for event in events %}
+                            <option value="{{ event.id }}" {% if event.id == default_event_id %}selected{% endif %}>
+                                {{ event.name }} ({{ event.year }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            Select one or more events this team is participating in.
+                            Hold down Ctrl (Windows) or Command (Mac) to select multiple events.
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('teams.index') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i> Back to Teams
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i> Add Team
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

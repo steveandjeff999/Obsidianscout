@@ -1,0 +1,322 @@
+{% extends 'base.html' %}
+
+{% block title %}Pit Scouting Dashboard{% endblock %}
+
+{% block heading %}Pit Scouting Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Pit Scouting</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <p class="lead">Collect detailed team information:</p>
+                        <div class="d-grid">
+                            <a href="{{ url_for('pit_scouting.form') }}" class="btn btn-success btn-lg">
+                                <i class="fas fa-clipboard-list me-2"></i> Start Pit Scouting
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <p class="lead">View collected data:</p>
+                        <div class="d-grid">
+                            <a href="{{ url_for('pit_scouting.list') }}" class="btn btn-outline-success btn-lg">
+                                <i class="fas fa-list me-2"></i> View Pit Data
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Upload Section -->
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <div class="d-flex justify-content-center">
+                            <button id="manual-upload-btn" class="btn btn-warning btn-lg">
+                                <i class="fas fa-cloud-upload-alt me-2"></i> Upload All Data Now
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Section -->
+<div class="row">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Teams Scouted</h5>
+                <h2 class="text-success">{{ total_teams_scouted }}</h2>
+                <p class="text-muted">Total pit scouting entries</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Unuploaded Data</h5>
+                <h2 class="text-warning">{{ unuploaded_count }}</h2>
+                <p class="text-muted">Entries pending upload</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Current Event</h5>
+                <h6 class="text-primary">{{ current_event.name if current_event else 'No Event Set' }}</h6>
+                <p class="text-muted">{{ current_event.code if current_event else 'Configure event in settings' }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Local Data Management Section -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-database me-2"></i> Local Data Management</h5>
+                <div>
+                    <button id="sync-status-btn" class="btn btn-sm btn-outline-light me-2">
+                        <i class="fas fa-sync me-1"></i> Check Status
+                    </button>
+                    <button id="upload-data-btn" class="btn btn-sm btn-light me-2">
+                        <i class="fas fa-upload me-1"></i> Upload All
+                    </button>
+                    {% if current_user.has_role('admin') %}
+                        <a href="{{ url_for('pit_scouting.config') }}" class="btn btn-sm btn-outline-light">
+                            <i class="fas fa-cog me-1"></i> Config
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Pit scouting data is stored locally on your device until uploaded to the server. This allows you to scout even when offline.
+                </div>
+                
+                <div id="sync-status-container">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="progress mb-2">
+                                <div id="sync-progress" class="progress-bar bg-success" role="progressbar" style="width: 0%">
+                                    <span id="sync-percentage">0%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-0">
+                                <span id="sync-status-text">Click "Check Status" to update sync information</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Pit Scouting Data -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">Recent Pit Scouting Data</h5>
+            </div>
+            <div class="card-body">
+                {% if pit_data %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Team</th>
+                                    <th>Scout</th>
+                                    <th>Timestamp</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entry in pit_data %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ entry.team.team_number }}</strong>
+                                        {% if entry.team.team_name %}
+                                            <br><small class="text-muted">{{ entry.team.team_name }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ entry.scout_name }}</td>
+                                    <td>{{ entry.timestamp.strftime('%m/%d/%Y %H:%M') }}</td>
+                                    <td>
+                                        {% if entry.is_uploaded %}
+                                            <span class="badge bg-success">Uploaded</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">Local</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('pit_scouting.view', id=entry.id) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-eye me-1"></i> View
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No pit scouting data found</h5>
+                        <p class="text-muted">Start by scouting your first team!</p>
+                        <a href="{{ url_for('pit_scouting.form') }}" class="btn btn-success">
+                            <i class="fas fa-plus me-2"></i> Start Pit Scouting
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Teams List (if available) -->
+{% if teams %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">Teams at {{ current_event.name if current_event else 'Event' }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for team in teams %}
+                    <div class="col-md-2 col-sm-3 col-4 mb-2">
+                        <div class="team-card p-2 border rounded text-center">
+                            <strong>{{ team.team_number }}</strong>
+                            {% if team.team_name %}
+                                <br><small class="text-muted">{{ team.team_name[:20] }}{% if team.team_name|length > 20 %}...{% endif %}</small>
+                            {% endif %}
+                            {% set pit_entry = pit_data|selectattr('team_id', 'equalto', team.id)|list|first %}
+                            {% if pit_entry %}
+                                <br><small class="text-success"><i class="fas fa-check"></i> Scouted</small>
+                            {% else %}
+                                <br><small class="text-muted"><i class="fas fa-circle"></i> Not scouted</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+// Sync status management
+document.getElementById('sync-status-btn').addEventListener('click', function() {
+    fetch('/pit-scouting/sync/status')
+        .then(response => response.json())
+        .then(data => {
+            const progress = document.getElementById('sync-progress');
+            const percentage = document.getElementById('sync-percentage');
+            const statusText = document.getElementById('sync-status-text');
+            
+            progress.style.width = data.sync_percentage + '%';
+            percentage.textContent = Math.round(data.sync_percentage) + '%';
+            statusText.textContent = `${data.total_count - data.unuploaded_count} of ${data.total_count} entries uploaded`;
+        })
+        .catch(error => {
+            console.error('Error fetching sync status:', error);
+        });
+});
+
+// Upload data management
+document.getElementById('upload-data-btn').addEventListener('click', function() {
+    uploadData();
+});
+
+// Manual upload button
+document.getElementById('manual-upload-btn').addEventListener('click', function() {
+    uploadData();
+});
+
+function uploadData() {
+    const uploadBtn = document.getElementById('upload-data-btn');
+    const manualUploadBtn = document.getElementById('manual-upload-btn');
+    
+    // Show loading state
+    const originalText = manualUploadBtn.innerHTML;
+    manualUploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Uploading...';
+    manualUploadBtn.disabled = true;
+    uploadBtn.disabled = true;
+    
+    if (confirm('Upload all local pit scouting data to the server?')) {
+        fetch('/pit-scouting/upload', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Error uploading data: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error uploading data:', error);
+            alert('Error uploading data. Please try again.');
+        })
+        .finally(() => {
+            // Restore button state
+            manualUploadBtn.innerHTML = originalText;
+            manualUploadBtn.disabled = false;
+            uploadBtn.disabled = false;
+        });
+    } else {
+        // Restore button state if user cancels
+        manualUploadBtn.innerHTML = originalText;
+        manualUploadBtn.disabled = false;
+        uploadBtn.disabled = false;
+    }
+}
+
+// Auto-load sync status on page load
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('sync-status-btn').click();
+});
+</script>
+
+<style>
+.team-card {
+    transition: all 0.3s ease;
+}
+
+.team-card:hover {
+    background-color: #f8f9fa;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.progress {
+    height: 20px;
+}
+
+.progress-bar {
+    font-size: 12px;
+    line-height: 20px;
+}
+</style>
+{% endblock %}

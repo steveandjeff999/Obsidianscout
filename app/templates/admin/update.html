@@ -1,0 +1,310 @@
+{% extends 'base.html' %}
+
+{% block title %}Application Update{% endblock %}
+
+{% block heading %}Application Update{% endblock %}
+{% block subheading %}Update the application from the Git repository{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-sync-alt me-2"></i> Application Update
+                </h5>
+                <small class="text-light">Current Version: {{ current_version }}</small>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>⚠️ BETA FEATURE - USE WITH CAUTION ⚠️</strong>
+                    <br><br>
+                    This update feature is currently in <strong>BETA</strong> and may not work as expected. 
+                    <strong>BACKUP YOUR DATA</strong> before proceeding, including:
+                    <ul class="mt-2 mb-0">
+                        <li>Database files (instance/scouting.db)</li>
+                        <li>Configuration files (config/ folder)</li>
+                        <li>Any custom modifications</li>
+                    </ul>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Additional Requirements:</strong> This will update the application to the latest version from Git. 
+                    Please make sure you have committed any local changes before proceeding.
+                    A server restart will be required after the update.
+                </div>
+
+                <!-- Version Status -->
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h6 class="card-title">Version Information</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Current Version:</strong> {{ current_version }}
+                            </div>
+                            <div class="col-md-6">
+                                {% if update_available %}
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                        Update Available
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check me-1"></i>
+                                        Up to Date
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="row mt-2" id="latestVersionRow" style="display: none;">
+                            <div class="col-md-12">
+                                <small class="text-muted">Latest Version: <span id="latestVersionText"></span></small>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button id="checkUpdatesBtn" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-search me-2"></i> Check for Updates
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <p class="mb-4">
+                    This process will:
+                </p>
+                <ul class="mb-4">
+                    <li>Pull the latest code from the Git repository</li>
+                    <li>Install/update Python dependencies</li>
+                    <li>Run database migrations</li>
+                </ul>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-start mb-4">
+                    <button id="startUpdateBtn" class="btn btn-primary">
+                        <i class="fas fa-play me-2"></i> Start Update
+                    </button>
+                    <a href="{{ url_for('auth.admin_settings') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-2"></i> Back to Admin Settings
+                    </a>
+                </div>
+
+                <div id="updateStatus" class="alert alert-info d-none">
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-2" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <div>Update in progress...</div>
+                    </div>
+                </div>
+
+                <div id="updateSuccess" class="alert alert-success d-none">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong>Success!</strong> Update completed. A server restart is required to apply all changes.
+                </div>
+
+                <div id="updateError" class="alert alert-danger d-none">
+                    <i class="fas fa-times-circle me-2"></i>
+                    <strong>Error!</strong> An error occurred during the update process.
+                </div>
+
+                <div class="card bg-dark text-white">
+                    <div class="card-header py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-terminal me-2"></i> Update Console</span>
+                            <button id="clearConsoleBtn" class="btn btn-sm btn-outline-light" disabled>
+                                <i class="fas fa-eraser"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <pre id="console" class="mb-0 p-3 bg-dark text-light" style="height: 350px; overflow-y: auto; white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 0.9rem;">Waiting for update to start...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const startUpdateBtn = document.getElementById('startUpdateBtn');
+    const clearConsoleBtn = document.getElementById('clearConsoleBtn');
+    const checkUpdatesBtn = document.getElementById('checkUpdatesBtn');
+    const consoleElement = document.getElementById('console');
+    const updateStatus = document.getElementById('updateStatus');
+    const updateSuccess = document.getElementById('updateSuccess');
+    const updateError = document.getElementById('updateError');
+    
+    let eventSource = null;
+
+    // Function to check for updates
+    function checkForUpdates() {
+        checkUpdatesBtn.disabled = true;
+        checkUpdatesBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Checking...';
+        
+        fetch('{{ url_for("admin.check_for_updates") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.update_available) {
+                // Show latest version info
+                if (data.latest_version) {
+                    document.getElementById('latestVersionText').textContent = data.latest_version;
+                    document.getElementById('latestVersionRow').style.display = 'block';
+                }
+                location.reload(); // Reload to show updated status
+            } else {
+                checkUpdatesBtn.innerHTML = '<i class="fas fa-check me-2"></i> Up to Date';
+                setTimeout(() => {
+                    checkUpdatesBtn.innerHTML = '<i class="fas fa-search me-2"></i> Check for Updates';
+                    checkUpdatesBtn.disabled = false;
+                }, 2000);
+            }
+        })
+        .catch(error => {
+            console.error('Error checking for updates:', error);
+            checkUpdatesBtn.innerHTML = '<i class="fas fa-times me-2"></i> Error';
+            setTimeout(() => {
+                checkUpdatesBtn.innerHTML = '<i class="fas fa-search me-2"></i> Check for Updates';
+                checkUpdatesBtn.disabled = false;
+            }, 2000);
+        });
+    }
+
+    // Function to start the update process
+    function startUpdate() {
+        // Clear previous output
+        consoleElement.textContent = '';
+        
+        // Update UI
+        startUpdateBtn.disabled = true;
+        updateStatus.classList.remove('d-none');
+        updateSuccess.classList.add('d-none');
+        updateError.classList.add('d-none');
+        
+        // First, make a POST request to trigger the update
+        fetch('{{ url_for("admin.run_update") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                // Include CSRF token if available
+                'X-CSRFToken': '{{ csrf_token() if csrf_token else "" }}'
+            },
+            body: JSON.stringify({ start: true }),
+            credentials: 'same-origin' // Include cookies for sessions
+        })
+        .then(response => {
+            if (response.ok) {
+                // Now create EventSource for Server-Sent Events to get the real-time output
+                eventSource = new EventSource('{{ url_for("admin.run_update") }}');
+                
+                // Handle incoming messages
+                eventSource.onmessage = function(event) {
+                    const message = event.data;
+                    
+                    // Format the output with colors for better readability
+                    let formattedMessage = message.replace(/\n/g, '<br>');
+                    
+                    if (message.includes('Error:') || message.includes('error') || message.includes('fail')) {
+                        consoleElement.innerHTML += `<span class="text-danger">${formattedMessage}</span><br>`;
+                    } else if (message.includes('Success') || message.includes('success') || message.includes('completed')) {
+                        consoleElement.innerHTML += `<span class="text-success">${formattedMessage}</span><br>`;
+                    } else if (message.includes('Warning')) {
+                        consoleElement.innerHTML += `<span class="text-warning">${formattedMessage}</span><br>`;
+                    } else {
+                        consoleElement.innerHTML += `${formattedMessage}<br>`;
+                    }
+                    
+                    consoleElement.scrollTop = consoleElement.scrollHeight; // Auto-scroll to bottom
+                };
+                
+                // Handle end event
+                eventSource.addEventListener('end', function(event) {
+                    const status = event.data;
+                    
+                    // Close connection
+                    eventSource.close();
+                    eventSource = null;
+                    
+                    // Update UI based on status
+                    updateStatus.classList.add('d-none');
+                    
+                    if (status === 'success') {
+                        updateSuccess.classList.remove('d-none');
+                    } else {
+                        updateError.classList.remove('d-none');
+                    }
+                    
+                    // Re-enable buttons
+                    startUpdateBtn.disabled = false;
+                    clearConsoleBtn.disabled = false;
+                });
+                
+                // Handle connection errors
+                eventSource.onerror = function() {
+                    consoleElement.innerHTML += '<span class="text-danger">Connection to server lost.</span><br>';
+                    consoleElement.scrollTop = consoleElement.scrollHeight;
+                    
+                    // Close connection
+                    eventSource.close();
+                    eventSource = null;
+                    
+                    // Update UI
+                    updateStatus.classList.add('d-none');
+                    updateError.classList.remove('d-none');
+                    startUpdateBtn.disabled = false;
+                    clearConsoleBtn.disabled = false;
+                };
+            } else {
+                // Handle error response
+                console.error('Failed to initiate update process');
+                updateStatus.classList.add('d-none');
+                updateError.classList.remove('d-none');
+                updateError.textContent = 'Failed to initiate update process. Server returned: ' + response.status;
+                startUpdateBtn.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Network error:', error);
+            updateStatus.classList.add('d-none');
+            updateError.classList.remove('d-none');
+            updateError.textContent = 'Network error occurred: ' + error.message;
+            startUpdateBtn.disabled = false;
+        });
+    }
+    
+    // Attach click event handler to the Start Update button
+    startUpdateBtn.addEventListener('click', function() {
+        if (confirm('Are you sure you want to update the application? This will pull the latest code from Git and may restart services.')) {
+            startUpdate();
+        }
+    });
+    
+    // Attach click event handler to the Check Updates button
+    checkUpdatesBtn.addEventListener('click', checkForUpdates);
+    
+    // Attach click event handler to the Clear Console button
+    clearConsoleBtn.addEventListener('click', function() {
+        consoleElement.textContent = '';
+        clearConsoleBtn.disabled = true;
+    });
+    
+    // Clean up EventSource on page unload
+    window.addEventListener('beforeunload', function() {
+        if (eventSource) {
+            eventSource.close();
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,322 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Pit Scouting Configuration{% endblock %}
+
+{% block heading %}Edit Pit Scouting Configuration{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0">Edit Pit Scouting Configuration</h5>
+                <small class="text-muted">Modify the structure and fields for pit scouting forms</small>
+            </div>
+            <div>
+                <a href="{{ url_for('pit_scouting.config') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-1"></i> Back to Configuration
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Configuration Editor -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0">
+                    <i class="fas fa-code me-2"></i> JSON Configuration Editor
+                </h6>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="configForm">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label for="config_json" class="form-label">
+                                <strong>Configuration JSON</strong>
+                            </label>
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="formatJSON()">
+                                    <i class="fas fa-align-left me-1"></i> Format
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-info" onclick="validateJSON()">
+                                    <i class="fas fa-check me-1"></i> Validate
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-warning" onclick="resetToDefault()">
+                                    <i class="fas fa-undo me-1"></i> Reset
+                                </button>
+                            </div>
+                        </div>
+                        <textarea class="form-control" 
+                                  id="config_json" 
+                                  name="config_json" 
+                                  rows="25" 
+                                  required
+                                  style="font-family: 'Courier New', monospace; font-size: 0.875rem;">{{ config_json }}</textarea>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Edit the JSON configuration above. Make sure to maintain proper JSON syntax and structure.
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> Changes to the configuration will affect all future pit scouting forms. 
+                        A backup will be created automatically before saving.
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" class="btn btn-outline-secondary" onclick="previewForm()">
+                            <i class="fas fa-eye me-1"></i> Preview Form
+                        </button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-save me-1"></i> Save Configuration
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Configuration Help -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0">
+                    <i class="fas fa-question-circle me-2"></i> Configuration Help
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Field Types</h6>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span><code>text</code></span>
+                                <span class="text-muted">Single line text input</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span><code>textarea</code></span>
+                                <span class="text-muted">Multi-line text input</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span><code>number</code></span>
+                                <span class="text-muted">Numeric input</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span><code>select</code></span>
+                                <span class="text-muted">Dropdown selection</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span><code>multiselect</code></span>
+                                <span class="text-muted">Multiple checkboxes</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span><code>boolean</code></span>
+                                <span class="text-muted">Yes/No checkbox</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Required Fields</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Section:</strong> <code>id</code>, <code>name</code>, <code>elements</code></li>
+                            <li><strong>Element:</strong> <code>id</code>, <code>perm_id</code>, <code>name</code>, <code>type</code></li>
+                        </ul>
+                        
+                        <h6 class="mt-3">Optional Fields</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Element:</strong> <code>required</code>, <code>options</code>, <code>validation</code>, <code>placeholder</code></li>
+                        </ul>
+                        
+                        <h6 class="mt-3">Example Element</h6>
+                        <pre class="bg-light p-2 rounded"><code>{
+  "id": "robot_weight",
+  "perm_id": "robot_weight",
+  "name": "Robot Weight (lbs)",
+  "type": "number",
+  "required": true,
+  "validation": {
+    "min": 0,
+    "max": 150
+  }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let originalConfig = `{{ config_json | safe }}`;
+
+// Format JSON
+function formatJSON() {
+    const textarea = document.getElementById('config_json');
+    try {
+        const parsed = JSON.parse(textarea.value);
+        textarea.value = JSON.stringify(parsed, null, 2);
+        showAlert('JSON formatted successfully!', 'success');
+    } catch (error) {
+        showAlert('Invalid JSON: ' + error.message, 'danger');
+    }
+}
+
+// Validate JSON
+function validateJSON() {
+    const textarea = document.getElementById('config_json');
+    try {
+        const parsed = JSON.parse(textarea.value);
+        
+        // Basic validation
+        if (!parsed.pit_scouting) {
+            throw new Error('Missing "pit_scouting" section');
+        }
+        
+        if (!parsed.pit_scouting.sections || !Array.isArray(parsed.pit_scouting.sections)) {
+            throw new Error('Missing or invalid "sections" array');
+        }
+        
+        // Validate sections
+        for (let i = 0; i < parsed.pit_scouting.sections.length; i++) {
+            const section = parsed.pit_scouting.sections[i];
+            if (!section.id || !section.name || !section.elements) {
+                throw new Error(`Section ${i + 1} missing required fields (id, name, elements)`);
+            }
+            
+            // Validate elements
+            for (let j = 0; j < section.elements.length; j++) {
+                const element = section.elements[j];
+                if (!element.id || !element.perm_id || !element.name || !element.type) {
+                    throw new Error(`Element ${j + 1} in section "${section.name}" missing required fields`);
+                }
+            }
+        }
+        
+        showAlert('Configuration is valid!', 'success');
+    } catch (error) {
+        showAlert('Validation error: ' + error.message, 'danger');
+    }
+}
+
+// Reset to default
+function resetToDefault() {
+    if (confirm('Reset to the original configuration? This will lose all current changes.')) {
+        document.getElementById('config_json').value = originalConfig;
+        showAlert('Configuration reset to original state', 'info');
+    }
+}
+
+// Preview form
+function previewForm() {
+    const textarea = document.getElementById('config_json');
+    try {
+        JSON.parse(textarea.value); // Validate JSON first
+        
+        // Store current config in localStorage for preview
+        localStorage.setItem('pit_config_preview', textarea.value);
+        
+        // Open form in new tab
+        window.open('{{ url_for("pit_scouting.form") }}?preview=1', '_blank');
+    } catch (error) {
+        showAlert('Cannot preview: Invalid JSON - ' + error.message, 'danger');
+    }
+}
+
+// Show alert
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // Insert after form
+    const form = document.getElementById('configForm');
+    form.parentNode.insertBefore(alertDiv, form.nextSibling);
+    
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// Form submission handling
+document.getElementById('configForm').addEventListener('submit', function(e) {
+    // Validate JSON before submission
+    const textarea = document.getElementById('config_json');
+    try {
+        JSON.parse(textarea.value);
+    } catch (error) {
+        e.preventDefault();
+        showAlert('Cannot save: Invalid JSON - ' + error.message, 'danger');
+        return false;
+    }
+    
+    // Show loading state
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+    submitBtn.disabled = true;
+    
+    // Allow form to submit
+    return true;
+});
+
+// Auto-save draft to localStorage
+let saveTimeout;
+document.getElementById('config_json').addEventListener('input', function() {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+        localStorage.setItem('pit_config_draft', this.value);
+    }, 1000);
+});
+
+// Load draft on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const draft = localStorage.getItem('pit_config_draft');
+    if (draft && draft !== originalConfig) {
+        if (confirm('A draft configuration was found. Would you like to load it?')) {
+            document.getElementById('config_json').value = draft;
+        }
+    }
+});
+</script>
+
+<style>
+.form-control {
+    font-family: 'Courier New', monospace;
+}
+
+pre {
+    font-size: 0.875rem;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.list-group-item {
+    padding: 0.5rem 0;
+    border: none;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.list-group-item:last-child {
+    border-bottom: none;
+}
+
+code {
+    background-color: #f8f9fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+}
+</style>
+{% endblock %}

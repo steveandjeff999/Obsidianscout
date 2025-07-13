@@ -1,0 +1,1707 @@
+/* Main styles for FRC Scouting Platform */
+
+/* Global styles */
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: #f8f9fa;
+    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.footer {
+    margin-top: auto;
+}
+
+/* Card styling */
+.card {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Team colors */
+.red-alliance {
+    background-color: rgba(255, 0, 0, 0.1);
+    border-left: 4px solid #dc3545;
+}
+
+.blue-alliance {
+    background-color: rgba(0, 123, 255, 0.1);
+    border-left: 4px solid #0d6efd;
+}
+
+/* Counter buttons */
+.counter-input {
+    width: 60px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+}
+
+.counter-input .form-control {
+    text-align: center;
+    font-weight: bold;
+    max-width: 80px;
+    margin: 0 0.5rem;
+}
+
+.btn-counter {
+    width: 35px;
+    height: 35px;
+    padding: 0;
+    font-weight: bold;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.counter-btn {
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    border-radius: 50%;
+}
+
+/* Period sections */
+.period-section {
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.auto-period {
+    background-color: rgba(255, 193, 7, 0.1);
+    border-left: 4px solid #ffc107;
+}
+
+.teleop-period {
+    background-color: rgba(13, 202, 240, 0.1);
+    border-left: 4px solid #0dcaf0;
+}
+
+.endgame-period {
+    background-color: rgba(111, 66, 193, 0.1);
+    border-left: 4px solid #6f42c1;
+}
+
+.post-match {
+    background-color: rgba(25, 135, 84, 0.1);
+    border-left: 4px solid #198754;
+}
+
+/* Star rating */
+.rating {
+    unicode-bidi: bidi-override;
+    direction: rtl;
+    text-align: center;
+}
+
+.rating > input {
+    display: none;
+}
+
+.rating > label {
+    display: inline-block;
+    cursor: pointer;
+    font-size: 1.5em;
+    color: #ccc;
+}
+
+.rating > label:before {
+    content: "\2605";
+}
+
+.rating > input:checked ~ label,
+.rating > input:checked ~ label ~ label {
+    color: #ffc107;
+}
+
+.rating > label:hover,
+.rating > label:hover ~ label {
+    color: #ffc107;
+}
+
+/* QR code */
+.qr-container {
+    background-color: white;
+    padding: 1.5rem;
+    border-radius: var(--border-radius);
+    box-shadow: var(--card-shadow);
+    max-width: 350px;
+    margin: 0 auto;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.qr-container:hover {
+    transform: scale(1.02);
+    box-shadow: var(--card-shadow-hover);
+}
+
+.dark-mode .qr-container {
+    background-color: #ffffff;
+}
+
+#qrcode {
+    margin: 0 auto;
+    max-width: 100%;
+}
+
+#qrcode img,
+#qrcode canvas {
+    max-width: 100%;
+    height: auto !important;
+    margin: 0 auto;
+}
+
+/* Statistics cards */
+.stat-card {
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 15px;
+    border-radius: 0.375rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.stat-value {
+    font-size: 2.5rem;
+    font-weight: bold;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #28a745;
+}
+
+/* Dashboard */
+.dashboard-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: none;
+    border-radius: 0.375rem;
+    overflow: hidden;
+}
+
+.dashboard-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+}
+
+.dashboard-card .card-body {
+    flex: 1;
+}
+
+.dashboard-card .card-header {
+    font-weight: 600;
+    padding: 0.75rem 1.25rem;
+}
+
+.dashboard-icon {
+    font-size: 2.5rem;
+    margin-bottom: 15px;
+}
+
+/* Responsive tables */
+@media (max-width: 768px) {
+    .table-responsive {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+    }
+}
+
+/* Config display */
+.config-json {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+
+/* Form styling */
+.form-control:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.form-label {
+    font-weight: 500;
+}
+
+/* Rating inputs */
+.rating-container {
+    display: flex;
+    flex-direction: row;
+    margin: 0.5rem 0;
+}
+
+.rating-star {
+    color: #e0e0e0;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: color 0.2s;
+    padding: 0 5px;
+}
+
+.rating-star.active {
+    color: #ffc107;
+}
+
+.rating-star:hover {
+    color: #ffdc69;
+}
+
+/* Match period tabs */
+.match-period-tabs .nav-link {
+    font-weight: 500;
+    border-radius: 0.25rem;
+    padding: 0.5rem 1rem;
+    margin-right: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.match-period-tabs .nav-link.active {
+    background-color: #0d6efd;
+    color: white;
+}
+
+.match-period-tabs .nav-link:not(.active):hover {
+    background-color: #e9ecef;
+}
+
+/* Alliance station indicators */
+.station-red {
+    background-color: #dc3545;
+    color: white;
+}
+
+.station-blue {
+    background-color: #0d6efd;
+    color: white;
+}
+
+/* Team metrics badges */
+.badge-metric {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Plotly graphs */
+.plotly-graph {
+    width: 100%;
+    height: 350px;
+    margin-bottom: 1.5rem;
+}
+
+/* Match schedule */
+.match-card {
+    margin-bottom: 1rem;
+    border-left: 5px solid #6c757d;
+}
+
+.match-qualification {
+    border-left-color: #0d6efd;
+}
+
+.match-playoff {
+    border-left-color: #dc3545;
+}
+
+.match-practice {
+    border-left-color: #28a745;
+}
+
+/* Team number pill */
+.team-number {
+    display: inline-block;
+    padding: 0.25em 0.6em;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 10rem;
+    margin-right: 0.5rem;
+}
+
+.red-alliance .team-number {
+    color: white;
+    background-color: #dc3545;
+}
+
+.blue-alliance .team-number {
+    color: white;
+    background-color: #0d6efd;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .counter-input .form-control {
+        max-width: 60px;
+    }
+    
+    .stat-value {
+        font-size: 1.5rem;
+    }
+    
+    .plotly-graph {
+        height: 300px;
+    }
+}
+
+/* 
+ * FRC Scouting Platform Custom Styles
+ * Team 5454 Scout 2026
+ */
+
+:root {
+    --primary-color: #007bff;
+    --secondary-color: #6c757d;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #17a2b8;
+    --light-color: #f8f9fa;
+    --dark-color: #343a40;
+}
+
+/* General Styles */
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.container {
+    flex: 1;
+}
+
+/* Card Styles */
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border-radius: 0.5rem;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+    border-top-left-radius: 0.5rem !important;
+    border-top-right-radius: 0.5rem !important;
+}
+
+.card-icon {
+    font-size: 2.5rem;
+    color: var(--primary-color);
+}
+
+/* Team Card Styles */
+.team-card {
+    height: 100%;
+}
+
+.team-card .team-number {
+    font-size: 1.75rem;
+    font-weight: bold;
+    line-height: 1.2;
+}
+
+.team-card .team-name {
+    font-size: 1rem;
+    color: var(--secondary-color);
+}
+
+.team-stats {
+    font-size: 0.9rem;
+}
+
+/* Match Card Styles */
+.match-card {
+    height: 100%;
+}
+
+.match-card .match-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.team-alliance-red {
+    color: var(--danger-color);
+}
+
+.team-alliance-blue {
+    color: var(--primary-color);
+}
+
+/* Scouting Form Styles */
+.scouting-form .form-label {
+    font-weight: 500;
+}
+
+.counter-container {
+    max-width: 200px;
+}
+
+/* Rating Star System */
+.rating-container {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+}
+
+.rating-star {
+    font-size: 1.5rem;
+    color: #ccc;
+    cursor: pointer;
+    margin-right: 5px;
+}
+
+.rating-star:hover,
+.rating-star:hover ~ .rating-star,
+.rating-star.active,
+.rating-star.active ~ .rating-star {
+    color: var(--warning-color);
+}
+
+/* QR Code Styles */
+#qrcode {
+    margin: 0 auto;
+    max-width: 100%;
+}
+
+.qr-container {
+    background-color: white;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+#qrcode img,
+#qrcode canvas {
+    max-width: 100%;
+    height: auto !important;
+    margin: 0 auto;
+}
+
+/* Chart Container */
+.chart-container {
+    height: 400px;
+    width: 100%;
+}
+
+/* Match Period Tabs */
+.match-period-tabs {
+    display: flex;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.match-period-tab {
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-top-left-radius: 0.25rem;
+    border-top-right-radius: 0.25rem;
+    margin-bottom: -1px;
+    transition: all 0.2s ease-in-out;
+}
+
+.match-period-tab:hover {
+    border-color: #e9ecef #e9ecef #dee2e6;
+}
+
+.match-period-tab.active {
+    color: var(--primary-color);
+    background-color: #fff;
+    border-color: #dee2e6 #dee2e6 #fff;
+}
+
+/* Metrics Table */
+.metrics-table th {
+    font-weight: 500;
+}
+
+.metric-value {
+    font-weight: 600;
+}
+
+/* Data Cards */
+.data-card {
+    transition: all 0.2s ease-in-out;
+}
+
+.data-card:hover {
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+.data-card-icon {
+    font-size: 2rem;
+    color: var(--primary-color);
+}
+
+/* Dashboard Stats */
+.dashboard-stat {
+    text-align: center;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.dashboard-stat-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.dashboard-stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.dashboard-stat-label {
+    font-size: 1rem;
+    color: var(--secondary-color);
+}
+
+/* Colors for different match phases */
+.auto-phase {
+    border-left: 4px solid var(--danger-color);
+    padding-left: 1rem;
+}
+
+.teleop-phase {
+    border-left: 4px solid var(--primary-color);
+    padding-left: 1rem;
+}
+
+.endgame-phase {
+    border-left: 4px solid var(--success-color);
+    padding-left: 1rem;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .card-icon {
+        font-size: 2rem;
+    }
+    
+    .dashboard-stat-icon {
+        font-size: 2rem;
+    }
+    
+    .dashboard-stat-value {
+        font-size: 1.5rem;
+    }
+}
+
+/* Print styles */
+@media print {
+    .navbar, .footer, .btn-print {
+        display: none !important;
+    }
+    
+    .container {
+        width: 100%;
+        max-width: 100%;
+    }
+    
+    .card {
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+    
+    .chart-container {
+        height: 300px;
+        page-break-inside: avoid;
+    }
+}
+
+/* Modal positioning fix to prevent flashing */
+.modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1050;
+    display: none;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    outline: 0;
+}
+
+.modal-dialog {
+    position: relative;
+    margin: 0 auto;
+    pointer-events: none;
+    max-width: 500px;
+    transition: transform 0.3s ease-out;
+}
+
+.modal-content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    pointer-events: auto;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 0.3rem;
+    outline: 0;
+}
+
+/* Ensure modal backdrop is fixed and covers the entire screen */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1040;
+    width: 100vw;
+    height: 100vh;
+    background-color: #000;
+}
+
+/* 
+ * FRC Scouting Platform Modern UI Styles
+ * Team 5454 Scout 2026
+ * Updated Design System - 2025
+ */
+
+:root {
+    /* Core color palette */
+    --primary: #0d6efd;
+    --primary-light: #cfe2ff;
+    --primary-dark: #0a58ca;
+    --secondary: #6c757d;
+    --success: #198754;
+    --danger: #dc3545;
+    --warning: #ffc107;
+    --info: #0dcaf0;
+    --light: #f8f9fa;
+    --dark: #212529;
+
+    /* App-specific colors */
+    --red-alliance: #dc3545;
+    --red-alliance-bg: #f8d7da;
+    --blue-alliance: #0d6efd;
+    --blue-alliance-bg: #cfe2ff;
+    
+    /* Game period colors */
+    --auto-color: #fd7e14;
+    --teleop-color: #0d6efd;
+    --endgame-color: #198754;
+    
+    /* UI elements */
+    --navbar-bg: #ffffff;
+    --card-shadow: 0 .125rem .25rem rgba(0, 0, 0, .075);
+    --card-shadow-hover: 0 .5rem 1rem rgba(0, 0, 0, .15);
+    --border-radius: .5rem;
+    --transition-speed: 0.2s;
+    
+    /* Typography */
+    --font-family-base: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    --font-family-headings: 'Montserrat', var(--font-family-base);
+}
+
+/* Dark mode theme variables */
+.dark-mode {
+    --navbar-bg: #1e2124;
+    --primary: #3d8bfd;
+    --primary-light: #1c4a87;
+    --primary-dark: #6ea8fe;
+    --light: #343a40;
+    --dark: #f8f9fa;
+    --text-main: #e6e6e6;
+    --text-muted: #b0b0b0;
+    --card-bg: #2d3338;
+    --card-border: #444;
+    --card-header: #252a30;
+    --table-bg: #252a30;
+    --table-stripe: #2d3338;
+    --btn-light-bg: #3a4147;
+    --btn-light-text: #e6e6e6;
+    --btn-light-hover: #4a515a;
+    --badge-bg: #3a4147;
+    --badge-text: #e6e6e6;
+    --alliance-card-border: #1c71d8;
+    --team-slot-bg: #252a30;
+    color-scheme: dark;
+    background-color: #121212 !important;
+    color: var(--text-main) !important;
+}
+
+.dark-mode .navbar {
+    background-color: var(--navbar-bg) !important;
+    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .navbar-toggler:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .navbar-light .navbar-nav .nav-link {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.dark-mode .navbar-light .navbar-nav .nav-link:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .navbar-light .navbar-nav .nav-link.active {
+    color: #ffffff !important;
+    background-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .navbar-light .navbar-nav .nav-link.active::after {
+    background-color: rgba(255, 255, 255, 0.8);
+}
+
+.dark-mode .navbar-actions .btn-outline-primary {
+    border-color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.dark-mode .navbar-actions .btn-outline-primary:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #ffffff;
+}
+
+.dark-mode .navbar-actions .btn-outline-secondary {
+    border-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.dark-mode .navbar-actions .btn-outline-secondary:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.dark-mode .game-badge .badge {
+    background-color: var(--badge-bg) !important;
+    color: var(--badge-text) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.dark-mode .dropdown-menu {
+    background-color: #2d3338;
+    border-color: #444;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .dropdown-item {
+    color: var(--text-main);
+}
+
+.dark-mode .dropdown-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+.dark-mode .dropdown-item.active {
+    background-color: rgba(61, 139, 253, 0.2);
+    color: #ffffff;
+}
+
+.dark-mode .dropdown-divider {
+    border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .dropdown-header {
+    color: var(--text-muted);
+}
+
+.dark-mode .navbar-actions {
+    border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .card {
+    background-color: var(--card-bg);
+    border-color: var(--card-border);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Modal styling for dark mode */
+.dark-mode .modal-content {
+    background-color: var(--card-bg);
+    border-color: var(--card-border);
+}
+
+.dark-mode .modal-header {
+    border-bottom-color: var(--card-border);
+}
+
+.dark-mode .modal-footer {
+    border-top-color: var(--card-border);
+}
+
+/* Ensure modal header in wipe database dialog respects dark mode */
+.dark-mode .modal-header.bg-danger {
+    background-color: #dc3545 !important;
+}
+
+.dark-mode .modal-header .btn-close {
+    filter: brightness(2);
+}
+
+/* Form elements within modals in dark mode */
+.dark-mode .modal .form-check-input {
+    background-color: #2d3338;
+    border-color: #6c757d;
+}
+
+.dark-mode .modal .form-check-input:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.dark-mode .modal .form-check-label {
+    color: var(--text-main);
+}
+
+.dark-mode .modal .alert-danger {
+    background-color: rgba(220, 53, 69, 0.2);
+    border-color: rgba(220, 53, 69, 0.3);
+    color: #f8d7da;
+}
+
+/* Select2 dropdowns in dark mode */
+.dark-mode .select2-container .select2-selection--single,
+.dark-mode .select2-container .select2-selection--multiple {
+    background-color: #2d3338;
+    border-color: #444;
+    color: var(--text-main);
+}
+
+.dark-mode .select2-container--bootstrap-5 .select2-selection {
+    background-color: #2d3338;
+    border-color: #444;
+    color: var(--text-main);
+}
+
+.dark-mode .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+    color: var(--text-main);
+}
+
+.dark-mode .select2-container--bootstrap-5 .select2-dropdown {
+    background-color: #2d3338;
+    border-color: #444;
+}
+
+.dark-mode .select2-container--bootstrap-5 .select2-dropdown .select2-results__option {
+    color: var(--text-main);
+}
+
+.dark-mode .select2-container--bootstrap-5 .select2-dropdown .select2-results__option--highlighted[aria-selected] {
+    background-color: rgba(61, 139, 253, 0.2);
+    color: #ffffff;
+}
+
+.dark-mode .select2-container--bootstrap-5 .select2-dropdown .select2-results__option[aria-selected=true] {
+    background-color: rgba(61, 139, 253, 0.3);
+}
+
+.dark-mode .card-header {
+    background-color: var(--card-header);
+    border-bottom-color: var(--card-border);
+    color: var(--text-main) !important;
+}
+
+/* Enhanced gradient elements for dark mode */
+
+/* Card header gradients */
+.dark-mode .bg-gradient-primary {
+    background: linear-gradient(45deg, #0d52bd, #3d8bfd) !important;
+    color: white !important;
+}
+
+.dark-mode .bg-gradient-success {
+    background: linear-gradient(45deg, #157347, #20c997) !important;
+    color: white !important;
+}
+
+.dark-mode .bg-gradient-info {
+    background: linear-gradient(45deg, #0891b2, #0dcaf0) !important;
+    color: white !important;
+}
+
+/* Fix for colored text in headers */
+.dark-mode .card-header .text-white {
+    color: white !important;
+}
+
+/* Improved dashboard styling for special UI elements */
+.dark-mode .stat-card {
+    background: linear-gradient(135deg, var(--card-bg), var(--card-header));
+    transition: all 0.3s ease;
+}
+
+.dark-mode .stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Consistent styling for data tools section */
+.dark-mode .list-group-flush {
+    border-radius: 0;
+}
+
+.dark-mode .list-group-flush .list-group-item {
+    border-right: 0;
+    border-left: 0;
+    border-color: var(--card-border);
+}
+
+/* Improved hover effects for list items in dark mode */
+.dark-mode .list-group-item-action:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Fix for buttons in dark mode */
+.dark-mode .btn-light {
+    background-color: var(--btn-light-bg);
+    border-color: var(--card-border);
+    color: var(--text-main);
+}
+
+/* Improve readability of links in dark mode */
+.dark-mode a:not(.btn):not(.dropdown-item):not(.nav-link):not(.list-group-item) {
+    color: #6ea8fe;
+}
+
+.dark-mode a:not(.btn):not(.dropdown-item):not(.nav-link):hover {
+    color: #9ec5fe;
+}
+
+/* Fix for nested cards and database management cards in dark mode */
+.dark-mode .card .card {
+    background-color: var(--card-bg);
+    border-color: var(--card-border);
+}
+
+.dark-mode .card .card-body {
+    background-color: var(--card-bg);
+    color: var(--text-main);
+}
+
+.dark-mode .card .card-title {
+    color: var(--text-main);
+}
+
+.dark-mode .card-text.text-muted {
+    color: var(--text-muted) !important;
+}
+
+/* Game Configuration window fixes */
+.dark-mode .list-group-item-action {
+    color: var(--text-main);
+}
+
+.dark-mode .bg-gradient-primary.text-white {
+    color: white !important; 
+}
+
+/* Fix nested borders for card in cards */
+.dark-mode .card .border {
+    border-color: var(--card-border) !important;
+}
+
+/* Fix nested card body backgrounds */
+.dark-mode .card .card .card-body {
+    background-color: #252a30;
+}
+
+/* Fix for the database management windows */
+.dark-mode .row.g-3 .card {
+    background-color: #252a30;
+    border-color: var(--card-border);
+}
+
+/* Ensure card backgrounds are consistent */
+.dark-mode .card-header + .card-body {
+    background-color: var(--card-bg);
+}
+
+/* Fix alert backgrounds in dark mode */
+.dark-mode .alert-info {
+    background-color: rgba(13, 202, 240, 0.15);
+    border-color: rgba(13, 202, 240, 0.3);
+    color: #8fddeb;
+}
+
+/* Fix font weight in cards */
+.dark-mode .fw-bold {
+    color: var(--text-main) !important;
+}
+
+/* Fix for list-group in Game Configuration */
+.dark-mode .list-group-flush .list-group-item {
+    background-color: var(--card-bg);
+    border-color: rgba(255, 255, 255, 0.08);
+    color: var(--text-main);
+}
+
+.dark-mode .list-group-flush .list-group-item:hover {
+    background-color: #343a40;
+}
+
+/* Fix dropdown button in Game Configuration header */
+.dark-mode .card-header.bg-gradient-primary .btn-light {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: transparent;
+    color: white;
+}
+
+.dark-mode .card-header.bg-gradient-primary .btn-light:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Fix for database management card headers */
+.dark-mode .card-header {
+    background-color: var(--card-header);
+}
+
+/* Fix for nested alert boxes */
+.dark-mode .card .alert {
+    border: 1px solid;
+}
+
+/* Fix specifically for database management nested cards */
+.dark-mode .row.g-3 > .col-md-6 > .card {
+    background-color: #252a30 !important;
+}
+
+.dark-mode .row.g-3 > .col-md-6 > .card .card-body {
+    background-color: #252a30 !important;
+}
+
+/* Fix for buttons inside these cards */
+.dark-mode .row.g-3 > .col-md-6 > .card .btn-primary {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.dark-mode .row.g-3 > .col-md-6 > .card .btn-success {
+    background-color: #198754;
+    border-color: #198754;
+}
+
+/* Stronger background enforcement for list group items */
+.dark-mode .list-group-item {
+    background-color: var(--card-bg) !important;
+}
+
+/* Fix specifically for the game configuration card */
+.dark-mode .card-header.bg-gradient-primary + .card-body {
+    padding: 0;
+}
+
+.dark-mode .card-header.bg-gradient-primary + .card-body .list-group-flush .list-group-item {
+    background-color: var(--card-bg) !important;
+}
+
+/* Important overrides for stubborn elements */
+.dark-mode .card,
+.dark-mode .card-header,
+.dark-mode .card-body,
+.dark-mode .list-group-item,
+.dark-mode .list-group-flush,
+.dark-mode .card .card {
+    color: var(--text-main) !important;
+}
+
+/* Ensuring background colors are properly applied */
+.dark-mode .card {
+    background-color: var(--card-bg) !important;
+}
+
+/* Fix specifically for white backgrounds in nested cards */
+.dark-mode .card-body .card {
+    background-color: #252a30 !important;
+}
+
+/* Make all card bodies in dark mode have consistent background */
+.dark-mode div.card-body {
+    background-color: var(--card-bg) !important;
+}
+
+/* Comprehensive fixes for all windows in dark mode */
+
+/* Fix any remaining white backgrounds */
+.dark-mode .bg-white,
+.dark-mode .bg-light {
+    background-color: var(--card-bg) !important;
+}
+
+/* Fix for any containers that might be white */
+.dark-mode .container .card,
+.dark-mode .container-fluid .card,
+.dark-mode .row .card {
+    background-color: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+}
+
+/* Fix specific card types that might be stuck in light mode */
+.dark-mode .data-card,
+.dark-mode .match-card,
+.dark-mode .team-card,
+.dark-mode .dashboard-card,
+.dark-mode .stat-card {
+    background-color: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-main) !important;
+}
+
+/* Fix for all card bodies regardless of nesting */
+.dark-mode .card .card-body,
+.dark-mode .card-body {
+    background-color: var(--card-bg) !important;
+    color: var(--text-main) !important;
+}
+
+/* Fix for card headers regardless of context */
+.dark-mode .card .card-header,
+.dark-mode .card-header {
+    background-color: var(--card-header) !important;
+    border-bottom-color: var(--card-border) !important;
+    color: var(--text-main) !important;
+}
+
+/* Exception for gradient headers which should keep their gradient */
+.dark-mode .card-header.bg-gradient-primary,
+.dark-mode .card-header.bg-gradient-success,
+.dark-mode .card-header.bg-gradient-info,
+.dark-mode .card-header.bg-gradient-warning,
+.dark-mode .card-header.bg-gradient-danger {
+    color: white !important;
+}
+
+/* Fix all list groups regardless of context */
+.dark-mode .list-group,
+.dark-mode .list-group-item,
+.dark-mode .list-group-flush,
+.dark-mode .list-group-flush .list-group-item {
+    background-color: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-main) !important;
+}
+
+/* Fix hover state for list group items */
+.dark-mode .list-group-item:hover,
+.dark-mode .list-group-item-action:hover {
+    background-color: #343a40 !important;
+}
+
+/* Fix form elements in all contexts */
+.dark-mode input,
+.dark-mode select,
+.dark-mode textarea {
+    background-color: #343a40 !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-main) !important;
+}
+
+/* Fix config display areas */
+.dark-mode .config-json {
+    background-color: #252a30 !important;
+    color: #e6e6e6 !important;
+}
+
+/* Fix any code displays or pre elements */
+.dark-mode pre,
+.dark-mode code {
+    background-color: #252a30 !important;
+    color: #e6e6e6 !important;
+    border-color: var(--card-border) !important;
+}
+
+/* Fix tables in all contexts */
+.dark-mode table,
+.dark-mode .table {
+    color: var(--text-main) !important;
+}
+
+.dark-mode .table th {
+    background-color: var(--card-header) !important;
+}
+
+.dark-mode .table td {
+    background-color: transparent !important;
+    border-color: var(--card-border) !important;
+}
+
+/* Fix for Bootstrap backgrounds */
+.dark-mode .bg-light {
+    background-color: var(--card-bg) !important;
+}
+
+.dark-mode .border-light {
+    border-color: var(--card-border) !important;
+}
+
+/* Fix any white background overlays */
+.dark-mode .overlay,
+.dark-mode .card-img-overlay {
+    background-color: rgba(0, 0, 0, 0.7) !important;
+}
+
+/* Fix any accordion components */
+.dark-mode .accordion-item,
+.dark-mode .accordion-header,
+.dark-mode .accordion-button {
+    background-color: var(--card-bg) !important;
+    color: var(--text-main) !important;
+    border-color: var(--card-border) !important;
+}
+
+.dark-mode .accordion-button:not(.collapsed) {
+    background-color: var(--card-header) !important;
+    color: var(--text-main) !important;
+}
+
+/* Fix all nested elements inside .row and .col that might have white backgrounds */
+.dark-mode .row [class*="col"] .card,
+.dark-mode .row [class*="col"] .alert,
+.dark-mode .row [class*="col"] .list-group,
+.dark-mode .row [class*="col"] .list-group-item {
+    background-color: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-main) !important;
+}
+
+/* Fix for badges to maintain their colors */
+.dark-mode .badge.bg-primary,
+.dark-mode .badge.bg-secondary,
+.dark-mode .badge.bg-success,
+.dark-mode .badge.bg-danger,
+.dark-mode .badge.bg-warning,
+.dark-mode .badge.bg-info {
+    color: white !important;
+}
+
+.dark-mode .badge.bg-warning,
+.dark-mode .badge.bg-info {
+    color: #212529 !important;
+}
+
+/* Fix for any tabs or pills */
+.dark-mode .nav-tabs,
+.dark-mode .nav-pills {
+    border-color: var(--card-border) !important;
+}
+
+.dark-mode .nav-tabs .nav-link,
+.dark-mode .nav-pills .nav-link {
+    color: var(--text-muted) !important;
+}
+
+.dark-mode .nav-tabs .nav-link.active,
+.dark-mode .nav-pills .nav-link.active {
+    background-color: var(--primary) !important;
+    color: white !important;
+    border-color: var(--card-border) !important;
+}
+
+/* Fix for any progress bars */
+.dark-mode .progress {
+    background-color: #343a40 !important;
+}
+
+/* Fix for any tooltips */
+.dark-mode .tooltip .tooltip-inner {
+    background-color: #212529 !important;
+    color: white !important;
+}
+
+/* Fix for dashboard notification or info boxes */
+.dark-mode .alert {
+    background-color: #252a30 !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-main) !important;
+}
+
+/* Exception for color-specific alerts */
+.dark-mode .alert-primary {
+    background-color: rgba(13, 110, 253, 0.15) !important;
+    border-color: rgba(13, 110, 253, 0.4) !important;
+    color: #9ec5fe !important;
+}
+
+.dark-mode .alert-success {
+    background-color: rgba(25, 135, 84, 0.15) !important;
+    border-color: rgba(25, 135, 84, 0.4) !important;
+    color: #75b798 !important;
+}
+
+.dark-mode .alert-info {
+    background-color: rgba(13, 202, 240, 0.15) !important;
+    border-color: rgba(13, 202, 240, 0.4) !important;
+    color: #8fddeb !important;
+}
+
+.dark-mode .alert-warning {
+    background-color: rgba(255, 193, 7, 0.15) !important;
+    border-color: rgba(255, 193, 7, 0.4) !important;
+    color: #ffd660 !important;
+}
+
+.dark-mode .alert-danger {
+    background-color: rgba(220, 53, 69, 0.15) !important;
+    border-color: rgba(220, 53, 69, 0.4) !important;
+    color: #ea868f !important;
+}
+
+/* Comprehensive text color fixes for dark mode */
+
+/* Fix all text to be white in dark mode */
+.dark-mode,
+.dark-mode p,
+.dark-mode h1,
+.dark-mode h2,
+.dark-mode h3,
+.dark-mode h4,
+.dark-mode h5,
+.dark-mode h6,
+.dark-mode span:not(.badge),
+.dark-mode label,
+.dark-mode td,
+.dark-mode th,
+.dark-mode div:not(.badge),
+.dark-mode li {
+    color: var(--text-main) !important;
+}
+
+/* Fix muted text to be visible but still subdued */
+.dark-mode .text-muted,
+.dark-mode small,
+.dark-mode .small,
+.dark-mode .text-secondary {
+    color: var(--text-muted) !important;
+}
+
+/* Exceptions for badges and buttons to maintain their colors */
+.dark-mode .badge,
+.dark-mode .btn:not(.btn-outline-secondary):not(.btn-outline-primary):not(.btn-light) {
+    /* Let these elements keep their specific colors */
+    color: initial;
+}
+
+/* Fix specifically colored text */
+.dark-mode .text-dark {
+    color: var(--text-main) !important;
+}
+
+.dark-mode .text-light {
+    color: var(--text-main) !important;
+}
+
+.dark-mode .text-black {
+    color: var(--text-main) !important;
+}
+
+.dark-mode .text-black-50 {
+    color: rgba(230, 230, 230, 0.8) !important;
+}
+
+/* Ensure specific colored text maintain visibility */
+.dark-mode .text-primary {
+    color: #6ea8fe !important;
+}
+
+.dark-mode .text-success {
+    color: #75b798 !important;
+}
+
+.dark-mode .text-info {
+    color: #6edff6 !important;
+}
+
+.dark-mode .text-warning {
+    color: #ffda6a !important;
+}
+
+.dark-mode .text-danger {
+    color: #ea868f !important;
+}
+
+/* Fix specifically for card titles and headings */
+.dark-mode .card-title,
+.dark-mode .card-header h5,
+.dark-mode .card-header h6 {
+    color: var(--text-main) !important;
+}
+
+/* Fix icons to be properly visible */
+.dark-mode .fas,
+.dark-mode .far,
+.dark-mode .fab,
+.dark-mode .fa,
+.dark-mode .bi {
+    color: inherit;
+}
+
+/* Fix for text inside buttons */
+.dark-mode .btn-outline-secondary,
+.dark-mode .btn-outline-primary,
+.dark-mode .btn-light {
+    color: var(--text-main) !important;
+}
+
+.dark-mode .btn-primary,
+.dark-mode .btn-success,
+.dark-mode .btn-danger,
+.dark-mode .btn-warning,
+.dark-mode .btn-info {
+    color: white !important;
+}
+
+/* Exception for warning and info buttons which should have dark text */
+.dark-mode .btn-warning,
+.dark-mode .btn-info {
+    color: #212529 !important;
+}
+
+/* Fix for team and match selection dropdowns */
+.dark-mode select.form-select {
+    background-color: #343a40 !important;
+    color: var(--text-main) !important;
+    border-color: var(--card-border) !important;
+}
+
+.dark-mode select.form-select option {
+    background-color: #343a40 !important;
+    color: var(--text-main) !important;
+}
+
+/* Fix for select2 and other enhanced dropdown widgets */
+.dark-mode .select2-container--default .select2-selection--single,
+.dark-mode .select2-container--default .select2-selection--multiple {
+    background-color: #343a40 !important;
+    border-color: var(--card-border) !important;
+}
+
+.dark-mode .select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: var(--text-main) !important;
+}
+
+.dark-mode .select2-dropdown {
+    background-color: #343a40 !important;
+    border-color: var(--card-border) !important;
+}
+
+.dark-mode .select2-search__field {
+    background-color: #2d3338 !important;
+    color: var(--text-main) !important;
+    border-color: var(--card-border) !important;
+}
+
+.dark-mode .select2-container--default .select2-results__option {
+    color: var(--text-main) !important;
+}
+
+.dark-mode .select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: var(--primary) !important;
+    color: white !important;
+}
+
+.dark-mode .select2-container--default .select2-results__option[aria-selected=true] {
+    background-color: #495057 !important;
+}
+
+/* Fix for dropdown menus in forms */
+.dark-mode .dropdown-menu.show {
+    background-color: #343a40 !important;
+    border-color: var(--card-border) !important;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Fix for Bootstrap's custom selects */
+.dark-mode .custom-select,
+.dark-mode .custom-select option {
+    background-color: #343a40 !important;
+    color: var(--text-main) !important;
+    border-color: var(--card-border) !important;
+}
+
+/* Fix for dropdown arrows */
+.dark-mode .form-select {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23e6e6e6' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e") !important;
+}
+
+/* Fix for team or match dropdown lists */
+.dark-mode [class*="team-list"],
+.dark-mode [class*="match-list"],
+.dark-mode [id*="team-select"],
+.dark-mode [id*="match-select"],
+.dark-mode [id*="teamSelect"],
+.dark-mode [id*="matchSelect"] {
+    background-color: #343a40 !important;
+    color: var(--text-main) !important;
+}
+
+/* Fix for any datalists */
+.dark-mode datalist,
+.dark-mode datalist option {
+    background-color: #343a40 !important;
+    color: var(--text-main) !important;
+}
+
+/* Fix for autocomplete dropdowns */
+.dark-mode .ui-autocomplete {
+    background-color: #343a40 !important;
+    color: var(--text-main) !important;
+    border-color: var(--card-border) !important;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5) !important;
+}
+
+.dark-mode .ui-autocomplete .ui-menu-item,
+.dark-mode .ui-autocomplete .ui-menu-item-wrapper {
+    color: var(--text-main) !important;
+}
+
+.dark-mode .ui-autocomplete .ui-menu-item-wrapper.ui-state-active {
+    background-color: var(--primary) !important;
+    color: white !important;
+    border-color: var(--primary) !important;
+}
+
+/* Fix for typeahead dropdowns */
+.dark-mode .tt-menu,
+.dark-mode .tt-dropdown-menu {
+    background-color: #343a40 !important;
+    color: var(--text-main) !important;
+    border-color: var(--card-border) !important;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5) !important;
+}
+
+.dark-mode .tt-suggestion {
+    color: var(--text-main) !important;
+}
+
+.dark-mode .tt-suggestion:hover,
+.dark-mode .tt-suggestion.tt-cursor {
+    background-color: var(--primary) !important;
+    color: white !important;
+}
+
+/* Fix for multiselect dropdowns */
+.dark-mode .multiselect-container {
+    background-color: #343a40 !important;
+    border-color: var(--card-border) !important;
+}
+
+.dark-mode .multiselect-container li a,
+.dark-mode .multiselect-container li a label {
+    color: var(--text-main) !important;
+}
+
+.dark-mode .multiselect-container li a:hover,
+.dark-mode .multiselect-container li.active a {
+    background-color: var(--primary) !important;
+    color: white !important;
+}
+
+/* Fix for chosen dropdowns */
+.dark-mode .chosen-container .chosen-drop {
+    background-color: #343a40 !important;
+    border-color: var(--card-border) !important;
+}
+
+.dark-mode .chosen-container .chosen-results li {
+    color: var(--text-main) !important;
+}
+
+.dark-mode .chosen-container .chosen-results li.highlighted {
+    background-color: var(--primary) !important;
+    color: white !important;
+}
+
+/* Fix for browser default autocomplete backgrounds */
+.dark-mode input:-webkit-autofill,
+.dark-mode input:-webkit-autofill:hover,
+.dark-mode input:-webkit-autofill:focus,
+.dark-mode select:-webkit-autofill,
+.dark-mode select:-webkit-autofill:hover,
+.dark-mode select:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0px 1000px #343a40 inset !important;
+    -webkit-text-fill-color: var(--text-main) !important;
+    transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Fix for Select2 on mobile devices */
+@media (max-width: 767.98px) {
+    .select2-container--bootstrap-5 .select2-dropdown {
+        width: 100% !important;
+        max-width: 100vw !important;
+        left: 0 !important;
+        right: 0 !important;
+    }
+    
+    .select2-dropdown-large {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        position: fixed !important;
+        left: 0 !important;
+        right: 0 !important;
+        top: 10% !important;
+        margin: 0 auto;
+    }
+    
+    .select2-container--bootstrap-5.select2-container--open .select2-dropdown {
+        transform: none !important;
+        left: 0 !important;
+    }
+    
+    .select2-search--dropdown .select2-search__field {
+        font-size: 16px !important; /* Prevents iOS zoom on focus */
+    }
+    
+    .select2-results__options {
+        max-height: 60vh !important;
+        overflow-y: auto !important;
+    }
+    
+    .select2-selection--multiple .select2-selection__rendered {
+        white-space: normal !important;
+        display: block !important;
+    }
+}
+
+/* Fix for ensuring the dropdown always has space */
+.select2-container--open .select2-dropdown--below {
+    margin-top: 3px;
+    border-top: 1px solid #aaa;
+}
+
+/* Fix for dropdown positioning */
+.select2-results {
+    position: relative;
+    overflow-y: auto;
+}

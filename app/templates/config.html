@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}Game Configuration{% endblock %}
+
+{% block heading %}Game Configuration{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">{{ game_config.game_name }} Configuration</h5>
+                <div>
+                    <a href="{{ url_for('main.simple_edit_config') }}" class="btn btn-success btn-sm me-2">
+                        <i class="fas fa-edit me-1"></i> Simple Edit
+                    </a>
+                    <a href="{{ url_for('main.edit_config') }}" class="btn btn-light btn-sm">
+                        <i class="fas fa-code me-1"></i> Advanced Edit
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <p class="lead">This configuration file controls all aspects of the scouting platform, including game elements, metrics, and visualizations.</p>
+                <p>You can view the current configuration below or click the "Edit Configuration" button to make changes.</p>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Changes to the configuration will immediately affect all aspects of the scouting platform without requiring code changes.
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Full Configuration JSON</h5>
+            </div>
+            <div class="card-body">
+                <pre class="config-json">{{ game_config | tojson(indent=2) }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Configuration Structure Guide</h5>
+            </div>
+            <div class="card-body">
+                <p>The game configuration file is structured as follows:</p>
+                
+                <h6><i class="fas fa-cog me-2"></i>Basic Game Settings</h6>
+                <ul>
+                    <li><strong>season:</strong> The year of the FRC season</li>
+                    <li><strong>game_name:</strong> The name of the FRC game</li>
+                    <li><strong>alliance_size:</strong> Number of teams per alliance (typically 3)</li>
+                    <li><strong>match_types:</strong> List of match types in the competition</li>
+                    <li><strong>scouting_stations:</strong> Number of scouting stations available</li>
+                </ul>
+                
+                <h6><i class="fas fa-list-alt me-2"></i>Game Periods</h6>
+                <p>Each period (auto_period, teleop_period, endgame_period) contains:</p>
+                <ul>
+                    <li><strong>duration_seconds:</strong> How long the period lasts</li>
+                    <li><strong>scoring_elements:</strong> List of elements to track during this period</li>
+                </ul>
+                
+                <h6><i class="fas fa-th-list me-2"></i>Scoring Elements</h6>
+                <p>Each scoring element contains:</p>
+                <ul>
+                    <li><strong>id:</strong> Unique identifier used in formulas and data storage</li>
+                    <li><strong>name:</strong> Display name shown on forms and reports</li>
+                    <li><strong>type:</strong> Type of input (boolean, counter, select, rating, text)</li>
+                    <li><strong>default:</strong> Default value for the element</li>
+                    <li><strong>options:</strong> List of options for select elements</li>
+                </ul>
+                
+                <h6><i class="fas fa-chart-line me-2"></i>Data Analysis</h6>
+                <p>The data_analysis section contains:</p>
+                <ul>
+                    <li><strong>key_metrics:</strong> Formulas used to calculate performance metrics</li>
+                    <li><strong>visualization:</strong> Configuration for charts and graphs</li>
+                </ul>
+                
+                <div class="alert alert-warning mt-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Note:</strong> Changing element IDs will affect existing data. Only add or modify elements if you're starting fresh or prepared to update your database.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

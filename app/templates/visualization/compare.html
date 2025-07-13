@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+
+{% block title %}Team Comparison{% endblock %}
+
+{% block heading %}Team Comparison - {{ metric.name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3>Comparing {{ teams|length }} Teams - {{ metric.name }}</h3>
+                        {% if metric.formula %}
+                        <p class="text-muted mb-0">Formula: {{ metric.formula }}</p>
+                        {% endif %}
+                        {% if teams_without_data %}
+                        <div class="alert alert-info mt-2 mb-0">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Teams without data:</strong> The following teams are included in the comparison but have no scouting data:
+                            {% for team in teams_without_data %}
+                                <span class="badge bg-warning text-dark me-1">{{ team.team_number }}</span>
+                            {% endfor %}
+                            <br><small class="text-muted">Teams without data will show as 0 in the charts and are highlighted in orange.</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <a href="{{ url_for('visualization.index') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i> Back to Visualization
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bar Chart Comparison -->
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Team Performance Comparison</h5>
+            </div>
+            <div class="card-body">
+                {% if 'comparison_bar' in plots %}
+                <div id="comparison_bar" class="plotly-graph" data-graph='{{ plots.comparison_bar }}' style="height: 500px;"></div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i> No comparison data available.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Line Chart Comparison -->
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Performance Trends by Match</h5>
+            </div>
+            <div class="card-body">
+                {% if 'comparison_line' in plots %}
+                <div id="comparison_line" class="plotly-graph" data-graph='{{ plots.comparison_line }}' style="height: 500px;"></div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i> No trend data available.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data Table -->
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Performance Data</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Team</th>
+                                <th>Aggregate {{ metric.name }}</th>
+                                <th>Match Count</th>
+                                <th>View Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tm in team_metrics|sort(attribute='aggregate_value', reverse=True) %}
+                            <tr {% if not tm.get('has_data', True) %}class="table-secondary"{% endif %}>
+                                <td>
+                                    {{ tm.team }} - {{ tm.team_name }}
+                                    {% if not tm.get('has_data', True) %}
+                                    <span class="badge bg-warning text-dark ms-2">No Data</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if 'percentage' in metric.id %}
+                                        {{ "%.1f"|format(tm.aggregate_value) }}%
+                                    {% else %}
+                                        {{ "%.2f"|format(tm.aggregate_value) }}
+                                    {% endif %}
+                                </td>
+                                <td>{{ tm.match_values|length }}</td>
+                                <td>
+                                    <a href="{{ url_for('visualization.team_stats', team_number=tm.team) }}" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-chart-line me-1"></i> View Stats
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="mt-3">
+                    <form action="{{ url_for('visualization.compare_teams') }}" method="get">
+                        <div class="row">
+                            <div class="col-md-5">
+                                <select class="form-select" name="teams" multiple required>
+                                    {% for team in teams %}
+                                    <option value="{{ team.team_number }}" selected>{{ team.team_number }} - {{ team.team_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-5">
+                                <select class="form-select" name="metric" required>
+                                    <option value="{{ metric.id }}" selected>{{ metric.name }}</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-info w-100">Update</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Wait for Plotly to be available, then render graphs
+        function waitForPlotly() {
+            if (typeof Plotly !== 'undefined') {
+                console.log('Plotly is loaded, rendering graphs...');
+                renderPlotlyGraphs();
+            } else {
+                console.log('Waiting for Plotly to load...');
+                setTimeout(waitForPlotly, 100);
+            }
+        }
+        
+        waitForPlotly();
+    });
+</script>
+{% endblock %}

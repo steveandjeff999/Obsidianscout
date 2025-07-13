@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Admin Settings{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h2>
+                <i class="fas fa-cogs"></i> Admin Settings
+            </h2>
+            <p class="text-muted">Administrative settings and system configuration options.</p>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-users"></i> User Management</h5>
+                </div>
+                <div class="card-body">
+                    <p>Manage user accounts, roles, and permissions.</p>
+                    <a href="{{ url_for('auth.manage_users') }}" class="btn btn-primary">
+                        <i class="fas fa-users"></i> Manage Users
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-shield-alt"></i> File Integrity</h5>
+                </div>
+                <div class="card-body">
+                    <p>Configure file integrity monitoring and security settings.</p>
+                    <a href="{{ url_for('auth.admin_integrity') }}" class="btn btn-warning">
+                        <i class="fas fa-shield-alt"></i> Integrity Settings
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-cog"></i> Game Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <p>Configure game settings and scouting parameters.</p>
+                    <a href="{{ url_for('main.config') }}" class="btn btn-info">
+                        <i class="fas fa-cog"></i> Game Config
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-database"></i> System Status</h5>
+                </div>
+                <div class="card-body">
+                    <p>View system health and monitoring information.</p>
+                    <a href="{{ url_for('integrity.status') }}" class="btn btn-success">
+                        <i class="fas fa-heartbeat"></i> System Status
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-line"></i> Analytics</h5>
+                </div>
+                <div class="card-body">
+                    <p>View application usage and performance metrics.</p>
+                    <a href="{{ url_for('visualization.index') }}" class="btn btn-secondary">
+                        <i class="fas fa-chart-line"></i> View Analytics
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-download"></i> Data Export</h5>
+                </div>
+                <div class="card-body">
+                    <p>Export scouting data and system configurations.</p>
+                    <a href="{{ url_for('data.export_excel') }}" class="btn btn-dark">
+                        <i class="fas fa-download"></i> Export Data
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header {% if update_available %}bg-warning{% else %}bg-primary text-white{% endif %}">
+                    <h5>
+                        <i class="fas fa-sync-alt"></i> Application Update
+                        {% if update_available %}
+                            <span class="badge bg-warning text-dark float-end">Update Available</span>
+                        {% else %}
+                            <span class="badge bg-success float-end">Up to Date</span>
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p>Update the application to the latest version from Git.</p>
+                    {% if current_version %}
+                    <p class="text-muted small mb-3">Current Version: {{ current_version }}</p>
+                    {% endif %}
+                    <a href="{{ url_for('admin.update_page') }}" class="btn btn-primary">
+                        <i class="fas fa-sync-alt"></i> Update Application
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Placeholder for additional admin cards -->
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card border-info">
+                <div class="card-header bg-info text-white">
+                    <h5><i class="fas fa-info-circle"></i> Admin Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Current User</h6>
+                            <p><strong>Username:</strong> {{ current_user.username }}</p>
+                            <p><strong>Roles:</strong> {{ current_user.get_role_names() | join(', ') }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>System Information</h6>
+                            <p><strong>Application:</strong> 5454 Scout {{ game_config.season }}</p>
+                            <p><strong>Version:</strong> 1.0.0</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

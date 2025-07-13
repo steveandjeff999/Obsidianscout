@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block title %}Side-by-Side Team Comparison - Select Teams{% endblock %}
+
+{% block heading %}Side-by-Side Team Comparison{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h3>Side-by-Side Team Comparison</h3>
+                <p class="text-muted">Select 2-6 teams to compare their performance side by side with detailed metrics.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <form action="{{ url_for('visualization.side_by_side') }}" method="get">
+                    <div class="mb-4">
+                        <label for="teams" class="form-label">Select Teams to Compare (2-6 teams)</label>
+                        <select class="form-select" id="teams" name="teams" multiple required>
+                            {% for team in teams %}
+                            <option value="{{ team.team_number }}">{{ team.team_number }} - {{ team.team_name or 'Unknown' }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Hold Ctrl (or Cmd on Mac) to select multiple teams. Select 2-6 teams for best results.</div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-columns me-2"></i> Compare Teams Side-by-Side
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5>Available Metrics</h5>
+                <p class="text-muted">The comparison will show detailed statistics for all configured metrics:</p>
+                <div class="row">
+                    {% for metric in metrics %}
+                    <div class="col-md-4 mb-2">
+                        <div class="p-2 bg-light rounded">
+                            <strong>{{ metric.name }}</strong>
+                            {% if metric.get('aggregate') %}
+                            <small class="text-muted d-block">Aggregated by {{ metric.aggregate }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const teamsSelect = document.getElementById('teams');
+    const form = document.querySelector('form');
+    
+    form.addEventListener('submit', function(e) {
+        const selectedTeams = Array.from(teamsSelect.selectedOptions);
+        
+        if (selectedTeams.length < 2) {
+            e.preventDefault();
+            alert('Please select at least 2 teams to compare.');
+            return;
+        }
+        
+        if (selectedTeams.length > 6) {
+            e.preventDefault();
+            alert('Please select no more than 6 teams for optimal display.');
+            return;
+        }
+    });
+});
+</script>
+{% endblock %}

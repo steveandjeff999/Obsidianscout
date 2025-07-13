@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Team {{ team.team_number }}{% endblock %}
+
+{% block heading %}Edit Team {{ team.team_number }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Edit Team Information</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('teams.edit', team_number=team.team_number) }}">
+                    <div class="mb-3">
+                        <label for="team_number" class="form-label">Team Number</label>
+                        <input type="number" class="form-control" id="team_number" value="{{ team.team_number }}" disabled>
+                        <div class="form-text">Team number cannot be changed</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="team_name" class="form-label">Team Name</label>
+                        <input type="text" class="form-control" id="team_name" name="team_name" value="{{ team.team_name }}">
+                        <div class="form-text">Edit the team's name</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="location" class="form-label">Location</label>
+                        <input type="text" class="form-control" id="location" name="location" value="{{ team.location }}">
+                        <div class="form-text">Edit the team's location</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="events" class="form-label">Associated Events</label>
+                        <select multiple class="form-select" id="events" name="events" size="5">
+                            {% for event in events %}
+                            <option value="{{ event.id }}" {% if event in team.events %}selected{% endif %}>
+                                {{ event.name }} ({{ event.year }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            Select one or more events this team is participating in.
+                            Hold down Ctrl (Windows) or Command (Mac) to select multiple events.
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('teams.view', team_number=team.team_number) }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i> Back to Team
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i> Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-4 border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">Danger Zone</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-danger">Deleting a team will also remove all associated scouting data. This action cannot be undone.</p>
+                <form method="post" action="{{ url_for('teams.delete', team_number=team.team_number) }}" 
+                      onsubmit="return confirm('Are you sure you want to delete team {{ team.team_number }}? This action cannot be undone.');">
+                    <button type="submit" class="btn btn-outline-danger">
+                        <i class="fas fa-trash-alt me-2"></i> Delete Team
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

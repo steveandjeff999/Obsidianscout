@@ -1,0 +1,417 @@
+{% extends 'base.html' %}
+
+{% block title %}Scout Assistant{% endblock %}
+
+{% block styles %}
+<style>
+    .chat-container {
+        height: calc(100vh - 250px);
+        min-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        background-color: #f9f9f9;
+    }
+    
+    .message {
+        margin-bottom: 15px;
+        padding: 10px 15px;
+        border-radius: 8px;
+        max-width: 80%;
+        position: relative;
+    }
+    
+    .message.user {
+        background-color: #DCF8C6;
+        margin-left: auto;
+        text-align: right;
+    }
+    
+    .message.assistant {
+        background-color: #FFFFFF;
+        margin-right: auto;
+    }
+    
+    .message-content {
+        word-wrap: break-word;
+    }
+    
+    .visualization-container {
+        margin: 15px 0;
+        text-align: center;
+    }
+    
+    .visualization-container img {
+        max-width: 100%;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    .chat-input-container {
+        display: flex;
+        gap: 10px;
+    }
+    
+    #questionInput {
+        flex-grow: 1;
+    }
+    
+    .suggestion-chip {
+        display: inline-block;
+        padding: 6px 12px;
+        margin: 5px;
+        background-color: #f1f1f1;
+        border-radius: 16px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+    
+    .suggestion-chip:hover {
+        background-color: #e0e0e0;
+    }
+    
+    .suggestions-container {
+        margin-top: 10px;
+    }
+    
+    .help-topic {
+        margin-bottom: 5px;
+    }
+    
+    .loading-indicator {
+        display: none;
+        text-align: center;
+        padding: 10px;
+    }
+    
+    .loading-spinner {
+        display: inline-block;
+        width: 25px;
+        height: 25px;
+        border: 3px solid rgba(0, 0, 0, 0.1);
+        border-radius: 50%;
+        border-top-color: #e51837;
+        animation: spin 1s ease-in-out infinite;
+        margin-right: 10px;
+    }
+    
+    .ai-indicator {
+        font-size: 12px;
+        color: #6c757d;
+        margin-top: 8px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .ai-indicator i {
+        color: #0066B3;
+    }
+    
+    .ai-info {
+        background-color: #f0f8ff;
+        border-left: 3px solid #0066B3;
+        padding: 8px 12px;
+        margin-top: 10px;
+        border-radius: 4px;
+        font-style: italic;
+    }
+    
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h1>Scout Assistant</h1>
+            <p>Ask questions about teams, matches, or event data to get insights and visualizations.</p>
+            
+            <!-- Chat History -->
+            <div class="chat-container" id="chatContainer">
+                <div class="message assistant">
+                    <div class="message-content">
+                        <p>Hi! I'm the Scout Assistant. How can I help you with scouting data today?</p>
+                        <p>You can ask me about team statistics, match results, or say "help" to see what I can do.</p>
+                    </div>
+                    <div class="suggestions-container">
+                        <span class="suggestion-chip">Stats for team 5454</span>
+                        <span class="suggestion-chip">Best auto scoring teams</span>
+                        <span class="suggestion-chip">Compare team 5454 and team 1234</span>
+                        <span class="suggestion-chip">Help</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Loading Indicator -->
+            <div class="loading-indicator" id="loadingIndicator">
+                <div class="loading-spinner"></div>
+                <span>Processing your question...</span>
+            </div>
+            
+            <!-- Input Form -->
+            <div class="chat-input-container">
+                <input type="text" class="form-control" id="questionInput" 
+                       placeholder="Ask a question about teams, matches, or event data..." autocomplete="off">
+                <button class="btn btn-primary" id="askButton">Ask</button>
+            </div>
+            <div class="d-flex justify-content-end mt-2">
+                <button class="btn btn-outline-secondary btn-sm" id="clearContextButton">
+                    <i class="fas fa-trash-alt me-1"></i> Clear Chat
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const chatContainer = document.getElementById('chatContainer');
+        const questionInput = document.getElementById('questionInput');
+        const askButton = document.getElementById('askButton');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        
+        // Function to add a message to the chat
+        function addMessage(content, sender, extras = {}) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', sender);
+            
+            const messageContent = document.createElement('div');
+            messageContent.classList.add('message-content');
+            messageContent.innerHTML = `<p>${content}</p>`;
+            messageDiv.appendChild(messageContent);
+            
+            // Add extras like help topics or suggestions
+            if (extras.help_topics) {
+                const topicsContainer = document.createElement('div');
+                topicsContainer.classList.add('help-topics');
+                topicsContainer.innerHTML = '<h5>Available Questions:</h5>';
+                
+                extras.help_topics.forEach(topic => {
+                    const topicElem = document.createElement('div');
+                    topicElem.classList.add('help-topic');
+                    topicElem.innerHTML = `<strong>${topic.topic}</strong>: ${topic.example}`;
+                    topicsContainer.appendChild(topicElem);
+                });
+                
+                messageDiv.appendChild(topicsContainer);
+            }
+            
+            // Add visualization if provided
+            if (extras.visualization) {
+                const visContainer = document.createElement('div');
+                visContainer.classList.add('visualization-container');
+                visContainer.innerHTML = `<img src="data:image/png;base64,${extras.visualization}" alt="Visualization" />`;
+                messageDiv.appendChild(visContainer);
+            }
+            
+            // Add AI indicator if response was AI-generated
+            if (extras.ai_generated) {
+                const aiIndicator = document.createElement('div');
+                aiIndicator.classList.add('ai-indicator');
+                aiIndicator.innerHTML = `<i class="fas fa-brain"></i> AI-assisted response`;
+                messageDiv.appendChild(aiIndicator);
+            }
+            
+            // Add AI info if provided
+            if (extras.ai_info) {
+                const aiInfo = document.createElement('div');
+                aiInfo.classList.add('ai-info');
+                aiInfo.innerHTML = extras.ai_info;
+                messageDiv.appendChild(aiInfo);
+            }
+            
+            // Add suggestion chips if available
+            if (extras.suggestion) {
+                const suggestionsContainer = document.createElement('div');
+                suggestionsContainer.classList.add('suggestions-container');
+                
+                const chip = document.createElement('span');
+                chip.classList.add('suggestion-chip');
+                chip.textContent = extras.suggestion;
+                chip.addEventListener('click', () => {
+                    questionInput.value = chip.textContent;
+                    askQuestion();
+                });
+                
+                suggestionsContainer.appendChild(chip);
+                messageDiv.appendChild(suggestionsContainer);
+            }
+            
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        // Function to ask a question
+        async function askQuestion() {
+            const question = questionInput.value.trim();
+            if (!question) return;
+            
+            // Add user question to chat
+            addMessage(question, 'user');
+            
+            // Clear input and show loading
+            questionInput.value = '';
+            loadingIndicator.style.display = 'block';
+            
+            try {
+                // Send question to the server
+                const response = await fetch('/assistant/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ question: question }),
+                });
+                
+                const data = await response.json();
+                
+                // Hide loading indicator
+                loadingIndicator.style.display = 'none';
+                
+                if (data.error) {
+                    addMessage(`Error: ${data.text || data.message}`, 'assistant');
+                    return;
+                }
+                
+                // Add assistant response to chat
+                addMessage(data.text, 'assistant', { 
+                    help_topics: data.help_topics,
+                    suggestion: data.suggestion 
+                });
+                
+                // Generate visualization if available
+                if (data.visualization_options && data.visualization_options.length > 0) {
+                    await generateVisualization(data.visualization_options[0], data);
+                }
+                
+            } catch (error) {
+                loadingIndicator.style.display = 'none';
+                addMessage(`Sorry, I encountered an error: ${error.message}`, 'assistant');
+            }
+        }
+        
+        // Function to generate visualization
+        async function generateVisualization(visType, data) {
+            try {
+                loadingIndicator.style.display = 'block';
+                
+                const response = await fetch('/assistant/visualize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        type: visType, 
+                        data: data 
+                    }),
+                });
+                
+                const result = await response.json();
+                loadingIndicator.style.display = 'none';
+                
+                if (result.error) {
+                    addMessage(`Failed to generate visualization: ${result.message}`, 'assistant');
+                    return;
+                }
+                
+                // Add visualization to the last message
+                const lastMessage = chatContainer.querySelector('.message.assistant:last-child');
+                
+                if (lastMessage) {
+                    const visContainer = document.createElement('div');
+                    visContainer.classList.add('visualization-container');
+                    visContainer.innerHTML = `<img src="data:image/png;base64,${result.image}" alt="Visualization" />`;
+                    lastMessage.appendChild(visContainer);
+                    
+                    // Scroll to show the visualization
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+                
+            } catch (error) {
+                loadingIndicator.style.display = 'none';
+                addMessage(`Sorry, I couldn't generate the visualization: ${error.message}`, 'assistant');
+            }
+        }
+        
+        // Function to clear the conversation context
+        async function clearContext() {
+            try {
+                const response = await fetch('/assistant/clear-context', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Clear the chat UI
+                    chatContainer.innerHTML = '';
+                    
+                    // Add welcome message back
+                    addMessage(
+                        "Hi! I'm the Scout Assistant. How can I help you with scouting data today? " + 
+                        "You can ask me about team statistics, match results, or say \"help\" to see what I can do.", 
+                        'assistant'
+                    );
+                    
+                    // Add suggestion chips
+                    const lastMessage = chatContainer.querySelector('.message:last-child');
+                    if (lastMessage) {
+                        const suggestionsContainer = document.createElement('div');
+                        suggestionsContainer.classList.add('suggestions-container');
+                        suggestionsContainer.innerHTML = `
+                            <span class="suggestion-chip">Stats for team 5454</span>
+                            <span class="suggestion-chip">Best auto scoring teams</span>
+                            <span class="suggestion-chip">Compare team 5454 and team 1234</span>
+                            <span class="suggestion-chip">Help</span>
+                        `;
+                        lastMessage.appendChild(suggestionsContainer);
+                        
+                        // Re-attach event listeners to new chips
+                        suggestionsContainer.querySelectorAll('.suggestion-chip').forEach(chip => {
+                            chip.addEventListener('click', () => {
+                                questionInput.value = chip.textContent;
+                                askQuestion();
+                            });
+                        });
+                    }
+                } else {
+                    console.error('Failed to clear context:', result.message);
+                }
+            } catch (error) {
+                console.error('Error clearing context:', error);
+            }
+        }
+        
+        // Event listeners
+        askButton.addEventListener('click', askQuestion);
+        
+        questionInput.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                askQuestion();
+            }
+        });
+        
+        // Set up clear context button
+        document.getElementById('clearContextButton').addEventListener('click', clearContext);
+        
+        // Set up suggestion chips
+        document.querySelectorAll('.suggestion-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                questionInput.value = chip.textContent;
+                askQuestion();
+            });
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+
+{% block title %}AI Assistant Configuration{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h1>AI Assistant Configuration</h1>
+            <p>Configure the Scout Assistant's AI capabilities.</p>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-brain me-2"></i> Browser AI Settings
+                </div>
+                <div class="card-body">
+                    <form id="aiConfigForm">
+                        <div class="mb-3">
+                            <label for="apiEndpoint" class="form-label">API Endpoint</label>
+                            <input type="text" class="form-control" id="apiEndpoint" name="endpoint" 
+                                   value="{{ ai_config.endpoint }}" placeholder="https://api.example.com/v1/chat">
+                            <div class="form-text">The URL of the browser AI service.</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="apiKey" class="form-label">API Key</label>
+                            <input type="password" class="form-control" id="apiKey" name="api_key" 
+                                   placeholder="Enter API key">
+                            <div class="form-text">
+                                {% if ai_config.api_key_configured %}
+                                <span class="text-success"><i class="fas fa-check-circle"></i> API key is configured</span>
+                                <small>(Leave blank to keep existing key)</small>
+                                {% else %}
+                                <span class="text-warning"><i class="fas fa-exclamation-circle"></i> No API key configured (using fallback mode)</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="enableAi" name="enable_ai" checked>
+                                <label class="form-check-label" for="enableAi">Enable AI assistance</label>
+                            </div>
+                            <div class="form-text">When enabled, the assistant will use AI for complex questions.</div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">Save Configuration</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-info-circle me-2"></i> AI Information
+                </div>
+                <div class="card-body">
+                    <p>The Scout Assistant uses a browser-based AI service to enhance its capabilities. When enabled, it can:</p>
+                    <ul>
+                        <li>Answer general questions about FRC and robotics</li>
+                        <li>Provide more context for scouting data</li>
+                        <li>Understand more complex natural language queries</li>
+                    </ul>
+                    
+                    <div class="alert alert-info">
+                        <h5><i class="fas fa-lightbulb me-2"></i> How it works</h5>
+                        <p>When the assistant receives a question it doesn't understand using its built-in patterns, 
+                           it will send the question to the AI service. The service returns a response which is then 
+                           displayed to the user.</p>
+                        <p>If no API key is configured or the service is unavailable, the assistant will fall back 
+                           to its built-in response system.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const aiConfigForm = document.getElementById('aiConfigForm');
+        
+        aiConfigForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                endpoint: document.getElementById('apiEndpoint').value,
+                api_key: document.getElementById('apiKey').value,
+                enable_ai: document.getElementById('enableAi').checked
+            };
+            
+            try {
+                const response = await fetch('/assistant/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData),
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Show success message
+                    const successAlert = document.createElement('div');
+                    successAlert.className = 'alert alert-success mt-3';
+                    successAlert.innerHTML = '<i class="fas fa-check-circle me-2"></i> AI configuration saved successfully!';
+                    aiConfigForm.insertAdjacentElement('afterend', successAlert);
+                    
+                    // Update the API key configured status
+                    const apiKeyStatus = document.querySelector('.form-text span');
+                    if (apiKeyStatus) {
+                        apiKeyStatus.className = 'text-success';
+                        apiKeyStatus.innerHTML = '<i class="fas fa-check-circle"></i> API key is configured';
+                        
+                        // Add the "leave blank" message if not already there
+                        if (!apiKeyStatus.nextElementSibling) {
+                            const smallText = document.createElement('small');
+                            smallText.textContent = '(Leave blank to keep existing key)';
+                            apiKeyStatus.insertAdjacentElement('afterend', smallText);
+                        }
+                    }
+                    
+                    // Clear the API key field since it's sensitive
+                    document.getElementById('apiKey').value = '';
+                    
+                    // Remove the success alert after 3 seconds
+                    setTimeout(() => {
+                        successAlert.remove();
+                    }, 3000);
+                } else {
+                    // Show error message
+                    const errorAlert = document.createElement('div');
+                    errorAlert.className = 'alert alert-danger mt-3';
+                    errorAlert.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i> Error saving configuration: ' + result.message;
+                    aiConfigForm.insertAdjacentElement('afterend', errorAlert);
+                    
+                    // Remove the error alert after 5 seconds
+                    setTimeout(() => {
+                        errorAlert.remove();
+                    }, 5000);
+                }
+            } catch (error) {
+                alert('Error saving configuration: ' + error.message);
+            }
+        });
+    });
+</script>
+{% endblock %}

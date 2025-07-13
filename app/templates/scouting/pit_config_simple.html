@@ -1,0 +1,448 @@
+{% extends 'base.html' %}
+
+{% block title %}Simple Pit Configuration Editor{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <i class="fas fa-wrench"></i> Simple Pit Configuration Editor
+                    </h2>
+                    <div class="card-tools">
+                        <a href="{{ url_for('pit_scouting.config') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to Config
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('pit_scouting.config_simple_save') }}" id="pitConfigForm">
+                        <!-- Basic Settings -->
+                        <div class="row mb-4">
+                            <div class="col-md-12">
+                                <h3>Basic Settings</h3>
+                                <div class="form-group">
+                                    <label for="title">Title</label>
+                                    <input type="text" class="form-control" id="title" name="title" 
+                                           value="{{ pit_config.pit_scouting.title }}" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="description">Description</label>
+                                    <input type="text" class="form-control" id="description" name="description" 
+                                           value="{{ pit_config.pit_scouting.description }}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sections -->
+                        <div class="row mb-4">
+                            <div class="col-md-12">
+                                <h3>Sections</h3>
+                                <div id="sectionsContainer">
+                                    {% for section in pit_config.pit_scouting.sections %}
+                                    <div class="section-item card mb-3" data-section-index="{{ loop.index0 }}">
+                                        <div class="card-header">
+                                            <h4>Section {{ loop.index }}</h4>
+                                            <button type="button" class="btn btn-sm btn-danger float-right remove-section">
+                                                <i class="fas fa-trash"></i> Remove Section
+                                            </button>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="form-group">
+                                                        <label>Section ID</label>
+                                                        <input type="text" class="form-control" name="section_id_{{ loop.index0 }}" 
+                                                               value="{{ section.id }}" required>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="form-group">
+                                                        <label>Section Name</label>
+                                                        <input type="text" class="form-control" name="section_name_{{ loop.index0 }}" 
+                                                               value="{{ section.name }}" required>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Elements -->
+                                            <h5>Elements</h5>
+                                            <div class="elements-container" data-section-index="{{ loop.index0 }}">
+                                                {% set section_index = loop.index0 %}
+                                                {% for element in section.elements %}
+                                                <div class="element-item border p-3 mb-2" data-element-index="{{ loop.index0 }}">
+                                                    <div class="row">
+                                                        <div class="col-md-12">
+                                                            <button type="button" class="btn btn-sm btn-danger float-right remove-element">
+                                                                <i class="fas fa-trash"></i> Remove Element
+                                                            </button>
+                                                            <h6>Element {{ loop.index }}</h6>
+                                                        </div>
+                                                    </div>
+                                                    <div class="row">
+                                                        <div class="col-md-4">
+                                                            <div class="form-group">
+                                                                <label>Element ID</label>
+                                                                <input type="text" class="form-control" 
+                                                                       name="element_id_{{ section_index }}_{{ loop.index0 }}" 
+                                                                       value="{{ element.id }}" required>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-4">
+                                                            <div class="form-group">
+                                                                <label>Element Name</label>
+                                                                <input type="text" class="form-control" 
+                                                                       name="element_name_{{ section_index }}_{{ loop.index0 }}" 
+                                                                       value="{{ element.name }}" required>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-4">
+                                                            <div class="form-group">
+                                                                <label>Element Type</label>
+                                                                <select class="form-control element-type-select" 
+                                                                        name="element_type_{{ section_index }}_{{ loop.index0 }}">
+                                                                    <option value="text" {% if element.type == 'text' %}selected{% endif %}>Text</option>
+                                                                    <option value="textarea" {% if element.type == 'textarea' %}selected{% endif %}>Textarea</option>
+                                                                    <option value="number" {% if element.type == 'number' %}selected{% endif %}>Number</option>
+                                                                    <option value="boolean" {% if element.type == 'boolean' %}selected{% endif %}>Boolean</option>
+                                                                    <option value="select" {% if element.type == 'select' %}selected{% endif %}>Select</option>
+                                                                    <option value="multiselect" {% if element.type == 'multiselect' %}selected{% endif %}>Multi-select</option>
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="row">
+                                                        <div class="col-md-4">
+                                                            <div class="form-group">
+                                                                <label>Default Value</label>
+                                                                <input type="text" class="form-control" 
+                                                                       name="element_default_{{ section_index }}_{{ loop.index0 }}" 
+                                                                       value="{{ element.default or '' }}">
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-4">
+                                                            <div class="form-group">
+                                                                <label>Placeholder</label>
+                                                                <input type="text" class="form-control" 
+                                                                       name="element_placeholder_{{ section_index }}_{{ loop.index0 }}" 
+                                                                       value="{{ element.placeholder or '' }}">
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-4">
+                                                            <div class="form-check pt-4">
+                                                                <input type="checkbox" class="form-check-input" 
+                                                                       name="element_required_{{ section_index }}_{{ loop.index0 }}" 
+                                                                       {% if element.required %}checked{% endif %}>
+                                                                <label class="form-check-label">Required</label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Number validation fields -->
+                                                    <div class="number-validation row" style="display: {% if element.type == 'number' %}block{% else %}none{% endif %}">
+                                                        <div class="col-md-6">
+                                                            <div class="form-group">
+                                                                <label>Min Value</label>
+                                                                <input type="number" class="form-control" 
+                                                                       name="element_min_{{ section_index }}_{{ loop.index0 }}" 
+                                                                       value="{{ element.validation.min if element.validation else '' }}">
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <div class="form-group">
+                                                                <label>Max Value</label>
+                                                                <input type="number" class="form-control" 
+                                                                       name="element_max_{{ section_index }}_{{ loop.index0 }}" 
+                                                                       value="{{ element.validation.max if element.validation else '' }}">
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Select/Multiselect options -->
+                                                    <div class="select-options" style="display: {% if element.type in ['select', 'multiselect'] %}block{% else %}none{% endif %}">
+                                                        <div class="form-group">
+                                                            <label>Options (one per line, format: value|label or just value)</label>
+                                                            <textarea class="form-control" rows="4" 
+                                                                      name="element_options_{{ section_index }}_{{ loop.index0 }}">{% if element.options %}{% for option in element.options %}{{ option.value }}|{{ option.label }}
+{% endfor %}{% endif %}</textarea>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                            <button type="button" class="btn btn-success add-element" data-section-index="{{ loop.index0 }}">
+                                                <i class="fas fa-plus"></i> Add Element
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                <button type="button" class="btn btn-success" id="addSection">
+                                    <i class="fas fa-plus"></i> Add Section
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Save Button -->
+                        <div class="row">
+                            <div class="col-md-12">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-save"></i> Save Configuration
+                                </button>
+                                <a href="{{ url_for('pit_scouting.config') }}" class="btn btn-secondary btn-lg">
+                                    <i class="fas fa-times"></i> Cancel
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let sectionIndex = {{ pit_config.pit_scouting.sections|length }};
+    let elementIndexes = {};
+    
+    // Initialize element indexes for each section
+    {% for section in pit_config.pit_scouting.sections %}
+    elementIndexes[{{ loop.index0 }}] = {{ section.elements|length }};
+    {% endfor %}
+    
+    // Add section functionality
+    document.getElementById('addSection').addEventListener('click', function() {
+        const sectionsContainer = document.getElementById('sectionsContainer');
+        const newSection = createSectionElement(sectionIndex);
+        sectionsContainer.appendChild(newSection);
+        elementIndexes[sectionIndex] = 0;
+        sectionIndex++;
+    });
+    
+    // Remove section functionality
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-section') || e.target.parentElement.classList.contains('remove-section')) {
+            const sectionItem = e.target.closest('.section-item');
+            if (confirm('Are you sure you want to remove this section?')) {
+                sectionItem.remove();
+                updateSectionIndexes();
+            }
+        }
+    });
+    
+    // Add element functionality
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('add-element') || e.target.parentElement.classList.contains('add-element')) {
+            const button = e.target.closest('.add-element');
+            const sectionIdx = parseInt(button.dataset.sectionIndex);
+            const elementsContainer = button.previousElementSibling;
+            const newElement = createElementElement(sectionIdx, elementIndexes[sectionIdx]);
+            elementsContainer.appendChild(newElement);
+            elementIndexes[sectionIdx]++;
+        }
+    });
+    
+    // Remove element functionality
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-element') || e.target.parentElement.classList.contains('remove-element')) {
+            const elementItem = e.target.closest('.element-item');
+            if (confirm('Are you sure you want to remove this element?')) {
+                elementItem.remove();
+            }
+        }
+    });
+    
+    // Element type change functionality
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('element-type-select')) {
+            const elementItem = e.target.closest('.element-item');
+            const elementType = e.target.value;
+            const numberValidation = elementItem.querySelector('.number-validation');
+            const selectOptions = elementItem.querySelector('.select-options');
+            
+            if (elementType === 'number') {
+                numberValidation.style.display = 'block';
+            } else {
+                numberValidation.style.display = 'none';
+            }
+            
+            if (elementType === 'select' || elementType === 'multiselect') {
+                selectOptions.style.display = 'block';
+            } else {
+                selectOptions.style.display = 'none';
+            }
+        }
+    });
+    
+    function createSectionElement(sectionIdx) {
+        const sectionDiv = document.createElement('div');
+        sectionDiv.className = 'section-item card mb-3';
+        sectionDiv.dataset.sectionIndex = sectionIdx;
+        
+        sectionDiv.innerHTML = `
+            <div class="card-header">
+                <h4>Section ${sectionIdx + 1}</h4>
+                <button type="button" class="btn btn-sm btn-danger float-right remove-section">
+                    <i class="fas fa-trash"></i> Remove Section
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>Section ID</label>
+                            <input type="text" class="form-control" name="section_id_${sectionIdx}" required>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>Section Name</label>
+                            <input type="text" class="form-control" name="section_name_${sectionIdx}" required>
+                        </div>
+                    </div>
+                </div>
+                <h5>Elements</h5>
+                <div class="elements-container" data-section-index="${sectionIdx}">
+                </div>
+                <button type="button" class="btn btn-success add-element" data-section-index="${sectionIdx}">
+                    <i class="fas fa-plus"></i> Add Element
+                </button>
+            </div>
+        `;
+        
+        return sectionDiv;
+    }
+    
+    function createElementElement(sectionIdx, elementIdx) {
+        const elementDiv = document.createElement('div');
+        elementDiv.className = 'element-item border p-3 mb-2';
+        elementDiv.dataset.elementIndex = elementIdx;
+        
+        elementDiv.innerHTML = `
+            <div class="row">
+                <div class="col-md-12">
+                    <button type="button" class="btn btn-sm btn-danger float-right remove-element">
+                        <i class="fas fa-trash"></i> Remove Element
+                    </button>
+                    <h6>Element ${elementIdx + 1}</h6>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>Element ID</label>
+                        <input type="text" class="form-control" name="element_id_${sectionIdx}_${elementIdx}" required>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>Element Name</label>
+                        <input type="text" class="form-control" name="element_name_${sectionIdx}_${elementIdx}" required>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>Element Type</label>
+                        <select class="form-control element-type-select" name="element_type_${sectionIdx}_${elementIdx}">
+                            <option value="text">Text</option>
+                            <option value="textarea">Textarea</option>
+                            <option value="number">Number</option>
+                            <option value="boolean">Boolean</option>
+                            <option value="select">Select</option>
+                            <option value="multiselect">Multi-select</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>Default Value</label>
+                        <input type="text" class="form-control" name="element_default_${sectionIdx}_${elementIdx}">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>Placeholder</label>
+                        <input type="text" class="form-control" name="element_placeholder_${sectionIdx}_${elementIdx}">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-check pt-4">
+                        <input type="checkbox" class="form-check-input" name="element_required_${sectionIdx}_${elementIdx}">
+                        <label class="form-check-label">Required</label>
+                    </div>
+                </div>
+            </div>
+            <div class="number-validation row" style="display: none">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label>Min Value</label>
+                        <input type="number" class="form-control" name="element_min_${sectionIdx}_${elementIdx}">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label>Max Value</label>
+                        <input type="number" class="form-control" name="element_max_${sectionIdx}_${elementIdx}">
+                    </div>
+                </div>
+            </div>
+            <div class="select-options" style="display: none">
+                <div class="form-group">
+                    <label>Options (one per line, format: value|label or just value)</label>
+                    <textarea class="form-control" rows="4" name="element_options_${sectionIdx}_${elementIdx}"></textarea>
+                </div>
+            </div>
+        `;
+        
+        return elementDiv;
+    }
+    
+    function updateSectionIndexes() {
+        const sections = document.querySelectorAll('.section-item');
+        sections.forEach((section, index) => {
+            section.dataset.sectionIndex = index;
+            const header = section.querySelector('h4');
+            header.textContent = `Section ${index + 1}`;
+            
+            // Update form field names
+            const sectionIdInput = section.querySelector('input[name^="section_id_"]');
+            const sectionNameInput = section.querySelector('input[name^="section_name_"]');
+            
+            if (sectionIdInput) sectionIdInput.name = `section_id_${index}`;
+            if (sectionNameInput) sectionNameInput.name = `section_name_${index}`;
+            
+            // Update element names
+            const elements = section.querySelectorAll('.element-item');
+            elements.forEach((element, elementIndex) => {
+                element.dataset.elementIndex = elementIndex;
+                const elementHeader = element.querySelector('h6');
+                elementHeader.textContent = `Element ${elementIndex + 1}`;
+                
+                // Update all form field names for this element
+                const inputs = element.querySelectorAll('input, select, textarea');
+                inputs.forEach(input => {
+                    const namePattern = /^element_(\w+)_\d+_\d+$/;
+                    const match = input.name.match(namePattern);
+                    if (match) {
+                        const fieldType = match[1];
+                        input.name = `element_${fieldType}_${index}_${elementIndex}`;
+                    }
+                });
+            });
+            
+            // Update add element button
+            const addElementBtn = section.querySelector('.add-element');
+            if (addElementBtn) {
+                addElementBtn.dataset.sectionIndex = index;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,233 @@
+{% extends 'base.html' %}
+
+{% block title %}Activity Logs - Administration{% endblock %}
+
+{% block head %}
+<style>
+    .logs-container {
+        max-height: 800px;
+        overflow-y: auto;
+    }
+    
+    .log-row {
+        transition: background-color 0.2s;
+    }
+    
+    .log-row:hover {
+        background-color: rgba(0,0,0,0.05);
+    }
+    
+    .log-data {
+        max-height: 150px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+    }
+    
+    .filter-bar {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 15px;
+    }
+    
+    .keystroke-data {
+        color: #721c24;
+        background-color: #f8d7da;
+        border-color: #f5c6cb;
+        padding: 5px;
+        border-radius: 3px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h1 class="mb-3">
+                <i class="fas fa-history me-2"></i>
+                Activity Logs
+            </h1>
+            <p class="text-muted">
+                View all user activity including keystrokes, clicks, and other interactions
+            </p>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-filter me-2"></i>
+                        Filter Logs
+                    </h5>
+                </div>
+                <div class="card-body filter-bar">
+                    <form method="GET" class="row g-3">
+                        <div class="col-md-3">
+                            <label for="username" class="form-label">Username</label>
+                            <input type="text" class="form-control" id="username" name="username" value="{{ request.args.get('username', '') }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="action_type" class="form-label">Action Type</label>
+                            <select class="form-select" id="action_type" name="action_type">
+                                <option value="" {% if not request.args.get('action_type') %}selected{% endif %}>All Actions</option>
+                                <option value="keystroke" {% if request.args.get('action_type') == 'keystroke' %}selected{% endif %}>Keystrokes</option>
+                                <option value="click" {% if request.args.get('action_type') == 'click' %}selected{% endif %}>Clicks</option>
+                                <option value="form_submit" {% if request.args.get('action_type') == 'form_submit' %}selected{% endif %}>Form Submissions</option>
+                                <option value="navigation" {% if request.args.get('action_type') == 'navigation' %}selected{% endif %}>Page Navigation</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="page" class="form-label">Page</label>
+                            <input type="text" class="form-control" id="page" name="page" value="{{ request.args.get('page', '') }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="date_range" class="form-label">Date Range</label>
+                            <input type="text" class="form-control" id="date_range" name="date_range" value="{{ request.args.get('date_range', '') }}" placeholder="YYYY-MM-DD to YYYY-MM-DD">
+                        </div>
+                        <div class="col-12 d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-2"></i>
+                                Apply Filters
+                            </button>
+                            <a href="{{ url_for('activity.view_logs') }}" class="btn btn-outline-secondary ms-2">
+                                <i class="fas fa-times me-2"></i>
+                                Clear Filters
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-list-alt me-2"></i>
+                        Activity Log Entries
+                    </h5>
+                    <div>
+                        <span class="badge bg-primary">{{ pagination.total }} Total Entries</span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive logs-container">
+                        <table class="table table-hover table-striped mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Time</th>
+                                    <th>User</th>
+                                    <th>Action</th>
+                                    <th>Page</th>
+                                    <th>Element</th>
+                                    <th>Details</th>
+                                    <th>IP Address</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in logs %}
+                                <tr class="log-row">
+                                    <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                    <td>{{ log.username }}</td>
+                                    <td>
+                                        {% if log.action_type == 'keystroke' %}
+                                            <span class="badge bg-danger">Keystroke</span>
+                                        {% elif log.action_type == 'click' %}
+                                            <span class="badge bg-success">Click</span>
+                                        {% elif log.action_type == 'form_submit' %}
+                                            <span class="badge bg-warning text-dark">Form Submit</span>
+                                        {% elif log.action_type == 'navigation' %}
+                                            <span class="badge bg-info">Navigation</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ log.action_type }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ log.page }}</td>
+                                    <td>
+                                        {% if log.element_id %}
+                                            <code>{{ log.element_type }}</code>: {{ log.element_id }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#logData{{ log.id }}">
+                                            View Data
+                                        </button>
+                                        <div class="collapse mt-2" id="logData{{ log.id }}">
+                                            <div class="log-data {% if log.action_type == 'keystroke' %}keystroke-data{% endif %}">
+                                                {{ log.data|prettify_json }}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{{ log.ip_address }}</td>
+                                </tr>
+                                {% endfor %}
+                                
+                                {% if not logs %}
+                                <tr>
+                                    <td colspan="7" class="text-center py-4">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        No activity logs found matching your criteria
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <nav aria-label="Activity log pagination">
+                        <ul class="pagination justify-content-center mb-0">
+                            {% if pagination.has_prev %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('activity.view_logs', page=pagination.prev_num, **request.args) }}">Previous</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <a class="page-link" href="#">Previous</a>
+                                </li>
+                            {% endif %}
+                            
+                            {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                                {% if page_num %}
+                                    {% if page_num == pagination.page %}
+                                        <li class="page-item active">
+                                            <a class="page-link" href="#">{{ page_num }}</a>
+                                        </li>
+                                    {% else %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="{{ url_for('activity.view_logs', page=page_num, **request.args) }}">{{ page_num }}</a>
+                                        </li>
+                                    {% endif %}
+                                {% else %}
+                                    <li class="page-item disabled">
+                                        <a class="page-link" href="#">...</a>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if pagination.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('activity.view_logs', page=pagination.next_num, **request.args) }}">Next</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <a class="page-link" href="#">Next</a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

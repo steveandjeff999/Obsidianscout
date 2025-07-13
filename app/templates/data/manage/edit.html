@@ -1,0 +1,199 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Scouting Data{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Edit Scouting Data</h1>
+    
+    <div class="card mb-4">
+        <div class="card-header {% if entry.alliance == 'red' %}bg-danger text-white{% elif entry.alliance == 'blue' %}bg-primary text-white{% else %}bg-secondary text-white{% endif %}">
+            <h5 class="mb-0">Team {{ entry.team.team_number }} - {{ entry.match.match_type }} Match {{ entry.match.match_number }}</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <!-- Match and Team Info (Read-only) -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Team</label>
+                            <input type="text" class="form-control" value="{{ entry.team.team_number }} - {{ entry.team.team_name }}" readonly>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Match</label>
+                            <input type="text" class="form-control" value="{{ entry.match.match_type }} {{ entry.match.match_number }}" readonly>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Scout Info -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="scout_name" class="form-label">Scout Name</label>
+                            <input type="text" class="form-control" id="scout_name" name="scout_name" value="{{ entry.scout_name }}">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="alliance" class="form-label">Alliance</label>
+                            <select class="form-select" id="alliance" name="alliance">
+                                <option value="red" {% if entry.alliance == 'red' %}selected{% endif %}>Red</option>
+                                <option value="blue" {% if entry.alliance == 'blue' %}selected{% endif %}>Blue</option>
+                                <option value="unknown" {% if entry.alliance == 'unknown' %}selected{% endif %}>Unknown</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <!-- Scouting Data Fields -->
+                <h5 class="mb-3">Scouting Data</h5>
+                
+                <!-- Auto Period -->
+                <div class="card mb-4">
+                    <div class="card-header bg-primary bg-opacity-25">
+                        <h6 class="mb-0">Auto Period</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for element in game_config.auto_period.scoring_elements %}
+                            <div class="col-md-4 mb-3">
+                                {% if element.type == 'counter' %}
+                                <label for="{{ element.id }}" class="form-label">{{ element.name }}</label>
+                                <input type="number" class="form-control" id="{{ element.id }}" name="{{ element.id }}" min="0" value="{{ entry.data.get(element.id, 0) }}">
+                                {% elif element.type == 'boolean' %}
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="{{ element.id }}" name="{{ element.id }}" {% if entry.data.get(element.id, false) %}checked{% endif %}>
+                                    <label class="form-check-label" for="{{ element.id }}">{{ element.name }}</label>
+                                </div>
+                                {% elif element.type == 'select' %}
+                                <label for="{{ element.id }}" class="form-label">{{ element.name }}</label>
+                                <select class="form-select" id="{{ element.id }}" name="{{ element.id }}">
+                                    {% for option in element.options %}
+                                    <option value="{{ option.value }}" {% if entry.data.get(element.id) == option.value %}selected{% endif %}>{{ option.label }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Teleop Period -->
+                <div class="card mb-4">
+                    <div class="card-header bg-success bg-opacity-25">
+                        <h6 class="mb-0">Teleop Period</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for element in game_config.teleop_period.scoring_elements %}
+                            <div class="col-md-4 mb-3">
+                                {% if element.type == 'counter' %}
+                                <label for="{{ element.id }}" class="form-label">{{ element.name }}</label>
+                                <input type="number" class="form-control" id="{{ element.id }}" name="{{ element.id }}" min="0" value="{{ entry.data.get(element.id, 0) }}">
+                                {% elif element.type == 'boolean' %}
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="{{ element.id }}" name="{{ element.id }}" {% if entry.data.get(element.id, false) %}checked{% endif %}>
+                                    <label class="form-check-label" for="{{ element.id }}">{{ element.name }}</label>
+                                </div>
+                                {% elif element.type == 'select' %}
+                                <label for="{{ element.id }}" class="form-label">{{ element.name }}</label>
+                                <select class="form-select" id="{{ element.id }}" name="{{ element.id }}">
+                                    {% for option in element.options %}
+                                    <option value="{{ option.value }}" {% if entry.data.get(element.id) == option.value %}selected{% endif %}>{{ option.label }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Endgame Period -->
+                <div class="card mb-4">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="mb-0">Endgame Period</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for element in game_config.endgame_period.scoring_elements %}
+                            <div class="col-md-4 mb-3">
+                                {% if element.type == 'counter' %}
+                                <label for="{{ element.id }}" class="form-label">{{ element.name }}</label>
+                                <input type="number" class="form-control" id="{{ element.id }}" name="{{ element.id }}" min="0" value="{{ entry.data.get(element.id, 0) }}">
+                                {% elif element.type == 'boolean' %}
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="{{ element.id }}" name="{{ element.id }}" {% if entry.data.get(element.id, false) %}checked{% endif %}>
+                                    <label class="form-check-label" for="{{ element.id }}">{{ element.name }}</label>
+                                </div>
+                                {% elif element.type == 'select' %}
+                                <label for="{{ element.id }}" class="form-label">{{ element.name }}</label>
+                                <select class="form-select" id="{{ element.id }}" name="{{ element.id }}">
+                                    {% for option in element.options %}
+                                    <option value="{{ option }}" {% if entry.data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Post-Match Ratings -->
+                <div class="card mb-4">
+                    <div class="card-header bg-success bg-opacity-25">
+                        <h6 class="mb-0">Post-Match Ratings</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for element in game_config.post_match.rating_elements %}
+                            <div class="col-md-4 mb-3">
+                                <label for="{{ element.id }}" class="form-label">{{ element.name }}</label>
+                                <select class="form-select" id="{{ element.id }}" name="{{ element.id }}">
+                                    {% for i in range(element.min, element.max + 1) %}
+                                    <option value="{{ i }}" {% if entry.data.get(element.id, element.default) == i %}selected{% endif %}>{{ i }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Comments -->
+                <div class="card mb-4">
+                    <div class="card-header bg-secondary bg-opacity-25">
+                        <h6 class="mb-0">Comments</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for element in game_config.post_match.text_elements %}
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ element.id }}" class="form-label">{{ element.name }}</label>
+                                {% if element.multiline %}
+                                <textarea class="form-control" id="{{ element.id }}" name="{{ element.id }}" rows="3">{{ entry.data.get(element.id, '') }}</textarea>
+                                {% else %}
+                                <input type="text" class="form-control" id="{{ element.id }}" name="{{ element.id }}" value="{{ entry.data.get(element.id, '') }}">
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <a href="{{ url_for('data.manage_entries') }}" class="btn btn-secondary me-md-2">Cancel</a>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

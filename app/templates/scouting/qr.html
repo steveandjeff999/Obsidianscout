@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block title %}QR Code for Team {{ team.team_number }}{% endblock %}
+
+{% block heading %}Scouting Data QR Code{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header {% if scouting_data.alliance == 'red' %}bg-danger text-white{% elif scouting_data.alliance == 'blue' %}bg-primary text-white{% else %}bg-secondary text-white{% endif %}">
+                <h5 class="mb-0">Team {{ team.team_number }} - {{ match.match_type }} Match {{ match.match_number }}</h5>
+            </div>
+            <div class="card-body text-center">
+                <p class="lead">Scan this QR code to import the scouting data to another device.</p>
+                
+                <div class="qr-container mb-4">
+                    <img src="data:image/png;base64,{{ qr_img }}" alt="QR Code" class="img-fluid">
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('scouting.scouting_form', team_id=team.id, match_id=match.id) }}" class="btn btn-warning">
+                        <i class="fas fa-edit me-2"></i> Edit Scouting Data
+                    </a>
+                    <a href="{{ url_for('scouting.index') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-2"></i> Back to Scouting
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Scouting Data Summary</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-4">Team</dt>
+                    <dd class="col-sm-8">{{ team.team_number }} - {{ team.team_name }}</dd>
+                    
+                    <dt class="col-sm-4">Match</dt>
+                    <dd class="col-sm-8">{{ match.match_type }} {{ match.match_number }}</dd>
+                    
+                    <dt class="col-sm-4">Alliance</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge {% if scouting_data.alliance == 'red' %}bg-danger{% elif scouting_data.alliance == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">
+                            {{ scouting_data.alliance|capitalize }}
+                        </span>
+                    </dd>
+                    
+                    <dt class="col-sm-4">Scout</dt>
+                    <dd class="col-sm-8">{{ scouting_data.scout_name }}</dd>
+                    
+                    <dt class="col-sm-4">Timestamp</dt>
+                    <dd class="col-sm-8">{{ scouting_data.timestamp.strftime('%m/%d/%Y %H:%M:%S') }}</dd>
+                </dl>
+                
+                <hr>
+                
+                <h6>Data Contents:</h6>
+                <pre class="config-json">{{ qr_data_json }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

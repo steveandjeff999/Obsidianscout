@@ -1,0 +1,321 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Team Lists{% endblock %}
+
+{% block heading %}Manage Team Lists{% endblock %}
+{% block subheading %}Configure avoid and do not pick lists for {{ event.name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4>Team List Management</h4>
+            <a href="{{ url_for('alliances.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Alliance Selection
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Avoid List -->
+    <div class="col-lg-6 mb-4">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Avoid List
+                </h5>
+                <small>Teams in this list will have their ranking lowered (30% penalty)</small>
+            </div>
+            <div class="card-body">
+                <!-- Add to Avoid List -->
+                <div class="mb-3">
+                    <div class="input-group">
+                        <select class="form-select" id="avoidTeamSelect">
+                            <option value="">Select team to avoid...</option>
+                            {% for team in all_teams %}
+                            <option value="{{ team.team_number }}">{{ team.team_number }} - {{ team.team_name or 'Unknown' }}</option>
+                            {% endfor %}
+                        </select>
+                        <button class="btn btn-warning" onclick="addToList('avoid')">
+                            <i class="fas fa-plus me-1"></i>Add
+                        </button>
+                    </div>
+                    <div class="mt-2">
+                        <input type="text" class="form-control" id="avoidReason" placeholder="Reason (optional)">
+                    </div>
+                </div>
+                
+                <!-- Avoid List Display -->
+                <div id="avoidList">
+                    {% if avoid_entries %}
+                    {% for entry in avoid_entries %}
+                    <div class="d-flex justify-content-between align-items-center border-bottom py-2" data-team-id="{{ entry.team_id }}">
+                        <div>
+                            <strong>Team {{ entry.team.team_number }}</strong>
+                            {% if entry.team.team_name %} - {{ entry.team.team_name }}{% endif %}
+                            {% if entry.reason %}
+                            <br><small class="text-muted">{{ entry.reason }}</small>
+                            {% endif %}
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger" onclick="removeFromList('avoid', {{ entry.team_id }})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="text-muted text-center py-3">No teams in avoid list</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Do Not Pick List -->
+    <div class="col-lg-6 mb-4">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-ban me-2"></i>Do Not Pick List
+                </h5>
+                <small>Teams will only be recommended if no other options are available</small>
+            </div>
+            <div class="card-body">
+                <!-- Add to Do Not Pick List -->
+                <div class="mb-3">
+                    <div class="input-group">
+                        <select class="form-select" id="doNotPickTeamSelect">
+                            <option value="">Select team to avoid picking...</option>
+                            {% for team in all_teams %}
+                            <option value="{{ team.team_number }}">{{ team.team_number }} - {{ team.team_name or 'Unknown' }}</option>
+                            {% endfor %}
+                        </select>
+                        <button class="btn btn-danger" onclick="addToList('do_not_pick')">
+                            <i class="fas fa-plus me-1"></i>Add
+                        </button>
+                    </div>
+                    <div class="mt-2">
+                        <input type="text" class="form-control" id="doNotPickReason" placeholder="Reason (optional)">
+                    </div>
+                </div>
+                
+                <!-- Do Not Pick List Display -->
+                <div id="doNotPickList">
+                    {% if do_not_pick_entries %}
+                    {% for entry in do_not_pick_entries %}
+                    <div class="d-flex justify-content-between align-items-center border-bottom py-2" data-team-id="{{ entry.team_id }}">
+                        <div>
+                            <strong>Team {{ entry.team.team_number }}</strong>
+                            {% if entry.team.team_name %} - {{ entry.team.team_name }}{% endif %}
+                            {% if entry.reason %}
+                            <br><small class="text-muted">{{ entry.reason }}</small>
+                            {% endif %}
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger" onclick="removeFromList('do_not_pick', {{ entry.team_id }})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="text-muted text-center py-3">No teams in do not pick list</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <h6><i class="fas fa-info-circle me-2"></i>How these lists work:</h6>
+            <ul class="mb-0">
+                <li><strong>Avoid List:</strong> Teams will still appear in recommendations but with a 30% reduction in their ranking score</li>
+                <li><strong>Do Not Pick List:</strong> Teams will only be recommended if there are no other available teams</li>
+                <li>Both lists only affect recommendations - you can still manually assign any team to an alliance</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let socket;
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeSocketIO();
+});
+
+function initializeSocketIO() {
+    socket = io();
+    
+    // Join the alliance room for this event
+    socket.emit('join_alliance_room', { event_id: {{ event.id }} });
+    
+    // Listen for list updates
+    socket.on('lists_updated', function(data) {
+        if (data.event_id === {{ event.id }}) {
+            updateListUI(data);
+        }
+    });
+}
+
+function updateListUI(data) {
+    const listId = data.list_type === 'avoid' ? 'avoidList' : 'doNotPickList';
+    const listContainer = document.getElementById(listId);
+    
+    if (data.action === 'add') {
+        // Add new team to the list
+        const teamHtml = `
+            <div class="d-flex justify-content-between align-items-center border-bottom py-2" data-team-id="${data.team_id}">
+                <div>
+                    <strong>Team ${data.team_number}</strong>
+                    ${data.team_name ? ` - ${data.team_name}` : ''}
+                    ${data.reason ? `<br><small class="text-muted">${data.reason}</small>` : ''}
+                </div>
+                <button class="btn btn-sm btn-outline-danger" onclick="removeFromList('${data.list_type}', ${data.team_id})">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        
+        // Check if list is empty and replace empty message
+        const emptyMessage = listContainer.querySelector('.text-muted.text-center');
+        if (emptyMessage) {
+            listContainer.innerHTML = teamHtml;
+        } else {
+            listContainer.insertAdjacentHTML('beforeend', teamHtml);
+        }
+        
+        // Clear the form inputs
+        const selectId = data.list_type === 'avoid' ? 'avoidTeamSelect' : 'doNotPickTeamSelect';
+        const reasonId = data.list_type === 'avoid' ? 'avoidReason' : 'doNotPickReason';
+        document.getElementById(selectId).value = '';
+        document.getElementById(reasonId).value = '';
+        
+    } else if (data.action === 'remove') {
+        // Remove team from the list
+        const teamElement = listContainer.querySelector(`[data-team-id="${data.team_id}"]`);
+        if (teamElement) {
+            teamElement.remove();
+        }
+        
+        // If no teams left, show empty message
+        if (listContainer.children.length === 0) {
+            const listName = data.list_type === 'avoid' ? 'avoid' : 'do not pick';
+            listContainer.innerHTML = `<div class="text-muted text-center py-3">No teams in ${listName} list</div>`;
+        }
+    }
+    
+    // Show notification
+    showNotification(data);
+}
+
+function showNotification(data) {
+    const listName = data.list_type.replace('_', ' ');
+    const message = data.action === 'add' 
+        ? `Team ${data.team_number} added to ${listName} list`
+        : `Team ${data.team_number} removed from ${listName} list`;
+    
+    // Create toast notification
+    const toastHtml = `
+        <div class="toast align-items-center text-white ${data.action === 'add' ? 'bg-success' : 'bg-warning'} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas ${data.action === 'add' ? 'fa-plus' : 'fa-minus'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `;
+    
+    // Add to toast container (create if it doesn't exist)
+    let toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        document.body.appendChild(toastContainer);
+    }
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    
+    // Initialize and show the toast
+    const toastElement = toastContainer.lastElementChild;
+    const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+    toast.show();
+    
+    // Remove toast element after it's hidden
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
+    });
+}
+
+function addToList(listType) {
+    const selectId = listType === 'avoid' ? 'avoidTeamSelect' : 'doNotPickTeamSelect';
+    const reasonId = listType === 'avoid' ? 'avoidReason' : 'doNotPickReason';
+    
+    const teamNumber = document.getElementById(selectId).value;
+    const reason = document.getElementById(reasonId).value;
+    
+    if (!teamNumber) {
+        alert('Please select a team');
+        return;
+    }
+    
+    fetch('/alliances/api/add_to_list', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            team_number: teamNumber,
+            event_id: {{ event.id }},
+            list_type: listType,
+            reason: reason
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            alert('Error: ' + data.message);
+        }
+        // UI will be updated via SocketIO, no need to reload
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Network error occurred');
+    });
+}
+
+function removeFromList(listType, teamId) {
+    if (!confirm('Are you sure you want to remove this team from the list?')) {
+        return;
+    }
+    
+    fetch('/alliances/api/remove_from_list', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            team_id: teamId,
+            event_id: {{ event.id }},
+            list_type: listType
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            alert('Error: ' + data.message);
+        }
+        // UI will be updated via SocketIO, no need to reload
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Network error occurred');
+    });
+}
+</script>
+{% endblock %}

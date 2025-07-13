@@ -1,0 +1,304 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Match Prediction{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Match Prediction</h1>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <h2 class="card-title h5 mb-0">Select Match</h2>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{{ url_for('matches.predict') }}">
+                <div class="row mb-3">
+                    <!-- Event Selection -->
+                    <div class="col-md-6">
+                        <label for="event_id" class="form-label">Event</label>
+                        <select id="event_id" name="event_id" class="form-select" onchange="updateEventSelection(this.value)">
+                            <option value="">Select Event</option>
+                            {% for event in events %}
+                            <option value="{{ event.id }}" {% if selected_event and selected_event.id == event.id %}selected{% endif %}>
+                                {{ event.name }} ({{ event.year }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Match Selection -->
+                    <div class="col-md-6">
+                        <label for="match_id" class="form-label">Match</label>
+                        <select id="match_id" name="match_id" class="form-select" {% if not matches %}disabled{% endif %}>
+                            <option value="">Select Match</option>
+                            {% for match in matches %}
+                            <option value="{{ match.id }}" {% if selected_match and selected_match.id == match.id %}selected{% endif %}>
+                                {{ match.match_type }} {{ match.match_number }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary">Predict Match</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    {% if selected_match and prediction %}
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h2 class="card-title h5 mb-0">
+                Prediction for {{ selected_match.match_type }} {{ selected_match.match_number }}
+            </h2>
+            <a href="{{ url_for('matches.predict_print', match_id=selected_match.id) }}" class="btn btn-sm btn-light" target="_blank">
+                <i class="fas fa-print me-1"></i> Print/PDF Version
+            </a>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <!-- Match Details -->
+                <div class="col-12 mb-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h3 class="h5">Predicted Winner: 
+                            <span class="badge {% if prediction.predicted_winner == 'red' %}bg-danger{% else %}bg-primary{% endif %}">
+                                {{ prediction.predicted_winner|upper }} ALLIANCE
+                            </span>
+                        </h3>
+                        <div>
+                            Confidence: 
+                            <div class="progress" style="width: 150px; display: inline-block;">
+                                <div class="progress-bar {% if prediction.confidence < 0.3 %}bg-warning{% elif prediction.confidence > 0.7 %}bg-success{% else %}bg-info{% endif %}" 
+                                    role="progressbar" 
+                                    style="width: {{ (prediction.confidence * 100)|round }}%;" 
+                                    aria-valuenow="{{ (prediction.confidence * 100)|round }}" 
+                                    aria-valuemin="0" 
+                                    aria-valuemax="100">{{ (prediction.confidence * 100)|round }}%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- RED ALLIANCE -->
+                <div class="col-md-6 mb-4">
+                    <div class="card border-danger">
+                        <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                            <h3 class="h5 mb-0">Red Alliance</h3>
+                            <span class="badge bg-light text-danger">{{ prediction.red_alliance.predicted_score }} pts</span>
+                        </div>
+                        <div class="card-body">
+                            {% if prediction.red_alliance.teams %}
+                                {% for team_data in prediction.red_alliance.teams %}
+                                <div class="card mb-3">
+                                    <div class="card-header bg-light">
+                                        <h4 class="h6 mb-0">
+                                            <a href="{{ url_for('teams.view', team_number=team_data.team.team_number) }}">
+                                                {{ team_data.team.team_number }} - {{ team_data.team.team_name }}
+                                            </a>
+                                        </h4>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div class="row row-cols-2 row-cols-md-3 g-2">
+                                            <!-- Display metrics dynamically based on game config -->
+                                            {% if game_config and game_config.get('data_analysis') and game_config.get('data_analysis').get('key_metrics') %}
+                                                {% for metric in game_config.data_analysis.key_metrics %}
+                                                    {% if metric.display_in_predictions %}
+                                                    <div class="col">
+                                                        <div class="small fw-bold">{{ metric.name }}</div>
+                                                        {% set metric_value = team_data.metrics.get(metric.id, 0) %}
+                                                        
+                                                        {# Check if this metric references any endgame elements #}
+                                                        {% set is_endgame_metric = false %}
+                                                        {% set endgame_element_id = none %}
+                                                        {% if metric.get('formula') and game_config.get('endgame_period', {}).get('scoring_elements') %}
+                                                            {% for endgame_element in game_config.endgame_period.scoring_elements %}
+                                                                {% if endgame_element.id in metric.formula %}
+                                                                    {% set is_endgame_metric = true %}
+                                                                    {% set endgame_element_id = endgame_element.id %}
+                                                                    
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                        
+                                                        {% if is_endgame_metric and endgame_element_id %}
+                                                            {# Find the endgame element configuration #}
+                                                            {% for endgame_element in game_config.endgame_period.scoring_elements %}
+                                                                {% if endgame_element.id == endgame_element_id %}
+                                                                    {# This is an endgame position metric, show the actual position #}
+                                                                    {% set position_value = team_data.metrics.get(endgame_element.id) %}
+                                                                    {% if position_value and position_value != endgame_element.get('default', 'None') %}
+                                                                        {% set position_points = endgame_element.get('points', {}).get(position_value, 0) %}
+                                                                        {% if position_points >= 10 %}
+                                                                            <div class="text-success">{{ position_value }}</div>
+                                                                        {% elif position_points >= 5 %}
+                                                                            <div class="text-primary">{{ position_value }}</div>
+                                                                        {% elif position_points > 0 %}
+                                                                            <div class="text-warning">{{ position_value }}</div>
+                                                                        {% else %}
+                                                                            <div class="text-muted">{{ position_value }}</div>
+                                                                        {% endif %}
+                                                                    {% else %}
+                                                                        <div class="text-muted">{{ endgame_element.get('default', 'None') }}</div>
+                                                                    {% endif %}
+                                                                    
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        {% else %}
+                                                            {# Regular metric display #}
+                                                            <div>{{ metric_value|round(2) }}{% if metric.name.endswith('Points') %} pts{% endif %}</div>
+                                                        {% endif %}
+                                                    </div>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            {% else %}
+                                                {# Fallback for backwards compatibility #}
+                                                <div class="col">
+                                                    <div class="small fw-bold">Auto</div>
+                                                    <div>{{ team_data.metrics.get('apt', team_data.metrics.get('auto_points', 0))|round(1) }} pts</div>
+                                                </div>
+                                                <div class="col">
+                                                    <div class="small fw-bold">Teleop</div>
+                                                    <div>{{ team_data.metrics.get('tpt', team_data.metrics.get('teleop_points', 0))|round(1) }} pts</div>
+                                                </div>
+                                                <div class="col">
+                                                    <div class="small fw-bold">Endgame</div>
+                                                    <div>{{ team_data.metrics.get('ept', team_data.metrics.get('endgame_points', 0))|round(1) }} pts</div>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    No scouting data available for red alliance teams
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- BLUE ALLIANCE -->
+                <div class="col-md-6 mb-4">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                            <h3 class="h5 mb-0">Blue Alliance</h3>
+                            <span class="badge bg-light text-primary">{{ prediction.blue_alliance.predicted_score }} pts</span>
+                        </div>
+                        <div class="card-body">
+                            {% if prediction.blue_alliance.teams %}
+                                {% for team_data in prediction.blue_alliance.teams %}
+                                <div class="card mb-3">
+                                    <div class="card-header bg-light">
+                                        <h4 class="h6 mb-0">
+                                            <a href="{{ url_for('teams.view', team_number=team_data.team.team_number) }}">
+                                                {{ team_data.team.team_number }} - {{ team_data.team.team_name }}
+                                            </a>
+                                        </h4>
+                                    </div>
+                                    <div class="card-body p-2">
+                                        <div class="row row-cols-2 row-cols-md-3 g-2">
+                                            <!-- Display metrics dynamically based on game config -->
+                                            {% if game_config and game_config.get('data_analysis') and game_config.get('data_analysis').get('key_metrics') %}
+                                                {% for metric in game_config.data_analysis.key_metrics %}
+                                                    {% if metric.display_in_predictions %}
+                                                    <div class="col">
+                                                        <div class="small fw-bold">{{ metric.name }}</div>
+                                                        {% set metric_value = team_data.metrics.get(metric.id, 0) %}
+                                                        
+                                                        {# Check if this metric references any endgame elements #}
+                                                        {% set is_endgame_metric = false %}
+                                                        {% set endgame_element_id = none %}
+                                                        {% if metric.get('formula') and game_config.get('endgame_period', {}).get('scoring_elements') %}
+                                                            {% for endgame_element in game_config.endgame_period.scoring_elements %}
+                                                                {% if endgame_element.id in metric.formula %}
+                                                                    {% set is_endgame_metric = true %}
+                                                                    {% set endgame_element_id = endgame_element.id %}
+                                                                    
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                        
+                                                        {% if is_endgame_metric and endgame_element_id %}
+                                                            {# Find the endgame element configuration #}
+                                                            {% for endgame_element in game_config.endgame_period.scoring_elements %}
+                                                                {% if endgame_element.id == endgame_element_id %}
+                                                                    {# This is an endgame position metric, show the actual position #}
+                                                                    {% set position_value = team_data.metrics.get(endgame_element.id) %}
+                                                                    {% if position_value and position_value != endgame_element.get('default', 'None') %}
+                                                                        {% set position_points = endgame_element.get('points', {}).get(position_value, 0) %}
+                                                                        {% if position_points >= 10 %}
+                                                                            <div class="text-success">{{ position_value }}</div>
+                                                                        {% elif position_points >= 5 %}
+                                                                            <div class="text-primary">{{ position_value }}</div>
+                                                                        {% elif position_points > 0 %}
+                                                                            <div class="text-warning">{{ position_value }}</div>
+                                                                        {% else %}
+                                                                            <div class="text-muted">{{ position_value }}</div>
+                                                                        {% endif %}
+                                                                    {% else %}
+                                                                        <div class="text-muted">{{ endgame_element.get('default', 'None') }}</div>
+                                                                    {% endif %}
+                                                                    
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        {% else %}
+                                                            {# Regular metric display #}
+                                                            <div>{{ metric_value|round(2) }}{% if metric.name.endswith('Points') %} pts{% endif %}</div>
+                                                        {% endif %}
+                                                    </div>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            {% else %}
+                                                {# Fallback for backwards compatibility #}
+                                                <div class="col">
+                                                    <div class="small fw-bold">Auto</div>
+                                                    <div>{{ team_data.metrics.get('apt', team_data.metrics.get('auto_points', 0))|round(1) }} pts</div>
+                                                </div>
+                                                <div class="col">
+                                                    <div class="small fw-bold">Teleop</div>
+                                                    <div>{{ team_data.metrics.get('tpt', team_data.metrics.get('teleop_points', 0))|round(1) }} pts</div>
+                                                </div>
+                                                <div class="col">
+                                                    <div class="small fw-bold">Endgame</div>
+                                                    <div>{{ team_data.metrics.get('ept', team_data.metrics.get('endgame_points', 0))|round(1) }} pts</div>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    No scouting data available for blue alliance teams
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Function to update the page when an event is selected
+function updateEventSelection(eventId) {
+    if (eventId) {
+        window.location.href = "{{ url_for('matches.predict') }}?event_id=" + eventId;
+    }
+}
+
+// Handle match selection change
+document.getElementById('match_id').addEventListener('change', function() {
+    if (this.value) {
+        document.querySelector('form').submit();
+    }
+});
+</script>
+{% endblock %}

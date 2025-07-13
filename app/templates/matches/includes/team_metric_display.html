@@ -1,0 +1,28 @@
+{% set component_metrics = [] %}
+{% for metric in game_config.data_analysis.key_metrics %}
+    {% if metric.is_total_component is defined and metric.is_total_component %}
+        {% if component_metrics.append(metric) %}{% endif %}
+    {% endif %}
+{% endfor %}
+
+{% if component_metrics %}
+    {% for metric in component_metrics %}
+    <div class="col">
+        <div class="small fw-bold">{{ metric.name }}</div>
+        <div>{{ team_data.metrics.get(metric.id, 0)|round(1) }} pts</div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="col">
+        <div class="small fw-bold">Auto</div>
+        <div>{{ team_data.metrics.get('auto_points', 0)|round(1) }} pts</div>
+    </div>
+    <div class="col">
+        <div class="small fw-bold">Teleop</div>
+        <div>{{ team_data.metrics.get('teleop_points', 0)|round(1) }} pts</div>
+    </div>
+    <div class="col">
+        <div class="small fw-bold">Endgame</div>
+        <div>{{ team_data.metrics.get('endgame_points', 0)|round(1) }} pts</div>
+    </div>
+{% endif %}

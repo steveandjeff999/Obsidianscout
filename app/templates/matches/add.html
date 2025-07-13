@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block title %}Add Match{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Add New Match</h1>
+    
+    <div class="card">
+        <div class="card-body">
+            <form method="POST">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="match_type" class="form-label">Match Type</label>
+                            <select class="form-select" id="match_type" name="match_type" required>
+                                <option value="" selected disabled>Select match type</option>
+                                {% for match_type in match_types %}
+                                <option value="{{ match_type }}" class="{% if match_type == 'Qualification' %}text-primary fw-bold{% elif match_type == 'Playoff' %}text-danger fw-bold{% elif match_type == 'Practice' %}text-success fw-bold{% endif %}">
+                                    {{ match_type }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="match_number" class="form-label">Match Number</label>
+                            <input type="number" class="form-control" id="match_number" name="match_number" required min="1">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="event_id" class="form-label">Event</label>
+                            <select class="form-select" id="event_id" name="event_id" required>
+                                <option value="" selected disabled>Select event</option>
+                                {% for event in events %}
+                                <option value="{{ event.id }}">{{ event.name }} ({{ event.year }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="card bg-danger bg-opacity-10">
+                            <div class="card-header bg-danger text-white">
+                                <h5 class="mb-0">Red Alliance</h5>
+                            </div>
+                            <div class="card-body">
+                                {% for i in range(alliance_size) %}
+                                <div class="mb-3">
+                                    <label for="red_team_{{ i }}" class="form-label">Team {{ i + 1 }}</label>
+                                    <select class="form-select" id="red_team_{{ i }}" name="red_team_{{ i }}">
+                                        <option value="">No team selected</option>
+                                        {% for team in teams %}
+                                        <option value="{{ team.team_number }}">{{ team.team_number }} - {{ team.team_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                {% endfor %}
+                                
+                                <div class="mb-0">
+                                    <label for="red_score" class="form-label">Final Score (Optional)</label>
+                                    <input type="number" class="form-control" id="red_score" name="red_score" min="0">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card bg-primary bg-opacity-10">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0">Blue Alliance</h5>
+                            </div>
+                            <div class="card-body">
+                                {% for i in range(alliance_size) %}
+                                <div class="mb-3">
+                                    <label for="blue_team_{{ i }}" class="form-label">Team {{ i + 1 }}</label>
+                                    <select class="form-select" id="blue_team_{{ i }}" name="blue_team_{{ i }}">
+                                        <option value="">No team selected</option>
+                                        {% for team in teams %}
+                                        <option value="{{ team.team_number }}">{{ team.team_number }} - {{ team.team_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                {% endfor %}
+                                
+                                <div class="mb-0">
+                                    <label for="blue_score" class="form-label">Final Score (Optional)</label>
+                                    <input type="number" class="form-control" id="blue_score" name="blue_score" min="0">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <a href="{{ url_for('matches.index') }}" class="btn btn-secondary me-md-2">Cancel</a>
+                    <button type="submit" class="btn btn-primary">Save Match</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

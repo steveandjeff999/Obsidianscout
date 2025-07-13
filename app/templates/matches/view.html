@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block title %}Match Details{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">
+        <span class="badge {% if match.match_type == 'Qualification' %}bg-primary{% elif match.match_type == 'Playoff' %}bg-danger{% elif match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %}">{{ match.match_type }}</span>
+        Match {{ match.match_number }}
+        <span class="badge bg-info">{{ match.event.name }}</span>
+    </h1>
+    
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">Red Alliance</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group mb-3">
+                        {% for team_number in match.red_alliance.split(',') if team_number %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Team {{ team_number }}
+                            <div>
+                                <a href="{{ url_for('teams.view', team_number=team_number|int) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-info-circle"></i> Team Info
+                                </a>
+                            </div>
+                        </li>
+                        {% else %}
+                        <li class="list-group-item">No teams assigned</li>
+                        {% endfor %}
+                    </ul>
+                    
+                    {% if match.red_score is not none %}
+                    <div class="alert alert-danger">
+                        <strong>Final Score:</strong> {{ match.red_score }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Blue Alliance</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group mb-3">
+                        {% for team_number in match.blue_alliance.split(',') if team_number %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Team {{ team_number }}
+                            <div>
+                                <a href="{{ url_for('teams.view', team_number=team_number|int) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-info-circle"></i> Team Info
+                                </a>
+                            </div>
+                        </li>
+                        {% else %}
+                        <li class="list-group-item">No teams assigned</li>
+                        {% endfor %}
+                    </ul>
+                    
+                    {% if match.blue_score is not none %}
+                    <div class="alert alert-primary">
+                        <strong>Final Score:</strong> {{ match.blue_score }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">Scouting Data</h5>
+        </div>
+        <div class="card-body">
+            {% if scouting_data %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>Team</th>
+                            <th>Alliance</th>
+                            <th>Scout</th>
+                            <th>Timestamp</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in scouting_data %}
+                        <tr>
+                            <td>{{ entry.team.team_number }} - {{ entry.team.team_name }}</td>
+                            <td>
+                                <span class="badge {% if entry.alliance == 'red' %}bg-danger{% elif entry.alliance == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                    {{ entry.alliance|capitalize }}
+                                </span>
+                            </td>
+                            <td>{{ entry.scout_name }}</td>
+                            <td>{{ entry.timestamp.strftime('%m/%d/%Y %I:%M %p') }}</td>
+                            <td>
+                                <a href="{{ url_for('scouting.view_data', id=entry.id) }}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-search"></i> View
+                                </a>
+                                <a href="{{ url_for('data.edit_entry', entry_id=entry.id) }}" class="btn btn-sm btn-warning">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="mb-0">No scouting data available for this match.</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('matches.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Matches
+        </a>
+        <a href="{{ url_for('matches.edit', match_id=match.id) }}" class="btn btn-warning">
+            <i class="fas fa-edit"></i> Edit Match
+        </a>
+        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteMatchModal">
+            <i class="fas fa-trash"></i> Delete Match
+        </button>
+    </div>
+    
+    <!-- Delete Match Modal -->
+    <div class="modal fade" id="deleteMatchModal" tabindex="-1" aria-labelledby="deleteMatchModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteMatchModalLabel">Confirm Delete</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete {{ match.match_type }} Match {{ match.match_number }}?</p>
+                    <p class="text-danger"><strong>Warning:</strong> This will also delete all associated scouting data for this match!</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <form action="{{ url_for('matches.delete', match_id=match.id) }}" method="POST">
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

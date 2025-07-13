@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit User{% endblock %}
+
+{% block heading %}Edit User: {{ user.username }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">
+                    <i class="fas fa-user-edit me-2"></i>
+                    Edit User Account
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="username" class="form-label">Username <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="username" name="username" 
+                                       value="{{ user.username }}" required>
+                                <div class="form-text">Must be unique. Used for login.</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="email" name="email" 
+                                       value="{{ user.email or '' }}">
+                                <div class="form-text">Optional. For notifications and password recovery.</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="password" class="form-label">New Password</label>
+                        <input type="password" class="form-control" id="password" name="password">
+                        <div class="form-text">Leave blank to keep current password.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                                   {% if user.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="is_active">
+                                Account is active
+                            </label>
+                        </div>
+                        <div class="form-text">Inactive users cannot log in.</div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label">Roles <span class="text-danger">*</span></label>
+                        <div class="border p-3 rounded">
+                            {% for role in roles %}
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" value="{{ role.id }}" 
+                                       id="role_{{ role.id }}" name="roles"
+                                       {% if role in user.roles %}checked{% endif %}>
+                                <label class="form-check-label" for="role_{{ role.id }}">
+                                    {% if role.name == 'admin' %}
+                                        <span class="badge bg-danger me-2">
+                                            <i class="fas fa-crown me-1"></i>Administrator
+                                        </span>
+                                        <small class="text-muted">Full system access including user management</small>
+                                    {% elif role.name == 'analytics' %}
+                                        <span class="badge bg-warning me-2">
+                                            <i class="fas fa-chart-line me-1"></i>Analytics
+                                        </span>
+                                        <small class="text-muted">Access to data analysis, graphs, and reports</small>
+                                    {% elif role.name == 'scout' %}
+                                        <span class="badge bg-info me-2">
+                                            <i class="fas fa-search me-1"></i>Scout
+                                        </span>
+                                        <small class="text-muted">Limited to scouting data entry only</small>
+                                    {% else %}
+                                        <span class="badge bg-secondary me-2">{{ role.name.title() }}</span>
+                                        <small class="text-muted">{{ role.description or 'Custom role' }}</small>
+                                    {% endif %}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="form-text">Select at least one role. Users can have multiple roles.</div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('auth.manage_users') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-save me-2"></i>Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

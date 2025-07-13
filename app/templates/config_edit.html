@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Game Configuration{% endblock %}
+
+{% block heading %}Edit Game Configuration{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Edit {{ game_config.game_name }} Configuration</h5>
+                <div>
+                    <a href="{{ url_for('main.simple_edit_config') }}" class="btn btn-success btn-sm me-2">
+                        <i class="fas fa-edit me-1"></i> Simple Editor
+                    </a>
+                    <a href="{{ url_for('main.config') }}" class="btn btn-light btn-sm">
+                        <i class="fas fa-eye me-1"></i> View Configuration
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> Editing the game configuration will affect all aspects of the scouting system. 
+                    Make sure you understand the structure and impact of your changes.
+                </div>
+                
+                <p>Edit the JSON configuration below. The system will validate your changes before saving.</p>
+                
+                <form id="configForm" action="{{ url_for('main.save_config') }}" method="POST">
+                    <div class="mb-3">
+                        <label for="configJsonEditor" class="form-label">Game Configuration JSON</label>
+                        <div id="configJsonEditor" style="height: 500px; border: 1px solid #ccc; border-radius: 4px;"></div>
+                        <textarea id="config_json" name="config_json" hidden>{{ game_config | tojson }}</textarea>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-save me-1"></i> Save Configuration
+                        </button>
+                        <a href="{{ url_for('main.config') }}" class="btn btn-secondary">
+                            <i class="fas fa-times me-1"></i> Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Configuration Structure Guide</h5>
+            </div>
+            <div class="card-body">
+                <h6><i class="fas fa-cog me-2"></i>Basic Game Settings</h6>
+                <ul>
+                    <li><strong>season:</strong> The year of the FRC season</li>
+                    <li><strong>game_name:</strong> The name of the FRC game</li>
+                    <li><strong>alliance_size:</strong> Number of teams per alliance (typically 3)</li>
+                    <li><strong>match_types:</strong> List of match types in the competition</li>
+                    <li><strong>scouting_stations:</strong> Number of scouting stations available</li>
+                </ul>
+                
+                <h6><i class="fas fa-server me-2"></i>FIRST API Settings</h6>
+                <ul>
+                    <li><strong>current_event_code:</strong> The code for the current event (e.g., "CALA", "NYRO") - used for automatic team/match syncing</li>
+                    <li><strong>api_settings:</strong> FIRST API credentials and settings
+                        <ul>
+                            <li><strong>username:</strong> Your FIRST API username</li>
+                            <li><strong>auth_token:</strong> Your FIRST API authorization token</li>
+                            <li><strong>base_url:</strong> The base URL for FIRST API (usually https://frc-api.firstinspires.org)</li>
+                        </ul>
+                    </li>
+                </ul>
+                
+                <h6><i class="fas fa-list-alt me-2"></i>Game Periods</h6>
+                <p>Each period (auto_period, teleop_period, endgame_period) contains:</p>
+                <ul>
+                    <li><strong>duration_seconds:</strong> How long the period lasts</li>
+                    <li><strong>scoring_elements:</strong> List of elements to track during this period</li>
+                </ul>
+                
+                <h6><i class="fas fa-th-list me-2"></i>Scoring Elements</h6>
+                <p>Each scoring element contains:</p>
+                <ul>
+                    <li><strong>id:</strong> Unique identifier used in formulas and data storage</li>
+                    <li><strong>name:</strong> Display name shown on forms and reports</li>
+                    <li><strong>type:</strong> Type of input (boolean, counter, select, rating, text)</li>
+                    <li><strong>default:</strong> Default value for the element</li>
+                    <li><strong>options:</strong> List of options for select elements</li>
+                </ul>
+                
+                <h6><i class="fas fa-chart-line me-2"></i>Data Analysis</h6>
+                <p>The data_analysis section contains:</p>
+                <ul>
+                    <li><strong>key_metrics:</strong> Formulas used to calculate performance metrics</li>
+                    <li><strong>visualization:</strong> Configuration for charts and graphs</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js" integrity="sha512-GZ1RIgZaSc8rnco/8CXfRdCpDxRCphenIiZ2ztLy3XQfCbQUSCuk8IudvNHxkRA3oUg6q0qejgN/qqyG1duv5Q==" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/mode-json.min.js" integrity="sha512-RYmdX0POd7BQQJxHgL9BNjtpyOzZmRCE5XgnpfXYCdKAEzNUEEQ7Qfbc92QtxRm0kVTrky6zlPHyUHHp/gGZrw==" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-monokai.min.js" integrity="sha512-S4I/WUGRs22+8rjUVu4kBjfNuBNp8GVsgcK2lbaFdws4q6TF3Nd00LxqnHhuxS9iVDfNcUh0jafEzrZrU8Yt7g==" crossorigin="anonymous"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize the JSON editor
+        const editor = ace.edit("configJsonEditor");
+        editor.setTheme("ace/theme/chrome");
+        editor.session.setMode("ace/mode/json");
+        editor.setValue(JSON.stringify({{ game_config | tojson }}, null, 2));
+        editor.setOptions({
+            fontSize: "14px",
+            showPrintMargin: false,
+            showGutter: true,
+        });
+        
+        // Update the hidden form field when the form is submitted
+        document.getElementById('configForm').addEventListener('submit', function() {
+            try {
+                // Parse the JSON to validate it
+                JSON.parse(editor.getValue());
+                
+                // Update the hidden form field
+                document.getElementById('config_json').value = editor.getValue();
+                return true;
+            } catch (e) {
+                alert('Invalid JSON: ' + e.message);
+                return false;
+            }
+        });
+    });
+</script>
+{% endblock %}
+{% endblock %}

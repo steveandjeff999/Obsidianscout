@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}File Integrity - Admin Settings{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('auth.admin_settings') }}">Admin Settings</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">File Integrity</li>
+                </ol>
+            </nav>
+            
+            <h2>
+                <i class="fas fa-shield-alt"></i> File Integrity Monitoring
+            </h2>
+            <p class="text-muted">Configure and manage file integrity monitoring settings.</p>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-info-circle"></i> Current Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mt-2">
+                        <div class="col-sm-6">
+                            <strong>Integrity Status:</strong>
+                        </div>
+                        <div class="col-sm-6">
+                            {% if status.compromised %}
+                                <span class="badge badge-danger">Compromised</span>
+                            {% else %}
+                                <span class="badge badge-success">Secure</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-sm-6">
+                            <strong>Files Monitored:</strong>
+                        </div>
+                        <div class="col-sm-6">
+                            <span class="badge badge-info">{{ status.files_monitored }}</span>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-sm-6">
+                            <strong>Warning-Only Mode:</strong>
+                        </div>
+                        <div class="col-sm-6">
+                            {% if status.warning_only_mode %}
+                                <span class="badge badge-info">Enabled</span>
+                            {% else %}
+                                <span class="badge badge-secondary">Disabled</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-sm-6">
+                            <strong>Password Set:</strong>
+                        </div>
+                        <div class="col-sm-6">
+                            {% if status.has_password %}
+                                <span class="badge badge-success">Yes</span>
+                            {% else %}
+                                <span class="badge badge-danger">No</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-info-circle"></i> Warning-Only Mode</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>File integrity is now permanently in warning-only mode.</strong>
+                        <br>File changes will only show warnings in the console and will not block access to the application.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-cog"></i> Management Actions</h5>
+                </div>
+                <div class="card-body">
+                    <h6>Reinitialize Monitoring</h6>
+                    <p class="text-muted">
+                        Recalculate checksums for all monitored files. Use this if you've made legitimate changes to the application.
+                    </p>
+                    <form method="POST" action="{{ url_for('auth.reinitialize_integrity') }}" onsubmit="return confirm('Are you sure you want to reinitialize file integrity monitoring? This will reset all current checksums.')">
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-sync-alt"></i> Reinitialize
+                        </button>
+                    </form>
+                    
+                    <hr>
+                    
+                    <h6>View Detailed Status</h6>
+                    <p class="text-muted">
+                        View detailed information about file integrity monitoring.
+                    </p>
+                    <a href="{{ url_for('integrity.status') }}" class="btn btn-info">
+                        <i class="fas fa-eye"></i> View Status
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card border-warning">
+                <div class="card-header bg-warning">
+                    <h5><i class="fas fa-exclamation-triangle"></i> Important Information</h5>
+                </div>
+                <div class="card-body">
+                    <ul>
+                        <li><strong>Warning-Only Mode:</strong> File integrity is now permanently in warning-only mode. File changes will only show warnings in the console and will not block access to the application.</li>
+                        <li><strong>Monitored Files:</strong> All application files are monitored except configuration files, logs, and uploads</li>
+                        <li><strong>Monitoring Frequency:</strong> Files are checked at application startup</li>
+                        <li><strong>No Password Required:</strong> Password verification is no longer required since the system operates in warning-only mode</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <a href="{{ url_for('auth.admin_settings') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Admin Settings
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en" class="h-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}FRC Scouting Platform{% endblock %}</title>
+    
+    {% if game_config %}
+    <meta name="auto_duration" content="{{ game_config.get('auto_period', {}).get('duration_seconds', 15) }}">
+    <meta name="teleop_duration" content="{{ game_config.get('teleop_period', {}).get('duration_seconds', 120) }}">
+    <meta name="endgame_duration" content="{{ game_config.get('endgame_period', {}).get('duration_seconds', 30) }}">
+    <script>
+        // Pass game configuration as a JavaScript variable to avoid HTML escaping issues
+        window.GAME_CONFIG = JSON.parse('{{ game_config|tojson|safe }}');
+    </script>
+    {% endif %}
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet">
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    
+    {% block head %}{% endblock %}
+</head>
+<body class="d-flex flex-column h-100">
+    <header class="app-header">
+        <nav class="navbar navbar-expand-lg navbar-light shadow-sm">
+            <div class="container-fluid px-lg-4 px-md-3 px-2">
+                <a class="navbar-brand d-flex align-items-center" href="{% if user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics') %}{{ url_for('scouting.index') }}{% else %}{{ url_for('main.index') }}{% endif %}">
+                    <i class="fas fa-robot brand-icon me-2"></i>
+                    <span class="brand-text fw-bold">5454 <span class="text-primary">Scout</span> <span class="d-none d-sm-inline">{{ game_config.season }}</span></span>
+                </a>
+                
+                <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain" 
+                        aria-controls="navbarMain" aria-expanded="false" aria-label="Toggle navigation">
+                    <i class="fas fa-bars"></i>
+                </button>
+                
+                <div class="collapse navbar-collapse" id="navbarMain">
+                    {% if current_user.is_authenticated %}
+                    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                        {% if not (user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics')) %}
+                        <li class="nav-item">
+                            <a class="nav-link px-3 py-2 {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}">
+                                <i class="fas fa-home nav-icon"></i> 
+                                <span class="nav-text">Dashboard</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        
+                        {% if user_has_role('admin') or user_has_role('analytics') %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle px-3 py-2 {% if request.endpoint and (request.endpoint.startswith('teams') or request.endpoint.startswith('matches') or request.endpoint.startswith('alliances')) %}active{% endif %}" 
+                               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-trophy nav-icon"></i> 
+                                <span class="nav-text">Competition</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-animated shadow">
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('teams') %}active{% endif %}" 
+                                       href="{{ url_for('teams.index') }}">
+                                        <i class="fas fa-users nav-icon text-primary"></i> 
+                                        <span>Teams</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('matches') %}active{% endif %}" 
+                                       href="{{ url_for('matches.index') }}">
+                                        <i class="fas fa-gamepad nav-icon text-danger"></i> 
+                                        <span>Matches</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('alliances') %}active{% endif %}" 
+                                       href="{{ url_for('alliances.index') }}">
+                                        <i class="fas fa-handshake nav-icon text-success"></i> 
+                                        <span>Alliance Selection</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint == 'matches.predict' %}active{% endif %}" 
+                                       href="{{ url_for('matches.predict') }}">
+                                        <i class="fas fa-chart-line nav-icon text-warning"></i> 
+                                        <span>Match Predictions</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint == 'matches.strategy' %}active{% endif %}" 
+                                       href="{{ url_for('matches.strategy') }}">
+                                        <i class="fas fa-chess nav-icon text-info"></i> 
+                                        <span>Match Strategy</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                        {% endif %}
+                        
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle px-3 py-2 {% if request.endpoint and request.endpoint.startswith('scouting') %}active{% endif %}" 
+                               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-clipboard-list nav-icon"></i> 
+                                <span class="nav-text">Scouting</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-animated shadow">
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint == 'scouting.index' %}active{% endif %}" 
+                                       href="{{ url_for('scouting.index') }}">
+                                        <i class="fas fa-home nav-icon text-primary"></i> 
+                                        <span>Dashboard</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint == 'scouting.scouting_form' %}active{% endif %}" 
+                                       href="{{ url_for('scouting.scouting_form') }}">
+                                        <i class="fas fa-rocket nav-icon text-success"></i> 
+                                        <span>Start Scouting</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint == 'pit_scouting.index' %}active{% endif %}" 
+                                       href="{{ url_for('pit_scouting.index') }}">
+                                        <i class="fas fa-wrench nav-icon text-primary"></i> 
+                                        <span>Pit Scouting</span>
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider my-1"></li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint == 'scouting.list_data' %}active{% endif %}" 
+                                       href="{{ url_for('scouting.list_data') }}">
+                                        <i class="fas fa-list nav-icon text-info"></i> 
+                                        <span>All Scouting Data</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint == 'scouting.view_text_elements' %}active{% endif %}" 
+                                       href="{{ url_for('scouting.view_text_elements') }}">
+                                        <i class="fas fa-comment-alt nav-icon text-warning"></i> 
+                                        <span>Text Elements</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                        
+                        {% if user_has_role('admin') or user_has_role('analytics') %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle px-3 py-2 {% if request.endpoint and (request.endpoint.startswith('visualization') or request.endpoint.startswith('graphs')) %}active{% endif %}" 
+                               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-chart-line nav-icon"></i> 
+                                <span class="nav-text">Analytics</span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-animated shadow">
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('visualization') %}active{% endif %}" 
+                                       href="{{ url_for('visualization.index') }}">
+                                        <i class="fas fa-chart-bar nav-icon text-primary"></i> 
+                                        <span>Team Performance</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('graphs') %}active{% endif %}" 
+                                       href="{{ url_for('graphs.index') }}">
+                                        <i class="fas fa-chart-pie nav-icon text-success"></i> 
+                                        <span>Advanced Graphs</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                        
+                        <li class="nav-item">
+                            <a class="nav-link px-3 py-2 {% if request.endpoint and request.endpoint.startswith('assistant') %}active{% endif %}" 
+                               href="{{ url_for('assistant.index') }}">
+                                <i class="fas fa-robot nav-icon"></i> 
+                                <span class="nav-text">Assistant</span>
+                            </a>
+                        </li>
+                        
+                        <li class="nav-item">
+                            <a class="nav-link px-3 py-2 {% if request.endpoint and request.endpoint.startswith('data') %}active{% endif %}" 
+                               href="{{ url_for('data.index') }}">
+                                <i class="fas fa-database nav-icon"></i> 
+                                <span class="nav-text">Data</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                    {% endif %}
+                    
+                    <div class="d-flex align-items-center navbar-actions">
+                        {% if game_config %}
+                        <div class="game-badge me-3 d-none d-lg-block">
+                            <span class="badge bg-light text-dark border">
+                                <i class="fas fa-gamepad me-1"></i> 
+                                <span class="d-none d-xl-inline">{{ game_config.game_name }}</span>
+                                <span class="d-xl-none">{{ game_config.season }}</span>
+                            </span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if current_user.is_authenticated %}
+                        <!-- User Menu -->
+                        <div class="dropdown me-2">
+                            <button class="btn btn-outline-primary btn-sm d-flex align-items-center dropdown-toggle" 
+                                    type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-user-circle me-1"></i>
+                                <span class="d-none d-md-inline">{{ current_user.username }}</span>
+                                <span class="d-md-none">User</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end shadow">
+                                <li>
+                                    <div class="dropdown-header border-bottom pb-2 mb-2">
+                                        <div class="fw-bold text-primary">{{ current_user.username }}</div>
+                                        <div class="small text-muted">
+                                            {% for role in current_user.roles %}
+                                                <span class="badge bg-secondary me-1">{{ role.name.title() }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2" href="{{ url_for('auth.profile') }}">
+                                        <i class="fas fa-user-edit me-2 text-primary"></i> Edit Profile
+                                    </a>
+                                </li>
+                                {% if user_has_role('admin') %}
+                                <li><hr class="dropdown-divider my-1"></li>
+                                <li>
+                                    <a class="dropdown-item py-2" href="{{ url_for('auth.admin_settings') }}">
+                                        <i class="fas fa-cogs me-2 text-info"></i> Admin Settings
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2" href="{{ url_for('auth.admin_integrity') }}">
+                                        <i class="fas fa-shield-alt me-2 text-warning"></i> File Integrity
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2" href="{{ url_for('auth.manage_users') }}">
+                                        <i class="fas fa-users-cog me-2 text-success"></i> Manage Users
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2" href="{{ url_for('activity.view_logs') }}">
+                                        <i class="fas fa-history me-2 text-secondary"></i> Activity Logs
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2" href="{{ url_for('api_test.index') }}">
+                                        <i class="fas fa-code me-2 text-primary"></i> API Testing
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2" href="{{ url_for('auth.system_check') }}">
+                                        <i class="fas fa-heartbeat me-2 text-danger"></i> System Check
+                                    </a>
+                                </li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider my-1"></li>
+                                <li>
+                                    <a class="dropdown-item py-2 text-danger" href="{{ url_for('auth.logout') }}">
+                                        <i class="fas fa-sign-out-alt me-2"></i> Logout
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        {% endif %}
+                        
+                        {% if current_user.is_authenticated and (user_has_role('admin') or user_has_role('analytics')) %}
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary btn-sm d-flex align-items-center dropdown-toggle" 
+                                    type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-cog me-1"></i>
+                                <span class="d-none d-lg-inline">Settings</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end shadow">
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint == 'main.config' %}active{% endif %}" 
+                                       href="{{ url_for('main.config') }}">
+                                        <i class="fas fa-wrench me-2 text-primary"></i> Game Configuration
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider my-1"></li>
+                                <li>
+                                    <div class="px-3 py-2">
+                                        <div class="form-check form-switch d-flex align-items-center">
+                                            <input class="form-check-input me-2" type="checkbox" id="darkModeToggle">
+                                            <label class="form-check-label d-flex align-items-center" for="darkModeToggle">
+                                                <i class="fas fa-moon me-2 text-primary" id="darkModeIcon"></i> 
+                                                <span id="darkModeLabel">Dark Mode</span>
+                                            </label>
+                                            <style>
+                                                .form-switch .form-check-input {
+                                                    height: 1.2rem;
+                                                    width: 2.2rem;
+                                                    cursor: pointer;
+                                                }
+                                                .form-check-label {
+                                                    cursor: pointer;
+                                                }
+                                                .dark-mode #darkModeIcon {
+                                                    color: #ffc107 !important;
+                                                }
+                                                .dark-mode #darkModeLabel {
+                                                    color: #e6e6e6;
+                                                }
+                                            </style>
+                                        </div>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+                        <div class="toast-header bg-{{ category }}{% if category in ['danger', 'success', 'primary'] %} text-white{% endif %}">
+                            <i class="fas {% if category == 'success' %}fa-check-circle{% elif category == 'danger' %}fa-exclamation-triangle{% elif category == 'warning' %}fa-exclamation-circle{% else %}fa-info-circle{% endif %} me-2"></i>
+                            <strong class="me-auto">Notification</strong>
+                            <small>Just now</small>
+                            <button type="button" class="btn-close {% if category in ['danger', 'success', 'primary'] %}btn-close-white{% endif %}" data-bs-dismiss="toast" aria-label="Close"></button>
+                        </div>
+                        <div class="toast-body">
+                            {{ message }}
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    {% block breadcrumb %}{% endblock %}
+
+    <main class="flex-shrink-0 py-4">
+        <!-- File Integrity Warning Banner -->
+        {% if integrity_status.integrity_compromised and integrity_status.warning_only_mode %}
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>File Integrity Warning:</strong> Application files have been modified. Warning-only mode is enabled.
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endif %}
+        
+        <div class="container">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h1 class="page-title">{% block heading %}FRC Scouting Platform{% endblock %}</h1>
+                    {% block subheading %}{% endblock %}
+                </div>
+            </div>
+            
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <footer class="footer mt-auto py-3">
+        <div class="container">
+            <div class="row align-items-center g-2">
+                <div class="col-md-6 text-center text-md-start">
+                    <div class="d-flex align-items-center justify-content-center justify-content-md-start">
+                        <i class="fas fa-robot brand-icon me-2 text-primary"></i>
+                        <span class="fw-bold">5454 Scout</span>
+                        <span class="text-muted mx-2">•</span>
+                        <span class="small text-muted">FRC Scouting Platform</span>
+                    </div>
+                </div>
+                <div class="col-md-6 text-center text-md-end">
+                    <div class="small text-muted">
+                        {% if game_config %}
+                        <span>{{ game_config.game_name }} {{ game_config.season }}</span>
+                        {% else %}
+                        <span>No active configuration</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <div id="loading-overlay" class="d-none">
+        <div class="spinner-container">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <div class="mt-2">Loading...</div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    
+    <script src="{{ url_for('static', filename='js/qrcode.min.js') }}"></script>
+    
+    <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/activity-logger.js') }}"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize dark mode
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            const body = document.body;
+            
+            // Check for system preference first, then user's localStorage preference
+            const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const storedPreference = localStorage.getItem('darkMode');
+            
+            // Set initial state based on user preference (if set) or system preference
+            const isDarkMode = storedPreference !== null ? storedPreference === 'true' : prefersDarkMode;
+            
+            // Set initial state
+            const darkModeIcon = document.getElementById('darkModeIcon');
+            const darkModeLabel = document.getElementById('darkModeLabel');
+            
+            if (isDarkMode) {
+                body.classList.add('dark-mode');
+                darkModeToggle.checked = true;
+                darkModeIcon.classList.remove('fa-moon');
+                darkModeIcon.classList.add('fa-sun');
+                darkModeLabel.textContent = 'Light Mode';
+            }
+            
+            // Toggle dark mode on change
+            darkModeToggle.addEventListener('change', function() {
+                const darkModeIcon = document.getElementById('darkModeIcon');
+                const darkModeLabel = document.getElementById('darkModeLabel');
+                
+                if (this.checked) {
+                    body.classList.add('dark-mode');
+                    localStorage.setItem('darkMode', 'true');
+                    darkModeIcon.classList.remove('fa-moon');
+                    darkModeIcon.classList.add('fa-sun');
+                    darkModeLabel.textContent = 'Light Mode';
+                } else {
+                    body.classList.remove('dark-mode');
+                    localStorage.setItem('darkMode', 'false');
+                    darkModeIcon.classList.remove('fa-sun');
+                    darkModeIcon.classList.add('fa-moon');
+                    darkModeLabel.textContent = 'Dark Mode';
+                }
+                
+                // Force refresh computedStyle to ensure all dark mode styles are applied
+                document.documentElement.style.display='none';
+                document.documentElement.offsetHeight;
+                document.documentElement.style.display='';
+            });
+            
+            // Listen for system preference changes
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+                // Only change if user hasn't set a preference
+                if (localStorage.getItem('darkMode') === null) {
+                    if (e.matches) {
+                        body.classList.add('dark-mode');
+                        darkModeToggle.checked = true;
+                    } else {
+                        body.classList.remove('dark-mode');
+                        darkModeToggle.checked = false;
+                    }
+                }
+            });
+            
+            // Initialize toasts
+            var toastElList = document.querySelectorAll('.toast');
+            Array.from(toastElList).map(function (toastEl) {
+                return new bootstrap.Toast(toastEl, {
+                    autohide: true,
+                    delay: 5000
+                });
+            });
+        });
+    </script>
+    
+    <!-- Dark mode handlers -->
+    <script src="{{ url_for('static', filename='js/dark-mode-handlers.js') }}"></script>
+    
+    {% block scripts %}{% endblock %}
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
