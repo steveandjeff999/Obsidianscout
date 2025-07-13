@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+
+{% block title %}User Profile{% endblock %}
+
+{% block heading %}User Profile{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-user me-2"></i>
+                    Profile Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Username:</label>
+                            <p class="form-control-plaintext">{{ user.username }}</p>
+                        </div>
+                        
+                        {% if user.email %}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Email:</label>
+                            <p class="form-control-plaintext">{{ user.email }}</p>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Account Status:</label>
+                            <p class="form-control-plaintext">
+                                {% if user.is_active %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Inactive</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Roles:</label>
+                            <div>
+                                {% for role in user.roles %}
+                                    {% if role.name == 'admin' %}
+                                        <span class="badge bg-danger me-2">
+                                            <i class="fas fa-crown me-1"></i>{{ role.name.title() }}
+                                        </span>
+                                    {% elif role.name == 'analytics' %}
+                                        <span class="badge bg-warning me-2">
+                                            <i class="fas fa-chart-line me-1"></i>{{ role.name.title() }}
+                                        </span>
+                                    {% elif role.name == 'scout' %}
+                                        <span class="badge bg-info me-2">
+                                            <i class="fas fa-search me-1"></i>{{ role.name.title() }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary me-2">{{ role.name.title() }}</span>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Member Since:</label>
+                            <p class="form-control-plaintext">{{ user.created_at.strftime('%B %d, %Y') }}</p>
+                        </div>
+                        
+                        {% if user.last_login %}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Last Login:</label>
+                            <p class="form-control-plaintext">{{ user.last_login.strftime('%B %d, %Y at %I:%M %p') }}</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <h6 class="fw-bold mb-3">Access Permissions:</h6>
+                        <div class="row">
+                            {% if user.has_role('admin') %}
+                                <div class="col-md-12">
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-crown me-2"></i>
+                                        <strong>Administrator Access:</strong> You have full access to all system features including user management, analytics, scouting, and system configuration.
+                                    </div>
+                                </div>
+                            {% elif user.has_role('analytics') %}
+                                <div class="col-md-12">
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-chart-line me-2"></i>
+                                        <strong>Analytics Access:</strong> You have access to all data analysis features, graphs, visualizations, team management, match data, and scouting data.
+                                    </div>
+                                </div>
+                            {% elif user.has_role('scout') %}
+                                <div class="col-md-12">
+                                    <div class="alert alert-primary">
+                                        <i class="fas fa-search me-2"></i>
+                                        <strong>Scout Access:</strong> You have access to the scouting system for data entry and viewing your scouting assignments.
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <div class="d-flex justify-content-between">
+                    <a href="{{ url_for('main.index') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                    </a>
+                    
+                    {% if user.has_role('admin') %}
+                    <div>
+                        <a href="{{ url_for('auth.admin_settings') }}" class="btn btn-primary me-2">
+                            <i class="fas fa-cogs me-2"></i>Admin Settings
+                        </a>
+                        <a href="{{ url_for('auth.admin_integrity') }}" class="btn btn-warning">
+                            <i class="fas fa-shield-alt me-2"></i>File Integrity
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

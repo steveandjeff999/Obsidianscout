@@ -1,0 +1,260 @@
+{% extends 'base.html' %}
+
+{% block title %}Scouting Dashboard{% endblock %}
+
+{% block heading %}Scouting Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Start Scouting</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <p class="lead">Quick start scouting with one click:</p>
+                        <div class="d-grid">
+                            <a href="{{ url_for('scouting.scouting_form') }}" class="btn btn-primary btn-lg">
+                                <i class="fas fa-rocket me-2"></i> Start Scouting Now
+                            </a>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Offline Data Management Section -->
+<div class="row">
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-wifi-slash me-2"></i> Offline Scouting Data</h5>
+                <button id="refresh-offline-data" class="btn btn-sm btn-outline-dark">
+                    <i class="fas fa-sync me-1"></i> Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Data saved with the "Generate QR" button is stored locally on this device. When online, you can sync it to the server.
+                </div>
+                
+                <div id="offline-data-container">
+                    <!-- This will be populated by the setupOfflineDataManager function -->
+                    <div class="text-center py-4">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Recent Scouting Data Section with conditional styling for scout role -->
+    <div class="col-md-6 mb-4">
+        <div class="card {% if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin') %}bg-light text-muted{% endif %}">
+            <div class="card-header {% if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin') %}bg-secondary text-white{% else %}bg-info text-white{% endif %}">
+                <h5 class="mb-0">Recent Scouting Data</h5>
+                {% if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin') %}
+                <small class="d-block mt-1"><i class="fas fa-lock me-1"></i> Limited access - contact an admin for details</small>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% set recent_data = scouting_data|default([]) %}
+                {% if recent_data %}
+                <div class="table-responsive">
+                    <table class="table {% if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin') %}table-secondary{% else %}table-striped table-hover{% endif %}">
+                        <thead>
+                            <tr>
+                                <th>Team</th>
+                                <th>Match</th>
+                                <th>Scout</th>
+                                <th>Timestamp</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for data in recent_data %}
+                            <tr>
+                                <td>{{ data.team.team_number }}</td>
+                                <td>
+                                    <span class="badge {% if data.match.match_type == 'Qualification' %}bg-primary{% elif data.match.match_type == 'Playoff' %}bg-danger{% elif data.match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %}">
+                                        {{ data.match.match_type }}
+                                    </span>
+                                    {{ data.match.match_number }}
+                                </td>
+                                <td>{{ data.scout_name }}</td>
+                                <td>{{ data.timestamp.strftime('%m/%d/%Y %H:%M') }}</td>
+                                <td>
+                                    <a href="{{ url_for('scouting.view_data', id=data.id) }}" class="btn btn-sm btn-primary {% if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin') %}disabled{% endif %}">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('scouting.scouting_form', team_id=data.team_id, match_id=data.match_id) }}" class="btn btn-sm btn-warning {% if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin') %}disabled{% endif %}">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-center">No scouting data available yet.</p>
+                {% endif %}
+                
+                <div class="text-center mt-3">
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                        <a href="{{ url_for('scouting.list_data') }}" class="btn {% if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin') %}btn-outline-secondary disabled{% else %}btn-outline-primary{% endif %}">
+                            <i class="fas fa-list me-2"></i> View All Scouting Data
+                        </a>
+                        <a href="{{ url_for('scouting.view_text_elements') }}" class="btn btn-outline-info">
+                            <i class="fas fa-comment-alt me-2"></i> View Text Elements
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Game Configuration Section with conditional styling for scout role -->
+    <div class="col-md-6 mb-4">
+        <div class="card {% if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin') %}bg-light text-muted{% endif %}">
+            <div class="card-header {% if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin') %}bg-secondary text-white{% else %}bg-success text-white{% endif %}">
+                <h5 class="mb-0">Game Configuration</h5>
+                {% if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin') %}
+                <small class="d-block mt-1"><i class="fas fa-lock me-1"></i> Limited access - contact an admin to modify</small>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-6">Game Name</dt>
+                    <dd class="col-sm-6">{{ game_config.game_name }}</dd>
+                    
+                    <dt class="col-sm-6">Season</dt>
+                    <dd class="col-sm-6">{{ game_config.season }}</dd>
+                    
+                    <dt class="col-sm-6">Alliance Size</dt>
+                    <dd class="col-sm-6">{{ game_config.alliance_size }} teams</dd>
+                    
+                    <dt class="col-sm-6">Scouting Stations</dt>
+                    <dd class="col-sm-6">{{ game_config.scouting_stations }}</dd>
+                    
+                    <dt class="col-sm-6">Match Types</dt>
+                    <dd class="col-sm-6">{{ game_config.match_types|join(', ') }}</dd>
+                    
+                    <dt class="col-sm-6">Auto Period</dt>
+                    <dd class="col-sm-6">{{ game_config.auto_period.duration_seconds }} seconds</dd>
+                    
+                    <dt class="col-sm-6">Teleop Period</dt>
+                    <dd class="col-sm-6">{{ game_config.teleop_period.duration_seconds }} seconds</dd>
+                    
+                    <dt class="col-sm-6">Endgame Period</dt>
+                    <dd class="col-sm-6">{{ game_config.endgame_period.duration_seconds }} seconds</dd>
+                </dl>
+                
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('main.config') }}" class="btn {% if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin') %}btn-outline-secondary disabled{% else %}btn-outline-success{% endif %}">
+                        <i class="fas fa-cog me-2"></i> View Full Configuration
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Connectivity Status Indicator -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="connectivity-toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="2000">
+        <div class="toast-header">
+            <span id="connectivity-icon" class="me-2"></span>
+            <strong class="me-auto" id="connectivity-status">Connection Status</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body" id="connectivity-message">
+            Your connection status changed
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle team and match selection
+        const teamSelector = document.getElementById('team-selector');
+        const matchSelector = document.getElementById('match-selector');
+        const startButton = document.getElementById('start-scouting');
+        
+        // Style match type dropdown options
+        const matchOptions = matchSelector?.querySelectorAll('option') || [];
+        matchOptions.forEach(option => {
+            if (option.value) {
+                const matchType = option.getAttribute('data-match-type');
+                let textClass = '';
+                
+                if (matchType === 'Qualification') {
+                    textClass = 'text-primary';
+                } else if (matchType === 'Playoff') {
+                    textClass = 'text-danger';
+                } else if (matchType === 'Practice') {
+                    textClass = 'text-success';
+                }
+                
+                if (textClass) {
+                    option.classList.add(textClass, 'fw-bold');
+                }
+            }
+        });
+        
+        // Enable/disable start button based on selections
+        function checkSelections() {
+            if (teamSelector && matchSelector && startButton) {
+                if (teamSelector.value && matchSelector.value) {
+                    startButton.disabled = false;
+                } else {
+                    startButton.disabled = true;
+                }
+            }
+        }
+        
+        if (teamSelector && matchSelector) {
+            teamSelector.addEventListener('change', checkSelections);
+            matchSelector.addEventListener('change', checkSelections);
+        }
+        
+        // Online/Offline status handling
+        function updateConnectivityStatus() {
+            const toast = document.getElementById('connectivity-toast');
+            const bsToast = bootstrap.Toast.getOrCreateInstance(toast);
+            const statusElem = document.getElementById('connectivity-status');
+            const msgElem = document.getElementById('connectivity-message');
+            const iconElem = document.getElementById('connectivity-icon');
+            
+            if (navigator.onLine) {
+                statusElem.textContent = 'Online';
+                msgElem.textContent = 'Connection restored. You can now sync your data.';
+                iconElem.innerHTML = '<i class="fas fa-wifi text-success"></i>';
+                document.getElementById('refresh-offline-data')?.click();
+            } else {
+                statusElem.textContent = 'Offline';
+                msgElem.textContent = 'You are offline. Data will be stored locally.';
+                iconElem.innerHTML = '<i class="fas fa-wifi-slash text-warning"></i>';
+            }
+            
+            bsToast.show();
+        }
+        
+        // Listen for online/offline events
+        window.addEventListener('online', updateConnectivityStatus);
+        window.addEventListener('offline', updateConnectivityStatus);
+    });
+</script>
+{% endblock %}

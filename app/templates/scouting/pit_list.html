@@ -1,0 +1,398 @@
+{% extends 'base.html' %}
+
+{% block title %}Pit Scouting Data{% endblock %}
+
+{% block heading %}Pit Scouting Data{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0">All Pit Scouting Data</h5>
+                {% if current_event %}
+                    <small class="text-muted">{{ current_event.name }} ({{ current_event.code }})</small>
+                {% endif %}
+            </div>
+            <div>
+                <button id="upload-all-btn" class="btn btn-warning me-2">
+                    <i class="fas fa-cloud-upload-alt me-1"></i> Upload All
+                </button>
+                <a href="{{ url_for('pit_scouting.form') }}" class="btn btn-success">
+                    <i class="fas fa-plus me-1"></i> New Pit Scouting
+                </a>
+                <a href="{{ url_for('pit_scouting.index') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-1"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0">
+                    <i class="fas fa-list me-2"></i> Pit Scouting Entries
+                    <span class="badge bg-light text-dark ms-2">{{ pit_data|length }}</span>
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if pit_data %}
+                    <!-- Filters and Search -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <input type="text" id="searchInput" class="form-control" placeholder="Search teams, scouts, or notes...">
+                        </div>
+                        <div class="col-md-3">
+                            <select id="statusFilter" class="form-select">
+                                <option value="">All Status</option>
+                                <option value="uploaded">Uploaded</option>
+                                <option value="local">Local Only</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select id="scoutFilter" class="form-select">
+                                <option value="">All Scouts</option>
+                                {% for scout in pit_data|map(attribute='scout_name')|unique|sort %}
+                                    <option value="{{ scout }}">{{ scout }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button id="clearFilters" class="btn btn-outline-secondary w-100">
+                                <i class="fas fa-times me-1"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Data Table -->
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="pitDataTable">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Team</th>
+                                    <th>Scout</th>
+                                    <th>Drivetrain</th>
+                                    <th>Capabilities</th>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entry in pit_data %}
+                                <tr class="pit-data-row" 
+                                    data-team="{{ entry.team.team_number }}"
+                                    data-scout="{{ entry.scout_name }}"
+                                    data-status="{{ 'uploaded' if entry.is_uploaded else 'local' }}">
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="team-number-badge me-2">
+                                                {{ entry.team.team_number }}
+                                            </div>
+                                            <div>
+                                                {% if entry.team.team_name %}
+                                                    <strong>{{ entry.team.team_name }}</strong>
+                                                {% else %}
+                                                    <strong>Team {{ entry.team.team_number }}</strong>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ entry.scout_name }}</span>
+                                    </td>
+                                    <td>
+                                        {% set drivetrain = entry.data.get('drivetrain_type', 'Unknown') %}
+                                        <span class="badge bg-secondary">{{ drivetrain.title() }}</span>
+                                    </td>
+                                    <td>
+                                        <div class="capabilities-badges">
+                                            {% if entry.data.get('can_score_coral') %}
+                                                <span class="badge bg-warning text-dark">CORAL</span>
+                                            {% endif %}
+                                            {% if entry.data.get('can_score_algae') %}
+                                                <span class="badge bg-success">ALGAE</span>
+                                            {% endif %}
+                                            {% if entry.data.get('autonomous_capabilities') %}
+                                                <span class="badge bg-primary">AUTO</span>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <small>{{ entry.timestamp.strftime('%m/%d/%Y') }}</small>
+                                        <br>
+                                        <small class="text-muted">{{ entry.timestamp.strftime('%H:%M') }}</small>
+                                    </td>
+                                    <td>
+                                        {% if entry.is_uploaded %}
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-check me-1"></i> Uploaded
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-warning">
+                                                <i class="fas fa-exclamation-triangle me-1"></i> Local
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="{{ url_for('pit_scouting.view', id=entry.id) }}" 
+                                               class="btn btn-sm btn-outline-primary"
+                                               title="View Details">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            {% if current_user.has_role('admin') or entry.scout_id == current_user.id %}
+                                                <a href="{{ url_for('pit_scouting.edit', id=entry.id) }}" 
+                                                   class="btn btn-sm btn-outline-warning"
+                                                   title="Edit">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <button class="btn btn-sm btn-outline-danger delete-btn" 
+                                                        data-id="{{ entry.id }}"
+                                                        data-team="{{ entry.team.team_number }}"
+                                                        title="Delete">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Export Options -->
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <div class="d-flex justify-content-end">
+                                <button id="exportBtn" class="btn btn-outline-success me-2">
+                                    <i class="fas fa-download me-1"></i> Export Data
+                                </button>
+                                <button id="printBtn" class="btn btn-outline-secondary">
+                                    <i class="fas fa-print me-1"></i> Print
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-clipboard-list fa-5x text-muted mb-3"></i>
+                        <h4 class="text-muted">No pit scouting data found</h4>
+                        <p class="text-muted">Start by scouting teams in the pits!</p>
+                        <a href="{{ url_for('pit_scouting.form') }}" class="btn btn-success btn-lg">
+                            <i class="fas fa-plus me-2"></i> Start Pit Scouting
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete the pit scouting data for <strong id="deleteTeamNumber"></strong>?
+                <br><br>
+                <small class="text-muted">This action cannot be undone.</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Search and filter functionality
+    const searchInput = document.getElementById('searchInput');
+    const statusFilter = document.getElementById('statusFilter');
+    const scoutFilter = document.getElementById('scoutFilter');
+    const clearFiltersBtn = document.getElementById('clearFilters');
+    const rows = document.querySelectorAll('.pit-data-row');
+
+    function filterRows() {
+        const searchTerm = searchInput.value.toLowerCase();
+        const statusValue = statusFilter.value;
+        const scoutValue = scoutFilter.value;
+
+        rows.forEach(row => {
+            const teamNumber = row.dataset.team;
+            const scout = row.dataset.scout;
+            const status = row.dataset.status;
+            const rowText = row.textContent.toLowerCase();
+
+            const matchesSearch = !searchTerm || rowText.includes(searchTerm);
+            const matchesStatus = !statusValue || status === statusValue;
+            const matchesScout = !scoutValue || scout === scoutValue;
+
+            if (matchesSearch && matchesStatus && matchesScout) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+
+    searchInput.addEventListener('input', filterRows);
+    statusFilter.addEventListener('change', filterRows);
+    scoutFilter.addEventListener('change', filterRows);
+
+    clearFiltersBtn.addEventListener('click', function() {
+        searchInput.value = '';
+        statusFilter.value = '';
+        scoutFilter.value = '';
+        filterRows();
+    });
+
+    // Delete functionality
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    const deleteButtons = document.querySelectorAll('.delete-btn');
+    const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+    let deleteId = null;
+
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            deleteId = this.dataset.id;
+            const teamNumber = this.dataset.team;
+            document.getElementById('deleteTeamNumber').textContent = 'Team ' + teamNumber;
+            deleteModal.show();
+        });
+    });
+
+    confirmDeleteBtn.addEventListener('click', function() {
+        if (deleteId) {
+            // Create a form to submit the DELETE request
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/pit-scouting/delete/' + deleteId;
+            document.body.appendChild(form);
+            form.submit();
+        }
+    });
+
+    // Export functionality
+    document.getElementById('exportBtn').addEventListener('click', function() {
+        window.location.href = '/pit-scouting/export';
+    });
+
+    // Print functionality
+    document.getElementById('printBtn').addEventListener('click', function() {
+        window.print();
+    });
+    
+    // Upload all functionality
+    document.getElementById('upload-all-btn').addEventListener('click', function() {
+        const uploadBtn = this;
+        const originalText = uploadBtn.innerHTML;
+        
+        if (confirm('Upload all local pit scouting data to the server?')) {
+            // Show loading state
+            uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Uploading...';
+            uploadBtn.disabled = true;
+            
+            fetch('/pit-scouting/upload', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Error uploading data: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error uploading data:', error);
+                alert('Error uploading data. Please try again.');
+            })
+            .finally(() => {
+                // Restore button state
+                uploadBtn.innerHTML = originalText;
+                uploadBtn.disabled = false;
+            });
+        }
+    });
+});
+</script>
+
+<style>
+.team-number-badge {
+    background-color: #007bff;
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-weight: bold;
+    font-size: 0.875rem;
+}
+
+.capabilities-badges .badge {
+    margin-right: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.pit-data-row {
+    transition: background-color 0.2s ease;
+}
+
+.pit-data-row:hover {
+    background-color: #f8f9fa;
+}
+
+.btn-group .btn {
+    border-radius: 0.25rem;
+    margin-right: 0.125rem;
+}
+
+.btn-group .btn:last-child {
+    margin-right: 0;
+}
+
+@media print {
+    .btn, .card-header, .row.mb-3 {
+        display: none !important;
+    }
+    
+    .card {
+        border: none !important;
+    }
+    
+    .table {
+        font-size: 0.875rem;
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .btn-group {
+        flex-direction: column;
+    }
+    
+    .btn-group .btn {
+        margin-bottom: 0.25rem;
+        margin-right: 0;
+    }
+    
+    .team-number-badge {
+        font-size: 0.75rem;
+    }
+}
+</style>
+{% endblock %}

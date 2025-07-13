@@ -1,0 +1,246 @@
+{% extends 'base.html' %}
+
+{% block title %}Matches{% endblock %}
+
+{% block heading %}Matches{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
+                <h5 class="mb-0">All Matches</h5>
+                <div>
+                    <a href="{{ url_for('matches.sync_from_config') }}" class="btn btn-success me-2">
+                        <i class="fas fa-sync me-2"></i> Sync Matches from Event Code
+                    </a>
+                    <a href="{{ url_for('matches.add') }}" class="btn btn-light">
+                        <i class="fas fa-plus me-2"></i>Add Match
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if config.GAME_CONFIG.current_event_code %}
+                <div class="mb-3 alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i> Current event code: <strong>{{ config.GAME_CONFIG.current_event_code }}</strong>
+                    <a href="{{ url_for('main.edit_config') }}" class="alert-link ms-2">Change</a>
+                </div>
+                {% else %}
+                <div class="mb-3 alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i> No event code configured. 
+                    <a href="{{ url_for('main.edit_config') }}" class="alert-link">Set an event code</a> to enable syncing matches.
+                </div>
+                {% endif %}
+                
+                {% if matches %}
+                <div class="mb-3">
+                    <label for="match-type-filter" class="form-label">Filter by match type:</label>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-secondary filter-btn active" data-filter="all">All</button>
+                        <button type="button" class="btn btn-outline-success filter-btn" data-filter="Practice">Practice</button>
+                        <button type="button" class="btn btn-outline-primary filter-btn" data-filter="Qualification">Qualification</button>
+                        <button type="button" class="btn btn-outline-danger filter-btn" data-filter="Playoff">Playoff</button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped">
+                        <thead>
+                            <tr>
+                                <th>Match #</th>
+                                <th>Type</th>
+                                <th>Event</th>
+                                <th>Red Alliance</th>
+                                <th>Blue Alliance</th>
+                                <th>Score</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for match in matches %}
+                            <tr>
+                                <td>{{ match.match_number }}</td>
+                                <td>
+                                    <span class="badge {% if match.match_type == 'Qualification' %}bg-primary{% elif match.match_type == 'Playoff' %}bg-danger{% elif match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %}">
+                                        {{ match.match_type }}
+                                    </span>
+                                </td>
+                                <td>{{ match.event.name if match.event else 'N/A' }}</td>
+                                <td>
+                                    {% for team_number in match.red_alliance.split(',') if team_number %}
+                                    <span class="badge bg-danger">{{ team_number }}</span>
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    {% for team_number in match.blue_alliance.split(',') if team_number %}
+                                    <span class="badge bg-primary">{{ team_number }}</span>
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    {% if match.red_score is not none and match.blue_score is not none %}
+                                    <span class="fw-bold text-danger">{{ match.red_score }}</span> - 
+                                    <span class="fw-bold text-primary">{{ match.blue_score }}</span>
+                                    {% else %}
+                                    Not scored
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('matches.view', match_id=match.id) }}" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-search"></i> View
+                                    </a>
+                                    <a href="{{ url_for('matches.edit', match_id=match.id) }}" class="btn btn-sm btn-warning">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-danger" 
+                                            data-bs-toggle="modal" data-bs-target="#deleteModal{{ match.id }}">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                    
+                                    <!-- Delete Confirmation Modal -->
+                                    <div class="modal fade" id="deleteModal{{ match.id }}" tabindex="-1" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header bg-danger text-white">
+                                                    <h5 class="modal-title">Delete Match</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    Are you sure you want to delete {{ match.match_type }} Match #{{ match.match_number }}?
+                                                    This will also delete all scouting data for this match.
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                    <form action="{{ url_for('matches.delete', match_id=match.id) }}" method="post">
+                                                        <button type="submit" class="btn btn-danger">Delete</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i> No matches found. 
+                    <a href="{{ url_for('matches.add') }}" class="alert-link">Add your first match</a>.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center bg-info text-white">
+                <h5 class="mb-0">Events</h5>
+            </div>
+            <div class="card-body">
+                {% if events %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Location</th>
+                                <th>Date</th>
+                                <th>Matches</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for event in events %}
+                            <tr>
+                                <td>{{ event.name }}</td>
+                                <td>{{ event.location }}</td>
+                                <td>{{ event.start_date.strftime('%m/%d/%Y') if event.start_date else 'TBD' }}</td>
+                                <td>{{ event.matches|length }}</td>
+                                <td>
+                                    <a href="{{ url_for('matches.index', event_id=event.id) }}" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-eye"></i> View Matches
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-danger" 
+                                            data-bs-toggle="modal" data-bs-target="#deleteEventModal{{ event.id }}">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                    
+                                    <!-- Delete Confirmation Modal -->
+                                    <div class="modal fade" id="deleteEventModal{{ event.id }}" tabindex="-1" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header bg-danger text-white">
+                                                    <h5 class="modal-title">Delete Event</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <p>Are you sure you want to delete the event <strong>{{ event.name }}</strong>?</p>
+                                                    <div class="alert alert-danger">
+                                                        <i class="fas fa-exclamation-triangle me-2"></i>
+                                                        <strong>Warning:</strong> This will permanently delete:
+                                                        <ul class="mb-0">
+                                                            <li>All {{ event.matches|length }} matches associated with this event</li>
+                                                            <li>All scouting data for these matches</li>
+                                                            <li>All team associations with this event</li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                    <form action="{{ url_for('events.delete', event_id=event.id) }}" method="post">
+                                                        <button type="submit" class="btn btn-danger">Delete Event</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i> No events found.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Match type filtering
+        const filterButtons = document.querySelectorAll('.filter-btn');
+        const matchRows = document.querySelectorAll('tbody tr');
+        
+        filterButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                // Update active button styling
+                filterButtons.forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+                
+                const filterValue = this.getAttribute('data-filter');
+                
+                // Filter the table rows
+                matchRows.forEach(row => {
+                    const matchType = row.querySelector('td:nth-child(2) .badge').textContent.trim();
+                    
+                    if (filterValue === 'all' || matchType === filterValue) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            });
+        });
+    });
+</script>
+{% endblock %}

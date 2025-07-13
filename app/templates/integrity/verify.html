@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}File Integrity Verification{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-shield-alt"></i> 
+                        Security Alert - File Integrity Compromised
+                    </h4>
+                </div>
+                <div class="card-body">
+                    {% if shutdown %}
+                        <div class="alert alert-danger">
+                            <strong>Access Denied!</strong> 
+                            The server will shut down in a few seconds for security reasons.
+                        </div>
+                        <div class="text-center">
+                            <div class="spinner-border text-danger" role="status">
+                                <span class="sr-only">Shutting down...</span>
+                            </div>
+                            <p class="mt-2">Server shutting down...</p>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <strong>Warning!</strong> 
+                            File integrity has been compromised. One or more application files have been modified.
+                        </div>
+                        
+                        <p class="mb-4">
+                            <i class="fas fa-exclamation-triangle text-warning"></i>
+                            To continue using the application, you must enter the integrity password.
+                            <br><br>
+                            <small class="text-muted">
+                                <strong>Note:</strong> If the password is incorrect, the server will shut down automatically for security.
+                            </small>
+                        </p>
+                        
+                        <form method="POST" class="mb-3">
+                            <div class="form-group">
+                                <label for="password" class="form-label">
+                                    <i class="fas fa-lock"></i> Integrity Password
+                                </label>
+                                <input type="password" 
+                                       class="form-control" 
+                                       id="password" 
+                                       name="password" 
+                                       required 
+                                       autofocus
+                                       placeholder="Enter integrity password">
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-danger">
+                                    <i class="fas fa-check"></i> Verify and Reset Integrity
+                                </button>
+                            </div>
+                        </form>
+                        
+                        <div class="text-center">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                Contact the system administrator if you don't have the integrity password.
+                            </small>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if shutdown %}
+<script>
+    // Auto-refresh to show shutdown message
+    setTimeout(function() {
+        document.body.innerHTML = '<div class="container mt-5 text-center"><h2 class="text-danger">Server Shutdown</h2><p>The server has been shut down for security reasons.</p></div>';
+    }, 3000);
+</script>
+{% endif %}
+{% endblock %}

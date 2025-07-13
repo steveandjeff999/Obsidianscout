@@ -1,0 +1,85 @@
+/**
+ * Modal positioning fixes
+ * This CSS completely overrides Bootstrap's modal positioning to prevent jumping/teleporting
+ */
+
+/* Core modal fixes */
+.modal {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    overflow: hidden !important;
+    outline: 0 !important;
+    display: none;
+    z-index: 1050 !important;
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+    padding: 0 !important;
+}
+
+.modal.show {
+    display: block !important;
+}
+
+/* Dialog positioning */
+.modal-dialog {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: auto !important;
+    max-width: 500px !important;
+    margin: 0 !important;
+    pointer-events: auto !important;
+    transition: none !important;
+    animation: none !important;
+}
+
+/* Modal content */
+.modal-content {
+    position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    pointer-events: auto !important;
+    background-color: #fff !important;
+    border: 1px solid rgba(0, 0, 0, 0.2) !important;
+    border-radius: 0.3rem !important;
+    outline: 0 !important;
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Modal backdrop */
+.modal-backdrop {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    z-index: 1040 !important;
+    background-color: #000 !important;
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+    opacity: 0.5 !important;
+    width: 100vw !important; 
+    height: 100vh !important;
+}
+
+/* Hide animations */
+.fade {
+    transition: none !important;
+    opacity: 1 !important;
+}
+
+/* Correct body behavior when modal is open */
+body.modal-open {
+    overflow: hidden !important;
+    padding-right: 0 !important;
+}

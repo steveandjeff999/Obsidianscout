@@ -1,0 +1,212 @@
+{% extends 'base.html' %}
+
+{% block title %}Team {{ team.team_number }} Statistics{% endblock %}
+
+{% block heading %}Team {{ team.team_number }} - {{ team.team_name }} Statistics{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3>{{ team.team_number }} - {{ team.team_name }}</h3>
+                        {% if team.location %}
+                        <p class="text-muted mb-0">{{ team.location }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <a href="{{ url_for('visualization.index') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i> Back to Visualization
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    {% for metric_id, metric in metrics.items() %}
+    <div class="col-md-4 mb-4">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <h5 class="card-title">{{ metric.name }}</h5>
+                <div class="stat-value {% if metric.value > 75 %}text-success{% elif metric.value < 25 %}text-danger{% else %}text-primary{% endif %}">
+                    {% if metric.value is number %}
+                        {% if 'percentage' in metric_id %}
+                            {{ "%.1f"|format(metric.value) }}%
+                        {% else %}
+                            {{ "%.2f"|format(metric.value) }}
+                        {% endif %}
+                    {% else %}
+                        {{ metric.value }}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Performance by Match</h5>
+            </div>
+            <div class="card-body">
+                {% if scouting_data %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Match</th>
+                                {% for element in game_config.auto_period.scoring_elements %}
+                                <th>{{ element.name }}</th>
+                                {% endfor %}
+                                
+                                {% for element in game_config.teleop_period.scoring_elements %}
+                                <th>{{ element.name }}</th>
+                                {% endfor %}
+                                
+                                {% for element in game_config.endgame_period.scoring_elements %}
+                                <th>{{ element.name }}</th>
+                                {% endfor %}
+                                
+                                {% for metric_id, metric in metrics.items() %}
+                                {% if 'match_values' in metric %}
+                                <th>{{ metric.name }}</th>
+                                {% endif %}
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for data in scouting_data %}
+                            <tr>
+                                <td>{{ data.match.match_number }}</td>
+                                
+                                {% for element in game_config.auto_period.scoring_elements %}
+                                <td>
+                                    {% if element.type == 'boolean' %}
+                                        {% if data.data.get(element.id) %}
+                                        <i class="fas fa-check text-success"></i>
+                                        {% else %}
+                                        <i class="fas fa-times text-danger"></i>
+                                        {% endif %}
+                                    {% else %}
+                                        {{ data.data.get(element.id, 0) }}
+                                    {% endif %}
+                                </td>
+                                {% endfor %}
+                                
+                                {% for element in game_config.teleop_period.scoring_elements %}
+                                <td>
+                                    {% if element.type == 'boolean' %}
+                                        {% if data.data.get(element.id) %}
+                                        <i class="fas fa-check text-success"></i>
+                                        {% else %}
+                                        <i class="fas fa-times text-danger"></i>
+                                        {% endif %}
+                                    {% else %}
+                                        {{ data.data.get(element.id, 0) }}
+                                    {% endif %}
+                                </td>
+                                {% endfor %}
+                                
+                                {% for element in game_config.endgame_period.scoring_elements %}
+                                <td>
+                                    {% if element.type == 'boolean' %}
+                                        {% if data.data.get(element.id) %}
+                                        <i class="fas fa-check text-success"></i>
+                                        {% else %}
+                                        <i class="fas fa-times text-danger"></i>
+                                        {% endif %}
+                                    {% elif element.type == 'select' %}
+                                        {{ data.data.get(element.id, '') }}
+                                    {% else %}
+                                        {{ data.data.get(element.id, 0) }}
+                                    {% endif %}
+                                </td>
+                                {% endfor %}
+                                
+                                {% for metric_id, metric in metrics.items() %}
+                                {% if 'match_values' in metric %}
+                                <td>
+                                    {% set match_value = none %}
+                                    {% for mv in metric.match_values %}
+                                        {% if mv.match == data.match.match_number %}
+                                            {% set match_value = mv.value %}
+                                        {% endif %}
+                                    {% endfor %}
+                                    
+                                    {% if match_value is not none %}
+                                        {% if 'percentage' in metric_id %}
+                                            {{ "%.1f"|format(match_value) }}%
+                                        {% else %}
+                                            {{ "%.1f"|format(match_value) }}
+                                        {% endif %}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                {% endif %}
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i> No scouting data available for this team.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    {% for metric_id, plot_json in plots.items() %}
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div id="{{ metric_id }}" class="plotly-graph" data-graph='{{ plot_json }}' style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if not plots %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="alert alert-warning">
+            <i class="fas fa-chart-line me-2"></i> Charts will appear here once more match data is collected for this team.
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Wait for Plotly to be available, then render graphs
+        function waitForPlotly() {
+            if (typeof Plotly !== 'undefined') {
+                console.log('Plotly is loaded, rendering graphs...');
+                renderPlotlyGraphs();
+            } else {
+                console.log('Waiting for Plotly to load...');
+                setTimeout(waitForPlotly, 100);
+            }
+        }
+        
+        waitForPlotly();
+    });
+</script>
+{% endblock %}

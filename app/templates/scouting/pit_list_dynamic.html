@@ -1,0 +1,794 @@
+{% extends 'base.html' %}
+
+{% block title %}Pit Scouting Data{% endblock %}
+
+{% block heading %}Dynamic Pit Scouting Data{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0">All Pit Scouting Data</h5>
+                <small class="text-muted" id="eventInfo">
+                    {% if current_event %}
+                        {{ current_event.name }} ({{ current_event.code }})
+                    {% else %}
+                        No event selected
+                    {% endif %}
+                </small>
+            </div>
+            <div>
+                <button id="refreshBtn" class="btn btn-info me-2">
+                    <i class="fas fa-sync-alt me-1"></i> Refresh
+                </button>
+                <div class="btn-group me-2" role="group">
+                    <button id="upload-all-btn" class="btn btn-warning">
+                        <i class="fas fa-cloud-upload-alt me-1"></i> Upload
+                    </button>
+                    <button type="button" class="btn btn-warning dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="visually-hidden">Toggle Dropdown</span>
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#" id="sync-full-btn">
+                            <i class="fas fa-sync me-1"></i> Mark as Synced
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{{ url_for('pit_scouting.sync_config') }}">
+                            <i class="fas fa-cog me-1"></i> Sync Settings
+                        </a></li>
+                    </ul>
+                </div>
+                <a href="{{ url_for('pit_scouting.form') }}" class="btn btn-success">
+                    <i class="fas fa-plus me-1"></i> New Pit Scouting
+                </a>
+                <a href="{{ url_for('pit_scouting.index') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-1"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Row -->
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="autoRefresh">
+                            <label class="form-check-label" for="autoRefresh">
+                                Auto-refresh (<span id="refreshInterval">30</span>s)
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <select id="columnSelector" class="form-select form-select-sm">
+                            <option value="">Select columns to display</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" id="searchInput" class="form-control form-control-sm" placeholder="Search teams, scouts, or data...">
+                    </div>
+                    <div class="col-md-2">
+                        <button id="clearFilters" class="btn btn-sm btn-outline-secondary w-100">
+                            <i class="fas fa-times me-1"></i> Clear
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data Display -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0">
+                    <i class="fas fa-list me-2"></i> Pit Scouting Entries
+                    <span class="badge bg-light text-dark ms-2" id="dataCount">0</span>
+                    <span class="badge bg-success ms-2" id="lastUpdate">Never</span>
+                </h6>
+            </div>
+            <div class="card-body">
+                <div id="loadingSpinner" class="text-center py-4">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p class="mt-2">Loading pit scouting data...</p>
+                </div>
+                
+                <div id="dataContainer" style="display: none;">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="pitDataTable">
+                            <thead class="table-dark" id="tableHeader">
+                                <!-- Dynamic headers will be populated here -->
+                            </thead>
+                            <tbody id="tableBody">
+                                <!-- Dynamic data will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div id="noDataMessage" class="text-center py-5" style="display: none;">
+                    <i class="fas fa-clipboard-list fa-5x text-muted mb-3"></i>
+                    <h4 class="text-muted">No pit scouting data found</h4>
+                    <p class="text-muted">Start by scouting teams in the pits!</p>
+                    <a href="{{ url_for('pit_scouting.form') }}" class="btn btn-success btn-lg">
+                        <i class="fas fa-plus me-2"></i> Start Pit Scouting
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete the pit scouting data for <strong id="deleteTeamNumber"></strong>?
+                <br><br>
+                <small class="text-muted">This action cannot be undone.</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+class PitScoutingDataDisplay {
+    constructor() {
+        this.data = [];
+        this.filteredData = [];
+        this.config = null;
+        this.visibleColumns = new Set();
+        this.autoRefreshInterval = null;
+        this.autoRefreshEnabled = false;
+        this.deleteModal = null;
+        this.deleteId = null;
+        
+        this.init();
+    }
+    
+    init() {
+        this.setupEventHandlers();
+        this.deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+        this.loadData();
+    }
+    
+    setupEventHandlers() {
+        // Auto-refresh toggle
+        document.getElementById('autoRefresh').addEventListener('change', (e) => {
+            this.toggleAutoRefresh(e.target.checked);
+        });
+        
+        // Manual refresh button
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            this.loadData();
+        });
+        
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            this.filterData(e.target.value);
+        });
+        
+        // Column selector
+        document.getElementById('columnSelector').addEventListener('change', (e) => {
+            this.toggleColumn(e.target.value);
+        });
+        
+        // Clear filters
+        document.getElementById('clearFilters').addEventListener('click', () => {
+            this.clearFilters();
+        });
+        
+        // Upload all
+        document.getElementById('upload-all-btn').addEventListener('click', () => {
+            this.uploadAll();
+        });
+        
+        // Delete confirmation
+        document.getElementById('confirmDeleteBtn').addEventListener('click', () => {
+            this.deleteEntry();
+        });
+        
+        // Add event handlers for sync buttons
+        const syncFullBtn = document.getElementById('sync-full-btn');
+        if (syncFullBtn) {
+            syncFullBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.uploadAll(); // Use the same upload functionality
+            });
+        }
+        
+        // Update the upload button text for WebSocket sync
+        const uploadBtn = document.getElementById('upload-all-btn');
+        if (uploadBtn) {
+            uploadBtn.title = 'Mark all data as synced across devices';
+        }
+    }
+    
+    async loadData() {
+        try {
+            const response = await fetch('{{ url_for("pit_scouting.api_list") }}');
+            const result = await response.json();
+            
+            if (result.success) {
+                this.data = result.data;
+                this.config = result.config;
+                this.setupColumns();
+                this.filterData();
+                this.updateUI();
+                this.updateLastUpdate();
+            } else {
+                console.error('Failed to load data:', result.error);
+            }
+        } catch (error) {
+            console.error('Error loading data:', error);
+        }
+    }
+    
+    setupColumns() {
+        if (!this.config) return;
+        
+        // Default visible columns
+        this.visibleColumns.clear();
+        this.visibleColumns.add('team_number');
+        this.visibleColumns.add('scout_name');
+        this.visibleColumns.add('timestamp');
+        this.visibleColumns.add('is_uploaded');
+        this.visibleColumns.add('actions');
+        
+        // Add first 3 elements from each section as default visible
+        let columnCount = 0;
+        for (const section of this.config.sections) {
+            for (const element of section.elements) {
+                if (columnCount < 3) {
+                    this.visibleColumns.add(element.id);
+                    columnCount++;
+                }
+            }
+        }
+        
+        this.updateColumnSelector();
+    }
+    
+    updateColumnSelector() {
+        const selector = document.getElementById('columnSelector');
+        selector.innerHTML = '<option value="">Select columns to display</option>';
+        
+        if (!this.config) return;
+        
+        // Group options by section
+        for (const section of this.config.sections) {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = section.name;
+            
+            for (const element of section.elements) {
+                const option = document.createElement('option');
+                option.value = element.id;
+                option.textContent = element.name;
+                option.selected = this.visibleColumns.has(element.id);
+                optgroup.appendChild(option);
+            }
+            
+            selector.appendChild(optgroup);
+        }
+    }
+    
+    toggleColumn(columnId) {
+        if (!columnId) return;
+        
+        if (this.visibleColumns.has(columnId)) {
+            this.visibleColumns.delete(columnId);
+        } else {
+            this.visibleColumns.add(columnId);
+        }
+        
+        this.updateColumnSelector();
+        this.renderTable();
+    }
+    
+    filterData(searchTerm = '') {
+        if (!searchTerm) {
+            this.filteredData = [...this.data];
+        } else {
+            const term = searchTerm.toLowerCase();
+            this.filteredData = this.data.filter(entry => {
+                // Search in team number, name, and scout name
+                const teamMatch = entry.team_number.toString().includes(term) ||
+                                entry.team_name.toLowerCase().includes(term) ||
+                                entry.scout_name.toLowerCase().includes(term);
+                
+                // Search in data fields
+                const dataMatch = Object.values(entry.data || {}).some(value => {
+                    if (Array.isArray(value)) {
+                        return value.some(v => v.toString().toLowerCase().includes(term));
+                    }
+                    return value.toString().toLowerCase().includes(term);
+                });
+                
+                return teamMatch || dataMatch;
+            });
+        }
+        
+        this.renderTable();
+    }
+    
+    clearFilters() {
+        document.getElementById('searchInput').value = '';
+        this.filterData();
+    }
+    
+    renderTable() {
+        const tableHeader = document.getElementById('tableHeader');
+        const tableBody = document.getElementById('tableBody');
+        
+        // Clear existing content
+        tableHeader.innerHTML = '';
+        tableBody.innerHTML = '';
+        
+        if (this.filteredData.length === 0) {
+            document.getElementById('dataContainer').style.display = 'none';
+            document.getElementById('noDataMessage').style.display = 'block';
+            return;
+        }
+        
+        document.getElementById('dataContainer').style.display = 'block';
+        document.getElementById('noDataMessage').style.display = 'none';
+        
+        // Create header row
+        const headerRow = document.createElement('tr');
+        
+        // Standard columns
+        if (this.visibleColumns.has('team_number')) {
+            headerRow.appendChild(this.createHeaderCell('Team'));
+        }
+        if (this.visibleColumns.has('scout_name')) {
+            headerRow.appendChild(this.createHeaderCell('Scout'));
+        }
+        
+        // Dynamic columns from config
+        if (this.config) {
+            for (const section of this.config.sections) {
+                for (const element of section.elements) {
+                    if (this.visibleColumns.has(element.id)) {
+                        headerRow.appendChild(this.createHeaderCell(element.name));
+                    }
+                }
+            }
+        }
+        
+        // Standard columns (continued)
+        if (this.visibleColumns.has('timestamp')) {
+            headerRow.appendChild(this.createHeaderCell('Date'));
+        }
+        if (this.visibleColumns.has('is_uploaded')) {
+            headerRow.appendChild(this.createHeaderCell('Status'));
+        }
+        if (this.visibleColumns.has('actions')) {
+            headerRow.appendChild(this.createHeaderCell('Actions'));
+        }
+        
+        tableHeader.appendChild(headerRow);
+        
+        // Create data rows
+        for (const entry of this.filteredData) {
+            const dataRow = document.createElement('tr');
+            dataRow.className = 'pit-data-row';
+            
+            // Standard columns
+            if (this.visibleColumns.has('team_number')) {
+                dataRow.appendChild(this.createTeamCell(entry));
+            }
+            if (this.visibleColumns.has('scout_name')) {
+                dataRow.appendChild(this.createScoutCell(entry));
+            }
+            
+            // Dynamic columns from config
+            if (this.config) {
+                for (const section of this.config.sections) {
+                    for (const element of section.elements) {
+                        if (this.visibleColumns.has(element.id)) {
+                            dataRow.appendChild(this.createDataCell(entry, element));
+                        }
+                    }
+                }
+            }
+            
+            // Standard columns (continued)
+            if (this.visibleColumns.has('timestamp')) {
+                dataRow.appendChild(this.createDateCell(entry));
+            }
+            if (this.visibleColumns.has('is_uploaded')) {
+                dataRow.appendChild(this.createStatusCell(entry));
+            }
+            if (this.visibleColumns.has('actions')) {
+                dataRow.appendChild(this.createActionsCell(entry));
+            }
+            
+            tableBody.appendChild(dataRow);
+        }
+    }
+    
+    createHeaderCell(text) {
+        const th = document.createElement('th');
+        th.textContent = text;
+        return th;
+    }
+    
+    createTeamCell(entry) {
+        const td = document.createElement('td');
+        td.innerHTML = `
+            <div class="d-flex align-items-center">
+                <div class="team-number-badge me-2">${entry.team_number}</div>
+                <div><strong>${entry.team_name}</strong></div>
+            </div>
+        `;
+        return td;
+    }
+    
+    createScoutCell(entry) {
+        const td = document.createElement('td');
+        td.innerHTML = `<span class="badge bg-info">${entry.scout_name}</span>`;
+        return td;
+    }
+    
+    createDataCell(entry, element) {
+        const td = document.createElement('td');
+        const value = entry.data[element.id];
+        
+        if (value === undefined || value === null) {
+            td.innerHTML = '<span class="text-muted">-</span>';
+        } else if (element.type === 'boolean') {
+            td.innerHTML = value ? 
+                '<span class="badge bg-success">Yes</span>' : 
+                '<span class="badge bg-secondary">No</span>';
+        } else if (element.type === 'multiselect') {
+            if (Array.isArray(value) && value.length > 0) {
+                td.innerHTML = value.map(v => `<span class="badge bg-primary me-1">${v}</span>`).join('');
+            } else {
+                td.innerHTML = '<span class="text-muted">None</span>';
+            }
+        } else if (element.type === 'select') {
+            td.innerHTML = `<span class="badge bg-secondary">${value}</span>`;
+        } else if (element.type === 'number') {
+            td.innerHTML = `<span class="badge bg-info">${value}</span>`;
+        } else {
+            // Text, textarea
+            const displayValue = value.toString().length > 30 ? 
+                value.toString().substring(0, 30) + '...' : 
+                value.toString();
+            td.innerHTML = `<span title="${value}">${displayValue}</span>`;
+        }
+        
+        return td;
+    }
+    
+    createDateCell(entry) {
+        const td = document.createElement('td');
+        const date = new Date(entry.timestamp);
+        td.innerHTML = `
+            <small>${date.toLocaleDateString()}</small><br>
+            <small class="text-muted">${date.toLocaleTimeString()}</small>
+        `;
+        return td;
+    }
+    
+    createStatusCell(entry) {
+        const td = document.createElement('td');
+        if (entry.is_uploaded) {
+            td.innerHTML = '<span class="badge bg-success"><i class="fas fa-check me-1"></i> Uploaded</span>';
+        } else {
+            td.innerHTML = '<span class="badge bg-warning"><i class="fas fa-exclamation-triangle me-1"></i> Local</span>';
+        }
+        return td;
+    }
+    
+    createActionsCell(entry) {
+        const td = document.createElement('td');
+        td.innerHTML = `
+            <div class="btn-group" role="group">
+                <a href="/pit-scouting/view/${entry.id}" class="btn btn-sm btn-outline-primary" title="View Details">
+                    <i class="fas fa-eye"></i>
+                </a>
+                <a href="/pit-scouting/edit/${entry.id}" class="btn btn-sm btn-outline-warning" title="Edit">
+                    <i class="fas fa-edit"></i>
+                </a>
+                <button class="btn btn-sm btn-outline-danger delete-btn" 
+                        data-id="${entry.id}" data-team="${entry.team_number}" title="Delete">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
+        
+        // Add delete event listener
+        const deleteBtn = td.querySelector('.delete-btn');
+        deleteBtn.addEventListener('click', () => {
+            this.deleteId = entry.id;
+            document.getElementById('deleteTeamNumber').textContent = 'Team ' + entry.team_number;
+            this.deleteModal.show();
+        });
+        
+        return td;
+    }
+    
+    updateUI() {
+        document.getElementById('loadingSpinner').style.display = 'none';
+        document.getElementById('dataCount').textContent = this.filteredData.length;
+        this.renderTable();
+    }
+    
+    updateLastUpdate() {
+        const now = new Date();
+        document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
+    }
+    
+    toggleAutoRefresh(enabled) {
+        this.autoRefreshEnabled = enabled;
+        
+        if (enabled) {
+            this.autoRefreshInterval = setInterval(() => {
+                this.loadData();
+            }, 30000); // 30 seconds
+        } else {
+            if (this.autoRefreshInterval) {
+                clearInterval(this.autoRefreshInterval);
+                this.autoRefreshInterval = null;
+            }
+        }
+    }
+    
+    async uploadAll() {
+        const uploadBtn = document.getElementById('upload-all-btn');
+        const originalText = uploadBtn.innerHTML;
+        
+        if (!confirm('Mark all local pit scouting data as synced across devices?')) {
+            return;
+        }
+        
+        uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Syncing...';
+        uploadBtn.disabled = true;
+        
+        try {
+            const response = await fetch('/pit-scouting/upload', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                alert(result.message);
+                this.loadData(); // Refresh data
+            } else {
+                alert('Error syncing data: ' + result.error);
+            }
+        } catch (error) {
+            console.error('Error syncing data:', error);
+            alert('Error syncing data. Please try again.');
+        } finally {
+            uploadBtn.innerHTML = originalText;
+            uploadBtn.disabled = false;
+        }
+    }
+    
+    async deleteEntry() {
+        if (!this.deleteId) return;
+        
+        try {
+            const response = await fetch(`/pit-scouting/delete/${this.deleteId}`, {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                this.deleteModal.hide();
+                this.loadData(); // Refresh data
+            } else {
+                alert('Error deleting entry');
+            }
+        } catch (error) {
+            console.error('Error deleting entry:', error);
+            alert('Error deleting entry');
+        }
+    }
+}
+
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    const pitDisplay = new PitScoutingDataDisplay();
+    
+    // Initialize Socket.IO for real-time updates
+    const socket = io();
+    
+    // Get current event ID
+    const eventId = {% if current_event %}{{ current_event.id }}{% else %}null{% endif %};
+    
+    if (eventId) {
+        // Join the pit scouting room for this event
+        socket.emit('join_pit_room', { event_id: eventId });
+        
+        // Listen for pit data updates
+        socket.on('pit_data_updated', function(data) {
+            console.log('Received pit data update:', data);
+            
+            // Show notification
+            const action = data.action;
+            const teamNumber = data.data.team_number;
+            const scoutName = data.data.scout_name;
+            
+            let message = '';
+            let alertClass = '';
+            
+            switch (action) {
+                case 'added':
+                    message = `New pit scouting data added for Team ${teamNumber} by ${scoutName}`;
+                    alertClass = 'alert-success';
+                    break;
+                case 'updated':
+                    message = `Pit scouting data updated for Team ${teamNumber} by ${scoutName}`;
+                    alertClass = 'alert-info';
+                    break;
+                case 'deleted':
+                    message = `Pit scouting data deleted for Team ${teamNumber}`;
+                    alertClass = 'alert-warning';
+                    break;
+            }
+            
+            // Show toast notification
+            showToast(message, alertClass);
+            
+            // Refresh data to show changes
+            pitDisplay.loadData();
+        });
+        
+        // Listen for sync status updates
+        socket.on('pit_sync_status', function(data) {
+            console.log('Received sync status update:', data);
+            showToast(data.status.message, 'alert-info');
+        });
+        
+        // Handle connection events
+        socket.on('connect', function() {
+            console.log('Connected to real-time sync');
+        });
+        
+        socket.on('disconnect', function() {
+            console.log('Disconnected from real-time sync');
+        });
+    }
+    
+    // Toast notification function
+    function showToast(message, alertClass) {
+        const toastId = 'toast-' + Date.now();
+        const toastHtml = `
+            <div class="toast align-items-center text-white bg-${alertClass.replace('alert-', '')} border-0" 
+                 role="alert" aria-live="assertive" aria-atomic="true" id="${toastId}">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="fas fa-sync-alt me-2"></i>${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" 
+                            data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `;
+        
+        // Add to toast container
+        let toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-container';
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            document.body.appendChild(toastContainer);
+        }
+        
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        
+        // Show toast
+        const toastElement = document.getElementById(toastId);
+        const toast = new bootstrap.Toast(toastElement, { delay: 4000 });
+        toast.show();
+        
+        // Remove from DOM after hidden
+        toastElement.addEventListener('hidden.bs.toast', function() {
+            toastElement.remove();
+        });
+    }
+});
+</script>
+
+<style>
+.team-number-badge {
+    background-color: #007bff;
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-weight: bold;
+    font-size: 0.875rem;
+}
+
+.pit-data-row {
+    transition: background-color 0.2s ease;
+}
+
+.pit-data-row:hover {
+    background-color: #f8f9fa;
+}
+
+.btn-group .btn {
+    border-radius: 0.25rem;
+    margin-right: 0.125rem;
+}
+
+.btn-group .btn:last-child {
+    margin-right: 0;
+}
+
+.badge {
+    font-size: 0.8em;
+}
+
+.table th {
+    white-space: nowrap;
+    font-size: 0.9rem;
+}
+
+.table td {
+    vertical-align: middle;
+    font-size: 0.85rem;
+}
+
+.form-check-input:checked {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+@media print {
+    .btn, .card-header, .row.mb-3 {
+        display: none !important;
+    }
+    
+    .card {
+        border: none !important;
+    }
+    
+    .table {
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .btn-group {
+        flex-direction: column;
+    }
+    
+    .btn-group .btn {
+        margin-bottom: 0.25rem;
+        margin-right: 0;
+    }
+    
+    .team-number-badge {
+        font-size: 0.75rem;
+    }
+    
+    .table-responsive {
+        font-size: 0.8rem;
+    }
+}
+</style>
+{% endblock %}

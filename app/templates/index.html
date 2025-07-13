@@ -1,0 +1,279 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - {{ game_config.game_name }} {{ game_config.season }}{% endblock %}
+
+{% block heading %}Dashboard{% endblock %}
+{% block subheading %}
+<div class="text-muted mb-4">{{ game_config.game_name }} {{ game_config.season }} Scouting Platform</div>
+{% endblock %}
+
+{% block content %}
+{% if current_user.has_role('admin') and update_available %}
+<div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
+    <div class="d-flex align-items-center">
+        <i class="fas fa-sync-alt me-3 fa-lg fa-spin"></i>
+        <div>
+            <strong>Update Available!</strong> A new version of the application is available.
+            <a href="{{ url_for('admin.update_page') }}" class="alert-link">Click here to update</a>.
+        </div>
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
+<!-- Quick Stats Section -->
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3 mb-lg-0">
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-users"></i>
+            </div>
+            <div>
+                <div class="stat-value text-primary">{{ teams|length if teams else '0' }}</div>
+                <div class="stat-label">Teams</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3 mb-lg-0">
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-gamepad"></i>
+            </div>
+            <div>
+                <div class="stat-value text-success">{{ matches|length if matches else '0' }}</div>
+                <div class="stat-label">Matches</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3 mb-lg-0">
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-clipboard-check"></i>
+            </div>
+            <div>
+                <div class="stat-value text-danger">{{ scout_entries|length if scout_entries is defined else '0' }}</div>
+                <div class="stat-label">Scouting Entries</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-calendar-day"></i>
+            </div>
+            <div>
+                <div class="stat-value text-info">
+                    {% if game_config.current_event_code %}
+                        {{ game_config.current_event_code }}
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </div>
+                <div class="stat-label">Current Event</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Actions Section -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <!-- Quick Actions -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-bolt me-2 text-warning"></i> Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <a href="{{ url_for('scouting.index') }}" class="btn btn-primary d-flex flex-column align-items-center justify-content-center p-4 h-100 w-100">
+                            <i class="fas fa-clipboard-list fa-2x mb-2"></i>
+                            <span>Scout Match</span>
+                        </a>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="{{ url_for('visualization.index') }}" class="btn btn-success d-flex flex-column align-items-center justify-content-center p-4 h-100 w-100">
+                            <i class="fas fa-chart-bar fa-2x mb-2"></i>
+                            <span>View Analytics</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Event Data Management -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-sync-alt me-2 text-primary"></i> Event Data Management
+                </h5>
+                <a href="{{ url_for('main.edit_config') }}" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-cog me-1"></i> Configure Event
+                </a>
+            </div>
+            <div class="card-body">
+                {% if game_config.current_event_code %}
+                <div class="alert alert-info d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="fas fa-info-circle me-2"></i> Current event code: <strong>{{ game_config.current_event_code }}</strong>
+                    </div>
+                </div>
+                
+                <div class="row g-3 mt-2">
+                    <div class="col-md-6">
+                        <div class="card h-100 border">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div>
+                                        <h5 class="card-title d-flex align-items-center">
+                                            <i class="fas fa-users text-primary me-2"></i> Teams
+                                        </h5>
+                                        <p class="card-text text-muted">Sync teams registered for this event from FIRST API</p>
+                                    </div>
+                                    <span class="badge bg-primary rounded-pill">{{ teams|length }}</span>
+                                </div>
+                                <a href="{{ url_for('teams.sync_from_config') }}" class="btn btn-primary">
+                                    <i class="fas fa-sync me-2"></i> Sync Teams
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100 border">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div>
+                                        <h5 class="card-title d-flex align-items-center">
+                                            <i class="fas fa-gamepad text-success me-2"></i> Matches
+                                        </h5>
+                                        <p class="card-text text-muted">Sync match schedule from FIRST API</p>
+                                    </div>
+                                    <span class="badge bg-success rounded-pill">{{ matches|length }}</span>
+                                </div>
+                                <a href="{{ url_for('matches.sync_from_config') }}" class="btn btn-success">
+                                    <i class="fas fa-sync me-2"></i> Sync Matches
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-warning d-flex align-items-center">
+                    <i class="fas fa-exclamation-triangle me-3 fa-2x"></i>
+                    <div>
+                        <h5 class="alert-heading">No event code configured</h5>
+                        <p class="mb-0">To enable automatic team and match syncing, add an event code (like "CAMA", "OHCL", etc.) to your configuration.</p>
+                    </div>
+                </div>
+                
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('main.simple_edit_config') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-plus me-2"></i> Set Event Code
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Game Configuration Summary -->
+        <div class="card mb-4">
+            <div class="card-header bg-gradient-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-cog me-2"></i> Game Configuration
+                </h5>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fas fa-edit"></i> Edit
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{{ url_for('main.simple_edit_config') }}">
+                            <i class="fas fa-edit me-2"></i> Simple Edit
+                        </a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('main.edit_config') }}">
+                            <i class="fas fa-code me-2"></i> Advanced Edit
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{{ url_for('main.config') }}">
+                            <i class="fas fa-eye me-2"></i> View Full Config
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-gamepad me-2 text-primary"></i> Game Name</span>
+                        <span class="fw-bold">{{ game_config.game_name }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-calendar me-2 text-success"></i> Season</span>
+                        <span class="fw-bold">{{ game_config.season }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-hourglass-start me-2 text-warning"></i> Auto Period</span>
+                        <span class="fw-bold">{{ game_config.get('auto_period', {}).get('duration_seconds', 15) }}s</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-hourglass-half me-2 text-primary"></i> Teleop Period</span>
+                        <span class="fw-bold">{{ game_config.get('teleop_period', {}).get('duration_seconds', 135) }}s</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-hourglass-end me-2 text-danger"></i> Endgame Period</span>
+                        <span class="fw-bold">{{ game_config.get('endgame_period', {}).get('duration_seconds', 30) }}s</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- Data Tools -->
+        <div class="card">
+            <div class="card-header bg-gradient-info text-white">
+                <h5 class="mb-0"><i class="fas fa-tools me-2"></i> Data Tools</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    <a href="{{ url_for('data.index') }}" class="list-group-item list-group-item-action d-flex align-items-center">
+                        <i class="fas fa-database text-primary me-3"></i>
+                        <div>
+                            <div class="fw-medium">Data Management</div>
+                            <small class="text-muted">Import and export scouting data</small>
+                        </div>
+                        <i class="fas fa-chevron-right ms-auto"></i>
+                    </a>
+                    <a href="{{ url_for('data.import_qr') }}" class="list-group-item list-group-item-action d-flex align-items-center">
+                        <i class="fas fa-qrcode text-success me-3"></i>
+                        <div>
+                            <div class="fw-medium">Scan QR Code</div>
+                            <small class="text-muted">Import data from QR codes</small>
+                        </div>
+                        <i class="fas fa-chevron-right ms-auto"></i>
+                    </a>
+                    <a href="{{ url_for('graphs.index') }}" class="list-group-item list-group-item-action d-flex align-items-center">
+                        <i class="fas fa-chart-line text-danger me-3"></i>
+                        <div>
+                            <div class="fw-medium">Advanced Graphs</div>
+                            <small class="text-muted">Create custom data visualizations</small>
+                        </div>
+                        <i class="fas fa-chevron-right ms-auto"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Teams & Matches section removed -->
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Make stat cards interactive
+        document.querySelectorAll('.stat-card').forEach(card => {
+            card.classList.add('card-interactive');
+        });
+    });
+</script>
+{% endblock %}

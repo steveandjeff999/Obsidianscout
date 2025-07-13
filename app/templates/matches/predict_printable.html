@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+
+{% block title %}Match Prediction - Print View{% endblock %}
+
+{% block head %}
+<!-- Include jsPDF library for client-side PDF generation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<style>
+    /* Print-specific styles */
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        body {
+            font-size: 12px;
+        }
+        .container {
+            width: 100%;
+            max-width: 100%;
+        }
+        .card {
+            border: 1px solid #ddd !important;
+            box-shadow: none !important;
+            break-inside: avoid;
+        }
+        .card-header {
+            background-color: #f8f9fa !important;
+            color: #000 !important;
+        }
+        .red-alliance .card-header {
+            background-color: #ffdddd !important;
+            color: #dc3545 !important;
+        }
+        .blue-alliance .card-header {
+            background-color: #dde5ff !important;
+            color: #0d6efd !important;
+        }
+        a {
+            text-decoration: none !important;
+            color: inherit !important;
+        }
+        .page-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .prediction-header {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .predicted-score {
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        .winner-red {
+            color: #dc3545;
+        }
+        .winner-blue {
+            color: #0d6efd;
+        }
+        .confidence-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .confidence-bar-inner {
+            height: 100%;
+            text-align: center;
+            line-height: 20px;
+            color: white;
+            font-size: 12px;
+        }
+        .confidence-low {
+            background-color: #ffc107;
+        }
+        .confidence-medium {
+            background-color: #17a2b8;
+        }
+        .confidence-high {
+            background-color: #28a745;
+        }
+    }
+    
+    /* Screen styles */
+    .container {
+        margin-top: 20px;
+    }
+    .red-alliance {
+        border-left: 4px solid #dc3545;
+    }
+    .blue-alliance {
+        border-left: 4px solid #0d6efd;
+    }
+    .winner-red {
+        color: #dc3545;
+        font-weight: bold;
+    }
+    .winner-blue {
+        color: #0d6efd;
+        font-weight: bold;
+    }
+    .confidence-bar {
+        width: 100%;
+        height: 25px;
+        background-color: #e9ecef;
+        border-radius: 12px;
+        overflow: hidden;
+        margin: 10px 0;
+        position: relative;
+    }
+    .confidence-bar-inner {
+        height: 100%;
+        text-align: center;
+        line-height: 25px;
+        color: white;
+        font-weight: bold;
+        transition: width 0.3s ease;
+    }
+    .confidence-low {
+        background-color: #ffc107;
+    }
+    .confidence-medium {
+        background-color: #17a2b8;
+    }
+    .confidence-high {
+        background-color: #28a745;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div id="prediction-content">
+        <!-- Print Controls -->
+        <div class="no-print mb-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <button onclick="window.print()" class="btn btn-primary">
+                    <i class="fas fa-print me-2"></i>Print
+                </button>
+                <button id="generate-pdf" class="btn btn-success">
+                    <i class="fas fa-file-pdf me-2"></i>Generate PDF
+                </button>
+                <a href="{{ url_for('matches.predict') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Prediction
+                </a>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <div class="page-header">
+            <h1>Match Prediction Report</h1>
+            <h2>{{ selected_match.match_type }} {{ selected_match.match_number }}</h2>
+            <h3>{{ selected_event.name }} ({{ selected_event.year }})</h3>
+            <p>Generated on: {{ now.strftime('%Y-%m-%d %H:%M') }}</p>
+        </div>
+        
+        <div class="winner-{{ prediction.predicted_winner }}">
+            <h2 class="text-center">Predicted Winner: {{ prediction.predicted_winner|upper }} ALLIANCE</h2>
+            <p class="text-center">Predicted Score: <strong>Red {{ prediction.red_alliance.predicted_score }} - Blue {{ prediction.blue_alliance.predicted_score }}</strong></p>
+            
+            <div class="text-center">Confidence: {{ (prediction.confidence * 100)|round }}%</div>
+            <div class="confidence-bar">
+                <div class="confidence-bar-inner 
+                    {% if prediction.confidence < 0.3 %}confidence-low{% elif prediction.confidence > 0.7 %}confidence-high{% else %}confidence-medium{% endif %}" 
+                    style="width: {{ (prediction.confidence * 100)|round }}%;">
+                    {{ (prediction.confidence * 100)|round }}%
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <!-- RED ALLIANCE -->
+            <div class="col-md-6 mb-4">
+                <div class="card red-alliance">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3 class="h5 mb-0">Red Alliance</h3>
+                        <span class="badge bg-light text-danger">{{ prediction.red_alliance.predicted_score }} pts</span>
+                    </div>
+                    <div class="card-body">
+                        {% if prediction.red_alliance.teams %}
+                            {% for team_data in prediction.red_alliance.teams %}
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <h4 class="h6 mb-0">
+                                        {{ team_data.team.team_number }} - {{ team_data.team.team_name }}
+                                    </h4>
+                                </div>
+                                <div class="card-body p-2">
+                                    <div class="row row-cols-2 row-cols-md-3 g-2">
+                                        <!-- Display metrics dynamically based on game config -->
+                                        {% if game_config and game_config.get('data_analysis') and game_config.get('data_analysis').get('key_metrics') %}
+                                            {% for metric in game_config.data_analysis.key_metrics %}
+                                                {% if metric.display_in_predictions %}
+                                                <div class="col">
+                                                    <div class="small fw-bold">{{ metric.name }}</div>
+                                                    {% set metric_value = team_data.metrics.get(metric.id, 0) %}
+                                                    
+                                                    {# Check if this metric references any endgame elements #}
+                                                    {% set is_endgame_metric = false %}
+                                                    {% set endgame_element_id = none %}
+                                                    {% if metric.get('formula') and game_config.get('endgame_period', {}).get('scoring_elements') %}
+                                                        {% for endgame_element in game_config.endgame_period.scoring_elements %}
+                                                            {% if endgame_element.id in metric.formula %}
+                                                                {% set is_endgame_metric = true %}
+                                                                {% set endgame_element_id = endgame_element.id %}
+                                                                {% break %}
+                                                            {% endif %}
+                                                        {% endfor %}
+                                                    {% endif %}
+                                                    
+                                                    {% if is_endgame_metric and endgame_element_id %}
+                                                        {# Find the endgame element configuration #}
+                                                        {% for endgame_element in game_config.endgame_period.scoring_elements %}
+                                                            {% if endgame_element.id == endgame_element_id %}
+                                                                {# This is an endgame position metric, show the actual position #}
+                                                                {% set position_value = team_data.metrics.get(endgame_element.id) %}
+                                                                {% if position_value and position_value != endgame_element.get('default', 'None') %}
+                                                                    {% set position_points = endgame_element.get('points', {}).get(position_value, 0) %}
+                                                                    {% if position_points >= 10 %}
+                                                                        <div class="text-success">{{ position_value }}</div>
+                                                                    {% elif position_points >= 5 %}
+                                                                        <div class="text-primary">{{ position_value }}</div>
+                                                                    {% elif position_points > 0 %}
+                                                                        <div class="text-warning">{{ position_value }}</div>
+                                                                    {% else %}
+                                                                        <div class="text-muted">{{ position_value }}</div>
+                                                                    {% endif %}
+                                                                {% else %}
+                                                                    <div class="text-muted">{{ endgame_element.get('default', 'None') }}</div>
+                                                                {% endif %}
+                                                                {% break %}
+                                                            {% endif %}
+                                                        {% endfor %}
+                                                    {% else %}
+                                                        {# Regular metric display #}
+                                                        <div>{{ metric_value|round(2) }}{% if metric.name.endswith('Points') %} pts{% endif %}</div>
+                                                    {% endif %}
+                                                </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            {# Fallback for backwards compatibility #}
+                                            <div class="col">
+                                                <div class="small fw-bold">Auto</div>
+                                                <div>{{ team_data.metrics.get('apt', team_data.metrics.get('auto_points', 0))|round(1) }} pts</div>
+                                            </div>
+                                            <div class="col">
+                                                <div class="small fw-bold">Teleop</div>
+                                                <div>{{ team_data.metrics.get('tpt', team_data.metrics.get('teleop_points', 0))|round(1) }} pts</div>
+                                            </div>
+                                            <div class="col">
+                                                <div class="small fw-bold">Endgame</div>
+                                                <div>{{ team_data.metrics.get('ept', team_data.metrics.get('endgame_points', 0))|round(1) }} pts</div>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="alert alert-warning">
+                                No scouting data available for red alliance teams
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- BLUE ALLIANCE -->
+            <div class="col-md-6 mb-4">
+                <div class="card blue-alliance">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3 class="h5 mb-0">Blue Alliance</h3>
+                        <span class="badge bg-light text-primary">{{ prediction.blue_alliance.predicted_score }} pts</span>
+                    </div>
+                    <div class="card-body">
+                        {% if prediction.blue_alliance.teams %}
+                            {% for team_data in prediction.blue_alliance.teams %}
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <h4 class="h6 mb-0">
+                                        {{ team_data.team.team_number }} - {{ team_data.team.team_name }}
+                                    </h4>
+                                </div>
+                                <div class="card-body p-2">
+                                    <div class="row row-cols-2 row-cols-md-3 g-2">
+                                        <!-- Display metrics dynamically based on game config -->
+                                        {% if game_config and game_config.get('data_analysis') and game_config.get('data_analysis').get('key_metrics') %}
+                                            {% for metric in game_config.data_analysis.key_metrics %}
+                                                {% if metric.display_in_predictions %}
+                                                <div class="col">
+                                                    <div class="small fw-bold">{{ metric.name }}</div>
+                                                    {% set metric_value = team_data.metrics.get(metric.id, 0) %}
+                                                    
+                                                    {# Check if this metric references any endgame elements #}
+                                                    {% set is_endgame_metric = false %}
+                                                    {% set endgame_element_id = none %}
+                                                    {% if metric.get('formula') and game_config.get('endgame_period', {}).get('scoring_elements') %}
+                                                        {% for endgame_element in game_config.endgame_period.scoring_elements %}
+                                                            {% if endgame_element.id in metric.formula %}
+                                                                {% set is_endgame_metric = true %}
+                                                                {% set endgame_element_id = endgame_element.id %}
+                                                                {% break %}
+                                                            {% endif %}
+                                                        {% endfor %}
+                                                    {% endif %}
+                                                    
+                                                    {% if is_endgame_metric and endgame_element_id %}
+                                                        {# Find the endgame element configuration #}
+                                                        {% for endgame_element in game_config.endgame_period.scoring_elements %}
+                                                            {% if endgame_element.id == endgame_element_id %}
+                                                                {# This is an endgame position metric, show the actual position #}
+                                                                {% set position_value = team_data.metrics.get(endgame_element.id) %}
+                                                                {% if position_value and position_value != endgame_element.get('default', 'None') %}
+                                                                    {% set position_points = endgame_element.get('points', {}).get(position_value, 0) %}
+                                                                    {% if position_points >= 10 %}
+                                                                        <div class="text-success">{{ position_value }}</div>
+                                                                    {% elif position_points >= 5 %}
+                                                                        <div class="text-primary">{{ position_value }}</div>
+                                                                    {% elif position_points > 0 %}
+                                                                        <div class="text-warning">{{ position_value }}</div>
+                                                                    {% else %}
+                                                                        <div class="text-muted">{{ position_value }}</div>
+                                                                    {% endif %}
+                                                                {% else %}
+                                                                    <div class="text-muted">{{ endgame_element.get('default', 'None') }}</div>
+                                                                {% endif %}
+                                                                {% break %}
+                                                            {% endif %}
+                                                        {% endfor %}
+                                                    {% else %}
+                                                        {# Regular metric display #}
+                                                        <div>{{ metric_value|round(2) }}{% if metric.name.endswith('Points') %} pts{% endif %}</div>
+                                                    {% endif %}
+                                                </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            {# Fallback for backwards compatibility #}
+                                            <div class="col">
+                                                <div class="small fw-bold">Auto</div>
+                                                <div>{{ team_data.metrics.get('apt', team_data.metrics.get('auto_points', 0))|round(1) }} pts</div>
+                                            </div>
+                                            <div class="col">
+                                                <div class="small fw-bold">Teleop</div>
+                                                <div>{{ team_data.metrics.get('tpt', team_data.metrics.get('teleop_points', 0))|round(1) }} pts</div>
+                                            </div>
+                                            <div class="col">
+                                                <div class="small fw-bold">Endgame</div>
+                                                <div>{{ team_data.metrics.get('ept', team_data.metrics.get('endgame_points', 0))|round(1) }} pts</div>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="alert alert-warning">
+                                No scouting data available for blue alliance teams
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Generated by Team 5454 Scouting App</p>
+            <p>Confidential - For Team Use Only</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Setup PDF generation button
+        document.getElementById('generate-pdf').addEventListener('click', function() {
+            // Show loading state
+            const button = this;
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Generating PDF...';
+            button.disabled = true;
+            
+            // Get the content to convert
+            const element = document.getElementById('prediction-content');
+            
+            // Use html2canvas to capture the content as an image
+            html2canvas(element, {
+                scale: 2, // Higher resolution
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff'
+            }).then(function(canvas) {
+                // Create jsPDF instance
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                
+                // Calculate dimensions
+                const imgWidth = 210; // A4 width in mm
+                const pageHeight = 295; // A4 height in mm
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                let heightLeft = imgHeight;
+                
+                let position = 0;
+                
+                // Add the image to PDF
+                pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+                
+                // Add new pages if content is longer than one page
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                
+                // Save the PDF
+                const filename = `match_prediction_${new Date().toISOString().slice(0, 10)}.pdf`;
+                pdf.save(filename);
+                
+                // Reset button
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }).catch(function(error) {
+                console.error('Error generating PDF:', error);
+                alert('Error generating PDF. Please try printing instead.');
+                
+                // Reset button
+                button.innerHTML = originalText;
+                button.disabled = false;
+            });
+        });
+    });
+</script>
+{% endblock %}

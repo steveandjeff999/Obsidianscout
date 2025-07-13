@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+
+{% block title %}Text Elements{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">
+            <i class="fas fa-comment-alt text-primary me-2"></i>Text Elements
+        </h1>
+        <a href="{{ url_for('scouting.index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i> Back to Scouting
+        </a>
+    </div>
+    
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filters</h5>
+        </div>
+        <div class="card-body">
+            <div class="d-flex flex-wrap gap-3 align-items-center">
+                <div>
+                    <label class="form-label">Filter by event:</label>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-secondary event-filter-btn active" data-filter="all">All Events</button>
+                        {% for event in events %}
+                        <button type="button" class="btn btn-outline-secondary event-filter-btn" data-filter="{{ event.code }}">{{ event.code }}</button>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="vr"></div>
+                <div>
+                    <label class="form-label">Filter by text element:</label>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-secondary text-filter-btn active" data-filter="all">All Types</button>
+                        {% for element in text_elements %}
+                        <button type="button" class="btn btn-outline-secondary text-filter-btn" data-filter="{{ element.id }}">{{ element.name }}</button>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if scouting_entries %}
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">
+                <i class="fas fa-list me-2"></i>Text Elements Submitted
+                {% if current_event %}
+                <span class="badge bg-light text-primary ms-2">{{ current_event.code }}</span>
+                {% endif %}
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="120">Team</th>
+                            <th width="150">Match</th>
+                            <th width="120">Alliance</th>
+                            <th width="150">Scout</th>
+                            <th width="140">Timestamp</th>
+                            <th>Text Content</th>
+                            <th width="100">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="text-entries-tbody">
+                        {% for item in scouting_entries %}
+                        {% set entry = item.entry %}
+                        {% set text_data = item.text_data %}
+                        <tr class="text-entry-row" data-event-code="{{ entry.match.event.code }}">
+                            <td>
+                                <a href="{{ url_for('teams.view', team_number=entry.team.team_number) }}" class="text-decoration-none">
+                                    <strong>{{ entry.team.team_number }}</strong>
+                                </a>
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary small">{{ entry.match.event.code }}</span><br>
+                                <span class="badge {% if entry.match.match_type == 'Qualification' %}bg-primary{% elif entry.match.match_type == 'Playoff' %}bg-danger{% elif entry.match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %} small">
+                                    {{ entry.match.match_type }}
+                                </span>
+                                <span class="text-muted small">{{ entry.match.match_number }}</span>
+                            </td>
+                            <td>
+                                <span class="badge {% if entry.alliance == 'red' %}bg-danger{% elif entry.alliance == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                    {{ entry.alliance.title() }}
+                                </span>
+                            </td>
+                            <td class="small">
+                                {{ entry.scout_name or 'Unknown' }}
+                            </td>
+                            <td class="small text-muted">
+                                {{ entry.timestamp.strftime('%m/%d/%Y %H:%M') }}
+                            </td>
+                            <td>
+                                <div class="text-content-container">
+                                    {% for element in text_elements %}
+                                        {% set element_id = element.id %}
+                                        {% if text_data.get(element_id) %}
+                                        <div class="text-element-entry mb-2" data-element-id="{{ element_id }}">
+                                            <div class="d-flex align-items-start">
+                                                <span class="badge bg-info me-2 flex-shrink-0">{{ element.name }}</span>
+                                                <div class="text-content">
+                                                    {% if element.multiline %}
+                                                        <div class="text-content-preview" style="max-height: 4em; overflow: hidden; text-overflow: ellipsis;">
+                                                            {{ text_data[element_id]|truncate(200) }}
+                                                        </div>
+                                                        {% if text_data[element_id]|length > 200 %}
+                                                        <button class="btn btn-link btn-sm p-0 expand-text" data-bs-toggle="modal" data-bs-target="#textModal{{ entry.id }}_{{ element_id }}">
+                                                            <small>Read more...</small>
+                                                        </button>
+                                                        {% endif %}
+                                                    {% else %}
+                                                        <span class="text-content-single">{{ text_data[element_id] }}</span>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Modal for full text view -->
+                                        {% if element.multiline and text_data[element_id]|length > 200 %}
+                                        <div class="modal fade" id="textModal{{ entry.id }}_{{ element_id }}" tabindex="-1" aria-hidden="true">
+                                            <div class="modal-dialog modal-lg">
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title">
+                                                            <i class="fas fa-comment-alt me-2"></i>{{ element.name }}
+                                                            <span class="text-muted ms-2">- Team {{ entry.team.team_number }}</span>
+                                                        </h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <div class="alert alert-info">
+                                                            <div class="row">
+                                                                <div class="col-md-6">
+                                                                    <strong>Team:</strong> {{ entry.team.team_number }} - {{ entry.team.team_name }}<br>
+                                                                    <strong>Match:</strong> {{ entry.match.match_type }} {{ entry.match.match_number }}
+                                                                </div>
+                                                                <div class="col-md-6">
+                                                                    <strong>Scout:</strong> {{ entry.scout_name or 'Unknown' }}<br>
+                                                                    <strong>Time:</strong> {{ entry.timestamp.strftime('%m/%d/%Y %H:%M') }}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="text-content-full">
+                                                            <pre class="bg-light p-3 rounded">{{ text_data[element_id] }}</pre>
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                                        <a href="{{ url_for('scouting.view_data', id=entry.id) }}" class="btn btn-primary">
+                                                            <i class="fas fa-eye me-2"></i>View Full Entry
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="btn-group-vertical btn-group-sm" role="group">
+                                    <a href="{{ url_for('scouting.view_data', id=entry.id) }}" 
+                                       class="btn btn-outline-primary btn-sm" title="View Full Entry">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('scouting.scouting_form', team_id=entry.team_id, match_id=entry.match_id) }}" 
+                                       class="btn btn-outline-warning btn-sm" title="Edit Entry">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-light">
+            <div class="d-flex justify-content-between align-items-center">
+                <span id="entries-count">Total entries: {{ scouting_entries|length }}</span>
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('data.export_excel') }}" class="btn btn-success btn-sm">
+                        <i class="fas fa-file-excel me-2"></i> Export to Excel
+                    </a>
+                    <a href="{{ url_for('scouting.list_data') }}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-list me-2"></i> All Scouting Data
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="fas fa-comment-slash fa-3x text-muted mb-3"></i>
+            <h4 class="text-muted">No Text Elements Found</h4>
+            <p class="text-muted mb-4">
+                No scouting entries with text content have been submitted yet
+                {% if current_event %}for {{ current_event.name }}{% endif %}.
+            </p>
+            <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                <a href="{{ url_for('scouting.scouting_form') }}" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i> Start Scouting
+                </a>
+                <a href="{{ url_for('scouting.list_data') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-list me-2"></i> View All Data
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dataRows = document.querySelectorAll('.text-entry-row');
+    const eventFilterButtons = document.querySelectorAll('.event-filter-btn');
+    const textFilterButtons = document.querySelectorAll('.text-filter-btn');
+    let currentEventFilter = 'all';
+    let currentTextFilter = 'all';
+
+    function updateVisibility() {
+        let visibleCount = 0;
+        
+        dataRows.forEach(row => {
+            const eventCode = row.getAttribute('data-event-code');
+            
+            // Check if the row has the selected text element (if filtering by text element)
+            let hasTextElement = true;
+            if (currentTextFilter !== 'all') {
+                const textElements = row.querySelectorAll('[data-element-id="' + currentTextFilter + '"]');
+                hasTextElement = textElements.length > 0;
+            }
+            
+            const eventMatch = currentEventFilter === 'all' || eventCode === currentEventFilter;
+            const textMatch = hasTextElement;
+            
+            if (eventMatch && textMatch) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        // Update the total count
+        document.getElementById('entries-count').textContent = `Filtered entries: ${visibleCount}`;
+    }
+
+    // Event filter handlers
+    eventFilterButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            eventFilterButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            currentEventFilter = this.getAttribute('data-filter');
+            updateVisibility();
+        });
+    });
+
+    // Text filter handlers
+    textFilterButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            textFilterButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            currentTextFilter = this.getAttribute('data-filter');
+            updateVisibility();
+        });
+    });
+
+    // Auto-expand text content on click
+    document.querySelectorAll('.text-content-preview').forEach(preview => {
+        preview.addEventListener('click', function() {
+            if (this.style.maxHeight === '4em') {
+                this.style.maxHeight = 'none';
+                this.style.overflow = 'visible';
+            } else {
+                this.style.maxHeight = '4em';
+                this.style.overflow = 'hidden';
+            }
+        });
+    });
+});
+</script>
+
+<style>
+.text-content-container {
+    min-width: 300px;
+}
+
+.text-element-entry {
+    border-left: 3px solid var(--bs-info);
+    padding-left: 0.5rem;
+}
+
+.text-content-preview {
+    cursor: pointer;
+    transition: max-height 0.3s ease;
+}
+
+.text-content-preview:hover {
+    background-color: var(--bs-light);
+    border-radius: 0.25rem;
+    padding: 0.25rem;
+}
+
+.text-content-single {
+    font-style: italic;
+}
+
+.expand-text {
+    color: var(--bs-primary);
+    text-decoration: none !important;
+}
+
+.expand-text:hover {
+    text-decoration: underline !important;
+}
+
+.btn-group-vertical .btn {
+    border-radius: 0.25rem !important;
+    margin-bottom: 2px;
+}
+
+.btn-group-vertical .btn:last-child {
+    margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    .text-content-container {
+        min-width: 200px;
+    }
+    
+    .badge {
+        font-size: 0.7rem;
+    }
+}
+</style>
+{% endblock %}

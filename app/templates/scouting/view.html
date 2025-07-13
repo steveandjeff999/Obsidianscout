@@ -1,0 +1,275 @@
+{% extends 'base.html' %}
+
+{% block title %}View Scouting Data{% endblock %}
+
+{% block heading %}Scouting Data Details{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header {% if scouting_data.alliance == 'red' %}bg-danger text-white{% elif scouting_data.alliance == 'blue' %}bg-primary text-white{% else %}bg-secondary text-white{% endif %}">
+                <h5 class="mb-0">
+                    Team {{ scouting_data.team.team_number }} - {{ scouting_data.team.team_name }}
+                    <span class="badge {% if scouting_data.match.match_type == 'Qualification' %}bg-primary{% elif scouting_data.match.match_type == 'Playoff' %}bg-danger{% elif scouting_data.match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %} ms-2">
+                        {{ scouting_data.match.match_type }} Match {{ scouting_data.match.match_number }}
+                    </span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Team</dt>
+                            <dd class="col-sm-8">{{ scouting_data.team.team_number }} - {{ scouting_data.team.team_name }}</dd>
+                            
+                            <dt class="col-sm-4">Match</dt>
+                            <dd class="col-sm-8">
+                                <span class="badge {% if scouting_data.match.match_type == 'Qualification' %}bg-primary{% elif scouting_data.match.match_type == 'Playoff' %}bg-danger{% elif scouting_data.match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %}">
+                                    {{ scouting_data.match.match_type }}
+                                </span>
+                                Match {{ scouting_data.match.match_number }}
+                            </dd>
+                            
+                            <dt class="col-sm-4">Alliance</dt>
+                            <dd class="col-sm-8">
+                                <span class="badge {% if scouting_data.alliance == 'red' %}bg-danger{% elif scouting_data.alliance == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                    {{ scouting_data.alliance|capitalize }}
+                                </span>
+                            </dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Scout</dt>
+                            <dd class="col-sm-8">{{ scouting_data.scout_name }}</dd>
+                            
+                            <dt class="col-sm-4">Date/Time</dt>
+                            <dd class="col-sm-8">{{ scouting_data.timestamp.strftime('%Y-%m-%d %H:%M') }}</dd>
+                        </dl>
+                    </div>
+                </div>
+                
+                <!-- Points Summary Card -->
+                <div class="card mb-4 border-success">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Points Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% set component_metrics = [] %}
+                            {% set total_metric = None %}
+                            
+                            {% for metric in game_config.data_analysis.key_metrics %}
+                                {% if metric.is_total_component is defined and metric.is_total_component %}
+                                    {% if component_metrics.append(metric) %}{% endif %}
+                                {% elif 'total' in metric.id.lower() or 'tot' == metric.id.lower() %}
+                                    {% set total_metric = metric %}
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% set colors = ['danger', 'primary', 'success', 'info', 'warning'] %}
+                            
+                            {% for metric in component_metrics %}
+                            <div class="col-md-{{ 12 // (component_metrics|length + 1) }} mb-2 mb-md-0 text-center">
+                                <div class="fs-5">{{ metric.name }}</div>
+                                <div class="fs-1 fw-bold text-{{ colors[loop.index0 % colors|length] }}">
+                                    {{ scouting_data.calculate_metric(metric.id)|round(1) }}
+                                </div>
+                            </div>
+                            {% endfor %}
+                            
+                            <div class="col-md-{{ 12 // (component_metrics|length + 1) }} text-center">
+                                <div class="fs-5">{{ total_metric.name if total_metric else 'Total Points' }}</div>
+                                <div class="fs-1 fw-bold text-dark">
+                                    {{ scouting_data.calculate_metric(total_metric.id if total_metric else 'tot')|round(1) }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Auto Period -->
+                <div class="card mb-4">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">Auto Period</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for element in game_config.auto_period.scoring_elements %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="d-flex justify-content-between">
+                                        <span>{{ element.name }}</span>
+                                        <span class="fw-bold">
+                                            {% if element.type == 'boolean' %}
+                                                {% if scouting_data.data.get(element.id) %}
+                                                <i class="fas fa-check text-success"></i>
+                                                {% else %}
+                                                <i class="fas fa-times text-danger"></i>
+                                                {% endif %}
+                                            {% else %}
+                                                {{ scouting_data.data.get(element.id, 0) }}
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Teleop Period -->
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Teleop Period</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for element in game_config.teleop_period.scoring_elements %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="d-flex justify-content-between">
+                                        <span>{{ element.name }}</span>
+                                        <span class="fw-bold">
+                                            {% if element.type == 'boolean' %}
+                                                {% if scouting_data.data.get(element.id) %}
+                                                <i class="fas fa-check text-success"></i>
+                                                {% else %}
+                                                <i class="fas fa-times text-danger"></i>
+                                                {% endif %}
+                                            {% else %}
+                                                {{ scouting_data.data.get(element.id, 0) }}
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Endgame Period -->
+                <div class="card mb-4">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Endgame</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for element in game_config.endgame_period.scoring_elements %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="d-flex justify-content-between">
+                                        <span>{{ element.name }}</span>
+                                        <span class="fw-bold">
+                                            {% if element.type == 'boolean' %}
+                                                {% if scouting_data.data.get(element.id) %}
+                                                <i class="fas fa-check text-success"></i>
+                                                {% else %}
+                                                <i class="fas fa-times text-danger"></i>
+                                                {% endif %}
+                                            {% elif element.type == 'select' %}
+                                                {{ scouting_data.data.get(element.id, '') }}
+                                            {% else %}
+                                                {{ scouting_data.data.get(element.id, 0) }}
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Post-Match Ratings -->
+                <div class="card mb-4">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Post-Match Ratings</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for element in game_config.post_match.rating_elements %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="d-flex justify-content-between">
+                                        <span>{{ element.name }}</span>
+                                        <span class="fw-bold">
+                                            <div class="rating-display">
+                                                {% for i in range(1, element.max + 1) %}
+                                                    <i class="fas fa-star {% if i <= scouting_data.data.get(element.id, 0) %}active{% endif %}"></i>
+                                                {% endfor %}
+                                            </div>
+                                        </span>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Comments -->
+                <div class="card mb-4">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0">Comments</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for element in game_config.post_match.text_elements %}
+                                <div class="col-md-6 mb-3">
+                                    <h6>{{ element.name }}</h6>
+                                    <p>{{ scouting_data.data.get(element.id, '') or 'No comments' }}</p>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <a href="{{ url_for('scouting.scouting_form', team_id=scouting_data.team_id, match_id=scouting_data.match_id) }}" class="btn btn-primary">
+                        <i class="fas fa-edit me-2"></i> Edit Data
+                    </a>
+                    <a href="{{ url_for('scouting.qr_code', team_id=scouting_data.team_id, match_id=scouting_data.match_id) }}" class="btn btn-info">
+                        <i class="fas fa-qrcode me-2"></i> QR Code
+                    </a>
+                    <a href="{{ url_for('scouting.list_data') }}" class="btn btn-secondary">
+                        <i class="fas fa-list me-2"></i> Back to List
+                    </a>
+                    <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                        <i class="fas fa-trash me-2"></i> Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete this scouting data for Team {{ scouting_data.team.team_number }} in Match {{ scouting_data.match.match_number }}?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="{{ url_for('scouting.delete_data', id=scouting_data.id) }}" method="post">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .rating-display .fas.fa-star {
+        color: #e0e0e0;
+        margin-right: 2px;
+    }
+    
+    .rating-display .fas.fa-star.active {
+        color: #ffc107;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+
+{% block title %}Scouting Data List{% endblock %}
+
+{% block heading %}Scouting Data List{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">All Scouting Data</h5>
+        <a href="{{ url_for('scouting.index') }}" class="btn btn-light btn-sm">
+            <i class="fas fa-arrow-left me-1"></i> Back to Scouting Dashboard
+        </a>
+    </div>
+    <div class="card-body">
+        {% if scouting_data %}        <div class="d-flex gap-3 mb-3">
+            <div>
+                <label class="form-label">Filter by event:</label>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary event-filter-btn active" data-filter="all">All Events</button>
+                    {% for event in events %}
+                    <button type="button" class="btn btn-outline-secondary event-filter-btn" data-filter="{{ event.code }}">{{ event.code }}</button>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="vr"></div>
+            <div>
+                <label class="form-label">Filter by match type:</label>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary match-filter-btn active" data-filter="all">All Types</button>
+                    <button type="button" class="btn btn-outline-success match-filter-btn" data-filter="Practice">Practice</button>
+                    <button type="button" class="btn btn-outline-primary match-filter-btn" data-filter="Qualification">Qualification</button>
+                    <button type="button" class="btn btn-outline-danger match-filter-btn" data-filter="Playoff">Playoff</button>
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Team</th>
+                        <th>Match</th>
+                        <th>Alliance</th>
+                        <th>Scout</th>
+                        <th>Station</th>
+                        <th>Timestamp</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for data in scouting_data %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('teams.view', team_number=data.team.team_number) }}">
+                                {{ data.team.team_number }}
+                            </a>
+                        </td>                        <td>
+                            <span class="badge bg-secondary">{{ data.match.event.code }}</span>
+                            <span class="badge {% if data.match.match_type == 'Qualification' %}bg-primary{% elif data.match.match_type == 'Playoff' %}bg-danger{% elif data.match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ data.match.match_type }}
+                            </span>
+                            {{ data.match.match_number }}
+                        </td>
+                        <td>
+                            <span class="badge {% if data.alliance == 'red' %}bg-danger{% elif data.alliance == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                {{ data.alliance }}
+                            </span>
+                        </td>
+                        <td>{{ data.scout_name }}</td>
+                        <td>{{ data.scouting_station }}</td>
+                        <td>{{ data.timestamp.strftime('%m/%d/%Y %H:%M') }}</td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{{ url_for('scouting.view_data', id=data.id) }}" class="btn btn-sm btn-primary" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{{ url_for('scouting.scouting_form', team_id=data.team_id, match_id=data.match_id) }}" class="btn btn-sm btn-warning" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <button type="button" class="btn btn-sm btn-danger" title="Delete" 
+                                        data-bs-toggle="modal" data-bs-target="#deleteModal{{ data.id }}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                            
+                            <!-- Delete Confirmation Modal -->
+                            <div class="modal fade" id="deleteModal{{ data.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ data.id }}" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="deleteModalLabel{{ data.id }}">Confirm Delete</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            Are you sure you want to delete scouting data for Team {{ data.team.team_number }} in {{ data.match.match_type }} {{ data.match.match_number }}?
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <form action="{{ url_for('scouting.delete_data', id=data.id) }}" method="post">
+                                                <button type="submit" class="btn btn-danger">Delete</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info text-center">
+            <i class="fas fa-info-circle me-2"></i> No scouting data available yet.
+        </div>
+        {% endif %}
+    </div>
+    {% if scouting_data %}
+    <div class="card-footer bg-light">
+        <div class="d-flex justify-content-between align-items-center">
+            <span>Total records: {{ scouting_data|length }}</span>
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('scouting.view_text_elements') }}" class="btn btn-outline-info">
+                    <i class="fas fa-comment-alt me-2"></i> View Text Elements
+                </a>
+                <a href="{{ url_for('data.export_excel') }}" class="btn btn-success">
+                    <i class="fas fa-file-excel me-2"></i> Export to Excel
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const dataRows = document.querySelectorAll('tbody tr');
+        const eventFilterButtons = document.querySelectorAll('.event-filter-btn');
+        const matchFilterButtons = document.querySelectorAll('.match-filter-btn');
+        let currentEventFilter = 'all';
+        let currentMatchFilter = 'all';
+
+        function updateVisibility() {
+            dataRows.forEach(row => {
+                const eventCode = row.querySelector('td:nth-child(2) .badge:first-child').textContent.trim();
+                const matchType = row.querySelector('td:nth-child(2) .badge:nth-child(2)').textContent.trim();
+                
+                const eventMatch = currentEventFilter === 'all' || eventCode === currentEventFilter;
+                const matchTypeMatch = currentMatchFilter === 'all' || matchType === currentMatchFilter;
+                
+                row.style.display = eventMatch && matchTypeMatch ? '' : 'none';
+            });
+
+            // Update the total records count
+            const visibleRows = document.querySelectorAll('tbody tr:not([style*="display: none"])');
+            document.querySelector('.card-footer span').textContent = `Filtered records: ${visibleRows.length}`;
+        }
+
+        eventFilterButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                eventFilterButtons.forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+                currentEventFilter = this.getAttribute('data-filter');
+                updateVisibility();
+            });
+        });
+
+        matchFilterButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                matchFilterButtons.forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+                currentMatchFilter = this.getAttribute('data-filter');
+                updateVisibility();
+            });
+        });
+    });
+</script>
+{% endblock %}

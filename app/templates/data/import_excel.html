@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block title %}Import Excel Data{% endblock %}
+
+{% block heading %}Import Excel Data{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3 class="mb-0">Import Scouting Data from Excel</h3>
+                    <a href="{{ url_for('data.index') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-2"></i> Back to Data Management
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Upload Excel File</h5>
+            </div>
+            <div class="card-body">
+                <p>Import scouting data from an Excel file (.xlsx or .xls format). The Excel file should have the following columns:</p>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i> Required columns:
+                    <ul>
+                        <li><strong>match_number</strong> - The match number</li>
+                        <li><strong>team_number</strong> - The team number</li>
+                    </ul>
+                    
+                    Optional columns:
+                    <ul>
+                        <li><strong>match_type</strong> - Type of match (defaults to "Qualification")</li>
+                        <li><strong>scout_name</strong> - Name of the scout (defaults to "Excel Import")</li>
+                        <li><strong>alliance</strong> - "red" or "blue" (defaults to "unknown")</li>
+                        <li><strong>event_name</strong> - Name of the event (defaults to "Unknown Event")</li>
+                    </ul>
+                    
+                    Plus any scoring element columns as defined in your game configuration.
+                </div>
+                
+                <form method="POST" enctype="multipart/form-data" class="mt-4">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Select Excel File</label>
+                        <input type="file" class="form-control" id="file" name="file" accept=".xlsx,.xls" required>
+                        <div class="form-text text-muted">Only .xlsx and .xls files are supported.</div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload me-2"></i> Upload and Import
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer">
+                <div class="text-muted">
+                    <i class="fas fa-exclamation-triangle me-2"></i> Note: Existing data for the same team and match will be updated.
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Excel Template</h5>
+            </div>
+            <div class="card-body">
+                <p>Need a starting template? You can download a blank Excel template with the correct column headers for your game configuration.</p>
+                
+                <div class="d-grid">
+                    <a href="{{ url_for('data.export_excel') }}" class="btn btn-info">
+                        <i class="fas fa-download me-2"></i> Download Excel Template
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,280 @@
+{% extends 'base.html' %}
+
+{% block title %}Side-by-Side Team Comparison{% endblock %}
+
+{% block heading %}Side-by-Side Team Comparison{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h3>Comparing {{ teams_data|length }} Teams</h3>
+            <div>
+                <a href="{{ url_for('visualization.side_by_side') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-plus me-2"></i> Select Different Teams
+                </a>
+                <a href="{{ url_for('visualization.index') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-chart-line me-2"></i> Back to Visualization
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Team Headers -->
+<div class="row mb-3">
+    {% for team_data in teams_data %}
+    <div class="col-md-{{ 12 // teams_data|length if teams_data|length <= 4 else 3 }}">
+        <div class="card h-100">
+            <div class="card-header text-center {% if team_data.has_data %}bg-primary text-white{% else %}bg-warning text-dark{% endif %}">
+                <h4 class="mb-0">Team {{ team_data.team.team_number }}</h4>
+                <small>{{ team_data.team.team_name or 'Unknown' }}</small>
+            </div>
+            <div class="card-body text-center">
+                <div class="row">
+                    <div class="col-6">
+                        <h5 class="text-primary">{{ team_data.match_count }}</h5>
+                        <small class="text-muted">Matches</small>
+                    </div>
+                    <div class="col-6">
+                        <h5 class="{% if team_data.has_data %}text-success{% else %}text-danger{% endif %}">
+                            {% if team_data.has_data %}
+                            <i class="fas fa-check-circle"></i>
+                            {% else %}
+                            <i class="fas fa-exclamation-triangle"></i>
+                            {% endif %}
+                        </h5>
+                        <small class="text-muted">{% if team_data.has_data %}Has Data{% else %}No Data{% endif %}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Metrics Comparison -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-bar me-2"></i> Detailed Metrics Comparison
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 200px;">Metric</th>
+                                {% for team_data in teams_data %}
+                                <th class="text-center">
+                                    Team {{ team_data.team.team_number }}
+                                    <br><small class="text-muted">{{ team_data.team.team_name or 'Unknown' }}</small>
+                                </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for metric in game_config['data_analysis']['key_metrics'] %}
+                            <tr>
+                                <td class="fw-bold">
+                                    {{ metric.name }}
+                                    {% if metric.get('aggregate') %}
+                                    <br><small class="text-muted">({{ metric.aggregate }})</small>
+                                    {% endif %}
+                                </td>
+                                {% for team_data in teams_data %}
+                                <td class="text-center">
+                                    {% set metric_data = team_data.metrics[metric.id] %}
+                                    {% if team_data.has_data and metric_data.match_data %}
+                                    <div class="metric-value">
+                                        <span class="h5 text-primary">{{ "%.2f"|format(metric_data.aggregate) }}</span>
+                                        <br>
+                                        <small class="text-muted">
+                                            Min: {{ "%.1f"|format(metric_data.min) }} | 
+                                            Max: {{ "%.1f"|format(metric_data.max) }} | 
+                                            Avg: {{ "%.1f"|format(metric_data.avg) }}
+                                        </small>
+                                        <br>
+                                        <small class="text-success">{{ metric_data.match_data|length }} matches</small>
+                                    </div>
+                                    {% else %}
+                                    <div class="metric-value">
+                                        <span class="h5 text-muted">--</span>
+                                        <br>
+                                        <small class="text-danger">No data</small>
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Individual Team Performance Charts -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-line me-2"></i> Match-by-Match Performance
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for team_data in teams_data %}
+                    <div class="col-md-{{ 12 // teams_data|length if teams_data|length <= 2 else 6 }}">
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6 class="mb-0">Team {{ team_data.team.team_number }} - {{ team_data.team.team_name or 'Unknown' }}</h6>
+                            </div>
+                            <div class="card-body">
+                                {% if team_data.has_data %}
+                                <div class="performance-summary">
+                                    <div class="row text-center mb-3">
+                                        {% for metric in game_config['data_analysis']['key_metrics'][:4] %}
+                                        {% set metric_data = team_data.metrics[metric.id] %}
+                                        <div class="col-3">
+                                            <div class="p-2 bg-light rounded">
+                                                <div class="h6 text-primary mb-1">{{ "%.1f"|format(metric_data.aggregate) }}</div>
+                                                <small class="text-muted">{{ metric.name }}</small>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    
+                                    <!-- Match History -->
+                                    <div class="match-history">
+                                        <h6 class="mb-2">Recent Matches</h6>
+                                        {% set recent_matches = team_data.metrics[game_config['data_analysis']['key_metrics'][0]['id']].match_values[-5:] %}
+                                        {% if recent_matches %}
+                                        <div class="row">
+                                            {% for match in recent_matches %}
+                                            <div class="col">
+                                                <div class="text-center p-2 bg-light rounded">
+                                                    <div class="fw-bold">M{{ match.match }}</div>
+                                                    <small class="text-muted">{{ "%.1f"|format(match.value) }}</small>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                        {% else %}
+                                        <p class="text-muted">No match data available</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% else %}
+                                <div class="text-center py-4">
+                                    <i class="fas fa-exclamation-triangle text-warning fa-3x mb-3"></i>
+                                    <p class="text-muted">No scouting data available for this team</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-tools me-2"></i> Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <a href="{{ url_for('visualization.compare_teams') }}?teams={{ teams_data|map(attribute='team.team_number')|join('&teams=') }}&metric={{ game_config['data_analysis']['key_metrics'][0]['id'] }}" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-chart-bar me-2"></i> Chart Comparison
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-outline-success w-100" onclick="window.print()">
+                            <i class="fas fa-print me-2"></i> Print Report
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-outline-info w-100" onclick="exportData()">
+                            <i class="fas fa-download me-2"></i> Export Data
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('visualization.side_by_side') }}" class="btn btn-outline-warning w-100">
+                            <i class="fas fa-plus me-2"></i> Add/Remove Teams
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.metric-value {
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.performance-summary {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.match-history .col {
+    margin-bottom: 10px;
+}
+
+@media print {
+    .btn, .card-header {
+        display: none !important;
+    }
+    .card {
+        border: 1px solid #000 !important;
+    }
+}
+</style>
+
+<script>
+function exportData() {
+    // Simple CSV export without complex template loops
+    const table = document.querySelector('table');
+    const rows = Array.from(table.querySelectorAll('tr'));
+    
+    let csvContent = "data:text/csv;charset=utf-8,";
+    
+    rows.forEach(row => {
+        const cells = Array.from(row.querySelectorAll('th, td'));
+        const rowData = cells.map(cell => '"' + cell.textContent.replace(/"/g, '""').replace(/\n/g, ' ').trim() + '"').join(',');
+        csvContent += rowData + '\n';
+    });
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "team_comparison.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+</script>
+{% endblock %}

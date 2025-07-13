@@ -1,0 +1,479 @@
+{% extends 'base.html' %}
+
+{% block title %}Scouting Form{% endblock %}
+
+{% block heading %}Scouting Form{% endblock %}
+{% block subheading %}
+<div id="form-subheading" class="text-muted mb-4">Select team and match below</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <!-- Team and Match Selection -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Select Team and Match</h5>
+            </div>
+            <div class="card-body">
+                <form id="team-match-form">
+                    <div class="row">
+                        <div class="col-md-6 mb-2">
+                            <label for="team-selector" class="form-label">Select Team</label>
+                            <select class="form-select" id="team-selector" name="team_id" required>
+                                <option value="">-- Select Team --</option>
+                                {% for team_option in teams %}
+                                <option value="{{ team_option.id }}" {% if team and team.id == team_option.id %}selected{% endif %}>
+                                    {{ team_option.team_number }} - {{ team_option.team_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <label for="match-selector" class="form-label">Select Match</label>
+                            <select class="form-select" id="match-selector" name="match_id" required>
+                                <option value="">-- Select Match --</option>
+                                {% for match_option in matches %}
+                                <option value="{{ match_option.id }}" data-match-type="{{ match_option.match_type }}" {% if match and match.id == match_option.id %}selected{% endif %}>
+                                    {{ match_option.match_type }} {{ match_option.match_number }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Form Content Container -->
+        <div id="form-content">
+            {% if team and match %}
+                {% include "scouting/partials/form_content.html" %}
+            {% else %}
+            <!-- Empty Form State -->
+            <div class="alert alert-info text-center py-4">
+                <i class="fas fa-info-circle fa-3x mb-3"></i>
+                <h4>Please select a team and match above</h4>
+                <p class="mb-0">The form will automatically update when both are selected.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- QR Code Container (initially hidden) -->
+<div class="modal fade" id="qrModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-qrcode me-2"></i> QR Code for Match Data
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="qr-container">
+                    <div id="qrcode" class="mb-3"></div>
+                    <div id="qrDownloadContainer" class="text-center d-none">
+                        <button type="button" class="btn btn-primary">
+                            <i class="fas fa-download me-2"></i> Download QR Code
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Status Toast Container -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <!-- Toasts will be inserted here dynamically -->
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize form components in one place for easier updates
+        function initializeFormComponents() {
+            // Show QR code in modal when generated
+            const generateQRButton = document.getElementById('generateQR');
+            if (generateQRButton) {
+                const qrModal = new bootstrap.Modal(document.getElementById('qrModal'));
+                
+                // Remove any existing event listener first
+                generateQRButton.removeEventListener('click', showQRModal);
+                
+                // Add new event listener
+                generateQRButton.addEventListener('click', showQRModal);
+                
+                function showQRModal() {
+                    // Show modal first, then generate QR code
+                    qrModal.show();
+                    generateQRCode(); // This function is defined in scripts.js
+                }
+            }
+            
+            // Initialize counters (needed for points calculation)
+            initializeCounters();
+            
+            // Initialize star rating system
+            initializeRatings();
+            
+            // Initialize match period tabs
+            initializeMatchPeriodTabs();
+            
+            // Initialize points calculation
+            initializePointsCalculation();
+
+            // Form reset button
+            initializeResetButton();
+
+            // Setup save button with enhanced functionality
+            setupSaveButton();
+
+            // Make sure points are calculated on page load
+            updatePointsCalculation();
+        }
+        
+        // Function to show toast notifications
+        function showToast(message, type = 'info') {
+            const toastContainer = document.querySelector('.toast-container');
+            if (!toastContainer) return;
+            
+            const toast = document.createElement('div');
+            toast.classList.add('toast', 'align-items-center', 'border-0');
+            toast.classList.add(`bg-${type === 'error' ? 'danger' : type}`);
+            toast.classList.add(type === 'error' || type === 'success' ? 'text-white' : '');
+            toast.setAttribute('role', 'alert');
+            toast.setAttribute('aria-live', 'assertive');
+            toast.setAttribute('aria-atomic', 'true');
+            
+            toast.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            `;
+            
+            toastContainer.appendChild(toast);
+            
+            const bsToast = new bootstrap.Toast(toast, {
+                delay: 5000
+            });
+            
+            bsToast.show();
+            
+            // Remove toast from DOM after it's been hidden
+            toast.addEventListener('hidden.bs.toast', function() {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            });
+        }
+        
+        // Set up Save button handler
+        function setupSaveButton() {
+            const saveBtn = document.getElementById('save-button');
+            if (!saveBtn) return;
+            
+            saveBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                const form = document.getElementById('scouting-form');
+                if (!form) return;
+                
+                // Validate form
+                if (!validateForm(form)) {
+                    showToast('Please fill in all required fields', 'error');
+                    return;
+                }
+                
+                // Visual feedback - change button state
+                const originalText = saveBtn.innerHTML;
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
+                
+                // Get the form data
+                const formData = new FormData(form);
+                
+                // Submit form via AJAX
+                fetch('{{ url_for("scouting.api_save") }}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok: ' + response.statusText);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Save response:', data);
+                    
+                    // Reset button state
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = originalText;
+                    
+                    if (data.success) {
+                        // Show success message with some feedback about what was saved
+                        showToast(`Data for Team ${data.team_number} in ${data.match_type} ${data.match_number} ${data.action} successfully!`, 'success');
+                        
+                        // Instead of redirecting, show a success indicator on the form
+                        const formContainer = document.querySelector('.scouting-form');
+                        if (formContainer) {
+                            // Add visual success indicator to the form
+                            formContainer.classList.add('form-saved');
+                            setTimeout(() => {
+                                formContainer.classList.remove('form-saved');
+                            }, 2000);
+                        }
+                        
+                        // Add a small badge showing when saved
+                        const saveTimeIndicator = document.createElement('div');
+                        saveTimeIndicator.className = 'save-indicator';
+                        saveTimeIndicator.innerHTML = `
+                            <div class="small text-success mt-2 text-end">
+                                <i class="fas fa-check-circle me-1"></i>
+                                Last saved at ${data.timestamp}
+                            </div>
+                        `;
+                        
+                        // Replace existing indicator or add new one
+                        const existingIndicator = document.querySelector('.save-indicator');
+                        if (existingIndicator) {
+                            existingIndicator.replaceWith(saveTimeIndicator);
+                        } else {
+                            const buttonContainer = saveBtn.closest('.form-section');
+                            if (buttonContainer) {
+                                buttonContainer.appendChild(saveTimeIndicator);
+                            }
+                        }
+                    } else {
+                        showToast('Error: ' + (data.message || 'Unknown error'), 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error saving data:', error);
+                    
+                    // Reset button state
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = originalText;
+                    
+                    // Handle error
+                    showToast('Error saving data. Please try again or generate a QR code instead.', 'error');
+                    
+                    // If offline or connection error, suggest QR code
+                    if (!navigator.onLine || error.message.includes('Network')) {
+                        showToast('You appear to be offline. Try generating a QR code instead.', 'info');
+                    }
+                });
+            });
+        }
+        
+        // Form validation helper
+        function validateForm(form) {
+            const requiredFields = form.querySelectorAll('[required]');
+            let valid = true;
+            
+            requiredFields.forEach(field => {
+                if (!field.value) {
+                    field.classList.add('is-invalid');
+                    valid = false;
+                    
+                    // Focus first invalid field
+                    if (valid === false && field === requiredFields[0]) {
+                        field.focus();
+                    }
+                } else {
+                    field.classList.remove('is-invalid');
+                }
+            });
+            
+            return valid;
+        }
+        
+        // Initialize form reset button
+        function initializeResetButton() {
+            const resetBtn = document.getElementById('reset-form');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', function() {
+                    if (confirm('Are you sure you want to reset all form fields?')) {
+                        const formInputs = document.querySelectorAll('#scouting-form input:not([type="hidden"]), #scouting-form select, #scouting-form textarea');
+                        formInputs.forEach(input => {
+                            if (input.type === 'checkbox') {
+                                input.checked = false;
+                            } else if (input.tagName === 'SELECT') {
+                                input.selectedIndex = 0;
+                            } else {
+                                input.value = '';
+                            }
+                        });
+                        
+                        // Update points after resetting form
+                        updatePointsCalculation();
+                    }
+                });
+            }
+        }
+        
+        // Team and Match selection enhancements with auto-submit
+        const teamSelector = document.getElementById('team-selector');
+        const matchSelector = document.getElementById('match-selector');
+        const teamMatchForm = document.getElementById('team-match-form');
+        
+        if (teamSelector && matchSelector && teamMatchForm) {
+            // Style match type dropdown options
+            const matchOptions = matchSelector.querySelectorAll('option');
+            matchOptions.forEach(option => {
+                if (option.value) {
+                    const matchType = option.getAttribute('data-match-type');
+                    let textClass = '';
+                    
+                    if (matchType === 'Qualification') {
+                        textClass = 'text-primary';
+                    } else if (matchType === 'Playoff') {
+                        textClass = 'text-danger';
+                    } else if (matchType === 'Practice') {
+                        textClass = 'text-success';
+                    }
+                    
+                    if (textClass) {
+                        option.classList.add(textClass, 'fw-bold');
+                    }
+                }
+            });
+            
+            // Save form data for offline use
+            function saveFormDataOffline(teamId, matchId) {
+                try {
+                    localStorage.setItem('last_team_id', teamId);
+                    localStorage.setItem('last_match_id', matchId);
+                } catch (e) {
+                    console.warn("Unable to save to localStorage:", e);
+                }
+            }
+            
+            // Load form when team and match are selected
+            function loadForm() {
+                const teamId = document.getElementById('team-selector').value;
+                const matchId = document.getElementById('match-selector').value;
+                
+                if (!teamId || !matchId) return;
+                
+                // Show loading indicator
+                const formContent = document.getElementById('form-content');
+                formContent.innerHTML = `
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-3">Loading scouting form...</p>
+                    </div>
+                `;
+                
+                // Save selected values in localStorage for offline use
+                try {
+                    localStorage.setItem('last_team_id', teamId);
+                    localStorage.setItem('last_match_id', matchId);
+                } catch (e) {
+                    console.warn("Unable to save to localStorage:", e);
+                }
+                
+                // Create form data for the AJAX request
+                const formData = new FormData();
+                formData.append('team_id', teamId);
+                formData.append('match_id', matchId);
+                
+                // Make AJAX request
+                fetch('{{ url_for("scouting.scouting_form") }}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Update form content
+                        formContent.innerHTML = data.html;
+                        
+                        // Update subheading
+                        document.getElementById('form-subheading').textContent = 
+                            `${data.team_number} - ${data.team_name} | ${data.match_type} ${data.match_number}`;
+                        
+                        // Initialize form components AFTER the form is loaded
+                        setTimeout(() => {
+                            initializeFormComponents();
+                        }, 100);
+                    } else {
+                        formContent.innerHTML = `
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-circle me-2"></i>
+                                ${data.message || 'An error occurred while loading the form.'}
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    formContent.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            Error loading form. Please try again or check your connection.
+                        </div>
+                    `;
+                });
+            }
+            
+            // Auto-submit when both selections are made
+            function checkSelections() {
+                const teamId = teamSelector.value;
+                const matchId = matchSelector.value;
+                
+                if (teamId && matchId) {
+                    // Visual feedback
+                    teamSelector.classList.add('border-success');
+                    matchSelector.classList.add('border-success');
+                    
+                    loadForm();
+                } else {
+                    teamSelector.classList.remove('border-success');
+                    matchSelector.classList.remove('border-success');
+                }
+            }
+            
+            // Initialize from localStorage if available
+            try {
+                const lastTeamId = localStorage.getItem('last_team_id');
+                const lastMatchId = localStorage.getItem('last_match_id');
+                
+                // If we have stored values and no current selection, use them
+                if (lastTeamId && lastMatchId && !teamSelector.value && !matchSelector.value) {
+                    teamSelector.value = lastTeamId;
+                    matchSelector.value = lastMatchId;
+                    if (teamSelector.value && matchSelector.value) {
+                        checkSelections();
+                    }
+                }
+            } catch (e) {
+                console.warn("Unable to retrieve from localStorage:", e);
+            }
+            
+            // Attach event listeners
+            teamSelector.addEventListener('change', checkSelections);
+            matchSelector.addEventListener('change', checkSelections);
+        }
+        
+        // Initialize existing form components if present on page load
+        initializeFormComponents();
+    });
+</script>
+{% endblock %}

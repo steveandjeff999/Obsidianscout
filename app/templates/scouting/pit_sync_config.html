@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block title %}Pit Scouting - Sync Configuration{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3 class="card-title">Sync Configuration</h3>
+                    <div>
+                        <button id="test-connection" class="btn btn-info btn-sm me-2">
+                            <i class="fas fa-network-wired"></i> Test Connection
+                        </button>
+                        <a href="{{ url_for('pit_scouting.config') }}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-arrow-left"></i> Back to Config
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="enabled" name="enabled" 
+                                       {% if config.get('enabled') %}checked{% endif %}>
+                                <label class="form-check-label" for="enabled">
+                                    <strong>Enable Server Sync</strong>
+                                </label>
+                            </div>
+                            <small class="form-text text-muted">
+                                Enable synchronization of pit scouting data across multiple devices
+                            </small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="base_url" class="form-label">Server URL</label>
+                            <input type="url" class="form-control" id="base_url" name="base_url" 
+                                   value="{{ config.get('base_url', '') }}" 
+                                   placeholder="https://your-sync-server.com/api">
+                            <small class="form-text text-muted">
+                                Base URL of your sync server API
+                            </small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="api_key" class="form-label">API Key</label>
+                            <input type="text" class="form-control" id="api_key" name="api_key" 
+                                   value="{{ config.get('auth', {}).get('api_key', '') }}" 
+                                   placeholder="Your API authentication key">
+                            <small class="form-text text-muted">
+                                Authentication key for your sync server
+                            </small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="team_key" class="form-label">Team Key</label>
+                            <input type="text" class="form-control" id="team_key" name="team_key" 
+                                   value="{{ config.get('auth', {}).get('team_key', '') }}" 
+                                   placeholder="5454">
+                            <small class="form-text text-muted">
+                                Your team number or identifier
+                            </small>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="timeout" class="form-label">Timeout (seconds)</label>
+                                    <input type="number" class="form-control" id="timeout" name="timeout" 
+                                           value="{{ config.get('timeout', 30) }}" min="5" max="300">
+                                    <small class="form-text text-muted">
+                                        Request timeout in seconds
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="retry_attempts" class="form-label">Retry Attempts</label>
+                                    <input type="number" class="form-control" id="retry_attempts" name="retry_attempts" 
+                                           value="{{ config.get('retry_attempts', 3) }}" min="1" max="10">
+                                    <small class="form-text text-muted">
+                                        Number of retry attempts for failed requests
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Configuration
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title">Sync Status</h4>
+                </div>
+                <div class="card-body">
+                    <div id="sync-status-content">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">Loading sync status...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h4 class="card-title">Setup Instructions</h4>
+                </div>
+                <div class="card-body">
+                    <h6>To enable cross-device sync:</h6>
+                    <ol>
+                        <li>Set up a sync server (or use a cloud service)</li>
+                        <li>Enter your server URL and API credentials</li>
+                        <li>Enable sync and test the connection</li>
+                        <li>Configure the same settings on all devices</li>
+                    </ol>
+                    
+                    <h6 class="mt-3">Server Requirements:</h6>
+                    <ul>
+                        <li>REST API endpoints for upload/download</li>
+                        <li>Authentication support</li>
+                        <li>JSON data format</li>
+                        <li>HTTPS recommended</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const testButton = document.getElementById('test-connection');
+    const syncStatusContent = document.getElementById('sync-status-content');
+    
+    // Load sync status
+    loadSyncStatus();
+    
+    // Test connection button
+    testButton.addEventListener('click', function() {
+        testButton.disabled = true;
+        testButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+        
+        fetch('{{ url_for("pit_scouting.sync_test") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('success', 'Connection Test Successful', data.message);
+            } else {
+                showToast('error', 'Connection Test Failed', data.error);
+            }
+        })
+        .catch(error => {
+            showToast('error', 'Connection Test Failed', 'An error occurred while testing the connection');
+            console.error('Test error:', error);
+        })
+        .finally(() => {
+            testButton.disabled = false;
+            testButton.innerHTML = '<i class="fas fa-network-wired"></i> Test Connection';
+            loadSyncStatus(); // Refresh status
+        });
+    });
+    
+    function loadSyncStatus() {
+        fetch('{{ url_for("pit_scouting.sync_status") }}')
+            .then(response => response.json())
+            .then(data => {
+                updateSyncStatusDisplay(data);
+            })
+            .catch(error => {
+                syncStatusContent.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Error loading sync status
+                    </div>
+                `;
+            });
+    }
+    
+    function updateSyncStatusDisplay(data) {
+        const serverStatus = data.server_available ? 
+            '<span class="badge bg-success">Online</span>' : 
+            '<span class="badge bg-danger">Offline</span>';
+        
+        const syncEnabled = data.server_enabled ? 
+            '<span class="badge bg-success">Enabled</span>' : 
+            '<span class="badge bg-secondary">Disabled</span>';
+        
+        syncStatusContent.innerHTML = `
+            <div class="mb-3">
+                <strong>Sync Status:</strong> ${syncEnabled}
+            </div>
+            <div class="mb-3">
+                <strong>Server Status:</strong> ${serverStatus}
+            </div>
+            <div class="mb-3">
+                <strong>Server URL:</strong><br>
+                <small class="text-muted">${data.server_url || 'Not configured'}</small>
+            </div>
+            <div class="mb-3">
+                <strong>Device ID:</strong><br>
+                <small class="text-muted">${data.device_id}</small>
+            </div>
+            <div class="mb-3">
+                <strong>Unuploaded:</strong> ${data.unuploaded_count} entries
+            </div>
+            <div class="mb-3">
+                <strong>Total:</strong> ${data.total_count} entries
+            </div>
+            <div class="mb-3">
+                <strong>Last Sync:</strong><br>
+                <small class="text-muted">${data.last_sync ? new Date(data.last_sync).toLocaleString() : 'Never'}</small>
+            </div>
+        `;
+    }
+    
+    function showToast(type, title, message) {
+        // Create toast element
+        const toastId = 'toast-' + Date.now();
+        const toastHtml = `
+            <div class="toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0" 
+                 role="alert" aria-live="assertive" aria-atomic="true" id="${toastId}">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <strong>${title}</strong><br>${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" 
+                            data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `;
+        
+        // Add to toast container
+        let toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-container';
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            document.body.appendChild(toastContainer);
+        }
+        
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        
+        // Show toast
+        const toastElement = document.getElementById(toastId);
+        const toast = new bootstrap.Toast(toastElement);
+        toast.show();
+        
+        // Remove from DOM after hidden
+        toastElement.addEventListener('hidden.bs.toast', function() {
+            toastElement.remove();
+        });
+    }
+});
+</script>
+{% endblock %}

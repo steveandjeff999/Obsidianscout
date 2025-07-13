@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+
+{% block title %}Export Excel Data{% endblock %}
+
+{% block heading %}Export Excel Data{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3 class="mb-0">Export Scouting Data to Excel</h3>
+                    <a href="{{ url_for('data.index') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-2"></i> Back to Data Management
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Download Excel File</h5>
+            </div>
+            <div class="card-body text-center">
+                <p class="mb-4">Your Excel file is ready to download. Click the button below to download all scouting data.</p>
+                
+                <div class="mb-4">
+                    <i class="fas fa-file-excel text-success" style="font-size: 5rem;"></i>
+                </div>
+                
+                <p class="mb-4">
+                    <strong>Filename:</strong> {{ filename }}
+                </p>
+                
+                <div class="d-grid gap-2">
+                    <a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{{ excel_data }}" 
+                       download="{{ filename }}" 
+                       class="btn btn-lg btn-success">
+                        <i class="fas fa-download me-2"></i> Download Excel File
+                    </a>
+                </div>
+            </div>
+            <div class="card-footer">
+                <div class="text-muted">
+                    <i class="fas fa-info-circle me-2"></i> The file includes all scouting data from all events and matches.
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">What's included?</h5>
+            </div>
+            <div class="card-body">
+                <p>The Excel file includes the following information:</p>
+                <ul>
+                    <li>Match details (number, type)</li>
+                    <li>Team details (number, name)</li>
+                    <li>Alliance (red/blue)</li>
+                    <li>Scout name</li>
+                    <li>Timestamp</li>
+                    <li>All scouting data elements</li>
+                </ul>
+                
+                <p class="mb-0">You can use this data for analysis in Excel, or as a template for importing data back into the system.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

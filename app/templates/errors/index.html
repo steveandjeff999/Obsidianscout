@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+
+{% block title %}Matches{% endblock %}
+
+{% block heading %}Matches{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3 class="mb-0">Match List</h3>
+                    <a href="{{ url_for('matches.add') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i> Add Match
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Matches</h5>
+            </div>
+            <div class="card-body">
+                {% if matches %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Match Type</th>
+                                <th>Match #</th>
+                                <th>Event</th>
+                                <th>Red Alliance</th>
+                                <th>Blue Alliance</th>
+                                <th>Score</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for match in matches %}
+                            <tr>
+                                <td>{{ match.match_type }}</td>
+                                <td>{{ match.match_number }}</td>
+                                <td>{{ match.event.name }}</td>
+                                <td>
+                                    <span class="text-danger">
+                                    {% for team_number in match.red_alliance.split(',') %}
+                                        {{ team_number }}{% if not loop.last %}, {% endif %}
+                                    {% endfor %}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="text-primary">
+                                    {% for team_number in match.blue_alliance.split(',') %}
+                                        {{ team_number }}{% if not loop.last %}, {% endif %}
+                                    {% endfor %}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if match.red_score is not none and match.blue_score is not none %}
+                                        <span class="text-danger">{{ match.red_score }}</span> - 
+                                        <span class="text-primary">{{ match.blue_score }}</span>
+                                    {% else %}
+                                        <span class="text-muted">Not Played</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ url_for('matches.view', match_id=match.id) }}" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{{ url_for('matches.edit', match_id=match.id) }}" class="btn btn-sm btn-info">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal-{{ match.id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Delete Modal -->
+                                    <div class="modal fade" id="deleteModal-{{ match.id }}" tabindex="-1" aria-labelledby="deleteModalLabel-{{ match.id }}" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header bg-danger text-white">
+                                                    <h5 class="modal-title" id="deleteModalLabel-{{ match.id }}">Delete Match</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <p>Are you sure you want to delete {{ match.match_type }} {{ match.match_number }}?</p>
+                                                    <p class="text-danger"><strong>Warning:</strong> This will also delete all scouting data associated with this match!</p>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                    <form action="{{ url_for('matches.delete', match_id=match.id) }}" method="POST" class="d-inline">
+                                                        <button type="submit" class="btn btn-danger">Delete</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i> No matches have been added yet.
+                    <a href="{{ url_for('matches.add') }}" class="alert-link">Click here to add a match</a>.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Events</h5>
+            </div>
+            <div class="card-body">
+                {% if events %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Event Name</th>
+                                <th>Location</th>
+                                <th>Start Date</th>
+                                <th>End Date</th>
+                                <th>Match Count</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for event in events %}
+                            <tr>
+                                <td>{{ event.name }}</td>
+                                <td>{{ event.location }}</td>
+                                <td>{{ event.start_date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ event.end_date.strftime('%Y-%m-%d') }}</td>
+                                <td>
+                                    {% set match_count = event.matches|length %}
+                                    {{ match_count }} match{{ 'es' if match_count != 1 else '' }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i> No events have been added yet.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

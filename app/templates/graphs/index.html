@@ -1,0 +1,477 @@
+{% extends 'base.html' %}
+
+{% block title %}Graphs Dashboard{% endblock %}
+
+{% block heading %}Graphs Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Graph Library</h5>
+            </div>
+            <div class="card-body">
+                <p>Welcome to the Graph Library. This section provides specialized graphs and visualizations for scouting data.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Team Selection Form -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="fas fa-users me-2"></i> Select Teams to Graph</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('graphs.index') }}" method="get" id="team-selection-form">
+                    <!-- Mobile-first responsive design -->
+                    <div class="row g-3">
+                        <!-- Team Selection Column -->
+                        <div class="col-12 col-lg-6">
+                            <label for="teams" class="form-label fw-semibold">
+                                <i class="fas fa-users me-2 text-primary"></i>Select Teams
+                            </label>
+                            <select name="teams" id="teams" class="form-select team-select" multiple required>
+                                {% for team in all_teams %}
+                                <option value="{{ team.team_number }}" 
+                                        {% if team.team_number in selected_team_numbers %}selected{% endif %}
+                                        data-team-name="{{ team.team_name or 'Unknown' }}"
+                                        data-points="{{ team_metrics.get(team.team_number, {}).get('total_points', 0) }}">
+                                    {{ team.team_number }} - {{ team.team_name or 'Unknown' }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Search by team number or name. Multiple selections allowed.
+                                <span id="team-count-indicator" class="text-muted ms-2"></span>
+                            </div>
+                            
+                            <!-- Quick selection buttons -->
+                            <div class="mt-2">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button type="button" class="btn btn-outline-secondary" id="select-all-teams">
+                                        <i class="fas fa-check-double me-1"></i>All
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info" id="add-all-event-teams">
+                                        <i class="fas fa-plus-circle me-1"></i>Add Event Teams
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" id="clear-teams">
+                                        <i class="fas fa-times me-1"></i>Clear
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" id="select-top-teams">
+                                        <i class="fas fa-trophy me-1"></i>Top 8
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Filters Column -->
+                        <div class="col-12 col-lg-6">
+                            <!-- Event Filter -->
+                            <div class="mb-3">
+                                <label for="event_id" class="form-label fw-semibold">
+                                    <i class="fas fa-calendar-alt me-2 text-info"></i>Filter by Event
+                                </label>
+                                <select name="event_id" id="event_id" class="form-select event-select">
+                                    <option value="">All Events</option>
+                                    {% for event in all_events %}
+                                    <option value="{{ event.id }}" {% if event.id == selected_event_id %}selected{% endif %}>
+                                        {{ event.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Filter teams by event. Select "All Events" to see all teams.
+                                </div>
+                            </div>
+                            
+                            <!-- Metric Selection -->
+                            <div class="mb-3">
+                                <label for="metric" class="form-label fw-semibold">
+                                    <i class="fas fa-chart-line me-2 text-success"></i>Select Metric
+                                </label>
+                                <select name="metric" id="metric" class="form-select">
+                                    <option value="">Default (Matches Scouted)</option>
+                                    {% for metric in game_config.get('data_analysis', {}).get('key_metrics', []) %}
+                                    {% if 'formula' in metric %}
+                                    <option value="{{ metric.id }}" {% if metric.id == selected_metric %}selected{% endif %}>
+                                        {{ metric.name }}
+                                    </option>
+                                    {% endif %}
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Choose the metric to visualize across teams
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Submit Button - Full width on mobile, centered on desktop -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="d-grid d-md-flex justify-content-md-center mt-3">
+                                <button type="submit" class="btn btn-primary btn-lg px-4" id="generate-graphs-btn">
+                                    <i class="fas fa-chart-line me-2"></i>
+                                    <span class="d-none d-sm-inline">Generate </span>Graphs
+                                    <div class="spinner-border spinner-border-sm ms-2 d-none" role="status" id="loading-spinner">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if plots %}
+<!-- Generated Graphs -->
+<div class="row">
+    {% for plot_id, plot_json in plots.items() %}
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <div id="{{ plot_id }}" class="plotly-graph" data-graph='{{ plot_json }}' style="height: 500px;"></div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% elif selected_team_numbers %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-circle me-2"></i> No data available for the selected teams and filters.
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i> Select teams above to generate graphs.
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Additional Graph Features -->
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i> Specialized Graph Types</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <h5 class="card-title"><i class="fas fa-chart-bar text-primary mb-3"></i><br>Team Performance</h5>
+                                <p class="card-text">Analyze individual team performance across metrics</p>
+                                <a href="{{ url_for('graphs.index') }}" class="btn btn-primary">Generate</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <h5 class="card-title"><i class="fas fa-chart-pie text-success mb-3"></i><br>Alliance Analysis</h5>
+                                <p class="card-text">Compare red vs blue alliance statistics</p>
+                                <a href="{{ url_for('graphs.index') }}" class="btn btn-success">Generate</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <h5 class="card-title"><i class="fas fa-chart-line text-danger mb-3"></i><br>Trend Analysis</h5>
+                                <p class="card-text">Analyze performance trends over time</p>
+                                <a href="{{ url_for('graphs.index') }}" class="btn btn-danger">Generate</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // @ts-nocheck - Disable TypeScript checking for Jinja templates
+    // Team-event mapping for dynamic filtering
+    const teamEventMapping = {{ team_event_mapping | tojson }};
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize Select2 for team selection with mobile-friendly settings
+        function initializeTeamSelect() {
+            $('#teams').select2({
+                theme: 'bootstrap-5',
+                placeholder: 'Search and select teams...',
+                allowClear: true,
+                closeOnSelect: false,
+                width: '100%',
+                dropdownParent: $('#team-selection-form').parent(), // Ensure dropdown is contained within the form's parent
+                dropdownCssClass: 'select2-dropdown-large', // Custom class for styling the dropdown
+                selectionCssClass: 'select2-selection-large', // Custom class for the selection area
+                templateResult: function(team) {
+                    if (!team.id) return team.text;
+                    
+                    // Create custom template with team number highlighting
+                    const teamNumber = team.text.split(' - ')[0];
+                    const teamName = team.text.split(' - ')[1] || '';
+                    
+                    return $('<span><strong class="text-primary">' + teamNumber + '</strong> - ' + teamName + '</span>');
+                },
+                templateSelection: function(team) {
+                    if (!team.id) return team.text;
+                    
+                    // Show just team number on mobile, full text on desktop
+                    const teamNumber = team.text.split(' - ')[0];
+                    const teamName = team.text.split(' - ')[1] || '';
+                    
+                    if (window.innerWidth < 768) {
+                        return teamNumber;
+                    } else {
+                        return team.text;
+                    }
+                },
+                // Fix for mobile devices
+                sorter: function(data) {
+                    return data.sort(function(a, b) {
+                        return (a.text > b.text) ? 1 : -1;
+                    });
+                }
+            });
+        }
+        
+        // Initialize Select2 for event selection
+        $('#event_id').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Select an event...',
+            allowClear: true,
+            width: '100%'
+        });
+        
+        // Initialize team select
+        initializeTeamSelect();
+        
+        // Store all teams data for filtering
+        // Convert the server-provided JSON string to a JavaScript object
+        const allTeamsData = {{ all_teams_json|safe }};
+        
+        
+        // Function to filter teams based on selected event
+        function filterTeamsByEvent() {
+            const selectedEventId = $('#event_id').val();
+            const teamSelect = $('#teams');
+            
+            // Store currently selected teams
+            const currentlySelected = teamSelect.val() || [];
+            
+            // Destroy existing Select2 instance
+            if (teamSelect.hasClass('select2-hidden-accessible')) {
+                teamSelect.select2('destroy');
+            }
+            
+            // Clear existing options
+            teamSelect.empty();
+            
+            let visibleCount = 0;
+            let filteredSelectedTeams = [];
+            
+            if (!selectedEventId || selectedEventId === '') {
+                // Show all teams if no event is selected
+                allTeamsData.forEach(function(team) {
+                    const option = new Option(team.displayText, team.teamNumber.toString(), false, false);
+                    teamSelect.append(option);
+                    
+                    // Keep selection if this team was previously selected
+                    if (currentlySelected.includes(team.teamNumber.toString())) {
+                        filteredSelectedTeams.push(team.teamNumber.toString());
+                    }
+                    visibleCount++;
+                });
+                
+                $('#team-count-indicator').text(`(${visibleCount} teams available)`);
+            } else {
+                // Show only teams in the selected event
+                allTeamsData.forEach(function(team) {
+                    const teamEvents = teamEventMapping[team.teamNumber] || [];
+                    if (teamEvents.includes(parseInt(selectedEventId))) {
+                        const option = new Option(team.displayText, team.teamNumber.toString(), false, false);
+                        teamSelect.append(option);
+                        
+                        // Keep selection if this team was previously selected
+                        if (currentlySelected.includes(team.teamNumber.toString())) {
+                            filteredSelectedTeams.push(team.teamNumber.toString());
+                        }
+                        visibleCount++;
+                    }
+                });
+                
+                $('#team-count-indicator').text(`(${visibleCount} teams in this event)`);
+            }
+            
+            // Set the filtered selected teams
+            teamSelect.val(filteredSelectedTeams);
+            
+            // Reinitialize Select2
+            initializeTeamSelect();
+        }
+        
+        // Event listener for event selection change
+        $('#event_id').on('change', function() {
+            filterTeamsByEvent();
+        });
+        
+        // Apply initial filter if an event is pre-selected
+        if ($('#event_id').val()) {
+            filterTeamsByEvent();
+        } else {
+            // Show initial team count for all teams
+            const totalTeams = $('#teams option[value!=""]').length;
+            $('#team-count-indicator').text(`(${totalTeams} teams available)`);
+        }
+        
+        // Quick selection button handlers
+        $('#select-all-teams').click(function() {
+            // Select all currently visible teams (after filtering)
+            const allVisibleValues = [];
+            $('#teams option').each(function() {
+                if ($(this).val()) { // Skip empty values
+                    allVisibleValues.push($(this).val());
+                }
+            });
+            $('#teams').val(allVisibleValues).trigger('change');
+        });
+        
+        $('#add-all-event-teams').click(function() {
+            const selectedEventId = $('#event_id').val();
+            
+            if (!selectedEventId || selectedEventId === '') {
+                // If no event is selected, show a message
+                alert('Please select an event first to add all teams from that event.');
+                return;
+            }
+            
+            // Get currently selected teams
+            const currentlySelected = $('#teams').val() || [];
+            const teamsToAdd = [];
+            
+            // Find all teams that belong to the selected event
+            allTeamsData.forEach(function(team) {
+                const teamEvents = teamEventMapping[team.teamNumber] || [];
+                if (teamEvents.includes(parseInt(selectedEventId))) {
+                    const teamNumberStr = team.teamNumber.toString();
+                    // Only add if not already selected
+                    if (!currentlySelected.includes(teamNumberStr)) {
+                        teamsToAdd.push(teamNumberStr);
+                    }
+                }
+            });
+            
+            // Combine currently selected teams with new teams
+            const allSelectedTeams = currentlySelected.concat(teamsToAdd);
+            $('#teams').val(allSelectedTeams).trigger('change');
+            
+            // Show feedback message
+            if (teamsToAdd.length > 0) {
+                const eventName = $('#event_id option:selected').text();
+                console.log(`Added ${teamsToAdd.length} teams from ${eventName}`);
+            } else {
+                console.log('All teams from this event are already selected.');
+            }
+        });
+        
+        $('#clear-teams').click(function() {
+            $('#teams').val(null).trigger('change');
+        });
+        
+        $('#select-top-teams').click(function() {
+            // Get the currently selected metric for sorting
+            const selectedMetric = $('#metric').val();
+            
+            // Get all teams and their data
+            const teamOptions = [];
+            $('#teams option').each(function() {
+                if ($(this).val()) {
+                    teamOptions.push({
+                        value: $(this).val(),
+                        text: $(this).text(),
+                        points: parseFloat($(this).data('points') || 0)
+                    });
+                }
+            });
+            
+            // Sort teams by points (descending)
+            teamOptions.sort((a, b) => b.points - a.points);
+            
+            // Select top 8 teams by points
+            const topTeamValues = teamOptions.slice(0, 8).map(team => team.value);
+            
+            // Update selection
+            $('#teams').val(topTeamValues).trigger('change');
+        });
+        
+        // Form submission with loading state
+        $('#team-selection-form').on('submit', function() {
+            const selectedTeams = $('#teams').val();
+            
+            if (!selectedTeams || selectedTeams.length === 0) {
+                alert('Please select at least one team to generate graphs.');
+                return false;
+            }
+            
+            // Show loading state
+            const btn = $('#generate-graphs-btn');
+            const spinner = $('#loading-spinner');
+            const originalText = btn.html();
+            
+            btn.prop('disabled', true);
+            spinner.removeClass('d-none');
+            
+            // Reset button after a timeout (in case of error)
+            setTimeout(function() {
+                btn.prop('disabled', false);
+                spinner.addClass('d-none');
+            }, 30000); // 30 seconds timeout
+            
+            return true;
+        });
+        
+        // Responsive handling for Select2
+        $(window).on('resize', function() {
+            // Reinitialize Select2 on resize to handle template changes
+            if ($('#teams').hasClass('select2-hidden-accessible')) {
+                $('#teams').select2('destroy');
+                initializeTeamSelect();
+            }
+        });
+        
+        // Wait for Plotly to be available, then render graphs
+        function waitForPlotly() {
+            if (typeof Plotly !== 'undefined') {
+                console.log('Plotly is loaded, rendering graphs...');
+                renderPlotlyGraphs();
+            } else {
+                console.log('Waiting for Plotly to load...');
+                setTimeout(waitForPlotly, 100);
+            }
+        }
+        
+        waitForPlotly();
+    });
+</script>
+{% endblock %}
