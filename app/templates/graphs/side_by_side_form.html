@@ -20,7 +20,7 @@
     <div class="col-md-12">
         <div class="card">
             <div class="card-body">
-                <form action="{{ url_for('visualization.side_by_side') }}" method="get">
+                <form action="{{ url_for('graphs.side_by_side') }}" method="get">
                     <div class="mb-4">
                         <label for="teams" class="form-label">Select Teams to Compare (2-6 teams)</label>
                         <select class="form-select" id="teams" name="teams" multiple required>
@@ -87,4 +87,4 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
-{% endblock %}
+{% endblock %} 

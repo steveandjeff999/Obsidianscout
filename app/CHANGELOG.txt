@@ -1,0 +1,12 @@
+Changelog
+=========
+
+- Initial changelog setup.
+
+[1.0.0.7] - 7/19/2025
+- Enhanced Plotly graphs with multiple chart types (bar, line, box, radar) for all metrics
+- Added "Total Points (from team_metrics)" as selectable metric in graphs dashboard
+- Moved side-by-side team comparison functionality from /visualization to /graphs
+- Removed /visualization route and consolidated all graphing functionality under /graphs
+- Updated navigation and all references to point to the new graphs routes
+- Improved counter input layout in scouting forms - plus/minus buttons now positioned horizontally next to number input instead of above/below

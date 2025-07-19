@@ -104,6 +104,9 @@
                                     </option>
                                     {% endif %}
                                     {% endfor %}
+                                    <option value="points" {% if selected_metric == 'points' %}selected{% endif %}>
+                                        Total Points (from team_metrics)
+                                    </option>
                                 </select>
                                 <div class="form-text">
                                     <i class="fas fa-info-circle me-1"></i>
@@ -169,34 +172,43 @@
     <div class="col-md-12 mb-4">
         <div class="card">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i> Specialized Graph Types</h5>
+                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i> Advanced Analysis Tools</h5>
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-3 mb-3">
                         <div class="card h-100">
                             <div class="card-body text-center">
-                                <h5 class="card-title"><i class="fas fa-chart-bar text-primary mb-3"></i><br>Team Performance</h5>
-                                <p class="card-text">Analyze individual team performance across metrics</p>
-                                <a href="{{ url_for('graphs.index') }}" class="btn btn-primary">Generate</a>
+                                <h5 class="card-title"><i class="fas fa-columns text-primary mb-3"></i><br>Side-by-Side Comparison</h5>
+                                <p class="card-text">Compare 2-6 teams with detailed metrics and performance data</p>
+                                <a href="{{ url_for('graphs.side_by_side') }}" class="btn btn-primary">Compare Teams</a>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-3 mb-3">
                         <div class="card h-100">
                             <div class="card-body text-center">
-                                <h5 class="card-title"><i class="fas fa-chart-pie text-success mb-3"></i><br>Alliance Analysis</h5>
-                                <p class="card-text">Compare red vs blue alliance statistics</p>
-                                <a href="{{ url_for('graphs.index') }}" class="btn btn-success">Generate</a>
+                                <h5 class="card-title"><i class="fas fa-chart-bar text-success mb-3"></i><br>Multi-Metric Analysis</h5>
+                                <p class="card-text">Generate bar, line, and box plots for all configured metrics</p>
+                                <a href="{{ url_for('graphs.index') }}" class="btn btn-success">Analyze</a>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-3 mb-3">
                         <div class="card h-100">
                             <div class="card-body text-center">
-                                <h5 class="card-title"><i class="fas fa-chart-line text-danger mb-3"></i><br>Trend Analysis</h5>
-                                <p class="card-text">Analyze performance trends over time</p>
-                                <a href="{{ url_for('graphs.index') }}" class="btn btn-danger">Generate</a>
+                                <h5 class="card-title"><i class="fas fa-chart-pie text-danger mb-3"></i><br>Radar Charts</h5>
+                                <p class="card-text">View team skill profiles across multiple metrics</p>
+                                <a href="{{ url_for('graphs.index') }}" class="btn btn-danger">View Profiles</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <h5 class="card-title"><i class="fas fa-trophy text-warning mb-3"></i><br>Points Analysis</h5>
+                                <p class="card-text">Compare total points and team rankings</p>
+                                <a href="{{ url_for('graphs.index') }}?metric=points" class="btn btn-warning">View Rankings</a>
                             </div>
                         </div>
                     </div>

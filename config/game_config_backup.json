@@ -1,6 +1,6 @@
 {
   "alliance_size": 3,
-  "preferred_api_source": "first",
+  "preferred_api_source": "tba",
   "api_settings": {
     "username": "your FIRST api username here",
     "auth_token": "your FIRST api auth token here",
@@ -93,7 +93,7 @@
       }
     ]
   },
-  "current_event_code": "MILSTEIN",
+  "current_event_code": "MIL",
   "data_analysis": {
     "key_metrics": [
       {

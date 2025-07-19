@@ -10,11 +10,11 @@
         <div class="d-flex justify-content-between align-items-center">
             <h3>Comparing {{ teams_data|length }} Teams</h3>
             <div>
-                <a href="{{ url_for('visualization.side_by_side') }}" class="btn btn-outline-primary">
+                <a href="{{ url_for('graphs.side_by_side') }}" class="btn btn-outline-primary">
                     <i class="fas fa-plus me-2"></i> Select Different Teams
                 </a>
-                <a href="{{ url_for('visualization.index') }}" class="btn btn-outline-secondary">
-                    <i class="fas fa-chart-line me-2"></i> Back to Visualization
+                <a href="{{ url_for('graphs.index') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-chart-line me-2"></i> Back to Graphs
                 </a>
             </div>
         </div>
@@ -199,7 +199,7 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-3">
-                        <a href="{{ url_for('visualization.compare_teams') }}?teams={{ teams_data|map(attribute='team.team_number')|join('&teams=') }}&metric={{ game_config['data_analysis']['key_metrics'][0]['id'] }}" class="btn btn-outline-primary w-100">
+                        <a href="{{ url_for('graphs.index') }}?teams={{ teams_data|map(attribute='team.team_number')|join('&teams=') }}&metric={{ game_config['data_analysis']['key_metrics'][0]['id'] }}" class="btn btn-outline-primary w-100">
                             <i class="fas fa-chart-bar me-2"></i> Chart Comparison
                         </a>
                     </div>
@@ -214,7 +214,7 @@
                         </button>
                     </div>
                     <div class="col-md-3">
-                        <a href="{{ url_for('visualization.side_by_side') }}" class="btn btn-outline-warning w-100">
+                        <a href="{{ url_for('graphs.side_by_side') }}" class="btn btn-outline-warning w-100">
                             <i class="fas fa-plus me-2"></i> Add/Remove Teams
                         </a>
                     </div>
@@ -277,4 +277,4 @@ function exportData() {
     document.body.removeChild(link);
 }
 </script>
-{% endblock %}
+{% endblock %} 

@@ -102,52 +102,23 @@ def index():
         if teams and scouting_data:
             # Create team performance graphs
             team_data = {}
-            
             # Calculate metrics for each team's matches
             for data in scouting_data:
                 team = data.team
                 match = data.match
-                
-                # Debug scouting data
-                print(f"\nProcessing scouting data for team {team.team_number}, match {match.match_number}")
-                print(f"Scouting data ID: {data.id}")
-                print(f"Alliance: {data.alliance}")
-                print(f"Scout name: {data.scout_name}")
-                print(f"Match type: {match.match_type}")
-                
                 if team.team_number not in team_data:
                     team_data[team.team_number] = {
                         'team_name': team.team_name, 
                         'matches': []
                     }
-                
-                # For debugging, print the raw data for this scouting record
-                try:
-                    raw_data = data.data
-                    print(f"Raw data keys: {list(raw_data.keys())}")
-                except Exception as e:
-                    print(f"Error accessing data.data: {e}")
-                    raw_data = {}
-                
-                # Process each metric we're interested in
                 match_metrics = {}
-                
-                # Direct access to the key metrics from game config
                 key_metrics = game_config.get('data_analysis', {}).get('key_metrics', [])
-                print(f"Found {len(key_metrics)} metrics in game config")
-                
                 for metric in key_metrics:
                     if 'formula' in metric:
                         try:
                             metric_id = metric['id']
                             formula = metric['formula']
-                            
-                            print(f"\n  Processing metric {metric_id} with formula: {formula}")
-                            
-                            # Use the calculate_metric method from ScoutingData model
                             value = data.calculate_metric(formula)
-                            print(f"  → Result for {metric_id}: {value}")
-                            
                             match_metrics[metric_id] = {
                                 'match_number': match.match_number,
                                 'metric_id': metric_id,
@@ -155,168 +126,196 @@ def index():
                                 'value': value
                             }
                         except Exception as e:
-                            print(f"  → ERROR calculating {metric_id}: {str(e)}")
-                            print(f"  → Exception type: {type(e).__name__}")
-                            import traceback
-                            print(traceback.format_exc())
-                
-                # Add all metrics for this match to the team's data
+                            match_metrics[metric_id] = {
+                                'match_number': match.match_number,
+                                'metric_id': metric_id,
+                                'metric_name': metric['name'],
+                                'value': None
+                            }
                 team_data[team.team_number]['matches'].append({
                     'match_number': match.match_number,
                     'metrics': match_metrics
                 })
+
+            # --- Enhanced: Generate multiple graph types for all metrics ---
+            import numpy as np
+            metric_ids = [m['id'] for m in key_metrics if 'formula' in m]
+            metric_names = {m['id']: m['name'] for m in key_metrics if 'formula' in m}
+            # Prepare data for radar chart (if 3+ metrics)
+            radar_ready = len(metric_ids) >= 3
+            radar_data = {}
             
-            # Generate comparison plot using the selected metric
-            if selected_metric:
-                print(f"\nGenerating graph for metric: {selected_metric}")
-                metric_config = None
-                for metric in game_config['data_analysis']['key_metrics']:
-                    if metric['id'] == selected_metric:
-                        metric_config = metric
-                        break
-                
-                if metric_config:
-                    print(f"Found metric config: {metric_config}")
-                    
-                    # Extract data for the selected metric
-                    chart_data = []
-                    
-                    # Detailed logging of team data
-                    for team_number, data in team_data.items():
-                        print(f"\nTeam {team_number} has {len(data['matches'])} matches:")
-                        
-                        for match_data in data['matches']:
-                            match_number = match_data['match_number']
-                            metrics = match_data['metrics']
-                            print(f"  Match {match_number} has {len(metrics)} metrics:")
-                            
-                            for metric_id, metric_info in metrics.items():
-                                print(f"    {metric_id}: {metric_info['value']}")
-                            
-                            if selected_metric in metrics:
-                                value = metrics[selected_metric]['value']
-                                print(f"  → Adding data point: Match {match_number}, Value: {value}")
-                                
-                                chart_data.append({
-                                    'team': f"{team_number} - {data['team_name']}",
-                                    'match': match_number,
-                                    'value': value
-                                })
-                            else:
-                                print(f"  → No data for metric {selected_metric} in match {match_number}")
-                    
-                    print(f"\nCollected {len(chart_data)} data points for the chart")
-                    
-                    # We're removing the top graph that doesn't work and only keeping the bottom graph
-                    # that shows team average comparisons
-                    
-                    # Create a bar chart for average performance
+            # Handle special 'points' metric selection
+            if selected_metric == 'points':
+                points_data = []
+                for team in teams:
+                    team_number = team.team_number
+                    team_name = team.team_name
+                    points = team_metrics.get(team_number, {}).get('total_points', 0)
+                    points_data.append({
+                        'team': f"{team_number} - {team_name}",
+                        'points': points
+                    })
+                if points_data:
+                    points_data = sorted(points_data, key=lambda x: x['points'], reverse=True)
+                    fig_points = go.Figure()
+                    fig_points.add_trace(go.Bar(
+                        x=[d['team'] for d in points_data],
+                        y=[d['points'] for d in points_data],
+                        marker_color='gold',
+                        hovertemplate='<b>%{x}</b><br>Total Points: %{y:.2f}<extra></extra>'
+                    ))
+                    fig_points.update_layout(
+                        title="Total Points by Team (from team_metrics)",
+                        xaxis_title="Team",
+                        yaxis_title="Total Points",
+                        margin=dict(l=40, r=20, t=50, b=60),
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        font=dict(family="Arial, sans-serif"),
+                        xaxis=dict(tickangle=-45)
+                    )
+                    plots['team_comparison'] = pio.to_json(fig_points)
+            else:
+                # For each metric, generate bar, line, and box plots
+                for metric_id in metric_ids:
+                    metric_name = metric_names[metric_id]
+                    # Collect per-team, per-match values
+                    team_match_values = {team_number: [] for team_number in team_data}
+                    for team_number, tdata in team_data.items():
+                        for match in tdata['matches']:
+                            value = match['metrics'].get(metric_id, {}).get('value')
+                            if value is not None:
+                                team_match_values[team_number].append(value)
+                    # --- Bar Chart: Average per team ---
                     avg_data = []
-                    
-                    print("\nCalculating averages for each team:")
-                    for team_number, data in team_data.items():
-                        values = []
-                        for match_data in data['matches']:
-                            metrics = match_data['metrics']
-                            if selected_metric in metrics:
-                                values.append(metrics[selected_metric]['value'])
-                        
-                        print(f"Team {team_number}: {len(values)} values - {values}")
-                        
+                    for team_number, values in team_match_values.items():
                         if values:
                             avg_value = sum(values) / len(values)
-                            print(f"  → Average: {avg_value}")
-                            
                             avg_data.append({
-                                'team': f"{team_number} - {data['team_name']}",
+                                'team': f"{team_number} - {team_data[team_number]['team_name']}",
                                 'value': avg_value
                             })
-                    
+                            if radar_ready:
+                                if team_number not in radar_data:
+                                    radar_data[team_number] = {}
+                                radar_data[team_number][metric_id] = avg_value
                     if avg_data:
-                        print(f"\nAverage data points ({len(avg_data)}):")
-                        for item in avg_data:
-                            print(f"  {item['team']}: {item['value']}")
-                        
-                        # Use go.Figure for the bar chart
-                        fig_avg = go.Figure()
-                        
-                        # Sort data by value for better readability
                         avg_data = sorted(avg_data, key=lambda x: x['value'], reverse=True)
-                        
-                        fig_avg.add_trace(go.Bar(
+                        fig_bar = go.Figure()
+                        fig_bar.add_trace(go.Bar(
                             x=[d['team'] for d in avg_data],
                             y=[d['value'] for d in avg_data],
-                            marker_color='rgb(55, 83, 109)'
+                            marker_color='rgb(55, 83, 109)',
+                            hovertemplate='<b>%{x}</b><br>Avg: %{y:.2f}<extra></extra>'
                         ))
-                        
-                        # Update layout
-                        fig_avg.update_layout(
-                            title=f"Average {metric_config['name']} by Team",
+                        fig_bar.update_layout(
+                            title=f"Average {metric_name} by Team",
                             xaxis_title="Team",
-                            yaxis_title=f"Average {metric_config['name']}",
+                            yaxis_title=f"Average {metric_name}",
                             margin=dict(l=40, r=20, t=50, b=60),
                             plot_bgcolor='rgba(0,0,0,0)',
                             paper_bgcolor='rgba(0,0,0,0)',
                             font=dict(family="Arial, sans-serif"),
                             xaxis=dict(tickangle=-45)
                         )
-                        
-                        # Convert to JSON and assign to team_comparison instead of team_avg_comparison
-                        # This ensures it displays in the expected location in the template
-                        plots['team_comparison'] = pio.to_json(fig_avg)
-                        print("Successfully created team average comparison plot")
-                    else:
-                        print("No average data available to create bar chart")
-            else:
-                # If no metric selected, show a default graph
-                # Example: Create a simple bar chart of teams by number of matches scouted
-                print("\nNo metric selected, creating default 'matches scouted' graph")
-                
-                team_match_counts = {}
-                for data in scouting_data:
-                    if data.team_id in team_match_counts:
-                        team_match_counts[data.team_id] += 1
-                    else:
-                        team_match_counts[data.team_id] = 1
-                
-                chart_data = []
-                for team in teams:
-                    match_count = team_match_counts.get(team.id, 0)
-                    print(f"Team {team.team_number} has {match_count} matches scouted")
-                    
-                    chart_data.append({
-                        'team_number': team.team_number,
-                        'team_name': team.team_name,
-                        'match_count': match_count
-                    })
-                
-                if chart_data:
-                    # Create a direct Plotly figure
-                    fig = go.Figure()
-                    
-                    # Sort by team number for consistency
-                    chart_data = sorted(chart_data, key=lambda x: x['team_number'])
-                    
-                    fig.add_trace(go.Bar(
-                        x=[f"{d['team_number']} - {d['team_name']}" for d in chart_data],
-                        y=[d['match_count'] for d in chart_data],
-                        marker_color='rgb(26, 118, 255)'
-                    ))
-                    
-                    # Update layout
-                    fig.update_layout(
-                        title='Teams by Number of Matches Scouted',
-                        xaxis_title='Team',
-                        yaxis_title='Matches Scouted',
-                        margin=dict(l=40, r=20, t=50, b=40),
+                        plots[f'{metric_id}_bar'] = pio.to_json(fig_bar)
+                    # --- Line Chart: Value per match (trend) ---
+                    fig_line = go.Figure()
+                    for team_number, values in team_match_values.items():
+                        if values:
+                            match_numbers = [m['match_number'] for m in team_data[team_number]['matches'] if m['metrics'].get(metric_id, {}).get('value') is not None]
+                            fig_line.add_trace(go.Scatter(
+                                x=match_numbers,
+                                y=values,
+                                mode='lines+markers',
+                                name=f"{team_number}",
+                                hovertemplate='Match %{x}: %{y:.2f}'
+                            ))
+                    fig_line.update_layout(
+                        title=f"{metric_name} Trend by Match",
+                        xaxis_title="Match Number",
+                        yaxis_title=metric_name,
+                        margin=dict(l=40, r=20, t=50, b=60),
                         plot_bgcolor='rgba(0,0,0,0)',
                         paper_bgcolor='rgba(0,0,0,0)',
                         font=dict(family="Arial, sans-serif")
                     )
-                    
-                    # Convert to JSON for JavaScript
-                    plots['team_comparison'] = pio.to_json(fig)
-                    print("Successfully created 'matches scouted' plot")
+                    plots[f'{metric_id}_line'] = pio.to_json(fig_line)
+                    # --- Box Plot: Distribution per team ---
+                    fig_box = go.Figure()
+                    for team_number, values in team_match_values.items():
+                        if values and len(values) > 1:
+                            fig_box.add_trace(go.Box(
+                                y=values,
+                                name=f"{team_number}",
+                                boxmean=True,
+                                marker_color='rgb(26, 118, 255)',
+                                hovertemplate='Team %{name}<br>Value: %{y:.2f}'
+                            ))
+                    fig_box.update_layout(
+                        title=f"{metric_name} Distribution by Team (Box Plot)",
+                        yaxis_title=metric_name,
+                        margin=dict(l=40, r=20, t=50, b=60),
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        font=dict(family="Arial, sans-serif")
+                    )
+                    plots[f'{metric_id}_box'] = pio.to_json(fig_box)
+                # --- Radar Chart: Team profiles (if 3+ metrics) ---
+                if radar_ready and len(radar_data) > 0:
+                    fig_radar = go.Figure()
+                    categories = [metric_names[mid] for mid in metric_ids]
+                    for team_number, metrics in radar_data.items():
+                        values = [metrics.get(mid, 0) for mid in metric_ids]
+                        fig_radar.add_trace(go.Scatterpolar(
+                            r=values + [values[0]],
+                            theta=categories + [categories[0]],
+                            fill='toself',
+                            name=f"{team_number} - {team_data[team_number]['team_name']}"
+                        ))
+                    fig_radar.update_layout(
+                        polar=dict(
+                            radialaxis=dict(visible=True)
+                        ),
+                        showlegend=True,
+                        title="Team Metric Profiles (Radar Chart)",
+                        margin=dict(l=40, r=20, t=50, b=60),
+                        font=dict(family="Arial, sans-serif")
+                    )
+                    plots['team_radar'] = pio.to_json(fig_radar)
+    
+    # After generating all metric plots, add a special 'points' bar chart using team_metrics
+    if selected_team_numbers and team_metrics:
+        points_data = []
+        for team in teams:
+            team_number = team.team_number
+            team_name = team.team_name
+            points = team_metrics.get(team_number, {}).get('total_points', 0)
+            points_data.append({
+                'team': f"{team_number} - {team_name}",
+                'points': points
+            })
+        if points_data:
+            points_data = sorted(points_data, key=lambda x: x['points'], reverse=True)
+            fig_points = go.Figure()
+            fig_points.add_trace(go.Bar(
+                x=[d['team'] for d in points_data],
+                y=[d['points'] for d in points_data],
+                marker_color='gold',
+                hovertemplate='<b>%{x}</b><br>Total Points: %{y:.2f}<extra></extra>'
+            ))
+            fig_points.update_layout(
+                title="Total Points by Team (from team_metrics)",
+                xaxis_title="Team",
+                yaxis_title="Total Points",
+                margin=dict(l=40, r=20, t=50, b=60),
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(family="Arial, sans-serif"),
+                xaxis=dict(tickangle=-45)
+            )
+            plots['points_bar'] = pio.to_json(fig_points)
     
     return render_template('graphs/index.html', 
                           plots=plots,
@@ -329,3 +328,112 @@ def index():
                           selected_metric=selected_metric,
                           team_event_mapping=team_event_mapping,
                           team_metrics=team_metrics)
+
+@bp.route('/side-by-side')
+@analytics_required
+def side_by_side():
+    """Side-by-side team comparison page"""
+    team_numbers = request.args.getlist('teams', type=int)
+    
+    if not team_numbers:
+        # Get game configuration
+        game_config = current_app.config['GAME_CONFIG']
+        
+        # Get current event based on configuration
+        current_event_code = game_config.get('current_event_code')
+        current_event = None
+        if current_event_code:
+            current_event = Event.query.filter_by(code=current_event_code).first()
+        
+        # Get teams filtered by the current event if available, otherwise show all teams
+        if current_event:
+            teams = current_event.teams
+        else:
+            teams = Team.query.order_by(Team.team_number).all()
+        
+        metrics = game_config['data_analysis']['key_metrics']
+        return render_template('graphs/side_by_side_form.html', teams=teams, metrics=metrics)
+    
+    # Get game configuration
+    game_config = current_app.config['GAME_CONFIG']
+    
+    # Get teams
+    teams = Team.query.filter(Team.team_number.in_(team_numbers)).all()
+    
+    # Calculate detailed metrics for each team
+    teams_data = []
+    
+    for team in teams:
+        scouting_data = ScoutingData.query.filter_by(team_id=team.id).all()
+        
+        team_info = {
+            'team': team,
+            'metrics': {},
+            'match_count': len(scouting_data),
+            'has_data': len(scouting_data) > 0
+        }
+        
+        if scouting_data:
+            # Calculate each metric
+            for metric in game_config['data_analysis']['key_metrics']:
+                metric_id = metric['id']
+                match_values = []
+                
+                for data in scouting_data:
+                    try:
+                        value = data.calculate_metric(metric_id)
+                        match_values.append({
+                            'match': data.match.match_number,
+                            'value': value
+                        })
+                    except Exception as e:
+                        print(f"Error calculating metric {metric_id} for team {team.team_number}: {e}")
+                
+                if match_values:
+                    values = [x['value'] for x in match_values]
+                    
+                    # Calculate aggregate based on metric configuration
+                    if metric.get('aggregate') == 'average':
+                        aggregate_value = sum(values) / len(values)
+                    elif metric.get('aggregate') == 'percentage':
+                        aggregate_value = (sum(values) / len(values)) * 100
+                    else:
+                        aggregate_value = sum(values)
+                    
+                    team_info['metrics'][metric_id] = {
+                        'config': metric,
+                        'aggregate': aggregate_value,
+                        'match_data': values,
+                        'match_values': match_values,
+                        'min': min(values),
+                        'max': max(values),
+                        'avg': sum(values) / len(values)
+                    }
+                else:
+                    team_info['metrics'][metric_id] = {
+                        'config': metric,
+                        'aggregate': 0,
+                        'match_data': [],
+                        'match_values': [],
+                        'min': 0,
+                        'max': 0,
+                        'avg': 0
+                    }
+        else:
+            # No data for this team
+            for metric in game_config['data_analysis']['key_metrics']:
+                team_info['metrics'][metric['id']] = {
+                    'config': metric,
+                    'aggregate': 0,
+                    'match_data': [],
+                    'match_values': [],
+                    'min': 0,
+                    'max': 0,
+                    'avg': 0
+                }
+        
+        teams_data.append(team_info)
+    
+    return render_template('graphs/side_by_side.html',
+                         teams_data=teams_data,
+                         game_config=game_config)
