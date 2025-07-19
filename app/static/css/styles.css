@@ -359,6 +359,23 @@ body {
         max-width: 60px;
     }
     
+    .counter-container {
+        gap: 0.25rem;
+        max-width: 180px;
+    }
+    
+    .counter-container .btn-counter {
+        width: 40px !important;
+        height: 40px !important;
+        font-size: 1rem !important;
+    }
+    
+    .counter-container .counter-input {
+        font-size: 1rem;
+        min-width: 60px;
+        height: 40px;
+    }
+    
     .stat-value {
         font-size: 1.5rem;
     }
@@ -461,7 +478,32 @@ body {
 }
 
 .counter-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     max-width: 200px;
+}
+
+.counter-container .btn-counter {
+    flex-shrink: 0;
+    width: 48px !important;
+    height: 48px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 0.375rem !important;
+    font-size: 1.25rem !important;
+    font-weight: bold !important;
+    padding: 0 !important;
+}
+
+.counter-container .counter-input {
+    flex: 1;
+    text-align: center;
+    font-size: 1.25rem;
+    font-weight: 600;
+    min-width: 80px;
+    height: 48px;
 }
 
 /* Rating Star System */

@@ -15,7 +15,7 @@
                         <a href="{{ url_for('teams.edit', team_number=team.team_number) }}" class="btn btn-primary me-2">
                             <i class="fas fa-edit me-2"></i> Edit Team
                         </a>
-                        <a href="{{ url_for('visualization.team_stats', team_number=team.team_number) }}" class="btn btn-success">
+                        <a href="{{ url_for('graphs.index') }}?teams={{ team.team_number }}" class="btn btn-success">
                             <i class="fas fa-chart-line me-2"></i> View Statistics
                         </a>
                     </div>

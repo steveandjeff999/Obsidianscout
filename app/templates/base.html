@@ -149,24 +149,24 @@
                         
                         {% if user_has_role('admin') or user_has_role('analytics') %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle px-3 py-2 {% if request.endpoint and (request.endpoint.startswith('visualization') or request.endpoint.startswith('graphs')) %}active{% endif %}" 
+                            <a class="nav-link dropdown-toggle px-3 py-2 {% if request.endpoint and (request.endpoint.startswith('graphs') or request.endpoint.startswith('visualization')) %}active{% endif %}" 
                                href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="fas fa-chart-line nav-icon"></i> 
                                 <span class="nav-text">Analytics</span>
                             </a>
                             <ul class="dropdown-menu dropdown-menu-animated shadow">
                                 <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('visualization') %}active{% endif %}" 
-                                       href="{{ url_for('visualization.index') }}">
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('graphs') %}active{% endif %}" 
+                                       href="{{ url_for('graphs.index') }}">
                                         <i class="fas fa-chart-bar nav-icon text-primary"></i> 
-                                        <span>Team Performance</span>
+                                        <span>Team Performance & Graphs</span>
                                     </a>
                                 </li>
                                 <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('graphs') %}active{% endif %}" 
-                                       href="{{ url_for('graphs.index') }}">
-                                        <i class="fas fa-chart-pie nav-icon text-success"></i> 
-                                        <span>Advanced Graphs</span>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('graphs') and 'side-by-side' in request.endpoint %}active{% endif %}" 
+                                       href="{{ url_for('graphs.side_by_side') }}">
+                                        <i class="fas fa-columns nav-icon text-success"></i> 
+                                        <span>Side-by-Side Comparison</span>
                                     </a>
                                 </li>
                             </ul>

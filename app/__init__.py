@@ -119,7 +119,7 @@ def create_app(test_config=None):
     config_manager.init_app(app)
 
     # Import and register blueprints
-    from app.routes import main, teams, matches, scouting, data, visualization, graphs, events, alliances, auth, activity, assistant, integrity, pit_scouting, admin
+    from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, activity, assistant, integrity, pit_scouting, admin
     
     # Register template filters
     from app.utils import template_filters
@@ -131,7 +131,6 @@ def create_app(test_config=None):
     app.register_blueprint(scouting.bp)
     app.register_blueprint(pit_scouting.bp)
     app.register_blueprint(data.bp)
-    app.register_blueprint(visualization.bp)
     app.register_blueprint(graphs.bp)
     app.register_blueprint(events.bp)
     app.register_blueprint(alliances.bp)

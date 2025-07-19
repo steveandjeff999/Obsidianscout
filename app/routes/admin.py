@@ -29,10 +29,20 @@ def update_page():
         update_available, _ = is_remote_version_newer(current_version, remote_version)
     else:
         update_available = False
-    
+
+    # Read changelog from plain text file
+    changelog_txt = ''
+    changelog_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'CHANGELOG.txt')
+    if os.path.exists(changelog_path):
+        with open(changelog_path, 'r', encoding='utf-8') as f:
+            changelog_txt = f.read()
+    else:
+        changelog_txt = 'No changelog found.'
+
     return render_template('admin/update.html', 
                          current_version=current_version,
-                         update_available=update_available)
+                         update_available=update_available,
+                         changelog_txt=changelog_txt)
 
 @bp.route('/update/check', methods=['POST'])
 @login_required
