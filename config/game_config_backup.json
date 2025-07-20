@@ -7,7 +7,7 @@
     "base_url": "https://frc-api.firstinspires.org"
   },
   "tba_api_settings": {
-    "auth_key": "your TBA api key here",
+    "auth_key": "your TBA API key here",
     "base_url": "https://www.thebluealliance.com/api/v3"
   },
   "auto_period": {
