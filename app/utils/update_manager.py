@@ -618,9 +618,16 @@ class UpdateManager:
             return False, f"Direct download update failed: {str(e)}"
     
     def initialize_git_repository(self):
-        """Initialize a Git repository in the current directory and sync with remote if possible"""
+        """Initialize a Git repository in the current directory and sync with remote if possible, preserving db and config files."""
         try:
+            import shutil
             app_root = os.path.dirname(self.config_path)
+            preserve_files = [
+                os.path.join(app_root, 'app_config.json'),
+                os.path.join(app_root, 'instance', 'scouting.db'),
+                os.path.join(app_root, 'config', 'pit_config.json'),
+            ]
+            temp_preserve = []
 
             # Check if Git is available
             try:
@@ -680,10 +687,23 @@ class UpdateManager:
                     # Check if remote branch exists
                     branch_check = subprocess.run(['git', 'ls-remote', '--heads', repo_url, branch], capture_output=True, text=True)
                     if branch_check.stdout.strip():
+                        # --- PRESERVE FILES ---
+                        for f in preserve_files:
+                            if os.path.exists(f):
+                                temp_path = f + ".bak_update"
+                                shutil.copy2(f, temp_path)
+                                temp_preserve.append((f, temp_path))
                         # Remote branch exists, hard reset local to match remote
                         subprocess.run(['git', 'checkout', '-B', branch], cwd=app_root, capture_output=True, text=True)
                         subprocess.run(['git', 'reset', '--hard', f'origin/{branch}'], cwd=app_root, capture_output=True, text=True)
                         logger.info(f"Checked out and reset to remote branch origin/{branch}")
+                        # Remove all untracked files and directories (except preserved)
+                        subprocess.run(['git', 'clean', '-fdx'], cwd=app_root, capture_output=True, text=True)
+                        # --- RESTORE FILES ---
+                        for orig, bak in temp_preserve:
+                            shutil.copy2(bak, orig)
+                            os.remove(bak)
+                        logger.info(f"Restored preserved files after reset: {[f for f, _ in temp_preserve]}")
                     else:
                         # Remote branch does not exist, push local branch to create it
                         subprocess.run(['git', 'checkout', '-B', branch], cwd=app_root, capture_output=True, text=True)
@@ -697,7 +717,7 @@ class UpdateManager:
             else:
                 logger.warning("No repository_url configured for remote origin.")
 
-            return True, "Git repository initialized and synchronized with remote successfully"
+            return True, "Git repository initialized and synchronized with remote successfully (preserved db/config files)"
         except Exception as e:
             return False, f"Failed to initialize Git repository: {str(e)}"
     
