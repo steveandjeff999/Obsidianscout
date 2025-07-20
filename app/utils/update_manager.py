@@ -261,18 +261,9 @@ class UpdateManager:
             return None
     
     def perform_update(self):
-        """Perform update using Git or direct download"""
-        repo_url = self.config.get('repository_url', '')
-        if not repo_url:
-            return False, "Repository URL not configured"
-        
-        # Try Git method first, fall back to direct download if Git is not available
-        try:
-            return self.perform_git_update()
-        except Exception as e:
-            logger.warning(f"Git update failed, trying direct download: {e}")
-            return self.perform_direct_update()
-    
+        """Always perform update using direct download (ZIP) method, preserving important files."""
+        return self.perform_direct_update()
+
     def cleanup_git_references(self, repo):
         """Clean up problematic Git references that might cause conflicts"""
         try:
@@ -527,77 +518,84 @@ class UpdateManager:
             return False, f"Git update failed: {str(e)}"
     
     def perform_direct_update(self):
-        """Perform direct download update from GitHub"""
+        """Perform direct download update from GitHub, preserving important files."""
         try:
+            import shutil
             repo_url = self.config.get('repository_url', '')
             branch = self.config.get('branch', 'main')
             if not repo_url:
                 return False, "Repository URL not configured"
-            
+
             # Convert Git URL to GitHub ZIP download URL
             if 'github.com' in repo_url:
                 repo_url = repo_url.replace('.git', '')
                 if repo_url.endswith('/'):
                     repo_url = repo_url[:-1]
-                
+
                 parts = repo_url.split('/')
                 if len(parts) >= 2:
                     owner = parts[-2]
                     repo = parts[-1]
                 else:
                     return False, "Invalid GitHub URL format"
-                
+
                 # Create GitHub ZIP download URL
                 download_url = f"https://github.com/{owner}/{repo}/archive/refs/heads/{branch}.zip"
                 logger.info(f"Downloading update from: {download_url}")
-                
+
                 # Create temporary directory
                 with tempfile.TemporaryDirectory() as temp_dir:
                     # Download the file
                     response = requests.get(download_url, stream=True)
                     if response.status_code != 200:
                         return False, f"Failed to download update: {response.status_code}"
-                    
+
                     # Save to temporary file
                     zip_path = os.path.join(temp_dir, 'update.zip')
                     with open(zip_path, 'wb') as f:
                         for chunk in response.iter_content(chunk_size=8192):
                             f.write(chunk)
-                    
+
                     # Extract the zip file
                     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                         zip_ref.extractall(temp_dir)
-                    
+
                     # Find the extracted directory
                     extracted_dirs = [d for d in os.listdir(temp_dir) if os.path.isdir(os.path.join(temp_dir, d)) and d != '__pycache__']
                     if not extracted_dirs:
                         return False, "No valid directory found in downloaded file"
-                    
+
                     extracted_dir = os.path.join(temp_dir, extracted_dirs[0])
-                    
-                    # Create backup if enabled
-                    if self.config.get('backup_enabled', True):
-                        self.create_backup()
-                    
-                    # Copy files to application directory
+
+                    # --- PRESERVE FILES ---
                     app_root = os.path.dirname(self.config_path)
+                    preserve_files = [
+                        os.path.join(app_root, 'app_config.json'),
+                        os.path.join(app_root, 'instance', 'scouting.db'),
+                        os.path.join(app_root, 'config', 'pit_config.json'),
+                    ]
+                    temp_preserve = []
+                    for f in preserve_files:
+                        if os.path.exists(f):
+                            temp_path = f + ".bak_update"
+                            shutil.copy2(f, temp_path)
+                            temp_preserve.append((f, temp_path))
+
+                    # Copy files to application directory (overwrite all except preserved)
                     self.copy_directory(extracted_dir, app_root)
-                    
-                    # Auto-commit any changes after update
-                    changes_summary = self.get_git_changes_summary()
-                    if changes_summary != "No uncommitted changes" and changes_summary != "Not a Git repository":
-                        logger.info(f"Auto-committing changes after direct download update: {changes_summary}")
-                        success, message = self.auto_commit_changes("Post-direct-update changes")
-                        if not success:
-                            logger.warning(f"Failed to auto-commit after direct update: {message}")
-                        else:
-                            logger.info(f"Post-direct-update commit: {message}")
-                    
+
+                    # --- RESTORE FILES ---
+                    for orig, bak in temp_preserve:
+                        shutil.copy2(bak, orig)
+                        os.remove(bak)
+                    logger.info(f"Restored preserved files after ZIP update: {[f for f, _ in temp_preserve]}")
+
+                    # Auto-commit any changes after update (optional, can skip for ZIP)
                     # Install packages from requirements.txt
                     success, message = self.install_requirements()
                     if not success:
                         return False, message
-                    
+
                     # Run database migrations if alembic is available
                     try:
                         result = subprocess.run(['flask', 'db', 'upgrade'], capture_output=True, text=True, timeout=60)
@@ -605,13 +603,13 @@ class UpdateManager:
                             logger.warning(f"Database migration failed (continuing anyway): {result.stderr}")
                     except (subprocess.TimeoutExpired, FileNotFoundError):
                         logger.warning("Database migration skipped (alembic not available)")
-                    
+
                     # Restart server immediately
                     restart_success, restart_message = self.restart_server()
                     if not restart_success:
                         logger.warning(f"Could not restart server: {restart_message}")
-                    
-                    return True, "Direct download update completed successfully - server restarting immediately"
+
+                    return True, "Direct download update completed successfully - server restarting immediately (preserved db/config files)"
             else:
                 return False, "Direct download only supports GitHub repositories"
         except Exception as e:
