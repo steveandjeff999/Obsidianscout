@@ -1,8 +1,8 @@
 {
   "checksums": {
     "app_config.json": {
-      "checksum": "9eaf1bfdca0764dafbef3d1bbcb54b96389dc1b06fab25cf9c068dc0d0fff3a1",
-      "modified": 1752970644.788712,
+      "checksum": "3d6f08fa71b2140c1d77b0f5dec1548158a80d0d1d808cac09d32d39b24645fe",
+      "modified": 1752178898.6462328,
       "size": 168
     },
     "CREATE_RELEASE_INSTRUCTIONS.md": {
@@ -31,9 +31,9 @@
       "size": 2020
     },
     "run.py": {
-      "checksum": "b2be420a03a7481c2a2b5e261e673196316b003f43520329a3f008f54ee2512d",
-      "modified": 1752187283.6089504,
-      "size": 6304
+      "checksum": "53507ca34ddf0e45d4076e5c71da63eb8f114eae922c838b91d614017ec2eff8",
+      "modified": 1752179323.4917226,
+      "size": 6255
     },
     "SETUP_INSTRUCTIONS.md": {
       "checksum": "259a3390eab5f134a8b40fd2d6ba7bd7b6bdc960a3b2bf471f8aa238fa096ddf",
@@ -60,20 +60,15 @@
       "modified": 1752178898.6381786,
       "size": 3403
     },
-    "app\\CHANGELOG.txt": {
-      "checksum": "46881805555904af93cd6126367d5d649e3aeb97bccb716f9195f5a1f493f8cc",
-      "modified": 1752969006.8033772,
-      "size": 1383
-    },
     "app\\models.py": {
       "checksum": "e722664dbcfe6d2ff8b75faacbd9996b1a8ad36dc5d1e4f81b34c3791e3be158",
-      "modified": 1752933713.889675,
+      "modified": 1752178898.734566,
       "size": 38052
     },
     "app\\__init__.py": {
-      "checksum": "88ca5f38b8bba8002a8a85daf3f2f707639f9c45bece2e0389efa89099e96474",
-      "modified": 1752968150.0169766,
-      "size": 7658
+      "checksum": "4e7084ed1fba372f6aaf17b6844a3b9b8794f26cfea9778314a418cb5ecc85cd",
+      "modified": 1752178898.7275407,
+      "size": 6925
     },
     "app\\assistant\\core.py": {
       "checksum": "a2c4729e595f6653b0dae4973d889a4b783e9771ad81e35010495fd50db6ed8a",
@@ -96,9 +91,9 @@
       "size": 5647
     },
     "app\\routes\\admin.py": {
-      "checksum": "76995453e0fb8cdc104d0614d65c6d3173773c1e8ab129899ad19b1af0a3b70a",
-      "modified": 1752936072.747249,
-      "size": 9538
+      "checksum": "58846df9745b8018c4f15947f737a93d0900ad364352299b1fd621bae353c09e",
+      "modified": 1752178898.861637,
+      "size": 9115
     },
     "app\\routes\\alliances.py": {
       "checksum": "df150253da728f953a67216d9edf0c34778174c4d4f2ec4e68c5cf44eb223c79",
@@ -131,9 +126,9 @@
       "size": 6058
     },
     "app\\routes\\graphs.py": {
-      "checksum": "e1b0149deb027b25e1c72ced6f69f78449085bf6a347120a313ad57897d72287",
-      "modified": 1752967590.752146,
-      "size": 20301
+      "checksum": "daa525096a951d41bfff7898ec08cb11ed6000b220090d095a7d4d42d9e58459",
+      "modified": 1752178898.9155593,
+      "size": 15723
     },
     "app\\routes\\integrity.py": {
       "checksum": "32e88c1cf6ffe73e456013aeb34d2f3835ab64024a41fa332772a698cccf5f09",
@@ -165,10 +160,10 @@
       "modified": 1752178898.9627435,
       "size": 16101
     },
-    "app\\routes\\themes.py": {
-      "checksum": "86cb6894879a95c7a88a9176ed4545302a27c64bbf8c283be1659eaf4589c219",
-      "modified": 1752968132.1490524,
-      "size": 11955
+    "app\\routes\\visualization.py": {
+      "checksum": "0dcaeefa1a9c0771705bb3763e0145bea8828bbc7d7bf354de8d34c33db6069d",
+      "modified": 1752178898.9697645,
+      "size": 22976
     },
     "app\\static\\manifest.json": {
       "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -186,19 +181,9 @@
       "size": 2120
     },
     "app\\static\\css\\styles.css": {
-      "checksum": "bafe7a54ef6d182bdee789ae34d7554f422f97db20ee771162f098891e837b64",
-      "modified": 1752970153.6184878,
-      "size": 39688
-    },
-    "app\\static\\css\\theme-management.css": {
-      "checksum": "d4b4a98a7d79fb9a41f2145e6ce7ddb1dc7eb44752ef4ab33bc9a979961a292c",
-      "modified": 1752968250.474158,
-      "size": 2605
-    },
-    "app\\static\\css\\theme-overrides.css": {
-      "checksum": "138ea0f01e434c453a64c1a1c9a41f12db87d3dd94040139029a64356aec9faa",
-      "modified": 1752970727.0769603,
-      "size": 18937
+      "checksum": "6bdb29f15bca86b5f11fab89057c314605116d93064e3b1eba825a9ec8c9f9e3",
+      "modified": 1752178899.1949675,
+      "size": 38886
     },
     "app\\static\\js\\activity-logger.js": {
       "checksum": "3d107e225f443c408d1e6fc0cb5de4042c9b7e9fff4e666059abc60afdc63b31",
@@ -251,9 +236,9 @@
       "size": 146939
     },
     "app\\templates\\base.html": {
-      "checksum": "11144ba04f81f1d4d08319a17056830dc827538459d8e323755aa710d160e0c7",
-      "modified": 1752970221.0810122,
-      "size": 30341
+      "checksum": "fb65a1b9d9ca7fe034fc0b90f018b954e8f1b94975a081a962b286846982617f",
+      "modified": 1752178899.2980678,
+      "size": 29467
     },
     "app\\templates\\config.html": {
       "checksum": "65680c4745de05efbda704dda8dedc200b217e9491ddac8bb962635a5ff0aa74",
@@ -291,9 +276,9 @@
       "size": 32971
     },
     "app\\templates\\index.html": {
-      "checksum": "861a7b9f410fb5ab4839d118a0ef1d5ca9e7e8a133c2f41c770f128ddbd6af70",
-      "modified": 1752967592.4321718,
-      "size": 13874
+      "checksum": "36b2ae373f895dcc11375b1970500f32ca3f1d8e6fe71bd5c5b12fd1e9968ee0",
+      "modified": 1752178899.3671072,
+      "size": 13881
     },
     "app\\templates\\activity\\logs.html": {
       "checksum": "0964d76f5feaffdd96277cc61a6e16c3c867b606fec12fbeec3e83e88127c4c5",
@@ -301,9 +286,9 @@
       "size": 11592
     },
     "app\\templates\\admin\\update.html": {
-      "checksum": "b52c7f3294b97b9d230be8134fcbd5a49371b79d4e52afeae6f2863437dbe54c",
-      "modified": 1752936076.3760557,
-      "size": 14844
+      "checksum": "55b1e312dc981ac67ea2ce41f5591586a949c199ddd06fa74b48713882e12aeb",
+      "modified": 1752178899.3988404,
+      "size": 14393
     },
     "app\\templates\\alliances\\index.html": {
       "checksum": "200bf3c3e5f73f1d14e45d2af5a3b5e1d1c6360dc5efa86e03c61493a0f90406",
@@ -346,9 +331,9 @@
       "size": 6758
     },
     "app\\templates\\auth\\admin_settings.html": {
-      "checksum": "f4140057e3eb4344c1d0826862417d89cc876df821c47bd0cb992ee34b51e558",
-      "modified": 1752969028.255409,
-      "size": 6752
+      "checksum": "6a403f935630231c42be1a6415ffd735115c237ceaf11b78cb1a095d221556d7",
+      "modified": 1752178899.530586,
+      "size": 6199
     },
     "app\\templates\\auth\\edit_user.html": {
       "checksum": "de307c4ab6bc10f6ad47926283a12b2ba64f24f1f99306ad866bdbdd037dacf1",
@@ -456,19 +441,9 @@
       "size": 6465
     },
     "app\\templates\\graphs\\index.html": {
-      "checksum": "1b10769b9918446f5f069f72d6e632bb333475305b24134ffab3eb48d0ab7fef",
-      "modified": 1752967591.3268402,
-      "size": 22708
-    },
-    "app\\templates\\graphs\\side_by_side.html": {
-      "checksum": "14d872251221ca7a9dc4fd9ff2ebd3081a501660533806bd9f511c5010e34512",
-      "modified": 1752967591.7492547,
-      "size": 12897
-    },
-    "app\\templates\\graphs\\side_by_side_form.html": {
-      "checksum": "6ad30d3dd74346b026b0c79083a45ee7cb25fcff314735e4e29ca08dab7b9874",
-      "modified": 1752967591.6532092,
-      "size": 3451
+      "checksum": "82bb390c71559a8c9882805b395b9cb9b6f8f7d46b21f8586083af08067fa48d",
+      "modified": 1752178899.757969,
+      "size": 21803
     },
     "app\\templates\\integrity\\verify.html": {
       "checksum": "70efd19edd1b2f95cc85ccc48814e54857b6ff9cc1fdbb8d5a17d12b968355a7",
@@ -622,7 +597,7 @@
     },
     "app\\templates\\scouting\\partials\\form_content.html": {
       "checksum": "8c21b8575a2a129e52c24bc0d52bfd932687290b108c281deb7e005da8bee0ce",
-      "modified": 1752954551.3993132,
+      "modified": 1752178900.0511546,
       "size": 21438
     },
     "app\\templates\\scouting\\partials\\pit_form_content.html": {
@@ -641,34 +616,49 @@
       "size": 3969
     },
     "app\\templates\\teams\\index.html": {
-      "checksum": "0e0350c6c28ce27f4fe08bcd41b43af8e47cd33038e3b3d96fbdc5adbdbb48c4",
-      "modified": 1752967591.9181826,
-      "size": 5994
+      "checksum": "5d3aab817c7c3b90dd7b2bba2b5e21db228f7c1295427ce602ecc0e44d4257e9",
+      "modified": 1752178900.087639,
+      "size": 6007
     },
     "app\\templates\\teams\\view.html": {
-      "checksum": "3ee4f8a042699dd49e03a1511fd0640e542d1e7fb0f728d1b5ca244adb160316",
-      "modified": 1752967591.8708506,
-      "size": 9832
+      "checksum": "6544ecb12a19ea06e11676dc3be0180f983c54a9ad58d1b6fdaec7204380e285",
+      "modified": 1752178900.0931585,
+      "size": 9845
     },
-    "app\\templates\\themes\\create.html": {
-      "checksum": "53945912f8660a913240583e40747dc97b61d8e65a53e77af1caa6584e700c5d",
-      "modified": 1752969031.948212,
-      "size": 10180
+    "app\\templates\\visualization\\compare.html": {
+      "checksum": "2ff3dd3edb8be43b59700bb8f17a792384df3746ce37f09ef16e073f708df9f7",
+      "modified": 1752178900.1071756,
+      "size": 7449
     },
-    "app\\templates\\themes\\edit.html": {
-      "checksum": "a364db511e4140ee3f72720ec44d012174757899f5eb3fdd4e96d772dce0b451",
-      "modified": 1752969346.4520438,
-      "size": 29526
+    "app\\templates\\visualization\\compare_form.html": {
+      "checksum": "d64508aa8991f3e245fee4a2ac37ebe1bbb94038559e975c0e5df0fb93b68502",
+      "modified": 1752178900.1152034,
+      "size": 2944
     },
-    "app\\templates\\themes\\index.html": {
-      "checksum": "b061dd342578218ac9f29502a4f7315199ea2b152bae05928ef1e85717ae3632",
-      "modified": 1752969074.0352,
-      "size": 12724
+    "app\\templates\\visualization\\event.html": {
+      "checksum": "28c6e29f3382969f5af582b65f0447115c1443ca399286bf4ee31bff74cf372a",
+      "modified": 1752178900.1202254,
+      "size": 7514
     },
-    "app\\templates\\themes\\preview.html": {
-      "checksum": "671b5e3a868c0ea568591266f2b3b4d8bc9adf2bef5b479a140bffc70c467819",
-      "modified": 1752969464.5353334,
-      "size": 20430
+    "app\\templates\\visualization\\index.html": {
+      "checksum": "ad07aa64fe366193c064c5faaf8c1e7bb95ea8a98360e356c71cebe3f7062a6a",
+      "modified": 1752178900.1286812,
+      "size": 23257
+    },
+    "app\\templates\\visualization\\side_by_side.html": {
+      "checksum": "5e3ccdb0cbea1a13b58eb1a5b8315313f7ec2d1061c6958c77ac3ae9c1f4585e",
+      "modified": 1752178900.135201,
+      "size": 12661
+    },
+    "app\\templates\\visualization\\side_by_side_form.html": {
+      "checksum": "d8ac1d757fa176adc18b11f55fe7a060d3728eb235b05f4485ac57e3b2aa4a4b",
+      "modified": 1752178900.1422281,
+      "size": 3369
+    },
+    "app\\templates\\visualization\\team.html": {
+      "checksum": "5734b17874e7432e8e221dda46193092df9a9a96fbf71ebff4742af7aeea591c",
+      "modified": 1752178900.1497884,
+      "size": 9332
     },
     "app\\utils\\ai_helper.py": {
       "checksum": "f9e288ead192a81dfd80a3585517eece58645b3b5359c3679922d8cc8c67ed7f",
@@ -730,11 +720,6 @@
       "modified": 1752178900.2511897,
       "size": 471
     },
-    "app\\utils\\theme_manager.py": {
-      "checksum": "81dcd889d537349e2df1d481eb94332cca4b2d708eec932a0a1ef36ac4a4caf6",
-      "modified": 1752968073.414076,
-      "size": 8482
-    },
     "app\\utils\\version_manager.py": {
       "checksum": "daa5e005f4c51bed75aa0a1727b358f492e2d0a2aeee6ded8cb25a74940c0136",
       "modified": 1752178900.258206,
@@ -746,9 +731,9 @@
       "size": 151
     },
     "config\\game_config_backup.json": {
-      "checksum": "7796766b429ddf3257552757238f6d7eb9bbcfb2d64ffbc15bd0dabf3cd887af",
-      "modified": 1752952850.4534628,
-      "size": 7611
+      "checksum": "ae8397d041ffad0d268bb4fb7cc92ed8e59cf448d21e41b6368c6ae8e49cdc08",
+      "modified": 1752178900.3974764,
+      "size": 7301
     },
     "config\\pit_config.json": {
       "checksum": "467f79c5c87ea39e4c6a527a822ec37d2a7ce5dc83a4292a87e22a9fafc24632",
@@ -764,11 +749,6 @@
       "checksum": "81b95dde5122dc7bb893c10d8f7db810cd080f3a8dadfb2214b9ba93e3f7f7bf",
       "modified": 1752178900.425282,
       "size": 426
-    },
-    "config\\theme_config.json": {
-      "checksum": "51cb6147b6f488bab2613e03869d625b39d65c77a3655beb75364c4aab64d1fc",
-      "modified": 1752970797.7915573,
-      "size": 9631
     },
     "help\\ACTIVITY_LOGGING.md": {
       "checksum": "a16b4932ce0e5d95e6d298811e0a15746dcd4c62304912dc60771efc7f4e44c7",
@@ -931,5 +911,5 @@
       "size": 946
     }
   },
-  "created": "2025-07-19T19:53:04.480320"
+  "created": "2025-07-10T15:30:06.472536"
 }

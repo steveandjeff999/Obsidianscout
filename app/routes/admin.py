@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, current_app, Response, stream_with
 from flask_login import login_required
 from app.routes.auth import admin_required
 from app.utils.version_manager import VersionManager
+from app.utils.update_manager import UpdateManager
 from app.utils.remote_config import fetch_remote_config, is_remote_version_newer
 import subprocess
 import sys
@@ -39,37 +40,39 @@ def update_page():
     else:
         changelog_txt = 'No changelog found.'
 
+    # Get update method information
+    update_manager = UpdateManager()
+    update_method_info = update_manager.get_update_method_info()
+    
     return render_template('admin/update.html', 
                          current_version=current_version,
                          update_available=update_available,
-                         changelog_txt=changelog_txt)
+                         changelog_txt=changelog_txt,
+                         update_method_info=update_method_info)
 
 @bp.route('/update/check', methods=['POST'])
 @login_required
 @admin_required
 def check_for_updates():
     """Check for available updates"""
-    version_manager = VersionManager()
+    update_manager = UpdateManager()
     
-    # Get current version and repository URL from local config
-    current_version = version_manager.get_current_version()
-    repo_url = version_manager.config.get('repository_url', '')
-    branch = version_manager.config.get('branch', 'main')
+    # Get current version
+    current_version = update_manager.get_current_version()
     
-    # Fetch remote config using the new function
-    remote_config = fetch_remote_config(repo_url, branch)
+    # Check for updates using the configured method
+    has_update, message = update_manager.check_for_updates()
     
-    if remote_config:
-        remote_version = remote_config.get('version', '0.0.0.0')
-        has_update, message = is_remote_version_newer(current_version, remote_version)
-    else:
-        has_update, message = False, "Could not fetch remote version"
+    # Get latest version if update is available
+    latest_version = "Unknown"
+    if has_update:
+        latest_version = update_manager.get_latest_version() or "Unknown"
     
     return jsonify({
         'update_available': has_update,
         'message': message,
         'current_version': current_version,
-        'latest_version': remote_version if remote_config else "Unknown"
+        'latest_version': latest_version
     })
 
 @bp.route('/update/run', methods=['GET', 'POST'])
@@ -98,95 +101,33 @@ def run_update():
     
     # For GET requests, we stream the output
     def generate():
-        # Determine which script to run based on OS
-        script_path = None
         try:
-            if platform.system() == 'Windows':
-                script_path = os.path.join(current_app.root_path, '..', 'update.bat')
-                yield f"data: Detected Windows OS, using update.bat script\n\n"
-            else:
-                script_path = os.path.join(current_app.root_path, '..', 'update.sh')
-                yield f"data: Detected Unix-like OS, using update.sh script\n\n"
-                # Ensure the script is executable on Unix-like systems
-                if os.path.exists(script_path):
-                    try:
-                        os.chmod(script_path, 0o755)
-                        yield f"data: Made update.sh executable\n\n"
-                    except Exception as e:
-                        yield f"data: Warning: Failed to set executable permissions: {e}\n\n"
-
-            # Check if the script exists
-            if not script_path or not os.path.exists(script_path):
-                yield f"data: Error: Update script not found at {script_path}\n\n"
-                yield "event: end\ndata: error\n\n"
-                return
-
-            # Send a message about which script is being executed
-            yield f"data: Using update script: {script_path}\n\n"
-
-            # Start the process
-            if platform.system() == 'Windows':
-                yield f"data: Starting Windows update process...\n\n"
-                process = subprocess.Popen(
-                    script_path,  # Use the path directly for Windows
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    bufsize=1,
-                    universal_newlines=True,
-                    shell=True
-                )
-            else:
-                yield f"data: Starting Unix update process...\n\n"
-                process = subprocess.Popen(
-                    [script_path],  # Use list format for Unix
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    bufsize=1,
-                    universal_newlines=True
-                )
-
-            # Stream output in real-time
-            for line in iter(process.stdout.readline, ''):
-                if line.strip():  # Only send non-empty lines
-                    line_sanitized = line.replace('\r', '').rstrip('\n')
-                    yield f"data: {line_sanitized}\n\n"
-
-            # Wait for the process to complete
-            process.stdout.close()
-            return_code = process.wait()
-
-            # Log the result
-            if return_code == 0:
-                yield f"data: Process completed with return code: {return_code}\n\n"
+            update_manager = UpdateManager()
+            update_method_info = update_manager.get_update_method_info()
+            
+            yield f"data: Using update method: {update_method_info['method']}\n\n"
+            yield f"data: {update_method_info['description']}\n\n"
+            
+            # Perform the update using the configured method
+            success, message = update_manager.perform_update()
+            
+            if success:
+                yield f"data: {message}\n\n"
                 
                 # Update version information after successful update
                 try:
-                    version_manager = VersionManager()
-                    
-                    # Get repository info from config
-                    repo_url = version_manager.config.get('repository_url', '')
-                    branch = version_manager.config.get('branch', 'main')
-                    current_version = version_manager.get_current_version()
-                    
-                    # Fetch remote config to get latest version
-                    remote_config = fetch_remote_config(repo_url, branch)
-                    if remote_config and 'version' in remote_config:
-                        remote_version = remote_config['version']
-                        has_update, _ = is_remote_version_newer(current_version, remote_version)
-                        
-                        if has_update:
-                            version_manager.set_current_version(remote_version)
-                            yield f"data: Updated to version {remote_version}\n\n"
-                        else:
-                            yield f"data: Already at latest version {current_version}\n\n"
+                    latest_version = update_manager.get_latest_version()
+                    if latest_version:
+                        update_manager.set_current_version(latest_version)
+                        yield f"data: Updated to version {latest_version}\n\n"
                     else:
-                        yield f"data: Could not fetch remote version information\n\n"
+                        yield f"data: Version information updated\n\n"
                 except Exception as e:
                     yield f"data: Warning: Could not update version info: {str(e)}\n\n"
                 
                 yield "event: end\ndata: success\n\n"
             else:
-                yield f"data: Process failed with return code: {return_code}\n\n"
+                yield f"data: Update failed: {message}\n\n"
                 yield "event: end\ndata: error\n\n"
 
         except Exception as e:
@@ -230,4 +171,49 @@ def update_version():
         return jsonify({
             'success': False,
             'message': f'Error updating version: {str(e)}'
+        }), 500
+
+@bp.route('/update/configure', methods=['POST'])
+@login_required
+@admin_required
+def configure_update_method():
+    """Configure the update method and related settings"""
+    try:
+        data = request.get_json()
+        
+        update_manager = UpdateManager()
+        
+        # Extract configuration
+        update_method = data.get('updateMethod', 'git')
+        backup_enabled = data.get('backupEnabled', True)
+        
+        # Method-specific configuration
+        config_kwargs = {'backup_enabled': backup_enabled}
+        
+        if update_method == 'git':
+            config_kwargs['repository_url'] = data.get('repositoryUrl', '')
+            config_kwargs['branch'] = data.get('branch', 'main')
+        elif update_method == 'direct_download':
+            config_kwargs['download_url'] = data.get('downloadUrl', '')
+        elif update_method == 'manual':
+            # No additional config needed for manual updates
+            pass
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Unknown update method: {update_method}'
+            }), 400
+        
+        # Set the update method configuration
+        update_manager.set_update_method(update_method, **config_kwargs)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Update method configured successfully: {update_method}'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error configuring update method: {str(e)}'
         }), 500
