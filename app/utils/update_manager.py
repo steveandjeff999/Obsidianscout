@@ -429,6 +429,16 @@ class UpdateManager:
             
             # Clean up problematic references
             self.cleanup_git_references(repo)
+            
+            # Auto-commit any existing changes before update
+            changes_summary = self.get_git_changes_summary()
+            if changes_summary != "No uncommitted changes" and changes_summary != "Not a Git repository":
+                logger.info(f"Auto-committing changes before update: {changes_summary}")
+                success, message = self.auto_commit_changes("Pre-update changes")
+                if not success:
+                    logger.warning(f"Failed to auto-commit before update: {message}")
+                else:
+                    logger.info(f"Pre-update commit: {message}")
 
             # Create backup if enabled
             if self.config.get('backup_enabled', True):
@@ -459,18 +469,35 @@ class UpdateManager:
                 # If pull fails (e.g., no remote tracking), that's okay for initial setup
                 logger.warning(f"Git pull failed (this is normal for new repositories): {str(e)}")
             
-            # Install dependencies
-            result = subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', 'requirements.txt'], 
-                                  capture_output=True, text=True)
-            if result.returncode != 0:
-                return False, f"Failed to install dependencies: {result.stderr}"
+            # Install packages from requirements.txt
+            success, message = self.install_requirements()
+            if not success:
+                return False, message
             
-            # Run database migrations
-            result = subprocess.run(['flask', 'db', 'upgrade'], capture_output=True, text=True)
-            if result.returncode != 0:
-                return False, f"Database migration failed: {result.stderr}"
+            # Run database migrations if alembic is available
+            try:
+                result = subprocess.run(['flask', 'db', 'upgrade'], capture_output=True, text=True, timeout=60)
+                if result.returncode != 0:
+                    logger.warning(f"Database migration failed (continuing anyway): {result.stderr}")
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                logger.warning("Database migration skipped (alembic not available)")
             
-            return True, "Git update completed successfully"
+            # Auto-commit any changes after update
+            changes_summary = self.get_git_changes_summary()
+            if changes_summary != "No uncommitted changes" and changes_summary != "Not a Git repository":
+                logger.info(f"Auto-committing changes after update: {changes_summary}")
+                success, message = self.auto_commit_changes("Post-update changes")
+                if not success:
+                    logger.warning(f"Failed to auto-commit after update: {message}")
+                else:
+                    logger.info(f"Post-update commit: {message}")
+            
+            # Restart server immediately
+            restart_success, restart_message = self.restart_server()
+            if not restart_success:
+                logger.warning(f"Could not restart server: {restart_message}")
+            
+            return True, "Git update completed successfully - server restarting immediately"
         except Exception as e:
             return False, f"Git update failed: {str(e)}"
     
@@ -531,18 +558,35 @@ class UpdateManager:
                     app_root = os.path.dirname(self.config_path)
                     self.copy_directory(extracted_dir, app_root)
                     
-                    # Install dependencies
-                    result = subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', 'requirements.txt'], 
-                                          capture_output=True, text=True)
-                    if result.returncode != 0:
-                        return False, f"Failed to install dependencies: {result.stderr}"
+                    # Auto-commit any changes after update
+                    changes_summary = self.get_git_changes_summary()
+                    if changes_summary != "No uncommitted changes" and changes_summary != "Not a Git repository":
+                        logger.info(f"Auto-committing changes after direct download update: {changes_summary}")
+                        success, message = self.auto_commit_changes("Post-direct-update changes")
+                        if not success:
+                            logger.warning(f"Failed to auto-commit after direct update: {message}")
+                        else:
+                            logger.info(f"Post-direct-update commit: {message}")
                     
-                    # Run database migrations
-                    result = subprocess.run(['flask', 'db', 'upgrade'], capture_output=True, text=True)
-                    if result.returncode != 0:
-                        return False, f"Database migration failed: {result.stderr}"
+                    # Install packages from requirements.txt
+                    success, message = self.install_requirements()
+                    if not success:
+                        return False, message
                     
-                    return True, "Direct download update completed successfully"
+                    # Run database migrations if alembic is available
+                    try:
+                        result = subprocess.run(['flask', 'db', 'upgrade'], capture_output=True, text=True, timeout=60)
+                        if result.returncode != 0:
+                            logger.warning(f"Database migration failed (continuing anyway): {result.stderr}")
+                    except (subprocess.TimeoutExpired, FileNotFoundError):
+                        logger.warning("Database migration skipped (alembic not available)")
+                    
+                    # Restart server immediately
+                    restart_success, restart_message = self.restart_server()
+                    if not restart_success:
+                        logger.warning(f"Could not restart server: {restart_message}")
+                    
+                    return True, "Direct download update completed successfully - server restarting immediately"
             else:
                 return False, "Direct download only supports GitHub repositories"
         except Exception as e:
@@ -679,6 +723,205 @@ class UpdateManager:
         except FileNotFoundError:
             return False
     
+    def auto_commit_changes(self, message="Auto-commit changes"):
+        """Automatically commit any uncommitted changes"""
+        try:
+            app_root = os.path.dirname(self.config_path)
+            
+            # Check if this is a Git repository
+            try:
+                repo = Repo(app_root)
+            except (InvalidGitRepositoryError, NoSuchPathError):
+                logger.info("Not a Git repository - skipping auto-commit")
+                return True, "Not a Git repository"
+            
+            # Check if there are any changes to commit
+            if repo.is_dirty():
+                logger.info(f"Auto-committing changes: {message}")
+                
+                # Add all changes
+                repo.git.add('.')
+                
+                # Commit with timestamp
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                commit_message = f"{message} - {timestamp}"
+                
+                try:
+                    repo.index.commit(commit_message)
+                    logger.info(f"Successfully committed: {commit_message}")
+                    return True, f"Changes committed: {commit_message}"
+                except Exception as e:
+                    logger.warning(f"Failed to commit changes: {e}")
+                    return False, f"Failed to commit: {str(e)}"
+            else:
+                logger.info("No changes to commit")
+                return True, "No changes to commit"
+                
+        except Exception as e:
+            logger.error(f"Error during auto-commit: {e}")
+            return False, f"Auto-commit error: {str(e)}"
+    
+    def get_git_changes_summary(self):
+        """Get a summary of uncommitted changes"""
+        try:
+            app_root = os.path.dirname(self.config_path)
+            
+            # Check if this is a Git repository
+            try:
+                repo = Repo(app_root)
+            except (InvalidGitRepositoryError, NoSuchPathError):
+                return "Not a Git repository"
+            
+            if not repo.is_dirty():
+                return "No uncommitted changes"
+            
+            # Get status summary
+            status = repo.git.status('--porcelain')
+            lines = status.strip().split('\n') if status.strip() else []
+            
+            modified = len([line for line in lines if line.startswith('M ')])
+            added = len([line for line in lines if line.startswith('A ')])
+            deleted = len([line for line in lines if line.startswith('D ')])
+            untracked = len([line for line in lines if line.startswith('??')])
+            
+            summary_parts = []
+            if modified > 0:
+                summary_parts.append(f"{modified} modified")
+            if added > 0:
+                summary_parts.append(f"{added} added")
+            if deleted > 0:
+                summary_parts.append(f"{deleted} deleted")
+            if untracked > 0:
+                summary_parts.append(f"{untracked} untracked")
+            
+            return f"{', '.join(summary_parts)} files" if summary_parts else "No changes"
+            
+        except Exception as e:
+            logger.error(f"Error getting Git changes summary: {e}")
+            return "Error checking changes"
+
+    def install_requirements(self):
+        """Install packages from requirements.txt"""
+        try:
+            app_root = os.path.dirname(self.config_path)
+            requirements_file = os.path.join(app_root, 'requirements.txt')
+            
+            if not os.path.exists(requirements_file):
+                return True, "No requirements.txt file found - skipping package installation"
+            
+            logger.info("Installing packages from requirements.txt...")
+            
+            # Run pip install
+            result = subprocess.run([
+                sys.executable, '-m', 'pip', 'install', '-r', requirements_file
+            ], cwd=app_root, capture_output=True, text=True, timeout=300)  # 5 minute timeout
+            
+            if result.returncode == 0:
+                return True, "Packages installed successfully"
+            else:
+                error_msg = result.stderr if result.stderr else result.stdout
+                return False, f"Failed to install packages: {error_msg}"
+                
+        except subprocess.TimeoutExpired:
+            return False, "Package installation timed out (5 minutes)"
+        except Exception as e:
+            return False, f"Error installing packages: {str(e)}"
+    
+    def restart_server(self):
+        """Restart the server gracefully using Flask's reload mechanism"""
+        try:
+            import os
+            import sys
+            import signal
+            import subprocess
+            import threading
+            import time
+            
+            # Get the current script path
+            app_root = os.path.dirname(self.config_path)
+            script_path = os.path.join(app_root, 'run.py')
+            
+            logger.info("Initiating graceful server restart...")
+            
+            # Method 1: Try to use Flask's reload mechanism
+            try:
+                from flask import current_app
+                if hasattr(current_app, 'testing') and not current_app.testing:
+                    # We're in a Flask context, try to trigger reload
+                    logger.info("Using Flask reload mechanism...")
+                    
+                    # Create a restart trigger file that Flask's reloader will detect
+                    restart_trigger = os.path.join(app_root, '.flask_restart_trigger')
+                    with open(restart_trigger, 'w') as f:
+                        f.write(f"Restart triggered at {datetime.now().isoformat()}")
+                    
+                    # Remove the trigger file after a short delay
+                    def cleanup_trigger():
+                        time.sleep(1)
+                        try:
+                            if os.path.exists(restart_trigger):
+                                os.remove(restart_trigger)
+                        except:
+                            pass
+                    
+                    threading.Thread(target=cleanup_trigger, daemon=True).start()
+                    
+                    return True, "Flask reload mechanism triggered"
+                    
+            except Exception as e:
+                logger.warning(f"Flask reload mechanism failed: {e}")
+            
+            # Method 2: Try to send restart signal to parent process
+            try:
+                # Get the parent process ID
+                parent_pid = os.getppid()
+                if parent_pid != 1:  # Not the init process
+                    logger.info(f"Sending restart signal to parent process {parent_pid}")
+                    
+                    if os.name == 'nt':  # Windows
+                        # On Windows, we can't easily send signals, so use subprocess
+                        subprocess.Popen([sys.executable, script_path], 
+                                       cwd=app_root,
+                                       creationflags=subprocess.DETACHED_PROCESS)
+                        # Give the new process time to start
+                        time.sleep(2)
+                        # Exit gracefully
+                        os._exit(0)
+                    else:
+                        # On Unix, send SIGTERM to parent
+                        os.kill(parent_pid, signal.SIGTERM)
+                        return True, "Restart signal sent to parent process"
+                        
+            except Exception as e:
+                logger.warning(f"Signal-based restart failed: {e}")
+            
+            # Method 3: Fallback to restart flag
+            logger.info("Using restart flag fallback method...")
+            restart_flag = os.path.join(app_root, '.restart_flag')
+            with open(restart_flag, 'w') as f:
+                f.write(f"Restart requested at {datetime.now().isoformat()}")
+            
+            return True, "Restart flag created - server will restart on next request"
+            
+        except Exception as e:
+            logger.error(f"Error during graceful restart: {e}")
+            return False, f"Error during graceful restart: {str(e)}"
+    
+    def check_restart_flag(self):
+        """Check if restart flag exists and remove it"""
+        try:
+            app_root = os.path.dirname(self.config_path)
+            restart_flag = os.path.join(app_root, '.restart_flag')
+            
+            if os.path.exists(restart_flag):
+                os.remove(restart_flag)
+                return True
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error checking restart flag: {e}")
+            return False
+
     def get_git_status(self):
         """Get Git repository status"""
         try:

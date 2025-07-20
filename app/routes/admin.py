@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, current_app, Response, stream_with_context, request, jsonify
+from flask import Blueprint, render_template, current_app, Response, stream_with_context, request, jsonify, flash, redirect, url_for
 from flask_login import login_required
 from app.routes.auth import admin_required
 from app.utils.version_manager import VersionManager
@@ -44,6 +44,10 @@ def update_page():
     update_manager = UpdateManager()
     git_config = update_manager.get_git_config()
     git_status = update_manager.get_git_status()
+    
+    # Add changes summary to the status
+    changes_summary = update_manager.get_git_changes_summary()
+    git_status['changes_summary'] = changes_summary
     
     return render_template('admin/update.html', 
                          current_version=current_version,
@@ -122,6 +126,12 @@ def run_update():
                 yield f"data: This may take a moment for new repositories\n\n"
                 yield f"data: Setting up branches and remote configuration...\n\n"
             
+            # Check for uncommitted changes
+            changes_summary = update_manager.get_git_changes_summary()
+            if changes_summary != "No uncommitted changes" and changes_summary != "Not a Git repository":
+                yield f"data: 📝 Found uncommitted changes: {changes_summary}\n\n"
+                yield f"data: Auto-committing changes before update...\n\n"
+            
             # Perform the update using Git or direct download
             success, message = update_manager.perform_update()
             
@@ -161,6 +171,34 @@ def run_update():
                 elif "Created temporary branch" in message:
                     yield f"data: Created temporary branch to avoid conflicts.\n\n"
                     yield f"data: The update will continue with the temporary branch.\n\n"
+                elif "Installing packages from requirements.txt" in message:
+                    yield f"data: Installing new packages from requirements.txt...\n\n"
+                    yield f"data: This may take a few minutes.\n\n"
+                elif "Packages installed successfully" in message:
+                    yield f"data: ✅ Package installation completed successfully!\n\n"
+                elif "Failed to install packages" in message:
+                    yield f"data: ⚠️ Package installation failed, but update will continue.\n\n"
+                    yield f"data: You may need to install packages manually: pip install -r requirements.txt\n\n"
+                elif "Flask reload mechanism triggered" in message:
+                    yield f"data: 🔄 Flask reload mechanism triggered...\n\n"
+                    yield f"data: The application will reload gracefully to apply changes.\n\n"
+                    yield f"data: Please wait a moment and refresh the page.\n\n"
+                elif "Restart signal sent" in message:
+                    yield f"data: 🔄 Restart signal sent to parent process...\n\n"
+                    yield f"data: The application will restart to apply changes.\n\n"
+                    yield f"data: Please wait a moment and refresh the page.\n\n"
+                elif "Changes committed:" in message:
+                    yield f"data: ✅ {message}\n\n"
+                elif "Pre-update commit:" in message:
+                    yield f"data: ✅ Pre-update changes committed successfully\n\n"
+                elif "Post-update commit:" in message:
+                    yield f"data: ✅ Post-update changes committed successfully\n\n"
+                elif "Post-direct-update commit:" in message:
+                    yield f"data: ✅ Post-direct-update changes committed successfully\n\n"
+                elif "server restarting immediately" in message:
+                    yield f"data: 🔄 Server restarting immediately...\n\n"
+                    yield f"data: The application will restart to apply all changes.\n\n"
+                    yield f"data: Please wait a moment and refresh the page.\n\n"
                 
                 yield "event: end\ndata: error\n\n"
 
@@ -245,6 +283,10 @@ def get_git_status():
         update_manager = UpdateManager()
         git_status = update_manager.get_git_status()
         
+        # Add changes summary to the status
+        changes_summary = update_manager.get_git_changes_summary()
+        git_status['changes_summary'] = changes_summary
+        
         return jsonify({
             'success': True,
             'git_status': git_status
@@ -254,3 +296,37 @@ def get_git_status():
             'success': False,
             'message': f'Error getting Git status: {str(e)}'
         }), 500
+
+@bp.route('/restart', methods=['POST'])
+@login_required
+@admin_required
+def restart_server():
+    """Manually restart the server"""
+    try:
+        update_manager = UpdateManager()
+        success, message = update_manager.restart_server()
+        
+        if success:
+            if "Flask reload mechanism" in message:
+                flash('Server restart initiated using Flask reload mechanism.', 'success')
+                return jsonify({
+                    'success': True,
+                    'message': 'Server restart initiated. The application will reload gracefully.',
+                    'restart_immediate': True
+                })
+            elif "Restart signal sent" in message:
+                flash('Server restart signal sent. The application will restart.', 'success')
+                return jsonify({
+                    'success': True,
+                    'message': 'Server restart signal sent. Please wait a moment and refresh the page.',
+                    'restart_immediate': True
+                })
+            else:
+                flash('Server restart flag created. The server will restart on the next request.', 'success')
+        else:
+            flash(f'Failed to restart server: {message}', 'error')
+            
+    except Exception as e:
+        flash(f'Error restarting server: {str(e)}', 'error')
+    
+    return redirect(url_for('admin.update_page'))
