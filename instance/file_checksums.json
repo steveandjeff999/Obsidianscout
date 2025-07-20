@@ -1,8 +1,8 @@
 {
   "checksums": {
     "app_config.json": {
-      "checksum": "74010ccc74991aef48c88fafc120ec77bcbfd37465c95752feb064522877272d",
-      "modified": 1753035793.8883343,
+      "checksum": "17ca5063282e912b14925cc7f183bed9eeb9efc520b62d04835a12c80cf53e9a",
+      "modified": 1753042259.6961913,
       "size": 205
     },
     "CREATE_RELEASE_INSTRUCTIONS.md": {
@@ -761,9 +761,9 @@
       "size": 8281
     },
     "app\\utils\\update_manager.py": {
-      "checksum": "fb0dac7115f8c8b04a5300306771be91682759a2c6581114efafcd799efd379a",
-      "modified": 1752979910.6054478,
-      "size": 44692
+      "checksum": "d4f69377debcaafa3c6b1b6e3033d031b18b9dbfbe06d0c3c59b9a2c771695e0",
+      "modified": 1753037287.9017906,
+      "size": 47787
     },
     "app\\utils\\version_manager.py": {
       "checksum": "daa5e005f4c51bed75aa0a1727b358f492e2d0a2aeee6ded8cb25a74940c0136",
@@ -776,8 +776,8 @@
       "size": 151
     },
     "config\\game_config_backup.json": {
-      "checksum": "17ff5c54c30380f0cb35890be0423f28490845d18023f03bb516e239b81b61e2",
-      "modified": 1753035922.6376073,
+      "checksum": "7796766b429ddf3257552757238f6d7eb9bbcfb2d64ffbc15bd0dabf3cd887af",
+      "modified": 1753035378.0621002,
       "size": 7611
     },
     "config\\pit_config.json": {
@@ -961,5 +961,5 @@
       "size": 946
     }
   },
-  "created": "2025-07-20T13:25:36.409701"
+  "created": "2025-07-20T15:12:08.945802"
 }

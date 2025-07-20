@@ -416,7 +416,9 @@ class UpdateManager:
         """Perform Git-based update using GitPython"""
         try:
             app_root = os.path.dirname(self.config_path)
-            
+            repo_url = self.config.get('repository_url', '')
+            target_branch = self.config.get('branch', 'main')
+
             # Check if this is a Git repository, initialize if not
             try:
                 repo = Repo(app_root)
@@ -426,10 +428,10 @@ class UpdateManager:
                 if not success:
                     return False, f"Failed to initialize Git repository: {message}"
                 repo = Repo(app_root)
-            
+
             # Clean up problematic references
             self.cleanup_git_references(repo)
-            
+
             # Auto-commit any existing changes before update
             changes_summary = self.get_git_changes_summary()
             if changes_summary != "No uncommitted changes" and changes_summary != "Not a Git repository":
@@ -443,11 +445,29 @@ class UpdateManager:
             # Create backup if enabled
             if self.config.get('backup_enabled', True):
                 self.create_backup()
-            
+
+            # Ensure remote 'origin' exists and is correct
+            if 'origin' not in [r.name for r in repo.remotes]:
+                if repo_url:
+                    try:
+                        repo.create_remote('origin', repo_url)
+                        logger.info(f"Added remote origin: {repo_url}")
+                    except Exception as e:
+                        logger.warning(f"Failed to add remote origin: {e}")
+                else:
+                    logger.warning("No repository_url configured to add remote origin.")
+            else:
+                # Check if URL matches, if not, set it
+                try:
+                    if repo.remotes.origin.url != repo_url and repo_url:
+                        repo.remotes.origin.set_url(repo_url)
+                        logger.info(f"Set remote origin URL to: {repo_url}")
+                except Exception as e:
+                    logger.warning(f"Failed to set remote origin URL: {e}")
+
             # Get the current branch
             current_branch = repo.active_branch.name
-            target_branch = self.config.get('branch', 'main')
-            
+
             # If we're not on the target branch, switch to it
             if current_branch != target_branch:
                 try:
@@ -457,23 +477,28 @@ class UpdateManager:
                     logger.info(message)
                 except GitCommandError as e:
                     return False, f"Failed to switch to branch '{target_branch}': {str(e)}"
-            
+
             # Try to pull latest changes (only if remote exists and is configured)
             try:
-                if 'origin' in repo.remotes:
+                if 'origin' in [r.name for r in repo.remotes]:
                     origin = repo.remotes.origin
-                    origin.pull()
+                    try:
+                        pull_result = origin.pull()
+                        logger.info(f"Git pull result: {pull_result}")
+                    except GitCommandError as e:
+                        logger.error(f"Git pull failed: {e.stderr if hasattr(e, 'stderr') else str(e)}")
+                        return False, f"Git pull failed: {e.stderr if hasattr(e, 'stderr') else str(e)}"
                 else:
                     logger.warning("No remote origin configured, skipping pull")
-            except GitCommandError as e:
-                # If pull fails (e.g., no remote tracking), that's okay for initial setup
-                logger.warning(f"Git pull failed (this is normal for new repositories): {str(e)}")
-            
+            except Exception as e:
+                logger.error(f"Unexpected error during git pull: {str(e)}")
+                return False, f"Unexpected error during git pull: {str(e)}"
+
             # Install packages from requirements.txt
             success, message = self.install_requirements()
             if not success:
                 return False, message
-            
+
             # Run database migrations if alembic is available
             try:
                 result = subprocess.run(['flask', 'db', 'upgrade'], capture_output=True, text=True, timeout=60)
@@ -481,7 +506,7 @@ class UpdateManager:
                     logger.warning(f"Database migration failed (continuing anyway): {result.stderr}")
             except (subprocess.TimeoutExpired, FileNotFoundError):
                 logger.warning("Database migration skipped (alembic not available)")
-            
+
             # Auto-commit any changes after update
             changes_summary = self.get_git_changes_summary()
             if changes_summary != "No uncommitted changes" and changes_summary != "Not a Git repository":
@@ -491,12 +516,12 @@ class UpdateManager:
                     logger.warning(f"Failed to auto-commit after update: {message}")
                 else:
                     logger.info(f"Post-update commit: {message}")
-            
+
             # Restart server immediately
             restart_success, restart_message = self.restart_server()
             if not restart_success:
                 logger.warning(f"Could not restart server: {restart_message}")
-            
+
             return True, "Git update completed successfully - server restarting immediately"
         except Exception as e:
             return False, f"Git update failed: {str(e)}"
@@ -593,10 +618,10 @@ class UpdateManager:
             return False, f"Direct download update failed: {str(e)}"
     
     def initialize_git_repository(self):
-        """Initialize a Git repository in the current directory"""
+        """Initialize a Git repository in the current directory and sync with remote if possible"""
         try:
             app_root = os.path.dirname(self.config_path)
-            
+
             # Check if Git is available
             try:
                 result = subprocess.run(['git', '--version'], capture_output=True, text=True)
@@ -604,7 +629,7 @@ class UpdateManager:
                     return False, "Git is not installed on this system"
             except FileNotFoundError:
                 return False, "Git is not installed on this system"
-            
+
             # Check if this is already a Git repository
             git_dir = os.path.join(app_root, '.git')
             if os.path.exists(git_dir):
@@ -620,35 +645,59 @@ class UpdateManager:
                     # Repository is corrupted, remove and reinitialize
                     logger.info("Removing corrupted Git repository and reinitializing...")
                     shutil.rmtree(git_dir)
-            
+
             # Initialize Git repository
             result = subprocess.run(['git', 'init'], cwd=app_root, capture_output=True, text=True)
             if result.returncode != 0:
                 return False, f"Failed to initialize Git repository: {result.stderr}"
-            
+
             # Add all files
             result = subprocess.run(['git', 'add', '.'], cwd=app_root, capture_output=True, text=True)
             if result.returncode != 0:
                 return False, f"Failed to add files: {result.stderr}"
-            
-            # Make initial commit
+
+            # Make initial commit (ignore if nothing to commit)
             result = subprocess.run(['git', 'commit', '-m', 'Initial commit'], cwd=app_root, capture_output=True, text=True)
-            if result.returncode != 0:
-                return False, f"Failed to make initial commit: {result.stderr}"
-            
+            # If already committed, that's fine
+
             # Add remote origin (but don't fail if it doesn't work)
             repo_url = self.config.get('repository_url', '')
+            branch = self.config.get('branch', 'main')
             if repo_url:
+                # Remove existing origin if present (to avoid duplicate error)
+                subprocess.run(['git', 'remote', 'remove', 'origin'], cwd=app_root, capture_output=True, text=True)
                 result = subprocess.run(['git', 'remote', 'add', 'origin', repo_url], cwd=app_root, capture_output=True, text=True)
                 if result.returncode != 0:
-                    # If adding remote fails, it might already exist or the URL might be invalid
-                    # Try to set the URL instead
+                    # If adding remote fails, try to set the URL instead
                     result = subprocess.run(['git', 'remote', 'set-url', 'origin', repo_url], cwd=app_root, capture_output=True, text=True)
                     if result.returncode != 0:
                         logger.warning(f"Could not configure remote origin: {result.stderr}")
                         logger.warning("Remote repository will need to be configured manually")
-            
-            return True, "Git repository initialized successfully"
+
+                # Fetch remote branch info
+                fetch_result = subprocess.run(['git', 'fetch', 'origin'], cwd=app_root, capture_output=True, text=True)
+                if fetch_result.returncode == 0:
+                    # Check if remote branch exists
+                    branch_check = subprocess.run(['git', 'ls-remote', '--heads', repo_url, branch], capture_output=True, text=True)
+                    if branch_check.stdout.strip():
+                        # Remote branch exists, hard reset local to match remote
+                        subprocess.run(['git', 'checkout', '-B', branch], cwd=app_root, capture_output=True, text=True)
+                        subprocess.run(['git', 'reset', '--hard', f'origin/{branch}'], cwd=app_root, capture_output=True, text=True)
+                        logger.info(f"Checked out and reset to remote branch origin/{branch}")
+                    else:
+                        # Remote branch does not exist, push local branch to create it
+                        subprocess.run(['git', 'checkout', '-B', branch], cwd=app_root, capture_output=True, text=True)
+                        push_result = subprocess.run(['git', 'push', '-u', 'origin', branch], cwd=app_root, capture_output=True, text=True)
+                        if push_result.returncode != 0:
+                            logger.warning(f"Could not push branch to remote: {push_result.stderr}")
+                        else:
+                            logger.info(f"Pushed local branch {branch} to remote origin")
+                else:
+                    logger.warning(f"Could not fetch from remote: {fetch_result.stderr}")
+            else:
+                logger.warning("No repository_url configured for remote origin.")
+
+            return True, "Git repository initialized and synchronized with remote successfully"
         except Exception as e:
             return False, f"Failed to initialize Git repository: {str(e)}"
     
