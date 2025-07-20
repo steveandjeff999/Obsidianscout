@@ -1,0 +1,491 @@
+{% extends "base.html" %}
+{% block title %}Edit Theme - {{ theme.name }}{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/theme-management.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('auth.admin_settings') }}">Admin Settings</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('themes.index') }}">Theme Management</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Edit Theme</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2>
+                        <i class="fas fa-edit"></i> Edit Theme: {{ theme.name }}
+                    </h2>
+                    <p class="text-muted">Customize colors, typography, and UI elements for your theme.</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('themes.preview_theme', theme_id=theme.id) }}" class="btn btn-outline-primary">
+                        <i class="fas fa-eye"></i> Preview
+                    </a>
+                    <a href="{{ url_for('themes.index') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Themes
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('themes.save_theme', theme_id=theme.id) }}">
+        <div class="row">
+            <!-- Theme Information -->
+            <div class="col-md-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Theme Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Theme Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="name" name="name" 
+                                   value="{{ theme.name }}" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" 
+                                      rows="3">{{ theme.description }}</textarea>
+                        </div>
+                        
+                        {% if not is_custom %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Note:</strong> This is a built-in theme. Saving will create a custom copy.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Color Customization -->
+            <div class="col-md-8">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Color Customization</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <!-- Primary Colors -->
+                            <div class="col-md-6">
+                                <h6 class="mb-3">Primary Colors</h6>
+                                
+                                <div class="mb-3">
+                                    <label for="color_primary" class="form-label">Primary</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_primary" 
+                                               name="color_primary" value="{{ theme.colors.primary }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors.primary }}" 
+                                               onchange="document.getElementById('color_primary').value = this.value">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="color_primary-light" class="form-label">Primary Light</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_primary-light" 
+                                               name="color_primary-light" value="{{ theme.colors['primary-light'] }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors['primary-light'] }}" 
+                                               onchange="document.getElementById('color_primary-light').value = this.value">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="color_primary-dark" class="form-label">Primary Dark</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_primary-dark" 
+                                               name="color_primary-dark" value="{{ theme.colors['primary-dark'] }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors['primary-dark'] }}" 
+                                               onchange="document.getElementById('color_primary-dark').value = this.value">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Secondary Colors -->
+                            <div class="col-md-6">
+                                <h6 class="mb-3">Secondary Colors</h6>
+                                
+                                <div class="mb-3">
+                                    <label for="color_secondary" class="form-label">Secondary</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_secondary" 
+                                               name="color_secondary" value="{{ theme.colors.secondary }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors.secondary }}" 
+                                               onchange="document.getElementById('color_secondary').value = this.value">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="color_success" class="form-label">Success</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_success" 
+                                               name="color_success" value="{{ theme.colors.success }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors.success }}" 
+                                               onchange="document.getElementById('color_success').value = this.value">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="color_danger" class="form-label">Danger</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_danger" 
+                                               name="color_danger" value="{{ theme.colors.danger }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors.danger }}" 
+                                               onchange="document.getElementById('color_danger').value = this.value">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="color_warning" class="form-label">Warning</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_warning" 
+                                               name="color_warning" value="{{ theme.colors.warning }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors.warning }}" 
+                                               onchange="document.getElementById('color_warning').value = this.value">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="color_info" class="form-label">Info</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_info" 
+                                               name="color_info" value="{{ theme.colors.info }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors.info }}" 
+                                               onchange="document.getElementById('color_info').value = this.value">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="row">
+                            <!-- UI Colors -->
+                            <div class="col-md-6">
+                                <h6 class="mb-3">UI Colors</h6>
+                                
+                                <div class="mb-3">
+                                    <label for="color_light" class="form-label">Light</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_light" 
+                                               name="color_light" value="{{ theme.colors.light }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors.light }}" 
+                                               onchange="document.getElementById('color_light').value = this.value">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="color_dark" class="form-label">Dark</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_dark" 
+                                               name="color_dark" value="{{ theme.colors.dark }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors.dark }}" 
+                                               onchange="document.getElementById('color_dark').value = this.value">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="color_navbar-bg" class="form-label">Navbar Background</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_navbar-bg" 
+                                               name="color_navbar-bg" value="{{ theme.colors['navbar-bg'] }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors['navbar-bg'] }}" 
+                                               onchange="document.getElementById('color_navbar-bg').value = this.value">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="color_card-bg" class="form-label">Card Background</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_card-bg" 
+                                               name="color_card-bg" value="{{ theme.colors['card-bg'] }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors['card-bg'] }}" 
+                                               onchange="document.getElementById('color_card-bg').value = this.value">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="color_card-border" class="form-label">Card Border</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_card-border" 
+                                               name="color_card-border" value="{{ theme.colors['card-border'] }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors['card-border'] }}" 
+                                               onchange="document.getElementById('color_card-border').value = this.value">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Text Colors -->
+                            <div class="col-md-6">
+                                <h6 class="mb-3">Text Colors</h6>
+                                
+                                <div class="mb-3">
+                                    <label for="color_text-main" class="form-label">Main Text</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_text-main" 
+                                               name="color_text-main" value="{{ theme.colors['text-main'] }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors['text-main'] }}" 
+                                               onchange="document.getElementById('color_text-main').value = this.value">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="color_text-muted" class="form-label">Muted Text</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_text-muted" 
+                                               name="color_text-muted" value="{{ theme.colors['text-muted'] }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors['text-muted'] }}" 
+                                               onchange="document.getElementById('color_text-muted').value = this.value">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="color_background" class="form-label">Page Background</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_background" 
+                                               name="color_background" value="{{ theme.colors.background }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors.background }}" 
+                                               onchange="document.getElementById('color_background').value = this.value">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="color_card-header" class="form-label">Card Header</label>
+                                    <div class="color-picker-container">
+                                        <input type="color" class="color-picker" id="color_card-header" 
+                                               name="color_card-header" value="{{ theme.colors['card-header'] }}">
+                                        <input type="text" class="form-control" 
+                                               value="{{ theme.colors['card-header'] }}" 
+                                               onchange="document.getElementById('color_card-header').value = this.value">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Typography and UI Settings -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Typography</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="typography_font-family-base" class="form-label">Base Font Family</label>
+                            <input type="text" class="form-control" id="typography_font-family-base" 
+                                   name="typography_font-family-base" 
+                                   value="{{ theme.typography['font-family-base'] }}">
+                            <div class="form-text">e.g., 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="typography_font-family-headings" class="form-label">Heading Font Family</label>
+                            <input type="text" class="form-control" id="typography_font-family-headings" 
+                                   name="typography_font-family-headings" 
+                                   value="{{ theme.typography['font-family-headings'] }}">
+                            <div class="form-text">e.g., 'Montserrat', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">UI Elements</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="ui_border-radius" class="form-label">Border Radius</label>
+                            <input type="text" class="form-control" id="ui_border-radius" 
+                                   name="ui_border-radius" value="{{ theme.ui['border-radius'] }}">
+                            <div class="form-text">e.g., 0.5rem</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="ui_transition-speed" class="form-label">Transition Speed</label>
+                            <input type="text" class="form-control" id="ui_transition-speed" 
+                                   name="ui_transition-speed" value="{{ theme.ui['transition-speed'] }}">
+                            <div class="form-text">e.g., 0.2s</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="ui_card-shadow" class="form-label">Card Shadow</label>
+                            <input type="text" class="form-control" id="ui_card-shadow" 
+                                   name="ui_card-shadow" value="{{ theme.ui['card-shadow'] }}">
+                            <div class="form-text">e.g., 0 .125rem .25rem rgba(0, 0, 0, .075)</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="ui_card-shadow-hover" class="form-label">Card Shadow (Hover)</label>
+                            <input type="text" class="form-control" id="ui_card-shadow-hover" 
+                                   name="ui_card-shadow-hover" value="{{ theme.ui['card-shadow-hover'] }}">
+                            <div class="form-text">e.g., 0 .5rem 1rem rgba(0, 0, 0, .15)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Preview -->
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Live Preview</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="livePreview" class="theme-preview">
+                            <h6>Theme Preview</h6>
+                            <div class="mb-3">
+                                <span class="badge bg-primary me-1">Primary</span>
+                                <span class="badge bg-secondary me-1">Secondary</span>
+                                <span class="badge bg-success me-1">Success</span>
+                                <span class="badge bg-danger me-1">Danger</span>
+                                <span class="badge bg-warning text-dark me-1">Warning</span>
+                                <span class="badge bg-info text-dark">Info</span>
+                            </div>
+                            <div class="mb-3">
+                                <button class="btn btn-primary me-2">Primary Button</button>
+                                <button class="btn btn-secondary me-2">Secondary Button</button>
+                                <button class="btn btn-success me-2">Success Button</button>
+                                <button class="btn btn-danger">Danger Button</button>
+                            </div>
+                            <div class="mb-3">
+                                <div class="alert alert-primary">Primary alert</div>
+                                <div class="alert alert-success">Success alert</div>
+                                <div class="alert alert-warning">Warning alert</div>
+                                <div class="alert alert-danger">Danger alert</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Theme
+                            </button>
+                            <a href="{{ url_for('themes.index') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            {% if is_custom %}
+                            <button type="button" class="btn btn-outline-danger" 
+                                    data-bs-toggle="modal" data-bs-target="#deleteModal">
+                                <i class="fas fa-trash"></i> Delete Theme
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Delete Modal -->
+{% if is_custom %}
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Delete Theme</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the theme "{{ theme.name }}"?</p>
+                <p class="text-danger"><strong>This action cannot be undone.</strong></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="{{ url_for('themes.delete_theme', theme_id=theme.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-danger">Delete Theme</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Update live preview when color inputs change
+    const colorInputs = document.querySelectorAll('input[type="color"]');
+    colorInputs.forEach(input => {
+        input.addEventListener('change', updateLivePreview);
+        input.addEventListener('input', updateLivePreview);
+    });
+    
+    // Update live preview when text inputs change
+    const textInputs = document.querySelectorAll('input[type="text"]');
+    textInputs.forEach(input => {
+        input.addEventListener('input', updateLivePreview);
+    });
+    
+    function updateLivePreview() {
+        const preview = document.getElementById('livePreview');
+        const colors = {};
+        
+        // Collect all color values
+        colorInputs.forEach(input => {
+            const key = input.name.replace('color_', '');
+            colors[key] = input.value;
+        });
+        
+        // Apply colors to preview
+        preview.style.setProperty('--primary', colors.primary || '#0d6efd');
+        preview.style.setProperty('--secondary', colors.secondary || '#6c757d');
+        preview.style.setProperty('--success', colors.success || '#198754');
+        preview.style.setProperty('--danger', colors.danger || '#dc3545');
+        preview.style.setProperty('--warning', colors.warning || '#ffc107');
+        preview.style.setProperty('--info', colors.info || '#0dcaf0');
+        preview.style.setProperty('--light', colors.light || '#f8f9fa');
+        preview.style.setProperty('--dark', colors.dark || '#212529');
+        preview.style.setProperty('--navbar-bg', colors['navbar-bg'] || '#ffffff');
+        preview.style.setProperty('--card-bg', colors['card-bg'] || '#ffffff');
+        preview.style.setProperty('--card-border', colors['card-border'] || '#dee2e6');
+        preview.style.setProperty('--text-main', colors['text-main'] || '#212529');
+        preview.style.setProperty('--text-muted', colors['text-muted'] || '#6c757d');
+        preview.style.setProperty('--background', colors.background || '#ffffff');
+    }
+    
+    // Initial preview update
+    updateLivePreview();
+});
+</script>
+{% endblock %} 
