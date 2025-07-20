@@ -31,8 +31,16 @@
                 
                 <div class="alert alert-warning">
                     <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>Additional Requirements:</strong> This will update the application to the latest version from Git. 
-                    Please make sure you have committed any local changes before proceeding.
+                    <strong>Update Method:</strong> 
+                    {% if update_method_info.method == 'git' %}
+                        This will update the application from the Git repository. 
+                        Please make sure you have committed any local changes before proceeding.
+                    {% elif update_method_info.method == 'direct_download' %}
+                        This will download and install the latest version from the configured download URL.
+                    {% elif update_method_info.method == 'manual' %}
+                        This will install updates from the manual_updates directory. 
+                        Please place update files in the manual_updates folder before proceeding.
+                    {% endif %}
                     A server restart will be required after the update.
                 </div>
 
@@ -79,6 +87,44 @@
                     <li>Install/update Python dependencies</li>
                     <li>Run database migrations</li>
                 </ul>
+
+                <!-- Update Method Configuration -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-cog me-2"></i> Update Method Configuration
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Current Method:</strong> 
+                                <span class="badge bg-info">{{ update_method_info.method|title }}</span>
+                            </div>
+                            <div class="col-md-6">
+                                <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#updateMethodModal">
+                                    <i class="fas fa-edit me-1"></i> Change Method
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">{{ update_method_info.description }}</small>
+                        </div>
+                        {% if update_method_info.method == 'git' and update_method_info.repository_url %}
+                            <div class="mt-2">
+                                <small><strong>Repository:</strong> {{ update_method_info.repository_url }}</small>
+                            </div>
+                        {% elif update_method_info.method == 'direct_download' and update_method_info.download_url %}
+                            <div class="mt-2">
+                                <small><strong>Download URL:</strong> {{ update_method_info.download_url }}</small>
+                            </div>
+                        {% elif update_method_info.method == 'manual' %}
+                            <div class="mt-2">
+                                <small><strong>Manual Updates Directory:</strong> {{ update_method_info.manual_dir }}</small>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
 
                 <div class="d-grid gap-2 d-md-flex justify-content-md-start mb-4">
                     <button id="startUpdateBtn" class="btn btn-primary">
@@ -137,6 +183,93 @@
             </div>
             <div class="card-body">
                 <pre>{{ changelog_txt }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Update Method Configuration Modal -->
+<div class="modal fade" id="updateMethodModal" tabindex="-1" aria-labelledby="updateMethodModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="updateMethodModalLabel">
+                    <i class="fas fa-cog me-2"></i> Configure Update Method
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="updateMethodForm">
+                    <div class="mb-3">
+                        <label for="updateMethod" class="form-label">Update Method</label>
+                        <select class="form-select" id="updateMethod" name="updateMethod" required>
+                            <option value="git" {% if update_method_info.method == 'git' %}selected{% endif %}>Git Repository</option>
+                            <option value="direct_download" {% if update_method_info.method == 'direct_download' %}selected{% endif %}>Direct Download</option>
+                            <option value="manual" {% if update_method_info.method == 'manual' %}selected{% endif %}>Manual Updates</option>
+                        </select>
+                        <div class="form-text">Choose how the application should check for and install updates.</div>
+                    </div>
+
+                    <!-- Git Configuration -->
+                    <div id="gitConfig" class="update-config-section" {% if update_method_info.method != 'git' %}style="display: none;"{% endif %}>
+                        <div class="mb-3">
+                            <label for="repositoryUrl" class="form-label">Repository URL</label>
+                            <input type="url" class="form-control" id="repositoryUrl" name="repositoryUrl" 
+                                   value="{{ update_method_info.repository_url or '' }}" 
+                                   placeholder="https://github.com/username/repository.git">
+                            <div class="form-text">The Git repository URL (GitHub, GitLab, etc.)</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="branch" class="form-label">Branch</label>
+                            <input type="text" class="form-control" id="branch" name="branch" 
+                                   value="{{ update_method_info.branch or 'main' }}" 
+                                   placeholder="main">
+                            <div class="form-text">The branch to pull updates from</div>
+                        </div>
+                    </div>
+
+                    <!-- Direct Download Configuration -->
+                    <div id="directDownloadConfig" class="update-config-section" {% if update_method_info.method != 'direct_download' %}style="display: none;"{% endif %}>
+                        <div class="mb-3">
+                            <label for="downloadUrl" class="form-label">Download URL</label>
+                            <input type="url" class="form-control" id="downloadUrl" name="downloadUrl" 
+                                   value="{{ update_method_info.download_url or '' }}" 
+                                   placeholder="https://example.com/updates/latest.zip">
+                            <div class="form-text">URL to download the latest version as a ZIP file</div>
+                        </div>
+                    </div>
+
+                    <!-- Manual Updates Configuration -->
+                    <div id="manualConfig" class="update-config-section" {% if update_method_info.method != 'manual' %}style="display: none;"{% endif %}>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Manual Updates:</strong> Place update files in the <code>manual_updates</code> directory. 
+                            The directory should contain the same structure as the application root.
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Manual Updates Directory</label>
+                            <input type="text" class="form-control" value="{{ update_method_info.manual_dir }}" readonly>
+                            <div class="form-text">This directory will be created automatically if it doesn't exist.</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="backupEnabled" name="backupEnabled" 
+                                   {% if update_method_info.backup_enabled %}checked{% endif %}>
+                            <label class="form-check-label" for="backupEnabled">
+                                Create backup before updating
+                            </label>
+                            <div class="form-text">Automatically create a backup of the current version before applying updates</div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveUpdateMethod">
+                    <i class="fas fa-save me-2"></i> Save Configuration
+                </button>
             </div>
         </div>
     </div>
@@ -320,6 +453,74 @@ document.addEventListener('DOMContentLoaded', function() {
         if (eventSource) {
             eventSource.close();
         }
+    });
+    
+    // Update Method Configuration
+    const updateMethodSelect = document.getElementById('updateMethod');
+    const updateConfigSections = document.querySelectorAll('.update-config-section');
+    const saveUpdateMethodBtn = document.getElementById('saveUpdateMethod');
+    
+    // Show/hide configuration sections based on selected method
+    function toggleConfigSections() {
+        const selectedMethod = updateMethodSelect.value;
+        
+        updateConfigSections.forEach(section => {
+            section.style.display = 'none';
+        });
+        
+        if (selectedMethod === 'git') {
+            document.getElementById('gitConfig').style.display = 'block';
+        } else if (selectedMethod === 'direct_download') {
+            document.getElementById('directDownloadConfig').style.display = 'block';
+        } else if (selectedMethod === 'manual') {
+            document.getElementById('manualConfig').style.display = 'block';
+        }
+    }
+    
+    // Handle method selection change
+    updateMethodSelect.addEventListener('change', toggleConfigSections);
+    
+    // Handle save configuration
+    saveUpdateMethodBtn.addEventListener('click', function() {
+        const formData = new FormData(document.getElementById('updateMethodForm'));
+        const config = {
+            updateMethod: formData.get('updateMethod'),
+            backupEnabled: formData.get('backupEnabled') === 'on'
+        };
+        
+        // Add method-specific configuration
+        if (config.updateMethod === 'git') {
+            config.repositoryUrl = formData.get('repositoryUrl');
+            config.branch = formData.get('branch');
+        } else if (config.updateMethod === 'direct_download') {
+            config.downloadUrl = formData.get('downloadUrl');
+        }
+        
+        // Send configuration to server
+        fetch('{{ url_for("admin.configure_update_method") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(config),
+            credentials: 'same-origin'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Close modal and reload page to show updated configuration
+                const modal = bootstrap.Modal.getInstance(document.getElementById('updateMethodModal'));
+                modal.hide();
+                location.reload();
+            } else {
+                alert('Error saving configuration: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error saving configuration:', error);
+            alert('Error saving configuration. Please try again.');
+        });
     });
 });
 </script>
