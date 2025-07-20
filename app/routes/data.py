@@ -537,3 +537,94 @@ def wipe_database():
         flash(f"Error wiping database: {str(e)}", "danger")
     
     return redirect(url_for('data.index'))
+
+@bp.route('/validate', methods=['GET'])
+@analytics_required
+@login_required
+def validate_data():
+    """Validate alliance points: API vs. scouting data for each match in the selected/current event."""
+    from app.utils.api_utils import get_matches_dual_api
+    from app.models import Event, Match, ScoutingData, Team
+    from app.utils.analysis import calculate_team_metrics
+    game_config = current_app.config.get('GAME_CONFIG', {})
+    current_event_code = game_config.get('current_event_code')
+    event_id = request.args.get('event_id', type=int)
+    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+    if event_id:
+        event = Event.query.get_or_404(event_id)
+    elif current_event_code:
+        event = Event.query.filter_by(code=current_event_code).first()
+    else:
+        event = events[0] if events else None
+    if not event:
+        flash('No event selected or found.', 'danger')
+        return redirect(url_for('data.index'))
+    # Get all matches for this event
+    matches = Match.query.filter_by(event_id=event.id).all()
+    # Get API matches (official scores)
+    try:
+        api_matches = get_matches_dual_api(event.code)
+    except Exception as e:
+        flash(f'Could not fetch official match data from API: {str(e)}', 'danger')
+        return redirect(url_for('data.index'))
+    # Build a lookup for API scores: (match_type, match_number) -> {red_score, blue_score}
+    api_score_lookup = {}
+    for m in api_matches:
+        key = (str(m.get('match_type', m.get('matchType', 'Qualification'))).lower(), str(m.get('match_number', m.get('matchNumber', 0))))
+        api_score_lookup[key] = {
+            'red_score': m.get('red_score', m.get('scoreRedFinal')),
+            'blue_score': m.get('blue_score', m.get('scoreBlueFinal'))
+        }
+    # Prepare comparison results
+    results = []
+    for match in matches:
+        key = (match.match_type.lower(), str(match.match_number))
+        api_scores = api_score_lookup.get(key, {'red_score': None, 'blue_score': None})
+        # Aggregate scouting data for this match
+        scouting = ScoutingData.query.filter_by(match_id=match.id).all()
+        red_total = 0
+        blue_total = 0
+        for sd in scouting:
+            try:
+                pts = sd.calculate_metric('tot')
+            except Exception:
+                pts = 0
+            if sd.alliance == 'red':
+                red_total += pts
+            elif sd.alliance == 'blue':
+                blue_total += pts
+        results.append({
+            'match_number': match.match_number,
+            'match_type': match.match_type,
+            'red_api': api_scores['red_score'],
+            'blue_api': api_scores['blue_score'],
+            'red_scout': red_total,
+            'blue_scout': blue_total,
+            'discrepancy_red': (api_scores['red_score'] is not None and red_total != api_scores['red_score']),
+            'discrepancy_blue': (api_scores['blue_score'] is not None and blue_total != api_scores['blue_score'])
+        })
+    # Custom sort order: practice, qualification, semifinals, finals
+    match_type_order = {
+        'practice': 1,
+        'qualification': 2,
+        'qualifier': 2,
+        'quarterfinal': 3,
+        'quarter-finals': 3,
+        'quarterfinals': 3,
+        'semifinal': 4,
+        'semifinals': 4,
+        'semi-final': 4,
+        'semi-finals': 4,
+        'final': 5,
+        'finals': 5
+    }
+    def match_sort_key(row):
+        type_key = match_type_order.get(row['match_type'].lower(), 99)
+        # Try to sort match_number numerically if possible, else as string
+        try:
+            num_key = int(str(row['match_number']).split('-')[0])
+        except Exception:
+            num_key = str(row['match_number'])
+        return (type_key, num_key, str(row['match_number']))
+    results = sorted(results, key=match_sort_key)
+    return render_template('data/validate.html', results=results, events=events, selected_event=event)

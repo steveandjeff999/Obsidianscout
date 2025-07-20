@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Data Validation: API vs. Scouting Points</h2>
+<form method="get" action="">
+  <label for="event_id">Select Event:</label>
+  <select name="event_id" id="event_id" onchange="this.form.submit()">
+    {% for event in events %}
+      <option value="{{ event.id }}" {% if event.id == selected_event.id %}selected{% endif %}>{{ event.name }}</option>
+    {% endfor %}
+  </select>
+</form>
+<table class="table table-bordered mt-3">
+  <thead>
+    <tr>
+      <th>Match #</th>
+      <th>Type</th>
+      <th>Alliance</th>
+      <th>API Points</th>
+      <th>Scouting Points</th>
+      <th>Discrepancy</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in results %}
+      <tr>
+        <td rowspan="2">{{ row.match_number }}</td>
+        <td rowspan="2">{{ row.match_type }}</td>
+        <td>Red</td>
+        <td>{{ row.red_api if row.red_api is not none else 'N/A' }}</td>
+        <td>{{ row.red_scout }}</td>
+        <td {% if row.discrepancy_red %}style="background-color: #f8d7da; color: #721c24;"{% endif %}>
+          {% if row.discrepancy_red %}Mismatch{% else %}OK{% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Blue</td>
+        <td>{{ row.blue_api if row.blue_api is not none else 'N/A' }}</td>
+        <td>{{ row.blue_scout }}</td>
+        <td {% if row.discrepancy_blue %}style="background-color: #f8d7da; color: #721c24;"{% endif %}>
+          {% if row.discrepancy_blue %}Mismatch{% else %}OK{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %} 

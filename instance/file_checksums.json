@@ -1,8 +1,8 @@
 {
   "checksums": {
     "app_config.json": {
-      "checksum": "744c406dd1aeafd85afe84111bf9a0824cf3fb3409976e2a0b4418bc41825020",
-      "modified": 1752976286.4618146,
+      "checksum": "74010ccc74991aef48c88fafc120ec77bcbfd37465c95752feb064522877272d",
+      "modified": 1753035793.8883343,
       "size": 205
     },
     "CREATE_RELEASE_INSTRUCTIONS.md": {
@@ -141,9 +141,9 @@
       "size": 12256
     },
     "app\\routes\\data.py": {
-      "checksum": "9149cb3d39406104217bbe3e75822f84f4f6706f20d826b08201d9341ef130be",
-      "modified": 1752975295.9901028,
-      "size": 23870
+      "checksum": "0ebdab8ed31af9e0af8c0df4c1b41007bc55af6ed7fc3d9a68aa93d29fb4f181",
+      "modified": 1753035574.835791,
+      "size": 27816
     },
     "app\\routes\\events.py": {
       "checksum": "c546aa778d3e71a07482940132dda5345c4539d9b1e9caee7be94204cd0dc64b",
@@ -206,9 +206,9 @@
       "size": 2120
     },
     "app\\static\\css\\styles.css": {
-      "checksum": "bafe7a54ef6d182bdee789ae34d7554f422f97db20ee771162f098891e837b64",
-      "modified": 1752975296.0021276,
-      "size": 39688
+      "checksum": "9cc895d36594ae225160500c49e401d457996612889dedee4159d25d26b23cdd",
+      "modified": 1753034727.5026357,
+      "size": 44510
     },
     "app\\static\\css\\theme-management.css": {
       "checksum": "d6d772a1db0311741635f25e85d2a1110f03f60d441cacb1d88bebd70d86d3ad",
@@ -266,9 +266,9 @@
       "size": 19927
     },
     "app\\static\\js\\scripts.js": {
-      "checksum": "f6d69f32c66ad35054247eaa3fc450666932d039914549be43e1a191796b8369",
-      "modified": 1752975296.0150206,
-      "size": 146939
+      "checksum": "11e099b2f2b73f1bb1e7f943c43638943e44caca4b57b23710cdda377244e24b",
+      "modified": 1753034885.4517047,
+      "size": 88646
     },
     "app\\templates\\base.html": {
       "checksum": "11144ba04f81f1d4d08319a17056830dc827538459d8e323755aa710d160e0c7",
@@ -426,9 +426,14 @@
       "size": 23364
     },
     "app\\templates\\data\\index.html": {
-      "checksum": "dc4c9f34847a6b6dea5d0520315739fc4d7d16b9044e465a35882f3146f8c59a",
-      "modified": 1752975296.0515406,
-      "size": 9054
+      "checksum": "bd31a2b368a6e01d48ab13f01d7044cc49b341f32b54a8548f3aa4ef1c4bb878",
+      "modified": 1753035266.2586243,
+      "size": 9269
+    },
+    "app\\templates\\data\\validate.html": {
+      "checksum": "2c16b7fed2e425979b9965595d128c87029374db37620305b6aa2024f5044104",
+      "modified": 1753035140.168141,
+      "size": 1590
     },
     "app\\templates\\data\\Excel\\Data.xlsx": {
       "checksum": "993f7b136b1b4a2c134d72d0ce258edf6bc8a548a4abfd44adbb15cb99a9a192",
@@ -771,9 +776,9 @@
       "size": 151
     },
     "config\\game_config_backup.json": {
-      "checksum": "f037abb89fde27b15803748ff21b1faa5d0728e6dc94065b985e66dc67fe199e",
-      "modified": 1752975296.1573434,
-      "size": 7294
+      "checksum": "17ff5c54c30380f0cb35890be0423f28490845d18023f03bb516e239b81b61e2",
+      "modified": 1753035922.6376073,
+      "size": 7611
     },
     "config\\pit_config.json": {
       "checksum": "467f79c5c87ea39e4c6a527a822ec37d2a7ce5dc83a4292a87e22a9fafc24632",
@@ -956,5 +961,5 @@
       "size": 946
     }
   },
-  "created": "2025-07-19T21:57:55.298631"
+  "created": "2025-07-20T13:25:36.409701"
 }

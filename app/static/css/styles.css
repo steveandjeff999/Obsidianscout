@@ -1738,3 +1738,164 @@ body {
     position: relative;
     overflow-y: auto;
 }
+
+/* Mobile dropdown positioning fixes */
+@media (max-width: 767.98px) {
+    /* Force dropdowns to position left on mobile to prevent going off-screen */
+    .navbar-actions .dropdown-menu {
+        left: auto !important;
+        right: 0 !important;
+        transform: none !important;
+        position: fixed !important;
+        top: 60px !important; /* Position below navbar */
+        width: 280px !important; /* Fixed width for mobile */
+        max-width: calc(100vw - 20px) !important; /* Ensure it doesn't exceed screen width */
+        margin: 0 10px !important;
+        z-index: 1050 !important;
+    }
+    
+    /* Ensure dropdowns don't go off the right edge */
+    .navbar-actions .dropdown-menu.dropdown-menu-end {
+        right: 10px !important;
+        left: auto !important;
+    }
+    
+    /* If dropdown would go off-screen, position it from the left instead */
+    .navbar-actions .dropdown.show .dropdown-menu {
+        right: auto !important;
+        left: 10px !important;
+    }
+    
+    /* Add backdrop for mobile dropdowns */
+}
+    
+    /* Improve dropdown item touch targets on mobile */
+    .navbar-actions .dropdown-item {
+        padding: 12px 16px !important;
+        font-size: 16px !important; /* Prevents iOS zoom */
+        min-height: 44px !important; /* Apple's recommended touch target size */
+        display: flex !important;
+        align-items: center !important;
+    }
+    
+    /* Make dropdown headers more prominent on mobile */
+    .navbar-actions .dropdown-header {
+        padding: 12px 16px !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Ensure dropdown dividers are visible on mobile */
+    .navbar-actions .dropdown-divider {
+        margin: 8px 0 !important;
+        border-width: 1px !important;
+    }
+    
+    /* Fix for nested dropdowns in navbar */
+    .navbar-nav .dropdown-menu {
+        position: static !important;
+        float: none !important;
+        width: 100% !important;
+        margin: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        background-color: rgba(0, 0, 0, 0.05) !important;
+    }
+    
+    /* Ensure main navbar dropdowns work properly on mobile */
+    .navbar-nav .dropdown-menu .dropdown-item {
+        padding: 8px 20px !important;
+        color: var(--text-main) !important;
+    }
+    
+    .navbar-nav .dropdown-menu .dropdown-item:hover {
+        background-color: rgba(0, 0, 0, 0.1) !important;
+    }
+}
+
+/* Additional mobile optimizations for very small screens */
+@media (max-width: 480px) {
+    .navbar-actions .dropdown-menu {
+        width: calc(100vw - 20px) !important;
+        right: 10px !important;
+        left: 10px !important;
+    }
+    
+    /* Stack user and settings buttons vertically on very small screens */
+    .navbar-actions {
+        flex-direction: column !important;
+        align-items: flex-end !important;
+        gap: 8px !important;
+    }
+    
+    .navbar-actions .dropdown {
+        width: 100% !important;
+    }
+    
+    .navbar-actions .dropdown .btn {
+        width: 100% !important;
+        justify-content: space-between !important;
+    }
+}
+
+/* Ensure dropdowns work properly in dark mode on mobile */
+@media (max-width: 767.98px) {
+    .dark-mode .navbar-actions .dropdown-menu {
+        background-color: #2d3338 !important;
+        border-color: #444 !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+    }
+    
+    .dark-mode .navbar-actions .dropdown-menu::before {
+        background: rgba(0, 0, 0, 0.7) !important;
+    }
+}
+
+/* Fix for dropdown positioning when navbar is scrolled */
+@media (max-width: 767.98px) {
+    .navbar-scrolled .navbar-actions .dropdown-menu {
+        top: 70px !important; /* Adjust for scrolled navbar height */
+    }
+}
+
+/* Ensure dropdown backdrop works properly */
+.dropdown-backdrop {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+    z-index: 1049 !important;
+}
+
+/* Prevent body scroll when dropdown is open on mobile */
+@media (max-width: 767.98px) {
+    body.dropdown-open {
+        overflow: hidden !important;
+    }
+}
+
+/* Ensure dropdown items are properly styled in all themes */
+.navbar-actions .dropdown-item {
+    transition: all 0.2s ease;
+}
+
+.navbar-actions .dropdown-item:hover {
+    transform: translateX(4px);
+}
+
+.navbar-actions .dropdown-item:active {
+    transform: translateX(2px);
+}
+
+/* Improve dropdown header styling */
+.navbar-actions .dropdown-header {
+    background-color: rgba(0, 0, 0, 0.02);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.dark-mode .navbar-actions .dropdown-header {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+}
