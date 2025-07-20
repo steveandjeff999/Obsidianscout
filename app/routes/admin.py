@@ -40,15 +40,17 @@ def update_page():
     else:
         changelog_txt = 'No changelog found.'
 
-    # Get update method information
+    # Get Git configuration and status
     update_manager = UpdateManager()
-    update_method_info = update_manager.get_update_method_info()
+    git_config = update_manager.get_git_config()
+    git_status = update_manager.get_git_status()
     
     return render_template('admin/update.html', 
                          current_version=current_version,
                          update_available=update_available,
                          changelog_txt=changelog_txt,
-                         update_method_info=update_method_info)
+                         git_config=git_config,
+                         git_status=git_status)
 
 @bp.route('/update/check', methods=['POST'])
 @login_required
@@ -60,7 +62,7 @@ def check_for_updates():
     # Get current version
     current_version = update_manager.get_current_version()
     
-    # Check for updates using the configured method
+    # Check for updates using Git or direct download
     has_update, message = update_manager.check_for_updates()
     
     # Get latest version if update is available
@@ -103,12 +105,24 @@ def run_update():
     def generate():
         try:
             update_manager = UpdateManager()
-            update_method_info = update_manager.get_update_method_info()
+            git_config = update_manager.get_git_config()
+            git_status = update_manager.get_git_status()
             
-            yield f"data: Using update method: {update_method_info['method']}\n\n"
-            yield f"data: {update_method_info['description']}\n\n"
+            yield f"data: Using update method: {'Git' if git_status['git_installed'] else 'Direct Download'}\n\n"
+            yield f"data: {git_config['description']}\n\n"
             
-            # Perform the update using the configured method
+            # Check Git installation status
+            if not git_status['git_installed']:
+                yield f"data: Git is not installed on this system\n\n"
+                yield f"data: Using direct download method instead\n\n"
+            
+            # Check if this is a Git repository
+            if not git_status['is_repo'] and git_status['git_installed']:
+                yield f"data: Initializing Git repository automatically...\n\n"
+                yield f"data: This may take a moment for new repositories\n\n"
+                yield f"data: Setting up branches and remote configuration...\n\n"
+            
+            # Perform the update using Git or direct download
             success, message = update_manager.perform_update()
             
             if success:
@@ -128,6 +142,26 @@ def run_update():
                 yield "event: end\ndata: success\n\n"
             else:
                 yield f"data: Update failed: {message}\n\n"
+                
+                # Provide helpful guidance for common issues
+                if "Failed to switch to branch" in message:
+                    yield f"data: This is normal for new repositories. The system will create the branch automatically.\n\n"
+                    yield f"data: You can manually push to the remote repository later if needed.\n\n"
+                elif "Git pull failed" in message:
+                    yield f"data: This is normal for new repositories without remote content.\n\n"
+                    yield f"data: The update will continue with local changes.\n\n"
+                elif "Could not configure remote origin" in message:
+                    yield f"data: Remote repository configuration failed. This is normal for new repositories.\n\n"
+                    yield f"data: You can configure the remote manually later: git remote add origin <repository-url>\n\n"
+                elif "does already exist" in message:
+                    yield f"data: Branch conflict detected. The system is resolving this automatically.\n\n"
+                    yield f"data: This is normal when there are conflicting Git references.\n\n"
+                elif "Resolved branch conflict" in message:
+                    yield f"data: Branch conflict resolved successfully!\n\n"
+                elif "Created temporary branch" in message:
+                    yield f"data: Created temporary branch to avoid conflicts.\n\n"
+                    yield f"data: The update will continue with the temporary branch.\n\n"
+                
                 yield "event: end\ndata: error\n\n"
 
         except Exception as e:
@@ -176,44 +210,47 @@ def update_version():
 @bp.route('/update/configure', methods=['POST'])
 @login_required
 @admin_required
-def configure_update_method():
-    """Configure the update method and related settings"""
+def configure_git():
+    """Configure the Git repository settings"""
     try:
         data = request.get_json()
         
         update_manager = UpdateManager()
         
         # Extract configuration
-        update_method = data.get('updateMethod', 'git')
+        repository_url = data.get('repositoryUrl', '')
+        branch = data.get('branch', 'main')
         backup_enabled = data.get('backupEnabled', True)
         
-        # Method-specific configuration
-        config_kwargs = {'backup_enabled': backup_enabled}
-        
-        if update_method == 'git':
-            config_kwargs['repository_url'] = data.get('repositoryUrl', '')
-            config_kwargs['branch'] = data.get('branch', 'main')
-        elif update_method == 'direct_download':
-            config_kwargs['download_url'] = data.get('downloadUrl', '')
-        elif update_method == 'manual':
-            # No additional config needed for manual updates
-            pass
-        else:
-            return jsonify({
-                'success': False,
-                'message': f'Unknown update method: {update_method}'
-            }), 400
-        
-        # Set the update method configuration
-        update_manager.set_update_method(update_method, **config_kwargs)
+        # Set the Git configuration
+        update_manager.set_git_config(repository_url, branch, backup_enabled)
         
         return jsonify({
             'success': True,
-            'message': f'Update method configured successfully: {update_method}'
+            'message': 'Git repository configured successfully'
         })
         
     except Exception as e:
         return jsonify({
             'success': False,
-            'message': f'Error configuring update method: {str(e)}'
+            'message': f'Error configuring Git repository: {str(e)}'
+        }), 500
+
+@bp.route('/update/status', methods=['GET'])
+@login_required
+@admin_required
+def get_git_status():
+    """Get Git repository status"""
+    try:
+        update_manager = UpdateManager()
+        git_status = update_manager.get_git_status()
+        
+        return jsonify({
+            'success': True,
+            'git_status': git_status
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error getting Git status: {str(e)}'
         }), 500

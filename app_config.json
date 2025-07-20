@@ -1,9 +1,7 @@
 {
     "version": "1.0.0.8",
     "last_updated": "2025-07-08T19:07:00",
-    "repository_url": "https://github.com/example/repo.git",
+    "repository_url": "https://github.com/steveandjeff999/Obsidianscout.git",
     "branch": "main",
-    "update_method": "direct_download",
-    "backup_enabled": true,
-    "download_url": "https://github.com/steveandjeff999/Obsidianscout/archive/refs/heads/main.zip"
+    "backup_enabled": true
 }

@@ -1,100 +1,112 @@
-# Update System - No Git Repository Required
+# Update System - Git Repository Required
 
-The application now supports multiple update methods, allowing you to update without requiring a Git repository.
+The application now uses a Git-only update system powered by GitPython, making it work with any Git repository (not just GitHub).
 
-## 🎯 **Update Methods**
+## 🎯 **Overview**
 
-### 1. **Git Repository** (Original Method)
-- Updates from a Git repository (GitHub, GitLab, etc.)
-- Requires the application to be a Git repository
-- Pulls latest changes and updates dependencies
+The update system has been simplified to use only Git repositories for updates. This provides:
 
-### 2. **Direct Download** (New Method)
-- Downloads updates from a direct URL
-- No Git repository required
-- Downloads ZIP files and extracts them
-- Perfect for hosting updates on any web server
+- **Universal compatibility** with any Git hosting service (GitHub, GitLab, Bitbucket, etc.)
+- **Reliable updates** using GitPython instead of subprocess calls
+- **Better error handling** and status reporting
+- **Automatic branch switching** and conflict resolution
+- **Repository status monitoring** in the web interface
 
-### 3. **Manual Updates** (New Method)
-- Updates from a local `manual_updates` directory
-- No internet connection required
-- Place update files in the directory and run update
-- Ideal for air-gapped environments
+## 🔧 **Requirements**
 
-## 🔧 **Configuration**
+### Python Dependencies
+The system requires GitPython to be installed:
+```bash
+pip install GitPython==3.1.44
+```
 
-### Default Configuration
-The application is now configured to use **Direct Download** as the default update method, pointing to the GitHub repository ZIP file.
+### Git Repository
+Your application directory must be a Git repository. If it's not already, you can initialize it using the provided script:
+```bash
+python init_git.py
+```
 
-### Web Interface
+## 📋 **Setup Instructions**
+
+### 1. Initialize Git Repository (if needed)
+If your application directory is not already a Git repository:
+
+```bash
+python init_git.py
+```
+
+This script will:
+- Initialize a Git repository in the current directory
+- Add all files and create an initial commit
+- Optionally set up a remote origin
+- Guide you through the configuration process
+
+### 2. Configure Repository URL
+Update your `app_config.json` file with your repository information:
+
+```json
+{
+    "version": "1.0.0.8",
+    "last_updated": "2025-07-08T19:07:00",
+    "repository_url": "https://github.com/steveandjeff999/Obsidianscout.git",
+    "branch": "main",
+    "backup_enabled": true
+}
+```
+
+### 3. Web Interface Configuration
 1. Go to **Admin Settings** → **Application Update**
-2. Click **"Change Method"** button
-3. Select your preferred update method
-4. Configure method-specific settings
+2. Click **"Configure"** button
+3. Enter your repository URL and branch
+4. Enable/disable backup creation
 5. Save configuration
 
-### Manual Configuration
-Edit `app_config.json` in the root directory:
+## 🌐 **Supported Git Hosting Services**
 
-```json
-{
-  "version": "1.0.0.8",
-  "update_method": "direct_download",
-  "backup_enabled": true,
-  "download_url": "https://github.com/steveandjeff999/Obsidianscout/archive/refs/heads/main.zip",
-  "repository_url": "https://github.com/steveandjeff999/Obsidianscout.git",
-  "branch": "main"
-}
-```
+The system works with any Git hosting service:
 
-## 📁 **Manual Updates Setup**
+- **GitHub** (recommended)
+- **GitLab**
+- **Bitbucket**
+- **Gitea**
+- **Self-hosted Git servers**
+- Any other Git-compatible hosting service
 
-### Directory Structure
-Create a `manual_updates` directory in your application root:
+## 🔄 **How Updates Work**
 
-```
-5454Scout2026/
-├── manual_updates/
-│   ├── app/
-│   ├── config/
-│   ├── requirements.txt
-│   ├── app_config.json
-│   └── ... (other files)
-├── app/
-├── config/
-└── ... (existing files)
-```
+### Version Checking
+1. **GitHub repositories**: Fetches `app_config.json` from the raw content URL
+2. **Other repositories**: Uses GitPython to fetch and compare commits
+3. **Version comparison**: Uses semantic versioning to determine if updates are available
 
-### How to Use Manual Updates
-1. **Download** the latest version files
-2. **Extract** them to the `manual_updates` directory
-3. **Run** the update from the web interface
-4. The system will copy files and update dependencies
+### Update Process
+1. **Backup creation** (if enabled)
+2. **Branch switching** (if needed)
+3. **Git pull** using GitPython
+4. **Dependency installation** (`pip install -r requirements.txt`)
+5. **Database migrations** (`flask db upgrade`)
+6. **Version update** in local `app_config.json`
 
-## 🌐 **Direct Download Setup**
+## 🛠 **Web Interface Features**
 
-### Server Requirements
-- Web server hosting ZIP files
-- `app_config.json` accessible via HTTP
-- ZIP file containing the complete application
-
-### URL Structure
-- **ZIP file**: `https://github.com/steveandjeff999/Obsidianscout/archive/refs/heads/main.zip`
-- **Config file**: `https://raw.githubusercontent.com/steveandjeff999/Obsidianscout/main/app_config.json`
+### Repository Status
+The web interface shows:
+- **Git repository status** (is it a valid Git repo?)
+- **Current branch** and last commit
+- **Working directory status** (clean/dirty)
+- **Remote URLs** configured
 
 ### Configuration
-```json
-{
-  "update_method": "direct_download",
-  "download_url": "https://github.com/steveandjeff999/Obsidianscout/archive/refs/heads/main.zip"
-}
-```
+- **Repository URL** configuration
+- **Branch selection**
+- **Backup settings**
+- **Real-time status updates**
 
-### GitHub Integration
-The system automatically handles GitHub ZIP URLs by:
-- Converting ZIP URLs to raw content URLs for version checking
-- Properly extracting GitHub repository structure
-- Supporting both GitHub ZIP downloads and raw content access
+### Update Console
+- **Real-time output** streaming
+- **Colored status messages**
+- **Error reporting**
+- **Progress tracking**
 
 ## 🔒 **Security Features**
 
@@ -110,63 +122,112 @@ The system automatically handles GitHub ZIP URLs by:
 
 ## 🚀 **Usage Examples**
 
-### Manual Updates (Recommended for Non-Git Users)
-1. **Download** latest version from releases
-2. **Extract** to `manual_updates/` directory
-3. **Configure** update method to "Manual"
-4. **Run** update from web interface
+### Basic Setup
+```bash
+# 1. Initialize Git repository
+python init_git.py
 
-### Direct Download (Default)
-1. **System** is pre-configured with GitHub ZIP URL
-2. **No configuration** required for GitHub updates
-3. **Automatic** version checking and updates
-4. **Run** update from web interface
+# 2. Configure repository URL in app_config.json
+# 3. Use web interface to configure updates
+# 4. Check for updates and install
+```
 
-### Git Repository (Original)
-1. **Initialize** Git repository
-2. **Configure** repository URL
-3. **Set** update method to "Git"
-4. **Run** update from web interface
+### Manual Git Commands
+```bash
+# Initialize repository manually
+git init
+git add .
+git commit -m "Initial commit"
+
+# Add remote origin
+git remote add origin https://github.com/steveandjeff999/Obsidianscout.git
+
+# Push to remote
+git push -u origin main
+```
+
+## ⚠️ **Important Notes**
+
+### Before Updating
+- **Commit local changes** before running updates
+- **Backup your data** (database, config files, custom modifications)
+- **Test in development** environment first
+
+### Repository Requirements
+- **app_config.json** must exist in the root of your repository
+- **requirements.txt** must be present for dependency updates
+- **Database migrations** should be included if schema changes are made
+
+### Error Handling
+- **Network issues** are handled gracefully
+- **Merge conflicts** will prevent updates (resolve manually)
+- **Permission issues** are reported clearly
+- **Invalid repositories** are detected and reported
 
 ## 🔧 **Troubleshooting**
 
 ### Common Issues
 
-**"Manual updates directory not found"**
-- Create `manual_updates` directory in application root
-- Ensure proper file structure
+#### "Not a Git Repository" Error
+```bash
+# Solution: Initialize Git repository
+python init_git.py
+```
 
-**"Download failed"**
-- Check download URL is accessible
-- Verify ZIP file format
+#### "Repository URL not configured" Error
+```json
+// Update app_config.json
+{
+    "repository_url": "https://github.com/steveandjeff999/Obsidianscout.git"
+}
+```
+
+#### "Git pull failed" Error
 - Check network connectivity
+- Verify repository URL is correct
+- Ensure you have proper permissions
+- Check for merge conflicts
 
-**"Backup failed"**
-- Ensure write permissions in application directory
-- Check available disk space
+#### "Failed to install dependencies" Error
+- Verify `requirements.txt` exists
+- Check Python environment
+- Ensure pip is available
 
-### Logs
-Update logs are displayed in real-time in the web interface console.
+### Debug Information
+The web interface provides detailed error messages and console output to help diagnose issues.
 
-## 📋 **Migration from Git-Only System**
+## 📝 **Migration from Old System**
 
-If you were previously using Git-only updates:
+If you're migrating from the previous multi-method update system:
 
-1. **Backup** your current configuration
-2. **Choose** your preferred update method
-3. **Configure** the new method settings
-4. **Test** with a small update first
-5. **Switch** to the new method permanently
+1. **Remove old configuration** from `app_config.json`:
+   ```json
+   // Remove these fields:
+   "update_method": "direct_download",
+   "download_url": "..."
+   ```
 
-## 🎉 **Benefits**
+2. **Add Git configuration**:
+   ```json
+   {
+       "repository_url": "https://github.com/steveandjeff999/Obsidianscout.git",
+       "branch": "main",
+       "backup_enabled": true
+   }
+   ```
 
-✅ **No Git repository required** for most methods  
-✅ **Multiple update options** for different environments  
-✅ **Automatic backups** before updates  
-✅ **Web-based configuration** interface  
-✅ **Real-time update progress** monitoring  
-✅ **Version validation** and comparison  
-✅ **Air-gapped environment** support  
-✅ **Simple file-based updates**  
+3. **Initialize Git repository** if needed:
+   ```bash
+   python init_git.py
+   ```
 
-The new update system provides flexibility for different deployment scenarios while maintaining the reliability and safety of the original Git-based system. 
+4. **Use web interface** to configure and test updates
+
+## 🎉 **Benefits of Git-Only System**
+
+- **Simplified configuration** - no need to choose between multiple update methods
+- **Better reliability** - GitPython provides robust Git operations
+- **Universal compatibility** - works with any Git hosting service
+- **Enhanced monitoring** - detailed repository status and error reporting
+- **Automatic conflict resolution** - handles branch switching and merging
+- **Professional workflow** - integrates with standard Git practices 
