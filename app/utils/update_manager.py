@@ -590,7 +590,6 @@ class UpdateManager:
                     # --- PRESERVE FILES ---
                     app_root = os.path.dirname(self.config_path)
                     preserve_files = [
-                        os.path.abspath(os.path.join(app_root, 'app_config.json')),
                         os.path.abspath(os.path.join(app_root, 'instance', 'scouting.db')),
                         os.path.abspath(os.path.join(app_root, 'config', 'pit_config.json')),
                     ]
