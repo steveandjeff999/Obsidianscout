@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Create New Theme{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/theme-management.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('auth.admin_settings') }}">Admin Settings</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('themes.index') }}">Theme Management</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Create Theme</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2>
+                        <i class="fas fa-plus"></i> Create New Theme
+                    </h2>
+                    <p class="text-muted">Create a custom theme based on an existing one.</p>
+                </div>
+                <a href="{{ url_for('themes.index') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Themes
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Theme Information</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('themes.save_new_theme') }}">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="theme_id" class="form-label">Theme ID <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="theme_id" name="theme_id" required
+                                           placeholder="e.g., my_custom_theme">
+                                    <div class="form-text">Use lowercase letters, numbers, and underscores only. This will be used as the internal identifier.</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="name" class="form-label">Theme Name <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="name" name="name" required
+                                           placeholder="e.g., My Custom Theme">
+                                    <div class="form-text">This is the display name that users will see.</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="3"
+                                      placeholder="Describe your custom theme..."></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="base_theme" class="form-label">Base Theme</label>
+                            <select class="form-select" id="base_theme" name="base_theme">
+                                {% for theme_id, theme in base_themes.items() %}
+                                <option value="{{ theme_id }}" {% if theme_id == 'default' %}selected{% endif %}>
+                                    {{ theme.name }} - {{ theme.description }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Choose an existing theme to use as a starting point.</div>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Tip:</strong> You can customize colors, typography, and UI elements after creating the theme. 
+                            The base theme will provide a good starting point for your customizations.
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Create Theme
+                            </button>
+                            <a href="{{ url_for('themes.index') }}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Theme Preview</h5>
+                </div>
+                <div class="card-body">
+                    <div id="themePreview">
+                        <p class="text-muted">Select a base theme to see a preview of its colors and styling.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="mb-0">Creating Custom Themes</h5>
+                </div>
+                <div class="card-body">
+                    <h6>Getting Started</h6>
+                    <ul class="small">
+                        <li>Choose a base theme that's close to your desired look</li>
+                        <li>Use descriptive names and IDs for easy identification</li>
+                        <li>Test your theme with the preview feature</li>
+                        <li>Consider accessibility and readability</li>
+                    </ul>
+                    
+                    <h6>Best Practices</h6>
+                    <ul class="small">
+                        <li>Ensure good contrast ratios</li>
+                        <li>Keep color schemes consistent</li>
+                        <li>Test in different lighting conditions</li>
+                        <li>Backup themes before major changes</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const baseThemeSelect = document.getElementById('base_theme');
+    const themePreview = document.getElementById('themePreview');
+    
+    function updatePreview() {
+        const selectedThemeId = baseThemeSelect.value;
+        
+        // Fetch theme preview data
+        fetch(`/themes/api/preview/${selectedThemeId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    themePreview.innerHTML = '<p class="text-danger">Error loading preview</p>';
+                    return;
+                }
+                
+                // Create preview HTML
+                const previewHTML = `
+                    <div class="theme-preview">
+                        <h6>${data.name}</h6>
+                        <div class="mb-2">
+                            <small class="text-muted">Color Palette:</small>
+                            <div class="d-flex gap-1 mt-1">
+                                <div class="color-preview" style="background-color: ${data.colors?.primary || '#0d6efd'}; width: 20px; height: 20px; border-radius: 3px;" title="Primary"></div>
+                                <div class="color-preview" style="background-color: ${data.colors?.secondary || '#6c757d'}; width: 20px; height: 20px; border-radius: 3px;" title="Secondary"></div>
+                                <div class="color-preview" style="background-color: ${data.colors?.success || '#198754'}; width: 20px; height: 20px; border-radius: 3px;" title="Success"></div>
+                                <div class="color-preview" style="background-color: ${data.colors?.danger || '#dc3545'}; width: 20px; height: 20px; border-radius: 3px;" title="Danger"></div>
+                                <div class="color-preview" style="background-color: ${data.colors?.warning || '#ffc107'}; width: 20px; height: 20px; border-radius: 3px;" title="Warning"></div>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <small class="text-muted">Sample Elements:</small>
+                            <div class="mt-1">
+                                <span class="badge bg-primary me-1">Primary</span>
+                                <span class="badge bg-secondary me-1">Secondary</span>
+                                <span class="badge bg-success me-1">Success</span>
+                                <span class="badge bg-danger me-1">Danger</span>
+                                <span class="badge bg-warning text-dark">Warning</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                themePreview.innerHTML = previewHTML;
+            })
+            .catch(error => {
+                console.error('Error fetching theme preview:', error);
+                themePreview.innerHTML = '<p class="text-danger">Error loading preview</p>';
+            });
+    }
+    
+    // Update preview when base theme changes
+    baseThemeSelect.addEventListener('change', updatePreview);
+    
+    // Initial preview
+    updatePreview();
+});
+</script>
+{% endblock %} 

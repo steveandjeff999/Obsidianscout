@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Theme Management{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/theme-management.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('auth.admin_settings') }}">Admin Settings</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Theme Management</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2>
+                        <i class="fas fa-palette"></i> Theme Management
+                    </h2>
+                    <p class="text-muted">Customize the appearance of your scouting platform with custom themes.</p>
+                </div>
+                <a href="{{ url_for('themes.create_theme') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Create New Theme
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Current Theme Display -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-star"></i> Current Theme: {{ current_theme.name }}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2">{{ current_theme.description }}</p>
+                    <div class="d-flex gap-2">
+                        <a href="{{ url_for('themes.preview_theme', theme_id=current_theme_id) }}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-eye"></i> Preview
+                        </a>
+                        <a href="{{ url_for('themes.edit_theme', theme_id=current_theme_id) }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-edit"></i> Edit
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Available Themes -->
+    <div class="row">
+        <div class="col-md-12">
+            <h4 class="mb-3">Available Themes</h4>
+        </div>
+    </div>
+
+    <div class="row">
+        {% for theme_id, theme in themes.items() %}
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 {% if theme_id == current_theme_id %}border-primary{% endif %}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">{{ theme.name }}</h6>
+                    {% if theme_id == current_theme_id %}
+                        <span class="badge bg-primary">Active</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">{{ theme.description }}</p>
+                    
+                    <!-- Color Preview -->
+                    <div class="mb-3">
+                        <small class="text-muted d-block mb-2">Color Palette:</small>
+                        <div class="d-flex gap-1 mb-2">
+                            <div class="color-preview" style="background-color: {{ theme.colors.primary }}; width: 20px; height: 20px; border-radius: 3px;" title="Primary"></div>
+                            <div class="color-preview" style="background-color: {{ theme.colors.secondary }}; width: 20px; height: 20px; border-radius: 3px;" title="Secondary"></div>
+                            <div class="color-preview" style="background-color: {{ theme.colors.success }}; width: 20px; height: 20px; border-radius: 3px;" title="Success"></div>
+                            <div class="color-preview" style="background-color: {{ theme.colors.danger }}; width: 20px; height: 20px; border-radius: 3px;" title="Danger"></div>
+                            <div class="color-preview" style="background-color: {{ theme.colors.warning }}; width: 20px; height: 20px; border-radius: 3px;" title="Warning"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Theme Type Badge -->
+                    <div class="mb-3">
+                        {% if theme_id in ['default', 'dark', 'green', 'purple', 'orange'] %}
+                            <span class="badge bg-info">Built-in</span>
+                        {% else %}
+                            <span class="badge bg-success">Custom</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="d-flex gap-2 flex-wrap">
+                        {% if theme_id != current_theme_id %}
+                            <form method="POST" action="{{ url_for('themes.apply_theme', theme_id=theme_id) }}" class="d-inline">
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-check"></i> Apply
+                                </button>
+                            </form>
+                        {% endif %}
+                        
+                        <a href="{{ url_for('themes.preview_theme', theme_id=theme_id) }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-eye"></i> Preview
+                        </a>
+                        
+                        <a href="{{ url_for('themes.edit_theme', theme_id=theme_id) }}" class="btn btn-outline-info btn-sm">
+                            <i class="fas fa-edit"></i> Edit
+                        </a>
+                        
+                        <!-- Duplicate Button -->
+                        <button type="button" class="btn btn-outline-warning btn-sm" 
+                                data-bs-toggle="modal" data-bs-target="#duplicateModal{{ theme_id }}">
+                            <i class="fas fa-copy"></i> Duplicate
+                        </button>
+                        
+                        <!-- Delete Button (only for custom themes) -->
+                        {% if theme_id not in ['default', 'dark', 'green', 'purple', 'orange'] %}
+                            <button type="button" class="btn btn-outline-danger btn-sm" 
+                                    data-bs-toggle="modal" data-bs-target="#deleteModal{{ theme_id }}">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Duplicate Modal -->
+        <div class="modal fade" id="duplicateModal{{ theme_id }}" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Duplicate Theme</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form method="POST" action="{{ url_for('themes.duplicate_theme', theme_id=theme_id) }}">
+                        <div class="modal-body">
+                            <p>Create a copy of "{{ theme.name }}" with a new name and ID.</p>
+                            
+                            <div class="mb-3">
+                                <label for="new_theme_id{{ theme_id }}" class="form-label">New Theme ID</label>
+                                <input type="text" class="form-control" id="new_theme_id{{ theme_id }}" 
+                                       name="new_theme_id" required 
+                                       placeholder="e.g., my_custom_theme">
+                                <div class="form-text">Use lowercase letters, numbers, and underscores only.</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="new_name{{ theme_id }}" class="form-label">New Theme Name</label>
+                                <input type="text" class="form-control" id="new_name{{ theme_id }}" 
+                                       name="new_name" required 
+                                       placeholder="e.g., My Custom Theme">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="new_description{{ theme_id }}" class="form-label">Description</label>
+                                <textarea class="form-control" id="new_description{{ theme_id }}" 
+                                          name="new_description" rows="2" 
+                                          placeholder="Describe your custom theme..."></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Duplicate Theme</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Delete Modal (only for custom themes) -->
+        {% if theme_id not in ['default', 'dark', 'green', 'purple', 'orange'] %}
+        <div class="modal fade" id="deleteModal{{ theme_id }}" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title">Delete Theme</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure you want to delete the theme "{{ theme.name }}"?</p>
+                        <p class="text-danger"><strong>This action cannot be undone.</strong></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <form method="POST" action="{{ url_for('themes.delete_theme', theme_id=theme_id) }}" class="d-inline">
+                            <button type="submit" class="btn btn-danger">Delete Theme</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    <!-- Theme Management Tips -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card border-info">
+                <div class="card-header bg-info text-white">
+                    <h5><i class="fas fa-lightbulb"></i> Theme Management Tips</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Creating Custom Themes</h6>
+                            <ul class="small">
+                                <li>Start by duplicating an existing theme</li>
+                                <li>Use the color picker to customize colors</li>
+                                <li>Test your theme with the preview feature</li>
+                                <li>Use descriptive names and IDs</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Best Practices</h6>
+                            <ul class="small">
+                                <li>Ensure good contrast for readability</li>
+                                <li>Test themes in both light and dark conditions</li>
+                                <li>Keep color schemes consistent</li>
+                                <li>Backup custom themes before major changes</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

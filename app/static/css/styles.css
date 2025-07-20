@@ -390,16 +390,7 @@ body {
  * Team 5454 Scout 2026
  */
 
-:root {
-    --primary-color: #007bff;
-    --secondary-color: #6c757d;
-    --success-color: #28a745;
-    --danger-color: #dc3545;
-    --warning-color: #ffc107;
-    --info-color: #17a2b8;
-    --light-color: #f8f9fa;
-    --dark-color: #343a40;
-}
+/* CSS variables are now defined by the theme system */
 
 /* General Styles */
 body {
@@ -431,7 +422,7 @@ body {
 
 .card-icon {
     font-size: 2.5rem;
-    color: var(--primary-color);
+    color: var(--primary-color, #0d6efd);
 }
 
 /* Team Card Styles */
@@ -447,7 +438,7 @@ body {
 
 .team-card .team-name {
     font-size: 1rem;
-    color: var(--secondary-color);
+    color: var(--secondary-color, #6c757d);
 }
 
 .team-stats {
@@ -465,11 +456,11 @@ body {
 }
 
 .team-alliance-red {
-    color: var(--danger-color);
+    color: var(--danger-color, #dc3545);
 }
 
 .team-alliance-blue {
-    color: var(--primary-color);
+    color: var(--primary-color, #0d6efd);
 }
 
 /* Scouting Form Styles */
@@ -524,7 +515,7 @@ body {
 .rating-star:hover ~ .rating-star,
 .rating-star.active,
 .rating-star.active ~ .rating-star {
-    color: var(--warning-color);
+    color: var(--warning-color, #ffc107);
 }
 
 /* QR Code Styles */
@@ -575,7 +566,7 @@ body {
 }
 
 .match-period-tab.active {
-    color: var(--primary-color);
+    color: var(--primary-color, #0d6efd);
     background-color: #fff;
     border-color: #dee2e6 #dee2e6 #fff;
 }

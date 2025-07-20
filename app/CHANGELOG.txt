@@ -3,6 +3,18 @@ Changelog
 
 - Initial changelog setup.
 
+[1.0.0.8] - 7/19/2025
+- Added comprehensive theme management system with GUI interface
+- Created theme configuration file (config/theme_config.json) with 5 built-in themes (Default Blue, Dark Mode, Green, Purple, Orange)
+- Added ThemeManager utility class for handling theme operations
+- Implemented theme management routes (/themes) with full CRUD operations
+- Added theme management access via Settings dropdown and Admin Settings page
+- Created theme management templates with preview functionality
+- Added dynamic CSS variable injection for real-time theme switching
+- Implemented theme duplication and customization features
+- Added theme preview API endpoints for live theme previews
+- Created theme-management.css for theme-specific styling
+
 [1.0.0.7] - 7/19/2025
 - Enhanced Plotly graphs with multiple chart types (bar, line, box, radar) for all metrics
 - Added "Total Points (from team_metrics)" as selectable metric in graphs dashboard

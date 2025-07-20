@@ -119,7 +119,7 @@ def create_app(test_config=None):
     config_manager.init_app(app)
 
     # Import and register blueprints
-    from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, activity, assistant, integrity, pit_scouting, admin
+    from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, activity, assistant, integrity, pit_scouting, admin, themes
     
     # Register template filters
     from app.utils import template_filters
@@ -145,6 +145,9 @@ def create_app(test_config=None):
     
     # Register admin blueprint
     app.register_blueprint(admin.bp)
+    
+    # Register themes blueprint
+    app.register_blueprint(themes.bp)
     
     # Create database tables (only if they don't exist)
     with app.app_context():
@@ -178,5 +181,21 @@ def create_app(test_config=None):
     @app.context_processor
     def inject_game_config():
         return dict(game_config=app.config.get('GAME_CONFIG', {}))
+    
+    # Add a context processor to make theme data available in all templates
+    @app.context_processor
+    def inject_theme_data():
+        try:
+            from app.utils.theme_manager import ThemeManager
+            theme_manager = ThemeManager()
+            theme = theme_manager.get_current_theme()
+            return dict(
+                current_theme=theme,
+                current_theme_id=theme_manager.current_theme,
+                theme_css_variables=theme_manager.get_theme_css_variables()
+            )
+        except Exception as e:
+            app.logger.error(f"Error loading theme data: {e}")
+            return dict(current_theme={}, current_theme_id='default', theme_css_variables='')
     
     return app

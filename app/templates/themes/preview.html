@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+{% block title %}Preview Theme - {{ theme.name }}{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/theme-management.css') }}">
+<style id="preview-theme-variables">
+    :root {
+        {% for key, value in theme.colors.items() %}
+        --{{ key }}: {{ value }};
+        {% endfor %}
+        {% for key, value in theme.typography.items() %}
+        --{{ key }}: {{ value }};
+        {% endfor %}
+        {% for key, value in theme.ui.items() %}
+        --{{ key }}: {{ value }};
+        {% endfor %}
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('auth.admin_settings') }}">Admin Settings</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('themes.index') }}">Theme Management</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Preview Theme</li>
+                </ol>
+            </nav>
+            
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2>
+                        <i class="fas fa-eye"></i> Preview: {{ theme.name }}
+                    </h2>
+                    <p class="text-muted">{{ theme.description }}</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <form method="POST" action="{{ url_for('themes.apply_theme', theme_id=theme.id) }}" class="d-inline">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-check"></i> Apply This Theme
+                        </button>
+                    </form>
+                    <a href="{{ url_for('themes.edit_theme', theme_id=theme.id) }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-edit"></i> Edit Theme
+                    </a>
+                    <a href="{{ url_for('themes.index') }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Themes
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Theme Information -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Theme Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Theme Details</h6>
+                            <p><strong>Name:</strong> {{ theme.name }}</p>
+                            <p><strong>Description:</strong> {{ theme.description }}</p>
+                            <p><strong>Type:</strong> 
+                                {% if theme.id in ['default', 'dark', 'green', 'purple', 'orange'] %}
+                                    <span class="badge bg-info">Built-in</span>
+                                {% else %}
+                                    <span class="badge bg-success">Custom</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Color Palette</h6>
+                            <div class="d-flex gap-1 mb-2">
+                                <div class="color-preview" style="background-color: {{ theme.colors.primary }}; width: 25px; height: 25px; border-radius: 4px;" title="Primary"></div>
+                                <div class="color-preview" style="background-color: {{ theme.colors.secondary }}; width: 25px; height: 25px; border-radius: 4px;" title="Secondary"></div>
+                                <div class="color-preview" style="background-color: {{ theme.colors.success }}; width: 25px; height: 25px; border-radius: 4px;" title="Success"></div>
+                                <div class="color-preview" style="background-color: {{ theme.colors.danger }}; width: 25px; height: 25px; border-radius: 4px;" title="Danger"></div>
+                                <div class="color-preview" style="background-color: {{ theme.colors.warning }}; width: 25px; height: 25px; border-radius: 4px;" title="Warning"></div>
+                                <div class="color-preview" style="background-color: {{ theme.colors.info }}; width: 25px; height: 25px; border-radius: 4px;" title="Info"></div>
+                            </div>
+                            <small class="text-muted">Hover over colors to see their names</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Preview -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Live Preview</h5>
+                </div>
+                <div class="card-body">
+                    <div class="theme-preview">
+                        <!-- Navigation Bar Preview -->
+                        <div class="mb-4">
+                            <h6>Navigation Bar</h6>
+                            <nav class="navbar navbar-expand-lg navbar-light" style="background-color: var(--navbar-bg); border: 1px solid var(--card-border); border-radius: var(--border-radius);">
+                                <div class="container-fluid">
+                                    <a class="navbar-brand" href="#">
+                                        <i class="fas fa-robot me-2"></i>
+                                        <span class="fw-bold">5454 <span class="text-primary">Scout</span></span>
+                                    </a>
+                                    <div class="navbar-nav ms-auto">
+                                        <a class="nav-link active" href="#">Dashboard</a>
+                                        <a class="nav-link" href="#">Teams</a>
+                                        <a class="nav-link" href="#">Matches</a>
+                                        <a class="nav-link" href="#">Scouting</a>
+                                    </div>
+                                </div>
+                            </nav>
+                        </div>
+
+                        <!-- Buttons Preview -->
+                        <div class="mb-4">
+                            <h6>Buttons</h6>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="btn btn-primary">Primary</button>
+                                <button class="btn btn-secondary">Secondary</button>
+                                <button class="btn btn-success">Success</button>
+                                <button class="btn btn-danger">Danger</button>
+                                <button class="btn btn-warning">Warning</button>
+                                <button class="btn btn-info">Info</button>
+                                <button class="btn btn-light">Light</button>
+                                <button class="btn btn-dark">Dark</button>
+                            </div>
+                            <div class="d-flex gap-2 flex-wrap mt-2">
+                                <button class="btn btn-outline-primary">Primary</button>
+                                <button class="btn btn-outline-secondary">Secondary</button>
+                                <button class="btn btn-outline-success">Success</button>
+                                <button class="btn btn-outline-danger">Danger</button>
+                            </div>
+                        </div>
+
+                        <!-- Badges Preview -->
+                        <div class="mb-4">
+                            <h6>Badges</h6>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <span class="badge bg-primary">Primary</span>
+                                <span class="badge bg-secondary">Secondary</span>
+                                <span class="badge bg-success">Success</span>
+                                <span class="badge bg-danger">Danger</span>
+                                <span class="badge bg-warning text-dark">Warning</span>
+                                <span class="badge bg-info text-dark">Info</span>
+                                <span class="badge bg-light text-dark">Light</span>
+                                <span class="badge bg-dark">Dark</span>
+                            </div>
+                        </div>
+
+                        <!-- Alerts Preview -->
+                        <div class="mb-4">
+                            <h6>Alerts</h6>
+                            <div class="alert alert-primary" role="alert">
+                                <i class="fas fa-info-circle me-2"></i>
+                                This is a primary alert—check it out!
+                            </div>
+                            <div class="alert alert-success" role="alert">
+                                <i class="fas fa-check-circle me-2"></i>
+                                This is a success alert—check it out!
+                            </div>
+                            <div class="alert alert-warning" role="alert">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                This is a warning alert—check it out!
+                            </div>
+                            <div class="alert alert-danger" role="alert">
+                                <i class="fas fa-exclamation-circle me-2"></i>
+                                This is a danger alert—check it out!
+                            </div>
+                        </div>
+
+                        <!-- Cards Preview -->
+                        <div class="mb-4">
+                            <h6>Cards</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Card Header</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <h5 class="card-title">Card Title</h5>
+                                            <p class="card-text">This is a sample card showing how content will look with this theme.</p>
+                                            <button class="btn btn-primary">Action</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border-primary">
+                                        <div class="card-header bg-primary text-white">
+                                            <h6 class="mb-0">Primary Card</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <h5 class="card-title">Primary Card Title</h5>
+                                            <p class="card-text">This card uses the primary color scheme.</p>
+                                            <button class="btn btn-outline-primary">Action</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Form Elements Preview -->
+                        <div class="mb-4">
+                            <h6>Form Elements</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="sampleInput" class="form-label">Sample Input</label>
+                                        <input type="text" class="form-control" id="sampleInput" placeholder="Enter text here...">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="sampleSelect" class="form-label">Sample Select</label>
+                                        <select class="form-select" id="sampleSelect">
+                                            <option>Option 1</option>
+                                            <option>Option 2</option>
+                                            <option>Option 3</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="sampleTextarea" class="form-label">Sample Textarea</label>
+                                        <textarea class="form-control" id="sampleTextarea" rows="3" placeholder="Enter text here..."></textarea>
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="sampleCheck">
+                                            <label class="form-check-label" for="sampleCheck">
+                                                Sample checkbox
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="sampleRadio" id="sampleRadio1">
+                                            <label class="form-check-label" for="sampleRadio1">
+                                                Sample radio 1
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tables Preview -->
+                        <div class="mb-4">
+                            <h6>Tables</h6>
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Team</th>
+                                            <th>Score</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Team 254</td>
+                                            <td>Cheesy Poofs</td>
+                                            <td>95</td>
+                                            <td><span class="badge bg-success">Active</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Team 2056</td>
+                                            <td>OPC Robotics</td>
+                                            <td>87</td>
+                                            <td><span class="badge bg-warning text-dark">Pending</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Team 1114</td>
+                                            <td>Simbotics</td>
+                                            <td>92</td>
+                                            <td><span class="badge bg-success">Active</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bars Preview -->
+                        <div class="mb-4">
+                            <h6>Progress Bars</h6>
+                            <div class="mb-2">
+                                <div class="progress">
+                                    <div class="progress-bar bg-primary" style="width: 75%">75%</div>
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <div class="progress">
+                                    <div class="progress-bar bg-success" style="width: 60%">60%</div>
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <div class="progress">
+                                    <div class="progress-bar bg-warning" style="width: 45%">45%</div>
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <div class="progress">
+                                    <div class="progress-bar bg-danger" style="width: 30%">30%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Theme Comparison -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Compare with Other Themes</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for theme_id, other_theme in all_themes.items() %}
+                        {% if theme_id != theme.id %}
+                        <div class="col-md-3 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body text-center">
+                                    <h6>{{ other_theme.name }}</h6>
+                                    <div class="d-flex gap-1 justify-content-center mb-2">
+                                        <div class="color-preview" style="background-color: {{ other_theme.colors.primary }}; width: 20px; height: 20px; border-radius: 3px;" title="Primary"></div>
+                                        <div class="color-preview" style="background-color: {{ other_theme.colors.secondary }}; width: 20px; height: 20px; border-radius: 3px;" title="Secondary"></div>
+                                        <div class="color-preview" style="background-color: {{ other_theme.colors.success }}; width: 20px; height: 20px; border-radius: 3px;" title="Success"></div>
+                                        <div class="color-preview" style="background-color: {{ other_theme.colors.danger }}; width: 20px; height: 20px; border-radius: 3px;" title="Danger"></div>
+                                    </div>
+                                    <a href="{{ url_for('themes.preview_theme', theme_id=theme_id) }}" class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-eye"></i> Preview
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
