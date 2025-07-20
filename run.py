@@ -5,12 +5,31 @@ from flask import redirect, url_for, request, flash
 from sqlalchemy.exc import IntegrityError, OperationalError
 from app.models import User, Role
 from app.utils.database_init import initialize_database, check_database_health
+from app.utils.update_manager import UpdateManager
 
 app = create_app()
 
 # Setup auth redirect handler
 @app.before_request
 def check_first_run():
+    # Check for restart trigger file (Flask reload mechanism)
+    restart_trigger = os.path.join(os.path.dirname(__file__), '.flask_restart_trigger')
+    if os.path.exists(restart_trigger):
+        print("Flask restart trigger detected - server will reload")
+        try:
+            os.remove(restart_trigger)
+        except:
+            pass
+    
+    # Check for restart flag (fallback method)
+    restart_flag = os.path.join(os.path.dirname(__file__), '.restart_flag')
+    if os.path.exists(restart_flag):
+        print("Restart flag detected - server was restarted after update")
+        try:
+            os.remove(restart_flag)
+        except:
+            pass
+    
     # File integrity is now always in warning-only mode - no redirection needed
     
     # Check if database needs initialization
@@ -142,6 +161,7 @@ if __name__ == '__main__':
             host='0.0.0.0',
             port=port,
             debug=not IS_PRODUCTION,
+            use_reloader=not IS_PRODUCTION,  # Enable reloader in development
             ssl_context=ssl_context,
             allow_unsafe_werkzeug=True  # This line disables the production server error.
         )
