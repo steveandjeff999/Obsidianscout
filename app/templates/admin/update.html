@@ -31,17 +31,85 @@
                 
                 <div class="alert alert-warning">
                     <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>Update Method:</strong> 
-                    {% if update_method_info.method == 'git' %}
-                        This will update the application from the Git repository. 
-                        Please make sure you have committed any local changes before proceeding.
-                    {% elif update_method_info.method == 'direct_download' %}
-                        This will download and install the latest version from the configured download URL.
-                    {% elif update_method_info.method == 'manual' %}
-                        This will install updates from the manual_updates directory. 
-                        Please place update files in the manual_updates folder before proceeding.
-                    {% endif %}
+                    <strong>Update Method:</strong> Git Repository
+                    <br>
+                    This will update the application from the Git repository using GitPython. 
+                    Please make sure you have committed any local changes before proceeding.
                     A server restart will be required after the update.
+                </div>
+
+                <!-- Git Repository Status -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-git-alt me-2"></i> Git Repository Status
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        {% if git_status.git_installed %}
+                            {% if git_status.is_repo %}
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <strong>Status:</strong> 
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check me-1"></i>
+                                            Git Repository
+                                        </span>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Current Branch:</strong> {{ git_status.current_branch }}
+                                    </div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-md-6">
+                                        <strong>Last Commit:</strong> {{ git_status.last_commit or 'Unknown' }}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Working Directory:</strong> 
+                                        {% if git_status.is_dirty %}
+                                            <span class="badge bg-warning text-dark">Dirty</span>
+                                        {% else %}
+                                            <span class="badge bg-success">Clean</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% if git_status.remote_urls %}
+                                    <div class="row mt-2">
+                                        <div class="col-md-12">
+                                            <strong>Remote URLs:</strong>
+                                            <ul class="list-unstyled mt-1">
+                                                {% for url in git_status.remote_urls %}
+                                                    <li><code>{{ url }}</code></li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% else %}
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    <strong>Git Available but No Repository</strong>
+                                    <br>
+                                    Git is installed but this directory is not a Git repository. 
+                                    The system will automatically initialize a Git repository when you run an update.
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <strong>Git Not Installed</strong>
+                                <br>
+                                Git is not installed on this system. The system will use direct download from GitHub instead.
+                                <br><br>
+                                <strong>For better performance, consider installing Git:</strong>
+                                <ul class="mt-2 mb-0">
+                                    <li><strong>Windows:</strong> Download from <a href="https://git-scm.com/download/win" target="_blank">git-scm.com</a></li>
+                                    <li><strong>macOS:</strong> Install via Homebrew: <code>brew install git</code></li>
+                                    <li><strong>Linux:</strong> <code>sudo apt-get install git</code> (Ubuntu/Debian) or <code>sudo yum install git</code> (CentOS/RHEL)</li>
+                                </ul>
+                            </div>
+                        {% endif %}
+                    </div>
                 </div>
 
                 <!-- Version Status -->
@@ -79,52 +147,62 @@
                     </div>
                 </div>
 
-                <p class="mb-4">
-                    This process will:
-                </p>
-                <ul class="mb-4">
-                    <li>Pull the latest code from the Git repository</li>
-                    <li>Install/update Python dependencies</li>
-                    <li>Run database migrations</li>
-                </ul>
-
-                <!-- Update Method Configuration -->
+                <!-- Git Configuration -->
                 <div class="card mb-4">
                     <div class="card-header">
                         <h6 class="mb-0">
-                            <i class="fas fa-cog me-2"></i> Update Method Configuration
+                            <i class="fas fa-cog me-2"></i> Git Configuration
                         </h6>
                     </div>
                     <div class="card-body">
                         <div class="row">
                             <div class="col-md-6">
-                                <strong>Current Method:</strong> 
-                                <span class="badge bg-info">{{ update_method_info.method|title }}</span>
+                                <strong>Repository URL:</strong> 
+                                <br>
+                                <code>{{ git_config.repository_url or 'Not configured' }}</code>
                             </div>
                             <div class="col-md-6">
-                                <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#updateMethodModal">
-                                    <i class="fas fa-edit me-1"></i> Change Method
+                                <strong>Branch:</strong> {{ git_config.branch }}
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-6">
+                                <strong>Backup Enabled:</strong> 
+                                {% if git_config.backup_enabled %}
+                                    <span class="badge bg-success">Yes</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">No</span>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#gitConfigModal">
+                                    <i class="fas fa-edit me-1"></i> Configure
                                 </button>
                             </div>
                         </div>
                         <div class="mt-2">
-                            <small class="text-muted">{{ update_method_info.description }}</small>
+                            <small class="text-muted">{{ git_config.description }}</small>
                         </div>
-                        {% if update_method_info.method == 'git' and update_method_info.repository_url %}
-                            <div class="mt-2">
-                                <small><strong>Repository:</strong> {{ update_method_info.repository_url }}</small>
-                            </div>
-                        {% elif update_method_info.method == 'direct_download' and update_method_info.download_url %}
-                            <div class="mt-2">
-                                <small><strong>Download URL:</strong> {{ update_method_info.download_url }}</small>
-                            </div>
-                        {% elif update_method_info.method == 'manual' %}
-                            <div class="mt-2">
-                                <small><strong>Manual Updates Directory:</strong> {{ update_method_info.manual_dir }}</small>
-                            </div>
-                        {% endif %}
                     </div>
                 </div>
+
+                <p class="mb-4">
+                    This process will:
+                </p>
+                <ul class="mb-4">
+                    {% if git_status.git_installed %}
+                        <li>Initialize Git repository automatically (if needed)</li>
+                        <li>Pull the latest code from the Git repository using GitPython</li>
+                        <li>Switch to the configured branch if needed</li>
+                    {% else %}
+                        <li>Download the latest code directly from GitHub</li>
+                    {% endif %}
+                    <li>Install/update Python dependencies</li>
+                    <li>Run database migrations</li>
+                    {% if git_config.backup_enabled %}
+                        <li>Create a backup before updating</li>
+                    {% endif %}
+                </ul>
 
                 <div class="d-grid gap-2 d-md-flex justify-content-md-start mb-4">
                     <button id="startUpdateBtn" class="btn btn-primary">
@@ -188,75 +266,36 @@
     </div>
 </div>
 
-<!-- Update Method Configuration Modal -->
-<div class="modal fade" id="updateMethodModal" tabindex="-1" aria-labelledby="updateMethodModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+<!-- Git Configuration Modal -->
+<div class="modal fade" id="gitConfigModal" tabindex="-1" aria-labelledby="gitConfigModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="updateMethodModalLabel">
-                    <i class="fas fa-cog me-2"></i> Configure Update Method
+                <h5 class="modal-title" id="gitConfigModalLabel">
+                    <i class="fas fa-cog me-2"></i> Configure Git Repository
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="updateMethodForm">
+                <form id="gitConfigForm">
                     <div class="mb-3">
-                        <label for="updateMethod" class="form-label">Update Method</label>
-                        <select class="form-select" id="updateMethod" name="updateMethod" required>
-                            <option value="git" {% if update_method_info.method == 'git' %}selected{% endif %}>Git Repository</option>
-                            <option value="direct_download" {% if update_method_info.method == 'direct_download' %}selected{% endif %}>Direct Download</option>
-                            <option value="manual" {% if update_method_info.method == 'manual' %}selected{% endif %}>Manual Updates</option>
-                        </select>
-                        <div class="form-text">Choose how the application should check for and install updates.</div>
+                        <label for="repositoryUrl" class="form-label">Repository URL</label>
+                        <input type="url" class="form-control" id="repositoryUrl" name="repositoryUrl" 
+                               value="{{ git_config.repository_url or '' }}" 
+                               placeholder="https://github.com/username/repository.git" required>
+                        <div class="form-text">The Git repository URL (GitHub, GitLab, etc.)</div>
                     </div>
-
-                    <!-- Git Configuration -->
-                    <div id="gitConfig" class="update-config-section" {% if update_method_info.method != 'git' %}style="display: none;"{% endif %}>
-                        <div class="mb-3">
-                            <label for="repositoryUrl" class="form-label">Repository URL</label>
-                            <input type="url" class="form-control" id="repositoryUrl" name="repositoryUrl" 
-                                   value="{{ update_method_info.repository_url or '' }}" 
-                                   placeholder="https://github.com/username/repository.git">
-                            <div class="form-text">The Git repository URL (GitHub, GitLab, etc.)</div>
-                        </div>
-                        <div class="mb-3">
-                            <label for="branch" class="form-label">Branch</label>
-                            <input type="text" class="form-control" id="branch" name="branch" 
-                                   value="{{ update_method_info.branch or 'main' }}" 
-                                   placeholder="main">
-                            <div class="form-text">The branch to pull updates from</div>
-                        </div>
+                    <div class="mb-3">
+                        <label for="branch" class="form-label">Branch</label>
+                        <input type="text" class="form-control" id="branch" name="branch" 
+                               value="{{ git_config.branch or 'main' }}" 
+                               placeholder="main" required>
+                        <div class="form-text">The branch to pull updates from</div>
                     </div>
-
-                    <!-- Direct Download Configuration -->
-                    <div id="directDownloadConfig" class="update-config-section" {% if update_method_info.method != 'direct_download' %}style="display: none;"{% endif %}>
-                        <div class="mb-3">
-                            <label for="downloadUrl" class="form-label">Download URL</label>
-                            <input type="url" class="form-control" id="downloadUrl" name="downloadUrl" 
-                                   value="{{ update_method_info.download_url or '' }}" 
-                                   placeholder="https://example.com/updates/latest.zip">
-                            <div class="form-text">URL to download the latest version as a ZIP file</div>
-                        </div>
-                    </div>
-
-                    <!-- Manual Updates Configuration -->
-                    <div id="manualConfig" class="update-config-section" {% if update_method_info.method != 'manual' %}style="display: none;"{% endif %}>
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle me-2"></i>
-                            <strong>Manual Updates:</strong> Place update files in the <code>manual_updates</code> directory. 
-                            The directory should contain the same structure as the application root.
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Manual Updates Directory</label>
-                            <input type="text" class="form-control" value="{{ update_method_info.manual_dir }}" readonly>
-                            <div class="form-text">This directory will be created automatically if it doesn't exist.</div>
-                        </div>
-                    </div>
-
                     <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="backupEnabled" name="backupEnabled" 
-                                   {% if update_method_info.backup_enabled %}checked{% endif %}>
+                                   {% if git_config.backup_enabled %}checked{% endif %}>
                             <label class="form-check-label" for="backupEnabled">
                                 Create backup before updating
                             </label>
@@ -267,7 +306,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="saveUpdateMethod">
+                <button type="button" class="btn btn-primary" id="saveGitConfig">
                     <i class="fas fa-save me-2"></i> Save Configuration
                 </button>
             </div>
@@ -346,11 +385,10 @@ document.addEventListener('DOMContentLoaded', function() {
             headers: {
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
-                // Include CSRF token if available
                 'X-CSRFToken': '{{ csrf_token() if csrf_token else "" }}'
             },
             body: JSON.stringify({ start: true }),
-            credentials: 'same-origin' // Include cookies for sessions
+            credentials: 'same-origin'
         })
         .then(response => {
             if (response.ok) {
@@ -455,49 +493,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Update Method Configuration
-    const updateMethodSelect = document.getElementById('updateMethod');
-    const updateConfigSections = document.querySelectorAll('.update-config-section');
-    const saveUpdateMethodBtn = document.getElementById('saveUpdateMethod');
+    // Git Configuration
+    const saveGitConfigBtn = document.getElementById('saveGitConfig');
     
-    // Show/hide configuration sections based on selected method
-    function toggleConfigSections() {
-        const selectedMethod = updateMethodSelect.value;
-        
-        updateConfigSections.forEach(section => {
-            section.style.display = 'none';
-        });
-        
-        if (selectedMethod === 'git') {
-            document.getElementById('gitConfig').style.display = 'block';
-        } else if (selectedMethod === 'direct_download') {
-            document.getElementById('directDownloadConfig').style.display = 'block';
-        } else if (selectedMethod === 'manual') {
-            document.getElementById('manualConfig').style.display = 'block';
-        }
-    }
-    
-    // Handle method selection change
-    updateMethodSelect.addEventListener('change', toggleConfigSections);
-    
-    // Handle save configuration
-    saveUpdateMethodBtn.addEventListener('click', function() {
-        const formData = new FormData(document.getElementById('updateMethodForm'));
+    // Handle save Git configuration
+    saveGitConfigBtn.addEventListener('click', function() {
+        const formData = new FormData(document.getElementById('gitConfigForm'));
         const config = {
-            updateMethod: formData.get('updateMethod'),
+            repositoryUrl: formData.get('repositoryUrl'),
+            branch: formData.get('branch'),
             backupEnabled: formData.get('backupEnabled') === 'on'
         };
         
-        // Add method-specific configuration
-        if (config.updateMethod === 'git') {
-            config.repositoryUrl = formData.get('repositoryUrl');
-            config.branch = formData.get('branch');
-        } else if (config.updateMethod === 'direct_download') {
-            config.downloadUrl = formData.get('downloadUrl');
-        }
-        
         // Send configuration to server
-        fetch('{{ url_for("admin.configure_update_method") }}', {
+        fetch('{{ url_for("admin.configure_git") }}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -510,7 +519,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.success) {
                 // Close modal and reload page to show updated configuration
-                const modal = bootstrap.Modal.getInstance(document.getElementById('updateMethodModal'));
+                const modal = bootstrap.Modal.getInstance(document.getElementById('gitConfigModal'));
                 modal.hide();
                 location.reload();
             } else {
