@@ -475,7 +475,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Handle connection errors
                 eventSource.onerror = function() {
-                    consoleElement.innerHTML += '<span class="text-danger">Connection to server lost.</span><br>';
+                    consoleElement.innerHTML += '<span class="text-warning">Connection to server lost. The server is likely restarting to apply the update. Please wait a few seconds and refresh the page.</span><br>';
                     consoleElement.scrollTop = consoleElement.scrollHeight;
                     
                     // Close connection
@@ -484,9 +484,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Update UI
                     updateStatus.classList.add('d-none');
-                    updateError.classList.remove('d-none');
+                    // Do NOT show updateError alert here
+                    // updateError.classList.remove('d-none');
                     startUpdateBtn.disabled = false;
                     clearConsoleBtn.disabled = false;
+
+                    // Optionally, auto-refresh after a short delay
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 7000); // 7 seconds
                 };
             } else {
                 // Handle error response
