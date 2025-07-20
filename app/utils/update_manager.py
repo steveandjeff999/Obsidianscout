@@ -517,6 +517,26 @@ class UpdateManager:
         except Exception as e:
             return False, f"Git update failed: {str(e)}"
     
+    def copy_directory(self, src, dst, skip_files=None):
+        """Recursively copy directory contents, overwriting existing files, but skipping any in skip_files."""
+        import shutil
+        skip_files = set(os.path.abspath(f) for f in (skip_files or []))
+        try:
+            for root, dirs, files in os.walk(src):
+                rel_root = os.path.relpath(root, src)
+                dst_root = os.path.join(dst, rel_root) if rel_root != '.' else dst
+                if not os.path.exists(dst_root):
+                    os.makedirs(dst_root, exist_ok=True)
+                for file in files:
+                    src_file = os.path.join(root, file)
+                    dst_file = os.path.abspath(os.path.join(dst_root, file))
+                    if dst_file in skip_files:
+                        continue
+                    shutil.copy2(src_file, dst_file)
+            return True
+        except Exception as e:
+            raise Exception(f"Failed to copy directory: {str(e)}")
+
     def perform_direct_update(self):
         """Perform direct download update from GitHub, preserving important files."""
         try:
@@ -570,9 +590,9 @@ class UpdateManager:
                     # --- PRESERVE FILES ---
                     app_root = os.path.dirname(self.config_path)
                     preserve_files = [
-                        os.path.join(app_root, 'app_config.json'),
-                        os.path.join(app_root, 'instance', 'scouting.db'),
-                        os.path.join(app_root, 'config', 'pit_config.json'),
+                        os.path.abspath(os.path.join(app_root, 'app_config.json')),
+                        os.path.abspath(os.path.join(app_root, 'instance', 'scouting.db')),
+                        os.path.abspath(os.path.join(app_root, 'config', 'pit_config.json')),
                     ]
                     temp_preserve = []
                     for f in preserve_files:
@@ -582,7 +602,7 @@ class UpdateManager:
                             temp_preserve.append((f, temp_path))
 
                     # Copy files to application directory (overwrite all except preserved)
-                    self.copy_directory(extracted_dir, app_root)
+                    self.copy_directory(extracted_dir, app_root, skip_files=preserve_files)
 
                     # --- RESTORE FILES ---
                     for orig, bak in temp_preserve:
@@ -590,7 +610,6 @@ class UpdateManager:
                         os.remove(bak)
                     logger.info(f"Restored preserved files after ZIP update: {[f for f, _ in temp_preserve]}")
 
-                    # Auto-commit any changes after update (optional, can skip for ZIP)
                     # Install packages from requirements.txt
                     success, message = self.install_requirements()
                     if not success:
@@ -718,24 +737,6 @@ class UpdateManager:
             return True, "Git repository initialized and synchronized with remote successfully (preserved db/config files)"
         except Exception as e:
             return False, f"Failed to initialize Git repository: {str(e)}"
-    
-    def copy_directory(self, src, dst):
-        """Copy directory contents, overwriting existing files"""
-        try:
-            for item in os.listdir(src):
-                src_path = os.path.join(src, item)
-                dst_path = os.path.join(dst, item)
-                
-                if os.path.isdir(src_path):
-                    if os.path.exists(dst_path):
-                        shutil.rmtree(dst_path)
-                    shutil.copytree(src_path, dst_path)
-                else:
-                    shutil.copy2(src_path, dst_path)
-            
-            return True
-        except Exception as e:
-            raise Exception(f"Failed to copy directory: {str(e)}")
     
     def create_backup(self):
         """Create a backup of the current application"""
