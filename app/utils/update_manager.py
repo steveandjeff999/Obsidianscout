@@ -1022,3 +1022,35 @@ class UpdateManager:
                 'last_commit': None,
                 'git_installed': self.is_git_installed()
             } 
+
+    def restore_latest_backup(self):
+        """Restore the most recent backup from the backups directory."""
+        import shutil
+        import glob
+        app_root = os.path.dirname(self.config_path)
+        backup_dir = os.path.join(app_root, 'backups')
+        if not os.path.exists(backup_dir):
+            return False, "No backups directory found."
+        # Find all backup folders
+        backup_folders = [os.path.join(backup_dir, d) for d in os.listdir(backup_dir) if os.path.isdir(os.path.join(backup_dir, d))]
+        if not backup_folders:
+            return False, "No backups found."
+        # Sort by timestamp in name (descending)
+        backup_folders.sort(reverse=True)
+        latest_backup = backup_folders[0]
+        try:
+            # Copy all files from latest_backup to app_root, skipping instance, .git, and backups
+            for item in os.listdir(latest_backup):
+                s = os.path.join(latest_backup, item)
+                d = os.path.join(app_root, item)
+                if item in ('instance', '.git', 'backups'):
+                    continue
+                if os.path.isdir(s):
+                    if os.path.exists(d):
+                        shutil.rmtree(d)
+                    shutil.copytree(s, d)
+                else:
+                    shutil.copy2(s, d)
+            return True, f"Restored from backup: {os.path.basename(latest_backup)}"
+        except Exception as e:
+            return False, f"Restore failed: {str(e)}" 

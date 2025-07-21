@@ -26,13 +26,12 @@
     
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-overrides.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modal-fix.css') }}">
     
     <!-- Dynamic Theme CSS Variables -->
-    {% if theme_css_variables %}
+    {% if theme_css_variables and theme_css_variables.strip() %}
     <style id="theme-variables">
-        :root {
-{{ theme_css_variables | safe }}
-        }
+        :root { {{ theme_css_variables | safe }} }
     </style>
     {% endif %}
     
