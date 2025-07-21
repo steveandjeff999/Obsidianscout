@@ -389,7 +389,25 @@ def strategy():
         event = Event.query.get_or_404(event_id)
         
         # Get all matches for this event
-        matches = Match.query.filter_by(event_id=event.id).order_by(Match.match_type, Match.match_number).all()
+        matches = Match.query.filter_by(event_id=event.id).all()
+        # Custom match type order: practice, qualification, quarterfinals, semifinals, finals
+        match_type_order = {
+            'practice': 1,
+            'qualification': 2,
+            'qualifier': 2,  # Alternative name for qualification matches
+            'quarterfinal': 3,
+            'quarterfinals': 3,
+            'semifinal': 4,
+            'semifinals': 4,
+            'final': 5,
+            'finals': 5
+        }
+        def match_sort_key(m):
+            return (
+                match_type_order.get(m.match_type.lower(), 99),
+                m.match_number
+            )
+        matches = sorted(matches, key=match_sort_key)
     
     # Get game configuration
     game_config = current_app.config.get('GAME_CONFIG', {})

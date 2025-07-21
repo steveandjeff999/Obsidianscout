@@ -4,6 +4,15 @@
 
 {% block content %}
 <div class="container">
+    <!-- Delete confirmation toast -->
+    <div class="toast align-items-center text-bg-warning border-0 position-fixed bottom-0 end-0 m-4 hide" id="delete-toast" role="alert" aria-live="assertive" aria-atomic="true" style="z-index: 9999; min-width: 250px;">
+        <div class="d-flex">
+            <div class="toast-body">
+                Click again to confirm delete.
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
     <h1 class="mb-4">Manage Database Entries</h1>
     
     <div class="card mb-4">
@@ -59,31 +68,9 @@
                                             <a href="{{ url_for('data.edit_entry', entry_id=entry.id) }}" class="btn btn-warning">
                                                 <i class="fas fa-edit"></i> Edit
                                             </a>
-                                            <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal-{{ entry.id }}">
+                                            <button type="button" class="btn btn-danger double-confirm-delete" data-entry-id="{{ entry.id }}">
                                                 <i class="fas fa-trash"></i> Delete
                                             </button>
-                                        </div>
-                                        
-                                        <!-- Delete Modal -->
-                                        <div class="modal fade" id="deleteModal-{{ entry.id }}" tabindex="-1" aria-labelledby="deleteModalLabel-{{ entry.id }}" aria-hidden="true">
-                                            <div class="modal-dialog">
-                                                <div class="modal-content">
-                                                    <div class="modal-header">
-                                                        <h5 class="modal-title" id="deleteModalLabel-{{ entry.id }}">Confirm Delete</h5>
-                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                    </div>
-                                                    <div class="modal-body">
-                                                        <p>Are you sure you want to delete the scouting data for Team {{ entry.team.team_number }} in {{ entry.match.match_type }} Match {{ entry.match.match_number }}?</p>
-                                                        <p class="text-danger"><strong>This action cannot be undone!</strong></p>
-                                                    </div>
-                                                    <div class="modal-footer">
-                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                                        <form action="{{ url_for('data.delete_entry', entry_id=entry.id) }}" method="POST" class="d-inline">
-                                                            <button type="submit" class="btn btn-danger">Delete</button>
-                                                        </form>
-                                                    </div>
-                                                </div>
-                                            </div>
                                         </div>
                                     </td>
                                 </tr>

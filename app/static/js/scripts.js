@@ -17,8 +17,8 @@ document.addEventListener('DOMContentLoaded', function() {
         [...popoverTriggerList].map(popoverTriggerEl => new bootstrap.Popover(popoverTriggerEl));
     }
     
-    // Initialize bootstrap toasts
-    const toastElList = document.querySelectorAll('.toast');
+    // Initialize bootstrap toasts ONLY if they have the 'show' class
+    const toastElList = document.querySelectorAll('.toast.show');
     if (toastElList.length) {
         [...toastElList].map(toastEl => {
             const toast = new bootstrap.Toast(toastEl, {
@@ -26,7 +26,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 delay: 5000
             });
             toast.show();
-            
             // Add auto-removal after hiding
             toastEl.addEventListener('hidden.bs.toast', () => {
                 setTimeout(() => {
@@ -97,8 +96,41 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize scouting form with save functionality
     initScoutingForm();
     
-    // Initialize navbar enhancements
-    initializeNavbar();
+    // Double-confirm delete logic for /data/manage
+    let deleteConfirmTimeouts = {};
+    document.querySelectorAll('.double-confirm-delete').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            const entryId = btn.getAttribute('data-entry-id');
+            if (!deleteConfirmTimeouts[entryId]) {
+                // First click: show notification
+                showDeleteConfirmNotification(btn, entryId);
+                deleteConfirmTimeouts[entryId] = setTimeout(() => {
+                    deleteConfirmTimeouts[entryId] = null;
+                    btn.textContent = 'Delete';
+                    btn.classList.remove('btn-warning');
+                    btn.classList.add('btn-danger');
+                }, 5000);
+                btn.textContent = 'Click again to confirm';
+                btn.classList.remove('btn-danger');
+                btn.classList.add('btn-warning');
+            } else {
+                // Second click: submit hidden form
+                clearTimeout(deleteConfirmTimeouts[entryId]);
+                deleteConfirmTimeouts[entryId] = null;
+                // Find or create a hidden form and submit
+                let form = document.getElementById('delete-form-' + entryId);
+                if (!form) {
+                    form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = `/data/delete/${entryId}`;
+                    form.style.display = 'none';
+                    form.id = 'delete-form-' + entryId;
+                    document.body.appendChild(form);
+                }
+                form.submit();
+            }
+        });
+    });
 });
 
 /**
@@ -2232,3 +2264,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add to the existing event listeners
     initScoutingForm();
 });
+
+function showDeleteConfirmNotification(btn, entryId) {
+    // Use Bootstrap toast if available, else fallback to alert
+    if (window.bootstrap && document.getElementById('delete-toast')) {
+        const toast = document.getElementById('delete-toast');
+        toast.querySelector('.toast-body').textContent = 'Click again to confirm delete.';
+        new bootstrap.Toast(toast).show();
+    } else {
+        alert('Click again to confirm delete.');
+    }
+}

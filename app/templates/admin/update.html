@@ -220,6 +220,11 @@
                     <button id="restartServerBtn" class="btn btn-warning">
                         <i class="fas fa-redo me-2"></i> Restart Server
                     </button>
+                    <form id="restoreBackupForm" method="POST" action="{{ url_for('admin.restore_backup') }}" style="display:inline;">
+                        <button id="restoreBackupBtn" type="submit" class="btn btn-danger">
+                            <i class="fas fa-undo me-2"></i> Restore Latest Backup
+                        </button>
+                    </form>
                     <a href="{{ url_for('auth.admin_settings') }}" class="btn btn-secondary">
                         <i class="fas fa-arrow-left me-2"></i> Back to Admin Settings
                     </a>
@@ -622,6 +627,15 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error saving configuration:', error);
             alert('Error saving configuration. Please try again.');
         });
+    });
+
+    // Attach confirmation to Restore Backup button
+    const restoreBackupBtn = document.getElementById('restoreBackupBtn');
+    const restoreBackupForm = document.getElementById('restoreBackupForm');
+    restoreBackupBtn.addEventListener('click', function(e) {
+        if (!confirm('Are you sure you want to restore the latest backup? This will overwrite current files and cannot be undone.')) {
+            e.preventDefault();
+        }
     });
 });
 </script>

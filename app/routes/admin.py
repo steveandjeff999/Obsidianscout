@@ -330,3 +330,16 @@ def restart_server():
         flash(f'Error restarting server: {str(e)}', 'error')
     
     return redirect(url_for('admin.update_page'))
+
+@bp.route('/update/restore', methods=['POST'])
+@login_required
+@admin_required
+def restore_backup():
+    """Restore the latest backup and redirect to the update page with a status message."""
+    update_manager = UpdateManager()
+    success, message = update_manager.restore_latest_backup()
+    if success:
+        flash(f"Restore successful: {message}", 'success')
+    else:
+        flash(f"Restore failed: {message}", 'danger')
+    return redirect(url_for('admin.update_page'))
