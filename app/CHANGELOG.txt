@@ -1,11 +1,7 @@
 Changelog
 =========
 
-[1.0.1.1] - 7/19/25
-- improved updates
-
-[1.0.1.0] - 7/19/25
-- improved updates
+- Initial changelog setup.
 
 [1.0.0.8] - 7/19/2025
 - Added comprehensive theme management system with GUI interface
