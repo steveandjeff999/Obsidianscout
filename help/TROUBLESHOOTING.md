@@ -1,5 +1,18 @@
 # Troubleshooting Guide for 5454Scout Authentication System
 
+## Quick Troubleshooting
+
+### Can't log in
+- Check your username and password.
+- Make sure your account is active.
+
+### Data not saving
+- Check your internet connection.
+- Try refreshing the page.
+
+### Still stuck?
+Contact your system administrator for further help.
+
 ## Common Issues and Solutions
 
 ### 1. UNIQUE constraint failed on user.email

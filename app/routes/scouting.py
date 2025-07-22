@@ -8,8 +8,16 @@ import qrcode
 from io import BytesIO
 import base64
 from app.utils.config_manager import get_id_to_perm_id_mapping
+from app.utils.theme_manager import ThemeManager
 
 bp = Blueprint('scouting', __name__, url_prefix='/scouting')
+
+def get_theme_context():
+    theme_manager = ThemeManager()
+    return {
+        'themes': theme_manager.get_available_themes(),
+        'current_theme_id': theme_manager.current_theme
+    }
 
 @bp.route('/')
 @login_required
@@ -57,7 +65,8 @@ def index():
                           teams=teams, 
                           matches=matches,
                           scouting_data=recent_scouting_data,  
-                          game_config=game_config)
+                          game_config=game_config,
+                          **get_theme_context())
 
 @bp.route('/form', methods=['GET', 'POST'])
 def scouting_form():
@@ -76,6 +85,9 @@ def scouting_form():
         teams = current_event.teams
     else:
         teams = []  # No teams if no current event is set
+
+    # Sort teams by team_number
+    teams = sorted(teams, key=lambda t: t.team_number)
     
     # Define custom ordering for match types
     match_type_order = {
@@ -154,7 +166,8 @@ def scouting_form():
                             form_data=form_data,
                             game_config=game_config,
                             alliance=alliance,
-                            existing_data=existing_data)
+                            existing_data=existing_data,
+                            **get_theme_context())
                             
         return jsonify({
             'success': True, 
@@ -176,7 +189,8 @@ def scouting_form():
         if not team_id or not match_id:
             flash('Please select a team and match', 'warning')
             return render_template('scouting/form.html', teams=teams, matches=matches, 
-                                game_config=game_config, team=None, match=None)
+                                game_config=game_config, team=None, match=None,
+                                **get_theme_context())
         
         team = Team.query.get_or_404(team_id)
         match = Match.query.get_or_404(match_id)
@@ -305,7 +319,8 @@ def scouting_form():
                               match=match,
                               form_data=form_data,
                               alliance=alliance,
-                              existing_data=existing_data)
+                              existing_data=existing_data,
+                              **get_theme_context())
     else:
         # Show form with team/match selection first
         return render_template('scouting/form.html', 
@@ -314,7 +329,8 @@ def scouting_form():
                               game_config=game_config, 
                               team=None, 
                               match=None,
-                              show_team_match_selection=True)  # Flag to show selection form
+                              show_team_match_selection=True,
+                              **get_theme_context())  # Flag to show selection form
 
 @bp.route('/qr')
 def qr_code_display():
@@ -381,7 +397,8 @@ def qr_code_display():
                           match=match,
                           barcode_data=json_data,  
                           scouting_data=scouting_data,
-                          display_data=json.dumps(display_data, indent=2))
+                          display_data=json.dumps(display_data, indent=2),
+                          **get_theme_context())
 
 def _get_element_type_from_config(element_id, game_config):
     """Helper function to get the type of an element from the game configuration"""
@@ -468,7 +485,8 @@ def qr_code(team_id, match_id):
                           match=match,
                           barcode_data=json_data,  
                           scouting_data=scouting_data,
-                          display_data=json.dumps(display_data, indent=2))
+                          display_data=json.dumps(display_data, indent=2),
+                          **get_theme_context())
 
 @bp.route('/list')
 @login_required
@@ -496,7 +514,8 @@ def list_data():
     
     return render_template('scouting/list.html', 
                          scouting_data=scouting_data,
-                         events=events)
+                         events=events,
+                         **get_theme_context())
 
 @bp.route('/view/<int:id>')
 @login_required
@@ -513,7 +532,8 @@ def view_data(id):
     game_config = current_app.config['GAME_CONFIG']
     
     return render_template('scouting/view.html', scouting_data=scouting_data, 
-                          game_config=game_config)
+                          game_config=game_config,
+                          **get_theme_context())
 
 @bp.route('/delete/<int:id>', methods=['POST'])
 @login_required
@@ -576,7 +596,8 @@ def offline_data():
     return render_template('scouting/offline.html', 
                            teams=teams, 
                            matches=matches, 
-                           game_config=game_config)
+                           game_config=game_config,
+                           **get_theme_context())
 
 @bp.route('/api/submit_offline', methods=['POST'])
 def submit_offline_data():
@@ -896,4 +917,5 @@ def view_text_elements():
                          text_elements=text_elements,
                          events=events,
                          current_event=current_event,
-                         game_config=game_config)
+                         game_config=game_config,
+                         **get_theme_context())

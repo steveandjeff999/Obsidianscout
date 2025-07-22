@@ -4,8 +4,16 @@ from app.models import AllianceSelection, Team, Event, ScoutingData, DoNotPickEn
 from app.utils.analysis import calculate_team_metrics
 from app import socketio
 from sqlalchemy import func, desc, and_
+from app.utils.theme_manager import ThemeManager
 
 bp = Blueprint('alliances', __name__, url_prefix='/alliances')
+
+def get_theme_context():
+    theme_manager = ThemeManager()
+    return {
+        'themes': theme_manager.get_available_themes(),
+        'current_theme_id': theme_manager.current_theme
+    }
 
 # SocketIO event handlers for real-time sync
 @socketio.on('join_alliance_room')
@@ -71,7 +79,8 @@ def index():
     return render_template('alliances/index.html', 
                          alliances=alliances, 
                          current_event=current_event,
-                         events=events)
+                         events=events,
+                         **get_theme_context())
 
 @bp.route('/recommendations/<int:event_id>')
 def get_recommendations(event_id):
@@ -413,7 +422,8 @@ def manage_lists(event_id):
                          event=event,
                          avoid_entries=avoid_entries,
                          do_not_pick_entries=do_not_pick_entries,
-                         all_teams=all_teams)
+                         all_teams=all_teams,
+                         **get_theme_context())
 
 @bp.route('/api/add_to_list', methods=['POST'])
 def add_to_list():

@@ -10,6 +10,14 @@ from werkzeug.utils import secure_filename
 import qrcode
 from io import BytesIO
 import base64
+from app.utils.theme_manager import ThemeManager
+
+def get_theme_context():
+    theme_manager = ThemeManager()
+    return {
+        'themes': theme_manager.get_available_themes(),
+        'current_theme_id': theme_manager.current_theme
+    }
 
 bp = Blueprint('data', __name__, url_prefix='/data')
 
@@ -25,7 +33,8 @@ def index():
     return render_template('data/index.html', 
                           teams_count=teams_count,
                           matches_count=matches_count, 
-                          scouting_count=scouting_count)
+                          scouting_count=scouting_count,
+                          **get_theme_context())
 
 @bp.route('/import/excel', methods=['GET', 'POST'])
 def import_excel():
@@ -169,7 +178,7 @@ def import_excel():
             flash('Invalid file format. Please upload an Excel file (.xlsx, .xls)', 'error')
             return redirect(request.url)
     
-    return render_template('data/import_excel.html')
+    return render_template('data/import_excel.html', **get_theme_context())
 
 @bp.route('/import_qr', methods=['GET', 'POST'])
 def import_qr():
@@ -374,7 +383,7 @@ def import_qr():
             flash(error_msg, 'error')
     
     success = request.args.get('success', False)
-    return render_template('data/import_qr.html', success=success)
+    return render_template('data/import_qr.html', success=success, **get_theme_context())
 
 @bp.route('/export/excel')
 def export_excel():
@@ -419,7 +428,8 @@ def export_excel():
     excel_data = base64.b64encode(output.read()).decode('utf-8')
     
     return render_template('data/export_excel.html', excel_data=excel_data,
-                          filename=f'scouting_data_{game_config["season"]}.xlsx')
+                          filename=f'scouting_data_{game_config["season"]}.xlsx',
+                          **get_theme_context())
 
 @bp.route('/manage', methods=['GET'])
 def manage_entries():
@@ -452,7 +462,8 @@ def manage_entries():
     return render_template('data/manage/index.html', 
                          scouting_entries=scouting_entries, 
                          teams=teams,
-                         matches=matches)
+                         matches=matches,
+                         **get_theme_context())
 
 @bp.route('/edit/<int:entry_id>', methods=['GET', 'POST'])
 def edit_entry(entry_id):
@@ -499,7 +510,7 @@ def edit_entry(entry_id):
         flash('Scouting data updated successfully!', 'success')
         return redirect(url_for('data.manage_entries'))
     
-    return render_template('data/manage/edit.html', entry=entry, game_config=game_config)
+    return render_template('data/manage/edit.html', entry=entry, game_config=game_config, **get_theme_context())
 
 @bp.route('/delete/<int:entry_id>', methods=['POST'])
 def delete_entry(entry_id):
@@ -627,4 +638,4 @@ def validate_data():
             num_key = str(row['match_number'])
         return (type_key, num_key, str(row['match_number']))
     results = sorted(results, key=match_sort_key)
-    return render_template('data/validate.html', results=results, events=events, selected_event=event)
+    return render_template('data/validate.html', results=results, events=events, selected_event=event, **get_theme_context())

@@ -7,6 +7,10 @@ This document explains how to use the authentication system in the 5454Scout2026
 
 The system supports three user roles with different permissions:
 
+- **Admin:** Full access to all features and settings.
+- **Analytics:** Can view and analyze data, but cannot change settings.
+- **Scout:** Can enter and view scouting data, limited access to admin features.
+
 1. **Admin**
    - Full system access
    - Can manage users

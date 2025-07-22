@@ -6,6 +6,30 @@ from flask import Blueprint, render_template, request, jsonify, current_app, abo
 from flask_login import login_required, current_user
 from app.assistant import get_assistant, get_visualizer
 from functools import wraps
+import os
+import markdown2
+from app.utils.theme_manager import ThemeManager
+
+HELP_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', 'help')
+
+def get_help_docs():
+    docs = []
+    for f in os.listdir(HELP_FOLDER):
+        if f.lower().endswith('.md'):
+            with open(os.path.join(HELP_FOLDER, f), encoding='utf-8') as file:
+                docs.append({
+                    'file': f,
+                    'title': f.replace('.md', '').replace('_', ' ').replace('-', ' ').title(),
+                    'content': file.read()
+                })
+    return docs
+
+def get_theme_context():
+    theme_manager = ThemeManager()
+    return {
+        'themes': theme_manager.get_available_themes(),
+        'current_theme_id': theme_manager.current_theme
+    }
 
 bp = Blueprint('assistant', __name__, url_prefix='/assistant')
 
@@ -22,7 +46,7 @@ def admin_required(f):
 @login_required
 def index():
     """Main assistant page"""
-    return render_template('assistant/index.html')
+    return render_template('assistant/index.html', **get_theme_context())
 
 @bp.route('/config')
 @login_required
@@ -39,7 +63,7 @@ def config():
             "fallback_enabled": True
         }
     
-    return render_template('assistant/config.html', ai_config=ai_config)
+    return render_template('assistant/config.html', ai_config=ai_config, **get_theme_context())
 
 @bp.route('/config', methods=['POST'])
 @login_required
@@ -113,6 +137,12 @@ def generate_visualization():
     result = visualizer.generate_visualization(vis_type, vis_data)
     
     return jsonify(result)
+
+@bp.route('/help-search')
+@login_required
+def help_search():
+    docs = get_help_docs()
+    return jsonify({'docs': docs})
 
 @bp.route('/clear-context', methods=['POST'])
 @login_required

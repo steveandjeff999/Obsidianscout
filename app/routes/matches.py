@@ -6,6 +6,14 @@ from app import db
 from app.utils.api_utils import get_matches, ApiError, api_to_db_match_conversion, get_matches_dual_api
 from app.utils.analysis import predict_match_outcome, get_match_details_with_teams
 from datetime import datetime
+from app.utils.theme_manager import ThemeManager
+
+def get_theme_context():
+    theme_manager = ThemeManager()
+    return {
+        'themes': theme_manager.get_available_themes(),
+        'current_theme_id': theme_manager.current_theme
+    }
 
 bp = Blueprint('matches', __name__, url_prefix='/matches')
 
@@ -55,7 +63,7 @@ def index():
         matches = []
         flash("No current event selected. Use the dropdown to select an event or configure a default event code.", "warning")
     
-    return render_template('matches/index.html', matches=matches, events=events, selected_event=event)
+    return render_template('matches/index.html', matches=matches, events=events, selected_event=event, **get_theme_context())
 
 @bp.route('/sync_from_config')
 def sync_from_config():
@@ -149,7 +157,7 @@ def view(match_id):
     game_config = current_app.config['GAME_CONFIG']
     
     return render_template('matches/view.html', match=match, 
-                          scouting_data=scouting_data, game_config=game_config)
+                          scouting_data=scouting_data, game_config=game_config, **get_theme_context())
 
 @bp.route('/add', methods=['GET', 'POST'])
 def add():
@@ -215,7 +223,7 @@ def add():
     
     return render_template('matches/add.html', events=events, teams=teams, 
                           alliance_size=current_app.config['GAME_CONFIG']['alliance_size'],
-                          match_types=current_app.config['GAME_CONFIG']['match_types'])
+                          match_types=current_app.config['GAME_CONFIG']['match_types'], **get_theme_context())
 
 @bp.route('/<int:match_id>/edit', methods=['GET', 'POST'])
 def edit(match_id):
@@ -270,7 +278,7 @@ def edit(match_id):
     return render_template('matches/edit.html', match=match, events=events, teams=teams,
                          red_teams=red_teams, blue_teams=blue_teams,
                          alliance_size=current_app.config['GAME_CONFIG']['alliance_size'],
-                         match_types=current_app.config['GAME_CONFIG']['match_types'])
+                         match_types=current_app.config['GAME_CONFIG']['match_types'], **get_theme_context())
 
 @bp.route('/<int:match_id>/delete', methods=['POST'])
 def delete(match_id):
@@ -331,7 +339,7 @@ def predict():
         matches=matches,
         selected_match=selected_match,
         prediction=prediction,
-        game_config=game_config
+        game_config=game_config, **get_theme_context()
     )
 
 @bp.route('/api/predict/<int:match_id>')
@@ -369,7 +377,7 @@ def predict_print(match_id):
         selected_event=selected_event,
         prediction=match_details['prediction'],
         game_config=game_config,
-        now=datetime.now()
+        now=datetime.now(), **get_theme_context()
     )
 
 @bp.route('/strategy')
@@ -417,7 +425,7 @@ def strategy():
         events=events,
         selected_event=event,
         matches=matches,
-        game_config=game_config
+        game_config=game_config, **get_theme_context()
     )
 
 @bp.route('/strategy/analyze/<int:match_id>')

@@ -1,0 +1,113 @@
+{% set help_topics = [] %}
+{% for file in files %}
+  {% set _ = help_topics.append({
+    'file': file,
+    'title': file.replace('.md', '').replace('_', ' ').replace('-', ' ').title(),
+    'content': content|striptags|replace('\n', ' ') if file == selected else ''
+  }) %}
+{% endfor %}
+{% extends 'base.html' %}
+{% block title %}Help{% endblock %}
+{% block content %}
+<div class="container-fluid mt-4">
+  <div class="row">
+    <div class="col-md-3">
+      <h4>Help Topics</h4>
+      <!-- Search Bar -->
+      <div class="mb-3">
+        <input id="help-search" type="text" class="form-control" placeholder="Search help...">
+        <button id="help-search-btn" class="btn btn-primary w-100 mt-2">Search</button>
+        <ul class="list-group mt-2 d-none" id="search-results"></ul>
+      </div>
+      <ul class="list-group" id="help-topic-list">
+        {% for file in files %}
+        <a href="{{ url_for('main.help_page', file=file) }}" class="list-group-item list-group-item-action {% if file == selected %}active{% endif %}" data-file="{{ file }}">
+          {{ file.replace('.md', '').replace('_', ' ').replace('-', ' ').title() }}
+        </a>
+        {% endfor %}
+      </ul>
+    </div>
+    <div class="col-md-9">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">{{ selected.replace('.md', '').replace('_', ' ').replace('-', ' ').title() if selected else 'Help' }}</h5>
+          <hr>
+          <div class="markdown-body" id="help-content">{{ content|safe }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const helpTopics = {{ help_topics|tojson|safe }};
+
+function enhancedSimilarity(query, title, content) {
+  // Tokenize
+  const qWords = query.toLowerCase().split(/\W+/).filter(Boolean);
+  const tWords = title.toLowerCase().split(/\W+/).filter(Boolean);
+  const cWords = content.toLowerCase().split(/\W+/).filter(Boolean);
+
+  // Cosine similarity (bag of words)
+  const allWords = Array.from(new Set([...qWords, ...tWords, ...cWords]));
+  const vecQ = allWords.map(w => qWords.filter(x => x === w).length);
+  const vecT = allWords.map(w => tWords.filter(x => x === w).length);
+  const vecC = allWords.map(w => cWords.filter(x => x === w).length);
+  const dotT = vecQ.reduce((sum, v, i) => sum + v * vecT[i], 0);
+  const dotC = vecQ.reduce((sum, v, i) => sum + v * vecC[i], 0);
+  const magQ = Math.sqrt(vecQ.reduce((sum, v) => sum + v * v, 0));
+  const magT = Math.sqrt(vecT.reduce((sum, v) => sum + v * v, 0));
+  const magC = Math.sqrt(vecC.reduce((sum, v) => sum + v * v, 0));
+  let score = 0;
+  if (magQ && magT) score += 2 * (dotT / (magQ * magT)); // Title is weighted more
+  if (magQ && magC) score += 1 * (dotC / (magQ * magC));
+
+  // Partial/substring match boost
+  for (const qw of qWords) {
+    for (const tw of tWords) {
+      if (tw.includes(qw) && qw.length > 2) score += 0.5;
+    }
+    for (const cw of cWords) {
+      if (cw.includes(qw) && qw.length > 2) score += 0.2;
+    }
+  }
+  return score;
+}
+
+function showSearchResults(results) {
+  const resultsList = document.getElementById('search-results');
+  resultsList.innerHTML = '';
+  if (results.length === 0) {
+    resultsList.classList.add('d-none');
+    return;
+  }
+  for (const r of results) {
+    const li = document.createElement('li');
+    li.className = 'list-group-item list-group-item-action';
+    li.innerHTML = `<a href="{{ url_for('main.help_page') }}?file=${encodeURIComponent(r.file)}">${r.title}</a>`;
+    resultsList.appendChild(li);
+  }
+  resultsList.classList.remove('d-none');
+}
+
+document.getElementById('help-search-btn').addEventListener('click', function() {
+  const query = document.getElementById('help-search').value.trim();
+  if (!query) return;
+  let scored = helpTopics.map(topic => ({
+    ...topic,
+    score: enhancedSimilarity(query, topic.title, topic.content || '')
+  }));
+  scored = scored.filter(t => t.score > 0.1);
+  scored.sort((a, b) => b.score - a.score);
+  if (scored.length === 1 && scored[0].score > 0.5) {
+    window.location.href = `{{ url_for('main.help_page') }}?file=${encodeURIComponent(scored[0].file)}`;
+  } else {
+    showSearchResults(scored.slice(0, 8));
+  }
+});
+document.getElementById('help-search').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    document.getElementById('help-search-btn').click();
+  }
+});
+</script>
+{% endblock %} 

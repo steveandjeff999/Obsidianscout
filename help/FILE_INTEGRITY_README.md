@@ -186,3 +186,10 @@ instance/
 - File-specific monitoring rules
 - Integration with external security systems
 - Audit logging of integrity events
+
+## Security Best Practices
+
+- Use strong, unique passwords for your account.
+- Log out when finished using the app.
+- Do not share your login credentials.
+- Report suspicious activity to your admin immediately.

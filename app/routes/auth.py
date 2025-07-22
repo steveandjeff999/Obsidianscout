@@ -10,6 +10,14 @@ from app import db
 from app.models import User, Role
 from datetime import datetime
 from app.utils.system_check import SystemCheck
+from app.utils.theme_manager import ThemeManager
+
+def get_theme_context():
+    theme_manager = ThemeManager()
+    return {
+        'themes': theme_manager.get_available_themes(),
+        'current_theme_id': theme_manager.current_theme
+    }
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -79,7 +87,7 @@ def login():
         flash(f'Welcome back, {user.username}!', 'success')
         return redirect(next_page)
     
-    return render_template('auth/login.html')
+    return render_template('auth/login.html', **get_theme_context())
 
 @bp.route('/logout')
 @login_required
@@ -91,14 +99,14 @@ def logout():
 @bp.route('/profile')
 @login_required
 def profile():
-    return render_template('auth/profile.html', user=current_user)
+    return render_template('auth/profile.html', user=current_user, **get_theme_context())
 
 @bp.route('/users')
 @admin_required
 def manage_users():
     users = User.query.all()
     roles = Role.query.all()
-    return render_template('auth/manage_users.html', users=users, roles=roles)
+    return render_template('auth/manage_users.html', users=users, roles=roles, **get_theme_context())
 
 @bp.route('/add_user', methods=['GET', 'POST'])
 @admin_required
@@ -139,7 +147,7 @@ def add_user():
         return redirect(url_for('auth.manage_users'))
     
     roles = Role.query.all()
-    return render_template('auth/add_user.html', roles=roles)
+    return render_template('auth/add_user.html', roles=roles, **get_theme_context())
 
 @bp.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
 @admin_required
@@ -173,7 +181,7 @@ def edit_user(user_id):
         return redirect(url_for('auth.manage_users'))
     
     roles = Role.query.all()
-    return render_template('auth/edit_user.html', user=user, roles=roles)
+    return render_template('auth/edit_user.html', user=user, roles=roles, **get_theme_context())
 
 @bp.route('/delete_user/<int:user_id>', methods=['POST'])
 @admin_required
@@ -215,9 +223,9 @@ def system_check():
         else:
             flash('System check failed. Critical issues were detected.', 'error')
         
-        return render_template('auth/system_check.html', results=results)
+        return render_template('auth/system_check.html', results=results, **get_theme_context())
     
-    return render_template('auth/system_check.html')
+    return render_template('auth/system_check.html', **get_theme_context())
 
 @bp.route('/admin/settings')
 @admin_required
@@ -247,7 +255,7 @@ def admin_settings():
     
     return render_template('auth/admin_settings.html', 
                           update_available=update_available,
-                          current_version=current_version)
+                          current_version=current_version, **get_theme_context())
 
 @bp.route('/admin/integrity')
 @admin_required
@@ -263,7 +271,7 @@ def admin_integrity():
             'warning_only_mode': monitor.warning_only_mode
         }
     
-    return render_template('auth/admin_integrity.html', status=status)
+    return render_template('auth/admin_integrity.html', status=status, **get_theme_context())
 
 @bp.route('/admin/integrity/password', methods=['POST'])
 @admin_required

@@ -5,6 +5,14 @@ from app.utils.api_utils import get_teams_dual_api, get_matches_dual_api, get_ev
 from app.utils.tba_api_utils import TBAApiError, construct_tba_event_key
 from app.models import Event, Team, Match
 from app import db
+from app.utils.theme_manager import ThemeManager
+
+def get_theme_context():
+    theme_manager = ThemeManager()
+    return {
+        'themes': theme_manager.get_available_themes(),
+        'current_theme_id': theme_manager.current_theme
+    }
 
 bp = Blueprint('api_test', __name__, url_prefix='/api_test')
 
@@ -12,7 +20,7 @@ bp = Blueprint('api_test', __name__, url_prefix='/api_test')
 @admin_required
 def index():
     """API testing interface"""
-    return render_template('api_test/index.html')
+    return render_template('api_test/index.html', **get_theme_context())
 
 @bp.route('/test_teams/<event_code>')
 @admin_required

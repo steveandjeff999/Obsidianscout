@@ -1,5 +1,12 @@
 # Git-Only Update System
 
+## Simple Update Steps
+
+- Check for updates in the Admin > Update section.
+- Follow the on-screen instructions to update.
+- Always back up your data before updating.
+- Contact your admin if you encounter issues during the update process.
+
 The application now uses a Git-only update system powered by GitPython, making it work with any Git repository (not just GitHub). The system automatically handles Git repository initialization and falls back to direct download when Git is not installed.
 
 ## 🎯 **Overview**
@@ -121,116 +128,4 @@ The web interface shows:
 ### Automatic Backups
 - Creates timestamped backups before updates
 - Configurable via web interface
-- Stored in `backups/` directory
-
-### Version Validation
-- Compares version numbers before updating
-- Prevents downgrades unless explicitly configured
-- Validates file integrity
-
-## 🚀 **Usage Examples**
-
-### Basic Setup (Automatic)
-```bash
-# 1. Configure repository URL in app_config.json
-# 2. Use web interface to configure updates
-# 3. Check for updates and install
-# 4. System automatically handles Git setup
-```
-
-### Manual Git Commands (Optional)
-```bash
-# Initialize repository manually (if desired)
-git init
-git add .
-git commit -m "Initial commit"
-
-# Add remote origin
-git remote add origin https://github.com/steveandjeff999/Obsidianscout.git
-
-# Push to remote
-git push -u origin main
-```
-
-## ⚠️ **Important Notes**
-
-### Before Updating
-- **Commit local changes** before running updates (if using Git)
-- **Backup your data** (database, config files, custom modifications)
-- **Test in development** environment first
-
-### Repository Requirements
-- **app_config.json** must exist in the root of your repository
-- **requirements.txt** must be present for dependency updates
-- **Database migrations** should be included if schema changes are made
-
-### Error Handling
-- **Network issues** are handled gracefully
-- **Merge conflicts** will prevent updates (resolve manually)
-- **Permission issues** are reported clearly
-- **Invalid repositories** are detected and reported
-- **Git not installed** automatically falls back to direct download
-
-## 🔧 **Troubleshooting**
-
-### Common Issues
-
-#### "Git is not installed" Warning
-- **Solution**: Install Git for better performance
-- **Alternative**: System will use direct download automatically
-
-#### "Repository URL not configured" Error
-```json
-// Update app_config.json
-{
-    "repository_url": "https://github.com/steveandjeff999/Obsidianscout.git"
-}
-```
-
-#### "Git pull failed" Error
-- Check network connectivity
-- Verify repository URL is correct
-- Ensure you have proper permissions
-- Check for merge conflicts
-
-#### "Failed to install dependencies" Error
-- Verify `requirements.txt` exists
-- Check Python environment
-- Ensure pip is available
-
-### Debug Information
-The web interface provides detailed error messages and console output to help diagnose issues.
-
-## 📝 **Migration from Old System**
-
-If you're migrating from the previous multi-method update system:
-
-1. **Remove old configuration** from `app_config.json`:
-   ```json
-   // Remove these fields:
-   "update_method": "direct_download",
-   "download_url": "..."
-   ```
-
-2. **Add Git configuration**:
-   ```json
-   {
-       "repository_url": "https://github.com/steveandjeff999/Obsidianscout.git",
-       "branch": "main",
-       "backup_enabled": true
-   }
-   ```
-
-3. **Use web interface** to configure and test updates
-4. **System automatically handles** Git repository initialization
-
-## 🎉 **Benefits of Enhanced Git System**
-
-- **Zero setup required** - automatically initializes Git repositories
-- **Fallback support** - works without Git installed
-- **Simplified configuration** - no need to choose between multiple update methods
-- **Better reliability** - GitPython provides robust Git operations
-- **Universal compatibility** - works with any Git hosting service
-- **Enhanced monitoring** - detailed repository status and error reporting
-- **Automatic conflict resolution** - handles branch switching and merging
-- **Professional workflow** - integrates with standard Git practices 
+- Stored in `

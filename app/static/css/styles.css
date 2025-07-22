@@ -1899,3 +1899,38 @@ body {
     background-color: rgba(255, 255, 255, 0.05);
     border-bottom-color: rgba(255, 255, 255, 0.1);
 }
+
+/* Ensure navbar dropdown overlays and does not expand navbar height */
+.navbar .dropdown-menu {
+    position: absolute !important;
+    top: 100% !important;
+    left: 0;
+    z-index: 1050;
+    margin-top: 0.25rem;
+}
+
+/* For right-aligned dropdowns */
+.navbar .dropdown-menu.dropdown-menu-end {
+    right: 0;
+    left: auto;
+}
+
+/* Navbar dropdown: solid background, auto width, no transparency, background always covers text */
+.navbar .dropdown-menu {
+    background-color: #f8f9fa !important;
+    color: #212529 !important;
+    min-width: 180px;
+    width: max-content;
+    max-width: 90vw;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    border: 1px solid #e0e0e0;
+    padding: 0.5rem 0;
+    overflow-x: auto;
+}
+
+.navbar .dropdown-menu .dropdown-item {
+    color: #212529 !important;
+    white-space: normal;
+    word-break: break-word;
+    padding-right: 2rem;
+}
