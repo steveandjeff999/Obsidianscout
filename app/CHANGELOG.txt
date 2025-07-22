@@ -3,6 +3,16 @@ Changelog
 
 - Initial changelog setup.
 
+
+Version 1.0.1.4 - PWA Improvements and Icon Fixes
+------------------------------------------------
+- Improved Progressive Web App (PWA) installability for mobile and desktop.
+- Added and referenced 192x192 and 512x512 PNG icons for proper app icon display.
+- Moved icon files to the static directory and updated all references in manifest and HTML.
+- Updated manifest.json to use correct static paths for icons.
+- Updated HTML <head> to use new icon paths for favicon and apple-touch-icon.
+- Ensured app installs with the correct custom icon and name on all platforms.
+
 [1.0.0.8] - 7/19/2025
 - Added comprehensive theme management system with GUI interface
 - Created theme configuration file (config/theme_config.json) with 5 built-in themes (Default Blue, Dark Mode, Green, Purple, Orange)
@@ -22,3 +32,4 @@ Changelog
 - Removed /visualization route and consolidated all graphing functionality under /graphs
 - Updated navigation and all references to point to the new graphs routes
 - Improved counter input layout in scouting forms - plus/minus buttons now positioned horizontally next to number input instead of above/below
+
