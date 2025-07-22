@@ -4,6 +4,17 @@ Changelog
 - Initial changelog setup.
 
 
+Version 1.0.1.5 - UI/UX Improvements, Theme Switching, and Bug Fixes
+------------------------------------------------
+- Theme switching from the navbar now updates the theme without redirecting to the themes page.
+- Button colors now correctly follow the selected theme in both light and dark mode.
+- Teams in the scouting form are now always sorted by team number.
+- Fixed navbar dropdown overlay and background issues.
+- Improved help page and assistant integration for help docs.
+- Fixed global theme context passing to all templates (no more 'themes is undefined' errors).
+- Various minor bug fixes and UI polish.
+
+
 Version 1.0.1.4 - PWA Improvements and Icon Fixes
 ------------------------------------------------
 - Improved Progressive Web App (PWA) installability for mobile and desktop.

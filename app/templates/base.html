@@ -40,6 +40,23 @@
     <link rel="apple-touch-icon" href="/static/obsidian-192.png">
     <meta name="theme-color" content="#1976d2">
     
+    <style>
+        .form-switch .form-check-input {
+            height: 1.2rem;
+            width: 2.2rem;
+            cursor: pointer;
+        }
+        .form-check-label {
+            cursor: pointer;
+        }
+        .dark-mode #darkModeIcon {
+            color: #ffc107 !important;
+        }
+        .dark-mode #darkModeLabel {
+            color: #e6e6e6;
+        }
+    </style>
+    
     {% block head %}{% endblock %}
 </head>
 <body class="d-flex flex-column h-100">
@@ -202,6 +219,12 @@
                             </a>
                         </li>
                         {% endif %}
+                        <li class="nav-item">
+                            <a class="nav-link px-3 py-2 {% if request.endpoint == 'main.help_page' %}active{% endif %}" href="{{ url_for('main.help_page') }}">
+                                <i class="fas fa-question-circle nav-icon"></i>
+                                <span class="nav-text">Help</span>
+                            </a>
+                        </li>
                     </ul>
                     {% endif %}
                     
@@ -308,6 +331,38 @@
                                 {% endif %}
                                 <li><hr class="dropdown-divider my-1"></li>
                                 <li>
+                                    <form id="themeSelectForm" method="POST" action="/themes/apply/" class="px-3 py-2">
+                                        <label for="themeSelect" class="form-label mb-1">Theme</label>
+                                        <select id="themeSelect" name="theme_id" class="form-select form-select-sm">
+                                            {% for theme_id, theme in themes.items() %}
+                                            <option value="{{ theme_id }}" {% if theme_id == current_theme_id %}selected{% endif %}>{{ theme.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </form>
+                                    <script>
+                                    document.getElementById('themeSelect').addEventListener('change', function(e) {
+                                        e.preventDefault();
+                                        var themeId = this.value;
+                                        fetch('/themes/apply/' + themeId, {
+                                            method: 'POST',
+                                            headers: {
+                                                'X-Requested-With': 'XMLHttpRequest',
+                                                'Content-Type': 'application/json'
+                                            }
+                                        })
+                                        .then(res => res.json())
+                                        .then(data => {
+                                            if (data.success) {
+                                                window.location.reload();
+                                            } else {
+                                                alert(data.message || 'Failed to apply theme.');
+                                            }
+                                        })
+                                        .catch(() => alert('Failed to apply theme.'));
+                                    });
+                                    </script>
+                                </li>
+                                <li>
                                     <div class="px-3 py-2">
                                         <div class="form-check form-switch d-flex align-items-center">
                                             <input class="form-check-input me-2" type="checkbox" id="darkModeToggle">
@@ -315,22 +370,6 @@
                                                 <i class="fas fa-moon me-2 text-primary" id="darkModeIcon"></i> 
                                                 <span id="darkModeLabel">Dark Mode</span>
                                             </label>
-                                            <style>
-                                                .form-switch .form-check-input {
-                                                    height: 1.2rem;
-                                                    width: 2.2rem;
-                                                    cursor: pointer;
-                                                }
-                                                .form-check-label {
-                                                    cursor: pointer;
-                                                }
-                                                .dark-mode #darkModeIcon {
-                                                    color: #ffc107 !important;
-                                                }
-                                                .dark-mode #darkModeLabel {
-                                                    color: #e6e6e6;
-                                                }
-                                            </style>
                                         </div>
                                     </div>
                                 </li>

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, current_app, redirect, url_for, request, flash
+from flask import Blueprint, render_template, current_app, redirect, url_for, request, flash, send_from_directory
 from flask_login import login_required, current_user
 import json
 import os
@@ -6,8 +6,12 @@ import copy
 from functools import wraps
 from flask_socketio import emit
 from app import socketio
+import markdown2
+from app.utils.theme_manager import ThemeManager
 
 connected_devices = {}
+
+HELP_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', 'help')
 
 def update_device_list():
     device_list = [
@@ -26,6 +30,22 @@ def handle_usb_device_connected(data):
 def handle_usb_data(data):
     # Relay data to all dashboard clients (could be filtered by device if needed)
     emit('usb_data_to_device', {'data': data['data']}, broadcast=True)
+
+def get_help_files():
+    files = []
+    for f in os.listdir(HELP_FOLDER):
+        if f.lower().endswith('.md'):
+            files.append(f)
+    files.sort()
+    return files
+
+def get_theme_context():
+    theme_manager = ThemeManager()
+    return {
+        'themes': theme_manager.get_available_themes(),
+        'current_theme_id': theme_manager.current_theme,
+        'theme_css_variables': theme_manager.get_theme_css_variables()
+    }
 
 bp = Blueprint('main', __name__)
 
@@ -67,32 +87,33 @@ def index():
                           game_config=game_config,
                           teams=teams,
                           matches=matches,
-                          scout_entries=scout_entries)
+                          scout_entries=scout_entries,
+                          **get_theme_context())
 
 @bp.route('/about')
 @login_required
 def about():
     """About page with info about the scouting system"""
-    return render_template('about.html')
+    return render_template('about.html', **get_theme_context())
 
 @bp.route('/config')
 @login_required
 def config():
     """View the current game configuration"""
     game_config = current_app.config['GAME_CONFIG']
-    return render_template('config.html', game_config=game_config)
+    return render_template('config.html', game_config=game_config, **get_theme_context())
 
 @bp.route('/config/edit')
 def edit_config():
     """Edit the game configuration"""
     game_config = copy.deepcopy(current_app.config['GAME_CONFIG'])
-    return render_template('config_edit.html', game_config=game_config)
+    return render_template('config_edit.html', game_config=game_config, **get_theme_context())
 
 @bp.route('/config/simple-edit')
 def simple_edit_config():
     """Simple form-based configuration editor"""
     game_config = copy.deepcopy(current_app.config['GAME_CONFIG'])
-    return render_template('config_simple_edit.html', game_config=game_config)
+    return render_template('config_simple_edit.html', game_config=game_config, **get_theme_context())
 
 @bp.route('/config/save', methods=['POST'])
 def save_config():
@@ -366,6 +387,20 @@ def save_simple_config():
     except Exception as e:
         flash(f'Error updating configuration: {str(e)}', 'danger')
         return redirect(url_for('main.simple_edit_config'))
+
+@bp.route('/help')
+@login_required
+def help_page():
+    files = get_help_files()
+    selected = request.args.get('file')
+    if not files:
+        return render_template('help.html', files=[], content="No help files found.", selected=None, **get_theme_context())
+    if not selected or selected not in files:
+        selected = files[0]
+    with open(os.path.join(HELP_FOLDER, selected), encoding='utf-8') as f:
+        md_content = f.read()
+    html_content = markdown2.markdown(md_content)
+    return render_template('help.html', files=files, content=html_content, selected=selected, **get_theme_context())
 
 def parse_default_value(value, element_type):
     """Parse default value based on element type"""

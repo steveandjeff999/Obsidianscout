@@ -6,6 +6,14 @@ from app import db
 from app.utils.api_utils import get_teams, ApiError, api_to_db_team_conversion, get_event_details, get_teams_dual_api, get_event_details_dual_api
 from datetime import datetime
 import statistics
+from app.utils.theme_manager import ThemeManager
+
+def get_theme_context():
+    theme_manager = ThemeManager()
+    return {
+        'themes': theme_manager.get_available_themes(),
+        'current_theme_id': theme_manager.current_theme
+    }
 
 bp = Blueprint('teams', __name__, url_prefix='/teams')
 
@@ -48,7 +56,7 @@ def index():
         else:
             flash("Please select an event to view teams.", "info")
     
-    return render_template('teams/index.html', teams=teams, events=events, selected_event=event)
+    return render_template('teams/index.html', teams=teams, events=events, selected_event=event, **get_theme_context())
 
 @bp.route('/sync_from_config')
 def sync_from_config():
@@ -198,13 +206,13 @@ def add():
         # Validate that team number is provided
         if not team_number:
             flash('Team number is required', 'danger')
-            return render_template('teams/add.html', events=events, default_event_id=default_event_id)
+            return render_template('teams/add.html', events=events, default_event_id=default_event_id, **get_theme_context())
         
         # Check if team already exists
         existing_team = Team.query.filter_by(team_number=team_number).first()
         if existing_team:
             flash(f'Team {team_number} already exists', 'danger')
-            return render_template('teams/add.html', events=events, default_event_id=default_event_id)
+            return render_template('teams/add.html', events=events, default_event_id=default_event_id, **get_theme_context())
         
         # Create new team
         team = Team(team_number=team_number, team_name=team_name, location=location)
@@ -235,7 +243,7 @@ def add():
             db.session.rollback()
             flash(f'Error adding team: {str(e)}', 'danger')
     
-    return render_template('teams/add.html', events=events, default_event_id=default_event_id)
+    return render_template('teams/add.html', events=events, default_event_id=default_event_id, **get_theme_context())
 
 @bp.route('/<int:team_number>/edit', methods=['GET', 'POST'])
 def edit(team_number):
@@ -284,7 +292,7 @@ def edit(team_number):
             db.session.rollback()
             flash(f'Error updating team: {str(e)}', 'danger')
     
-    return render_template('teams/edit.html', team=team, events=events)
+    return render_template('teams/edit.html', team=team, events=events, **get_theme_context())
 
 @bp.route('/<int:team_number>/delete', methods=['POST'])
 def delete(team_number):
@@ -393,5 +401,6 @@ def view(team_number):
         component_metrics=component_metrics,
         metric_info=metric_info,
         total_metric_id=total_metric_id,
-        total_metric_name=total_metric_name
+        total_metric_name=total_metric_name,
+        **get_theme_context()
     )

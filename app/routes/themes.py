@@ -7,19 +7,19 @@ import time
 
 bp = Blueprint('themes', __name__, url_prefix='/themes')
 
+def get_theme_context():
+    theme_manager = ThemeManager()
+    return {
+        'themes': theme_manager.get_available_themes(),
+        'current_theme_id': theme_manager.current_theme
+    }
+
 @bp.route('/')
 @login_required
 @admin_required
 def index():
     """Theme management dashboard"""
-    theme_manager = ThemeManager()
-    available_themes = theme_manager.get_available_themes()
-    current_theme = theme_manager.get_current_theme()
-    
-    return render_template('themes/index.html', 
-                          themes=available_themes,
-                          current_theme=current_theme,
-                          current_theme_id=theme_manager.current_theme)
+    return render_template('themes/index.html', **get_theme_context())
 
 @bp.route('/preview/<theme_id>')
 @login_required
@@ -38,7 +38,8 @@ def preview_theme(theme_id):
     
     return render_template('themes/preview.html', 
                           theme=theme_data,
-                          all_themes=available_themes)
+                          all_themes=available_themes,
+                          **get_theme_context())
 
 @bp.route('/apply/<theme_id>', methods=['POST'])
 @login_required
@@ -46,10 +47,16 @@ def preview_theme(theme_id):
 def apply_theme(theme_id):
     """Apply a theme"""
     theme_manager = ThemeManager()
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.accept_mimetypes['application/json'] > 0
     
     if theme_manager.set_current_theme(theme_id):
-        flash(f'The theme "{theme_manager.get_current_theme()["name"]}" has been applied successfully!', 'success')
+        msg = f'The theme "{theme_manager.get_current_theme()["name"]}" has been applied successfully!'
+        if is_ajax:
+            return jsonify({'success': True, 'message': msg})
+        flash(msg, 'success')
     else:
+        if is_ajax:
+            return jsonify({'success': False, 'message': 'Failed to apply theme. Theme not found.'}), 400
         flash('Failed to apply theme. Theme not found.', 'danger')
     
     return redirect(url_for('themes.index'))
@@ -72,7 +79,8 @@ def edit_theme(theme_id):
     
     return render_template('themes/edit.html', 
                           theme=theme_data,
-                          is_custom=is_custom)
+                          is_custom=is_custom,
+                          **get_theme_context())
 
 @bp.route('/edit/<theme_id>', methods=['POST'])
 @login_required
@@ -149,7 +157,8 @@ def create_theme():
     available_themes = theme_manager.get_available_themes()
     
     return render_template('themes/create.html', 
-                          base_themes=available_themes)
+                          base_themes=available_themes,
+                          **get_theme_context())
 
 @bp.route('/create', methods=['POST'])
 @login_required

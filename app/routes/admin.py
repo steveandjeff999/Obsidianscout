@@ -4,6 +4,15 @@ from app.routes.auth import admin_required
 from app.utils.version_manager import VersionManager
 from app.utils.update_manager import UpdateManager
 from app.utils.remote_config import fetch_remote_config, is_remote_version_newer
+from app.utils.theme_manager import ThemeManager
+
+def get_theme_context():
+    theme_manager = ThemeManager()
+    return {
+        'themes': theme_manager.get_available_themes(),
+        'current_theme_id': theme_manager.current_theme
+    }
+
 import subprocess
 import sys
 import os
@@ -54,7 +63,8 @@ def update_page():
                          update_available=update_available,
                          changelog_txt=changelog_txt,
                          git_config=git_config,
-                         git_status=git_status)
+                         git_status=git_status,
+                         **get_theme_context())
 
 @bp.route('/update/check', methods=['POST'])
 @login_required

@@ -9,6 +9,14 @@ from datetime import datetime
 from app.utils.config_manager import get_id_to_perm_id_mapping
 from app.utils.sync_manager import SyncManager
 import os
+from app.utils.theme_manager import ThemeManager
+
+def get_theme_context():
+    theme_manager = ThemeManager()
+    return {
+        'themes': theme_manager.get_available_themes(),
+        'current_theme_id': theme_manager.current_theme
+    }
 
 bp = Blueprint('pit_scouting', __name__, url_prefix='/pit-scouting')
 
@@ -54,7 +62,8 @@ def index():
                           pit_config=pit_config,
                           current_event=current_event,
                           total_teams_scouted=total_teams_scouted,
-                          unuploaded_count=unuploaded_count)
+                          unuploaded_count=unuploaded_count,
+                          **get_theme_context())
 
 @bp.route('/form', methods=['GET', 'POST'])
 @login_required
@@ -159,7 +168,8 @@ def form():
     return render_template('scouting/pit_form.html', 
                           teams=teams, 
                           pit_config=pit_config,
-                          current_event=current_event)
+                          current_event=current_event,
+                          **get_theme_context())
 
 @bp.route('/list')
 @login_required
@@ -182,7 +192,8 @@ def list_dynamic():
     
     return render_template('scouting/pit_list_dynamic.html', 
                           pit_config=pit_config,
-                          current_event=current_event)
+                          current_event=current_event,
+                          **get_theme_context())
 
 @bp.route('/api/list')
 @login_required
@@ -237,7 +248,8 @@ def view(id):
     
     return render_template('scouting/pit_view.html', 
                           pit_data=pit_data,
-                          pit_config=pit_config)
+                          pit_config=pit_config,
+                          **get_theme_context())
 
 @bp.route('/edit/<int:id>', methods=['GET', 'POST'])
 @login_required
@@ -298,7 +310,8 @@ def edit(id):
     return render_template('scouting/pit_form.html', 
                           pit_data=pit_data,
                           pit_config=pit_config,
-                          edit_mode=True)
+                          edit_mode=True,
+                          **get_theme_context())
 
 @bp.route('/sync/status')
 @login_required
@@ -436,7 +449,7 @@ def config():
         return redirect(url_for('pit_scouting.index'))
     
     pit_config = load_pit_config()
-    return render_template('scouting/pit_config.html', pit_config=pit_config)
+    return render_template('scouting/pit_config.html', pit_config=pit_config, **get_theme_context())
 
 @bp.route('/config/edit', methods=['GET', 'POST'])
 @login_required
@@ -502,7 +515,8 @@ def config_edit():
     config_json = json.dumps(pit_config, indent=2)
     
     return render_template('scouting/pit_config_edit.html', 
-                          config_json=config_json)
+                          config_json=config_json,
+                          **get_theme_context())
 
 @bp.route('/config/simple-edit')
 @login_required
@@ -513,7 +527,7 @@ def config_simple_edit():
         return redirect(url_for('pit_scouting.index'))
     
     pit_config = load_pit_config()
-    return render_template('scouting/pit_config_simple.html', pit_config=pit_config)
+    return render_template('scouting/pit_config_simple.html', pit_config=pit_config, **get_theme_context())
 
 @bp.route('/config/simple-save', methods=['POST'])
 @login_required
@@ -1514,7 +1528,7 @@ def sync_config():
     sync_manager = SyncManager()
     config = sync_manager.config.get('sync_server', {})
     
-    return render_template('scouting/pit_sync_config.html', config=config)
+    return render_template('scouting/pit_sync_config.html', config=config, **get_theme_context())
 
 @bp.route('/sync/test', methods=['POST'])
 @login_required

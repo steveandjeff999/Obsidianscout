@@ -10,6 +10,14 @@ import plotly
 import sys
 from app.models import Team, Match, ScoutingData, Event
 from app.utils.analysis import calculate_team_metrics
+from app.utils.theme_manager import ThemeManager
+
+def get_theme_context():
+    theme_manager = ThemeManager()
+    return {
+        'themes': theme_manager.get_available_themes(),
+        'current_theme_id': theme_manager.current_theme
+    }
 
 bp = Blueprint('graphs', __name__, url_prefix='/graphs')
 
@@ -327,7 +335,8 @@ def index():
                           selected_event_id=selected_event_id,
                           selected_metric=selected_metric,
                           team_event_mapping=team_event_mapping,
-                          team_metrics=team_metrics)
+                          team_metrics=team_metrics,
+                          **get_theme_context())
 
 @bp.route('/side-by-side')
 @analytics_required
@@ -352,7 +361,7 @@ def side_by_side():
             teams = Team.query.order_by(Team.team_number).all()
         
         metrics = game_config['data_analysis']['key_metrics']
-        return render_template('graphs/side_by_side_form.html', teams=teams, metrics=metrics)
+        return render_template('graphs/side_by_side_form.html', teams=teams, metrics=metrics, **get_theme_context())
     
     # Get game configuration
     game_config = current_app.config['GAME_CONFIG']
@@ -436,4 +445,5 @@ def side_by_side():
     
     return render_template('graphs/side_by_side.html',
                          teams_data=teams_data,
-                         game_config=game_config)
+                         game_config=game_config,
+                         **get_theme_context())
