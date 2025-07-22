@@ -5,6 +5,17 @@
  */
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Register service worker for offline support
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/static/sw.js')
+            .then(reg => {
+                console.log('Service Worker registered:', reg.scope);
+            })
+            .catch(err => {
+                console.warn('Service Worker registration failed:', err);
+            });
+    }
+    
     // Initialize all tooltips
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
     if (tooltipTriggerList.length) {
@@ -1169,8 +1180,7 @@ function setupSearch() {
             searchResultsContainer.classList.remove('d-none');
             
             // Fetch search results
-            fetch(`/api/search?q=${encodeURIComponent(query)}`)
-                .then(response => response.json())
+            fetchWithOfflineFallback(`/api/search?q=${encodeURIComponent(query)}`)
                 .then(data => {
                     // Generate results HTML
                     if (data.results && data.results.length) {
@@ -2274,4 +2284,44 @@ function showDeleteConfirmNotification(btn, entryId) {
     } else {
         alert('Click again to confirm delete.');
     }
+}
+
+// Utility: Fetch API data from IndexedDB if offline
+async function getAPIDataFromIDB(url) {
+    return new Promise(resolve => {
+        const open = indexedDB.open('ScoutAppDB', 1);
+        open.onupgradeneeded = () => {
+            open.result.createObjectStore('api', { keyPath: 'url' });
+        };
+        open.onsuccess = () => {
+            const db = open.result;
+            const tx = db.transaction('api', 'readonly');
+            const req = tx.objectStore('api').get(url);
+            req.onsuccess = () => {
+                resolve(req.result ? req.result.data : null);
+                db.close();
+            };
+            req.onerror = () => {
+                resolve(null);
+                db.close();
+            };
+        };
+        open.onerror = () => resolve(null);
+    });
+}
+
+// Example usage: Fetch API data, fallback to IndexedDB if offline
+async function fetchWithOfflineFallback(apiUrl) {
+    if (navigator.onLine) {
+        try {
+            const res = await fetch(apiUrl);
+            if (res.ok) return await res.json();
+        } catch (e) {
+            // Network error, fallback to IDB
+        }
+    }
+    // Offline or fetch failed
+    const cached = await getAPIDataFromIDB(apiUrl);
+    if (cached) return cached;
+    throw new Error('No data available offline');
 }

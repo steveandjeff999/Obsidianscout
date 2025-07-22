@@ -4,6 +4,28 @@ import json
 import os
 import copy
 from functools import wraps
+from flask_socketio import emit
+from app import socketio
+
+connected_devices = {}
+
+def update_device_list():
+    device_list = [
+        {'id': k, 'status': v['status']} for k, v in connected_devices.items()
+    ]
+    socketio.emit('update_device_list', device_list)
+
+@socketio.on('usb_device_connected')
+def handle_usb_device_connected(data):
+    device_id = data.get('device', 'Unknown Device')
+    connected_devices[device_id] = {'status': 'Connected'}
+    update_device_list()
+    emit('usb_data_to_device', {'data': 'Device connected!'}, broadcast=True)
+
+@socketio.on('usb_data')
+def handle_usb_data(data):
+    # Relay data to all dashboard clients (could be filtered by device if needed)
+    emit('usb_data_to_device', {'data': data['data']}, broadcast=True)
 
 bp = Blueprint('main', __name__)
 

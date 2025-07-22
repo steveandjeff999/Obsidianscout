@@ -155,20 +155,25 @@ class ActivityLogger {
             }
             
             console.log('Sending activity logs to server');
-            const response = await fetch('/activity/log_activity', {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify({ logs: batch }),
-                credentials: 'same-origin'
-            });
-            
-            if (!response.ok) {
-                // If submission fails, add the items back to the queue
-                this.queue = [...batch, ...this.queue];
-                console.error('Failed to submit activity logs', response.status, response.statusText);
+            if (navigator.onLine) {
+                const response = await fetch('/activity/log_activity', {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({ logs: batch }),
+                    credentials: 'same-origin'
+                });
+                if (!response.ok) {
+                    // If submission fails, add the items back to the queue
+                    this.queue = [...batch, ...this.queue];
+                    console.error('Failed to submit activity logs', response.status, response.statusText);
+                } else {
+                    const result = await response.json();
+                    console.log(`Activity logger: Successfully logged ${result.logged_entries} entries`);
+                }
             } else {
-                const result = await response.json();
-                console.log(`Activity logger: Successfully logged ${result.logged_entries} entries`);
+                // Offline: add the items back to the queue for later
+                this.queue = [...batch, ...this.queue];
+                console.warn('Offline: Activity logs queued for later submission');
             }
         } catch (error) {
             // If submission fails, add the items back to the queue
