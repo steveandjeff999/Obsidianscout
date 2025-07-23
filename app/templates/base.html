@@ -128,6 +128,13 @@
                                         <span>Match Strategy</span>
                                     </a>
                                 </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint == 'matches.strategy_draw' %}active{% endif %}"
+                                       href="{{ url_for('matches.strategy_draw') }}">
+                                        <i class="fas fa-pen-ruler nav-icon text-primary"></i>
+                                        <span>Strategy Drawing</span>
+                                    </a>
+                                </li>
                             </ul>
                         </li>
                         {% endif %}
@@ -445,6 +452,11 @@
                         <span>No active configuration</span>
                         {% endif %}
                     </div>
+                <!--<div class="mt-2">
+                        <a href="https://www.paypal.com" target="_blank" rel="noopener" class="btn btn-sm btn-warning d-inline-flex align-items-center">
+                            <i class="fas fa-heart me-1"></i> Donate(Not yet available)
+                        </a>
+                    </div> -->
                 </div>
             </div>
         </div>

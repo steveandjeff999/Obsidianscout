@@ -7,6 +7,14 @@ from app.utils.api_utils import get_matches, ApiError, api_to_db_match_conversio
 from app.utils.analysis import predict_match_outcome, get_match_details_with_teams
 from datetime import datetime
 from app.utils.theme_manager import ThemeManager
+from flask_socketio import emit, join_room, leave_room
+from app.models import StrategyDrawing
+from app import socketio
+import os
+from flask import send_from_directory
+from werkzeug.utils import secure_filename
+from PIL import Image
+import io
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -490,3 +498,127 @@ def analyze_strategy(match_id):
         import traceback
         traceback.print_exc()
         return jsonify({'error': f'Error generating strategy analysis: {str(e)}'}), 500
+
+@bp.route('/strategy/draw')
+@login_required
+def strategy_draw():
+    """Strategy drawing page for matches"""
+    # Only allow users with analytics or admin role
+    user_roles = current_user.get_role_names()
+    if not any(role in user_roles for role in ['admin', 'analytics']):
+        flash('Insufficient permissions to access strategy drawing.', 'danger')
+        return redirect(url_for('matches.index'))
+
+    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+    game_config = current_app.config.get('GAME_CONFIG', {})
+    current_event_code = game_config.get('current_event_code')
+    event_id = request.args.get('event_id', type=int) or request.form.get('event_id', type=int)
+    event = None
+    matches = []
+    if event_id:
+        event = Event.query.get_or_404(event_id)
+    elif current_event_code:
+        event = Event.query.filter_by(code=current_event_code).first()
+    if event:
+        matches = Match.query.filter_by(event_id=event.id).all()
+        match_type_order = {
+            'practice': 1,
+            'qualification': 2,
+            'qualifier': 2,
+            'quarterfinal': 3,
+            'quarterfinals': 3,
+            'semifinal': 4,
+            'semifinals': 4,
+            'final': 5,
+            'finals': 5
+        }
+        def match_sort_key(m):
+            return (
+                match_type_order.get(m.match_type.lower(), 99),
+                m.match_number
+            )
+        matches = sorted(matches, key=match_sort_key)
+    return render_template(
+        'matches/strategy_draw.html',
+        events=events,
+        selected_event=event,
+        matches=matches,
+        game_config=game_config, **get_theme_context()
+    )
+
+@bp.route('/api/strategy_drawing/<int:match_id>', methods=['GET'])
+@login_required
+def get_strategy_drawing(match_id):
+    drawing = StrategyDrawing.query.filter_by(match_id=match_id).first()
+    if drawing:
+        bg_url = url_for('matches.get_strategy_background', filename=drawing.background_image) if drawing.background_image else None
+        return jsonify({'data': drawing.data, 'last_updated': drawing.last_updated.isoformat() if drawing.last_updated else None, 'background_image': bg_url})
+    else:
+        return jsonify({'data': None, 'last_updated': None, 'background_image': None})
+
+# Socket.IO events for real-time strategy drawing sync
+@socketio.on('join_strategy_room')
+def on_join_strategy_room(data):
+    match_id = data.get('match_id')
+    if match_id:
+        room = f'strategy_match_{match_id}'
+        join_room(room)
+        # Send current drawing data to the new client
+        drawing = StrategyDrawing.query.filter_by(match_id=match_id).first()
+        emit('drawing_data', {
+            'match_id': match_id,
+            'data': drawing.data if drawing else None,
+            'last_updated': drawing.last_updated.isoformat() if drawing and drawing.last_updated else None
+        })
+
+@socketio.on('drawing_update')
+def on_drawing_update(data):
+    match_id = data.get('match_id')
+    drawing_data = data.get('data')
+    if not match_id or drawing_data is None:
+        return
+    # Save to DB
+    drawing = StrategyDrawing.query.filter_by(match_id=match_id).first()
+    if not drawing:
+        drawing = StrategyDrawing(match_id=match_id, data_json='{}')
+        db.session.add(drawing)
+    drawing.data = drawing_data
+    db.session.commit()
+    # Broadcast to all clients in the room (except sender)
+    room = f'strategy_match_{match_id}'
+    emit('drawing_data', {
+        'match_id': match_id,
+        'data': drawing_data,
+        'last_updated': drawing.last_updated.isoformat() if drawing.last_updated else None
+    }, room=room, include_self=False)
+
+ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+STRATEGY_BG_UPLOAD_FOLDER = os.path.join('app', 'static', 'strategy_backgrounds')
+
+@bp.route('/api/strategy_background', methods=['POST'])
+@login_required
+def upload_strategy_background():
+    if 'background' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+    file = request.files['background']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    # Convert to PNG and save as default_bg.png
+    try:
+        img = Image.open(file.stream)
+        save_path = os.path.join(STRATEGY_BG_UPLOAD_FOLDER, 'default_bg.png')
+        os.makedirs(STRATEGY_BG_UPLOAD_FOLDER, exist_ok=True)
+        img.convert('RGBA').save(save_path, format='PNG')
+    except Exception as e:
+        return jsonify({'error': f'Image conversion failed: {str(e)}'}), 400
+    # Notify via Socket.IO (all matches)
+    bg_url = url_for('matches.get_global_strategy_background', filename='default_bg.png')
+    socketio.emit('background_image_update', {
+        'match_id': None,
+        'background_image': bg_url
+    })
+    return jsonify({'background_image': bg_url})
+
+@bp.route('/strategy_backgrounds/<filename>')
+def get_global_strategy_background(filename):
+    return send_from_directory(os.path.abspath(STRATEGY_BG_UPLOAD_FOLDER), filename)
