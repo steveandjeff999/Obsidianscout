@@ -1,7 +1,7 @@
 # Scouting Guide
 
 ## Overview
-This guide provides best practices and tips for effective scouting using the 5454 Scout Platform.
+This guide provides best practices and tips for effective scouting using ObsidianScout.
 
 ## Best Practices
 - Double-check your data before submitting.

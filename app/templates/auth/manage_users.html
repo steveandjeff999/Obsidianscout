@@ -61,6 +61,10 @@
                                             <span class="badge bg-info me-1">
                                                 <i class="fas fa-search me-1"></i>Scout
                                             </span>
+                                        {% elif role.name == 'viewer' %}
+                                            <span class="badge bg-secondary me-1">
+                                                <i class="fas fa-eye me-1"></i>Viewer
+                                            </span>
                                         {% else %}
                                             <span class="badge bg-secondary me-1">{{ role.name.title() }}</span>
                                         {% endif %}

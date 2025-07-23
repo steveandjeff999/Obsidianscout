@@ -107,6 +107,9 @@ class User(UserMixin, db.Model):
             ]
             return route_name in allowed_routes
         
+        # Remove viewer role logic
+        # (No viewer-specific allowed_routes)
+        
         return False
     
     def __repr__(self):

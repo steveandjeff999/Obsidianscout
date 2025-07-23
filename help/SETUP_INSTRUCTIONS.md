@@ -2,7 +2,7 @@
 
 ## Quick Start
 
-Welcome to the 5454 Scout Platform!
+Welcome to ObsidianScout!
 
 ### First Steps
 1. Log in with your credentials.
@@ -56,12 +56,12 @@ Use the Help page to search for answers or contact your admin for support.
    **Option 1 - The Blue Alliance API (Recommended):**
    - Visit https://www.thebluealliance.com/account
    - Create an account and generate a Read API key
-   - Go to Configuration > API Settings in the scouting platform
+   - Go to Configuration > API Settings in the ObsidianScout platform
    - Enter your TBA API key and set "The Blue Alliance API" as preferred source
    
    **Option 2 - FIRST API (Official):**
    - Obtain credentials from the FIRST API portal
-   - Go to Configuration > API Settings in the scouting platform
+   - Go to Configuration > API Settings in the ObsidianScout platform
    - Enter your FIRST API username and auth token
    
    **Option 3 - Both APIs (Maximum Reliability):**
