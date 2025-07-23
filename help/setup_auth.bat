@@ -1,6 +1,6 @@
 @echo off
 echo ===================================================
-echo 5454Scout2026 Authentication System Setup Guide
+echo ObsidianScout Authentication System Setup Guide
 echo ===================================================
 echo.
 echo This script will guide you through setting up the authentication system.

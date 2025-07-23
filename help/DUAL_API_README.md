@@ -2,7 +2,7 @@
 
 ## Overview
 
-The FRC Scouting Platform now supports both the **FIRST API** (official) and **The Blue Alliance API** with automatic fallback functionality. This provides redundancy and ensures your scouting platform can continue to function even if one API is unavailable.
+The ObsidianScout platform now supports both the **FIRST API** (official) and **The Blue Alliance API** with automatic fallback functionality. This provides redundancy and ensures your ObsidianScout platform can continue to function even if one API is unavailable.
 
 ## Supported APIs
 
@@ -41,7 +41,7 @@ The FRC Scouting Platform now supports both the **FIRST API** (official) and **T
 1. Visit the FIRST API portal
 2. Create an account and request API access
 3. Obtain your username and authorization token
-4. In the scouting platform, go to **Configuration > API Settings**
+4. In the ObsidianScout platform, go to **Configuration > API Settings**
 5. Enter your FIRST API credentials
 
 ### 2. The Blue Alliance API Setup
@@ -49,7 +49,7 @@ The FRC Scouting Platform now supports both the **FIRST API** (official) and **T
 2. Create an account or log in
 3. Navigate to the "Read API Keys" section
 4. Generate a new API key
-5. In the scouting platform, go to **Configuration > API Settings**
+5. In the ObsidianScout platform, go to **Configuration > API Settings**
 6. Enter your TBA API key
 
 **Note:** TBA API works without authentication for basic usage, but an API key provides better rate limits and access to additional features.
@@ -75,21 +75,18 @@ A built-in testing interface is available to verify your API configuration:
 ### Testing Workflow
 1. Configure your API credentials
 2. Access the API Testing interface
-3. Run a quick test with a known event code (e.g., `2024cala`)
+3. Run a quick test with a known event code (e.g., `okok`)
 4. Verify both APIs are working correctly
 5. Check fallback functionality by temporarily disabling one API
 
 ## Event Code Formats
 
-### FIRST API
+
 - Uses simple event codes: `CALA`, `NYRO`, `TXDAL`
 - Case-insensitive
 - Typically 4-5 characters
 
-### The Blue Alliance API
-- Uses year-prefixed codes: `2024cala`, `2024nyro`, `2024txdal`
-- Must be lowercase
-- Format: `{year}{event_code}`
+
 
 The system automatically handles the conversion between formats.
 

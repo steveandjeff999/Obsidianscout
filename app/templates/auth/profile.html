@@ -58,6 +58,8 @@
                                         <span class="badge bg-info me-2">
                                             <i class="fas fa-search me-1"></i>{{ role.name.title() }}
                                         </span>
+                                    {% elif role.name == 'viewer' %}
+                                        {# Remove viewer role display #}
                                     {% else %}
                                         <span class="badge bg-secondary me-2">{{ role.name.title() }}</span>
                                     {% endif %}
@@ -104,6 +106,8 @@
                                         <strong>Scout Access:</strong> You have access to the scouting system for data entry and viewing your scouting assignments.
                                     </div>
                                 </div>
+                            {% elif user.has_role('viewer') %}
+                                {# Remove viewer role display #}
                             {% endif %}
                         </div>
                     </div>

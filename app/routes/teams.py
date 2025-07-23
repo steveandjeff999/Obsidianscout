@@ -404,3 +404,50 @@ def view(team_number):
         total_metric_name=total_metric_name,
         **get_theme_context()
     )
+
+@bp.route('/ranks')
+@analytics_required
+def ranks():
+    """Display team rankings for the selected event based on average total points"""
+    game_config = current_app.config.get('GAME_CONFIG', {})
+    current_event_code = game_config.get('current_event_code')
+    event_id = request.args.get('event_id', type=int)
+    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+    event = None
+    if event_id:
+        event = Event.query.get_or_404(event_id)
+    elif current_event_code:
+        event = Event.query.filter_by(code=current_event_code).first()
+    teams = event.teams if event else []
+    # Determine the total metric id from config
+    total_metric_id = None
+    if 'data_analysis' in game_config and 'key_metrics' in game_config['data_analysis']:
+        for metric in game_config['data_analysis']['key_metrics']:
+            if 'total' in metric.get('id', '').lower() or metric.get('id', '').lower() == 'tot':
+                total_metric_id = metric['id']
+                break
+    if not total_metric_id:
+        total_metric_id = 'tot'
+    # Calculate average total points for each team
+    team_rankings = []
+    for team in teams:
+        scouting_data = ScoutingData.query.filter_by(team_id=team.id).all()
+        if scouting_data:
+            total_points = [data.calculate_metric(total_metric_id) for data in scouting_data]
+            avg_points = sum(total_points) / len(total_points) if total_points else 0
+        else:
+            avg_points = 0
+        team_rankings.append({
+            'team': team,
+            'avg_points': avg_points,
+            'num_entries': len(scouting_data)
+        })
+    # Sort by average points descending
+    team_rankings.sort(key=lambda x: x['avg_points'], reverse=True)
+    return render_template('teams/ranks.html',
+        team_rankings=team_rankings,
+        events=events,
+        selected_event=event,
+        total_metric_id=total_metric_id,
+        **get_theme_context()
+    )

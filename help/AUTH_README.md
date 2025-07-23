@@ -1,7 +1,7 @@
 # Authentication System Documentation
 
 ## Overview
-This document explains how to use the authentication system in the 5454Scout2026 application.
+This document explains how to use the authentication system in the ObsidianScout application.
 
 ## User Roles
 

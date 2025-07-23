@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}FRC Scouting Platform{% endblock %}</title>
+    <title>{% block title %}ObsidianScout{% endblock %}</title>
     
     {% if game_config %}
     <meta name="auto_duration" content="{{ game_config.get('auto_period', {}).get('duration_seconds', 15) }}">
@@ -55,6 +55,13 @@
         .dark-mode #darkModeLabel {
             color: #e6e6e6;
         }
+        .obsidian-gradient {
+            background: linear-gradient(90deg, #7065a2 0%, #5a4b8f 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-fill-color: transparent;
+        }
     </style>
     
     {% block head %}{% endblock %}
@@ -65,7 +72,9 @@
             <div class="container-fluid px-lg-4 px-md-3 px-2">
                 <a class="navbar-brand d-flex align-items-center" href="{% if user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics') %}{{ url_for('scouting.index') }}{% else %}{{ url_for('main.index') }}{% endif %}">
                     <i class="fas fa-robot brand-icon me-2"></i>
-                    <span class="brand-text fw-bold">5454 <span class="text-primary">Scout</span> <span class="d-none d-sm-inline">{{ game_config.season }}</span></span>
+                    <span class="brand-text fw-bold">
+                        <span class="obsidian-gradient">Obsidian</span>Scout <span class="d-none d-sm-inline">{{ game_config.season }}</span>
+                    </span>
                 </a>
                 
                 <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain" 
@@ -94,10 +103,16 @@
                             </a>
                             <ul class="dropdown-menu dropdown-menu-animated shadow">
                                 <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('teams') %}active{% endif %}" 
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('teams') and request.endpoint != 'teams.ranks' %}active{% endif %}" 
                                        href="{{ url_for('teams.index') }}">
                                         <i class="fas fa-users nav-icon text-primary"></i> 
                                         <span>Teams</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint == 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.ranks') }}">
+                                        <i class="fas fa-list-ol nav-icon text-purple"></i>
+                                        <span>Team Ranks</span>
                                     </a>
                                 </li>
                                 <li>
@@ -424,7 +439,7 @@
         <div class="container">
             <div class="row mb-4">
                 <div class="col-12">
-                    <h1 class="page-title">{% block heading %}FRC Scouting Platform{% endblock %}</h1>
+                    <h1 class="page-title">{% block heading %}ObsidianScout{% endblock %}</h1>
                     {% block subheading %}{% endblock %}
                 </div>
             </div>
@@ -439,9 +454,9 @@
                 <div class="col-md-6 text-center text-md-start">
                     <div class="d-flex align-items-center justify-content-center justify-content-md-start">
                         <i class="fas fa-robot brand-icon me-2 text-primary"></i>
-                        <span class="fw-bold">5454 Scout</span>
+                        <span class="fw-bold">ObsidianScout</span>
                         <span class="text-muted mx-2">•</span>
-                        <span class="small text-muted">FRC Scouting Platform</span>
+                        <span class="small text-muted">ObsidianScout</span>
                     </div>
                 </div>
                 <div class="col-md-6 text-center text-md-end">
