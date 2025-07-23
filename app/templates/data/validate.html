@@ -1,46 +1,71 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Data Validation: API vs. Scouting Points</h2>
-<form method="get" action="">
-  <label for="event_id">Select Event:</label>
-  <select name="event_id" id="event_id" onchange="this.form.submit()">
-    {% for event in events %}
-      <option value="{{ event.id }}" {% if event.id == selected_event.id %}selected{% endif %}>{{ event.name }}</option>
-    {% endfor %}
-  </select>
-</form>
-<table class="table table-bordered mt-3">
-  <thead>
-    <tr>
-      <th>Match #</th>
-      <th>Type</th>
-      <th>Alliance</th>
-      <th>API Points</th>
-      <th>Scouting Points</th>
-      <th>Discrepancy</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for row in results %}
-      <tr>
-        <td rowspan="2">{{ row.match_number }}</td>
-        <td rowspan="2">{{ row.match_type }}</td>
-        <td>Red</td>
-        <td>{{ row.red_api if row.red_api is not none else 'N/A' }}</td>
-        <td>{{ row.red_scout }}</td>
-        <td {% if row.discrepancy_red %}style="background-color: #f8d7da; color: #721c24;"{% endif %}>
-          {% if row.discrepancy_red %}Mismatch{% else %}OK{% endif %}
-        </td>
-      </tr>
-      <tr>
-        <td>Blue</td>
-        <td>{{ row.blue_api if row.blue_api is not none else 'N/A' }}</td>
-        <td>{{ row.blue_scout }}</td>
-        <td {% if row.discrepancy_blue %}style="background-color: #f8d7da; color: #721c24;"{% endif %}>
-          {% if row.discrepancy_blue %}Mismatch{% else %}OK{% endif %}
-        </td>
-      </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="container mt-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-10">
+      <div class="card shadow data-card">
+        <div class="card-header bg-warning text-dark d-flex align-items-center">
+          <i class="fas fa-balance-scale me-2"></i>
+          <h4 class="mb-0">Validate API vs. Scouting Points</h4>
+        </div>
+        <div class="card-body">
+          <div class="alert alert-info d-flex align-items-center mb-4" role="alert">
+            <i class="fas fa-info-circle me-2"></i>
+            <div>
+              This page compares official API alliance scores with your scouting data for each match. Discrepancies are highlighted below.
+            </div>
+          </div>
+          <form method="get" action="" class="row g-3 align-items-center mb-3">
+            <div class="col-auto">
+              <label for="event_id" class="col-form-label fw-bold">Select Event:</label>
+            </div>
+            <div class="col-auto">
+              <select name="event_id" id="event_id" class="form-select" onchange="this.form.submit()">
+                {% for event in events %}
+                  <option value="{{ event.id }}" {% if event.id == selected_event.id %}selected{% endif %}>{{ event.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </form>
+          <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle mt-3 mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Match #</th>
+                  <th>Type</th>
+                  <th>Alliance</th>
+                  <th>API Points</th>
+                  <th>Scouting Points</th>
+                  <th>Discrepancy</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in results %}
+                  <tr>
+                    <td rowspan="2" class="fw-bold">{{ row.match_number }}</td>
+                    <td rowspan="2">{{ row.match_type }}</td>
+                    <td><span class="badge bg-danger">Red</span></td>
+                    <td>{{ row.red_api if row.red_api is not none else 'N/A' }}</td>
+                    <td>{{ row.red_scout }}</td>
+                    <td class="text-center {% if row.discrepancy_red %}table-danger fw-bold text-danger{% else %}table-success text-success{% endif %}">
+                      {% if row.discrepancy_red %}<i class="fas fa-exclamation-triangle me-1"></i>Mismatch{% else %}<i class="fas fa-check-circle me-1"></i>OK{% endif %}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><span class="badge bg-primary">Blue</span></td>
+                    <td>{{ row.blue_api if row.blue_api is not none else 'N/A' }}</td>
+                    <td>{{ row.blue_scout }}</td>
+                    <td class="text-center {% if row.discrepancy_blue %}table-danger fw-bold text-danger{% else %}table-success text-success{% endif %}">
+                      {% if row.discrepancy_blue %}<i class="fas fa-exclamation-triangle me-1"></i>Mismatch{% else %}<i class="fas fa-check-circle me-1"></i>OK{% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %} 

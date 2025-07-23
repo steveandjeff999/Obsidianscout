@@ -1,7 +1,16 @@
 Changelog
 =========
 
-- Initial changelog setup.
+Version 1.0.1.6 - Strategy Drawing, Real-Time Sync, and Custom Backgrounds
+------------------------------------------------
+- Added a new Strategy Drawing page accessible from the navbar under Competition.
+- Users can draw strategies on a field image with multi-color support.
+- Drawings sync in real time across all connected devices for the selected match.
+- Drawings are saved per match and persist across sessions.
+- Added support for uploading a custom background image, used globally for all matches.
+- Custom background syncs in real time and persists after refresh.
+- Fixed clear drawing button to sync cleared state across all clients.
+- Various minor bug fixes and improvements.
 
 
 Version 1.0.1.5 - UI/UX Improvements, Theme Switching, and Bug Fixes

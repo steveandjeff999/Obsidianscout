@@ -803,3 +803,28 @@ class PitScoutingData(db.Model):
                 pit_data.upload_timestamp = data_dict['upload_timestamp']
         
         return pit_data
+
+class StrategyDrawing(db.Model):
+    """Model to store strategy drawing data for each match"""
+    id = db.Column(db.Integer, primary_key=True)
+    match_id = db.Column(db.Integer, db.ForeignKey('match.id'), nullable=False, unique=True)
+    data_json = db.Column(db.Text, nullable=False)  # JSON-encoded drawing data
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    background_image = db.Column(db.String(256), nullable=True)  # Path or filename of custom background
+
+    match = db.relationship('Match', backref=db.backref('strategy_drawing', uselist=False))
+
+    def __repr__(self):
+        return f"<StrategyDrawing for Match {self.match_id}>"
+
+    @property
+    def data(self):
+        try:
+            return json.loads(self.data_json)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    @data.setter
+    def data(self, value):
+        self.data_json = json.dumps(value)

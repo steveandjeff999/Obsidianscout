@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required
 from app.routes.auth import analytics_required
-from app.models import Team, Match, Event, ScoutingData
+from app.models import Team, Match, Event, ScoutingData, StrategyDrawing
 from app import db
 import pandas as pd
 import json
@@ -528,25 +528,28 @@ def delete_entry(entry_id):
 
 @bp.route('/wipe_database', methods=['POST'])
 def wipe_database():
-    """Wipe all data from the database"""
+    """Wipe all data from the database and custom strategy backgrounds/drawings"""
     try:
-        # Import all models that need to be cleared
-        from app.models import ScoutingData, Match, Team, Event
-        
         # Delete all data in order to respect foreign key constraints
         ScoutingData.query.delete()
         Match.query.delete()
         Team.query.delete()
         Event.query.delete()
-        
-        # Commit the changes
+        StrategyDrawing.query.delete()
         db.session.commit()
-        
-        flash("Database wiped successfully. All data has been deleted.", "success")
+        # Delete all custom strategy background images
+        bg_folder = os.path.join('app', 'static', 'strategy_backgrounds')
+        if os.path.exists(bg_folder):
+            for f in os.listdir(bg_folder):
+                if f.endswith('.png') or f.endswith('.jpg') or f.endswith('.jpeg') or f.endswith('.gif'):
+                    try:
+                        os.remove(os.path.join(bg_folder, f))
+                    except Exception:
+                        pass
+        flash("Database and custom strategy backgrounds/drawings wiped successfully. All data has been deleted.", "success")
     except Exception as e:
         db.session.rollback()
         flash(f"Error wiping database: {str(e)}", "danger")
-    
     return redirect(url_for('data.index'))
 
 @bp.route('/validate', methods=['GET'])
