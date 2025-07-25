@@ -161,7 +161,7 @@ if __name__ == '__main__':
             host='0.0.0.0',
             port=port,
             debug=not IS_PRODUCTION,
-            use_reloader=not IS_PRODUCTION,  # Enable reloader in development
+            use_reloader=False,  # Enable reloader in development
             ssl_context=ssl_context,
             allow_unsafe_werkzeug=True  # This line disables the production server error.
         )
