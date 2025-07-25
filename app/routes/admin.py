@@ -143,7 +143,8 @@ def run_update():
                 yield f"data: 📝 Found uncommitted changes: {changes_summary}\n\n"
                 yield f"data: Auto-committing changes before update...\n\n"
             
-            # Perform the update using Git or direct download
+            # For now, we'll use the existing approach without progress callbacks
+            # The detailed progress is already built into the Git update method
             success, message = update_manager.perform_update()
             
             if success:

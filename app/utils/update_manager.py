@@ -261,9 +261,15 @@ class UpdateManager:
             return None
     
     def perform_update(self):
-        """Always perform update using direct download (ZIP) method, preserving important files."""
-        return self.perform_direct_update()
-
+        """Perform update using Git if available, otherwise use direct download method."""
+        # Check if Git is available and this is a Git repository
+        git_status = self.get_git_status()
+        
+        if git_status['git_installed'] and git_status['is_repo']:
+            return self.perform_git_update()
+        else:
+            return self.perform_direct_update()
+    
     def cleanup_git_references(self, repo):
         """Clean up problematic Git references that might cause conflicts"""
         try:
@@ -474,8 +480,38 @@ class UpdateManager:
                 if 'origin' in [r.name for r in repo.remotes]:
                     origin = repo.remotes.origin
                     try:
+                        # Get current commit before pull
+                        current_commit = repo.head.commit.hexsha[:8]
+                        
                         pull_result = origin.pull()
                         logger.info(f"Git pull result: {pull_result}")
+                        
+                        # Get new commit after pull
+                        new_commit = repo.head.commit.hexsha[:8]
+                        if current_commit != new_commit:
+                            # Show what files were changed
+                            try:
+                                old_commit = repo.commit(current_commit)
+                                new_commit_obj = repo.commit(new_commit)
+                                diff = old_commit.diff(new_commit_obj)
+                                
+                                if diff:
+                                    changed_files = []
+                                    for change in diff:
+                                        if change.a_path:
+                                            changed_files.append(change.a_path)
+                                        elif change.b_path:
+                                            changed_files.append(change.b_path)
+                                    
+                                    logger.info(f"Updated {len(changed_files)} files: {changed_files[:10]}")
+                                    if len(changed_files) > 10:
+                                        logger.info(f"... and {len(changed_files) - 10} more files")
+                                else:
+                                    logger.info("No files were changed in this update")
+                            except Exception as e:
+                                logger.info(f"Files updated (could not get detailed list: {e})")
+                        else:
+                            logger.info("Already up to date - no changes pulled")
                     except GitCommandError as e:
                         logger.error(f"Git pull failed: {e.stderr if hasattr(e, 'stderr') else str(e)}")
                         return False, f"Git pull failed: {e.stderr if hasattr(e, 'stderr') else str(e)}"
