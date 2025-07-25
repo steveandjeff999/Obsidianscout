@@ -185,8 +185,23 @@
                                                 {% if element.type == 'select' %}
                                                 <div class="row mt-2 select-options">
                                                     <div class="col-md-12">
-                                                        <label>Options (one per line)</label>
-                                                        <textarea class="form-control" name="auto_element_options_{{ loop.index0 }}" rows="3">{{ element.options | join('\n') if element.options else '' }}</textarea>
+                                                        <label>Options and Points</label>
+                                                        <table class="table table-bordered option-points-table">
+                                                            <thead>
+                                                                <tr><th>Option Value</th><th>Label</th><th>Points</th><th></th></tr>
+                                                            </thead>
+                                                            <tbody>
+                                                            {% for opt in element.options %}
+                                                            <tr>
+                                                                <td><input type="text" class="form-control option-value-input" name="auto_element_option_value_{{ loop.index0 }}_{{ loop.index }}" value="{{ opt }}" required></td>
+                                                                <td><input type="text" class="form-control option-label-input" name="auto_element_option_label_{{ loop.index0 }}_{{ loop.index }}" value="{{ opt }}"></td>
+                                                                <td><input type="number" class="form-control option-points-input" name="auto_element_option_points_{{ loop.index0 }}_{{ loop.index }}" value="{{ element.points[opt] if element.points and opt in element.points else 0 }}" step="0.1"></td>
+                                                                <td><button type="button" class="btn btn-danger btn-sm remove-option" title="Remove Option">&times;</button></td>
+                                                            </tr>
+                                                            {% endfor %}
+                                                            </tbody>
+                                                        </table>
+                                                        <button type="button" class="btn btn-sm btn-success add-option" data-period="auto" data-element-index="{{ loop.index0 }}">Add Option</button>
                                                     </div>
                                                 </div>
                                                 {% endif %}
@@ -253,8 +268,23 @@
                                                 {% if element.type == 'select' %}
                                                 <div class="row mt-2 select-options">
                                                     <div class="col-md-12">
-                                                        <label>Options (one per line)</label>
-                                                        <textarea class="form-control" name="teleop_element_options_{{ loop.index0 }}" rows="3">{{ element.options | join('\n') if element.options else '' }}</textarea>
+                                                        <label>Options and Points</label>
+                                                        <table class="table table-bordered option-points-table">
+                                                            <thead>
+                                                                <tr><th>Option Value</th><th>Label</th><th>Points</th><th></th></tr>
+                                                            </thead>
+                                                            <tbody>
+                                                            {% for opt in element.options %}
+                                                            <tr>
+                                                                <td><input type="text" class="form-control option-value-input" name="teleop_element_option_value_{{ loop.index0 }}_{{ loop.index }}" value="{{ opt }}" required></td>
+                                                                <td><input type="text" class="form-control option-label-input" name="teleop_element_option_label_{{ loop.index0 }}_{{ loop.index }}" value="{{ opt }}"></td>
+                                                                <td><input type="number" class="form-control option-points-input" name="teleop_element_option_points_{{ loop.index0 }}_{{ loop.index }}" value="{{ element.points[opt] if element.points and opt in element.points else 0 }}" step="0.1"></td>
+                                                                <td><button type="button" class="btn btn-danger btn-sm remove-option" title="Remove Option">&times;</button></td>
+                                                            </tr>
+                                                            {% endfor %}
+                                                            </tbody>
+                                                        </table>
+                                                        <button type="button" class="btn btn-sm btn-success add-option" data-period="teleop" data-element-index="{{ loop.index0 }}">Add Option</button>
                                                     </div>
                                                 </div>
                                                 {% endif %}
@@ -321,8 +351,23 @@
                                                 {% if element.type == 'select' %}
                                                 <div class="row mt-2 select-options">
                                                     <div class="col-md-12">
-                                                        <label>Options (one per line)</label>
-                                                        <textarea class="form-control" name="endgame_element_options_{{ loop.index0 }}" rows="3">{{ element.options | join('\n') if element.options else '' }}</textarea>
+                                                        <label>Options and Points</label>
+                                                        <table class="table table-bordered option-points-table">
+                                                            <thead>
+                                                                <tr><th>Option Value</th><th>Label</th><th>Points</th><th></th></tr>
+                                                            </thead>
+                                                            <tbody>
+                                                            {% for opt in element.options %}
+                                                            <tr>
+                                                                <td><input type="text" class="form-control option-value-input" name="endgame_element_option_value_{{ loop.index0 }}_{{ loop.index }}" value="{{ opt }}" required></td>
+                                                                <td><input type="text" class="form-control option-label-input" name="endgame_element_option_label_{{ loop.index0 }}_{{ loop.index }}" value="{{ opt }}"></td>
+                                                                <td><input type="number" class="form-control option-points-input" name="endgame_element_option_points_{{ loop.index0 }}_{{ loop.index }}" value="{{ element.points[opt] if element.points and opt in element.points else 0 }}" step="0.1"></td>
+                                                                <td><button type="button" class="btn btn-danger btn-sm remove-option" title="Remove Option">&times;</button></td>
+                                                            </tr>
+                                                            {% endfor %}
+                                                            </tbody>
+                                                        </table>
+                                                        <button type="button" class="btn btn-sm btn-success add-option" data-period="endgame" data-element-index="{{ loop.index0 }}">Add Option</button>
                                                     </div>
                                                 </div>
                                                 {% endif %}
@@ -678,13 +723,13 @@
 // Dynamic form management JavaScript
 document.addEventListener('DOMContentLoaded', function() {
     let elementCounters = {
-        auto: {{ game_config.auto_period.scoring_elements|length }},
-        teleop: {{ game_config.teleop_period.scoring_elements|length }},
-        endgame: {{ game_config.endgame_period.scoring_elements|length }},
-        gamepiece: {{ game_config.game_pieces|length }},
-        rating: {{ game_config.post_match.rating_elements|length }},
-        text: {{ game_config.post_match.text_elements|length }},
-        metric: {{ game_config.data_analysis.key_metrics|length }}
+        auto: parseInt('{{ game_config.auto_period.scoring_elements|length or 0 }}'),
+        teleop: parseInt('{{ game_config.teleop_period.scoring_elements|length or 0 }}'),
+        endgame: parseInt('{{ game_config.endgame_period.scoring_elements|length or 0 }}'),
+        gamepiece: parseInt('{{ game_config.game_pieces|length or 0 }}'),
+        rating: parseInt('{{ game_config.post_match.rating_elements|length or 0 }}'),
+        text: parseInt('{{ game_config.post_match.text_elements|length or 0 }}'),
+        metric: parseInt('{{ game_config.data_analysis.key_metrics|length or 0 }}')
     };
     
     // Add element handlers
@@ -698,22 +743,92 @@ document.addEventListener('DOMContentLoaded', function() {
             container.insertAdjacentHTML('beforeend', template);
         });
     });
-    
-    // Remove element handlers
-    document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('remove-element') || 
-            e.target.classList.contains('remove-game-piece') ||
-            e.target.classList.contains('remove-rating-element') ||
-            e.target.classList.contains('remove-text-element') ||
-            e.target.classList.contains('remove-metric')) {
-            
-            const elementToRemove = e.target.closest('.scoring-element, .game-piece, .rating-element, .text-element, .key-metric');
-            if (elementToRemove) {
-                elementToRemove.remove();
+
+    // Helper to attach remove-option event listener to a button
+    function attachRemoveOptionHandler(button) {
+        button.addEventListener('click', function() {
+            const row = this.closest('tr');
+            if (row) row.remove();
+        });
+    }
+
+    // Update attachAddOptionHandler to also attach remove handler to new row's button
+    function attachAddOptionHandler(button) {
+        button.addEventListener('click', function() {
+            const period = this.dataset.period;
+            const elementIndex = this.dataset.elementIndex;
+            const container = document.getElementById(`${period}-elements`).querySelector(`.scoring-element[data-index="${elementIndex}"] .option-points-table tbody`);
+            if (!container) {
+                console.error(`Tbody for options not found for element index ${elementIndex}`);
+                return;
+            }
+            const newOptionIndex = container.querySelectorAll('tr').length;
+            const template = createOptionTemplate(period, elementIndex, newOptionIndex);
+            container.insertAdjacentHTML('beforeend', template);
+            // Attach remove handler to the new row's remove button
+            const newRow = container.querySelector('tr:last-child .remove-option');
+            if (newRow) attachRemoveOptionHandler(newRow);
+        });
+    }
+
+    // When type changes to select, insert options table and attach handlers
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('element-type')) {
+            const type = e.target.value;
+            const scoringElement = e.target.closest('.scoring-element');
+            if (!scoringElement) return;
+            let optionsRow = scoringElement.querySelector('.select-options');
+            if (!optionsRow && type === 'select') {
+                const period = scoringElement.getAttribute('data-period');
+                const elementIndex = scoringElement.getAttribute('data-index');
+                const tableHtml = `
+                <div class="row mt-2 select-options">
+                    <div class="col-md-12">
+                        <label>Options and Points</label>
+                        <table class="table table-bordered option-points-table">
+                            <thead>
+                                <tr><th>Option Value</th><th>Label</th><th>Points</th><th></th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                        <button type="button" class="btn btn-sm btn-success add-option" data-period="${period}" data-element-index="${elementIndex}">Add Option</button>
+                    </div>
+                </div>`;
+                const lastRow = scoringElement.querySelector('.row:last-of-type');
+                if (lastRow) {
+                    lastRow.insertAdjacentHTML('afterend', tableHtml);
+                } else {
+                    scoringElement.insertAdjacentHTML('beforeend', tableHtml);
+                }
+                // Attach handler to the new Add Option button
+                const newAddBtn = scoringElement.querySelector('.add-option');
+                if (newAddBtn) attachAddOptionHandler(newAddBtn);
+            } else if (optionsRow) {
+                optionsRow.style.display = (type === 'select') ? 'block' : 'none';
             }
         }
     });
-    
+
+    // On page load, attach handlers to all existing add-option and remove-option buttons
+    document.querySelectorAll('.add-option').forEach(attachAddOptionHandler);
+    document.querySelectorAll('.remove-option').forEach(attachRemoveOptionHandler);
+
+    // Restore event delegation for remove-option buttons
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-option')) {
+            const row = e.target.closest('tr');
+            if (row) row.remove();
+        }
+    });
+
+    // Event delegation for remove-element buttons (scoring elements)
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-element')) {
+            const scoringElement = e.target.closest('.scoring-element');
+            if (scoringElement) scoringElement.remove();
+        }
+    });
+
     // Add game piece
     document.getElementById('add-game-piece').addEventListener('click', function() {
         const container = document.getElementById('game-pieces');
@@ -750,6 +865,52 @@ document.addEventListener('DOMContentLoaded', function() {
         container.insertAdjacentHTML('beforeend', template);
     });
     
+    // Validation for options on form submit
+    document.getElementById('config-form').addEventListener('submit', function(e) {
+        let valid = true;
+        let errorMsg = '';
+        // For each select element's options table
+        document.querySelectorAll('.option-points-table').forEach(table => {
+            const valueInputs = table.querySelectorAll('.option-value-input');
+            const values = [];
+            valueInputs.forEach(input => {
+                input.classList.remove('is-invalid');
+                if (!input.value.trim()) {
+                    valid = false;
+                    input.classList.add('is-invalid');
+                    errorMsg = 'Option values cannot be empty.';
+                } else if (values.includes(input.value.trim())) {
+                    valid = false;
+                    input.classList.add('is-invalid');
+                    errorMsg = 'Duplicate option values are not allowed.';
+                } else {
+                    values.push(input.value.trim());
+                }
+            });
+            // Show error message if invalid
+            let errorDiv = table.parentElement.querySelector('.option-error');
+            if (!errorDiv) {
+                errorDiv = document.createElement('div');
+                errorDiv.className = 'option-error text-danger mt-1';
+                table.parentElement.appendChild(errorDiv);
+            }
+            errorDiv.textContent = valid ? '' : errorMsg;
+        });
+        if (!valid) {
+            e.preventDefault();
+        }
+    });
+
+    // Visual feedback for new/edited rows
+    document.addEventListener('DOMNodeInserted', function(e) {
+        if (e.target.tagName === 'TR' && e.target.querySelector('.option-value-input')) {
+            e.target.classList.add('table-success');
+            setTimeout(() => {
+                e.target.classList.remove('table-success');
+            }, 1000);
+        }
+    });
+
     // Template creation functions
     function createElementTemplate(period, index) {
         return `
@@ -792,6 +953,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
             </div>
+        `;
+    }
+
+    function createOptionTemplate(period, elementIndex, optionIndex) {
+        return `
+            <tr>
+                <td><input type="text" class="form-control option-value-input" name="${period}_element_option_value_${elementIndex}_${optionIndex}" required></td>
+                <td><input type="text" class="form-control option-label-input" name="${period}_element_option_label_${elementIndex}_${optionIndex}"></td>
+                <td><input type="number" class="form-control option-points-input" name="${period}_element_option_points_${elementIndex}_${optionIndex}" value="0" step="0.1"></td>
+                <td><button type="button" class="btn btn-danger btn-sm remove-option" title="Remove Option">&times;</button></td>
+            </tr>
         `;
     }
     

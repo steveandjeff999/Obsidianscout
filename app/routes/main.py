@@ -4,10 +4,13 @@ import json
 import os
 import copy
 from functools import wraps
-from flask_socketio import emit
+from flask_socketio import emit, join_room
 from app import socketio
 import markdown2
 from app.utils.theme_manager import ThemeManager
+from flask import request, jsonify
+from app import load_chat_history
+from app.models import User
 
 connected_devices = {}
 
@@ -212,9 +215,9 @@ def save_simple_config():
                         'default': parse_default_value(request.form.get(f'{period}_element_default_{index}', '0'), element_type)
                     }
                     
-                    # Add points if provided
+                    # Add points if provided (for non-select types)
                     points = request.form.get(f'{period}_element_points_{index}')
-                    if points:
+                    if points and element_type != 'select':
                         try:
                             element['points'] = float(points)
                         except ValueError:
@@ -225,15 +228,26 @@ def save_simple_config():
                     if game_piece_id:
                         element['game_piece_id'] = game_piece_id
                     
-                    # Handle select options
+                    # Handle select options with per-option points
                     if element_type == 'select':
-                        options_text = request.form.get(f'{period}_element_options_{index}', '')
-                        if options_text:
-                            element['options'] = [opt.strip() for opt in options_text.split('\n') if opt.strip()]
-                            # Create points mapping for select options
-                            element['points'] = {}
-                            for option in element['options']:
-                                element['points'][option] = 0  # Default points
+                        options = []
+                        points_dict = {}
+                        option_idx = 0
+                        while True:
+                            opt_val = request.form.get(f'{period}_element_option_value_{index}_{option_idx}')
+                            opt_label = request.form.get(f'{period}_element_option_label_{index}_{option_idx}')
+                            opt_points = request.form.get(f'{period}_element_option_points_{index}_{option_idx}')
+                            if opt_val is None:
+                                break
+                            options.append(opt_val)
+                            try:
+                                points_dict[opt_val] = float(opt_points) if opt_points is not None else 0
+                            except ValueError:
+                                points_dict[opt_val] = 0
+                            option_idx += 1
+                        if options:
+                            element['options'] = options
+                            element['points'] = points_dict
                     
                     elements.append(element)
             
@@ -401,6 +415,126 @@ def help_page():
         md_content = f.read()
     html_content = markdown2.markdown(md_content)
     return render_template('help.html', files=files, content=html_content, selected=selected, **get_theme_context())
+
+@bp.route('/chat')
+@login_required
+def chat_page():
+    return render_template('chat.html')
+
+@bp.route('/chat/dm-history')
+@login_required
+def dm_history():
+    from flask_login import current_user
+    username = current_user.username
+    other_user = request.args.get('user')
+    history = load_chat_history()
+    filtered = []
+    for msg in history:
+        if (
+            (msg.get('sender') == username and msg.get('recipient') == other_user) or
+            (msg.get('sender') == other_user and msg.get('recipient') == username)
+        ):
+            filtered.append(msg)
+    return jsonify({'history': filtered})
+
+@bp.route('/chat/group-history')
+@login_required
+def group_history():
+    group = request.args.get('group')
+    history = load_chat_history()
+    filtered = [msg for msg in history if msg.get('group') == group]
+    return jsonify({'history': filtered})
+
+@bp.route('/chat/dm', methods=['POST'])
+@login_required
+def send_dm():
+    from flask_login import current_user
+    data = request.get_json()
+    sender = current_user.username
+    recipient = data.get('recipient')
+    text = data.get('message')
+    from app import save_chat_message
+    import datetime
+    message = {
+        'sender': sender,
+        'recipient': recipient,
+        'text': text,
+        'timestamp': datetime.datetime.utcnow().isoformat()
+    }
+    save_chat_message(message)
+    # Emit real-time DM event to both sender and recipient
+    from app import socketio
+    socketio.emit('dm_message', message, room=sender)
+    socketio.emit('dm_message', message, room=recipient)
+    return {'success': True, 'message': 'Message sent.'}
+
+@bp.route('/chat/state', methods=['GET', 'POST'])
+@login_required
+def chat_state():
+    import os, json
+    from flask_login import current_user
+    state_file = os.path.join(current_app.instance_path, f'chat_state_{current_user.username}.json')
+    if request.method == 'POST':
+        data = request.get_json()
+        # Ensure unreadCount is always present
+        if 'unreadCount' not in data:
+            data['unreadCount'] = 0
+        with open(state_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return {'success': True}
+    else:
+        if os.path.exists(state_file):
+            with open(state_file, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+                if 'unreadCount' not in state:
+                    state['unreadCount'] = 0
+                return jsonify(state)
+        else:
+            return jsonify({'joinedGroups': [], 'currentGroup': '', 'lastDmUser': '', 'unreadCount': 0})
+
+# Helper endpoint to increment unread count
+@bp.route('/chat/increment-unread', methods=['POST'])
+@login_required
+def increment_unread():
+    import os, json
+    from flask_login import current_user
+    state_file = os.path.join(current_app.instance_path, f'chat_state_{current_user.username}.json')
+    state = {'joinedGroups': [], 'currentGroup': '', 'lastDmUser': '', 'unreadCount': 0}
+    if os.path.exists(state_file):
+        with open(state_file, 'r', encoding='utf-8') as f:
+            state = json.load(f)
+    state['unreadCount'] = state.get('unreadCount', 0) + 1
+    with open(state_file, 'w', encoding='utf-8') as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+    return {'success': True, 'unreadCount': state['unreadCount']}
+
+# Helper endpoint to reset unread count
+@bp.route('/chat/reset-unread', methods=['POST'])
+@login_required
+def reset_unread():
+    import os, json
+    from flask_login import current_user
+    state_file = os.path.join(current_app.instance_path, f'chat_state_{current_user.username}.json')
+    state = {'joinedGroups': [], 'currentGroup': '', 'lastDmUser': '', 'unreadCount': 0}
+    if os.path.exists(state_file):
+        with open(state_file, 'r', encoding='utf-8') as f:
+            state = json.load(f)
+    state['unreadCount'] = 0
+    with open(state_file, 'w', encoding='utf-8') as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+    return {'success': True}
+
+@bp.route('/users', methods=['GET'])
+@login_required
+def users_page():
+    users = User.query.all()
+    return render_template('users/index.html', users=users)
+
+@bp.route('/users/<int:user_id>')
+@login_required
+def user_profile(user_id):
+    user = User.query.get_or_404(user_id)
+    return render_template('users/profile.html', user=user)
 
 def parse_default_value(value, element_type):
     """Parse default value based on element type"""

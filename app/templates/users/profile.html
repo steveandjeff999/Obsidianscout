@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}{{ user.username }}'s Profile{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <div class="row justify-content-center">
+    <div class="col-md-7 col-lg-6">
+      <div class="card shadow">
+        <div class="card-body text-center">
+          <img src="{{ url_for('static', filename=user.profile_picture or 'img/avatars/default.png') }}" class="rounded-circle mb-3" alt="Profile Picture" width="96" height="96" style="object-fit:cover;">
+          <h2 class="mb-1">{{ user.username }}</h2>
+          {% if user.email %}
+          <p class="text-muted mb-2">{{ user.email }}</p>
+          {% endif %}
+          <div class="mb-2">
+            {% for role in user.roles %}
+              <span class="badge bg-primary me-1">{{ role.name }}</span>
+            {% endfor %}
+          </div>
+          <div class="mb-2">
+            <small class="text-muted">Member since {{ user.created_at.strftime('%B %d, %Y') }}</small>
+          </div>
+          <a href="{{ url_for('main.chat_page') }}?dm={{ user.username }}" class="btn btn-outline-primary mt-3">
+            <i class="fas fa-paper-plane me-1"></i> DM {{ user.username }}
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} 

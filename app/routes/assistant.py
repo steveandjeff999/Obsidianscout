@@ -9,6 +9,7 @@ from functools import wraps
 import os
 import markdown2
 from app.utils.theme_manager import ThemeManager
+from app.models import User
 
 HELP_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', 'help')
 
@@ -94,20 +95,35 @@ def ask_question():
     """API endpoint for asking questions to the assistant"""
     if not request.is_json:
         return jsonify({"error": "Request must be JSON"}), 400
-    
     data = request.get_json()
     question = data.get('question', '')
-    
     if not question:
         return jsonify({"error": "Question is required"}), 400
-    
     # Log the question for analytics (optional)
     current_app.logger.info(f"Assistant question from {current_user.email}: {question}")
-    
     # Get answer from assistant
     assistant = get_assistant()
     answer = assistant.answer_question(question)
-    
+    # Save both user question and assistant reply to chat history
+    from app import save_chat_message
+    import datetime
+    username = current_user.username
+    user_msg = {
+        'sender': username,
+        'recipient': 'assistant',
+        'text': question,
+        'timestamp': datetime.datetime.utcnow().isoformat(),
+        'owner': username
+    }
+    assistant_msg = {
+        'sender': 'assistant',
+        'recipient': username,
+        'text': answer.get('text', ''),
+        'timestamp': datetime.datetime.utcnow().isoformat(),
+        'owner': username
+    }
+    save_chat_message(user_msg)
+    save_chat_message(assistant_msg)
     # Include AI config information for admin users
     if current_user.has_role('admin'):
         try:
@@ -115,7 +131,6 @@ def ask_question():
             answer['ai_config'] = get_ai_config()
         except ImportError:
             pass
-    
     return jsonify(answer)
 
 @bp.route('/visualize', methods=['POST'])
@@ -154,3 +169,56 @@ def clear_context():
         session.pop('assistant_context')
     
     return jsonify({"success": True, "message": "Conversation context cleared"})
+
+@bp.route('/clear-assistant-history', methods=['POST'])
+@login_required
+def clear_assistant_history():
+    from flask_login import current_user
+    username = current_user.username
+    from app import load_chat_history
+    import os, json
+    history = load_chat_history()
+    # Remove all assistant messages for this user (old and new format)
+    new_history = [msg for msg in history if not (
+        (msg.get('recipient') == 'assistant' and msg.get('owner') == username) or
+        (msg.get('sender') == 'assistant' and msg.get('recipient') == username and msg.get('owner') == username) or
+        (msg.get('recipient') == username and (msg.get('sender') == 'assistant' or msg.get('sender') == username))
+    )]
+    # Save the filtered history
+    from app import CHAT_HISTORY_FILE, CHAT_HISTORY_LOCK
+    with CHAT_HISTORY_LOCK:
+        with open(CHAT_HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(new_history, f, ensure_ascii=False, indent=2)
+    return {'success': True, 'message': 'Assistant history cleared.'}
+
+@bp.route('/chat-users')
+@login_required
+def chat_users():
+    users = User.query.with_entities(User.username).all()
+    user_list = [u.username for u in users if u.username != current_user.username]
+    return jsonify({
+        'users': user_list,
+        'current_user': current_user.username
+    })
+
+@bp.route('/history')
+@login_required
+def assistant_history():
+    from flask_login import current_user
+    username = current_user.username
+    from app import load_chat_history
+    history = load_chat_history()
+    filtered = []
+    for msg in history:
+        if msg.get('recipient') == 'assistant' and msg.get('owner') and msg.get('owner') != username:
+            continue
+        # Also include messages where recipient is the user and sender is 'assistant' or the user
+        if (
+            msg.get('recipient') == username and (msg.get('sender') == 'assistant' or msg.get('sender') == username)
+        ) or (
+            msg.get('recipient') == 'assistant' and msg.get('owner') == username
+        ) or (
+            msg.get('sender') == 'assistant' and msg.get('recipient') == username and msg.get('owner') == username
+        ):
+            filtered.append(msg)
+    return {'history': filtered}

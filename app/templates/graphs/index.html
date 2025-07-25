@@ -101,7 +101,7 @@
                                 <select name="metric" id="metric" class="form-select">
                                     <option value="">Default (Matches Scouted)</option>
                                     {% for metric in game_config.get('data_analysis', {}).get('key_metrics', []) %}
-                                    {% if 'formula' in metric %}
+                                    {% if 'formula' in metric or metric.get('auto_generated', False) %}
                                     <option value="{{ metric.id }}" {% if metric.id == selected_metric %}selected{% endif %}>
                                         {{ metric.name }}
                                     </option>

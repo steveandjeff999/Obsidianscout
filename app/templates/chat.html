@@ -1,0 +1,424 @@
+{% extends 'base.html' %}
+
+{% block title %}Chat{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h1 class="mb-4">Chat</h1>
+  <ul class="nav nav-tabs" id="chatTab" role="tablist" style="margin-bottom: 1rem;">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="dm-tab" data-bs-toggle="tab" data-bs-target="#dmTabPane" type="button" role="tab">DMs</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="assistant-tab" data-bs-toggle="tab" data-bs-target="#assistantTabPane" type="button" role="tab">Assistant</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="group-tab" data-bs-toggle="tab" data-bs-target="#groupTabPane" type="button" role="tab">Groups</button>
+    </li>
+  </ul>
+  <div class="tab-content" id="chatTabContent">
+    <div class="tab-pane fade show active" id="dmTabPane" role="tabpanel">
+      <div class="mb-2">
+        <label for="dmUserSelect" class="form-label mb-1">Chat with:</label>
+        <select id="dmUserSelect" class="form-select form-select-sm d-inline-block" style="width: 200px; display: inline-block;"></select>
+      </div>
+      <div id="dmChatContainer" style="max-height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fff;"></div>
+      <div class="input-group mt-3">
+        <input type="text" class="form-control" id="dmChatInput" placeholder="Type a message...">
+        <button class="btn btn-primary" id="dmSendBtn">Send</button>
+      </div>
+    </div>
+    <div class="tab-pane fade" id="assistantTabPane" role="tabpanel">
+      <div id="assistantChatContainer" style="max-height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fff;"></div>
+      <div class="input-group mt-3">
+        <input type="text" class="form-control" id="assistantChatInput" placeholder="Ask the assistant...">
+        <button class="btn btn-primary" id="assistantSendBtn">Send</button>
+        <button class="btn btn-danger ms-2" id="assistantClearBtn" type="button">Clear History</button>
+      </div>
+    </div>
+    <div class="tab-pane fade" id="groupTabPane" role="tabpanel">
+      <div class="mb-2">
+        <input type="text" id="groupNameInput" class="form-control form-control-sm d-inline-block" style="width: 200px; display: inline-block;" placeholder="Group name">
+        <button class="btn btn-outline-primary btn-sm" id="joinGroupBtn">Join/Create Group</button>
+        <select id="currentGroupSelect" class="form-select form-select-sm d-inline-block" style="width: 200px; display: inline-block;"></select>
+        <button class="btn btn-outline-danger btn-sm" id="leaveGroupBtn">Leave Group</button>
+        <label for="groupUserSelect" class="form-label mb-1 ms-3">Add user:</label>
+        <select id="groupUserSelect" class="form-select form-select-sm d-inline-block" style="width: 200px; display: inline-block;"></select>
+        <button class="btn btn-success btn-sm" id="addUserToGroupBtn">Add to Group</button>
+      </div>
+      <div class="mb-2">
+        <strong>Group Members:</strong> <span id="groupMembersList"></span>
+      </div>
+      <div id="groupChatContainer" style="max-height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fff;"></div>
+      <div class="input-group mt-3">
+        <input type="text" class="form-control" id="groupChatInput" placeholder="Type a group message...">
+        <button class="btn btn-primary" id="groupSendBtn">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  (async function() {
+    // Socket.IO setup
+    if (!window.socket) {
+        window.socket = io();
+    }
+    const socket = window.socket;
+    let currentGroup = null;
+    let groupMembers = [];
+    let currentUsername = null;
+    let joinedGroups = [];
+    // --- Backend helpers for persistence ---
+    async function saveChatState() {
+        const dmUserSelectEl = document.getElementById('dmUserSelect');
+        await fetch('/chat/state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                joinedGroups,
+                currentGroup: currentGroup || '',
+                lastDmUser: dmUserSelectEl ? dmUserSelectEl.value : ''
+            })
+        });
+    }
+    async function loadChatState() {
+        try {
+            const resp = await fetch('/chat/state');
+            const data = await resp.json();
+            joinedGroups = data.joinedGroups || [];
+            currentGroup = data.currentGroup || null;
+            window._lastDmUser = data.lastDmUser || '';
+        } catch (e) {
+            joinedGroups = [];
+            currentGroup = null;
+            window._lastDmUser = '';
+        }
+    }
+    // --- Restore state on page load ---
+    await loadChatState();
+
+    // Populate DM and group user selects
+    fetch('/assistant/chat-users').then(r => r.json()).then(data => {
+        const dmUserSelect = document.getElementById('dmUserSelect');
+        const groupUserSelect = document.getElementById('groupUserSelect');
+        dmUserSelect.innerHTML = '';
+        groupUserSelect.innerHTML = '';
+        data.users.forEach(u => {
+            const opt1 = document.createElement('option');
+            opt1.value = u;
+            opt1.textContent = u;
+            dmUserSelect.appendChild(opt1);
+            const opt2 = document.createElement('option');
+            opt2.value = u;
+            opt2.textContent = u;
+            groupUserSelect.appendChild(opt2);
+        });
+        currentUsername = data.current_user;
+        // --- DM tab auto-select logic from URL ---
+        const params = new URLSearchParams(window.location.search);
+        const dmParam = params.get('dm');
+        if (dmParam && Array.from(dmUserSelect.options).some(opt => opt.value === dmParam)) {
+            dmUserSelect.value = dmParam;
+            // Switch to DM tab
+            const dmTab = document.getElementById('dm-tab');
+            if (dmTab) dmTab.click();
+        }
+        // Restore last selected DM user
+        const lastDmUser = window._lastDmUser;
+        if (!dmParam && lastDmUser && Array.from(dmUserSelect.options).some(opt => opt.value === lastDmUser)) {
+            dmUserSelect.value = lastDmUser;
+        }
+        // Attach event listener after populating
+        dmUserSelect.addEventListener('change', function() {
+            loadDmHistory();
+            saveChatState();
+        });
+        // Load initial DM chat history
+        loadDmHistory();
+        // Load initial assistant chat history
+        loadAssistantHistory();
+    });
+
+    // --- Restore joined groups and current group ---
+    function rejoinGroupsOnLoad() {
+        if (joinedGroups.length > 0) {
+            joinedGroups.forEach(group => {
+                socket.emit('join_group', { group });
+            });
+            updateGroupSelect();
+            if (currentGroup && joinedGroups.includes(currentGroup)) {
+                currentGroupSelect.value = currentGroup;
+                loadGroupHistory();
+            } else if (joinedGroups.length > 0) {
+                currentGroup = joinedGroups[0];
+                currentGroupSelect.value = currentGroup;
+                loadGroupHistory();
+            }
+        }
+    }
+    // Wait a bit to ensure selects are populated
+    setTimeout(rejoinGroupsOnLoad, 500);
+
+    // --- Assistant Chat History ---
+    function loadAssistantHistory() {
+        const assistantChatContainer = document.getElementById('assistantChatContainer');
+        assistantChatContainer.innerHTML = '';
+        fetch('/assistant/history')
+            .then(r => r.json())
+            .then(data => {
+                (data.history || []).forEach(msg => {
+                    const div = document.createElement('div');
+                    div.className = 'mb-2';
+                    div.innerHTML = `<strong>${msg.sender === 'assistant' ? 'Assistant' : 'You'}:</strong> <span>${msg.text}</span>`;
+                    assistantChatContainer.appendChild(div);
+                });
+                assistantChatContainer.scrollTop = assistantChatContainer.scrollHeight;
+            });
+    }
+
+    // --- DM Chat History ---
+    function loadDmHistory() {
+        const dmUserSelect = document.getElementById('dmUserSelect');
+        const dmChatContainer = document.getElementById('dmChatContainer');
+        dmChatContainer.innerHTML = '';
+        const recipient = dmUserSelect ? dmUserSelect.value : null;
+        if (!recipient) return;
+        fetch(`/chat/dm-history?user=${encodeURIComponent(recipient)}`)
+            .then(r => r.json())
+            .then(data => {
+                (data.history || []).forEach(msg => {
+                    const div = document.createElement('div');
+                    div.className = 'mb-2';
+                    div.innerHTML = `<strong>${msg.sender === currentUsername ? 'You' : msg.sender}:</strong> <span>${msg.text}</span>`;
+                    dmChatContainer.appendChild(div);
+                });
+                dmChatContainer.scrollTop = dmChatContainer.scrollHeight;
+            });
+    }
+
+    // Listen for real-time DM messages
+    socket.on('dm_message', function(msg) {
+        const dmUserSelect = document.getElementById('dmUserSelect');
+        if (!dmUserSelect) return;
+        // Only show if the message is for the current DM chat
+        const selectedUser = dmUserSelect.value;
+        if (
+            (msg.sender === currentUsername && msg.recipient === selectedUser) ||
+            (msg.sender === selectedUser && msg.recipient === currentUsername)
+        ) {
+            // Append the message to the DM chat container
+            const dmChatContainer = document.getElementById('dmChatContainer');
+            const div = document.createElement('div');
+            div.className = 'mb-2';
+            div.innerHTML = `<strong>${msg.sender === currentUsername ? 'You' : msg.sender}:</strong> <span>${msg.text}</span>`;
+            dmChatContainer.appendChild(div);
+            dmChatContainer.scrollTop = dmChatContainer.scrollHeight;
+        }
+    });
+
+    // --- Group Chat History ---
+    function loadGroupHistory() {
+        const groupChatContainer = document.getElementById('groupChatContainer');
+        groupChatContainer.innerHTML = '';
+        if (!currentGroup) return;
+        fetch(`/chat/group-history?group=${encodeURIComponent(currentGroup)}`)
+            .then(r => r.json())
+            .then(data => {
+                (data.history || []).forEach(msg => {
+                    const div = document.createElement('div');
+                    div.className = 'mb-2';
+                    div.innerHTML = `<strong>${msg.sender}:</strong> <span>${msg.text}</span>`;
+                    groupChatContainer.appendChild(div);
+                });
+                groupChatContainer.scrollTop = groupChatContainer.scrollHeight;
+            });
+    }
+
+    // Group chat logic
+    const joinGroupBtn = document.getElementById('joinGroupBtn');
+    const leaveGroupBtn = document.getElementById('leaveGroupBtn');
+    const addUserToGroupBtn = document.getElementById('addUserToGroupBtn');
+    const groupNameInput = document.getElementById('groupNameInput');
+    const currentGroupSelect = document.getElementById('currentGroupSelect');
+    const groupUserSelect = document.getElementById('groupUserSelect');
+    const groupMembersList = document.getElementById('groupMembersList');
+    const groupChatContainer = document.getElementById('groupChatContainer');
+    const groupChatInput = document.getElementById('groupChatInput');
+    const groupSendBtn = document.getElementById('groupSendBtn');
+
+    if (joinGroupBtn) {
+        joinGroupBtn.addEventListener('click', async function() {
+            const group = groupNameInput.value.trim();
+            if (group && !joinedGroups.includes(group)) {
+                socket.emit('join_group', { group });
+                joinedGroups.push(group);
+                updateGroupSelect();
+                currentGroupSelect.value = group;
+                currentGroup = group;
+                groupChatContainer.innerHTML = '';
+                loadGroupHistory(); // Load history for the new group
+                await saveChatState();
+            }
+        });
+    }
+    if (leaveGroupBtn) {
+        leaveGroupBtn.addEventListener('click', async function() {
+            const group = currentGroupSelect.value;
+            if (group) {
+                socket.emit('leave_group', { group });
+                joinedGroups = joinedGroups.filter(g => g !== group);
+                updateGroupSelect();
+                currentGroup = null;
+                groupChatContainer.innerHTML = '';
+                groupMembersList.textContent = '';
+                loadGroupHistory(); // Clear history for the group that was left
+                await saveChatState();
+            }
+        });
+    }
+    function updateGroupSelect() {
+        currentGroupSelect.innerHTML = '';
+        joinedGroups.forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g;
+            opt.textContent = g;
+            currentGroupSelect.appendChild(opt);
+        });
+        // Restore currentGroup selection
+        if (currentGroup && joinedGroups.includes(currentGroup)) {
+            currentGroupSelect.value = currentGroup;
+        }
+    }
+    if (currentGroupSelect) {
+        currentGroupSelect.addEventListener('change', async function() {
+            currentGroup = this.value;
+            groupChatContainer.innerHTML = '';
+            groupMembersList.textContent = '';
+            loadGroupHistory(); // Load history for the new group
+            await saveChatState();
+        });
+    }
+    if (addUserToGroupBtn) {
+        addUserToGroupBtn.addEventListener('click', function() {
+            const group = currentGroupSelect.value;
+            const user = groupUserSelect.value;
+            if (group && user) {
+                socket.emit('add_user_to_group', { group, user });
+            }
+        });
+    }
+    socket.on('group_members_updated', function(data) {
+        if (data.group === currentGroup) {
+            groupMembers = data.members;
+            groupMembersList.textContent = groupMembers.join(', ');
+        }
+    });
+    if (groupSendBtn) {
+        groupSendBtn.addEventListener('click', function() {
+            const text = groupChatInput.value.trim();
+            if (text && currentGroup && groupMembers.includes(currentUsername)) {
+                socket.emit('group_chat_message', { group: currentGroup, text, sender: currentUsername });
+                groupChatInput.value = '';
+                loadGroupHistory(); // Reload group history after sending
+            }
+        });
+    }
+    socket.on('group_chat_message', function(msg) {
+        if (msg.group === currentGroup && groupMembers.includes(currentUsername)) {
+            const div = document.createElement('div');
+            div.className = 'mb-2';
+            div.innerHTML = `<strong>${msg.sender}:</strong> <span>${msg.text}</span> <span class="text-muted" style="font-size:0.8em;">${new Date(msg.timestamp).toLocaleTimeString()}</span>`;
+            groupChatContainer.appendChild(div);
+            groupChatContainer.scrollTop = groupChatContainer.scrollHeight;
+        }
+    });
+    // Assistant tab logic: send message to /assistant/ask and display response
+    const assistantSendBtn = document.getElementById('assistantSendBtn');
+    const assistantChatInput = document.getElementById('assistantChatInput');
+    const assistantChatContainer = document.getElementById('assistantChatContainer');
+    const assistantClearBtn = document.getElementById('assistantClearBtn');
+    if (assistantSendBtn) {
+        assistantSendBtn.addEventListener('click', async function() {
+            const question = assistantChatInput.value.trim();
+            if (!question) return;
+            // Show user message
+            const userDiv = document.createElement('div');
+            userDiv.className = 'mb-2';
+            userDiv.innerHTML = `<strong>You:</strong> <span>${question}</span>`;
+            assistantChatContainer.appendChild(userDiv);
+            assistantChatInput.value = '';
+            assistantChatContainer.scrollTop = assistantChatContainer.scrollHeight;
+            // Send to backend
+            const response = await fetch('/assistant/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question })
+            });
+            const data = await response.json();
+            const botDiv = document.createElement('div');
+            botDiv.className = 'mb-2';
+            botDiv.innerHTML = `<strong>Assistant:</strong> <span>${data.text || data.message || 'No response.'}</span>`;
+            assistantChatContainer.appendChild(botDiv);
+            assistantChatContainer.scrollTop = assistantChatContainer.scrollHeight;
+        });
+        assistantChatInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') assistantSendBtn.click();
+        });
+    }
+    if (assistantClearBtn) {
+        assistantClearBtn.addEventListener('click', async function() {
+            if (!confirm('Clear all assistant chat history?')) return;
+            assistantChatContainer.innerHTML = '';
+            const resp = await fetch('/assistant/clear-assistant-history', { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) {
+                // Add a small delay to ensure backend writes are complete
+                setTimeout(() => {
+                    loadAssistantHistory();
+                }, 200);
+            } else {
+                alert('Failed to clear assistant history.');
+            }
+        });
+    }
+    // DM chat logic: send message to /chat/dm and display response
+    const dmSendBtn = document.getElementById('dmSendBtn');
+    const dmChatInput = document.getElementById('dmChatInput');
+    const dmChatContainer = document.getElementById('dmChatContainer');
+    if (dmSendBtn) {
+        dmSendBtn.addEventListener('click', async function() {
+            const dmUserSelect = document.getElementById('dmUserSelect');
+            const recipient = dmUserSelect ? dmUserSelect.value : null;
+            const message = dmChatInput.value.trim();
+            if (!recipient || !message) return;
+            // Show user message
+            const userDiv = document.createElement('div');
+            userDiv.className = 'mb-2';
+            userDiv.innerHTML = `<strong>You:</strong> <span>${message}</span>`;
+            dmChatContainer.appendChild(userDiv);
+            dmChatInput.value = '';
+            dmChatContainer.scrollTop = dmChatContainer.scrollHeight;
+            // Send to backend
+            const response = await fetch('/chat/dm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ recipient, message })
+            });
+            // No need to append any bot/assistant message to DM chat
+            loadDmHistory(); // Reload DM history after sending
+        });
+        dmChatInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                dmSendBtn.click();
+            }
+        });
+    }
+  })();
+});
+</script>
+{% endblock %} 

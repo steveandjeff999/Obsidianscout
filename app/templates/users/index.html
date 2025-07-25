@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Users{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h1 class="mb-4">Users</h1>
+  <div class="row row-cols-1 row-cols-md-3 g-4">
+    {% for user in users %}
+    <div class="col">
+      <a href="{{ url_for('main.user_profile', user_id=user.id) }}" class="text-decoration-none text-reset">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body d-flex align-items-center">
+          <img src="{{ url_for('static', filename=user.profile_picture or 'img/avatars/default.png') }}" class="rounded-circle me-3" alt="Profile" width="64" height="64" style="object-fit:cover;">
+          <div>
+            <h5 class="card-title mb-1">{{ user.username }}</h5>
+            {% if user.email %}
+            <p class="mb-0 text-muted">{{ user.email }}</p>
+            {% endif %}
+            <div class="mt-2">
+              {% for role in user.roles %}
+                <span class="badge bg-primary me-1">{{ role.name }}</span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %} 

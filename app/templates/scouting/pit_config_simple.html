@@ -73,6 +73,7 @@
                                             <div class="elements-container" data-section-index="{{ loop.index0 }}">
                                                 {% set section_index = loop.index0 %}
                                                 {% for element in section.elements %}
+                                                {% set element_index = loop.index0 %}
                                                 <div class="element-item border p-3 mb-2" data-element-index="{{ loop.index0 }}">
                                                     <div class="row">
                                                         <div class="col-md-12">
@@ -87,7 +88,7 @@
                                                             <div class="form-group">
                                                                 <label>Element ID</label>
                                                                 <input type="text" class="form-control" 
-                                                                       name="element_id_{{ section_index }}_{{ loop.index0 }}" 
+                                                                       name="element_id_{{ section_index }}_{{ element_index }}" 
                                                                        value="{{ element.id }}" required>
                                                             </div>
                                                         </div>
@@ -95,7 +96,7 @@
                                                             <div class="form-group">
                                                                 <label>Element Name</label>
                                                                 <input type="text" class="form-control" 
-                                                                       name="element_name_{{ section_index }}_{{ loop.index0 }}" 
+                                                                       name="element_name_{{ section_index }}_{{ element_index }}" 
                                                                        value="{{ element.name }}" required>
                                                             </div>
                                                         </div>
@@ -103,7 +104,7 @@
                                                             <div class="form-group">
                                                                 <label>Element Type</label>
                                                                 <select class="form-control element-type-select" 
-                                                                        name="element_type_{{ section_index }}_{{ loop.index0 }}">
+                                                                        name="element_type_{{ section_index }}_{{ element_index }}">
                                                                     <option value="text" {% if element.type == 'text' %}selected{% endif %}>Text</option>
                                                                     <option value="textarea" {% if element.type == 'textarea' %}selected{% endif %}>Textarea</option>
                                                                     <option value="number" {% if element.type == 'number' %}selected{% endif %}>Number</option>
@@ -119,7 +120,7 @@
                                                             <div class="form-group">
                                                                 <label>Default Value</label>
                                                                 <input type="text" class="form-control" 
-                                                                       name="element_default_{{ section_index }}_{{ loop.index0 }}" 
+                                                                       name="element_default_{{ section_index }}_{{ element_index }}" 
                                                                        value="{{ element.default or '' }}">
                                                             </div>
                                                         </div>
@@ -127,14 +128,14 @@
                                                             <div class="form-group">
                                                                 <label>Placeholder</label>
                                                                 <input type="text" class="form-control" 
-                                                                       name="element_placeholder_{{ section_index }}_{{ loop.index0 }}" 
+                                                                       name="element_placeholder_{{ section_index }}_{{ element_index }}" 
                                                                        value="{{ element.placeholder or '' }}">
                                                             </div>
                                                         </div>
                                                         <div class="col-md-4">
                                                             <div class="form-check pt-4">
                                                                 <input type="checkbox" class="form-check-input" 
-                                                                       name="element_required_{{ section_index }}_{{ loop.index0 }}" 
+                                                                       name="element_required_{{ section_index }}_{{ element_index }}" 
                                                                        {% if element.required %}checked{% endif %}>
                                                                 <label class="form-check-label">Required</label>
                                                             </div>
@@ -147,7 +148,7 @@
                                                             <div class="form-group">
                                                                 <label>Min Value</label>
                                                                 <input type="number" class="form-control" 
-                                                                       name="element_min_{{ section_index }}_{{ loop.index0 }}" 
+                                                                       name="element_min_{{ section_index }}_{{ element_index }}" 
                                                                        value="{{ element.validation.min if element.validation else '' }}">
                                                             </div>
                                                         </div>
@@ -155,7 +156,7 @@
                                                             <div class="form-group">
                                                                 <label>Max Value</label>
                                                                 <input type="number" class="form-control" 
-                                                                       name="element_max_{{ section_index }}_{{ loop.index0 }}" 
+                                                                       name="element_max_{{ section_index }}_{{ element_index }}" 
                                                                        value="{{ element.validation.max if element.validation else '' }}">
                                                             </div>
                                                         </div>
@@ -164,10 +165,22 @@
                                                     <!-- Select/Multiselect options -->
                                                     <div class="select-options" style="display: {% if element.type in ['select', 'multiselect'] %}block{% else %}none{% endif %}">
                                                         <div class="form-group">
-                                                            <label>Options (one per line, format: value|label or just value)</label>
-                                                            <textarea class="form-control" rows="4" 
-                                                                      name="element_options_{{ section_index }}_{{ loop.index0 }}">{% if element.options %}{% for option in element.options %}{{ option.value }}|{{ option.label }}
-{% endfor %}{% endif %}</textarea>
+                                                            <label>Options and Points (value|label|points)</label>
+                                                            <table class="table table-bordered option-points-table">
+                                                                <thead>
+                                                                    <tr><th>Option Value</th><th>Label</th><th>Points</th></tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                {% for opt in element.options %}
+                                                                <tr>
+                                                                    <td><input type="text" class="form-control" name="element_option_value_{{ section_index }}_{{ element_index }}_{{ loop.index0 }}" value="{{ opt.value }}" required></td>
+                                                                    <td><input type="text" class="form-control" name="element_option_label_{{ section_index }}_{{ element_index }}_{{ loop.index0 }}" value="{{ opt.label }}"></td>
+                                                                    <td><input type="number" class="form-control" name="element_option_points_{{ section_index }}_{{ element_index }}_{{ loop.index0 }}" value="{{ element.points[opt.value] if element.points and opt.value in element.points else 0 }}" step="0.1"></td>
+                                                                </tr>
+                                                                {% endfor %}
+                                                                </tbody>
+                                                            </table>
+                                                            <button type="button" class="btn btn-sm btn-success add-option" data-section-index="{{ section_index }}" data-element-index="{{ element_index }}">Add Option</button>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -277,6 +290,31 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+
+    document.querySelectorAll('.add-option').forEach(button => {
+        button.addEventListener('click', function() {
+            const sectionIndex = this.dataset.sectionIndex;
+            const elementIndex = this.dataset.elementIndex;
+            const container = document.querySelector(`.section-item[data-section-index="${sectionIndex}"] .element-item[data-element-index="${elementIndex}"] .option-points-table tbody`);
+            if (!container) {
+                console.error(`Tbody for options not found for section ${sectionIndex} element ${elementIndex}`);
+                return;
+            }
+            const newOptionIndex = container.querySelectorAll('tr').length;
+            const template = createOptionTemplate(sectionIndex, elementIndex, newOptionIndex);
+            container.insertAdjacentHTML('beforeend', template);
+        });
+    });
+});
+function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
+    return `
+        <tr>
+            <td><input type="text" class="form-control" name="element_option_value_${sectionIndex}_${elementIndex}_${optionIndex}" required></td>
+            <td><input type="text" class="form-control" name="element_option_label_${sectionIndex}_${elementIndex}_${optionIndex}"></td>
+            <td><input type="number" class="form-control" name="element_option_points_${sectionIndex}_${elementIndex}_${optionIndex}" value="0" step="0.1"></td>
+        </tr>
+    `;
+}
     
     function createSectionElement(sectionIdx) {
         const sectionDiv = document.createElement('div');

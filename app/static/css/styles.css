@@ -8,6 +8,7 @@ body {
     background-color: #f8f9fa;
     font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
     transition: background-color 0.3s ease, color 0.3s ease;
+    padding-top: 0;
 }
 
 .footer {
@@ -1933,4 +1934,193 @@ body {
     white-space: normal;
     word-break: break-word;
     padding-right: 2rem;
+}
+
+/* --- Chat Page Modern UI Styles --- */
+
+.chat-container {
+    background: #f7f9fa;
+    border-radius: 12px;
+    border: 1px solid #e3e6ea;
+    padding: 18px 16px 12px 16px;
+    min-height: 350px;
+    max-height: 420px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    transition: background 0.3s;
+}
+
+.chat-message {
+    display: flex;
+    align-items: flex-end;
+    margin-bottom: 12px;
+}
+
+.chat-message.user {
+    justify-content: flex-end;
+}
+
+.chat-message .bubble {
+    max-width: 70%;
+    padding: 10px 16px;
+    border-radius: 18px;
+    font-size: 1rem;
+    line-height: 1.5;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    position: relative;
+    word-break: break-word;
+}
+
+.chat-message.user .bubble {
+    background: linear-gradient(90deg, #0d6efd 60%, #4f8cff 100%);
+    color: #fff;
+    border-bottom-right-radius: 6px;
+    margin-left: 8px;
+}
+
+.chat-message.assistant .bubble {
+    background: #fff;
+    color: #222;
+    border-bottom-left-radius: 6px;
+    margin-right: 8px;
+    border: 1px solid #e3e6ea;
+}
+
+.chat-message.group .bubble {
+    background: #e9f5ff;
+    color: #0d6efd;
+    border-bottom-left-radius: 6px;
+    margin-right: 8px;
+    border: 1px solid #b6e0fe;
+}
+
+.chat-message .meta {
+    font-size: 0.85em;
+    color: #888;
+    margin: 0 6px;
+    align-self: flex-end;
+}
+
+/* Input area */
+.chat-input-area {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.chat-input-area input[type="text"] {
+    flex: 1;
+    border-radius: 20px;
+    border: 1px solid #e3e6ea;
+    padding: 8px 16px;
+    font-size: 1rem;
+    transition: border 0.2s;
+}
+
+.chat-input-area input[type="text"]:focus {
+    border-color: #0d6efd;
+    outline: none;
+}
+
+.chat-input-area button {
+    border-radius: 20px;
+    padding: 8px 20px;
+    font-size: 1rem;
+}
+
+/* Suggestions/Chips */
+.suggestion-chip {
+    display: inline-block;
+    padding: 6px 14px;
+    margin: 4px 6px 4px 0;
+    background: #e3e6ea;
+    border-radius: 16px;
+    font-size: 0.95em;
+    color: #444;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.suggestion-chip:hover {
+    background: #d0d7de;
+}
+
+/* Group members list */
+#groupMembersList {
+    font-size: 0.97em;
+    color: #0d6efd;
+    font-weight: 500;
+}
+
+/* Dark mode overrides for chat */
+.dark-mode .chat-container {
+    background: #23272b;
+    border-color: #343a40;
+}
+.dark-mode .chat-message.assistant .bubble {
+    background: #23272b;
+    color: #e3e6ea;
+    border-color: #343a40;
+}
+.dark-mode .chat-message.user .bubble {
+    background: linear-gradient(90deg, #375a7f 60%, #4f8cff 100%);
+    color: #fff;
+}
+.dark-mode .chat-message.group .bubble {
+    background: #1a2634;
+    color: #4fc3f7;
+    border-color: #22334a;
+}
+.dark-mode .chat-input-area input[type="text"] {
+    background: #181c20;
+    color: #e3e6ea;
+    border-color: #343a40;
+}
+.dark-mode .chat-input-area input[type="text"]:focus {
+    border-color: #4f8cff;
+}
+.dark-mode .suggestion-chip {
+    background: #343a40;
+    color: #e3e6ea;
+}
+.dark-mode .suggestion-chip:hover {
+    background: #23272b;
+}
+.dark-mode #groupMembersList {
+    color: #4fc3f7;
+}
+
+/* Sticky navbar: always at the top */
+.app-header, .navbar {
+    position: sticky;
+    top: 0;
+    z-index: 1051;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    background-color: var(--navbar-bg, #fff);
+}
+
+/* Fallback for older browsers */
+@supports not (position: sticky) {
+    .app-header, .navbar {
+        position: fixed;
+        width: 100%;
+        left: 0;
+        top: 0;
+    }
+}
+
+/* Ensure body content is not hidden behind navbar */
+body {
+    padding-top: 0;
+}
+
+/* Add top padding to main content area to prevent content from being hidden under navbar */
+main {
+    padding-top: 70px;
+}
+
+/* Dark mode sticky navbar */
+.dark-mode .app-header, .dark-mode .navbar {
+    background-color: var(--navbar-bg, #1e2124) !important;
+    box-shadow: 0 2px 15px rgba(0,0,0,0.3);
 }

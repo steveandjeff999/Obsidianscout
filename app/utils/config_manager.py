@@ -67,23 +67,24 @@ class ConfigManager:
                 formula_parts.append(f"({element_id} ? {points} : 0)")
             elif element_type == 'counter':
                 formula_parts.append(f"({element_id} * {points})")
-            elif element_type == 'select' and isinstance(points, dict):
-                # Create a nested ternary for select options
-                options = element.get('options', [])
-                ternary = ""
-                # Sort points by value to build a proper ternary
-                sorted_points = sorted(points.items(), key=lambda item: item[1], reverse=True)
-                
-                first = True
-                for option, value in sorted_points:
-                    if option == "None" or value == 0: continue
-                    if not first:
-                        ternary += " : "
-                    ternary += f"({element_id} == '{option}' ? {value}"
-                    first = False
-                
-                ternary += " : 0" + ")" * (len(sorted_points) -1) # Subtract "None"
-                formula_parts.append(ternary)
+            elif element_type == 'select':
+                # Support both dict (new) and single value (legacy)
+                if isinstance(points, dict):
+                    options = element.get('options', [])
+                    ternary = ""
+                    sorted_points = sorted(points.items(), key=lambda item: item[1], reverse=True)
+                    first = True
+                    for option, value in sorted_points:
+                        if option == "None" or value == 0: continue
+                        if not first:
+                            ternary += " : "
+                        ternary += f"({element_id} == '{option}' ? {value}"
+                        first = False
+                    ternary += " : 0" + ")" * (len(sorted_points) -1)
+                    formula_parts.append(ternary)
+                else:
+                    # Legacy: all options get the same points value
+                    formula_parts.append(f"({element_id} ? {points if points is not None else 0} : 0)")
 
 
         return " + ".join(formula_parts) if formula_parts else "0"

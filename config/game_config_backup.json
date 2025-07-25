@@ -161,27 +161,23 @@
     "duration_seconds": 30,
     "scoring_elements": [
       {
-        "id": "enp",
-        "perm_id": "enp",
-        "name": "Endgame Position",
+        "id": "egh",
+        "perm_id": "egh",
+        "name": "climb",
         "type": "select",
-        "default": "None",
-        "points": {
-          "None": 0,
-          "Barge Park": 0,
-          "Shallow Cage": 0,
-          "Deep Cage": 0
-        },
-        "options": [
-          "None",
-          "Barge Park",
-          "Shallow Cage",
-          "Deep Cage"
-        ]
+        "default": "none"
+      },
+      {
+        "id": "f",
+        "perm_id": "f",
+        "name": "f",
+        "type": "boolean",
+        "default": false,
+        "points": 0.0
       }
     ]
   },
-  "game_name": "REEFSCAPE1",
+  "game_name": "REEFSCAPE",
   "game_pieces": [
     {
       "id": "cor",

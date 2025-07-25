@@ -10,17 +10,15 @@ function updateSelect2DarkMode() {
     // Apply appropriate theme to all Select2 instances
     if ($.fn.select2) {
         $('.select2-container--bootstrap-5').each(function() {
-            const select = $(this).data('select2').$element;
-            if (select) {
+            const select2Data = $(this).data('select2');
+            if (select2Data && select2Data.$element) {
+                const select = select2Data.$element;
                 // Store current selection
                 const selectedData = select.select2('data');
-                
                 // Destroy and reinitialize with updated theme
                 select.select2('destroy');
-                
                 // Get existing options
                 const existingOptions = select.data('select2-options') || {};
-                
                 // Create merged options with updated theme
                 const options = {
                     ...existingOptions,
@@ -28,13 +26,10 @@ function updateSelect2DarkMode() {
                     // Additional styling for dark mode
                     dropdownParent: existingOptions.dropdownParent || $('body')
                 };
-                
                 // Store the options for future reference
                 select.data('select2-options', options);
-                
                 // Reinitialize with updated options
                 select.select2(options);
-                
                 // Restore selection
                 if (selectedData && selectedData.length) {
                     select.val(selectedData.map(item => item.id)).trigger('change');

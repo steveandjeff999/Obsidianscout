@@ -180,16 +180,78 @@ class Assistant:
             team = Team.query.filter_by(team_number=int(team_number)).first()
             if not team:
                 return {"text": f"Team {team_number} not found in the database."}
-            
             # Calculate team statistics from scouting data
             entries = ScoutingData.query.filter_by(team_id=team.id).all()
             if not entries:
                 return {"text": f"No scouting data available for Team {team_number}."}
-            
             stats = calculate_team_metrics(team.id)
-            
+            # Build HTML table of averages with display names
+            from flask import current_app
+            game_config = current_app.config.get('GAME_CONFIG', {})
+            metric_display_names = {}
+            if 'data_analysis' in game_config and 'key_metrics' in game_config['data_analysis']:
+                for metric in game_config['data_analysis']['key_metrics']:
+                    metric_display_names[metric['id']] = metric.get('name', metric['id'])
+            table_html = '<table class="table table-sm table-bordered" style="width:auto; margin-top:10px;"><thead><tr><th>Metric</th><th>Average</th></tr></thead><tbody>'
+            for k, v in stats.items():
+                display_name = metric_display_names.get(k, k.replace("_", " ").title())
+                if isinstance(v, (int, float)):
+                    table_html += f'<tr><td>{display_name}</td><td>{v:.2f}</td></tr>'
+                else:
+                    table_html += f'<tr><td>{display_name}</td><td>{v}</td></tr>'
+            table_html += '</tbody></table>'
+            # Prepare data for Chart.js: total points per match
+            match_labels = []
+            match_points = []
+            total_metric_id = 'tot'
+            from flask import current_app
+            game_config = current_app.config.get('GAME_CONFIG', {})
+            if 'data_analysis' in game_config and 'key_metrics' in game_config['data_analysis']:
+                for metric in game_config['data_analysis']['key_metrics']:
+                    if 'total' in metric.get('id', '').lower() or 'tot' == metric.get('id', '').lower():
+                        total_metric_id = metric.get('id')
+                        break
+            for entry in entries:
+                match_label = f"M{entry.match.match_number}" if entry.match else f"Entry {entry.id}"
+                match_labels.append(match_label)
+                try:
+                    pts = entry.calculate_metric(total_metric_id)
+                except Exception:
+                    pts = 0
+                match_points.append(pts)
+            chart_id = f"team-{team.team_number}-graph"
+            chartjs_html = f'''
+<canvas id="{chart_id}" height="200"></canvas>
+<script>
+setTimeout(function() {{
+  var ctx = document.getElementById('{chart_id}').getContext('2d');
+  if (window['{chart_id}_chart']) window['{chart_id}_chart'].destroy();
+  window['{chart_id}_chart'] = new Chart(ctx, {{
+    type: 'line',
+    data: {{
+      labels: {match_labels},
+      datasets: [{{
+        label: 'Total Points',
+        data: {match_points},
+        borderColor: 'rgba(54, 162, 235, 1)',
+        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+        fill: true,
+        tension: 0.2
+      }}]
+    }},
+    options: {{
+      responsive: true,
+      plugins: {{ legend: {{ display: false }} }},
+      scales: {{
+        y: {{ beginAtZero: true }}
+      }}
+    }}
+  }});
+}}, 100);
+</script>
+'''
             response = {
-                "text": f"Here are the stats for Team {team_number} ({team.team_name}):",
+                "text": f"Here are the stats for Team {team_number} ({team.team_name}):<br>{table_html}{chartjs_html}",
                 "team": {
                     "number": team.team_number,
                     "name": team.team_name,

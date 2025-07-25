@@ -53,3 +53,10 @@ Version 1.0.1.4 - PWA Improvements and Icon Fixes
 - Updated navigation and all references to point to the new graphs routes
 - Improved counter input layout in scouting forms - plus/minus buttons now positioned horizontally next to number input instead of above/below
 
+Version 1.0.1.8 - Unread Chat Badge for DMs and Groups
+------------------------------------------------
+- Added a real-time unread message badge to the Chat button in the navbar.
+- The badge shows the number of unread direct and group chat messages for the current user.
+- Badge updates instantly when new messages arrive and resets when the chat is opened.
+- Improved notification logic for both DMs and group chats.
+
