@@ -5,6 +5,7 @@ from app.utils.version_manager import VersionManager
 from app.utils.update_manager import UpdateManager
 from app.utils.remote_config import fetch_remote_config, is_remote_version_newer
 from app.utils.theme_manager import ThemeManager
+from app.models import User, Role
 
 def get_theme_context():
     theme_manager = ThemeManager()

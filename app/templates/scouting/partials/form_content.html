@@ -154,7 +154,11 @@
                                 {% endif %}
                                 <select class="form-select form-select-lg" id="{{ element.id }}" name="{{ element.id }}">
                                     {% for option in element.options %}
-                                    <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
+                                        {% if option is string %}
+                                            <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
+                                        {% else %}
+                                            <option value="{{ option.value }}" {% if form_data.get(element.id) == option.value %}selected{% endif %}>{{ option.label if option.label else option.value }}</option>
+                                        {% endif %}
                                     {% endfor %}
                                 </select>
                             {% endif %}
@@ -213,7 +217,11 @@
                                 {% endif %}
                                 <select class="form-select form-select-lg" id="{{ element.id }}" name="{{ element.id }}">
                                     {% for option in element.options %}
-                                    <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
+                                        {% if option is string %}
+                                            <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
+                                        {% else %}
+                                            <option value="{{ option.value }}" {% if form_data.get(element.id) == option.value %}selected{% endif %}>{{ option.label if option.label else option.value }}</option>
+                                        {% endif %}
                                     {% endfor %}
                                 </select>
                             {% endif %}
@@ -272,7 +280,11 @@
                                 {% endif %}
                                 <select class="form-select form-select-lg" id="{{ element.id }}" name="{{ element.id }}">
                                     {% for option in element.options %}
-                                    <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
+                                        {% if option is string %}
+                                            <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
+                                        {% else %}
+                                            <option value="{{ option.value }}" {% if form_data.get(element.id) == option.value %}selected{% endif %}>{{ option.label if option.label else option.value }}</option>
+                                        {% endif %}
                                     {% endfor %}
                                 </select>
                             {% endif %}

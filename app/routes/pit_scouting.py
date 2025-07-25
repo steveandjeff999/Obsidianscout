@@ -624,20 +624,26 @@ def config_simple_save():
                             if validation:
                                 element["validation"] = validation
                         
-                        # Handle options for select/multiselect fields
+                        # Handle options for select/multiselect fields with per-option points
                         if element_type in ['select', 'multiselect']:
-                            options_text = request.form.get(f'element_options_{section_index}_{element_index}', '')
-                            if options_text:
-                                options = []
-                                for line in options_text.strip().split('\n'):
-                                    line = line.strip()
-                                    if line:
-                                        if '|' in line:
-                                            value, label = line.split('|', 1)
-                                            options.append({"value": value.strip(), "label": label.strip()})
-                                        else:
-                                            options.append({"value": line, "label": line})
+                            options = []
+                            points_dict = {}
+                            option_idx = 0
+                            while True:
+                                opt_val = request.form.get(f'element_option_value_{section_index}_{element_index}_{option_idx}')
+                                opt_label = request.form.get(f'element_option_label_{section_index}_{element_index}_{option_idx}')
+                                opt_points = request.form.get(f'element_option_points_{section_index}_{element_index}_{option_idx}')
+                                if opt_val is None:
+                                    break
+                                options.append({"value": opt_val, "label": opt_label if opt_label else opt_val})
+                                try:
+                                    points_dict[opt_val] = float(opt_points) if opt_points is not None else 0
+                                except ValueError:
+                                    points_dict[opt_val] = 0
+                                option_idx += 1
+                            if options:
                                 element["options"] = options
+                                element["points"] = points_dict
                         
                         section["elements"].append(element)
                 

@@ -17,6 +17,15 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
+                        <div class="mb-3 text-center">
+                            <label class="form-label">Profile Picture</label><br>
+                            <img src="{{ url_for('static', filename=user.profile_picture or 'img/avatars/default.png') }}" class="rounded-circle mb-2" alt="Profile Picture" width="96" height="96" style="object-fit:cover;">
+                            <form method="POST" enctype="multipart/form-data" class="mt-2">
+                                <input class="form-control" type="file" name="profile_picture" accept="image/*">
+                                <button type="submit" class="btn btn-primary btn-sm mt-2">Upload New Picture</button>
+                                <div class="form-text">Max size: 2MB. JPG/PNG only.</div>
+                            </form>
+                        </div>
                         <div class="mb-3">
                             <label class="form-label fw-bold">Username:</label>
                             <p class="form-control-plaintext">{{ user.username }}</p>

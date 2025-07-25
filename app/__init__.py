@@ -1,12 +1,13 @@
-from flask import Flask, render_template, flash
+from flask import Flask, render_template, flash, send_from_directory, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, join_room
 from flask_login import LoginManager
 import os
 import json
 from datetime import datetime
 from app.utils.config_manager import ConfigManager
+import threading
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -18,6 +19,160 @@ config_manager = ConfigManager()
 # Initialize file integrity monitor
 from app.utils.file_integrity import FileIntegrityMonitor
 file_integrity_monitor = FileIntegrityMonitor()
+
+CHAT_HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'instance', 'assistant_chat_history.json')
+CHAT_HISTORY_LOCK = threading.Lock()
+
+def load_chat_history():
+    if not os.path.exists(CHAT_HISTORY_FILE):
+        return []
+    with open(CHAT_HISTORY_FILE, 'r', encoding='utf-8') as f:
+        try:
+            return json.load(f)
+        except Exception:
+            return []
+
+def save_chat_message(message):
+    with CHAT_HISTORY_LOCK:
+        history = load_chat_history()
+        history.append(message)
+        with open(CHAT_HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+
+# Socket.IO event handlers for assistant chat
+@socketio.on('assistant_chat_message')
+def handle_assistant_chat_message(data):
+    user = None
+    try:
+        from flask_login import current_user
+        user = current_user
+    except Exception:
+        pass
+    sender = data.get('sender') or (user.username if user and hasattr(user, 'username') else 'Anonymous')
+    recipient = data.get('recipient', 'assistant')
+    text = data.get('text', '')
+    timestamp = datetime.utcnow().isoformat()
+    # If chatting with assistant, make it private per user
+    if recipient == 'assistant':
+        message = {'sender': sender, 'recipient': 'assistant', 'text': text, 'timestamp': timestamp, 'owner': sender}
+        save_chat_message(message)
+        socketio.emit('assistant_chat_message', message, room=sender)
+        # Simple auto-reply from assistant
+        reply = {'sender': 'assistant', 'recipient': sender, 'text': f"Hello {sender}, how can I help you?", 'timestamp': datetime.utcnow().isoformat(), 'owner': sender}
+        save_chat_message(reply)
+        socketio.emit('assistant_chat_message', reply, room=sender)
+    else:
+        message = {'sender': sender, 'recipient': recipient, 'text': text, 'timestamp': timestamp}
+        save_chat_message(message)
+        socketio.emit('assistant_chat_message', message, room=sender)
+        socketio.emit('assistant_chat_message', message, room=recipient)
+
+@socketio.on('assistant_chat_history_request')
+def handle_assistant_chat_history_request():
+    user = None
+    try:
+        from flask_login import current_user
+        user = current_user
+    except Exception:
+        pass
+    username = user.username if user and hasattr(user, 'username') else None
+    history = load_chat_history()
+    # Only show assistant messages owned by this user
+    filtered = []
+    for msg in history:
+        if msg.get('recipient') == 'assistant' and msg.get('owner') and msg.get('owner') != username:
+            continue
+        if msg.get('recipient') == username or msg.get('sender') == username or (msg.get('recipient') == 'assistant' and msg.get('owner') == username):
+            filtered.append(msg)
+    socketio.emit('assistant_chat_history', filtered)
+
+# In-memory group membership (for demo; use DB for production)
+group_members = {}  # {group_name: set([usernames])}
+
+@socketio.on('add_user_to_group')
+def add_user_to_group(data):
+    group = data.get('group')
+    user = data.get('user')
+    if group and user:
+        group_members.setdefault(group, set()).add(user)
+        socketio.emit('group_members_updated', {'group': group, 'members': list(group_members[group])}, room=group)
+
+@socketio.on('remove_user_from_group')
+def remove_user_from_group(data):
+    group = data.get('group')
+    user = data.get('user')
+    if group and user and group in group_members:
+        group_members[group].discard(user)
+        socketio.emit('group_members_updated', {'group': group, 'members': list(group_members[group])}, room=group)
+
+@socketio.on('join_group')
+def join_group_room(data):
+    group = data.get('group')
+    user = None
+    try:
+        from flask_login import current_user
+        user = current_user
+    except Exception:
+        pass
+    username = user.username if user and hasattr(user, 'username') else None
+    if group and username:
+        join_room(group)
+        group_members.setdefault(group, set()).add(username)
+        socketio.emit('group_members_updated', {'group': group, 'members': list(group_members[group])}, room=group)
+
+@socketio.on('leave_group')
+def leave_group_room(data):
+    group = data.get('group')
+    user = None
+    try:
+        from flask_login import current_user
+        user = current_user
+    except Exception:
+        pass
+    username = user.username if user and hasattr(user, 'username') else None
+    if group and username and group in group_members:
+        from flask_socketio import leave_room
+        leave_room(group)
+        group_members[group].discard(username)
+        socketio.emit('group_members_updated', {'group': group, 'members': list(group_members[group])}, room=group)
+
+@socketio.on('group_chat_message')
+def handle_group_chat_message(data):
+    user = None
+    try:
+        from flask_login import current_user
+        user = current_user
+    except Exception:
+        pass
+    sender = data.get('sender') or (user.username if user and hasattr(user, 'username') else 'Anonymous')
+    group = data.get('group')
+    text = data.get('text', '')
+    timestamp = datetime.utcnow().isoformat()
+    # Only allow group members to send/receive
+    if group and sender in group_members.get(group, set()):
+        message = {'sender': sender, 'group': group, 'text': text, 'timestamp': timestamp}
+        save_chat_message(message)
+        socketio.emit('group_chat_message', message, room=group)
+
+@socketio.on('connect')
+def on_connect():
+    try:
+        from flask_login import current_user
+        if current_user.is_authenticated:
+            join_room(current_user.username)
+    except Exception:
+        pass
+
+# Flask route to delete chat history (admin only)
+def register_chat_history_routes(app):
+    @app.route('/assistant/delete-chat-history', methods=['POST'])
+    def delete_chat_history():
+        from flask_login import current_user
+        if not current_user.is_authenticated or not current_user.has_role('admin'):
+            return jsonify({'success': False, 'message': 'Admin only'}), 403
+        if os.path.exists(CHAT_HISTORY_FILE):
+            os.remove(CHAT_HISTORY_FILE)
+        return jsonify({'success': True, 'message': 'Chat history deleted'})
 
 def create_app(test_config=None):
     # Create and configure the app
@@ -148,6 +303,9 @@ def create_app(test_config=None):
     
     # Register themes blueprint
     app.register_blueprint(themes.bp)
+
+    # Register chat history routes
+    register_chat_history_routes(app)
     
     # Create database tables (only if they don't exist)
     with app.app_context():
@@ -192,10 +350,11 @@ def create_app(test_config=None):
             return dict(
                 current_theme=theme,
                 current_theme_id=theme_manager.current_theme,
-                theme_css_variables=theme_manager.get_theme_css_variables()
+                theme_css_variables=theme_manager.get_theme_css_variables(),
+                themes=theme_manager.get_available_themes()  # Ensure 'themes' is always available
             )
         except Exception as e:
             app.logger.error(f"Error loading theme data: {e}")
-            return dict(current_theme={}, current_theme_id='default', theme_css_variables='')
+            return dict(current_theme={}, current_theme_id='default', theme_css_variables='', themes={})
     
     return app

@@ -7,7 +7,7 @@
     "base_url": "https://frc-api.firstinspires.org"
   },
   "tba_api_settings": {
-    "auth_key": "your TBA auth key hereS",
+    "auth_key": "your tba api key here",
     "base_url": "https://www.thebluealliance.com/api/v3"
   },
   "auto_period": {
@@ -161,23 +161,23 @@
     "duration_seconds": 30,
     "scoring_elements": [
       {
-        "id": "enp",
-        "perm_id": "enp",
-        "name": "Endgame Position",
+        "id": "egh",
+        "perm_id": "egh",
+        "name": "Climb",
         "type": "select",
-        "default": "None",
-        "points": {
-          "None": 0,
-          "Barge Park": 0,
-          "Shallow Cage": 0,
-          "Deep Cage": 0
-        },
+        "default": "0",
         "options": [
           "None",
-          "Barge Park",
-          "Shallow Cage",
-          "Deep Cage"
-        ]
+          "Park",
+          "Shallow ",
+          "Deep"
+        ],
+        "points": {
+          "None": 1.0,
+          "Park": 2.0,
+          "Shallow ": 3.0,
+          "Deep": 4.0
+        }
       }
     ]
   },

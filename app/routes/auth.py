@@ -11,6 +11,8 @@ from app.models import User, Role
 from datetime import datetime
 from app.utils.system_check import SystemCheck
 from app.utils.theme_manager import ThemeManager
+from werkzeug.utils import secure_filename
+import os
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -96,9 +98,34 @@ def logout():
     flash('You have been logged out successfully.', 'info')
     return redirect(url_for('auth.login'))
 
-@bp.route('/profile')
+@bp.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
+    if request.method == 'POST':
+        if 'profile_picture' in request.files:
+            file = request.files['profile_picture']
+            if file and file.filename:
+                filename = secure_filename(file.filename)
+                ext = os.path.splitext(filename)[1].lower()
+                if ext in ['.jpg', '.jpeg', '.png']:
+                    if len(file.read()) > 2 * 1024 * 1024:
+                        flash('Profile picture must be less than 2MB.', 'error')
+                        return redirect(request.url)
+                    file.seek(0)
+                    avatar_dir = os.path.join(current_app.root_path, 'static', 'img', 'avatars')
+                    if not os.path.exists(avatar_dir):
+                        os.makedirs(avatar_dir)
+                    avatar_filename = f'user_{current_user.id}{ext}'
+                    file_path = os.path.join(avatar_dir, avatar_filename)
+                    file.save(file_path)
+                    current_user.profile_picture = f'img/avatars/{avatar_filename}'
+                    db.session.commit()
+                    flash('Profile picture updated!', 'success')
+                else:
+                    flash('Only JPG and PNG images are allowed.', 'error')
+            else:
+                flash('No file selected.', 'error')
+        return redirect(request.url)
     return render_template('auth/profile.html', user=current_user, **get_theme_context())
 
 @bp.route('/users')
@@ -175,6 +202,30 @@ def edit_user(user_id):
             role = Role.query.get(role_id)
             if role:
                 user.roles.append(role)
+        
+        # --- Profile picture upload logic ---
+        if 'profile_picture' in request.files:
+            file = request.files['profile_picture']
+            if file and file.filename:
+                filename = secure_filename(file.filename)
+                ext = os.path.splitext(filename)[1].lower()
+                if ext in ['.jpg', '.jpeg', '.png']:
+                    if len(file.read()) > 2 * 1024 * 1024:
+                        flash('Profile picture must be less than 2MB.', 'error')
+                        return redirect(request.url)
+                    file.seek(0)
+                    avatar_dir = os.path.join(current_app.root_path, 'static', 'img', 'avatars')
+                    if not os.path.exists(avatar_dir):
+                        os.makedirs(avatar_dir)
+                    avatar_filename = f'user_{user.id}{ext}'
+                    file_path = os.path.join(avatar_dir, avatar_filename)
+                    file.save(file_path)
+                    user.profile_picture = f'img/avatars/{avatar_filename}'
+                else:
+                    flash('Only JPG and PNG images are allowed.', 'error')
+                    return redirect(request.url)
+            elif not user.profile_picture:
+                user.profile_picture = 'img/avatars/default.png'
         
         db.session.commit()
         flash(f'User {user.username} updated successfully', 'success')

@@ -1,0 +1,128 @@
+[
+  {
+    "sender": "admin",
+    "group": "bob",
+    "text": "hi",
+    "timestamp": "2025-07-24T02:54:02.001651"
+  },
+  {
+    "sender": "admin",
+    "group": "bob",
+    "text": "test",
+    "timestamp": "2025-07-24T02:59:54.325769"
+  },
+  {
+    "sender": "Seth Herod",
+    "recipient": "admin",
+    "text": "hi",
+    "timestamp": "2025-07-24T13:22:14.791133"
+  },
+  {
+    "sender": "Seth Herod",
+    "group": "bob",
+    "text": "test",
+    "timestamp": "2025-07-24T13:22:58.454808"
+  },
+  {
+    "sender": "Seth Herod",
+    "recipient": "admin",
+    "text": "hello",
+    "timestamp": "2025-07-24T13:28:52.999396"
+  },
+  {
+    "sender": "Seth Herod",
+    "recipient": "admin",
+    "text": "test",
+    "timestamp": "2025-07-24T13:29:17.184071"
+  },
+  {
+    "sender": "Seth Herod",
+    "group": "bob",
+    "text": "groups test",
+    "timestamp": "2025-07-24T13:30:07.400029"
+  },
+  {
+    "sender": "Seth Herod",
+    "group": "bob",
+    "text": "1",
+    "timestamp": "2025-07-24T13:30:22.904267"
+  },
+  {
+    "sender": "Seth Herod",
+    "recipient": "admin",
+    "text": "google",
+    "timestamp": "2025-07-24T13:31:34.583661"
+  },
+  {
+    "sender": "Seth Herod",
+    "recipient": "admin",
+    "text": "hi",
+    "timestamp": "2025-07-24T13:34:04.293399"
+  },
+  {
+    "sender": "Seth Herod",
+    "recipient": "admin",
+    "text": "sync test",
+    "timestamp": "2025-07-24T13:37:02.676855"
+  },
+  {
+    "sender": "Seth Herod",
+    "recipient": "assistant",
+    "text": "1477",
+    "timestamp": "2025-07-24T14:01:18.440436",
+    "owner": "Seth Herod"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "Seth Herod",
+    "text": "Here are the stats for Team 1477 (Texas Torque):<br><table class=\"table table-sm table-bordered\" style=\"width:auto; margin-top:10px;\"><thead><tr><th>Metric</th><th>Average</th></tr></thead><tbody><tr><td>Auto Points</td><td>24.00</td></tr><tr><td>Auto Points</td><td>24.00</td></tr><tr><td>Teleop Points</td><td>0.00</td></tr><tr><td>Teleop Points</td><td>0.00</td></tr><tr><td>Endgame Points</td><td>0.00</td></tr><tr><td>Endgame Points</td><td>0.00</td></tr><tr><td>Total Points</td><td>24.00</td></tr><tr><td>Total Points</td><td>24.00</td></tr><tr><td>Endgame Capability</td><td>0.00</td></tr><tr><td>Endgame Position Name</td><td>None</td></tr><tr><td>CORAL & ALGAE Accuracy</td><td>1.00</td></tr><tr><td>Defense Rate</td><td>0.00</td></tr><tr><td>Endgame Capability</td><td>0.00</td></tr></tbody></table>\n<canvas id=\"team-1477-graph\" height=\"200\"></canvas>\n<script>\nsetTimeout(function() {\n  var ctx = document.getElementById('team-1477-graph').getContext('2d');\n  if (window['team-1477-graph_chart']) window['team-1477-graph_chart'].destroy();\n  window['team-1477-graph_chart'] = new Chart(ctx, {\n    type: 'line',\n    data: {\n      labels: ['M111'],\n      datasets: [{\n        label: 'Total Points',\n        data: [24],\n        borderColor: 'rgba(54, 162, 235, 1)',\n        backgroundColor: 'rgba(54, 162, 235, 0.2)',\n        fill: true,\n        tension: 0.2\n      }]\n    },\n    options: {\n      responsive: true,\n      plugins: { legend: { display: false } },\n      scales: {\n        y: { beginAtZero: true }\n      }\n    }\n  });\n}, 100);\n</script>\n",
+    "timestamp": "2025-07-24T14:01:18.440455",
+    "owner": "Seth Herod"
+  },
+  {
+    "sender": "admin",
+    "recipient": "assistant",
+    "text": "hi",
+    "timestamp": "2025-07-24T20:49:28.701372",
+    "owner": "admin"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "admin",
+    "text": "I'm not sure how to answer that question. Try asking about team stats, match results, or say 'help' for more options.",
+    "timestamp": "2025-07-24T20:49:28.701391",
+    "owner": "admin"
+  },
+  {
+    "sender": "admin",
+    "recipient": "assistant",
+    "text": "5454",
+    "timestamp": "2025-07-24T20:49:32.994774",
+    "owner": "admin"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "admin",
+    "text": "No scouting data available for Team 5454.",
+    "timestamp": "2025-07-24T20:49:32.994789",
+    "owner": "admin"
+  },
+  {
+    "sender": "Test User1",
+    "recipient": "admin",
+    "text": "Hi",
+    "timestamp": "2025-07-25T17:56:11.009815"
+  },
+  {
+    "sender": "Test User1",
+    "recipient": "admin",
+    "text": "Hi dudes",
+    "timestamp": "2025-07-25T17:56:20.962544"
+  },
+  {
+    "sender": "Test User1",
+    "group": "bob",
+    "text": "Hi",
+    "timestamp": "2025-07-25T17:56:49.063278"
+  }
+]

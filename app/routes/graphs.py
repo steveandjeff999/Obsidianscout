@@ -122,10 +122,10 @@ def index():
                 match_metrics = {}
                 key_metrics = game_config.get('data_analysis', {}).get('key_metrics', [])
                 for metric in key_metrics:
-                    if 'formula' in metric:
+                    if 'formula' in metric or metric.get('auto_generated', False):
                         try:
                             metric_id = metric['id']
-                            formula = metric['formula']
+                            formula = metric.get('formula', metric_id)  # Use metric_id for auto_generated
                             value = data.calculate_metric(formula)
                             match_metrics[metric_id] = {
                                 'match_number': match.match_number,
@@ -147,8 +147,8 @@ def index():
 
             # --- Enhanced: Generate multiple graph types for all metrics ---
             import numpy as np
-            metric_ids = [m['id'] for m in key_metrics if 'formula' in m]
-            metric_names = {m['id']: m['name'] for m in key_metrics if 'formula' in m}
+            metric_ids = [m['id'] for m in key_metrics if 'formula' in m or m.get('auto_generated', False)]
+            metric_names = {m['id']: m['name'] for m in key_metrics if 'formula' in m or m.get('auto_generated', False)}
             # Prepare data for radar chart (if 3+ metrics)
             radar_ready = len(metric_ids) >= 3
             radar_data = {}
@@ -185,8 +185,9 @@ def index():
                     )
                     plots['team_comparison'] = pio.to_json(fig_points)
             else:
-                # For each metric, generate bar, line, and box plots
-                for metric_id in metric_ids:
+                # Only show the selected metric as the main graph
+                if selected_metric in metric_ids:
+                    metric_id = selected_metric
                     metric_name = metric_names[metric_id]
                     # Collect per-team, per-match values
                     team_match_values = {team_number: [] for team_number in team_data}
@@ -198,36 +199,27 @@ def index():
                     # --- Bar Chart: Average per team ---
                     avg_data = []
                     for team_number, values in team_match_values.items():
-                        if values:
-                            avg_value = sum(values) / len(values)
-                            avg_data.append({
-                                'team': f"{team_number} - {team_data[team_number]['team_name']}",
-                                'value': avg_value
-                            })
-                            if radar_ready:
-                                if team_number not in radar_data:
-                                    radar_data[team_number] = {}
-                                radar_data[team_number][metric_id] = avg_value
-                    if avg_data:
-                        avg_data = sorted(avg_data, key=lambda x: x['value'], reverse=True)
-                        fig_bar = go.Figure()
-                        fig_bar.add_trace(go.Bar(
-                            x=[d['team'] for d in avg_data],
-                            y=[d['value'] for d in avg_data],
-                            marker_color='rgb(55, 83, 109)',
-                            hovertemplate='<b>%{x}</b><br>Avg: %{y:.2f}<extra></extra>'
-                        ))
-                        fig_bar.update_layout(
-                            title=f"Average {metric_name} by Team",
-                            xaxis_title="Team",
-                            yaxis_title=f"Average {metric_name}",
-                            margin=dict(l=40, r=20, t=50, b=60),
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font=dict(family="Arial, sans-serif"),
-                            xaxis=dict(tickangle=-45)
-                        )
-                        plots[f'{metric_id}_bar'] = pio.to_json(fig_bar)
+                        avg = np.mean(values) if values else 0
+                        avg_data.append({'team': team_number, 'avg': avg})
+                    avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=True)
+                    fig_bar = go.Figure()
+                    fig_bar.add_trace(go.Bar(
+                        x=[str(d['team']) for d in avg_data],
+                        y=[d['avg'] for d in avg_data],
+                        marker_color='royalblue',
+                        hovertemplate='<b>Team %{x}</b><br>Avg: %{y:.2f}<extra></extra>'
+                    ))
+                    fig_bar.update_layout(
+                        title=f"{metric_name} by Team",
+                        xaxis_title="Team",
+                        yaxis_title=metric_name,
+                        margin=dict(l=40, r=20, t=50, b=60),
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        font=dict(family="Arial, sans-serif"),
+                        xaxis=dict(tickangle=-45)
+                    )
+                    plots['team_comparison'] = pio.to_json(fig_bar)
                     # --- Line Chart: Value per match (trend) ---
                     fig_line = go.Figure()
                     for team_number, values in team_match_values.items():

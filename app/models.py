@@ -66,6 +66,7 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
+    profile_picture = db.Column(db.String(256), nullable=True, default='img/avatars/default.png')
     
     # Many-to-many relationship with roles
     roles = db.relationship('Role', secondary=user_roles, lazy='subquery',
@@ -418,7 +419,7 @@ class ScoutingData(db.Model):
         
         # Add points from auto period scoring elements with direct point values
         for element in game_config.get('auto_period', {}).get('scoring_elements', []):
-            element_id = element.get('perm_id', element.get('id')) # Use perm_id
+            element_id = element.get('id')
             if element_id not in local_dict:
                 continue
                 
@@ -457,7 +458,7 @@ class ScoutingData(db.Model):
         
         # Add points from teleop period scoring elements
         for element in game_config.get('teleop_period', {}).get('scoring_elements', []):
-            element_id = element.get('perm_id', element.get('id')) # Use perm_id
+            element_id = element.get('id')
             if element_id not in local_dict:
                 continue
                 
@@ -500,7 +501,7 @@ class ScoutingData(db.Model):
         
         # Add points from endgame period scoring elements
         for element in game_config.get('endgame_period', {}).get('scoring_elements', []):
-            element_id = element.get('perm_id', element.get('id')) # Use perm_id
+            element_id = element.get('id')
             if element_id not in local_dict:
                 continue
                 

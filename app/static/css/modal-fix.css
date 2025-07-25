@@ -63,11 +63,11 @@
     right: 0 !important;
     bottom: 0 !important;
     z-index: 1040 !important;
-    background-color: #000 !important;
+    background-color: rgba(0,0,0,0.15) !important;
     transition: none !important;
     animation: none !important;
     transform: none !important;
-    opacity: 0.5 !important;
+    opacity: 1 !important;
     width: 100vw !important; 
     height: 100vh !important;
 }
