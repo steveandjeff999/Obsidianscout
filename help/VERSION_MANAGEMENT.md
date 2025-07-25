@@ -96,4 +96,4 @@ Examples:
 - `1.0.0` - Initial release
 - `1.0.1` - Patch update
 - `1.1.0` - Minor update with new features
-- `2.0.0` - Major update with breaking changess
+- `2.0.0` - Major update with breaking changes
