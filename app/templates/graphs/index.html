@@ -99,21 +99,57 @@
                                     <i class="fas fa-chart-line me-2 text-success"></i>Select Metric
                                 </label>
                                 <select name="metric" id="metric" class="form-select">
-                                    <option value="">Default (Matches Scouted)</option>
+                                    <option value="">Default (Total Points)</option>
                                     {% for metric in game_config.get('data_analysis', {}).get('key_metrics', []) %}
-                                    {% if 'formula' in metric or metric.get('auto_generated', False) %}
+                                    {% if ('formula' in metric or metric.get('auto_generated', False)) and metric.id not in ['coral', 'algae', 'accuracy', 'matches_scouted', 'defence', 'caa', 'dr', 'ecp', 'tot'] %}
                                     <option value="{{ metric.id }}" {% if metric.id == selected_metric %}selected{% endif %}>
                                         {{ metric.name }}
                                     </option>
                                     {% endif %}
                                     {% endfor %}
-                                    <option value="points" {% if selected_metric == 'points' %}selected{% endif %}>
-                                        Total Points (from team_metrics)
-                                    </option>
+
                                 </select>
                                 <div class="form-text">
                                     <i class="fas fa-info-circle me-1"></i>
                                     Choose the metric to visualize across teams
+                                </div>
+                            </div>
+                            
+                            <!-- Data View Type Selection -->
+                            <div class="mb-3">
+                                <label for="data_view" class="form-label fw-semibold">
+                                    <i class="fas fa-eye me-2 text-info"></i>Data View Type
+                                </label>
+                                <select name="data_view" id="data_view" class="form-select">
+                                    <option value="averages" {% if selected_data_view == 'averages' %}selected{% endif %}>
+                                        📊 Team Averages (Recommended)
+                                    </option>
+                                    <option value="matches" {% if selected_data_view == 'matches' %}selected{% endif %}>
+                                        📈 Match-by-Match Data
+                                    </option>
+                                </select>
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Choose how to display the data - averages for comparison or individual matches for trends.
+                                </div>
+                            </div>
+                            
+                            <!-- Graph Type Selection -->
+                            <div class="mb-3">
+                                <label for="graph_types" class="form-label fw-semibold">
+                                    <i class="fas fa-chart-bar me-2 text-warning"></i>Select Graph Types
+                                </label>
+                                <select name="graph_types" id="graph_types" class="form-select" multiple>
+                                    <option value="bar" {% if 'bar' in selected_graph_types %}selected{% endif %}>
+                                        📊 Bar Chart
+                                    </option>
+                                    <option value="line" {% if 'line' in selected_graph_types %}selected{% endif %}>
+                                        📈 Line Chart
+                                    </option>
+                                </select>
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Select one or both graph types to display.
                                 </div>
                             </div>
                         </div>
@@ -287,6 +323,15 @@
             width: '100%'
         });
         
+        // Initialize Select2 for graph types selection
+        $('#graph_types').select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Select graph types...',
+            allowClear: true,
+            closeOnSelect: false,
+            width: '100%'
+        });
+        
         // Initialize team select
         initializeTeamSelect();
         
@@ -447,6 +492,8 @@
             // Update selection
             $('#teams').val(topTeamValues).trigger('change');
         });
+        
+
         
         // Form submission with loading state
         $('#team-selection-form').on('submit', function() {
