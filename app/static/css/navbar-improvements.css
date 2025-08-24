@@ -1,0 +1,566 @@
+/* Enhanced Navigation Bar Improvements */
+
+/* Compact navigation styling */
+.navbar {
+    padding: 0.25rem 0.5rem;
+    min-height: 64px;
+}
+
+/* Fix navbar container to prevent overflow */
+.navbar .container-fluid {
+    padding-left: clamp(0.5rem, 2vw, 1.5rem);
+    padding-right: clamp(0.5rem, 2vw, 1.5rem);
+    overflow: visible !important; /* Allow dropdowns to escape */
+}
+
+/* Responsive navbar layout improvements */
+@media (max-width: 1400px) {
+    .navbar .container-fluid {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+}
+
+@media (max-width: 992px) {
+    .navbar .container-fluid {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .navbar .container-fluid {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+}
+
+/* Brand improvements */
+.navbar-brand {
+    font-size: 1.2rem;
+    padding: 0.5rem 0;
+    flex-shrink: 0;
+    margin-right: 0.5rem;
+}
+
+.brand-icon {
+    font-size: 1.3rem;
+}
+
+.brand-text {
+    font-size: 1.1rem;
+    line-height: 1.2;
+}
+
+/* Responsive brand improvements */
+@media (max-width: 1200px) {
+    .navbar-brand {
+        font-size: 1.1rem;
+        margin-right: 0.25rem;
+    }
+    .brand-text {
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 992px) {
+    .navbar-brand {
+        font-size: 1rem;
+    }
+    .brand-text {
+        font-size: 0.9rem;
+    }
+}
+
+/* Navbar navigation improvements */
+.navbar-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE 10+ */
+}
+
+.navbar-nav::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
+}
+
+/* Ensure navbar items stay in a single row */
+.navbar-nav .nav-item {
+    flex-shrink: 0;
+}
+
+/* Navigation link improvements */
+.nav-link {
+    border-radius: 6px;
+    margin: 0 2px;
+    transition: all 0.2s ease;
+    display: flex !important;
+    align-items: center;
+    white-space: nowrap;
+    font-size: 1rem;
+    flex-shrink: 0; /* Prevent nav links from shrinking */
+}
+
+/* Responsive navigation improvements */
+@media (max-width: 1200px) {
+    .nav-link {
+        margin: 0 1px;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+    }
+}
+
+@media (max-width: 992px) {
+    .nav-link {
+        font-size: 0.9rem;
+    }
+}
+
+.nav-link:hover {
+    background-color: rgba(var(--bs-primary-rgb), 0.1);
+    transform: translateY(-1px);
+}
+
+.nav-link.active {
+    background-color: rgba(var(--bs-primary-rgb), 0.15);
+    color: var(--bs-primary) !important;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Icon spacing improvements */
+.nav-icon {
+    font-size: 1rem;
+    width: 18px;
+    text-align: center;
+    margin-right: 0.4rem;
+}
+
+/* Responsive text hiding */
+@media (max-width: 1399.98px) {
+    .nav-text.d-none.d-xl-inline {
+        display: none !important;
+    }
+}
+
+@media (max-width: 1199.98px) {
+    .nav-text.d-none.d-lg-inline {
+        display: none !important;
+    }
+}
+
+/* Dropdown improvements */
+.dropdown-menu {
+    border-radius: 8px;
+    border: none;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    margin-top: 8px;
+    min-width: auto; /* Allow dropdowns to size based on content */
+    max-width: max-content; /* Limit to content width */
+    width: max-content !important; /* Size to content */
+    white-space: nowrap;
+    z-index: 1055 !important; /* Ensure dropdowns appear above navbar */
+    position: fixed !important; /* Use fixed positioning to escape all containers */
+    padding: 8px 0; /* Add some padding for better appearance */
+}
+
+/* Fix dropdown positioning to escape navbar container overflow */
+.navbar .dropdown {
+    position: static;
+}
+
+@media (min-width: 992px) {
+    .navbar .dropdown-menu {
+        position: fixed !important; /* Fixed positioning escapes all container constraints */
+        transform: none !important;
+    }
+    
+    /* Use JavaScript to position dropdowns properly */
+    .dropdown-menu.show {
+        display: block !important;
+        position: fixed !important;
+    }
+}
+
+.dropdown-item {
+    border-radius: 6px;
+    margin: 2px 8px;
+    padding: 10px 14px;
+    transition: all 0.2s ease;
+    font-size: 1rem;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    width: auto; /* Let items size to their content */
+    max-width: none; /* Remove any max-width constraints */
+    overflow: hidden; /* Prevent content overflow */
+    text-overflow: ellipsis; /* Add ellipsis for long text */
+}
+
+/* Ensure consistent icon spacing in dropdown items */
+.dropdown-item .nav-icon {
+    width: 18px;
+    text-align: center;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+/* Special constraints for user dropdown items */
+.dropdown-menu-end .dropdown-item {
+    max-width: 250px; /* Constrain user dropdown items */
+}
+
+/* Constrain dropdown headers in user menu */
+.dropdown-menu-end .dropdown-header {
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dropdown-item:hover {
+    background-color: rgba(var(--bs-primary-rgb), 0.1);
+    transform: translateX(4px);
+}
+
+.dropdown-item.active {
+    background-color: rgba(var(--bs-primary-rgb), 0.15);
+    color: var(--bs-primary);
+}
+
+/* Dropdown header styling */
+.dropdown-header {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--bs-secondary);
+    padding: 8px 14px 4px;
+    margin: 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Mobile-specific improvements */
+@media (max-width: 991.98px) {
+    .navbar-collapse {
+        margin-top: 0.5rem;
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        padding-top: 0.5rem;
+    }
+    
+    .navbar-nav {
+        flex-direction: column;
+        width: 100%;
+        overflow: visible; /* Reset overflow for mobile */
+    }
+    
+    .nav-item {
+        width: 100%;
+        margin-bottom: 2px;
+        flex-shrink: 1; /* Allow shrinking in mobile */
+    }
+    
+    .nav-link {
+        padding: 12px 16px;
+        margin: 0;
+        border-radius: 8px;
+        font-size: 1.1rem;
+    }
+    
+    /* Reset dropdown positioning for mobile */
+    .dropdown-menu {
+        position: static !important;
+        float: none;
+        width: auto !important; /* Don't force full width on mobile */
+        max-width: 100%; /* But don't exceed container */
+        margin-top: 0;
+        border: none;
+        box-shadow: none;
+        background-color: rgba(var(--bs-light-rgb), 0.5);
+        border-radius: 8px;
+        min-width: auto;
+        z-index: auto !important; /* Reset z-index for mobile */
+        left: auto !important;
+        top: auto !important;
+        right: auto !important;
+        bottom: auto !important;
+        transform: none !important;
+    }
+    
+    .dropdown-item {
+        margin: 1px 4px;
+        padding: 10px 16px;
+        font-size: 1rem;
+    }
+}
+
+/* Navbar actions improvements */
+.navbar-actions {
+    gap: 0.25rem;
+    flex-wrap: nowrap;
+    align-items: center;
+    flex-shrink: 0;
+    margin-right: 12px; /* Add space from the screen edge */
+    padding-right: 4px; /* Additional padding for better visual spacing */
+}
+
+.navbar-actions .btn-sm {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+
+.navbar-actions .dropdown-toggle::after {
+    margin-left: 0.4rem;
+    font-size: 0.7rem;
+}
+
+/* Fix username display and prevent overflow */
+.navbar-actions .dropdown .btn {
+    max-width: 160px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+@media (max-width: 1200px) {
+    .navbar-actions .dropdown .btn {
+        max-width: 120px;
+    }
+    .navbar-actions {
+        margin-right: 10px; /* Slightly smaller margin for medium screens */
+    }
+}
+
+@media (max-width: 992px) {
+    .navbar-actions .dropdown .btn {
+        max-width: 100px;
+    }
+    .navbar-actions {
+        margin-right: 8px; /* Smaller margin for smaller screens */
+    }
+}
+
+@media (max-width: 768px) {
+    .navbar-actions .dropdown .btn span {
+        display: none !important;
+    }
+    .navbar-actions .dropdown .btn {
+        max-width: auto;
+        padding: 0.4rem 0.6rem;
+    }
+    .navbar-actions {
+        margin-right: 6px; /* Minimal but present margin on mobile */
+        padding-right: 2px;
+    }
+}
+
+/* Improved mobile button spacing */
+@media (max-width: 575.98px) {
+    .navbar-toggler {
+        padding: 0.25rem 0.5rem;
+        font-size: 1rem;
+    }
+    
+    .navbar-brand {
+        font-size: 1.1rem;
+    }
+    
+    .brand-text {
+        font-size: 1rem;
+    }
+    
+    .navbar-actions .btn-sm {
+        padding: 0.3rem 0.6rem;
+        font-size: 0.85rem;
+    }
+}
+
+/* Enhanced hover effects */
+.navbar-nav .nav-link:hover .nav-icon {
+    transform: scale(1.1);
+    transition: transform 0.2s ease;
+}
+
+.dropdown-item:hover .nav-icon {
+    transform: scale(1.1);
+    transition: transform 0.2s ease;
+}
+
+/* Active state enhancements */
+.navbar-nav .nav-link.active {
+    position: relative;
+}
+
+.navbar-nav .nav-link.active::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    background-color: var(--bs-primary);
+    border-radius: 50%;
+}
+
+/* Chat badge positioning fix */
+.nav-item.position-relative .badge {
+    top: 8px;
+    right: -8px;
+}
+
+/* Better text truncation for smaller screens */
+@media (max-width: 767.98px) {
+    .navbar-brand .d-none.d-sm-inline {
+        display: none !important;
+    }
+}
+
+/* Dark mode specific improvements */
+.dark-mode .navbar-collapse {
+    border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .dropdown-menu {
+    background-color: var(--card-bg);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .dropdown-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .nav-link.active {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+@media (max-width: 991.98px) {
+    .dark-mode .dropdown-menu {
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+}
+
+/* Animation for dropdown menus */
+.dropdown-menu-animated {
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.2s ease;
+}
+
+.dropdown-menu-animated.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Focus improvements for accessibility */
+.nav-link:focus,
+.dropdown-item:focus {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: -2px;
+}
+
+.btn:focus {
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+/* Prevent horizontal scroll in dropdowns and add vertical scrollbars */
+.dropdown-menu {
+    overflow-x: hidden;
+    overflow-y: auto;
+    max-width: 90vw;
+    max-height: 70vh; /* Limit height to 70% of viewport height */
+    word-wrap: break-word;
+    white-space: normal;
+}
+
+/* Fix dropdown positioning issues */
+@media (min-width: 992px) {
+    .navbar .dropdown {
+        position: relative;
+    }
+    
+    .navbar .dropdown-menu {
+        position: fixed !important; /* Fixed positioning escapes all container constraints */
+        transform: none !important;
+        inset: auto !important; /* Reset Bootstrap 5 inset */
+        margin-top: 0 !important; /* Remove default margin since we'll position with JS */
+        max-width: 320px !important; /* Prevent dropdowns from getting too wide */
+        width: max-content !important; /* Size to content but respect max-width */
+        z-index: 1060 !important; /* Ensure proper stacking */
+        /* Prevent any CSS from overriding our JS positioning */
+        left: auto !important;
+        right: auto !important;
+        top: auto !important;
+        bottom: auto !important;
+    }
+    
+    /* Special handling for user dropdown to ensure it never overflows */
+    .navbar .dropdown-menu-end {
+        max-width: 280px !important; /* Smaller max-width for right-aligned dropdowns */
+    }
+    
+    /* Use JavaScript to position dropdowns properly */
+    .dropdown-menu.show {
+        display: block !important;
+        position: fixed !important;
+    }
+    
+    /* Hide dropdowns that aren't properly positioned yet */
+    .navbar .dropdown-menu:not(.show) {
+        display: none !important;
+    }
+    
+    /* Ensure search suggestions also escape container */
+    #searchSuggestions {
+        position: fixed !important;
+        z-index: 1060 !important;
+        max-width: 300px !important;
+        width: max-content !important;
+    }
+}
+
+.dropdown-item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-wrap: break-word;
+    white-space: normal;
+}
+
+/* Custom scrollbar styling for dropdowns */
+.dropdown-menu::-webkit-scrollbar {
+    width: 8px;
+}
+
+.dropdown-menu::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+.dropdown-menu::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.dropdown-menu::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+/* Dark mode scrollbar styling */
+.dark-mode .dropdown-menu::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.dark-mode .dropdown-menu::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.dark-mode .dropdown-menu::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}

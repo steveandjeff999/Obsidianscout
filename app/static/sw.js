@@ -14,7 +14,6 @@ const STATIC_ASSETS = [
   '/static/js/pit_scouting_offline.js',
   '/static/js/game-config.js',
   '/static/js/dark-mode-handlers.js',
-  '/static/js/activity-logger.js',
   '/static/js/modal-fix.js',
   '/static/js/modal-override.js',
   '/static/manifest.json',

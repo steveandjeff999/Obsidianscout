@@ -2,9 +2,17 @@ from flask import Blueprint, render_template, request, jsonify, flash, redirect,
 from flask_socketio import emit, join_room, leave_room
 from app.models import AllianceSelection, Team, Event, ScoutingData, DoNotPickEntry, AvoidEntry, db, team_event
 from app.utils.analysis import calculate_team_metrics
+from flask_login import current_user
 from app import socketio
 from sqlalchemy import func, desc, and_
 from app.utils.theme_manager import ThemeManager
+from app.utils.config_manager import get_current_game_config, get_effective_game_config
+from app.utils.team_isolation import (
+    filter_teams_by_scouting_team, filter_events_by_scouting_team,
+    filter_alliance_selections_by_scouting_team, filter_do_not_pick_by_scouting_team,
+    filter_avoid_entries_by_scouting_team, assign_scouting_team_to_model,
+    get_current_scouting_team_number
+)
 
 bp = Blueprint('alliances', __name__, url_prefix='/alliances')
 
@@ -47,15 +55,15 @@ def emit_lists_update(event_id, list_data):
 @bp.route('/')
 def index():
     """Alliance selection main page"""
-    # Get all events ordered by date
-    events = Event.query.order_by(Event.year.desc(), Event.start_date.desc()).all()
+    # Get all events ordered by date (filtered by scouting team)
+    events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.start_date.desc()).all()
     
-    # Get current event from game config or fall back to most recent event
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    # Get current event from game config or fall back to most recent event (filtered by scouting team)
+    game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     
     if current_event_code:
-        current_event = Event.query.filter_by(code=current_event_code).first()
+        current_event = filter_events_by_scouting_team().filter(Event.code == current_event_code).first()
     else:
         current_event = events[0] if events else None
     
@@ -63,8 +71,10 @@ def index():
         flash('No events found. Please create an event first.', 'warning')
         return redirect(url_for('main.index'))
     
-    # Get existing alliances for the current event
-    alliances = AllianceSelection.query.filter_by(event_id=current_event.id).order_by(AllianceSelection.alliance_number).all()
+    # Get existing alliances for the current event (filtered by scouting team)
+    alliances = filter_alliance_selections_by_scouting_team().filter(
+        AllianceSelection.event_id == current_event.id
+    ).order_by(AllianceSelection.alliance_number).all()
     
     # Create 8 alliances if they don't exist
     if len(alliances) < 8:
@@ -72,9 +82,12 @@ def index():
             existing = next((a for a in alliances if a.alliance_number == i), None)
             if not existing:
                 new_alliance = AllianceSelection(alliance_number=i, event_id=current_event.id)
+                assign_scouting_team_to_model(new_alliance)  # Assign current scouting team
                 db.session.add(new_alliance)
         db.session.commit()
-        alliances = AllianceSelection.query.filter_by(event_id=current_event.id).order_by(AllianceSelection.alliance_number).all()
+        alliances = filter_alliance_selections_by_scouting_team().filter(
+            AllianceSelection.event_id == current_event.id
+        ).order_by(AllianceSelection.alliance_number).all()
     
     return render_template('alliances/index.html', 
                          alliances=alliances, 
@@ -86,26 +99,36 @@ def index():
 def get_recommendations(event_id):
     """Get team recommendations based on points scored"""
     try:
-        event = Event.query.get_or_404(event_id)
+        event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+        if not event:
+            return jsonify({'error': 'Event not found or not accessible'}), 404
         
-        # Get all teams associated with this event
-        all_teams = db.session.query(Team).join(
-            team_event, Team.id == team_event.c.team_id
+        # Get all teams associated with this event (filtered by scouting team)
+        all_teams = filter_teams_by_scouting_team().join(
+            Team.events
         ).filter(
-            team_event.c.event_id == event_id
+            Event.id == event_id
         ).order_by(Team.team_number).all()
         
-        # If no teams found in team_event, fall back to teams with scouting data
+        # If no teams found in team_event, fall back to teams with scouting data for this scouting team
         if not all_teams:
             from app.models import Match
-            all_teams = db.session.query(Team).join(ScoutingData).join(
+            scouting_team_number = get_current_scouting_team_number()
+            query = db.session.query(Team).join(ScoutingData).join(
                 Match, ScoutingData.match_id == Match.id
             ).filter(
                 Match.event_id == event_id
-            ).distinct().all()
+            )
+            
+            if scouting_team_number is not None:
+                query = query.filter(ScoutingData.scouting_team_number == scouting_team_number)
+            else:
+                query = query.filter(ScoutingData.scouting_team_number.is_(None))
+                
+            all_teams = query.distinct().all()
         
         # Get game configuration
-        game_config = current_app.config.get('GAME_CONFIG', {})
+        game_config = get_effective_game_config()
         
         # Find metric IDs from game config
         component_metric_ids = []
@@ -135,15 +158,21 @@ def get_recommendations(event_id):
         if not total_metric_id:
             total_metric_id = "tot"
             
-        # Get teams already picked in alliances
+        # Get teams already picked in alliances (filtered by scouting team)
         picked_teams = set()
-        alliances = AllianceSelection.query.filter_by(event_id=event_id).all()
+        alliances = filter_alliance_selections_by_scouting_team().filter(
+            AllianceSelection.event_id == event_id
+        ).all()
         for alliance in alliances:
             picked_teams.update(alliance.get_all_teams())
         
-        # Get avoid and do not pick lists for this event
-        avoid_teams = set(entry.team_id for entry in AvoidEntry.query.filter_by(event_id=event_id).all())
-        do_not_pick_teams = set(entry.team_id for entry in DoNotPickEntry.query.filter_by(event_id=event_id).all())
+        # Get avoid and do not pick lists for this event (filtered by scouting team)
+        avoid_teams = set(entry.team_id for entry in filter_avoid_entries_by_scouting_team().filter(
+            AvoidEntry.event_id == event_id
+        ).all())
+        do_not_pick_teams = set(entry.team_id for entry in filter_do_not_pick_by_scouting_team().filter(
+            DoNotPickEntry.event_id == event_id
+        ).all())
         
         # Calculate metrics for available teams
         team_recommendations = []
@@ -280,7 +309,8 @@ def update_alliance():
         return jsonify({'success': False, 'message': 'Invalid position'})
     
     # Get the alliance
-    alliance = AllianceSelection.query.get(alliance_id)
+    alliance = AllianceSelection.query.filter_by(id=alliance_id, scouting_team_number=current_user.scouting_team_number).first()
+    alliance = AllianceSelection.query.filter_by(id=alliance_id, scouting_team_number=current_user.scouting_team_number).first()
     if not alliance:
         return jsonify({'success': False, 'message': 'Alliance not found'})
     
@@ -372,7 +402,7 @@ def reset_alliances(event_id):
     event = Event.query.get_or_404(event_id)
     
     # Clear all alliance selections for this event
-    alliances = AllianceSelection.query.filter_by(event_id=event_id).all()
+    alliances = AllianceSelection.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).all()
     for alliance in alliances:
         alliance.captain = None
         alliance.first_pick = None
@@ -399,8 +429,8 @@ def manage_lists(event_id):
     event = Event.query.get_or_404(event_id)
     
     # Get current lists
-    avoid_entries = AvoidEntry.query.filter_by(event_id=event_id).join(Team).all()
-    do_not_pick_entries = DoNotPickEntry.query.filter_by(event_id=event_id).join(Team).all()
+    avoid_entries = AvoidEntry.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).join(Team).all()
+    do_not_pick_entries = DoNotPickEntry.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).join(Team).all()
     
     # Get all teams for this event from team_event relationship
     all_teams = db.session.query(Team).join(
@@ -448,17 +478,17 @@ def add_to_list():
     
     # Check if team is already in the list
     if list_type == 'avoid':
-        existing = AvoidEntry.query.filter_by(team_id=team.id, event_id=event_id).first()
+        existing = AvoidEntry.query.filter_by(team_id=team.id, event_id=event_id, scouting_team_number=current_user.scouting_team_number).first()
         if existing:
             return jsonify({'success': False, 'message': 'Team already in avoid list'})
         
-        entry = AvoidEntry(team_id=team.id, event_id=event_id, reason=reason)
+        entry = AvoidEntry(team_id=team.id, event_id=event_id, reason=reason, scouting_team_number=current_user.scouting_team_number)
     else:  # do_not_pick
-        existing = DoNotPickEntry.query.filter_by(team_id=team.id, event_id=event_id).first()
+        existing = DoNotPickEntry.query.filter_by(team_id=team.id, event_id=event_id, scouting_team_number=current_user.scouting_team_number).first()
         if existing:
             return jsonify({'success': False, 'message': 'Team already in do not pick list'})
         
-        entry = DoNotPickEntry(team_id=team.id, event_id=event_id, reason=reason)
+        entry = DoNotPickEntry(team_id=team.id, event_id=event_id, reason=reason, scouting_team_number=current_user.scouting_team_number)
     
     try:
         db.session.add(entry)
@@ -499,9 +529,9 @@ def remove_from_list():
     
     # Find and remove the entry
     if list_type == 'avoid':
-        entry = AvoidEntry.query.filter_by(team_id=team_id, event_id=event_id).first()
+        entry = AvoidEntry.query.filter_by(team_id=team_id, event_id=event_id, scouting_team_number=current_user.scouting_team_number).first()
     else:  # do_not_pick
-        entry = DoNotPickEntry.query.filter_by(team_id=team_id, event_id=event_id).first()
+        entry = DoNotPickEntry.query.filter_by(team_id=team_id, event_id=event_id, scouting_team_number=current_user.scouting_team_number).first()
     
     if not entry:
         return jsonify({'success': False, 'message': 'Entry not found'})

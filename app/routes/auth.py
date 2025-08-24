@@ -8,6 +8,7 @@ except ImportError:
 from functools import wraps
 from app import db
 from app.models import User, Role
+from sqlalchemy import or_, func
 from datetime import datetime
 from app.utils.system_check import SystemCheck
 from app.utils.theme_manager import ThemeManager
@@ -31,6 +32,15 @@ def role_required(*roles):
         def decorated_function(*args, **kwargs):
             if not current_user.is_authenticated:
                 return redirect(url_for('auth.login'))
+
+            if current_user.has_role('superadmin'):
+                allowed_superadmin_routes = [
+                    'auth.manage_users', 'auth.edit_user', 'auth.delete_user', 
+                    'auth.update_user', 'auth.add_user', 'auth.logout', 'auth.profile',
+                    'auth.delete_user_permanently', 'auth.hard_delete_user', 'auth.restore_user'
+                ]
+                if request.endpoint not in allowed_superadmin_routes:
+                    return redirect(url_for('auth.manage_users'))
             
             # Check if user has any of the required roles
             user_roles = current_user.get_role_names()
@@ -43,12 +53,38 @@ def role_required(*roles):
     return decorator
 
 def admin_required(f):
-    """Decorator to require admin role"""
-    return role_required('admin')(f)
+    """Decorator to require admin or superadmin role"""
+    return role_required('admin', 'superadmin')(f)
 
 def analytics_required(f):
     """Decorator to require admin or analytics role"""
     return role_required('admin', 'analytics')(f)
+
+@bp.route('/lockout')
+def lockout():
+    """Display lockout page with current status"""
+    username = request.args.get('username')
+    
+    if not username:
+        # No username provided, redirect to login
+        return redirect(url_for('auth.login'))
+    
+    # Import brute force protection
+    from app.utils.brute_force_protection import is_login_blocked, get_login_status
+    
+    # Check if user is actually blocked
+    if not is_login_blocked(username):
+        # Not blocked anymore, redirect to login
+        flash('Account lockout has expired. You may now try logging in again.', 'info')
+        return redirect(url_for('auth.login'))
+    
+    # Get lockout status information
+    lockout_info = get_login_status(username)
+    
+    return render_template('auth/lockout.html', 
+                         lockout_info=lockout_info, 
+                         username=username,
+                         **get_theme_context())
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -58,17 +94,58 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        team_number = request.form.get('team_number')
         remember_me = bool(request.form.get('remember_me'))
+
+        # Import brute force protection
+        from app.utils.brute_force_protection import is_login_blocked, record_login_attempt, get_login_status
         
-        user = User.query.filter_by(username=username).first()
+        # Check if this IP/username is currently blocked
+        if is_login_blocked(username):
+            # Redirect to lockout page instead of showing flash message
+            return redirect(url_for('auth.lockout', username=username))
+
+        if not team_number:
+            flash('Team number is required.', 'error')
+            # Record failed attempt (missing team number)
+            record_login_attempt(username=username, team_number=None, success=False)
+            return redirect(url_for('auth.login'))
+        
+        try:
+            team_number = int(team_number)
+        except ValueError:
+            flash('Team number must be a valid number.', 'error')
+            record_login_attempt(username=username, team_number=team_number, success=False)
+            return redirect(url_for('auth.login'))
+        
+        user = User.query.filter_by(username=username, scouting_team_number=team_number).first()
         
         if user is None or not user.check_password(password):
-            flash('Invalid username or password', 'error')
+            flash('Invalid username, password, or team number.', 'error')
+            # Record failed login attempt
+            record_login_attempt(username=username, team_number=team_number, success=False)
+            
+            # Show remaining attempts warning
+            status = get_login_status(username)
+            remaining = status['remaining_attempts']
+            if remaining <= 3 and remaining > 0:
+                flash(f'Warning: Only {remaining} login attempts remaining before temporary lockout.', 'warning')
+            
             return redirect(url_for('auth.login'))
         
         if not user.is_active:
             flash('Your account has been deactivated. Please contact an administrator.', 'error')
+            # Record failed attempt (deactivated account)
+            record_login_attempt(username=username, team_number=team_number, success=False)
             return redirect(url_for('auth.login'))
+        
+        # Final check: Even with correct credentials, prevent login if account is locked due to brute force
+        if is_login_blocked(username):
+            # Redirect to lockout page instead of flash message
+            return redirect(url_for('auth.lockout', username=username))
+        
+        # Successful login - record it and clear failed attempts
+        record_login_attempt(username=username, team_number=team_number, success=True)
         
         # Update last login time
         user.last_login = datetime.utcnow()
@@ -76,6 +153,15 @@ def login():
         
         login_user(user, remember=remember_me)
         
+        # Check if user must change password
+        if user.must_change_password:
+            flash('You must change your password before continuing.', 'warning')
+            return redirect(url_for('auth.change_password'))
+        
+        # If user has no roles, redirect to select role page
+        if not user.has_roles():
+            return redirect(url_for('auth.select_role'))
+
         # Redirect to next page or appropriate page based on role
         next_page = request.args.get('next')
         
@@ -90,6 +176,128 @@ def login():
         return redirect(next_page)
     
     return render_template('auth/login.html', **get_theme_context())
+
+@bp.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    """Force password change for users who must change password"""
+    if not current_user.must_change_password:
+        # If user doesn't need to change password, redirect appropriately
+        if current_user.has_role('scout') and not current_user.has_role('admin') and not current_user.has_role('analytics'):
+            return redirect(url_for('scouting.index'))
+        else:
+            return redirect(url_for('main.index'))
+    
+    if request.method == 'POST':
+        current_password = request.form['current_password']
+        new_password = request.form['new_password']
+        confirm_password = request.form['confirm_password']
+        
+        # Verify current password
+        if not current_user.check_password(current_password):
+            flash('Current password is incorrect.', 'error')
+            return render_template('auth/change_password.html', **get_theme_context())
+        
+        # Validate new password
+        if len(new_password) < 6:
+            flash('Password must be at least 6 characters long.', 'error')
+            return render_template('auth/change_password.html', **get_theme_context())
+        
+        if new_password != confirm_password:
+            flash('New passwords do not match.', 'error')
+            return render_template('auth/change_password.html', **get_theme_context())
+        
+        if new_password == current_password:
+            flash('New password must be different from current password.', 'error')
+            return render_template('auth/change_password.html', **get_theme_context())
+        
+        # Update password and clear the must_change_password flag
+        current_user.set_password(new_password)
+        current_user.must_change_password = False
+        db.session.commit()
+        
+        flash('Password changed successfully!', 'success')
+        
+        # Redirect to appropriate page based on role
+        if current_user.has_role('scout') and not current_user.has_role('admin') and not current_user.has_role('analytics'):
+            return redirect(url_for('scouting.index'))
+        else:
+            return redirect(url_for('main.index'))
+    
+    return render_template('auth/change_password.html', **get_theme_context())
+
+@bp.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        confirm_password = request.form['confirm_password']
+        team_number = request.form.get('team_number')
+
+        if not team_number:
+            flash('Team number is required.', 'error')
+            return redirect(url_for('auth.register'))
+
+        # Check if account creation is locked for this team
+        from app.models import ScoutingTeamSettings
+        team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=int(team_number)).first()
+        if team_settings and team_settings.account_creation_locked:
+            flash('Account creation is currently locked for this team. Please contact your team administrator.', 'error')
+            return redirect(url_for('auth.register'))
+
+        if password != confirm_password:
+            flash('Passwords do not match.', 'error')
+            return redirect(url_for('auth.register'))
+
+        user = User.query.filter_by(username=username).first()
+        if user is not None:
+            flash('Username already exists.', 'error')
+            return redirect(url_for('auth.register'))
+
+        new_user = User(username=username, scouting_team_number=team_number)
+        new_user.set_password(password)
+        db.session.add(new_user)
+        db.session.commit()
+
+        # Check if this is the first user for the team
+        team_user_count = User.query.filter_by(scouting_team_number=team_number).count()
+        if team_user_count == 1:
+            # First user becomes admin
+            admin_role = Role.query.filter_by(name='admin').first()
+            if admin_role:
+                new_user.roles.append(admin_role)
+            db.session.commit()
+        flash('Congratulations, you are now a registered user!', 'success')
+        return redirect(url_for('auth.login'))
+    return render_template('auth/register.html', **get_theme_context())
+
+@bp.route('/select_role', methods=['GET', 'POST'])
+@login_required
+def select_role():
+    if current_user.roles:
+        # If user already has a role, redirect them
+        return redirect(url_for('main.index'))
+
+    if request.method == 'POST':
+        role_id = request.form.get('role')
+        if not role_id:
+            flash('You must select a role.', 'error')
+            return redirect(url_for('auth.select_role'))
+
+        role = Role.query.get(role_id)
+        if not role or role.name == 'superadmin':
+            flash('Invalid role selected.', 'error')
+            return redirect(url_for('auth.select_role'))
+
+        current_user.roles.append(role)
+        db.session.commit()
+        flash(f'Your role has been set to {role.name}.', 'success')
+        return redirect(url_for('main.index'))
+
+    roles = Role.query.all()
+    return render_template('auth/select_role.html', roles=roles, **get_theme_context())
 
 @bp.route('/logout')
 @login_required
@@ -131,9 +339,33 @@ def profile():
 @bp.route('/users')
 @admin_required
 def manage_users():
-    users = User.query.all()
-    roles = Role.query.all()
-    return render_template('auth/manage_users.html', users=users, roles=roles, **get_theme_context())
+    query = User.query
+    search = request.args.get('search')
+    if search:
+        # Handle both username and team number searches properly
+        if search.isdigit():
+            # Search by exact team number if numeric
+            query = query.filter(
+                or_(
+                    User.username.contains(search),
+                    User.scouting_team_number == int(search)
+                )
+            )
+        else:
+            # Search by username and team number as string
+            query = query.filter(
+                or_(
+                    User.username.contains(search),
+                    func.cast(User.scouting_team_number, db.String).contains(search)
+                )
+            )
+
+    if not current_user.has_role('superadmin'):
+        query = query.filter_by(scouting_team_number=current_user.scouting_team_number)
+
+    users = query.all()
+    all_roles = Role.query.all()
+    return render_template('auth/manage_users.html', users=users, all_roles=all_roles, search=search, **get_theme_context())
 
 @bp.route('/add_user', methods=['GET', 'POST'])
 @admin_required
@@ -142,6 +374,7 @@ def add_user():
         username = request.form['username']
         email = request.form.get('email')
         password = request.form['password']
+        scouting_team_number = request.form.get('scouting_team_number')
         role_ids = request.form.getlist('roles')
         
         # Check if username already exists
@@ -158,13 +391,17 @@ def add_user():
         if email == '':
             email = None
             
-        user = User(username=username, email=email)
+        user = User(username=username, email=email, scouting_team_number=scouting_team_number)
         user.set_password(password)
         
         # Add roles
         for role_id in role_ids:
             role = Role.query.get(role_id)
             if role:
+                # Only superadmins can assign the superadmin role
+                if role.name == 'superadmin' and not current_user.has_role('superadmin'):
+                    flash('Only superadmins can create other superadmins', 'error')
+                    return redirect(url_for('auth.add_user'))
                 user.roles.append(role)
         
         db.session.add(user)
@@ -176,13 +413,84 @@ def add_user():
     roles = Role.query.all()
     return render_template('auth/add_user.html', roles=roles, **get_theme_context())
 
+@bp.route('/users/update/<int:user_id>', methods=['POST'])
+@admin_required
+def update_user(user_id):
+    from flask import current_app
+    current_app.logger.info(f"Update user request for user_id: {user_id}")
+    current_app.logger.info(f"Current user: {current_user.username}, roles: {[role.name for role in current_user.roles]}")
+    current_app.logger.info(f"Form data: {dict(request.form)}")
+    
+    if not current_user.has_role('superadmin'):
+        flash('You do not have permission to perform this action.', 'error')
+        return redirect(url_for('auth.manage_users'))
+
+    user = User.query.get_or_404(user_id)
+    current_app.logger.info(f"Target user: {user.username}, current active status: {user.is_active}")
+
+    user.username = request.form.get('username')
+    user.scouting_team_number = request.form.get('scouting_team_number')
+
+    password = request.form.get('password')
+    if password:
+        user.set_password(password)
+
+    # Handle is_active checkbox
+    old_status = user.is_active
+    user.is_active = 'is_active' in request.form
+    current_app.logger.info(f"Active status changed from {old_status} to {user.is_active}")
+
+    role_ids = request.form.getlist('roles')
+    user.roles.clear()
+    for role_id in role_ids:
+        role = Role.query.get(role_id)
+        if role:
+            # Only superadmins can assign the superadmin role
+            if role.name == 'superadmin' and not current_user.has_role('superadmin'):
+                flash('Only superadmins can assign superadmin roles', 'error')
+                return redirect(url_for('auth.manage_users'))
+            user.roles.append(role)
+
+    db.session.commit()
+    current_app.logger.info(f"User {user.username} updated successfully. New active status: {user.is_active}")
+    flash(f'User {user.username} updated successfully.', 'success')
+    return redirect(url_for('auth.manage_users'))
+
+@bp.route('/users/<int:user_id>')
+@login_required
+def view_user(user_id):
+    """View user profile/details"""
+    user = User.query.get_or_404(user_id)
+    
+    # Check permissions - users can view their own profile, admins can view team members, superadmins can view all
+    if not (current_user.id == user_id or 
+            current_user.has_role('superadmin') or 
+            (current_user.has_role('admin') and user.scouting_team_number == current_user.scouting_team_number)):
+        flash('You do not have permission to view this user.', 'error')
+        return redirect(url_for('main.index'))
+    
+    # Get user's recent activity (if they have scouting data)
+    from app.models import ScoutingData
+    recent_scouting = ScoutingData.query.filter_by(
+        scout_name=user.username,
+        scouting_team_number=user.scouting_team_number
+    ).order_by(ScoutingData.timestamp.desc()).limit(10).all()
+    
+    return render_template('auth/view_user.html', 
+                         user=user, 
+                         recent_scouting=recent_scouting)
+
 @bp.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
 @admin_required
 def edit_user(user_id):
     user = User.query.get_or_404(user_id)
+    if not current_user.has_role('superadmin') and user.scouting_team_number != current_user.scouting_team_number:
+        flash('You do not have permission to edit this user.', 'error')
+        return redirect(url_for('auth.manage_users'))
     
     if request.method == 'POST':
         user.username = request.form['username']
+        user.scouting_team_number = request.form.get('scouting_team_number')
         
         # Handle email (convert empty string to None)
         email = request.form.get('email')
@@ -201,6 +509,10 @@ def edit_user(user_id):
         for role_id in role_ids:
             role = Role.query.get(role_id)
             if role:
+                # Only superadmins can assign the superadmin role
+                if role.name == 'superadmin' and not current_user.has_role('superadmin'):
+                    flash('Only superadmins can assign superadmin roles', 'error')
+                    return redirect(url_for('auth.edit_user', user_id=user.id))
                 user.roles.append(role)
         
         # --- Profile picture upload logic ---
@@ -237,18 +549,162 @@ def edit_user(user_id):
 @bp.route('/delete_user/<int:user_id>', methods=['POST'])
 @admin_required
 def delete_user(user_id):
+    from flask import current_app
+    current_app.logger.info(f"Soft delete attempt for user_id: {user_id}")
+    current_app.logger.info(f"Current user: {current_user.username}, roles: {[role.name for role in current_user.roles]}")
+    
     user = User.query.get_or_404(user_id)
+    current_app.logger.info(f"Target user: {user.username}, roles: {[role.name for role in user.roles]}, active: {user.is_active}")
     
     # Prevent deleting yourself
     if user.id == current_user.id:
+        current_app.logger.info("Blocked - cannot delete own account")
         flash('You cannot delete your own account', 'error')
         return redirect(url_for('auth.manage_users'))
     
+    # Prevent deactivating other superadmin users (safety measure)
+    if user.has_role('superadmin'):
+        current_app.logger.info("Blocked - cannot deactivate superadmin user")
+        flash('Cannot deactivate other superadmin users for security reasons', 'error')
+        return redirect(url_for('auth.manage_users'))
+    
     username = user.username
+    current_app.logger.info(f"Proceeding with soft delete of user: {username}")
+    
+    # Use soft delete instead of hard delete for sync consistency
+    user.is_active = False
+    # Update timestamp to ensure sync detection
+    if hasattr(user, 'updated_at'):
+        user.updated_at = datetime.utcnow()
+    elif hasattr(user, 'last_login'):
+        user.last_login = datetime.utcnow()  # Use as modification timestamp
+    
+    db.session.commit()
+    
+    current_app.logger.info(f"Soft delete completed for user: {username}")
+    flash(f'User {username} deactivated successfully', 'success')
+    return redirect(url_for('auth.manage_users'))
+
+@bp.route('/hard_delete_user/<int:user_id>', methods=['POST'])
+@admin_required
+def hard_delete_user(user_id):
+    """Permanently delete a user from the database (hard delete)"""
+    from flask import current_app
+    current_app.logger.info(f"Hard delete attempt for user_id: {user_id}")
+    current_app.logger.info(f"Current user: {current_user.username}, roles: {[role.name for role in current_user.roles]}")
+    
+    user = User.query.get_or_404(user_id)
+    current_app.logger.info(f"Target user: {user.username}, roles: {[role.name for role in user.roles]}")
+    
+    # Prevent deleting yourself
+    if user.id == current_user.id:
+        current_app.logger.info("Blocked - cannot delete own account")
+        flash('You cannot delete your own account', 'error')
+        return redirect(url_for('auth.manage_users'))
+    
+    # Extra security check - only superadmin can hard delete
+    if not current_user.has_role('superadmin'):
+        current_app.logger.info("Blocked - user is not superadmin")
+        flash('Only superadmins can permanently delete users', 'error')
+        return redirect(url_for('auth.manage_users'))
+    
+    # Prevent deleting other superadmin users (safety measure)
+    if user.has_role('superadmin'):
+        current_app.logger.info("Blocked - cannot delete superadmin user")
+        flash('Cannot permanently delete other superadmin users for security reasons', 'error')
+        return redirect(url_for('auth.manage_users'))
+    
+    username = user.username
+    current_app.logger.info(f"Proceeding with hard delete of user: {username}")
+    
+    # Hard delete - this will trigger the after_delete event and track the change
     db.session.delete(user)
     db.session.commit()
     
-    flash(f'User {username} deleted successfully', 'success')
+    current_app.logger.info(f"Hard delete completed for user: {username}")
+    flash(f'User {username} permanently deleted', 'warning')
+    return redirect(url_for('auth.manage_users'))
+
+@bp.route('/restore_user/<int:user_id>', methods=['POST'])
+@admin_required
+def restore_user(user_id):
+    """Restore a soft-deleted (deactivated) user"""
+    from flask import current_app
+    current_app.logger.info(f"Restore attempt for user_id: {user_id}")
+    current_app.logger.info(f"Current user: {current_user.username}, roles: {[role.name for role in current_user.roles]}")
+    
+    user = User.query.get_or_404(user_id)
+    current_app.logger.info(f"Target user: {user.username}, roles: {[role.name for role in user.roles]}, active: {user.is_active}")
+    
+    if user.is_active:
+        current_app.logger.info("User is already active")
+        flash('User is already active', 'info')
+        return redirect(url_for('auth.manage_users'))
+    
+    username = user.username
+    current_app.logger.info(f"Proceeding with restore of user: {username}")
+    
+    # Reactivate user
+    user.is_active = True
+    if hasattr(user, 'updated_at'):
+        user.updated_at = datetime.utcnow()
+    
+    db.session.commit()
+    
+    current_app.logger.info(f"Restore completed for user: {username}")
+    flash(f'User {username} restored successfully', 'success')
+    return redirect(url_for('auth.manage_users'))
+
+@bp.route('/delete_user_permanently/<int:user_id>', methods=['POST'])
+@admin_required
+def delete_user_permanently(user_id):
+    """Permanently delete a user from the database with change tracking for sync"""
+    from flask import current_app
+    
+    # First, let's print to console to see if function is being called
+    print(f"🔴 DELETE FUNCTION CALLED for user_id: {user_id}")
+    current_app.logger.error(f"🔴 DELETE FUNCTION CALLED for user_id: {user_id}")
+    
+    current_app.logger.info(f"Delete user permanently attempt for user_id: {user_id}")
+    current_app.logger.info(f"Current user: {current_user.username}, roles: {[role.name for role in current_user.roles]}")
+    
+    user = User.query.get_or_404(user_id)
+    current_app.logger.info(f"Target user: {user.username}, roles: {[role.name for role in user.roles]}, active: {user.is_active}")
+    
+    print(f"🔴 Target user found: {user.username}")
+    
+    # Prevent deleting yourself
+    if user.id == current_user.id:
+        print("🔴 Blocked - cannot delete own account")
+        current_app.logger.info("Blocked - cannot delete own account")
+        flash('You cannot delete your own account', 'error')
+        return redirect(url_for('auth.manage_users'))
+    
+    # Extra security check - only superadmin can delete permanently
+    if not current_user.has_role('superadmin'):
+        print("🔴 Blocked - user is not superadmin")
+        current_app.logger.info("Blocked - user is not superadmin")
+        flash('Only superadmins can permanently delete users', 'error')
+        return redirect(url_for('auth.manage_users'))
+    
+    # Prevent deleting other superadmin users (safety measure)
+    if user.has_role('superadmin'):
+        print("🔴 Blocked - cannot delete superadmin user")
+        current_app.logger.info("Blocked - cannot delete superadmin user")
+        flash('Cannot delete other superadmin users for security reasons', 'error')
+        return redirect(url_for('auth.manage_users'))
+    
+    username = user.username
+    print(f"🔴 Proceeding with permanent deletion of user: {username}")
+    current_app.logger.info(f"Proceeding with permanent deletion of user: {username}")
+    
+    # Delete user - this will trigger the after_delete event and track the change for sync
+    db.session.delete(user)
+    db.session.commit()
+    
+    print(f"🔴 Permanent deletion completed for user: {username}")
+    current_app.logger.info(f"Permanent deletion completed for user: {username}")
+    flash(f'User {username} permanently deleted and synced across servers', 'warning')
     return redirect(url_for('auth.manage_users'))
 
 @bp.route('/system_check', methods=['GET', 'POST'])
@@ -282,103 +738,38 @@ def system_check():
 @admin_required
 def admin_settings():
     """Admin settings page"""
-    # Get version information for admin dashboard
-    update_available = False
-    current_version = None
     
-    try:
-        from app.utils.remote_config import fetch_remote_config, is_remote_version_newer
-        from app.utils.version_manager import VersionManager
-        
-        # Get version info
-        version_manager = VersionManager()
-        current_version = version_manager.get_current_version()
-        repo_url = version_manager.config.get('repository_url', '')
-        branch = version_manager.config.get('branch', 'main')
-        
-        # Check for updates
-        remote_config = fetch_remote_config(repo_url, branch)
-        if remote_config and 'version' in remote_config:
-            remote_version = remote_config['version']
-            update_available, _ = is_remote_version_newer(current_version, remote_version)
-    except Exception as e:
-        current_app.logger.error(f"Error checking for updates in admin settings: {e}")
+    # Get account lock status for current user's team
+    from app.models import ScoutingTeamSettings
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    account_creation_locked = team_settings.account_creation_locked if team_settings else False
     
     return render_template('auth/admin_settings.html', 
-                          update_available=update_available,
-                          current_version=current_version, **get_theme_context())
+                          account_creation_locked=account_creation_locked,
+                          **get_theme_context())
 
-@bp.route('/admin/integrity')
+@bp.route('/admin/toggle-account-lock', methods=['POST'])
 @admin_required
-def admin_integrity():
-    """View integrity monitoring configuration"""
-    status = {}
-    if hasattr(current_app, 'file_integrity_monitor'):
-        monitor = current_app.file_integrity_monitor
-        status = {
-            'compromised': monitor.integrity_compromised,
-            'files_monitored': len(monitor.checksums),
-            'has_password': monitor.integrity_password_hash is not None,
-            'warning_only_mode': monitor.warning_only_mode
-        }
+def toggle_account_lock():
+    """Toggle account creation lock for the admin's team"""
+    from app.models import ScoutingTeamSettings
     
-    return render_template('auth/admin_integrity.html', status=status, **get_theme_context())
-
-@bp.route('/admin/integrity/password', methods=['POST'])
-@admin_required
-def update_integrity_password():
-    """Update the integrity password"""
-    new_password = request.form.get('password')
-    confirm_password = request.form.get('confirm_password')
+    # Get or create team settings
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    if not team_settings:
+        team_settings = ScoutingTeamSettings(scouting_team_number=current_user.scouting_team_number)
+        db.session.add(team_settings)
     
-    if not new_password or not confirm_password:
-        flash("Both password fields are required.", "danger")
-        return redirect(url_for('auth.admin_integrity'))
-    
-    if new_password != confirm_password:
-        flash("Passwords do not match.", "danger")
-        return redirect(url_for('auth.admin_integrity'))
-    
-    if len(new_password) < 6:
-        flash("Password must be at least 6 characters long.", "danger")
-        return redirect(url_for('auth.admin_integrity'))
-    
-    if hasattr(current_app, 'file_integrity_monitor'):
-        monitor = current_app.file_integrity_monitor
-        monitor.set_integrity_password(new_password)
-        flash("Integrity password updated successfully.", "success")
+    # Toggle the lock status
+    if team_settings.account_creation_locked:
+        team_settings.unlock_account_creation(current_user)
+        flash('Account creation has been unlocked for your team.', 'success')
     else:
-        flash("File integrity monitoring is not available.", "danger")
+        team_settings.lock_account_creation(current_user)
+        flash('Account creation has been locked for your team.', 'warning')
     
-    return redirect(url_for('auth.admin_integrity'))
-
-@bp.route('/admin/integrity/reinitialize', methods=['POST'])
-@admin_required
-def reinitialize_integrity():
-    """Reinitialize file integrity monitoring"""
-    if hasattr(current_app, 'file_integrity_monitor'):
-        monitor = current_app.file_integrity_monitor
-        
-        # Reset the compromised flag before reinitializing
-        monitor.integrity_compromised = False
-        
-        # Reinitialize the checksums
-        monitor.initialize_checksums()
-        
-        # Perform an integrity check immediately after reinitializing
-        integrity_ok = monitor.check_integrity()
-        
-        if integrity_ok:
-            flash(f"File integrity monitoring reinitialized. Now monitoring {len(monitor.checksums)} files. All files verified.", "success")
-        else:
-            if monitor.warning_only_mode:
-                flash(f"File integrity monitoring reinitialized, but some files were modified. Warning-only mode is enabled.", "warning")
-            else:
-                flash(f"File integrity monitoring reinitialized, but some files were modified. You may need to verify integrity.", "warning")
-    else:
-        flash("File integrity monitoring is not available.", "danger")
-    
-    return redirect(url_for('auth.admin_integrity'))
+    db.session.commit()
+    return redirect(url_for('auth.admin_settings'))
 
 # Context processor to make current_user and role functions available in templates
 @bp.app_context_processor

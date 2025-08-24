@@ -221,6 +221,36 @@
 {% endif %}
 
 <script>
+// Global config reload handler
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof window.globalConfigReload === 'function') {
+        window.globalConfigReload = function() {
+            reloadPitIndexWithNewConfig();
+        };
+    }
+});
+
+function reloadPitIndexWithNewConfig() {
+    console.log('Reloading pit scouting dashboard with new configuration...');
+    
+    // Show loading indicator
+    const dashboard = document.querySelector('.card-body');
+    if (dashboard) {
+        const loadingAlert = document.createElement('div');
+        loadingAlert.className = 'alert alert-info text-center mb-3';
+        loadingAlert.innerHTML = '<i class="fas fa-sync fa-spin me-2"></i>Updating dashboard with new configuration...';
+        dashboard.insertBefore(loadingAlert, dashboard.firstChild);
+        
+        // Remove after a short delay and reload
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+    } else {
+        // Fallback to immediate reload
+        window.location.reload();
+    }
+}
+
 // Sync status management
 document.getElementById('sync-status-btn').addEventListener('click', function() {
     fetch('/pit-scouting/sync/status')

@@ -316,7 +316,7 @@
                                         <label class="form-label fw-medium">{{ element.name }}</label>
                                         <div class="rating-container mb-2">
                                             {% for i in range(1, element.max + 1) %}
-                                                <i class="rating-star fas fa-star {% if form_data.get(element.id, element.default) >= i %}active{% endif %}" 
+                                                <i class="rating-star fas fa-star {% if (form_data.get(element.id, element.default)|int) >= i %}active{% endif %}" 
                                                     data-value="{{ i }}" data-rating-id="{{ element.id }}"></i>
                                             {% endfor %}
                                         </div>

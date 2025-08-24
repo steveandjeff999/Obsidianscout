@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ shared_ranks.title }} - Shared Team Rankings</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        .shared-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+        .ranking-container {
+            margin-bottom: 2rem;
+        }
+        .watermark {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.1);
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        .view-count {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        .rank-badge {
+            font-size: 1.1rem;
+            font-weight: bold;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+        .rank-1 { background: linear-gradient(135deg, #ffd700, #ffed4e); color: #333; }
+        .rank-2 { background: linear-gradient(135deg, #c0c0c0, #e8e8e8); color: #333; }
+        .rank-3 { background: linear-gradient(135deg, #cd7f32, #daa520); color: white; }
+        .rank-other { background: linear-gradient(135deg, #6c757d, #adb5bd); color: white; }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="shared-header">
+        <div class="container">
+            <div class="row">
+                <div class="col-12">
+                    <h1 class="mb-3">
+                        <i class="fas fa-trophy me-3"></i>{{ shared_ranks.title }}
+                    </h1>
+                    {% if shared_ranks.description %}
+                    <p class="lead mb-3">{{ shared_ranks.description }}</p>
+                    {% endif %}
+                    
+                    <!-- Ranking Information -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="d-flex flex-column gap-2">
+                                {% if shared_ranks.event %}
+                                <div>
+                                    <i class="fas fa-calendar-alt me-2"></i>
+                                    <strong>Event:</strong> {{ shared_ranks.event.name }}
+                                </div>
+                                {% endif %}
+                                <div>
+                                    <i class="fas fa-chart-bar me-2"></i>
+                                    <strong>Metric:</strong> Average Points
+                                </div>
+                                <div>
+                                    <i class="fas fa-users me-2"></i>
+                                    <strong>Teams Ranked:</strong> {{ team_rankings|length }}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex flex-column gap-2">
+                                <div>
+                                    <i class="fas fa-chart-line me-2"></i>
+                                    <strong>Ranking Type:</strong> Team Performance
+                                </div>
+                                {% if team_rankings|length > 0 %}
+                                <div>
+                                    <i class="fas fa-star me-2"></i>
+                                    <strong>Top Score:</strong> {{ team_rankings[0].avg_points|round(2) }} pts
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Meta Information -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <small class="text-light">
+                                <i class="fas fa-user me-1"></i>Shared by Team {{ shared_ranks.created_by_team }}
+                                <span class="ms-3">
+                                    <i class="fas fa-clock me-1"></i>{{ shared_ranks.created_at.strftime('%B %d, %Y at %I:%M %p') }}
+                                </span>
+                                <span class="ms-3 view-count">
+                                    <i class="fas fa-eye me-1"></i>{{ shared_ranks.view_count }} view{{ 's' if shared_ranks.view_count != 1 else '' }}
+                                </span>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        {% if team_rankings %}
+        <!-- Team Rankings -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-list-ol me-2"></i>Team Rankings
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Rank</th>
+                                        <th>Team #</th>
+                                        <th>Name</th>
+                                        <th>Avg Points</th>
+                                        <th>Data Points</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for entry in team_rankings %}
+                                    <tr {% if loop.index <= 3 %}class="table-warning"{% endif %}>
+                                        <td>
+                                            <div class="rank-badge {% if loop.index == 1 %}rank-1{% elif loop.index == 2 %}rank-2{% elif loop.index == 3 %}rank-3{% else %}rank-other{% endif %}">
+                                                {{ loop.index }}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <strong class="text-primary">{{ entry.team.team_number }}</strong>
+                                        </td>
+                                        <td>{{ entry.team.team_name or 'N/A' }}</td>
+                                        <td>
+                                            <strong class="text-success">{{ entry.avg_points|round(2) }}</strong>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info">{{ entry.num_entries }} match{{ 'es' if entry.num_entries != 1 else '' }}</span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Statistics Summary -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card bg-light">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-chart-area me-2"></i>Ranking Summary
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <div class="h-100 d-flex flex-column justify-content-center">
+                                    <h4 class="text-primary mb-1">{{ team_rankings|length }}</h4>
+                                    <small class="text-muted">Team{{ 's' if team_rankings|length != 1 else '' }} Ranked</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="h-100 d-flex flex-column justify-content-center">
+                                    <h4 class="text-success mb-1">{{ team_rankings[0].avg_points|round(1) if team_rankings else 0 }}</h4>
+                                    <small class="text-muted">Highest Average</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="h-100 d-flex flex-column justify-content-center">
+                                    <h4 class="text-warning mb-1">{{ team_rankings[-1].avg_points|round(1) if team_rankings else 0 }}</h4>
+                                    <small class="text-muted">Lowest Average</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="h-100 d-flex flex-column justify-content-center">
+                                    <h4 class="text-info mb-1">{{ ((team_rankings|sum(attribute='avg_points')) / team_rankings|length)|round(1) if team_rankings else 0 }}</h4>
+                                    <small class="text-muted">Overall Average</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- No Data Message -->
+        <div class="row">
+            <div class="col-12">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    No team ranking data is currently available for the configuration specified in this shared ranking.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Info Section -->
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">
+                            <i class="fas fa-info-circle me-2"></i>About This Shared Ranking
+                        </h5>
+                        <p class="card-text">
+                            This is a read-only view of team ranking data. The rankings shown reflect the configuration 
+                            set by the sharing team at the time this link was created.
+                        </p>
+                        <p class="card-text">
+                            <small class="text-muted">
+                                Powered by Scout2026 Scouting System
+                                {% if shared_ranks.expires_at %}
+                                <br>This link expires on {{ shared_ranks.expires_at.strftime('%B %d, %Y') }}
+                                {% endif %}
+                            </small>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Watermark -->
+    <div class="watermark">
+        <i class="fas fa-trophy me-1"></i>Shared Rankings
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

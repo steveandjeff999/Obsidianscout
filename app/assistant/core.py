@@ -7,7 +7,9 @@ import re
 from typing import Dict, List, Any, Tuple, Optional
 from app.models import Team, ScoutingData, Match, Event, User
 from app import db
+from flask_login import current_user
 from app.utils.analysis import calculate_team_metrics
+from app.utils.config_manager import get_current_game_config
 from sqlalchemy import func, desc
 import logging
 
@@ -181,13 +183,13 @@ class Assistant:
             if not team:
                 return {"text": f"Team {team_number} not found in the database."}
             # Calculate team statistics from scouting data
-            entries = ScoutingData.query.filter_by(team_id=team.id).all()
+            entries = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=current_user.scouting_team_number).all()
             if not entries:
                 return {"text": f"No scouting data available for Team {team_number}."}
             stats = calculate_team_metrics(team.id)
             # Build HTML table of averages with display names
             from flask import current_app
-            game_config = current_app.config.get('GAME_CONFIG', {})
+            game_config = get_current_game_config()
             metric_display_names = {}
             if 'data_analysis' in game_config and 'key_metrics' in game_config['data_analysis']:
                 for metric in game_config['data_analysis']['key_metrics']:
@@ -205,7 +207,7 @@ class Assistant:
             match_points = []
             total_metric_id = 'tot'
             from flask import current_app
-            game_config = current_app.config.get('GAME_CONFIG', {})
+            game_config = get_current_game_config()
             if 'data_analysis' in game_config and 'key_metrics' in game_config['data_analysis']:
                 for metric in game_config['data_analysis']['key_metrics']:
                     if 'total' in metric.get('id', '').lower() or 'tot' == metric.get('id', '').lower():

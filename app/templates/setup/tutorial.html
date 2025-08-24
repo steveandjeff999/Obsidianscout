@@ -1,0 +1,1034 @@
+{% extends 'base.html' %}
+
+{% block title %}Interactive Tutorial{% endblock %}
+
+{% block heading %}ObsidianScout Tutorial{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <!-- Tutorial Header -->
+            <div class="text-center mb-4">
+                <h2><i class="fas fa-graduation-cap me-2"></i>Interactive Tutorial</h2>
+                <p class="lead text-muted">Learn how to use ObsidianScout effectively</p>
+                <div class="text-center mt-4">
+                    <a href="{{ url_for('setup.index') }}" class="btn btn-outline-secondary btn-sm me-2">
+                        <i class="fas fa-home me-1"></i>Setup Home
+                    </a>
+                    <a href="{{ url_for('main.help_page') }}" class="btn btn-outline-info btn-sm me-2">
+                        <i class="fas fa-question-circle me-1"></i>Help Center
+                    </a>
+                    <a href="{{ url_for('setup.features') }}" class="btn btn-outline-warning btn-sm">
+                        <i class="fas fa-star me-1"></i>Features Overview
+                    </a>
+                </div>
+            </div>
+
+            <!-- Tutorial Steps -->
+            <div id="tutorial-container">
+                <!-- Step 1: Overview -->
+                <div class="tutorial-step" id="step-1" style="display: block;">
+                    <div class="card shadow">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">
+                                <span class="badge bg-light text-primary me-2">1</span>
+                                Welcome to ObsidianScout
+                            </h5>
+                        </div>
+                        <div class="card-body p-4">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <h6>What is ObsidianScout?</h6>
+                                    <p>ObsidianScout is a comprehensive FRC scouting platform that helps teams:</p>
+                                    <ul>
+                                        <li><strong>Collect Data:</strong> Scout matches and pits efficiently</li>
+                                        <li><strong>Analyze Performance:</strong> View graphs and team rankings</li>
+                                        <li><strong>Share Insights:</strong> Collaborate with team members</li>
+                                        <li><strong>Make Decisions:</strong> Use data for strategy and alliance selection</li>
+                                    </ul>
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-lightbulb me-2"></i>
+                                        <strong>Tip:</strong> Use the navigation bar at the top to access different features.
+                                    </div>
+                                    
+                                    <!-- Interactive Navigation Guide -->
+                                    <div class="card border-primary mt-3">
+                                        <div class="card-header bg-primary text-white">
+                                            <i class="fas fa-map-signs me-2"></i>Quick Navigation Guide
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row g-2">
+                                                <div class="col-md-6">
+                                                    <div class="d-flex align-items-center p-2 border rounded bg-light">
+                                                        <div class="nav-demo-icon me-3">
+                                                            <i class="fas fa-home fa-lg text-primary"></i>
+                                                        </div>
+                                                        <div>
+                                                            <strong>Dashboard</strong>
+                                                            <div class="small text-muted">Your mission control center</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="d-flex align-items-center p-2 border rounded bg-light">
+                                                        <div class="nav-demo-icon me-3">
+                                                            <i class="fas fa-clipboard-list fa-lg text-success"></i>
+                                                        </div>
+                                                        <div>
+                                                            <strong>Scouting</strong>
+                                                            <div class="small text-muted">Record match & pit data</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="d-flex align-items-center p-2 border rounded bg-light">
+                                                        <div class="nav-demo-icon me-3">
+                                                            <i class="fas fa-chart-bar fa-lg text-warning"></i>
+                                                        </div>
+                                                        <div>
+                                                            <strong>Analytics</strong>
+                                                            <div class="small text-muted">Graphs, rankings & insights</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="d-flex align-items-center p-2 border rounded bg-light">
+                                                        <div class="nav-demo-icon me-3">
+                                                            <i class="fas fa-cogs fa-lg text-info"></i>
+                                                        </div>
+                                                        <div>
+                                                            <strong>Configuration</strong>
+                                                            <div class="small text-muted">Customize your setup</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-center">
+                                    <img src="{{ url_for('static', filename='img/obsidian.png') }}" 
+                                         alt="ObsidianScout" class="img-fluid mb-3" style="max-height: 100px;">
+                                    <p class="text-muted small">Your professional scouting platform</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Navigation -->
+                <div class="tutorial-step" id="step-2" style="display: none;">
+                    <div class="card shadow">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">
+                                <span class="badge bg-light text-info me-2">2</span>
+                                Navigation & Advanced Features
+                            </h5>
+                        </div>
+                        <div class="card-body p-4">
+                            <h6>Main Navigation Areas</h6>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h6><i class="fas fa-home text-primary me-2"></i>Dashboard</h6>
+                                            <p class="small mb-0">Main overview with recent activity and quick stats</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h6><i class="fas fa-clipboard-list text-success me-2"></i>Scouting</h6>
+                                            <p class="small mb-0">Record match data and pit scouting information</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h6><i class="fas fa-chart-line text-warning me-2"></i>Analytics</h6>
+                                            <p class="small mb-0">View graphs, team rankings, and data analysis</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h6><i class="fas fa-users text-danger me-2"></i>Teams</h6>
+                                            <p class="small mb-0">Browse team information and performance data</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <h6 class="mt-4"><i class="fas fa-star text-info me-2"></i>Advanced Pages & Features</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card border-info">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="fas fa-chart-bar text-primary me-2"></i>Analytics & Graphs</h6>
+                                            <ul class="small mb-0">
+                                                <li><strong>Team Comparisons:</strong> Side-by-side performance analysis</li>
+                                                <li><strong>Event Trends:</strong> Performance over time tracking</li>
+                                                <li><strong>Custom Metrics:</strong> Create your own analysis views</li>
+                                                <li><strong>Export Options:</strong> Share graphs with your team</li>
+                                                <li><strong>Real-time Updates:</strong> Data refreshes automatically</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border-warning">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="fas fa-handshake text-warning me-2"></i>Alliance Selection</h6>
+                                            <ul class="small mb-0">
+                                                <li><strong>Pick Lists:</strong> Organize teams by priority</li>
+                                                <li><strong>Recommendations:</strong> AI-powered alliance suggestions</li>
+                                                <li><strong>Strategy Notes:</strong> Team-specific insights</li>
+                                                <li><strong>Live Updates:</strong> Real-time alliance tracking</li>
+                                                <li><strong>Data Export:</strong> Print pick lists for competition</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mt-3">
+                                    <div class="card border-success">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="fas fa-trophy text-success me-2"></i>Team Rankings & Sharing</h6>
+                                            <ul class="small mb-0">
+                                                <li><strong>Smart Rankings:</strong> Multi-metric team scoring</li>
+                                                <li><strong>Custom Weights:</strong> Adjust importance of different stats</li>
+                                                <li><strong>Share Links:</strong> Send rankings to team members</li>
+                                                <li><strong>Export Data:</strong> Download for strategy meetings</li>
+                                                <li><strong>Historical Tracking:</strong> See team improvement over time</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mt-3">
+                                    <div class="card border-danger">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="fas fa-robot text-danger me-2"></i>Assistant & AI</h6>
+                                            <ul class="small mb-0">
+                                                <li><strong>Smart Search:</strong> Ask questions about your data</li>
+                                                <li><strong>Strategy Insights:</strong> AI-generated recommendations</li>
+                                                <li><strong>Data Analysis:</strong> Automated pattern detection</li>
+                                                <li><strong>Predictions:</strong> Match outcome forecasting</li>
+                                                <li><strong>Help Integration:</strong> Context-aware assistance</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mt-3">
+                                    <div class="card border-info">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="fas fa-database text-info me-2"></i>Data Management</h6>
+                                            <ul class="small mb-0">
+                                                <li><strong>Import/Export:</strong> CSV and Excel file handling</li>
+                                                <li><strong>Data Validation:</strong> Automatic error checking</li>
+                                                <li><strong>Backup & Restore:</strong> Protect your scouting data</li>
+                                                <li><strong>Event Syncing:</strong> Connect to FRC API for schedules</li>
+                                                <li><strong>Team Management:</strong> Organize participating teams</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mt-3">
+                                    <div class="card border-secondary">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="fas fa-palette text-secondary me-2"></i>Themes & Customization</h6>
+                                            <ul class="small mb-0">
+                                                <li><strong>Theme Editor:</strong> Create custom color schemes</li>
+                                                <li><strong>Dark/Light Modes:</strong> Optimize for different lighting</li>
+                                                <li><strong>Team Branding:</strong> Match your team's colors</li>
+                                                <li><strong>Layout Options:</strong> Customize interface density</li>
+                                                <li><strong>Accessibility:</strong> Font size and contrast controls</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-success mt-3">
+                                <i class="fas fa-lightbulb me-2"></i>
+                                <strong>Pro Tip:</strong> Each advanced feature has detailed help documentation. Visit the specific pages to explore tooltips, guides, and interactive help!
+                            </div>
+
+                            <!-- Live Demo: Navigation -->
+                            <div class="card mt-4 border-info">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="fas fa-person-walking-dashed-line-arrow-right text-info me-2"></i>
+                                        Try Navigation Live
+                                    </div>
+                                    <div class="small text-muted">This is a live, interactive view of the app</div>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Hints and Instructions -->
+                                    <div class="alert alert-light border-info mb-3">
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-lightbulb text-warning me-2 fa-lg"></i>
+                                            <div>
+                                                <strong>👆 Try This:</strong> Click the buttons below to explore different sections of ObsidianScout.
+                                                Start with <span class="highlight-hint">Dashboard</span> to see the main overview!
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="navDemoButtons" class="btn-group flex-wrap mb-3" role="group" aria-label="Navigation demo">
+                                        <button type="button" class="btn btn-outline-primary btn-sm me-1 demo-highlight" data-url="{{ url_for('main.index') }}" 
+                                                data-hint="Start here! The Dashboard shows your team's overview and recent activity.">Dashboard</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm me-1" data-url="{{ url_for('scouting.index') }}"
+                                                data-hint="Your scouting command center - see assignments and recent matches.">Scouting Dashboard</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm me-1" data-url="{{ url_for('scouting.scouting_form') }}"
+                                                data-hint="The main form for recording match data during competitions.">Match Scouting</button>
+                                        <button type="button" class="btn btn-outline-primary btn-sm me-1" data-url="{{ url_for('pit_scouting.index') }}"
+                                                data-hint="Record team information and robot capabilities in the pits.">Pit Scouting</button>
+                                        <button type="button" class="btn btn-outline-warning btn-sm me-1" data-url="{{ url_for('graphs.index') }}"
+                                                data-hint="Visualize team performance with interactive charts and graphs.">Graphs</button>
+                                        <button type="button" class="btn btn-outline-purple btn-sm me-1" data-url="{{ url_for('teams.ranks') }}"
+                                                data-hint="See which teams are performing best based on your scouting data.">Team Rankings</button>
+                                        <button type="button" class="btn btn-outline-info btn-sm me-1" data-url="{{ url_for('alliances.index') }}"
+                                                data-hint="Plan your alliance selection strategy for playoffs.">Alliances</button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm me-1" data-url="{{ url_for('matches.index') }}"
+                                                data-hint="View match schedules, results, and predictions.">Matches</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" data-url="{{ url_for('data.index') }}"
+                                                data-hint="Import, export, and manage your scouting data.">Data</button>
+                                    </div>
+                                    
+                                    <!-- Dynamic Hint Display -->
+                                    <div id="navHintDisplay" class="alert alert-info mb-3" style="display: none;">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        <span id="navHintText">Hover over buttons to see what each section does!</span>
+                                    </div>
+                                    
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <div class="small text-muted">
+                                            <i class="fas fa-mouse-pointer me-1"></i>
+                                            Navigate the actual app below ↓
+                                        </div>
+                                        <a id="navOpenBtn" class="btn btn-sm btn-outline-secondary" href="#" target="_blank" rel="noopener">
+                                            <i class="fas fa-up-right-from-square me-1"></i>Open in new tab
+                                        </a>
+                                    </div>
+                                    <div class="ratio ratio-16x9 border rounded bg-body-secondary demo-frame">
+                                        <iframe id="navDemoFrame" class="rounded" src="about:blank" title="Navigation Live Demo" style="border:0;"></iframe>
+                                    </div>
+                                    <div class="form-text mt-2">
+                                        <strong>💡 Next Step:</strong> Try clicking the navigation menu in the iframe above to explore different sections.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Scouting -->
+                <div class="tutorial-step" id="step-3" style="display: none;">
+                    <div class="card shadow">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0">
+                                <span class="badge bg-light text-success me-2">3</span>
+                                Scouting Matches
+                            </h5>
+                        </div>
+                        <div class="card-body p-4">
+                            <h6>How to Scout a Match</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <ol>
+                                        <li><strong>Go to Scouting:</strong> Click "Match Scouting" in the navigation</li>
+                                        <li><strong>Select Match:</strong> Choose the match you're observing</li>
+                                        <li><strong>Pick Team:</strong> Select which team you'll be scouting</li>
+                                        <li><strong>Record Data:</strong> Fill in the scouting form during the match</li>
+                                        <li><strong>Submit:</strong> Save your data when the match ends</li>
+                                    </ol>
+                                    
+                                    <h6 class="mt-4">Match Phases</h6>
+                                    <div class="row">
+                                        <div class="col-md-4 mb-2">
+                                            <span class="badge bg-primary">Autonomous</span>
+                                            <p class="small text-muted mb-0">First 15 seconds</p>
+                                        </div>
+                                        <div class="col-md-4 mb-2">
+                                            <span class="badge bg-info">Teleop</span>
+                                            <p class="small text-muted mb-0">Main 2:15 period</p>
+                                        </div>
+                                        <div class="col-md-4 mb-2">
+                                            <span class="badge bg-warning">Endgame</span>
+                                            <p class="small text-muted mb-0">Final 30 seconds</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <!-- Live Demo: Scouting -->
+                                    <div class="card border-success h-100">
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <div><i class="fas fa-clipboard-list text-success me-2"></i>Try Scouting Live</div>
+                                            <a id="scoutOpenBtn" class="btn btn-sm btn-outline-secondary" href="#" target="_blank" rel="noopener">
+                                                <i class="fas fa-up-right-from-square me-1"></i>Open in new tab
+                                            </a>
+                                        </div>
+                                        <div class="card-body">
+                                            <!-- Scouting Instructions -->
+                                            <div class="alert alert-light border-success mb-3">
+                                                <div class="d-flex align-items-start">
+                                                    <i class="fas fa-play-circle text-success me-2 fa-lg mt-1"></i>
+                                                    <div>
+                                                        <strong>🎯 Your Task:</strong> Try entering sample match data!
+                                                        <ol class="small mb-0 mt-1">
+                                                            <li>Click <span class="highlight-hint">Match Scouting</span> below</li>
+                                                            <li>Select any team and match</li>
+                                                            <li>Fill in some scoring data</li>
+                                                            <li>Submit to see it in analytics</li>
+                                                        </ol>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div id="scoutDemoButtons" class="btn-group flex-wrap mb-3" role="group">
+                                                <button type="button" class="btn btn-outline-success btn-sm me-1 demo-highlight" data-url="{{ url_for('scouting.scouting_form') }}"
+                                                        data-hint="Start here! This is where you record what happens during matches.">Match Scouting</button>
+                                                <button type="button" class="btn btn-outline-primary btn-sm me-1" data-url="{{ url_for('pit_scouting.index') }}"
+                                                        data-hint="Record robot specifications and team interview data.">Pit Scouting</button>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" data-url="{{ url_for('scouting.index') }}"
+                                                        data-hint="Overview of your scouting assignments and recent data.">Scouting Dashboard</button>
+                                            </div>
+                                            
+                                            <!-- Dynamic Hint Display -->
+                                            <div id="scoutHintDisplay" class="alert alert-info mb-3" style="display: none;">
+                                                <i class="fas fa-info-circle me-2"></i>
+                                                <span id="scoutHintText">Hover over buttons to learn more!</span>
+                                            </div>
+                                            
+                                            <div class="ratio ratio-16x9 border rounded bg-body-secondary demo-frame">
+                                                <iframe id="scoutDemoFrame" class="rounded" src="about:blank" title="Scouting Live Demo" style="border:0;"></iframe>
+                                            </div>
+                                            <div class="form-text mt-2">
+                                                <strong>🚀 Pro Tip:</strong> Data you enter here will appear in the analytics section in the next step!
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Analytics -->
+                <div class="tutorial-step" id="step-4" style="display: none;">
+                    <div class="card shadow">
+                        <div class="card-header bg-warning text-white">
+                            <h5 class="mb-0">
+                                <span class="badge bg-light text-warning me-2">4</span>
+                                Data Analysis
+                            </h5>
+                        </div>
+                        <div class="card-body p-4">
+                            <h6>Analyzing Your Data</h6>
+                            <div class="row g-3">
+                                <div class="col-lg-5">
+                                    <div class="card border-primary mb-3">
+                                        <div class="card-body">
+                                            <h6><i class="fas fa-chart-bar text-primary me-2"></i>Graphs</h6>
+                                            <ul class="small">
+                                                <li>Team performance over time</li>
+                                                <li>Scoring averages by game piece</li>
+                                                <li>Autonomous success rates</li>
+                                                <li>Custom comparisons</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="card border-success">
+                                        <div class="card-body">
+                                            <h6><i class="fas fa-trophy text-success me-2"></i>Rankings</h6>
+                                            <ul class="small">
+                                                <li>Teams ranked by metrics</li>
+                                                <li>Filter by capabilities</li>
+                                                <li>Alliance selection insights</li>
+                                                <li>Export to Excel</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="alert alert-info mt-3">
+                                        <i class="fas fa-share-alt me-2"></i>
+                                        <strong>Sharing:</strong> You can share graphs and rankings with your team using public links!
+                                    </div>
+                                </div>
+                                <div class="col-lg-7">
+                                    <!-- Live Demo: Analytics -->
+                                    <div class="card border-warning h-100">
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <div><i class="fas fa-chart-line text-warning me-2"></i>Try Analytics Live</div>
+                                            <a id="analyticsOpenBtn" class="btn btn-sm btn-outline-secondary" href="#" target="_blank" rel="noopener">
+                                                <i class="fas fa-up-right-from-square me-1"></i>Open in new tab
+                                            </a>
+                                        </div>
+                                        <div class="card-body">
+                                            <!-- Analytics Instructions -->
+                                            <div class="alert alert-light border-warning mb-3">
+                                                <div class="d-flex align-items-start">
+                                                    <i class="fas fa-chart-bar text-warning me-2 fa-lg mt-1"></i>
+                                                    <div>
+                                                        <strong>📊 Explore Analytics:</strong> See your data come to life!
+                                                        <div class="small mt-1">
+                                                            Try: <span class="highlight-hint">Graphs</span> → Select teams → View performance charts
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div id="analyticsDemoButtons" class="btn-group flex-wrap mb-3" role="group">
+                                                <button type="button" class="btn btn-outline-warning btn-sm me-1 demo-highlight" data-url="{{ url_for('graphs.index') }}"
+                                                        data-hint="Start here! Create visual charts of team performance and trends.">Graphs</button>
+                                                <button type="button" class="btn btn-outline-purple btn-sm me-1" data-url="{{ url_for('teams.ranks') }}"
+                                                        data-hint="See which teams are ranked highest based on your data.">Team Rankings</button>
+                                                <button type="button" class="btn btn-outline-primary btn-sm me-1" data-url="{{ url_for('teams.index') }}"
+                                                        data-hint="Browse individual team profiles and detailed statistics.">Teams</button>
+                                                <button type="button" class="btn btn-outline-info btn-sm me-1" data-url="{{ url_for('alliances.index') }}"
+                                                        data-hint="Plan your strategy for alliance selection in playoffs.">Alliances</button>
+                                                <button type="button" class="btn btn-outline-danger btn-sm me-1" data-url="{{ url_for('matches.index') }}"
+                                                        data-hint="View match results, schedules, and predictions.">Matches</button>
+                                            </div>
+                                            
+                                            <!-- Dynamic Hint Display -->
+                                            <div id="analyticsHintDisplay" class="alert alert-info mb-3" style="display: none;">
+                                                <i class="fas fa-info-circle me-2"></i>
+                                                <span id="analyticsHintText">Hover over buttons to learn what each tool does!</span>
+                                            </div>
+                                            
+                                            <div class="ratio ratio-16x9 border rounded bg-body-secondary demo-frame">
+                                                <iframe id="analyticsDemoFrame" class="rounded" src="about:blank" title="Analytics Live Demo" style="border:0;"></iframe>
+                                            </div>
+                                            <div class="form-text mt-2">
+                                                <strong>🔍 Try This:</strong> Look for filter controls and team selectors on the analytics pages.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 5: Configuration -->
+                <div class="tutorial-step" id="step-5" style="display: none;">
+                    <div class="card shadow">
+                        <div class="card-header bg-warning text-white">
+                            <h5 class="mb-0">
+                                <span class="badge bg-light text-warning me-2">5</span>
+                                Configuration & Customization
+                            </h5>
+                        </div>
+                        <div class="card-body p-4">
+                            <h6><i class="fas fa-cogs text-warning me-2"></i>System Configuration</h6>
+                            <div class="row g-3">
+                                <div class="col-lg-6">
+                                    <div class="card border-primary mb-3">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="fas fa-gamepad text-primary me-2"></i>Game Settings</h6>
+                                            <ul class="small">
+                                                <li><strong>Scoring Elements:</strong> Configure game pieces and points</li>
+                                                <li><strong>Match Phases:</strong> Set autonomous and endgame timers</li>
+                                                <li><strong>Custom Fields:</strong> Add team-specific tracking</li>
+                                                <li><strong>Field Layout:</strong> Adapt to yearly game changes</li>
+                                                <li><strong>Validation Rules:</strong> Prevent invalid data entry</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="card border-success mb-3">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="fas fa-calendar text-success me-2"></i>Event Setup</h6>
+                                            <ul class="small">
+                                                <li><strong>Event Selection:</strong> Connect to FRC events API</li>
+                                                <li><strong>Team Lists:</strong> Auto-import participating teams</li>
+                                                <li><strong>Match Schedules:</strong> Sync qualification matches</li>
+                                                <li><strong>Alliance Data:</strong> Real-time playoff brackets</li>
+                                                <li><strong>Pit Assignments:</strong> Track team locations</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-tools me-2"></i>
+                                        <strong>Configuration Access:</strong> Some settings require appropriate user permissions. Contact your team's system administrator for access to advanced configurations.
+                                    </div>
+                                </div>
+                                <div class="col-lg-6">
+                                    <!-- Live Demo: Configuration -->
+                                    <div class="card border-info h-100">
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <div><i class="fas fa-sliders text-info me-2"></i>Try Configuration Live</div>
+                                            <a id="configOpenBtn" class="btn btn-sm btn-outline-secondary" href="#" target="_blank" rel="noopener">
+                                                <i class="fas fa-up-right-from-square me-1"></i>Open in new tab
+                                            </a>
+                                        </div>
+                                        <div class="card-body">
+                                            <!-- Configuration Instructions -->
+                                            <div class="alert alert-light border-info mb-3">
+                                                <div class="d-flex align-items-start">
+                                                    <i class="fas fa-cogs text-info me-2 fa-lg mt-1"></i>
+                                                    <div>
+                                                        <strong>⚙️ Customize Your Setup:</strong> 
+                                                        <div class="small mt-1">
+                                                            Start with <span class="highlight-hint">Game Config</span> to set up scoring for your season!
+                                                        </div>
+                                                        <div class="small text-muted">
+                                                            <i class="fas fa-lock me-1"></i>Admin permissions may be required
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div id="configDemoButtons" class="btn-group flex-wrap mb-3" role="group">
+                                                <button type="button" class="btn btn-outline-primary btn-sm me-1 demo-highlight" data-url="{{ url_for('main.config') }}"
+                                                        data-hint="Configure game elements, scoring, and match phases for your season.">Game Config</button>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm me-1" data-url="{{ url_for('setup.system_check') }}"
+                                                        data-hint="Check your system health, database status, and configuration files.">System Check</button>
+                                                <button type="button" class="btn btn-outline-warning btn-sm" data-url="{{ url_for('setup.features') }}"
+                                                        data-hint="Overview of all ObsidianScout features and capabilities.">Features</button>
+                                            </div>
+                                            
+                                            <!-- Dynamic Hint Display -->
+                                            <div id="configHintDisplay" class="alert alert-info mb-3" style="display: none;">
+                                                <i class="fas fa-info-circle me-2"></i>
+                                                <span id="configHintText">Hover over buttons to see what each configuration area covers!</span>
+                                            </div>
+                                            
+                                            <div class="ratio ratio-16x9 border rounded bg-body-secondary demo-frame">
+                                                <iframe id="configDemoFrame" class="rounded" src="about:blank" title="Configuration Live Demo" style="border:0;"></iframe>
+                                            </div>
+                                            <div class="form-text mt-2">
+                                                <strong>🛡️ Note:</strong> Some configuration options require admin permissions for your team.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 6: User Roles -->
+                <div class="tutorial-step" id="step-6" style="display: none;">
+                    <div class="card shadow">
+                        <div class="card-header bg-purple text-white">
+                            <h5 class="mb-0">
+                                <span class="badge bg-light text-purple me-2">6</span>
+                                User Roles & Permissions
+                            </h5>
+                        </div>
+                        <div class="card-body p-4">
+                            <h6>Understanding User Roles</h6>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <div class="card border-warning h-100">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-user-cog fa-2x text-warning mb-2"></i>
+                                            <h6>Admin</h6>
+                                            <ul class="list-unstyled small">
+                                                <li>✓ Game settings</li>
+                                                <li>✓ Team preferences</li>
+                                                <li>✓ Event setup</li>
+                                                <li>✓ Theme customization</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="card border-info h-100">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-chart-line fa-2x text-info mb-2"></i>
+                                            <h6>Analytics</h6>
+                                            <ul class="list-unstyled small">
+                                                <li>✓ View all data</li>
+                                                <li>✓ Create graphs</li>
+                                                <li>✓ Team rankings</li>
+                                                <li>✗ User management</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="card border-success h-100">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-clipboard-list fa-2x text-success mb-2"></i>
+                                            <h6>Scout</h6>
+                                            <ul class="list-unstyled small">
+                                                <li>✓ Enter match data</li>
+                                                <li>✓ Pit scouting</li>
+                                                <li>✗ Analytics</li>
+                                                <li>✗ Configuration</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 7: Tips -->
+                <div class="tutorial-step" id="step-7" style="display: none;">
+                    <div class="card shadow">
+                        <div class="card-header bg-dark text-white">
+                            <h5 class="mb-0">
+                                <span class="badge bg-light text-dark me-2">7</span>
+                                Pro Tips & Best Practices
+                            </h5>
+                        </div>
+                        <div class="card-body p-4">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6><i class="fas fa-lightbulb text-warning me-2"></i>Scouting Tips</h6>
+                                    <ul class="small">
+                                        <li>Practice using the form before competition</li>
+                                        <li>Focus on one robot at a time</li>
+                                        <li>Use the notes field for special observations</li>
+                                        <li>Don't worry about perfect data - consistency matters more</li>
+                                    </ul>
+                                    
+                                    <h6 class="mt-3"><i class="fas fa-mobile-alt text-info me-2"></i>Device Tips</h6>
+                                    <ul class="small">
+                                        <li>Works on phones, tablets, and computers</li>
+                                        <li>Data saves automatically as you type</li>
+                                        <li>Can work offline (syncs when connected)</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6><i class="fas fa-users text-success me-2"></i>Team Collaboration</h6>
+                                    <ul class="small">
+                                        <li>Share analysis graphs with your team</li>
+                                        <li>Use rankings for alliance selection</li>
+                                        <li>Export data to spreadsheets if needed</li>
+                                        <li>Multiple scouts can work simultaneously</li>
+                                    </ul>
+                                    
+                                    <h6 class="mt-3"><i class="fas fa-cog text-warning me-2"></i>Configuration</h6>
+                                    <ul class="small">
+                                        <li>Customize game scoring elements for each season</li>
+                                        <li>Adjust scouting forms and data fields</li>
+                                        <li>Set up API connections for event data</li>
+                                        <li>Configure themes and display preferences</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-success mt-3">
+                                <i class="fas fa-rocket me-2"></i>
+                                <strong>Ready to start?</strong> You now know the basics of ObsidianScout. Jump in and start scouting!
+                            </div>
+                            
+                            <!-- Final Call-to-Action -->
+                            <div class="card border-success mt-4">
+                                <div class="card-header bg-success text-white">
+                                    <i class="fas fa-flag-checkered me-2"></i>You're Ready to Scout!
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <h6>🎯 Next Steps:</h6>
+                                            <ol>
+                                                <li><strong>Start with the Dashboard</strong> - Get familiar with the layout</li>
+                                                <li><strong>Try Match Scouting</strong> - Enter some practice data</li>
+                                                <li><strong>Explore Analytics</strong> - See your data visualized</li>
+                                                <li><strong>Customize Settings</strong> - Configure for your team's needs</li>
+                                            </ol>
+                                            
+                                            <div class="alert alert-light border-success mt-3">
+                                                <i class="fas fa-users me-2 text-success"></i>
+                                                <strong>Team Tip:</strong> Get your whole scouting team to go through this tutorial together!
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 text-center">
+                                            <div class="p-3">
+                                                <i class="fas fa-trophy fa-4x text-warning mb-3"></i>
+                                                <h6 class="text-success">Tutorial Complete!</h6>
+                                                <p class="small text-muted">You're now ready to use ObsidianScout effectively</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tutorial Controls -->
+            <div class="card mt-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <button id="prev-btn" class="btn btn-secondary" onclick="previousStep()" disabled>
+                                <i class="fas fa-arrow-left me-2"></i>Previous
+                            </button>
+                        </div>
+                        
+                        <div class="text-center">
+                            <span id="step-indicator" class="text-muted">Step 1 of 7</span>
+                        </div>
+                        
+                        <div>
+                            <button id="next-btn" class="btn btn-primary" onclick="nextStep()">
+                                Next<i class="fas fa-arrow-right ms-2"></i>
+                            </button>
+                            <a href="{{ url_for('main.index') }}" id="finish-btn" class="btn btn-success" style="display: none;">
+                                <i class="fas fa-check me-2"></i>Start Scouting
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <!-- Progress Bar -->
+                    <div class="mt-3">
+                        <div class="progress">
+                            <div id="progress-bar" class="progress-bar bg-success" style="width: 14.29%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <h6>Quick Actions</h6>
+                            <a href="{{ url_for('setup.index') }}" class="btn btn-outline-secondary btn-sm me-2">
+                                <i class="fas fa-home me-1"></i>Setup Home
+                            </a>
+                            <a href="{{ url_for('main.help_page') }}" class="btn btn-outline-info btn-sm me-2">
+                                <i class="fas fa-question-circle me-1"></i>Help Center
+                            </a>
+                            <a href="{{ url_for('setup.features') }}" class="btn btn-outline-warning btn-sm">
+                                <i class="fas fa-star me-1"></i>Features Overview
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentStep = 1;
+const totalSteps = 7;
+
+function showStep(step) {
+    // Hide all steps
+    document.querySelectorAll('.tutorial-step').forEach(el => {
+        el.style.display = 'none';
+    });
+    
+    // Show current step
+    const stepEl = document.getElementById(`step-${step}`);
+    if (stepEl) stepEl.style.display = 'block';
+    
+    // Update controls
+    document.getElementById('prev-btn').disabled = (step === 1);
+    document.getElementById('next-btn').style.display = (step === totalSteps) ? 'none' : 'inline-block';
+    document.getElementById('finish-btn').style.display = (step === totalSteps) ? 'inline-block' : 'none';
+    
+    // Update step indicator
+    document.getElementById('step-indicator').textContent = `Step ${step} of ${totalSteps}`;
+    
+    // Update progress bar
+    const progressPercent = (step / totalSteps) * 100;
+    document.getElementById('progress-bar').style.width = progressPercent + '%';
+}
+
+function nextStep() {
+    if (currentStep < totalSteps) {
+        currentStep++;
+        showStep(currentStep);
+    }
+}
+
+function previousStep() {
+    if (currentStep > 1) {
+        currentStep--;
+        showStep(currentStep);
+    }
+}
+
+// Simple helper to wire a button group to an iframe
+function initLiveDemo(frameId, defaultUrl, buttonsSelector, openBtnId) {
+    const frame = document.getElementById(frameId);
+    const buttons = document.querySelectorAll(buttonsSelector);
+    const openBtn = document.getElementById(openBtnId);
+    
+    // Get hint display elements
+    const hintDisplayId = frameId.replace('Frame', 'HintDisplay');
+    const hintTextId = frameId.replace('Frame', 'HintText');
+    const hintDisplay = document.getElementById(hintDisplayId);
+    const hintText = document.getElementById(hintTextId);
+
+    function setSrc(url, btn) {
+        if (!frame) return;
+        frame.src = url;
+        if (openBtn) {
+            openBtn.href = url;
+        }
+        // active button state
+        buttons.forEach(b => {
+            b.classList.remove('active');
+            b.classList.remove('demo-highlight');
+        });
+        if (btn) {
+            btn.classList.add('active');
+            btn.classList.add('demo-highlight');
+        }
+    }
+
+    // bind clicks
+    buttons.forEach(btn => {
+        btn.addEventListener('click', () => setSrc(btn.getAttribute('data-url'), btn));
+        
+        // Add hover hints
+        btn.addEventListener('mouseenter', () => {
+            const hint = btn.getAttribute('data-hint');
+            if (hint && hintDisplay && hintText) {
+                hintText.textContent = hint;
+                hintDisplay.style.display = 'block';
+            }
+        });
+        
+        btn.addEventListener('mouseleave', () => {
+            if (hintDisplay) {
+                hintDisplay.style.display = 'none';
+            }
+        });
+    });
+
+    // initialize
+    setSrc(defaultUrl, buttons[0]);
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowRight' || e.key === ' ') {
+        // Space prevents page scroll when focused outside inputs
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+            e.preventDefault();
+            nextStep();
+        }
+    } else if (e.key === 'ArrowLeft') {
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+            e.preventDefault();
+            previousStep();
+        }
+    }
+});
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    showStep(1);
+    
+    // Wire up live demos with sensible defaults
+    initLiveDemo('navDemoFrame', '{{ url_for("main.index") }}', '#navDemoButtons button', 'navOpenBtn');
+    initLiveDemo('scoutDemoFrame', '{{ url_for("scouting.scouting_form") }}', '#scoutDemoButtons button', 'scoutOpenBtn');
+    initLiveDemo('analyticsDemoFrame', '{{ url_for("graphs.index") }}', '#analyticsDemoButtons button', 'analyticsOpenBtn');
+    initLiveDemo('configDemoFrame', '{{ url_for("main.config") }}', '#configDemoButtons button', 'configOpenBtn');
+});
+</script>
+
+<style>
+.bg-purple { background-color: #6f42c1 !important; }
+.text-purple { color: #6f42c1 !important; }
+.border-purple { border-color: #6f42c1 !important; }
+.btn-outline-purple { color: #6f42c1; border-color: #6f42c1; }
+.btn-outline-purple:hover { color: #fff; background-color: #6f42c1; border-color: #6f42c1; }
+
+/* Tutorial Enhancement Styles */
+.highlight-hint {
+    background: linear-gradient(120deg, #fff3cd 0%, #fff3cd 100%);
+    background-size: 100% 0.2em;
+    background-repeat: no-repeat;
+    background-position: 0 88%;
+    padding: 0 4px;
+    border-radius: 3px;
+    font-weight: 600;
+    color: #856404;
+}
+
+.demo-highlight {
+    position: relative;
+    animation: pulse-highlight 2s infinite;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+@keyframes pulse-highlight {
+    0% {
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    }
+    50% {
+        box-shadow: 0 0 0 0.4rem rgba(13, 110, 253, 0.15);
+    }
+    100% {
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    }
+}
+
+.demo-frame {
+    border: 2px solid #dee2e6;
+    transition: border-color 0.3s ease;
+}
+
+.demo-frame:hover {
+    border-color: #0d6efd;
+}
+
+.nav-demo-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(0, 123, 255, 0.1);
+}
+
+/* Tutorial Progress Indicator */
+.tutorial-step {
+    opacity: 0;
+    transform: translateX(20px);
+    transition: all 0.3s ease-in-out;
+}
+
+.tutorial-step[style*="block"] {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* Interactive Elements */
+.alert-light {
+    background-color: #f8f9fa;
+    border-left: 4px solid #0d6efd;
+}
+
+.card-header {
+    font-weight: 600;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .btn-group .btn {
+        margin-bottom: 0.25rem;
+    }
+    
+    .demo-highlight {
+        animation: none;
+        box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.25);
+    }
+    
+    .nav-demo-icon {
+        width: 35px;
+        height: 35px;
+    }
+}
+</style>
+{% endblock %}

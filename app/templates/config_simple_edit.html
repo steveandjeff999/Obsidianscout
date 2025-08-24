@@ -709,12 +709,66 @@
                     </div>
                     
                     <div class="form-group text-end mt-4">
-                        <button type="submit" class="btn btn-primary btn-lg">
-                            <i class="fas fa-save"></i> Save Configuration
-                        </button>
+                        <div class="d-flex justify-content-between">
+                            <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#resetModal">
+                                <i class="fas fa-undo me-1"></i> Reset to Default
+                            </button>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-save"></i> Save Configuration
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reset to Default Modal - Moved outside main container to prevent positioning issues -->
+<div class="modal fade" id="resetModal" tabindex="-1" aria-labelledby="resetModalLabel" aria-hidden="true" style="z-index: 1055;">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="resetModalLabel">
+                    <i class="fas fa-undo me-2"></i>Reset Configuration to Default
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('main.reset_config') }}" method="POST">
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> This will completely replace your current configuration with the selected default. This action cannot be undone!
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="default_config" class="form-label">Select Default Configuration:</label>
+                        <select name="default_config" id="default_config" class="form-select" required>
+                            <option value="">-- Select a default configuration --</option>
+                            {% if default_configs %}
+                                {% for config in default_configs %}
+                                <option value="{{ config.filename }}">{{ config.display_name }}</option>
+                                {% endfor %}
+                            {% else %}
+                                <option value="" disabled>No default configurations found</option>
+                            {% endif %}
+                        </select>
+                        <small class="form-text text-muted">
+                            Choose from pre-configured game setups for different seasons.
+                        </small>
+                    </div>
+                    
+                    <input type="hidden" name="config_type" value="game">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>Cancel
+                    </button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-undo me-1"></i>Reset Configuration
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

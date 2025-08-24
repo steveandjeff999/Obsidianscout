@@ -88,6 +88,13 @@
                         </label>
                         <input type="text" class="form-control" id="username" name="username" required autofocus>
                     </div>
+
+                    <div class="mb-3">
+                        <label for="team_number" class="form-label">
+                            <i class="fas fa-users me-2 text-muted"></i>Team Number
+                        </label>
+                        <input type="number" class="form-control" id="team_number" name="team_number" required>
+                    </div>
                     
                     <div class="mb-3">
                         <label for="password" class="form-label">
@@ -112,8 +119,7 @@
                 
                 <div class="mt-4 text-center">
                     <small class="text-muted">
-                        <i class="fas fa-info-circle me-1"></i>
-                        Contact your administrator for login credentials
+                        Don't have an account? <a href="{{ url_for('auth.register') }}">Sign Up</a>
                     </small>
                 </div>
             </div>
@@ -121,6 +127,5 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/activity-logger.js') }}"></script>
 </body>
 </html>

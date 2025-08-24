@@ -1,0 +1,225 @@
+{% extends 'base.html' %}
+
+{% block title %}Setup Wizard{% endblock %}
+
+{% block heading %}Welcome to ObsidianScout{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-10 col-lg-8">
+            <!-- Welcome Header -->
+            <div class="text-center mb-5">
+                <div class="mb-4">
+                    <img src="{{ url_for('static', filename='img/obsidian.png') }}" alt="ObsidianScout" 
+                         style="max-height: 80px;" class="img-fluid">
+                </div>
+                <h1 class="display-5 fw-bold text-primary">ObsidianScout</h1>
+                <p class="lead text-muted">Professional FRC Scouting Platform</p>
+            </div>
+
+            {% if is_first_run %}
+            <!-- First Run Setup -->
+            <div class="card border-success shadow-lg">
+                <div class="card-header bg-success text-white text-center">
+                    <h4 class="mb-0">
+                        <i class="fas fa-rocket me-2"></i>
+                        Let's Get Started!
+                    </h4>
+                </div>
+                <div class="card-body p-4">
+                    <div class="alert alert-info mb-4">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Welcome!</strong> This appears to be your first time running ObsidianScout. 
+                        Let's set up your scouting platform in just a few minutes.
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="card h-100 border-primary">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-cog fa-3x text-primary mb-3"></i>
+                                    <h5>Quick Setup</h5>
+                                    <p class="text-muted">Set up your team and admin account</p>
+                                    <a href="{{ url_for('setup.first_run') }}" class="btn btn-primary btn-lg">
+                                        <i class="fas fa-play me-2"></i>Start Setup
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card h-100 border-info">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-book fa-3x text-info mb-3"></i>
+                                    <h5>Learn More</h5>
+                                    <p class="text-muted">Explore features and capabilities</p>
+                                    <a href="{{ url_for('setup.features') }}" class="btn btn-info btn-lg">
+                                        <i class="fas fa-info-circle me-2"></i>Features
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <!-- Existing Installation -->
+            <div class="card shadow-lg">
+                <div class="card-header bg-primary text-white text-center">
+                    <h4 class="mb-0">
+                        <i class="fas fa-tools me-2"></i>
+                        Setup & Configuration
+                    </h4>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100 border-success">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-play-circle fa-3x text-success mb-3"></i>
+                                    <h6>Interactive Tutorial</h6>
+                                    <p class="text-muted small">Learn how to use the platform</p>
+                                    <a href="{{ url_for('setup.tutorial') }}" class="btn btn-success">
+                                        <i class="fas fa-graduation-cap me-1"></i>Start Tutorial
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100 border-warning">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-magic fa-3x text-warning mb-3"></i>
+                                    <h6>Setup Wizard</h6>
+                                    <p class="text-muted small">Configure your team quickly</p>
+                                    {% if current_user.is_authenticated %}
+                                    <a href="{{ url_for('setup.setup_wizard') }}" class="btn btn-warning">
+                                        <i class="fas fa-cogs me-1"></i>Launch Wizard
+                                    </a>
+                                    {% else %}
+                                    <span class="text-muted small">Login required</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100 border-info">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-stethoscope fa-3x text-info mb-3"></i>
+                                    <h6>System Check</h6>
+                                    <p class="text-muted small">Verify system health</p>
+                                    {% if current_user.is_authenticated and current_user.has_role('admin') %}
+                                    <a href="{{ url_for('setup.system_check') }}" class="btn btn-info">
+                                        <i class="fas fa-check-circle me-1"></i>Run Check
+                                    </a>
+                                    {% else %}
+                                    <span class="text-muted small">Admin access required</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100 border-warning">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-star fa-3x text-warning mb-3"></i>
+                                    <h6>Features Overview</h6>
+                                    <p class="text-muted small">Discover what's available</p>
+                                    <a href="{{ url_for('setup.features') }}" class="btn btn-warning">
+                                        <i class="fas fa-list me-1"></i>Explore
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if health %}
+                    <div class="mt-4">
+                        <h6>System Status</h6>
+                        <div class="row">
+                            <div class="col-sm-6 col-md-3 mb-2">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-database me-2 {% if health.database_exists %}text-success{% else %}text-danger{% endif %}"></i>
+                                    <span class="small">Database</span>
+                                </div>
+                            </div>
+                            <div class="col-sm-6 col-md-3 mb-2">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-users me-2 {% if health.has_users %}text-success{% else %}text-warning{% endif %}"></i>
+                                    <span class="small">Users ({{ health.user_count }})</span>
+                                </div>
+                            </div>
+                            <div class="col-sm-6 col-md-3 mb-2">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-user-shield me-2 {% if health.has_admin %}text-success{% else %}text-warning{% endif %}"></i>
+                                    <span class="small">Admin User</span>
+                                </div>
+                            </div>
+                            <div class="col-sm-6 col-md-3 mb-2">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-cog me-2 {% if health.configs_exist %}text-success{% else %}text-warning{% endif %}"></i>
+                                    <span class="small">Configs</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Quick Links -->
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-link me-2"></i>Quick Links
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-6 col-md-3 mb-2">
+                                    <a href="{{ url_for('main.index') }}" class="btn btn-outline-primary btn-sm w-100">
+                                        <i class="fas fa-home me-1"></i>Dashboard
+                                    </a>
+                                </div>
+                                <div class="col-6 col-md-3 mb-2">
+                                    <a href="{{ url_for('main.help_page') }}" class="btn btn-outline-info btn-sm w-100">
+                                        <i class="fas fa-question-circle me-1"></i>Help
+                                    </a>
+                                </div>
+                                {% if current_user.is_authenticated and current_user.has_role('admin') %}
+                                <div class="col-6 col-md-3 mb-2">
+                                    <a href="{{ url_for('auth.manage_users') }}" class="btn btn-outline-danger btn-sm w-100">
+                                        <i class="fas fa-users me-1"></i>Users
+                                    </a>
+                                </div>
+                                <div class="col-6 col-md-3 mb-2">
+                                    <a href="{{ url_for('main.config') }}" class="btn btn-outline-warning btn-sm w-100">
+                                        <i class="fas fa-cog me-1"></i>Config
+                                    </a>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-refresh system status every 30 seconds on setup page
+setInterval(function() {
+    fetch('{{ url_for("setup.api_check_database") }}')
+        .then(response => response.json())
+        .then(data => {
+            // Update status indicators if needed
+            console.log('System status updated:', data);
+        })
+        .catch(error => console.error('Status check failed:', error));
+}, 30000);
+</script>
+{% endblock %}

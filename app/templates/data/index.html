@@ -135,14 +135,17 @@
     <div class="card-body">
         <div class="row">
             <div class="col-md-8">
-                <h5>Wipe Database</h5>
+                <h5>Wipe Scouting Team Data</h5>
                 <p class="text-danger">
-                    <strong>Warning:</strong> This will permanently delete all data from the database including teams, matches, and scouting data. This action cannot be undone.
+                    <strong>Warning:</strong> This will permanently delete all data for your scouting team (Team {{ current_user.scouting_team_number }}) including teams, matches, events, and scouting data. This action cannot be undone.
+                </p>
+                <p class="text-muted">
+                    <small>This will only affect data for your scouting team. Other teams' data will remain intact.</small>
                 </p>
             </div>
             <div class="col-md-4 text-end d-flex align-items-center justify-content-end">
                 <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#wipeDbModal">
-                    <i class="fas fa-trash me-2"></i> Wipe Database
+                    <i class="fas fa-trash me-2"></i> Wipe Team Data
                 </button>
             </div>
         </div>
@@ -154,24 +157,27 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title" id="wipeDbModalLabel"><i class="fas fa-exclamation-triangle me-2"></i> Wipe Database Confirmation</h5>
+                <h5 class="modal-title" id="wipeDbModalLabel"><i class="fas fa-exclamation-triangle me-2"></i> Wipe Scouting Team Data</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form action="{{ url_for('data.wipe_database') }}" method="POST" id="wipeDbForm">
                     <div class="alert alert-danger">
                         <p><strong>WARNING: THIS ACTION CANNOT BE UNDONE!</strong></p>
-                        <p>You are about to delete ALL data from the database, including:</p>
+                        <p>You are about to delete ALL data for scouting team {{ current_user.scouting_team_number }}, including:</p>
                         <ul>
-                            <li>All teams</li>
-                            <li>All matches</li>
-                            <li>All scouting data</li>
-                            <li>All events</li>
+                            <li>All teams for your scouting team</li>
+                            <li>All matches for your scouting team</li>
+                            <li>All scouting data for your scouting team</li>
+                            <li>All events for your scouting team</li>
+                            <li>All alliance selections for your scouting team</li>
+                            <li>All pit scouting data for your scouting team</li>
                         </ul>
+                        <p class="text-info"><strong>Note:</strong> This will only affect data for scouting team {{ current_user.scouting_team_number }}. Other teams' data will remain intact.</p>
                         <div class="form-check mt-3">
                             <input class="form-check-input" type="checkbox" name="confirm_wipe" id="wipe-confirmation" required>
                             <label class="form-check-label" for="wipe-confirmation">
-                                <strong>I understand this action will permanently delete all data and cannot be undone</strong>
+                                <strong>I understand this will permanently delete all data for scouting team {{ current_user.scouting_team_number }} and cannot be undone</strong>
                             </label>
                         </div>
                     </div>
@@ -179,7 +185,7 @@
                     <div class="d-flex justify-content-between">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" class="btn btn-danger">
-                            <i class="fas fa-trash me-2"></i> Wipe Database
+                            <i class="fas fa-trash me-2"></i> Wipe Team Data
                         </button>
                     </div>
                 </form>
@@ -191,6 +197,101 @@
 
 {% block extra_js %}
 <script>
+    // Global config reload handler
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof window.globalConfigReload === 'function') {
+            window.globalConfigReload = function() {
+                reloadDataManagementWithNewConfig();
+            };
+        }
+    });
+    
+    function reloadDataManagementWithNewConfig() {
+        console.log('Reloading data management with new configuration...');
+        
+        // Show loading indicator
+        const cardBody = document.querySelector('.card-body');
+        if (cardBody) {
+            const loadingAlert = document.createElement('div');
+            loadingAlert.className = 'alert alert-info text-center mb-3';
+            loadingAlert.innerHTML = '<i class="fas fa-sync fa-spin me-2"></i>Updating data management with new configuration...';
+            cardBody.insertBefore(loadingAlert, cardBody.firstChild);
+        }
+        
+        // Fetch updated stats via AJAX
+        fetch('/data/api/stats', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch updated data configuration');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // Update stats on page without full reload
+                updateDataStats(data);
+                
+                // Remove loading indicator
+                const loadingAlert = document.querySelector('.alert-info');
+                if (loadingAlert) {
+                    loadingAlert.remove();
+                }
+                
+                // Show success notification
+                const successAlert = document.createElement('div');
+                successAlert.className = 'alert alert-success alert-dismissible fade show';
+                successAlert.innerHTML = `
+                    <i class="fas fa-check me-2"></i>
+                    Data management updated with new configuration.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                
+                if (cardBody) {
+                    cardBody.insertBefore(successAlert, cardBody.firstChild);
+                    setTimeout(() => successAlert.remove(), 3000);
+                }
+            } else {
+                throw new Error(data.error || 'Unknown error occurred');
+            }
+        })
+        .catch(error => {
+            console.error('Error reloading data management:', error);
+            
+            // Remove loading indicator
+            const loadingAlert = document.querySelector('.alert-info');
+            if (loadingAlert) {
+                loadingAlert.remove();
+            }
+            
+            const errorAlert = document.createElement('div');
+            errorAlert.className = 'alert alert-warning alert-dismissible fade show';
+            errorAlert.innerHTML = `
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Failed to update data management configuration. Please refresh the page manually.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            if (cardBody) {
+                cardBody.insertBefore(errorAlert, cardBody.firstChild);
+            }
+        });
+    }
+    
+    function updateDataStats(data) {
+        // Update any statistics shown on the page
+        // This is a placeholder for when stats are displayed on the data management page
+        console.log('Data stats updated:', data.total_stats);
+        
+        if (data.current_event) {
+            console.log('Current event stats updated:', data.event_stats);
+        }
+    }
+
     // Simple direct implementation - wait until page is fully loaded
     window.onload = function() {
         // Get the elements

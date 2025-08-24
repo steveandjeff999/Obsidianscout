@@ -1,12 +1,18 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
-from flask_login import login_required
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort
+from flask_login import login_required, current_user
 from app.routes.auth import analytics_required
 from app.models import Team, Event, ScoutingData
 from app import db
 from app.utils.api_utils import get_teams, ApiError, api_to_db_team_conversion, get_event_details, get_teams_dual_api, get_event_details_dual_api
+from app.utils.tba_api_utils import get_tba_team_events, TBAApiError
 from datetime import datetime
 import statistics
 from app.utils.theme_manager import ThemeManager
+from app.utils.config_manager import get_current_game_config, get_effective_game_config
+from app.utils.team_isolation import (
+    filter_teams_by_scouting_team, filter_events_by_scouting_team, 
+    assign_scouting_team_to_model, get_event_by_code
+)
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -22,31 +28,37 @@ bp = Blueprint('teams', __name__, url_prefix='/teams')
 def index():
     """Display teams for the selected event"""
     # Get event code from config
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     
     # Get the current event
     event = None
     event_id = request.args.get('event_id', type=int)
     
-    # Get all events for the dropdown
-    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+    # Get all events for the dropdown (filtered by current scouting team)
+    events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
     
     if event_id:
-        # If a specific event ID is requested, use that
-        event = Event.query.get_or_404(event_id)
+        # If a specific event ID is requested, use that (filtered by scouting team)
+        event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+        if not event:
+            flash("Event not found or not accessible.", "error")
+            return redirect(url_for('teams.index'))
     elif current_event_code:
-        # Otherwise use the current event from config
-        event = Event.query.filter_by(code=current_event_code).first()
+        # Otherwise use the current event from config (filtered by scouting team)
+        event = get_event_by_code(current_event_code)
         
         # If the config has an event code but it's not in the database yet,
         # suggest syncing teams to create the event
         if not event and events:
             flash(f"Event with code '{current_event_code}' not found. Please sync teams to create this event.", "warning")
     
-    # Filter teams by the selected event
+    # Filter teams by the selected event and scouting team
     if event:
-        teams = event.teams
+        # Get teams associated with this event, filtered by scouting team
+        teams = filter_teams_by_scouting_team().join(
+            Team.events
+        ).filter(Event.id == event.id).order_by(Team.team_number).all()
     else:
         # If no event selected, don't show any teams
         teams = []
@@ -62,17 +74,17 @@ def index():
 def sync_from_config():
     """Sync teams from FIRST API using the event code from config file"""
     try:
-        # Get event code from config
-        game_config = current_app.config.get('GAME_CONFIG', {})
+        # Get event code from effective config (respects alliance mode)
+        game_config = get_effective_game_config()
         event_code = game_config.get('current_event_code')
         
         if not event_code:
             flash("No event code found in configuration. Please add 'current_event_code' to your game_config.json file.", 'danger')
             return redirect(url_for('teams.index'))
         
-        # Find or create the event in our database
+        # Find or create the event in our database (filtered by current scouting team)
         current_year = game_config.get('season', 2026)
-        event = Event.query.filter_by(code=event_code).first()
+        event = get_event_by_code(event_code)
         
         if not event:
             try:
@@ -116,6 +128,8 @@ def sync_from_config():
                     year=current_year
                 )
             
+            # Assign scouting team number to the new event
+            assign_scouting_team_to_model(event)
             db.session.add(event)
             db.session.commit()  # Commit to get the ID
 
@@ -126,42 +140,65 @@ def sync_from_config():
         teams_added = 0
         teams_updated = 0
         
-        # Process each team from the API
-        for team_data in team_data_list:
-            
-            if not team_data or not team_data.get('team_number'):
-                continue
-                
-            team_number = team_data.get('team_number')
-            
-            # Check if the team already exists
-            team = Team.query.filter_by(team_number=team_number).first()
-            
-            if team:
-                # Update existing team
-                team.team_name = team_data.get('team_name', team.team_name)
-                team.location = team_data.get('location', team.location)
-                teams_updated += 1
-            else:
-                # Add new team
-                team = Team(**team_data)
-                db.session.add(team)
-                db.session.flush()  # Flush to get the team ID
-                teams_added += 1
-            
-            # Associate this team with the current event if not already associated
-            try:
-                # Check if association already exists to avoid unique constraint violation
-                if event not in team.events:
-                    team.events.append(event)
-                    db.session.flush()  # Flush after each team-event association
-            except Exception as e:
-                # Log the error but continue processing other teams
-                print(f"Error associating team {team.team_number} with event: {str(e)}")
-                continue
+        # Import DisableReplication to prevent queue issues during bulk operations
+        from app.utils.real_time_replication import DisableReplication
         
-        # Commit all changes
-        db.session.commit()
+        # Temporarily disable replication during bulk sync to prevent queue issues
+        with DisableReplication():
+            # Process each team from the API
+            for team_data in team_data_list:
+                
+                if not team_data or not team_data.get('team_number'):
+                    continue
+                    
+                team_number = team_data.get('team_number')
+                
+                # Check if the team already exists for this scouting team
+                team = filter_teams_by_scouting_team().filter(Team.team_number == team_number).first()
+                
+                if team:
+                    # Update existing team
+                    team.team_name = team_data.get('team_name', team.team_name)
+                    team.location = team_data.get('location', team.location)
+                    teams_updated += 1
+                else:
+                    # Add new team
+                    team = Team(**team_data)
+                    assign_scouting_team_to_model(team)  # Assign current scouting team
+                    db.session.add(team)
+                    db.session.flush()  # Flush to get the team ID
+                    teams_added += 1
+                
+                # Associate this team with the current event if not already associated
+                try:
+                    # Check if association already exists to avoid unique constraint violation
+                    if event not in team.events:
+                        team.events.append(event)
+                        db.session.flush()  # Flush after each team-event association
+                except Exception as e:
+                    # Log the error but continue processing other teams
+                    print(f"Error associating team {team.team_number} with event: {str(e)}")
+                    continue
+            
+            # Commit all changes
+            db.session.commit()
+        
+        # After bulk sync, queue a single replication event for the team sync
+        if teams_added > 0 or teams_updated > 0:
+            from app.utils.real_time_replication import real_time_replicator
+            real_time_replicator.replicate_operation(
+                'update', 
+                'teams', 
+                {
+                    'event_code': event_code,
+                    'teams_added': teams_added,
+                    'teams_updated': teams_updated,
+                    'total_teams': len(team_data_list),
+                    'sync_type': 'bulk_sync',
+                    'sync_timestamp': datetime.utcnow().isoformat()
+                }, 
+                f"sync_summary_teams_{event_code}"
+            )
         
         # Show success message
         flash(f"Teams sync complete! Added {teams_added} new teams and updated {teams_updated} existing teams.", 'success')
@@ -177,16 +214,16 @@ def sync_from_config():
 @bp.route('/add', methods=['GET', 'POST'])
 def add():
     """Add a new team"""
-    # Get all events for the form
-    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+    # Get all events for the form (filtered by current scouting team)
+    events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
     
     # Get default event from config or URL parameter
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    game_config = get_current_game_config()
     current_event_code = game_config.get('current_event_code')
     default_event_id = None
     
     if current_event_code:
-        event = Event.query.filter_by(code=current_event_code).first()
+        event = get_event_by_code(current_event_code)
         if event:
             default_event_id = event.id
     
@@ -208,23 +245,24 @@ def add():
             flash('Team number is required', 'danger')
             return render_template('teams/add.html', events=events, default_event_id=default_event_id, **get_theme_context())
         
-        # Check if team already exists
-        existing_team = Team.query.filter_by(team_number=team_number).first()
+        # Check if team already exists for this scouting team
+        existing_team = filter_teams_by_scouting_team().filter(Team.team_number == team_number).first()
         if existing_team:
             flash(f'Team {team_number} already exists', 'danger')
             return render_template('teams/add.html', events=events, default_event_id=default_event_id, **get_theme_context())
         
         # Create new team
         team = Team(team_number=team_number, team_name=team_name, location=location)
+        assign_scouting_team_to_model(team)  # Assign current scouting team
         
         try:
             db.session.add(team)
             db.session.flush()  # Flush to get the team ID
             
-            # Associate team with selected events
+            # Associate team with selected events (filtered by scouting team)
             if event_ids:
                 for event_id in event_ids:
-                    event = Event.query.get(event_id)
+                    event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
                     if event:
                         team.events.append(event)
                 
@@ -315,10 +353,10 @@ def view(team_number):
     team = Team.query.filter_by(team_number=team_number).first_or_404()
     
     # Get scouting data for this team
-    scouting_data = ScoutingData.query.filter_by(team_id=team.id).order_by(ScoutingData.match_id).all()
+    scouting_data = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=current_user.scouting_team_number).order_by(ScoutingData.match_id).all()
     
     # Get game configuration for metrics calculation
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    game_config = get_current_game_config()
     
     # Calculate key metrics for this team if we have scouting data
     metrics = {}
@@ -392,6 +430,38 @@ def view(team_number):
                 if metric_values:
                     metrics[metric_id] = sum(metric_values) / len(metric_values)
     
+    # Get events this team is competing at from the API
+    team_events = []
+    try:
+        # Use current year (2025 based on context)
+        current_year = datetime.now().year
+        team_key = f"frc{team_number}"
+        api_events = get_tba_team_events(team_key, current_year)
+        
+        if api_events:
+            for event_data in api_events:
+                # Convert TBA event data to a format we can use
+                event_info = {
+                    'key': event_data.get('key'),
+                    'name': event_data.get('name'),
+                    'event_code': event_data.get('event_code'),
+                    'start_date': event_data.get('start_date'),
+                    'end_date': event_data.get('end_date'),
+                    'location_name': event_data.get('location_name'),
+                    'city': event_data.get('city'),
+                    'state_prov': event_data.get('state_prov'),
+                    'country': event_data.get('country'),
+                    'event_type': event_data.get('event_type'),
+                    'event_type_string': event_data.get('event_type_string')
+                }
+                team_events.append(event_info)
+    except TBAApiError as e:
+        print(f"Error fetching events for team {team_number}: {e}")
+        team_events = []
+    except Exception as e:
+        print(f"Unexpected error fetching events for team {team_number}: {e}")
+        team_events = []
+    
     return render_template(
         'teams/view.html', 
         team=team, 
@@ -402,6 +472,7 @@ def view(team_number):
         metric_info=metric_info,
         total_metric_id=total_metric_id,
         total_metric_name=total_metric_name,
+        team_events=team_events,
         **get_theme_context()
     )
 
@@ -409,7 +480,7 @@ def view(team_number):
 @analytics_required
 def ranks():
     """Display team rankings for the selected event based on average total points"""
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    game_config = get_current_game_config()
     current_event_code = game_config.get('current_event_code')
     event_id = request.args.get('event_id', type=int)
     events = Event.query.order_by(Event.year.desc(), Event.name).all()
@@ -417,7 +488,7 @@ def ranks():
     if event_id:
         event = Event.query.get_or_404(event_id)
     elif current_event_code:
-        event = Event.query.filter_by(code=current_event_code).first()
+        event = get_event_by_code(current_event_code)
     teams = event.teams if event else []
     # Determine the total metric id from config
     total_metric_id = None
@@ -431,7 +502,7 @@ def ranks():
     # Calculate average total points for each team
     team_rankings = []
     for team in teams:
-        scouting_data = ScoutingData.query.filter_by(team_id=team.id).all()
+        scouting_data = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=current_user.scouting_team_number).all()
         if scouting_data:
             total_points = [data.calculate_metric(total_metric_id) for data in scouting_data]
             avg_points = sum(total_points) / len(total_points) if total_points else 0
@@ -451,3 +522,139 @@ def ranks():
         total_metric_id=total_metric_id,
         **get_theme_context()
     )
+
+
+@bp.route('/ranks/share', methods=['POST'])
+@analytics_required
+def create_ranks_share():
+    """Create a shareable link for team rankings"""
+    try:
+        from app.models import SharedTeamRanks
+        
+        # Get form data
+        title = request.form.get('share_title', '').strip()
+        description = request.form.get('share_description', '').strip()
+        expires_in_days = request.form.get('expires_in_days', type=int)
+        event_id = request.form.get('event_id', type=int) or None
+        metric = request.form.get('metric', 'tot')
+        
+        # Validation
+        if not title:
+            flash('Please provide a title for your shared team rankings.', 'error')
+            return redirect(url_for('teams.ranks'))
+        
+        # Create the shared ranking
+        shared_ranks = SharedTeamRanks.create_share(
+            title=title,
+            event_id=event_id,
+            metric=metric,
+            created_by_team=current_user.scouting_team_number,
+            created_by_user=current_user.username,
+            description=description,
+            expires_in_days=expires_in_days
+        )
+        
+        # Generate the share URL
+        share_url = url_for('teams.view_shared_ranks', share_id=shared_ranks.share_id, _external=True)
+        
+        flash(f'Team rankings shared successfully! Share URL: {share_url}', 'success')
+        return redirect(url_for('teams.ranks'))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error creating shared team rankings: {str(e)}")
+        flash('An error occurred while creating the shared rankings. Please try again.', 'error')
+        return redirect(url_for('teams.ranks'))
+
+
+@bp.route('/ranks/shared/<share_id>')
+def view_shared_ranks(share_id):
+    """View shared team rankings (no authentication required)"""
+    from app.models import SharedTeamRanks
+    
+    # Get the shared ranking configuration
+    shared_ranks = SharedTeamRanks.get_by_share_id(share_id)
+    
+    if not shared_ranks:
+        abort(404, description="Shared team rankings not found or have been removed.")
+    
+    if shared_ranks.is_expired():
+        abort(410, description="This shared team rankings has expired.")
+    
+    # Increment view count
+    shared_ranks.increment_view_count()
+    
+    # Get game configuration (use a default/public configuration)
+    game_config = get_effective_game_config()
+    
+    # Get event and teams for the shared configuration
+    event = shared_ranks.event
+    teams = event.teams if event else []
+    
+    if not teams:
+        teams = Team.query.all()  # Fallback to all teams if no event specified
+    
+    # Calculate team rankings using the same logic as the main route
+    # but without user-specific filtering
+    total_metric_id = shared_ranks.metric
+    
+    team_rankings = []
+    for team in teams:
+        # Get all scouting data for this team (without team isolation for shared view)
+        scouting_data = ScoutingData.query.filter_by(team_id=team.id).all()
+        
+        if scouting_data:
+            total_points = [data.calculate_metric(total_metric_id) for data in scouting_data]
+            avg_points = sum(total_points) / len(total_points) if total_points else 0
+        else:
+            avg_points = 0
+        
+        team_rankings.append({
+            'team': team,
+            'avg_points': avg_points,
+            'num_entries': len(scouting_data)
+        })
+    
+    # Sort by average points descending
+    team_rankings.sort(key=lambda x: x['avg_points'], reverse=True)
+    
+    return render_template('teams/shared_ranks.html',
+                         shared_ranks=shared_ranks,
+                         team_rankings=team_rankings,
+                         event=event,
+                         total_metric_id=total_metric_id,
+                         game_config=game_config,
+                         **get_theme_context())
+
+
+@bp.route('/ranks/my-shares')
+@analytics_required
+def my_ranks_shares():
+    """View user's created shared team rankings"""
+    from app.models import SharedTeamRanks
+    
+    shares = SharedTeamRanks.get_user_shares(current_user.scouting_team_number, current_user.username)
+    
+    return render_template('teams/my_ranks_shares.html',
+                         shares=shares,
+                         **get_theme_context())
+
+
+@bp.route('/ranks/share/<int:share_id>/delete', methods=['POST'])
+@analytics_required
+def delete_ranks_share(share_id):
+    """Delete a shared team ranking"""
+    from app.models import SharedTeamRanks
+    
+    shared_ranks = SharedTeamRanks.query.get_or_404(share_id)
+    
+    # Check if user owns this share
+    if (shared_ranks.created_by_team != current_user.scouting_team_number or 
+        shared_ranks.created_by_user != current_user.username):
+        abort(403, description="You don't have permission to delete this shared ranking.")
+    
+    # Soft delete by setting is_active to False
+    shared_ranks.is_active = False
+    db.session.commit()
+    
+    flash('Shared team ranking deleted successfully.', 'success')
+    return redirect(url_for('teams.my_ranks_shares'))

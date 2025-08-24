@@ -99,19 +99,32 @@
             // Show QR code in modal when generated
             const generateQRButton = document.getElementById('generateQR');
             if (generateQRButton) {
-                const qrModal = new bootstrap.Modal(document.getElementById('qrModal'));
-                
-                // Remove any existing event listener first
-                generateQRButton.removeEventListener('click', showQRModal);
-                
-                // Add new event listener
-                generateQRButton.addEventListener('click', showQRModal);
-                
-                function showQRModal() {
-                    // Show modal first, then generate QR code
-                    qrModal.show();
-                    generateQRCode(); // This function is defined in scripts.js
+                const qrModalElement = document.getElementById('qrModal');
+                if (qrModalElement) {
+                    const qrModal = new bootstrap.Modal(qrModalElement);
+                    
+                    // Remove any existing event listener first
+                    generateQRButton.removeEventListener('click', showQRModal);
+                    
+                    // Add new event listener
+                    generateQRButton.addEventListener('click', showQRModal);
+                    
+                    function showQRModal() {
+                        try {
+                            // Show modal first, then generate QR code
+                            qrModal.show();
+                            if (typeof generateQRCode === 'function') {
+                                generateQRCode(); // This function is defined in scripts.js
+                            }
+                        } catch (error) {
+                            console.error('Error showing QR modal:', error);
+                        }
+                    }
+                } else {
+                    console.warn('QR Modal element not found');
                 }
+            } else {
+                console.warn('Generate QR Button not found');
             }
             
             // Initialize counters (needed for points calculation)
@@ -399,11 +412,36 @@
                         'X-Requested-With': 'XMLHttpRequest'
                     }
                 })
-                .then(response => response.json())
+                .then(response => {
+                    // Check if response is OK
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    // Check if response is JSON
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        throw new Error('Server returned non-JSON response');
+                    }
+                    
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         // Update form content
                         formContent.innerHTML = data.html;
+                        
+                        // Show warning if there was data corruption
+                        if (data.warning) {
+                            const warningAlert = document.createElement('div');
+                            warningAlert.className = 'alert alert-warning alert-dismissible fade show mb-3';
+                            warningAlert.innerHTML = `
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                ${data.warning}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            `;
+                            formContent.insertBefore(warningAlert, formContent.firstChild);
+                        }
                         
                         // Update subheading
                         document.getElementById('form-subheading').textContent = 
@@ -423,11 +461,25 @@
                     }
                 })
                 .catch(error => {
-                    console.error('Error:', error);
+                    console.error('Error loading form:', error);
+                    
+                    let errorMessage = 'Error loading form. Please try again.';
+                    
+                    if (error.message.includes('HTTP 500')) {
+                        errorMessage = 'Server error occurred. Please check the server logs or try again later.';
+                    } else if (error.message.includes('non-JSON response')) {
+                        errorMessage = 'Server returned an unexpected response. There may be a server error.';
+                    } else if (error.message.includes('Network')) {
+                        errorMessage = 'Network error. Please check your connection and try again.';
+                    }
+                    
                     formContent.innerHTML = `
                         <div class="alert alert-danger">
                             <i class="fas fa-exclamation-circle me-2"></i>
-                            Error loading form. Please try again or check your connection.
+                            ${errorMessage}
+                            <div class="mt-2 small text-muted">
+                                Technical details: ${error.message}
+                            </div>
                         </div>
                     `;
                 });
@@ -474,6 +526,131 @@
         
         // Initialize existing form components if present on page load
         initializeFormComponents();
+        
+        // ======== REAL-TIME CONFIG UPDATE LISTENERS ========
+        
+        // Listen for game config updates
+        window.addEventListener('gameConfigUpdated', function(event) {
+            const newGameConfig = event.detail;
+            console.log('Game config updated in scouting form:', newGameConfig);
+            
+            // Show notification to user
+            showConfigUpdateNotification('Game configuration has been updated due to alliance mode change.');
+            
+            // Optionally reload form elements or show a reload prompt
+            if (confirm('The game configuration has been updated. Would you like to reload the form to use the new configuration?')) {
+                window.location.reload();
+            }
+        });
+        
+        // ======== GLOBAL CONFIG RELOAD HANDLER ========
+        // Listen for global config changes that require form reload
+        window.addEventListener('globalConfigReload', function(event) {
+            const configData = event.detail;
+            console.log('Global config reload in scouting form:', configData);
+            
+            // Show notification
+            showConfigUpdateNotification(`Configuration updated: ${configData.message}`);
+            
+            // Automatically reload the form content without full page reload
+            reloadFormWithNewConfig();
+        });
+        
+        // Function to reload form content with new configuration
+        window.reloadFormWithNewConfig = function() {
+            console.log('Reloading scouting form with new configuration...');
+            
+            // Get current form state
+            const currentTeamId = document.getElementById('team-selector')?.value;
+            const currentMatchId = document.getElementById('match-selector')?.value;
+            
+            if (!currentTeamId || !currentMatchId) {
+                console.log('No team/match selected, skipping form reload');
+                return;
+            }
+            
+            // Reload the form content via AJAX
+            fetch(window.location.pathname, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: new URLSearchParams({
+                    'team_id': currentTeamId,
+                    'match_id': currentMatchId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Replace the current form content
+                    const currentFormContent = document.getElementById('form-content');
+                    if (currentFormContent && data.html) {
+                        currentFormContent.innerHTML = data.html;
+                        
+                        // Show warning if there was data corruption
+                        if (data.warning) {
+                            const warningAlert = document.createElement('div');
+                            warningAlert.className = 'alert alert-warning alert-dismissible fade show mb-3';
+                            warningAlert.innerHTML = `
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                ${data.warning}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            `;
+                            currentFormContent.insertBefore(warningAlert, currentFormContent.firstChild);
+                        }
+                        
+                        // Reinitialize form components
+                        initializeFormComponents();
+                        
+                        console.log('Form reloaded successfully with new configuration');
+                        showConfigUpdateNotification('Form updated with new configuration');
+                    }
+                } else {
+                    console.error('Error reloading form:', data.message);
+                    showConfigUpdateNotification('Error reloading form: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error reloading form:', error);
+                showConfigUpdateNotification('Error reloading form. Please refresh the page.', 'error');
+            });
+        };
+        
+        // Listen for alliance status changes
+        window.addEventListener('allianceStatusUpdated', function(event) {
+            const allianceStatus = event.detail;
+            console.log('Alliance status updated in scouting form:', allianceStatus);
+            
+            if (allianceStatus.is_active) {
+                showConfigUpdateNotification(`Alliance mode activated. Now using shared configuration from ${allianceStatus.alliance_info?.alliance_name || 'alliance'}.`);
+            } else {
+                showConfigUpdateNotification('Alliance mode deactivated. Now using individual team configuration.');
+            }
+        });
+        
+        // Function to show config update notifications
+        function showConfigUpdateNotification(message) {
+            // Create a notification banner
+            const notification = document.createElement('div');
+            notification.className = 'alert alert-info alert-dismissible fade show position-fixed';
+            notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
+            notification.innerHTML = `
+                <i class="fas fa-sync-alt me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 10000);
+        }
     });
 </script>
 {% endblock %}

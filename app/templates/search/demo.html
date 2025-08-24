@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Search - ObsidianScout</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/search-enhancements.css') }}">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem 0;
+        }
+        
+        .demo-container {
+            background: white;
+            border-radius: 20px;
+            padding: 3rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+            margin: 2rem auto;
+            max-width: 800px;
+        }
+        
+        .demo-title {
+            text-align: center;
+            margin-bottom: 3rem;
+            color: #333;
+        }
+        
+        .demo-title h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        
+        .demo-title p {
+            font-size: 1.1rem;
+            color: #666;
+        }
+        
+        .feature-list {
+            margin-top: 3rem;
+        }
+        
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .feature-icon {
+            color: #667eea;
+            margin-right: 1rem;
+            font-size: 1.2rem;
+        }
+        
+        .search-demo {
+            margin: 2rem 0;
+            padding: 2rem;
+            background: #f8f9fa;
+            border-radius: 15px;
+            border: 2px dashed #dee2e6;
+        }
+        
+        .search-demo h4 {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="demo-container">
+            <div class="demo-title">
+                <h1><i class="fas fa-search me-3"></i>Enhanced Search</h1>
+                <p>Experience the improved search functionality with modern design and better UX</p>
+            </div>
+            
+            <!-- Demo Search Box -->
+            <div class="search-demo">
+                <h4><i class="fas fa-star me-2"></i>Try the Enhanced Search</h4>
+                <div class="search-box">
+                    <form>
+                        <div class="enhanced-search-main-container">
+                            <div class="search-input-wrapper-main">
+                                <i class="fas fa-search search-icon-main"></i>
+                                <input type="text" 
+                                       class="form-control enhanced-search-input-main" 
+                                       placeholder="Type 'team' or '5454' to see suggestions..."
+                                       id="demoSearchInput"
+                                       autocomplete="off">
+                                <button type="button" class="search-clear-btn-main" id="demoClearBtn" style="display: none;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                <button class="search-submit-btn-main" type="button">
+                                    <i class="fas fa-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                    <div class="enhanced-search-suggestions-main" id="demoSuggestions" style="display: none;"></div>
+                </div>
+            </div>
+            
+            <!-- Feature List -->
+            <div class="feature-list">
+                <h3 class="mb-4 text-center">✨ New Features</h3>
+                
+                <div class="feature-item">
+                    <i class="fas fa-paint-brush feature-icon"></i>
+                    <div>
+                        <strong>Modern Design</strong><br>
+                        <small class="text-muted">Sleek, rounded search bar with hover effects and smooth animations</small>
+                    </div>
+                </div>
+                
+                <div class="feature-item">
+                    <i class="fas fa-list feature-icon"></i>
+                    <div>
+                        <strong>Categorized Suggestions</strong><br>
+                        <small class="text-muted">Search results organized by Teams, Users, and Events with icons</small>
+                    </div>
+                </div>
+                
+                <div class="feature-item">
+                    <i class="fas fa-keyboard feature-icon"></i>
+                    <div>
+                        <strong>Enhanced Keyboard Navigation</strong><br>
+                        <small class="text-muted">Arrow keys, Enter, Escape, and Tab support for accessibility</small>
+                    </div>
+                </div>
+                
+                <div class="feature-item">
+                    <i class="fas fa-times-circle feature-icon"></i>
+                    <div>
+                        <strong>Clear Button</strong><br>
+                        <small class="text-muted">One-click clear functionality with visual feedback</small>
+                    </div>
+                </div>
+                
+                <div class="feature-item">
+                    <i class="fas fa-mobile-alt feature-icon"></i>
+                    <div>
+                        <strong>Responsive Design</strong><br>
+                        <small class="text-muted">Optimized for all screen sizes from mobile to desktop</small>
+                    </div>
+                </div>
+                
+                <div class="feature-item">
+                    <i class="fas fa-moon feature-icon"></i>
+                    <div>
+                        <strong>Dark Mode Support</strong><br>
+                        <small class="text-muted">Automatic adaptation to light and dark themes</small>
+                    </div>
+                </div>
+                
+                <div class="feature-item">
+                    <i class="fas fa-bolt feature-icon"></i>
+                    <div>
+                        <strong>Performance Optimized</strong><br>
+                        <small class="text-muted">Debounced search, caching, and smooth loading states</small>
+                    </div>
+                </div>
+                
+                <div class="feature-item">
+                    <i class="fas fa-universal-access feature-icon"></i>
+                    <div>
+                        <strong>Accessibility Focused</strong><br>
+                        <small class="text-muted">ARIA labels, screen reader support, and high contrast compatibility</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-center mt-4">
+                <a href="/" class="btn btn-primary btn-lg">
+                    <i class="fas fa-arrow-left me-2"></i>
+                    Back to ObsidianScout
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Demo functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('demoSearchInput');
+            const clearBtn = document.getElementById('demoClearBtn');
+            const suggestions = document.getElementById('demoSuggestions');
+            let selectedIndex = -1;
+            
+            // Demo suggestions data
+            const demoSuggestions = {
+                'team': [
+                    { text: 'Team 5454 - Islanders', type: 'team' },
+                    { text: 'Team 1234 - Example Team', type: 'team' },
+                    { text: 'Team 9999 - Demo Robotics', type: 'team' }
+                ],
+                'user': [
+                    { text: 'admin', type: 'user' },
+                    { text: 'scout1', type: 'user' },
+                    { text: 'captain', type: 'user' }
+                ],
+                '5454': [
+                    { text: 'Team 5454 - Islanders', type: 'team' }
+                ]
+            };
+            
+            // Clear button functionality
+            clearBtn.addEventListener('click', function() {
+                searchInput.value = '';
+                searchInput.focus();
+                hideSuggestions();
+                this.style.display = 'none';
+            });
+            
+            // Input handling
+            searchInput.addEventListener('input', function() {
+                const query = this.value.trim().toLowerCase();
+                
+                // Show/hide clear button
+                clearBtn.style.display = query ? 'flex' : 'none';
+                
+                if (query.length < 2) {
+                    hideSuggestions();
+                    return;
+                }
+                
+                // Show demo suggestions
+                showDemoSuggestions(query);
+            });
+            
+            // Keyboard navigation
+            searchInput.addEventListener('keydown', function(e) {
+                const items = suggestions.querySelectorAll('.suggestion-item');
+                
+                switch (e.key) {
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+                        updateSelection(items);
+                        break;
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        selectedIndex = Math.max(selectedIndex - 1, -1);
+                        updateSelection(items);
+                        break;
+                    case 'Enter':
+                        e.preventDefault();
+                        if (selectedIndex >= 0 && items[selectedIndex]) {
+                            selectSuggestion(items[selectedIndex]);
+                        }
+                        break;
+                    case 'Escape':
+                        hideSuggestions();
+                        break;
+                }
+            });
+            
+            function showDemoSuggestions(query) {
+                let matchingSuggestions = [];
+                
+                // Find matching suggestions
+                for (const [key, suggestions] of Object.entries(demoSuggestions)) {
+                    if (key.includes(query) || key === query) {
+                        matchingSuggestions = matchingSuggestions.concat(suggestions);
+                    }
+                }
+                
+                if (matchingSuggestions.length === 0) {
+                    showNoResults();
+                    return;
+                }
+                
+                // Group by type
+                const grouped = matchingSuggestions.reduce((acc, suggestion) => {
+                    if (!acc[suggestion.type]) acc[suggestion.type] = [];
+                    acc[suggestion.type].push(suggestion);
+                    return acc;
+                }, {});
+                
+                let html = '';
+                const categoryLabels = { 'team': 'Teams', 'user': 'Users' };
+                
+                Object.keys(grouped).forEach(type => {
+                    html += `<div class="suggestion-category">${categoryLabels[type]}</div>`;
+                    grouped[type].forEach((suggestion, index) => {
+                        const iconClass = type === 'team' ? 'fas fa-users' : 'fas fa-user';
+                        html += `
+                            <div class="suggestion-item" onclick="selectDemoSuggestion('${suggestion.text}')">
+                                <div class="suggestion-icon">
+                                    <i class="${iconClass}"></i>
+                                </div>
+                                <div class="suggestion-content">
+                                    <div class="suggestion-title">${suggestion.text}</div>
+                                    <div class="suggestion-type">${suggestion.type}</div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                });
+                
+                suggestions.innerHTML = html;
+                suggestions.classList.add('show');
+                selectedIndex = -1;
+            }
+            
+            function showNoResults() {
+                suggestions.innerHTML = `
+                    <div class="no-suggestions">
+                        <i class="fas fa-search-minus mb-2"></i><br>
+                        Try typing "team", "user", or "5454"
+                    </div>
+                `;
+                suggestions.classList.add('show');
+            }
+            
+            function hideSuggestions() {
+                suggestions.classList.remove('show');
+                selectedIndex = -1;
+            }
+            
+            function updateSelection(items) {
+                items.forEach((item, index) => {
+                    item.classList.toggle('active', index === selectedIndex);
+                });
+            }
+            
+            function selectSuggestion(element) {
+                const text = element.querySelector('.suggestion-title').textContent;
+                searchInput.value = text;
+                hideSuggestions();
+                alert(`Selected: ${text}`);
+            }
+            
+            // Global function for onclick
+            window.selectDemoSuggestion = function(text) {
+                searchInput.value = text;
+                hideSuggestions();
+                alert(`Selected: ${text}`);
+            };
+            
+            // Hide suggestions when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.search-box')) {
+                    hideSuggestions();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

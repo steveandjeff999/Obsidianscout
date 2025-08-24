@@ -7,6 +7,7 @@ import json
 import traceback
 from flask import current_app
 from app import db
+from app.utils.config_manager import get_current_game_config
 from app.models import User, Role, Team, Event, Match, ScoutingData
 
 class SystemCheck:
@@ -671,7 +672,7 @@ class SystemCheck:
                 return
             
             # Check that critical sections can be accessed without errors
-            game_config = current_app.config['GAME_CONFIG']
+            game_config = get_current_game_config()
             
             # Test accessing game periods - continue even if some periods aren't found
             test_periods = []

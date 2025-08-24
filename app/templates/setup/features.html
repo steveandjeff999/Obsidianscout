@@ -1,0 +1,320 @@
+{% extends 'base.html' %}
+
+{% block title %}Features Overview{% endblock %}
+
+{% block heading %}ObsidianScout Features{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12 text-center mb-4">
+            <h2><i class="fas fa-star me-2"></i>Comprehensive FRC Scouting Platform</h2>
+            <p class="lead text-muted">Discover all the powerful features available in ObsidianScout</p>
+        </div>
+    </div>
+
+    <!-- Core Features -->
+    <div class="row mb-5">
+        <div class="col-md-12">
+            <h4 class="mb-3"><i class="fas fa-rocket me-2"></i>Core Scouting Features</h4>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-success">
+                <div class="card-body text-center">
+                    <i class="fas fa-clipboard-list fa-3x text-success mb-3"></i>
+                    <h5>Match Scouting</h5>
+                    <p class="text-muted">Comprehensive match data collection with customizable forms for autonomous, teleop, and endgame phases.</p>
+                    <ul class="list-unstyled text-start">
+                        <li>✓ Real-time data entry</li>
+                        <li>✓ Mobile-optimized interface</li>
+                        <li>✓ Offline capability</li>
+                        <li>✓ QR code scanning</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-info">
+                <div class="card-body text-center">
+                    <i class="fas fa-tools fa-3x text-info mb-3"></i>
+                    <h5>Pit Scouting</h5>
+                    <p class="text-muted">Detailed robot and team information collection with structured interview forms.</p>
+                    <ul class="list-unstyled text-start">
+                        <li>✓ Robot specifications</li>
+                        <li>✓ Team capabilities</li>
+                        <li>✓ Photo uploads</li>
+                        <li>✓ Strategy notes</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-warning">
+                <div class="card-body text-center">
+                    <i class="fas fa-chart-line fa-3x text-warning mb-3"></i>
+                    <h5>Data Analytics</h5>
+                    <p class="text-muted">Powerful analysis tools to understand team performance and make strategic decisions.</p>
+                    <ul class="list-unstyled text-start">
+                        <li>✓ Performance graphs</li>
+                        <li>✓ Team rankings</li>
+                        <li>✓ Trend analysis</li>
+                        <li>✓ Custom metrics</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Features -->
+    <div class="row mb-5">
+        <div class="col-md-12">
+            <h4 class="mb-3"><i class="fas fa-cogs me-2"></i>Advanced Capabilities</h4>
+        </div>
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5><i class="fas fa-share-alt text-primary me-2"></i>Data Sharing</h5>
+                    <p class="text-muted">Share insights with your team and collaborate effectively.</p>
+                    <ul class="small">
+                        <li><strong>Public Links:</strong> Share graphs and rankings with anyone</li>
+                        <li><strong>Team Collaboration:</strong> Multiple users can work simultaneously</li>
+                        <li><strong>Real-time Sync:</strong> Data updates across all devices</li>
+                        <li><strong>Export Options:</strong> Excel, CSV, and PDF exports</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5><i class="fas fa-wifi text-success me-2"></i>API Integration</h5>
+                    <p class="text-muted">Automatic event data synchronization with dual API support.</p>
+                    <ul class="small">
+                        <li><strong>FIRST API:</strong> Official FRC event data</li>
+                        <li><strong>Blue Alliance API:</strong> Community-driven data source</li>
+                        <li><strong>Auto Fallback:</strong> Seamless switching between APIs</li>
+                        <li><strong>Real-time Updates:</strong> Match schedules and results</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5><i class="fas fa-palette text-info me-2"></i>Customization</h5>
+                    <p class="text-muted">Tailor the platform to your team's specific needs.</p>
+                    <ul class="small">
+                        <li><strong>Game Configuration:</strong> Customize scoring elements for each season</li>
+                        <li><strong>Themes:</strong> Multiple visual themes and branding options</li>
+                        <li><strong>User Roles:</strong> Flexible permission system</li>
+                        <li><strong>Dynamic Forms:</strong> Adapt scouting forms as the game evolves</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5><i class="fas fa-shield-alt text-danger me-2"></i>Security & Reliability</h5>
+                    <p class="text-muted">Enterprise-grade security and data protection.</p>
+                    <ul class="small">
+                        <li><strong>Team Isolation:</strong> Data is segregated by team</li>
+                        <li><strong>Secure Authentication:</strong> Role-based access control</li>
+                        <li><strong>Data Integrity:</strong> File checksums and validation</li>
+                        <li><strong>Activity Logging:</strong> Comprehensive audit trails</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Roles -->
+    <div class="row mb-5">
+        <div class="col-md-12">
+            <h4 class="mb-3"><i class="fas fa-users me-2"></i>User Roles & Permissions</h4>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card border-danger h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-crown fa-2x text-danger mb-2"></i>
+                    <h6>Administrator</h6>
+                    <ul class="list-unstyled small text-start">
+                        <li>✓ Full system access</li>
+                        <li>✓ User management</li>
+                        <li>✓ Configuration</li>
+                        <li>✓ Data export</li>
+                        <li>✓ System settings</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card border-info h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-chart-line fa-2x text-info mb-2"></i>
+                    <h6>Analytics User</h6>
+                    <ul class="list-unstyled small text-start">
+                        <li>✓ View all data</li>
+                        <li>✓ Create graphs</li>
+                        <li>✓ Team rankings</li>
+                        <li>✓ Data sharing</li>
+                        <li>✗ User management</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card border-success h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-clipboard-list fa-2x text-success mb-2"></i>
+                    <h6>Scout</h6>
+                    <ul class="list-unstyled small text-start">
+                        <li>✓ Match scouting</li>
+                        <li>✓ Pit scouting</li>
+                        <li>✓ QR scanning</li>
+                        <li>✗ Analytics</li>
+                        <li>✗ Configuration</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card border-dark h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-user-shield fa-2x text-dark mb-2"></i>
+                    <h6>Super Admin</h6>
+                    <ul class="list-unstyled small text-start">
+                        <li>✓ Cross-team access</li>
+                        <li>✓ System-wide management</li>
+                        <li>✓ User administration</li>
+                        <li>✗ Team data access</li>
+                        <li>✗ Scouting features</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Technical Features -->
+    <div class="row mb-5">
+        <div class="col-md-12">
+            <h4 class="mb-3"><i class="fas fa-microchip me-2"></i>Technical Highlights</h4>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6><i class="fas fa-mobile-alt text-primary me-2"></i>Cross-Platform Compatibility</h6>
+                    <ul class="list-unstyled small">
+                        <li>• Responsive web design works on all devices</li>
+                        <li>• Optimized for tablets and smartphones</li>
+                        <li>• No app installation required</li>
+                        <li>• Works offline with sync when connected</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6><i class="fas fa-database text-success me-2"></i>Data Management</h6>
+                    <ul class="list-unstyled small">
+                        <li>• SQLite database for reliability</li>
+                        <li>• Automatic backups and migrations</li>
+                        <li>• Data validation and integrity checks</li>
+                        <li>• Real-time synchronization</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6><i class="fas fa-bolt text-warning me-2"></i>Performance</h6>
+                    <ul class="list-unstyled small">
+                        <li>• Fast loading times and smooth interactions</li>
+                        <li>• Efficient data queries and caching</li>
+                        <li>• Background processing for heavy operations</li>
+                        <li>• Scalable architecture</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6><i class="fas fa-code text-info me-2"></i>Extensibility</h6>
+                    <ul class="list-unstyled small">
+                        <li>• Modular design for easy customization</li>
+                        <li>• Plugin architecture for new features</li>
+                        <li>• Open configuration formats</li>
+                        <li>• RESTful API for integrations</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Getting Started -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h4><i class="fas fa-rocket me-2"></i>Ready to Get Started?</h4>
+                    <p class="mb-4">Jump into ObsidianScout and start collecting valuable scouting data for your team.</p>
+                    <div class="row justify-content-center">
+                        <div class="col-auto me-2">
+                            <a href="{{ url_for('setup.tutorial') }}" class="btn btn-light btn-lg">
+                                <i class="fas fa-graduation-cap me-2"></i>Take Tutorial
+                            </a>
+                        </div>
+                        <div class="col-auto me-2">
+                            <a href="{{ url_for('main.index') }}" class="btn btn-success btn-lg">
+                                <i class="fas fa-home me-2"></i>Go to Dashboard
+                            </a>
+                        </div>
+                        <div class="col-auto">
+                            <a href="{{ url_for('main.help_page') }}" class="btn btn-info btn-lg">
+                                <i class="fas fa-question-circle me-2"></i>Help Center
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Add some interactive elements
+document.addEventListener('DOMContentLoaded', function() {
+    // Animate cards on scroll
+    const cards = document.querySelectorAll('.card');
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.animation = 'fadeInUp 0.5s ease-in-out';
+            }
+        });
+    });
+
+    cards.forEach(card => {
+        observer.observe(card);
+    });
+});
+</script>
+
+<style>
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+</style>
+{% endblock %}

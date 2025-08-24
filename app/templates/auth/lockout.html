@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Account Temporarily Locked{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow-lg border-0">
+                <div class="card-body p-5">
+                    <div class="text-center mb-4">
+                        <i class="fas fa-lock fa-3x text-danger mb-3"></i>
+                        <h2 class="card-title text-danger">Account Temporarily Locked</h2>
+                    </div>
+                    
+                    <div class="alert alert-danger" role="alert">
+                        <h5 class="alert-heading">
+                            <i class="fas fa-shield-alt me-2"></i>Security Protection Activated
+                        </h5>
+                        <p class="mb-3">
+                            Your account has been temporarily locked due to multiple failed login attempts. 
+                            This is a security measure to protect your account from unauthorized access.
+                        </p>
+                        
+                        {% if lockout_info %}
+                        <hr>
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <strong>Time Remaining:</strong><br>
+                                <span class="badge bg-danger fs-6" id="countdown">
+                                    {{ lockout_info.lockout_minutes_remaining }} minutes
+                                </span>
+                            </div>
+                            <div class="col-6">
+                                <strong>Failed Attempts:</strong><br>
+                                <span class="badge bg-warning fs-6">
+                                    {{ lockout_info.failed_attempts }} attempts
+                                </span>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <i class="fas fa-info-circle text-info me-2"></i>What happened?
+                            </h6>
+                            <ul class="mb-0 small">
+                                <li>Multiple incorrect login attempts were detected</li>
+                                <li>Your IP address has been temporarily blocked</li>
+                                <li>This affects all accounts from your location</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="card bg-light mt-3">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <i class="fas fa-lightbulb text-warning me-2"></i>What can you do?
+                            </h6>
+                            <ul class="mb-0 small">
+                                <li>Wait for the lockout period to expire</li>
+                                <li>Double-check your username, password, and team number</li>
+                                <li>Contact your team administrator if you need help</li>
+                                <li>Report suspicious activity to your system administrator</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 mt-4">
+                        <button class="btn btn-outline-primary" onclick="location.reload()">
+                            <i class="fas fa-sync-alt me-2"></i>Check Status
+                        </button>
+                        <a href="{{ url_for('auth.login') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Login
+                        </a>
+                    </div>
+                    
+                    <div class="text-center mt-4">
+                        <small class="text-muted">
+                            <i class="fas fa-clock me-1"></i>
+                            Automatic refresh in <span id="auto-refresh">60</span> seconds
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Countdown timer for lockout
+let countdownElement = document.getElementById('countdown');
+let autoRefreshElement = document.getElementById('auto-refresh');
+
+if (countdownElement) {
+    let lockoutMinutes = {{ lockout_info.lockout_minutes_remaining if lockout_info else 0 }};
+    let totalSeconds = lockoutMinutes * 60;
+    
+    function updateCountdown() {
+        if (totalSeconds <= 0) {
+            location.reload();
+            return;
+        }
+        
+        let minutes = Math.floor(totalSeconds / 60);
+        let seconds = totalSeconds % 60;
+        
+        countdownElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        totalSeconds--;
+    }
+    
+    // Update every second
+    setInterval(updateCountdown, 1000);
+}
+
+// Auto-refresh countdown
+let autoRefreshSeconds = 60;
+function updateAutoRefresh() {
+    if (autoRefreshSeconds <= 0) {
+        location.reload();
+        return;
+    }
+    
+    if (autoRefreshElement) {
+        autoRefreshElement.textContent = autoRefreshSeconds;
+    }
+    autoRefreshSeconds--;
+}
+
+// Update auto-refresh every second
+setInterval(updateAutoRefresh, 1000);
+</script>
+{% endblock %}

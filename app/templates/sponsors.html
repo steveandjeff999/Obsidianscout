@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Sponsors - ObsidianScout{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="text-center mb-5">
+                <h1 class="display-4">
+                    <i class="fas fa-handshake text-primary"></i> Our Sponsor
+                </h1>
+                <p class="lead text-muted">
+                    We gratefully acknowledge the generous support of our sponsor who makes this scouting platform possible.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Sponsor -->
+    <div class="row mb-5">
+        <div class="col-md-12">
+            <div class="row justify-content-center">
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 shadow-lg sponsor-card">
+                        <div class="card-body text-center">
+                            <div class="sponsor-logo mb-4">
+                                <i class="fas fa-cloud fa-5x text-primary"></i>
+                            </div>
+                            <h4 class="card-title mb-3">Your Hosting Provider</h4>
+                            <p class="card-text">Providing reliable hosting infrastructure and making this scouting platform accessible to FRC teams worldwide.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.sponsor-card {
+    transition: transform 0.2s ease-in-out;
+    border: 2px solid #e6f3ff;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e6f3ff 100%);
+}
+
+.sponsor-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 35px rgba(0,0,0,0.2) !important;
+}
+
+.sponsor-logo {
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.display-4 {
+    font-weight: 300;
+}
+
+.card-title {
+    color: #495057;
+    font-weight: 600;
+}
+
+.card-text {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    color: #6c757d;
+}
+</style>
+{% endblock %}

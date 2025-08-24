@@ -2,6 +2,8 @@ from app.models import ScoutingData, Team, Match
 import statistics
 from flask import current_app
 import random
+from app.utils.config_manager import get_current_game_config
+from app.utils.team_isolation import filter_scouting_data_by_scouting_team, get_current_scouting_team_number
 
 def calculate_team_metrics(team_id):
     """Calculate key performance metrics for a team based on their scouting data"""
@@ -9,8 +11,12 @@ def calculate_team_metrics(team_id):
     team = Team.query.get(team_id)
     team_number = team.team_number if team else team_id
     
-    # Get all scouting data for this team
-    scouting_data = ScoutingData.query.filter_by(team_id=team_id).all()
+    # Get all scouting data for this team (filtered by current scouting team)
+    scouting_team_number = get_current_scouting_team_number()
+    if scouting_team_number is not None:
+        scouting_data = filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team_id).all()
+    else:
+        scouting_data = ScoutingData.query.filter_by(team_id=team_id, scouting_team_number=None).all()
     
     if not scouting_data:
         print(f"    No scouting data found for team {team_number} (ID: {team_id})")
@@ -22,7 +28,7 @@ def calculate_team_metrics(team_id):
     metrics = {}
     
     # Get game configuration
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    game_config = get_current_game_config()
     
     # Find metric IDs from game config
     component_metric_ids = []
@@ -266,7 +272,7 @@ def predict_match_outcome(match_id):
     print(f"Final blue alliance teams for prediction: {[team_data['team'].team_number for team_data in blue_alliance_teams]}")
     
     # Get game configuration to find total_metric_id
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    game_config = get_current_game_config()
     total_metric_id = None
     
     # Identify metrics from game config
@@ -419,7 +425,7 @@ def generate_match_strategy_analysis(match_id):
             blue_teams.append(team)
     
     # Get game configuration
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    game_config = get_current_game_config()
     
     # Calculate detailed metrics for each team
     red_alliance_data = []

@@ -264,6 +264,107 @@ document.addEventListener('DOMContentLoaded', function() {
     if (successAlerts.length > 0) {
         localStorage.removeItem('pit_scouting_draft');
     }
+    
+    // Global config reload handler
+    if (typeof window.globalConfigReload === 'function') {
+        window.globalConfigReload = function() {
+            reloadPitFormWithNewConfig();
+        };
+    }
+});
+
+function reloadPitFormWithNewConfig() {
+    console.log('Reloading pit scouting form with new configuration...');
+    
+    // Show loading indicator
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'alert alert-info text-center';
+    loadingIndicator.innerHTML = '<i class="fas fa-sync fa-spin me-2"></i>Updating form with new configuration...';
+    
+    const form = document.getElementById('pit-scouting-form');
+    if (form) {
+        form.insertBefore(loadingIndicator, form.firstChild);
+    }
+    
+    // Fetch updated data via AJAX
+    fetch('/pit-scouting/data', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Failed to fetch updated configuration');
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Preserve current form data before reload
+            const currentFormData = new FormData(form);
+            const preservedData = {};
+            for (let [key, value] of currentFormData.entries()) {
+                preservedData[key] = value;
+            }
+            
+            // Reload the page with current form data preserved
+            const url = new URL(window.location);
+            sessionStorage.setItem('preserved_pit_form_data', JSON.stringify(preservedData));
+            window.location.reload();
+        } else {
+            throw new Error(data.error || 'Unknown error occurred');
+        }
+    })
+    .catch(error => {
+        console.error('Error reloading pit form:', error);
+        
+        // Remove loading indicator and show error
+        loadingIndicator.remove();
+        
+        const errorAlert = document.createElement('div');
+        errorAlert.className = 'alert alert-warning alert-dismissible fade show';
+        errorAlert.innerHTML = `
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            Failed to update form configuration. Please refresh the page manually.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        if (form) {
+            form.insertBefore(errorAlert, form.firstChild);
+        }
+    });
+}
+
+// Restore preserved form data on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const preservedData = sessionStorage.getItem('preserved_pit_form_data');
+    if (preservedData) {
+        try {
+            const data = JSON.parse(preservedData);
+            const form = document.getElementById('pit-scouting-form');
+            
+            // Restore form values
+            for (const [key, value] of Object.entries(data)) {
+                const input = form.querySelector(`[name="${key}"]`);
+                if (input) {
+                    if (input.type === 'checkbox' || input.type === 'radio') {
+                        input.checked = input.value === value;
+                    } else {
+                        input.value = value;
+                    }
+                }
+            }
+            
+            // Clear preserved data
+            sessionStorage.removeItem('preserved_pit_form_data');
+            
+            console.log('Restored form data after config update');
+        } catch (e) {
+            console.error('Error restoring form data:', e);
+            sessionStorage.removeItem('preserved_pit_form_data');
+        }
+    }
 });
 </script>
 

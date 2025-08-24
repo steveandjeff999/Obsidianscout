@@ -10,6 +10,11 @@ from app.utils.config_manager import get_id_to_perm_id_mapping
 from app.utils.sync_manager import SyncManager
 import os
 from app.utils.theme_manager import ThemeManager
+from app.utils.config_manager import get_current_pit_config, save_pit_config, get_effective_pit_config, is_alliance_mode_active
+from app.utils.team_isolation import (
+    filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
+    filter_events_by_scouting_team, get_event_by_code
+)
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -18,36 +23,92 @@ def get_theme_context():
         'current_theme_id': theme_manager.current_theme
     }
 
-bp = Blueprint('pit_scouting', __name__, url_prefix='/pit-scouting')
-
-def load_pit_config():
-    """Load pit scouting configuration from JSON file"""
+def auto_sync_alliance_pit_data(pit_data_entry):
+    """Automatically sync new pit scouting data to alliance members if alliance mode is active"""
     try:
-        config_path = os.path.join(os.getcwd(), 'config', 'pit_config.json')
-        with open(config_path, 'r') as f:
-            return json.load(f)
+        # Check if alliance mode is active for current user's team
+        if not is_alliance_mode_active():
+            return
+        
+        # Import here to avoid circular imports
+        from app.models import TeamAllianceStatus, ScoutingAlliance, ScoutingAllianceMember, ScoutingAllianceSync
+        
+        current_team = current_user.scouting_team_number
+        
+        # Get the active alliance for this team
+        alliance_status = TeamAllianceStatus.query.filter_by(
+            team_number=current_team,
+            is_alliance_mode_active=True
+        ).first()
+        
+        if not alliance_status or not alliance_status.active_alliance:
+            return
+            
+        alliance = alliance_status.active_alliance
+        
+        # Prepare the pit data for sync
+        sync_data = {
+            'team_number': pit_data_entry.team.team_number,
+            'scout_name': pit_data_entry.scout_name,
+            'data': pit_data_entry.data,
+            'timestamp': pit_data_entry.timestamp.isoformat()
+        }
+        
+        # Send data to alliance members via Socket.IO
+        sync_count = 0
+        active_members = alliance.get_active_members()
+        
+        for member in active_members:
+            if member.team_number != current_team:
+                # Create sync record
+                sync_record = ScoutingAllianceSync(
+                    alliance_id=alliance.id,
+                    from_team_number=current_team,
+                    to_team_number=member.team_number,
+                    data_type='pit',
+                    data_count=1
+                )
+                db.session.add(sync_record)
+                sync_count += 1
+                
+                # Emit real-time sync to that team
+                socketio.emit('alliance_data_sync_auto', {
+                    'from_team': current_team,
+                    'alliance_name': alliance.alliance_name,
+                    'scouting_data': [],
+                    'pit_data': [sync_data],
+                    'sync_id': sync_record.id,
+                    'type': 'auto_sync'
+                }, room=f'team_{member.team_number}')
+                
+        if sync_count > 0:
+            db.session.commit()
+            print(f"Auto-synced pit data for Team {pit_data_entry.team.team_number} to {sync_count} alliance members")
+            
     except Exception as e:
-        print(f"Error loading pit configuration: {e}")
-        return {"pit_scouting": {"title": "Pit Scouting", "sections": []}}
+        print(f"Error in auto-sync alliance pit data: {str(e)}")
+        # Don't raise the exception to prevent disrupting the main save operation
+
+bp = Blueprint('pit_scouting', __name__, url_prefix='/pit-scouting')
 
 @bp.route('/')
 @login_required
 def index():
     """Pit scouting dashboard page"""
-    pit_config = load_pit_config()
+    pit_config = get_effective_pit_config()  # Use alliance config if active
     
     # Get current event based on main game configuration
     game_config = current_app.config.get('GAME_CONFIG', {})
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
-        current_event = Event.query.filter_by(code=current_event_code).first()
+        current_event = get_event_by_code(current_event_code)
     
     # Get teams filtered by the current event if available
     if current_event:
-        teams = current_event.teams
+        teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
     else:
-        teams = Team.query.all()
+        teams = filter_teams_by_scouting_team().all()
     
     # Get recent pit scouting data
     recent_pit_data = PitScoutingData.query.order_by(PitScoutingData.timestamp.desc()).limit(10).all()
@@ -69,20 +130,20 @@ def index():
 @login_required
 def form():
     """Dynamic pit scouting form"""
-    pit_config = load_pit_config()
+    pit_config = get_effective_pit_config()
     
     # Get current event based on main game configuration
     game_config = current_app.config.get('GAME_CONFIG', {})
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
-        current_event = Event.query.filter_by(code=current_event_code).first()
+        current_event = get_event_by_code(current_event_code)
     
     # Get teams filtered by the current event if available
     if current_event:
-        teams = current_event.teams
+        teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
     else:
-        teams = Team.query.all()
+        teams = filter_teams_by_scouting_team().all()
     
     if request.method == 'POST':
         try:
@@ -152,6 +213,9 @@ def form():
             db.session.add(pit_data)
             db.session.commit()
             
+            # Automatically sync to alliance members if alliance mode is active
+            auto_sync_alliance_pit_data(pit_data)
+            
             # Emit real-time update
             if current_event:
                 emit_pit_data_update(current_event.id, 'added', pit_data.to_dict())
@@ -181,14 +245,14 @@ def list():
 @login_required
 def list_dynamic():
     """Dynamic pit scouting data display with auto-refresh"""
-    pit_config = load_pit_config()
+    pit_config = get_effective_pit_config()
     
     # Get current event based on main game configuration
     game_config = current_app.config.get('GAME_CONFIG', {})
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
-        current_event = Event.query.filter_by(code=current_event_code).first()
+        current_event = get_event_by_code(current_event_code)
     
     return render_template('scouting/pit_list_dynamic.html', 
                           pit_config=pit_config,
@@ -199,14 +263,14 @@ def list_dynamic():
 @login_required
 def api_list():
     """API endpoint to get pit scouting data as JSON"""
-    pit_config = load_pit_config()
+    pit_config = get_effective_pit_config()
     
     # Get current event based on main game configuration
     game_config = current_app.config.get('GAME_CONFIG', {})
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
-        current_event = Event.query.filter_by(code=current_event_code).first()
+        current_event = get_event_by_code(current_event_code)
     
     # Filter by event if available
     if current_event:
@@ -243,7 +307,7 @@ def api_list():
 @login_required
 def view(id):
     """View specific pit scouting data"""
-    pit_config = load_pit_config()
+    pit_config = get_effective_pit_config()
     pit_data = PitScoutingData.query.get_or_404(id)
     
     return render_template('scouting/pit_view.html', 
@@ -255,7 +319,7 @@ def view(id):
 @login_required
 def edit(id):
     """Edit existing pit scouting data"""
-    pit_config = load_pit_config()
+    pit_config = get_effective_pit_config()
     pit_data = PitScoutingData.query.get_or_404(id)
     
     # Check if user can edit this data
@@ -295,6 +359,9 @@ def edit(id):
             
             db.session.commit()
             
+            # Automatically sync to alliance members if alliance mode is active
+            auto_sync_alliance_pit_data(pit_data)
+            
             # Emit real-time update
             if pit_data.event_id:
                 emit_pit_data_update(pit_data.event_id, 'updated', pit_data.to_dict())
@@ -325,7 +392,7 @@ def sync_status():
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
-        current_event = Event.query.filter_by(code=current_event_code).first()
+        current_event = get_event_by_code(current_event_code)
     
     return jsonify({
         'unuploaded_count': unuploaded_count,
@@ -351,7 +418,7 @@ def upload():
         current_event_code = game_config.get('current_event_code')
         current_event = None
         if current_event_code:
-            current_event = Event.query.filter_by(code=current_event_code).first()
+            current_event = get_event_by_code(current_event_code)
         
         # Get unuploaded data
         unuploaded_data = PitScoutingData.query.filter_by(is_uploaded=False).all()
@@ -448,7 +515,7 @@ def config():
         flash('You must be an admin to view pit scouting configuration', 'error')
         return redirect(url_for('pit_scouting.index'))
     
-    pit_config = load_pit_config()
+    pit_config = get_effective_pit_config()
     return render_template('scouting/pit_config.html', pit_config=pit_config, **get_theme_context())
 
 @bp.route('/config/edit', methods=['GET', 'POST'])
@@ -459,7 +526,12 @@ def config_edit():
         flash('You must be an admin to edit pit scouting configuration', 'error')
         return redirect(url_for('pit_scouting.index'))
     
-    config_path = os.path.join(os.getcwd(), 'config', 'pit_config.json')
+    if request.method == 'GET':
+        # Import here to avoid circular imports
+        from app.utils.config_manager import get_available_default_configs
+        default_configs = get_available_default_configs()
+        pit_config = get_current_pit_config()
+        return render_template('config/pit_editor.html', pit_config=pit_config, default_configs=default_configs, **get_theme_context())
     
     if request.method == 'POST':
         try:
@@ -492,17 +564,11 @@ def config_edit():
                             flash(f'Element missing required field: {field}', 'error')
                             return redirect(url_for('pit_scouting.config_edit'))
             
-            # Create backup
-            backup_path = config_path + '.backup'
-            if os.path.exists(config_path):
-                import shutil
-                shutil.copy2(config_path, backup_path)
-            
             # Save new configuration
-            with open(config_path, 'w') as f:
-                json.dump(pit_config, f, indent=2)
-            
-            flash('Pit scouting configuration updated successfully!', 'success')
+            if save_pit_config(pit_config):
+                flash('Pit scouting configuration updated successfully!', 'success')
+            else:
+                flash('Error saving pit scouting configuration.', 'danger')
             return redirect(url_for('pit_scouting.config'))
             
         except json.JSONDecodeError as e:
@@ -511,12 +577,42 @@ def config_edit():
             flash(f'Error saving configuration: {str(e)}', 'error')
     
     # Load current configuration for editing
-    pit_config = load_pit_config()
+    pit_config = get_effective_pit_config()
     config_json = json.dumps(pit_config, indent=2)
     
     return render_template('scouting/pit_config_edit.html', 
                           config_json=config_json,
                           **get_theme_context())
+
+@bp.route('/config/reset', methods=['POST'])
+@login_required
+def config_reset():
+    """Reset pit configuration to a default template"""
+    if not current_user.has_role('admin'):
+        flash('You must be an admin to reset pit scouting configuration', 'error')
+        return redirect(url_for('pit_scouting.index'))
+    
+    try:
+        from app.utils.config_manager import reset_config_to_default
+        
+        default_file = request.form.get('default_config')
+        
+        if not default_file:
+            flash('No default configuration selected', 'error')
+            return redirect(url_for('pit_scouting.config_edit'))
+        
+        success, message = reset_config_to_default(default_file, 'pit')
+        
+        if success:
+            flash(message, 'success')
+        else:
+            flash(f'Error: {message}', 'error')
+            
+        return redirect(url_for('pit_scouting.config_edit'))
+        
+    except Exception as e:
+        flash(f'Error resetting configuration: {str(e)}', 'error')
+        return redirect(url_for('pit_scouting.config_edit'))
 
 @bp.route('/config/simple-edit')
 @login_required
@@ -526,7 +622,7 @@ def config_simple_edit():
         flash('You must be an admin to edit pit scouting configuration', 'error')
         return redirect(url_for('pit_scouting.index'))
     
-    pit_config = load_pit_config()
+    pit_config = get_effective_pit_config()
     return render_template('scouting/pit_config_simple.html', pit_config=pit_config, **get_theme_context())
 
 @bp.route('/config/simple-save', methods=['POST'])
@@ -652,19 +748,10 @@ def config_simple_save():
         print(f"Final config: {json.dumps(updated_config, indent=2)}")
         
         # Save the configuration
-        config_path = os.path.join(os.getcwd(), 'config', 'pit_config.json')
-        
-        # Create backup
-        backup_path = config_path + '.backup'
-        if os.path.exists(config_path):
-            import shutil
-            shutil.copy2(config_path, backup_path)
-        
-        # Write updated config
-        with open(config_path, 'w') as f:
-            json.dump(updated_config, f, indent=2)
-        
-        flash('Pit scouting configuration updated successfully! A backup was created.', 'success')
+        if save_pit_config(updated_config):
+            flash('Pit scouting configuration updated successfully!', 'success')
+        else:
+            flash('Error saving pit scouting configuration.', 'danger')
         return redirect(url_for('pit_scouting.config'))
         
     except Exception as e:
@@ -686,524 +773,6 @@ def parse_default_value(value, element_type):
     else:
         return value if value else ""
 
-@bp.route('/config/reset', methods=['POST'])
-@login_required
-def config_reset():
-    """Reset pit scouting configuration to default"""
-    if not current_user.has_role('admin'):
-        flash('You must be an admin to reset pit scouting configuration', 'error')
-        return redirect(url_for('pit_scouting.index'))
-    
-    try:
-        # REEFSCAPE 2025 Configuration
-        default_config = {
-            "pit_scouting": {
-                "title": "REEFSCAPE 2025 Pit Scouting",
-                "description": "Collect detailed information about teams and their robots for REEFSCAPE 2025",
-                "sections": [
-                    {
-                        "id": "team_info",
-                        "name": "Team Information",
-                        "elements": [
-                            {
-                                "id": "team_number",
-                                "perm_id": "team_number",
-                                "name": "Team Number",
-                                "type": "number",
-                                "required": True,
-                                "validation": {
-                                    "min": 1,
-                                    "max": 99999
-                                }
-                            },
-                            {
-                                "id": "team_name",
-                                "perm_id": "team_name",
-                                "name": "Team Name",
-                                "type": "text"
-                            },
-                            {
-                                "id": "drive_team_experience",
-                                "perm_id": "drive_team_experience",
-                                "name": "Drive Team Experience",
-                                "type": "select",
-                                "options": [
-                                    {
-                                        "value": "rookie",
-                                        "label": "Rookie (0-1 years)"
-                                    },
-                                    {
-                                        "value": "experienced",
-                                        "label": "Experienced (2-4 years)"
-                                    },
-                                    {
-                                        "value": "veteran",
-                                        "label": "Veteran (5+ years)"
-                                    }
-                                ]
-                            },
-                            {
-                                "id": "programming_language",
-                                "perm_id": "programming_language",
-                                "name": "Programming Language",
-                                "type": "select",
-                                "options": [
-                                    {
-                                        "value": "java",
-                                        "label": "Java"
-                                    },
-                                    {
-                                        "value": "cpp",
-                                        "label": "C++"
-                                    },
-                                    {
-                                        "value": "python",
-                                        "label": "Python"
-                                    },
-                                    {
-                                        "value": "labview",
-                                        "label": "LabVIEW"
-                                    },
-                                    {
-                                        "value": "other",
-                                        "label": "Other"
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        "id": "robot_design",
-                        "name": "Robot Design & Drivetrain",
-                        "elements": [
-                            {
-                                "id": "drivetrain_type",
-                                "perm_id": "drivetrain_type",
-                                "name": "Drivetrain Type",
-                                "type": "select",
-                                "options": [
-                                    {
-                                        "value": "tank",
-                                        "label": "Tank Drive"
-                                    },
-                                    {
-                                        "value": "mecanum",
-                                        "label": "Mecanum"
-                                    },
-                                    {
-                                        "value": "swerve",
-                                        "label": "Swerve"
-                                    },
-                                    {
-                                        "value": "west_coast",
-                                        "label": "West Coast Drive"
-                                    },
-                                    {
-                                        "value": "other",
-                                        "label": "Other"
-                                    }
-                                ]
-                            },
-                            {
-                                "id": "drivetrain_motors",
-                                "perm_id": "drivetrain_motors",
-                                "name": "Number of Drive Motors",
-                                "type": "number",
-                                "validation": {
-                                    "min": 1,
-                                    "max": 12
-                                }
-                            },
-                            {
-                                "id": "motor_type",
-                                "perm_id": "motor_type",
-                                "name": "Drive Motor Type",
-                                "type": "select",
-                                "options": [
-                                    {
-                                        "value": "neo",
-                                        "label": "NEO"
-                                    },
-                                    {
-                                        "value": "cim",
-                                        "label": "CIM"
-                                    },
-                                    {
-                                        "value": "falcon500",
-                                        "label": "Falcon 500"
-                                    },
-                                    {
-                                        "value": "kraken",
-                                        "label": "Kraken X60"
-                                    },
-                                    {
-                                        "value": "other",
-                                        "label": "Other"
-                                    }
-                                ]
-                            },
-                            {
-                                "id": "robot_weight",
-                                "perm_id": "robot_weight",
-                                "name": "Robot Weight (lbs)",
-                                "type": "number",
-                                "validation": {
-                                    "min": 0,
-                                    "max": 150
-                                }
-                            },
-                            {
-                                "id": "robot_height",
-                                "perm_id": "robot_height",
-                                "name": "Robot Height (inches)",
-                                "type": "number",
-                                "validation": {
-                                    "min": 0,
-                                    "max": 840
-                                }
-                            },
-                            {
-                                "id": "max_speed",
-                                "perm_id": "max_speed",
-                                "name": "Estimated Max Speed (ft/s)",
-                                "type": "number",
-                                "validation": {
-                                    "min": 0,
-                                    "max": 30
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        "id": "coral_capabilities",
-                        "name": "CORAL Capabilities",
-                        "elements": [
-                            {
-                                "id": "can_score_coral",
-                                "perm_id": "can_score_coral",
-                                "name": "Can Score CORAL",
-                                "type": "boolean"
-                            },
-                            {
-                                "id": "coral_intake_method",
-                                "perm_id": "coral_intake_method",
-                                "name": "CORAL Intake Method",
-                                "type": "select",
-                                "options": [
-                                    {
-                                        "value": "none",
-                                        "label": "Cannot Intake"
-                                    },
-                                    {
-                                        "value": "ground",
-                                        "label": "Ground Pickup"
-                                    },
-                                    {
-                                        "value": "station",
-                                        "label": "Human Player Station"
-                                    },
-                                    {
-                                        "value": "both",
-                                        "label": "Both Ground and Station"
-                                    }
-                                ]
-                            },
-                            {
-                                "id": "coral_levels",
-                                "perm_id": "coral_levels",
-                                "name": "CORAL Levels Robot Can Score",
-                                "type": "multiselect",
-                                "options": [
-                                    {
-                                        "value": "l1",
-                                        "label": "Level 1"
-                                    },
-                                    {
-                                        "value": "l2",
-                                        "label": "Level 2"
-                                    },
-                                    {
-                                        "value": "l3",
-                                        "label": "Level 3"
-                                    },
-                                    {
-                                        "value": "l4",
-                                        "label": "Level 4"
-                                    }
-                                ]
-                            },
-                            {
-                                "id": "coral_cycle_time",
-                                "perm_id": "coral_cycle_time",
-                                "name": "CORAL Cycle Time (seconds)",
-                                "type": "number",
-                                "validation": {
-                                    "min": 0,
-                                    "max": 150
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        "id": "algae_capabilities",
-                        "name": "ALGAE Capabilities",
-                        "elements": [
-                            {
-                                "id": "can_score_algae",
-                                "perm_id": "can_score_algae",
-                                "name": "Can Score ALGAE",
-                                "type": "boolean"
-                            },
-                            {
-                                "id": "algae_intake_method",
-                                "perm_id": "algae_intake_method",
-                                "name": "ALGAE Intake Method",
-                                "type": "select",
-                                "options": [
-                                    {
-                                        "value": "none",
-                                        "label": "Cannot Intake"
-                                    },
-                                    {
-                                        "value": "ground",
-                                        "label": "Ground Pickup"
-                                    },
-                                    {
-                                        "value": "station",
-                                        "label": "Human Player Station"
-                                    },
-                                    {
-                                        "value": "both",
-                                        "label": "Both Ground and Station"
-                                    }
-                                ]
-                            },
-                            {
-                                "id": "algae_locations",
-                                "perm_id": "algae_locations",
-                                "name": "ALGAE Scoring Locations",
-                                "type": "multiselect",
-                                "options": [
-                                    {
-                                        "value": "processor",
-                                        "label": "Processor"
-                                    },
-                                    {
-                                        "value": "net",
-                                        "label": "Net"
-                                    }
-                                ]
-                            },
-                            {
-                                "id": "algae_cycle_time",
-                                "perm_id": "algae_cycle_time",
-                                "name": "ALGAE Cycle Time (seconds)",
-                                "type": "number",
-                                "validation": {
-                                    "min": 0,
-                                    "max": 150
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        "id": "autonomous_capabilities",
-                        "name": "Autonomous Capabilities",
-                        "elements": [
-                            {
-                                "id": "autonomous_leave_zone",
-                                "perm_id": "autonomous_leave_zone",
-                                "name": "Can Leave Starting Zone in Auto",
-                                "type": "boolean"
-                            },
-                            {
-                                "id": "autonomous_score_coral",
-                                "perm_id": "autonomous_score_coral",
-                                "name": "Can Score CORAL in Auto",
-                                "type": "boolean"
-                            },
-                            {
-                                "id": "autonomous_score_algae",
-                                "perm_id": "autonomous_score_algae",
-                                "name": "Can Score ALGAE in Auto",
-                                "type": "boolean"
-                            },
-                            {
-                                "id": "autonomous_collect_pieces",
-                                "perm_id": "autonomous_collect_pieces",
-                                "name": "Can Collect Game Pieces in Auto",
-                                "type": "boolean"
-                            },
-                            {
-                                "id": "autonomous_starting_position",
-                                "perm_id": "autonomous_starting_position",
-                                "name": "Preferred Starting Position",
-                                "type": "select",
-                                "options": [
-                                    {
-                                        "value": "left",
-                                        "label": "Left"
-                                    },
-                                    {
-                                        "value": "center",
-                                        "label": "Center"
-                                    },
-                                    {
-                                        "value": "right",
-                                        "label": "Right"
-                                    },
-                                    {
-                                        "value": "flexible",
-                                        "label": "Flexible"
-                                    }
-                                ]
-                            },
-                            {
-                                "id": "autonomous_points_estimate",
-                                "perm_id": "autonomous_points_estimate",
-                                "name": "Estimated Auto Points",
-                                "type": "number",
-                                "validation": {
-                                    "min": 0,
-                                    "max": 50
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        "id": "climb_capabilities",
-                        "name": "Climb & Endgame",
-                        "elements": [
-                            {
-                                "id": "can_climb",
-                                "perm_id": "can_climb",
-                                "name": "Can Climb",
-                                "type": "boolean"
-                            },
-                            {
-                                "id": "climb_levels",
-                                "perm_id": "climb_levels",
-                                "name": "Climb Levels Achieved",
-                                "type": "multiselect",
-                                "options": [
-                                    {
-                                        "value": "none",
-                                        "label": "none"
-                                    },
-                                    {
-                                        "value": "park",
-                                        "label": "park"
-                                    },
-                                    {
-                                        "value": "shallow",
-                                        "label": "Shallow Climb"
-                                    },
-                                    {
-                                        "value": "deep",
-                                        "label": "Deep Climb"
-                                    }
-                                ]
-                            },
-                            {
-                                "id": "climb_time",
-                                "perm_id": "climb_time",
-                                "name": "Climb Time (seconds)",
-                                "type": "number",
-                                "validation": {
-                                    "min": 0,
-                                    "max": 60
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        "id": "strategy_notes",
-                        "name": "Strategy & Notes",
-                        "elements": [
-                            {
-                                "id": "robot_strengths",
-                                "perm_id": "robot_strengths",
-                                "name": "Robot Strengths",
-                                "type": "textarea",
-                                "placeholder": "What are this robot's main strengths and capabilities?"
-                            },
-                            {
-                                "id": "robot_weaknesses",
-                                "perm_id": "robot_weaknesses",
-                                "name": "Areas for Improvement",
-                                "type": "textarea",
-                                "placeholder": "What areas could this robot improve on?"
-                            },
-                            {
-                                "id": "alliance_strategy",
-                                "perm_id": "alliance_strategy",
-                                "name": "Alliance Strategy Notes",
-                                "type": "textarea",
-                                "placeholder": "How would this robot fit into alliance strategy?"
-                            },
-                            {
-                                "id": "reliability_concerns",
-                                "perm_id": "reliability_concerns",
-                                "name": "Reliability Concerns",
-                                "type": "textarea",
-                                "placeholder": "Any known reliability issues or concerns?"
-                            },
-                            {
-                                "id": "driver_skill_level",
-                                "perm_id": "driver_skill_level",
-                                "name": "Driver Skill Level",
-                                "type": "select",
-                                "options": [
-                                    {
-                                        "value": "novice",
-                                        "label": "Novice"
-                                    },
-                                    {
-                                        "value": "intermediate",
-                                        "label": "Intermediate"
-                                    },
-                                    {
-                                        "value": "advanced",
-                                        "label": "Advanced"
-                                    },
-                                    {
-                                        "value": "expert",
-                                        "label": "Expert"
-                                    }
-                                ]
-                            },
-                            {
-                                "id": "additional_notes",
-                                "perm_id": "additional_notes",
-                                "name": "Additional Notes",
-                                "type": "textarea",
-                                "placeholder": "Any other observations or notes about this team"
-                            }
-                        ]
-                    }
-                ]
-            }
-        }
-        
-        config_path = os.path.join(os.getcwd(), 'config', 'pit_config.json')
-        
-        # Create backup
-        backup_path = config_path + '.backup'
-        if os.path.exists(config_path):
-            import shutil
-            shutil.copy2(config_path, backup_path)
-        
-        # Save default configuration
-        with open(config_path, 'w') as f:
-            json.dump(default_config, f, indent=2)
-        
-        flash('Pit scouting configuration reset to default!', 'success')
-        return redirect(url_for('pit_scouting.config'))
-        
-    except Exception as e:
-        flash(f'Error resetting configuration: {str(e)}', 'error')
-        return redirect(url_for('pit_scouting.config'))
-
 @bp.route('/config/backup')
 @login_required
 def config_backup():
@@ -1213,7 +782,7 @@ def config_backup():
         return redirect(url_for('pit_scouting.index'))
     
     try:
-        pit_config = load_pit_config()
+        pit_config = get_effective_pit_config()
         
         from flask import make_response
         response = make_response(json.dumps(pit_config, indent=2))
@@ -1251,7 +820,7 @@ def sync_download():
         current_event_code = game_config.get('current_event_code')
         current_event = None
         if current_event_code:
-            current_event = Event.query.filter_by(code=current_event_code).first()
+            current_event = get_event_by_code(current_event_code)
         
         # Get last sync timestamp
         last_sync = sync_manager.get_last_sync_timestamp()
@@ -1361,7 +930,7 @@ def sync_full():
         current_event_code = game_config.get('current_event_code')
         current_event = None
         if current_event_code:
-            current_event = Event.query.filter_by(code=current_event_code).first()
+            current_event = get_event_by_code(current_event_code)
         
         # Get all local data for context
         if current_event:
@@ -1613,3 +1182,69 @@ def emit_pit_sync_status(event_id, status):
         'status': status,
         'event_id': event_id
     }, room=f'pit_event_{event_id}')
+
+@bp.route('/data')
+@login_required
+def pit_data():
+    """AJAX endpoint for pit scouting data - used for real-time config updates"""
+    try:
+        # Get current configurations (alliance-aware)
+        pit_config = get_effective_pit_config()
+        
+        # Get current event based on main game configuration
+        game_config = current_app.config.get('GAME_CONFIG', {})
+        current_event_code = game_config.get('current_event_code')
+        current_event = None
+        if current_event_code:
+            current_event = get_event_by_code(current_event_code)
+        
+        # Get teams filtered by the current event if available
+        if current_event:
+            teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+        else:
+            teams = filter_teams_by_scouting_team().all()
+        
+        # Get pit scouting data
+        pit_data = PitScoutingData.query.join(Team).filter(
+            Team.id.in_([team.id for team in teams])
+        ).all()
+        
+        # Get scouted teams count
+        scouted_teams = len(set([data.team_id for data in pit_data]))
+        total_teams = len(teams)
+        
+        # Prepare data for JSON response
+        teams_data = [{'id': team.id, 'team_number': team.team_number, 'name': team.name or ''} for team in teams]
+        
+        pit_data_serialized = []
+        for data in pit_data:
+            pit_data_serialized.append({
+                'id': data.id,
+                'team_id': data.team_id,
+                'team_number': data.team.team_number,
+                'scout_name': data.scout.username if data.scout else 'Unknown',
+                'timestamp': data.timestamp.isoformat() if data.timestamp else None,
+                'data': data.data
+            })
+        
+        return jsonify({
+            'success': True,
+            'pit_config': pit_config,
+            'current_event': {
+                'id': current_event.id if current_event else None,
+                'name': current_event.name if current_event else None,
+                'code': current_event.code if current_event else None
+            } if current_event else None,
+            'teams': teams_data,
+            'pit_data': pit_data_serialized,
+            'stats': {
+                'scouted_teams': scouted_teams,
+                'total_teams': total_teams,
+                'completion_percentage': round((scouted_teams / total_teams * 100) if total_teams > 0 else 0, 1)
+            },
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in pit_data endpoint: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500

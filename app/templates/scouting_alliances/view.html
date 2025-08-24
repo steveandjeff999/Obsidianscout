@@ -1,0 +1,824 @@
+{% extends "base.html" %}
+{% block title %}{{ alliance.alliance_name }} - Scouting Alliance{% endblock %}
+
+{% block head %}
+<meta name="csrf-token" content="{{ csrf_token() if csrf_token else '' }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2>
+                        <i class="fas fa-handshake"></i> {{ alliance.alliance_name }}
+                    </h2>
+                    <p class="text-muted">{{ alliance.description or 'No description provided.' }}</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('scouting_alliances.dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                    {% if member.role == 'admin' %}
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#inviteModal">
+                        <i class="fas fa-user-plus"></i> Invite Team
+                    </button>
+                    {% endif %}
+                    <button class="btn btn-outline-danger" onclick="leaveAlliance({{ alliance.id }})">
+                        <i class="fas fa-sign-out-alt"></i> Leave Alliance
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Alliance Information -->
+        <div class="col-md-8">
+            <!-- Members Section -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-users"></i> Alliance Members ({{ members|length }})
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for member_obj in members %}
+                        <div class="col-md-6 mb-3">
+                            <div class="card h-100 {% if member_obj.role == 'admin' %}border-warning{% endif %}">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        Team {{ member_obj.team_number }}
+                                        {% if member_obj.role == 'admin' %}
+                                        <span class="badge bg-warning text-dark">Admin</span>
+                                        {% endif %}
+                                    </h6>
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            Joined: {{ member_obj.joined_at.strftime('%m/%d/%Y') }}
+                                            {% if member_obj.invited_by %}
+                                            <br>Invited by: Team {{ member_obj.invited_by }}
+                                            {% endif %}
+                                        </small>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration Section -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cogs"></i> Alliance Configuration
+                    </h5>
+                    {% if member.role == 'admin' %}
+                    <div class="dropdown">
+                        <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" id="configDropdown" 
+                                data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-edit me-1"></i>Edit Configuration
+                        </button>
+                        <ul class="dropdown-menu" aria-labelledby="configDropdown">
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('scouting_alliances.edit_game_config', alliance_id=alliance.id) }}">
+                                    <i class="fas fa-gamepad me-1"></i>Game Configuration
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('scouting_alliances.edit_pit_config', alliance_id=alliance.id) }}">
+                                    <i class="fas fa-tools me-1"></i>Pit Configuration
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <!-- Alliance Mode Toggle -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card border-primary">
+                                <div class="card-header bg-primary text-white">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-toggle-on me-2"></i>Alliance Mode Control
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-8">
+                                            <div class="mb-2">
+                                                <strong>Your Team's Alliance Mode:</strong>
+                                                <span id="allianceModeStatus" class="badge bg-secondary ms-1">
+                                                    <i class="fas fa-spinner fa-spin me-1"></i>Checking...
+                                                </span>
+                                            </div>
+                                            <p class="text-muted small mb-0">
+                                                <strong>Active:</strong> Your team uses alliance's shared configurations site-wide<br>
+                                                <strong>Inactive:</strong> Your team uses individual configurations<br>
+                                                <em>Note: Each team can control their own alliance mode independently</em>
+                                            </p>
+                                        </div>
+                                        <div class="col-md-4 text-end">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" 
+                                                       id="allianceModeToggle" style="transform: scale(1.5);">
+                                                <label class="form-check-label" for="allianceModeToggle">
+                                                    <strong>Alliance Mode</strong>
+                                                </label>
+                                            </div>
+                                            <small class="text-muted">Controls your team's alliance mode</small>
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="allianceModeInfo" class="alert alert-info mt-3" style="display: none;">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        <span id="allianceModeInfoText"></span>
+                                    </div>
+                                    
+                                    <div class="alert alert-warning mt-3">
+                                        <i class="fas fa-exclamation-triangle me-2"></i>
+                                        <strong>Important:</strong> Your team can only be active in one alliance at a time. 
+                                        Activating this alliance will automatically deactivate any other active alliance.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Configuration Details -->
+                    {% set config_summary = alliance.get_config_summary() %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="fas fa-gamepad me-2 text-primary"></i>Game Configuration
+                                    </h6>
+                                    {% if alliance.game_config_team %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check me-1"></i>
+                                            Team {{ alliance.game_config_team }}
+                                        </span>
+                                        <p class="small text-muted mt-2 mb-0">
+                                            All members use Team {{ alliance.game_config_team }}'s game scouting configuration
+                                        </p>
+                                    {% else %}
+                                        <span class="badge bg-info">
+                                            <i class="fas fa-cog me-1"></i>
+                                            Default Configuration
+                                        </span>
+                                        <p class="small text-muted mt-2 mb-0">
+                                            Using system default game configuration - you can customize this in the alliance settings
+                                        </p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="fas fa-tools me-2 text-info"></i>Pit Configuration
+                                    </h6>
+                                    {% if alliance.pit_config_team %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check me-1"></i>
+                                            Team {{ alliance.pit_config_team }}
+                                        </span>
+                                        <p class="small text-muted mt-2 mb-0">
+                                            All members use Team {{ alliance.pit_config_team }}'s pit scouting configuration
+                                        </p>
+                                    {% else %}
+                                        <span class="badge bg-info">
+                                            <i class="fas fa-cog me-1"></i>
+                                            Default Configuration
+                                        </span>
+                                        <p class="small text-muted mt-2 mb-0">
+                                            Using system default pit configuration - you can customize this in the alliance settings
+                                        </p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <strong>Overall Status:</strong>
+                                {% if alliance.is_config_complete() %}
+                                    <span class="badge bg-success ms-1">
+                                        <i class="fas fa-check me-1"></i>Configuration Complete
+                                    </span>
+                                {% elif alliance.has_config_conflicts() %}
+                                    <span class="badge bg-danger ms-1">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>Conflicts Detected
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-warning ms-1">
+                                        <i class="fas fa-clock me-1"></i>Configuration Pending
+                                    </span>
+                                {% endif %}
+                            </div>
+                            
+                            {% if not alliance.is_config_complete() and member.role == 'admin' %}
+                                <div class="dropdown">
+                                    <button class="btn btn-warning btn-sm dropdown-toggle" type="button" id="configureDropdown" 
+                                            data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="fas fa-cogs me-1"></i>Configure Now
+                                    </button>
+                                    <ul class="dropdown-menu" aria-labelledby="configureDropdown">
+                                        <li>
+                                            <a class="dropdown-item" href="{{ url_for('scouting_alliances.edit_game_config', alliance_id=alliance.id) }}">
+                                                <i class="fas fa-gamepad me-1"></i>Game Configuration
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="{{ url_for('scouting_alliances.edit_pit_config', alliance_id=alliance.id) }}">
+                                                <i class="fas fa-tools me-1"></i>Pit Configuration
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Configuration warning removed since default configurations are always available -->
+                </div>
+            </div>
+
+            <!-- Alliance Configuration Management -->
+            {% if member.role == 'admin' %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cogs"></i> Alliance Configuration Management
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        As an alliance administrator, you can create and edit shared configurations that all alliance members will use.
+                    </p>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-gamepad fa-3x text-primary mb-3"></i>
+                                    <h6>Game Configuration</h6>
+                                    <p class="text-muted small">
+                                        Edit the shared game scouting form configuration for all alliance members.
+                                    </p>
+                                    <!-- Always show as configured since defaults are available -->
+                                    <span class="badge bg-success mb-2">
+                                        <i class="fas fa-check"></i> Configured
+                                    </span>
+                                    <div>
+                                        <a href="{{ url_for('scouting_alliances.edit_game_config', alliance_id=alliance.id) }}" 
+                                           class="btn btn-primary btn-sm">
+                                            <i class="fas fa-edit"></i> Edit Game Config
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-tools fa-3x text-info mb-3"></i>
+                                    <h6>Pit Configuration</h6>
+                                    <p class="text-muted small">
+                                        Edit the shared pit scouting form configuration for all alliance members.
+                                    </p>
+                                    <!-- Always show as configured since defaults are available -->
+                                    <span class="badge bg-success mb-2">
+                                        <i class="fas fa-check"></i> Configured
+                                    </span>
+                                    <div>
+                                        <a href="{{ url_for('scouting_alliances.edit_pit_config', alliance_id=alliance.id) }}" 
+                                           class="btn btn-info btn-sm">
+                                            <i class="fas fa-edit"></i> Edit Pit Config
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Note:</strong> These configurations will override individual team configurations when alliance mode is active. 
+                        Changes will be automatically applied to all alliance members.
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Events Section -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-calendar"></i> Shared Events ({{ events|length }})
+                    </h5>
+                    {% if member.role == 'admin' %}
+                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addEventModal">
+                        <i class="fas fa-plus"></i> Add Event
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if events %}
+                    <div class="row">
+                        {% for event in events %}
+                        <div class="col-md-4 mb-2">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">{{ event.event_code }}</h6>
+                                    <p class="card-text">
+                                        <small class="text-muted">{{ event.event_name }}</small>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted">
+                        <i class="fas fa-calendar-plus fa-2x mb-3"></i>
+                        <p>No events configured yet. Add events to start sharing data.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Data Sync Section -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-sync"></i> Data Synchronization
+                        <span class="badge bg-success ms-2">Auto-Sync Active</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Automatic Sync Enabled:</strong> When alliance mode is active, scouting and pit data automatically syncs to alliance members in real-time when saved.
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h4 class="text-primary">{{ sync_stats.total_syncs }}</h4>
+                                    <p class="mb-0">Total Syncs</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h4 class="text-success">{{ "%.1f"|format(sync_stats.success_rate) }}%</h4>
+                                    <p class="mb-0">Success Rate</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if sync_stats.last_sync %}
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            Last sync: {{ sync_stats.last_sync.strftime('%m/%d/%Y %I:%M %p') }}
+                        </small>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mt-3">
+                        <button class="btn btn-primary" onclick="syncAllianceData({{ alliance.id }})">
+                            <i class="fas fa-sync"></i> Manual Sync Data
+                        </button>
+                        <small class="text-muted ms-2">
+                            Force sync all current data with alliance members
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Sidebar -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-comments"></i> Alliance Chat
+                    </h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <div id="chatMessages" class="flex-grow-1 overflow-auto mb-3" style="max-height: 400px;">
+                        {% for chat in recent_chats %}
+                        <div class="mb-2 {% if chat.from_team_number == current_team %}text-end{% endif %}">
+                            <div class="d-inline-block p-2 rounded {% if chat.from_team_number == current_team %}bg-primary text-white{% else %}bg-light{% endif %}" 
+                                 style="max-width: 85%;">
+                                <div class="fw-bold small">{{ chat.from_username }} (Team {{ chat.from_team_number }})</div>
+                                <div>{{ chat.message }}</div>
+                                <div class="small opacity-75">{{ chat.created_at.strftime('%I:%M %p') }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="chatInput" 
+                               placeholder="Type your message...">
+                        <button class="btn btn-primary" onclick="sendChatMessage()">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Invite Modal -->
+<div class="modal fade" id="inviteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Invite Team to Alliance</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('scouting_alliances.send_invitation', alliance_id=alliance.id) }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="teamNumber" class="form-label">Team Number</label>
+                        <input type="number" class="form-control" id="teamNumber" name="team_number" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Send Invitation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Event Modal -->
+<div class="modal fade" id="addEventModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Event to Alliance</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('scouting_alliances.add_event', alliance_id=alliance.id) }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="eventCode" class="form-label">Event Code</label>
+                        <input type="text" class="form-control" id="eventCode" name="event_code" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="eventName" class="form-label">Event Name</label>
+                        <input type="text" class="form-control" id="eventName" name="event_name" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Event</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Initialize socket connection and alliance room
+if (typeof window.socket !== 'undefined') {
+    window.socket.emit('join_alliance_room', {alliance_id: {{ alliance.id }}});
+}
+
+// Alliance Mode Toggle Functionality
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, starting alliance mode check...');
+    
+    // Give a small delay to ensure all elements are ready
+    setTimeout(function() {
+        checkAllianceModeStatus();
+    }, 500);
+    
+    const toggle = document.getElementById('allianceModeToggle');
+    if (toggle) {
+        console.log('Alliance mode toggle found, adding event listener');
+        toggle.addEventListener('change', function() {
+            toggleAllianceMode(this.checked);
+        });
+    } else {
+        console.error('Alliance mode toggle element not found!');
+    }
+});
+
+function checkAllianceModeStatus() {
+    console.log('Checking alliance mode status for alliance {{ alliance.id }}...');
+    
+    // Get CSRF token if available
+    let headers = {};
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta) {
+        headers['X-CSRFToken'] = csrfMeta.getAttribute('content');
+    }
+    
+    fetch('/alliances/scouting/api/alliance-mode-status/{{ alliance.id }}', {
+        headers: headers
+    })
+        .then(response => {
+            console.log('Alliance mode status response:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Alliance mode status data:', data);
+            const statusElement = document.getElementById('allianceModeStatus');
+            const toggle = document.getElementById('allianceModeToggle');
+            const infoElement = document.getElementById('allianceModeInfo');
+            const infoText = document.getElementById('allianceModeInfoText');
+            
+            if (statusElement && toggle) {
+                toggle.checked = data.is_active;
+                
+                if (data.is_active) {
+                    statusElement.innerHTML = '<i class="fas fa-check-circle me-1"></i>Active';
+                    statusElement.className = 'badge bg-success ms-1';
+                    if (infoElement && infoText) {
+                        infoText.textContent = 'This alliance is active. Your team is using shared alliance configurations.';
+                        infoElement.style.display = 'block';
+                    }
+                } else if (data.alliance_mode_on && data.active_alliance_id && data.active_alliance_id !== {{ alliance.id }}) {
+                    statusElement.innerHTML = '<i class="fas fa-times-circle me-1"></i>Inactive';
+                    statusElement.className = 'badge bg-warning ms-1';
+                    if (infoElement && infoText) {
+                        infoText.textContent = 'Another alliance is currently active. This alliance is inactive.';
+                        infoElement.style.display = 'block';
+                    }
+                } else {
+                    statusElement.innerHTML = '<i class="fas fa-times-circle me-1"></i>Inactive';
+                    statusElement.className = 'badge bg-secondary ms-1';
+                    if (infoElement && infoText) {
+                        infoText.textContent = 'Alliance mode is inactive. Your team is using individual configurations.';
+                        infoElement.style.display = 'block';
+                    }
+                }
+            } else {
+                console.error('Alliance mode status elements not found:', {
+                    statusElement: !!statusElement,
+                    toggle: !!toggle
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error checking alliance mode status:', error);
+            const statusElement = document.getElementById('allianceModeStatus');
+            const toggle = document.getElementById('allianceModeToggle');
+            
+            if (statusElement) {
+                statusElement.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Error';
+                statusElement.className = 'badge bg-danger ms-1';
+            }
+            
+            // Set default state if API fails
+            if (toggle) {
+                toggle.checked = false; // Default to inactive
+                console.log('Set default alliance mode to inactive due to API error');
+            }
+        });
+}
+
+function toggleAllianceMode(isActive) {
+    const statusElement = document.getElementById('allianceModeStatus');
+    if (statusElement) {
+        statusElement.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Updating...';
+        statusElement.className = 'badge bg-warning ms-1';
+    }
+    
+    // Get CSRF token if available
+    let headers = {
+        'Content-Type': 'application/json',
+    };
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta) {
+        headers['X-CSRFToken'] = csrfMeta.getAttribute('content');
+    }
+    
+    fetch('/alliances/scouting/api/toggle-alliance-mode', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+            alliance_id: {{ alliance.id }},
+            is_active: isActive
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            checkAllianceModeStatus();
+            
+            // Show success notification
+            showNotification(
+                isActive ? 'Alliance mode activated successfully!' : 'Alliance mode deactivated successfully!',
+                'success'
+            );
+            
+            // Reload page after a short delay to reflect changes
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            console.error('Failed to toggle alliance mode:', data.error);
+            checkAllianceModeStatus(); // Revert toggle if failed
+            showNotification('Failed to update alliance mode: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error toggling alliance mode:', error);
+        checkAllianceModeStatus(); // Revert toggle if failed
+        showNotification('Error updating alliance mode', 'danger');
+    });
+}
+
+// Sync functionality
+function syncAllianceData(allianceId) {
+    const button = event.target;
+    const originalText = button.innerHTML;
+    
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+    button.disabled = true;
+    
+    // Get CSRF token if available
+    let headers = {
+        'Content-Type': 'application/json',
+    };
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta) {
+        headers['X-CSRFToken'] = csrfMeta.getAttribute('content');
+    }
+    
+    fetch(`/alliances/scouting/${allianceId}/sync/data`, {
+        method: 'POST',
+        headers: headers
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(data.message || `Sync complete! Imported ${data.imported_count} entries, shared ${data.shared_count} entries with ${data.synced_to} teams.`, 'success');
+        } else {
+            showNotification('Sync failed: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Sync error:', error);
+        showNotification('Sync error occurred', 'danger');
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+// Chat functionality
+function sendChatMessage() {
+    const input = document.getElementById('chatInput');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    if (typeof window.socket !== 'undefined') {
+        window.socket.emit('alliance_chat', {
+            alliance_id: {{ alliance.id }},
+            message: message
+        });
+        input.value = '';
+    }
+}
+
+// Enter key support for chat
+const chatInput = document.getElementById('chatInput');
+if (chatInput) {
+    chatInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            sendChatMessage();
+        }
+    });
+}
+
+// Socket event listeners for chat
+if (typeof window.socket !== 'undefined') {
+    window.socket.on('alliance_chat_message', function(data) {
+        const chatMessages = document.getElementById('chatMessages');
+        if (chatMessages) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `mb-2 ${data.from_team_number == {{ current_team }} ? 'text-end' : ''}`;
+            messageDiv.innerHTML = `
+                <div class="d-inline-block p-2 rounded ${data.from_team_number == {{ current_team }} ? 'bg-primary text-white' : 'bg-light'}" 
+                     style="max-width: 85%;">
+                    <div class="fw-bold small">${data.from_username} (Team ${data.from_team_number})</div>
+                    <div>${data.message}</div>
+                    <div class="small opacity-75">Just now</div>
+                </div>
+            `;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+    });
+    
+    // Listen for when members leave the alliance
+    window.socket.on('alliance_member_left', function(data) {
+        if (data.alliance_id === {{ alliance.id }}) {
+            showNotification(`${data.team_name} left the alliance`, 'warning');
+            // Reload page after a short delay to update member list
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        }
+    });
+}
+
+// Utility function for notifications
+function showNotification(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(alertDiv);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// Leave Alliance function
+function leaveAlliance(allianceId) {
+    // Show confirmation dialog
+    const allianceName = '{{ alliance.alliance_name }}';
+    const confirmMessage = `Are you sure you want to leave the alliance "${allianceName}"?\n\n` +
+                          `This will:\n` +
+                          `• Remove you from the alliance\n` +
+                          `• Deactivate alliance mode if currently active\n` +
+                          `• Stop sharing scouting data with alliance members\n\n` +
+                          `This action cannot be undone.`;
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    // Get CSRF token if available
+    let headers = {
+        'Content-Type': 'application/json',
+    };
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta) {
+        headers['X-CSRFToken'] = csrfMeta.getAttribute('content');
+    }
+    
+    fetch('/alliances/scouting/api/leave-alliance', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+            alliance_id: allianceId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(data.message, 'success');
+            
+            // Redirect to dashboard after a short delay
+            setTimeout(() => {
+                window.location.href = '{{ url_for("scouting_alliances.dashboard") }}';
+            }, 2000);
+        } else {
+            showNotification('Error leaving alliance: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error leaving alliance:', error);
+        showNotification('Network error occurred while leaving alliance', 'danger');
+    });
+}
+</script>
+{% endblock %}

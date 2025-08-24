@@ -1,14 +1,18 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
 from flask_login import login_required, current_user
 from app.models import Match, Team, ScoutingData, Event
-from app import db
+from app import db, socketio
 import json
 from datetime import datetime
 import qrcode
 from io import BytesIO
 import base64
-from app.utils.config_manager import get_id_to_perm_id_mapping
+from app.utils.config_manager import get_id_to_perm_id_mapping, get_current_game_config, get_effective_game_config, is_alliance_mode_active
 from app.utils.theme_manager import ThemeManager
+from app.utils.team_isolation import (
+    filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
+    filter_events_by_scouting_team, get_event_by_code
+)
 
 bp = Blueprint('scouting', __name__, url_prefix='/scouting')
 
@@ -19,22 +23,102 @@ def get_theme_context():
         'current_theme_id': theme_manager.current_theme
     }
 
+def auto_sync_alliance_data(scouting_data_entry):
+    """Automatically sync new scouting data to alliance members if alliance mode is active"""
+    try:
+        # Check if alliance mode is active for current user's team
+        if not is_alliance_mode_active():
+            return
+        
+        # Import here to avoid circular imports
+        from app.models import TeamAllianceStatus, ScoutingAlliance, ScoutingAllianceMember, ScoutingAllianceSync
+        
+        current_team = current_user.scouting_team_number
+        
+        # Get the active alliance for this team
+        alliance_status = TeamAllianceStatus.query.filter_by(
+            team_number=current_team,
+            is_alliance_mode_active=True
+        ).first()
+        
+        if not alliance_status or not alliance_status.active_alliance:
+            return
+            
+        alliance = alliance_status.active_alliance
+        
+        # Get alliance shared events to verify we should sync this data
+        alliance_events = alliance.get_shared_events()
+        
+        # Check if this scouting data is for a shared event
+        match_event_code = scouting_data_entry.match.event.code
+        if alliance_events and match_event_code not in alliance_events:
+            return  # Don't sync data for non-shared events
+        
+        # Prepare the scouting data for sync
+        sync_data = {
+            'team_number': scouting_data_entry.team.team_number,
+            'match_number': scouting_data_entry.match.match_number,
+            'match_type': scouting_data_entry.match.match_type,
+            'event_code': match_event_code,
+            'alliance': scouting_data_entry.alliance,
+            'scout_name': scouting_data_entry.scout_name,
+            'data': scouting_data_entry.data,
+            'timestamp': scouting_data_entry.timestamp.isoformat()
+        }
+        
+        # Send data to alliance members via Socket.IO
+        sync_count = 0
+        active_members = alliance.get_active_members()
+        
+        for member in active_members:
+            if member.team_number != current_team:
+                # Create sync record
+                sync_record = ScoutingAllianceSync(
+                    alliance_id=alliance.id,
+                    from_team_number=current_team,
+                    to_team_number=member.team_number,
+                    data_type='scouting',
+                    data_count=1
+                )
+                db.session.add(sync_record)
+                sync_count += 1
+                
+                # Emit real-time sync to that team
+                socketio.emit('alliance_data_sync_auto', {
+                    'from_team': current_team,
+                    'alliance_name': alliance.alliance_name,
+                    'scouting_data': [sync_data],
+                    'pit_data': [],
+                    'sync_id': sync_record.id,
+                    'type': 'auto_sync'
+                }, room=f'team_{member.team_number}')
+                
+        if sync_count > 0:
+            db.session.commit()
+            print(f"Auto-synced scouting data for Team {scouting_data_entry.team.team_number} Match {scouting_data_entry.match.match_number} to {sync_count} alliance members")
+            
+    except Exception as e:
+        print(f"Error in auto-sync alliance data: {str(e)}")
+        # Don't raise the exception to prevent disrupting the main save operation
+
 @bp.route('/')
 @login_required
 def index():
     """Scouting dashboard page"""
-    # Get game configuration
-    game_config = current_app.config['GAME_CONFIG']
+    # Get game configuration (using alliance config if active)
+    game_config = get_effective_game_config()
     
     # Get current event based on configuration
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
-        current_event = Event.query.filter_by(code=current_event_code).first()
+        current_event = get_event_by_code(current_event_code)  # Use filtered function
     
-    # Get teams filtered by the current event if available
+    # Get teams filtered by the current event and scouting team
     if current_event:
-        teams = current_event.teams
+        teams = filter_teams_by_scouting_team().join(
+            Team.events
+        ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
     else:
         teams = []  # No teams if no current event is set
     
@@ -49,9 +133,9 @@ def index():
     
     # Get matches filtered by the current event if available
     if current_event:
-        all_matches = Match.query.filter_by(event_id=current_event.id).all()
+        all_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).all()
     else:
-        all_matches = Match.query.all()
+        all_matches = filter_matches_by_scouting_team().all()
     
     matches = sorted(all_matches, key=lambda m: (
         match_type_order.get(m.match_type.lower(), 99),  # Unknown types go to the end
@@ -59,7 +143,7 @@ def index():
     ))
     
     # Get recent scouting data
-    recent_scouting_data = ScoutingData.query.order_by(ScoutingData.timestamp.desc()).limit(5).all()
+    recent_scouting_data = ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).order_by(ScoutingData.timestamp.desc()).limit(5).all()
     
     return render_template('scouting/index.html', 
                           teams=teams, 
@@ -71,22 +155,24 @@ def index():
 @bp.route('/form', methods=['GET', 'POST'])
 def scouting_form():
     """Dynamic scouting form based on game configuration"""
-    # Get game configuration
-    game_config = current_app.config['GAME_CONFIG']
+    # Get game configuration (using alliance config if active)
+    game_config = get_effective_game_config()
     
     # Get current event based on configuration
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
-        current_event = Event.query.filter_by(code=current_event_code).first()
+        current_event = get_event_by_code(current_event_code)  # Use filtered function
     
-    # Get teams filtered by the current event if available
+    # Get teams filtered by the current event and scouting team
     if current_event:
-        teams = current_event.teams
+        teams = filter_teams_by_scouting_team().join(
+            Team.events
+        ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
     else:
         teams = []  # No teams if no current event is set
 
-    # Sort teams by team_number
+    # Sort teams by team_number (already sorted in query but keeping for consistency)
     teams = sorted(teams, key=lambda t: t.team_number)
     
     # Define custom ordering for match types
@@ -100,9 +186,9 @@ def scouting_form():
     
     # Get matches filtered by the current event if available
     if current_event:
-        all_matches = Match.query.filter_by(event_id=current_event.id).all()
+        all_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).all()
     else:
-        all_matches = Match.query.all()
+        all_matches = filter_matches_by_scouting_team().all()
     
     matches = sorted(all_matches, key=lambda m: (
         match_type_order.get(m.match_type.lower(), 99),  # Unknown types go to the end
@@ -111,14 +197,24 @@ def scouting_form():
     
     # For AJAX team/match selection
     if request.method == 'POST' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        current_app.logger.info(f"AJAX form request received - User: {current_user.username}")
+        
         team_id = request.form.get('team_id', type=int)
         match_id = request.form.get('match_id', type=int)
         
+        current_app.logger.info(f"Team ID: {team_id}, Match ID: {match_id}")
+        
         if not team_id or not match_id:
+            current_app.logger.warning("Missing team_id or match_id in AJAX request")
             return jsonify({'success': False, 'message': 'Both team and match must be selected'})
         
-        team = Team.query.get_or_404(team_id)
-        match = Match.query.get_or_404(match_id)
+        try:
+            team = Team.query.get_or_404(team_id)
+            match = Match.query.get_or_404(match_id)
+            current_app.logger.info(f"Found team: {team.team_number}, match: {match.match_number}")
+        except Exception as e:
+            current_app.logger.error(f"Error fetching team/match: {str(e)}")
+            return jsonify({'success': False, 'message': 'Team or match not found'})
         
         # Determine alliance color
         alliance = 'unknown'
@@ -130,13 +226,20 @@ def scouting_form():
         # Check if data already exists
         existing_data = ScoutingData.query.filter_by(
             team_id=team.id,
-            match_id=match.id
+            match_id=match.id,
+            scouting_team_number=current_user.scouting_team_number
         ).first()
         
         # Initialize form data
         form_data = {}
+        data_corruption_warning = None
         if existing_data:
-            form_data = existing_data.data
+            try:
+                form_data = existing_data.data
+            except (json.JSONDecodeError, TypeError, ValueError) as e:
+                current_app.logger.error(f"Error parsing existing data for team {team_id}, match {match_id}: {str(e)}")
+                form_data = {}
+                data_corruption_warning = 'Warning: Could not load existing form data due to data corruption. Starting with fresh form.'
         else:
             # Initialize with defaults from config for all periods
             for period in ['auto_period', 'teleop_period', 'endgame_period']:
@@ -160,16 +263,29 @@ def scouting_form():
                         form_data[element['id']] = element['default']
         
         # Render just the form content for the AJAX response
-        html = render_template('scouting/partials/form_content.html', 
-                            team=team, 
-                            match=match,
-                            form_data=form_data,
-                            game_config=game_config,
-                            alliance=alliance,
-                            existing_data=existing_data,
-                            **get_theme_context())
-                            
-        return jsonify({
+        try:
+            theme_context = get_theme_context()
+        except Exception as e:
+            current_app.logger.error(f"Error getting theme context: {str(e)}")
+            theme_context = {}
+            
+        try:
+            html = render_template('scouting/partials/form_content.html', 
+                                team=team, 
+                                match=match,
+                                form_data=form_data,
+                                game_config=game_config,
+                                alliance=alliance,
+                                existing_data=existing_data,
+                                **theme_context)
+        except Exception as e:
+            current_app.logger.error(f"Error rendering form template: {str(e)}")
+            return jsonify({
+                'success': False, 
+                'message': f'Error rendering form template: {str(e)}'
+            })
+        
+        response_data = {
             'success': True, 
             'html': html,
             'team_number': team.team_number,
@@ -179,7 +295,13 @@ def scouting_form():
             'alliance': alliance,
             'team_id': team.id,
             'match_id': match.id
-        })
+        }
+        
+        # Include warning if there was data corruption
+        if data_corruption_warning:
+            response_data['warning'] = data_corruption_warning
+            
+        return jsonify(response_data)
     
     # For normal form submission (non-AJAX)
     elif request.method == 'POST':
@@ -212,7 +334,7 @@ def scouting_form():
                 continue
                 
             # Find the element in the game config to determine its type
-            element_type = _get_element_type_from_config(key, game_config)
+            element_type = _get_element_type_from_config(key, get_effective_game_config())
             perm_id = id_map.get(key, key)
             
             # Process based on type
@@ -235,7 +357,8 @@ def scouting_form():
         # Check if data already exists
         existing_data = ScoutingData.query.filter_by(
             team_id=team.id,
-            match_id=match.id
+            match_id=match.id,
+            scouting_team_number=current_user.scouting_team_number
         ).first()
         
         # Create or update scouting data
@@ -253,7 +376,8 @@ def scouting_form():
                 scout_name=scout_name,
                 scouting_station=scouting_station,
                 alliance=alliance,
-                data_json=json.dumps(data)
+                data_json=json.dumps(data),
+                scouting_team_number=current_user.scouting_team_number
             )
             db.session.add(new_data)
             flash('Scouting data saved successfully!', 'success')
@@ -282,13 +406,19 @@ def scouting_form():
         # Check if data already exists
         existing_data = ScoutingData.query.filter_by(
             team_id=team.id,
-            match_id=match.id
+            match_id=match.id,
+            scouting_team_number=current_user.scouting_team_number
         ).first()
         
         # Initialize form data
         form_data = {}
         if existing_data:
-            form_data = existing_data.data
+            try:
+                form_data = existing_data.data
+            except (json.JSONDecodeError, TypeError, ValueError) as e:
+                current_app.logger.error(f"Error parsing existing data for team {team_id}, match {match_id}: {str(e)}")
+                form_data = {}
+                flash('Warning: Could not load existing form data due to data corruption. Starting with fresh form.', 'warning')
         else:
             # Initialize with defaults
             for period in ['auto_period', 'teleop_period', 'endgame_period']:
@@ -349,11 +479,12 @@ def qr_code_display():
     # Get scouting data
     scouting_data = ScoutingData.query.filter_by(
         team_id=team.id,
-        match_id=match.id
+        match_id=match.id,
+        scouting_team_number=current_user.scouting_team_number
     ).first_or_404()
     
     # Get game configuration for default values
-    game_config = current_app.config['GAME_CONFIG']
+    game_config = get_current_game_config()
     
     # Process scouting data to minimize size
     compact_data = {}
@@ -438,11 +569,12 @@ def qr_code(team_id, match_id):
     # Get scouting data
     scouting_data = ScoutingData.query.filter_by(
         team_id=team.id,
-        match_id=match.id
+        match_id=match.id,
+        scouting_team_number=current_user.scouting_team_number
     ).first_or_404()
     
     # Get game configuration for default values
-    game_config = current_app.config['GAME_CONFIG']
+    game_config = get_effective_game_config()
     
     # Process scouting data to minimize size
     compact_data = {}
@@ -497,7 +629,7 @@ def list_data():
         flash('Access to the full scouting data list is restricted. Please contact an administrator for assistance.', 'warning')
         return redirect(url_for('scouting.index'))
     
-    scouting_data = (ScoutingData.query
+    scouting_data = (ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number)
                      .join(Match)
                      .join(Event)
                      .join(Team)
@@ -507,7 +639,7 @@ def list_data():
     # Get all events that have scouting data
     events = (Event.query
              .join(Match)
-             .join(ScoutingData)
+             .join(ScoutingData).filter(ScoutingData.scouting_team_number==current_user.scouting_team_number)
              .distinct()
              .order_by(Event.name)
              .all())
@@ -526,10 +658,10 @@ def view_data(id):
         flash('Access to view detailed scouting data is restricted. Please contact an administrator for assistance.', 'warning')
         return redirect(url_for('scouting.index'))
         
-    scouting_data = ScoutingData.query.get_or_404(id)
+    scouting_data = ScoutingData.query.filter_by(id=id, scouting_team_number=current_user.scouting_team_number).first_or_404()
     
     # Get game configuration
-    game_config = current_app.config['GAME_CONFIG']
+    game_config = get_effective_game_config()
     
     return render_template('scouting/view.html', scouting_data=scouting_data, 
                           game_config=game_config,
@@ -544,7 +676,7 @@ def delete_data(id):
         flash('You do not have permission to delete scouting data. Please contact an administrator for assistance.', 'danger')
         return redirect(url_for('scouting.index'))
         
-    scouting_data = ScoutingData.query.get_or_404(id)
+    scouting_data = ScoutingData.query.filter_by(id=id, scouting_team_number=current_user.scouting_team_number).first_or_404()
     
     team_number = scouting_data.team.team_number
     match_number = scouting_data.match.match_number
@@ -559,17 +691,17 @@ def delete_data(id):
 def offline_data():
     """Manage offline scouting data"""
     # Get game configuration
-    game_config = current_app.config['GAME_CONFIG']
+    game_config = get_effective_game_config()
     
     # Get current event based on configuration
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
-        current_event = Event.query.filter_by(code=current_event_code).first()
+        current_event = get_event_by_code(current_event_code)
     
     # Get teams filtered by the current event if available
     if current_event:
-        teams = current_event.teams
+        teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
     else:
         teams = []  # No teams if no current event is set
     
@@ -584,9 +716,9 @@ def offline_data():
     
     # Get matches filtered by the current event if available
     if current_event:
-        all_matches = Match.query.filter_by(event_id=current_event.id).all()
+        all_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).all()
     else:
-        all_matches = Match.query.all()
+        all_matches = filter_matches_by_scouting_team().all()
     
     matches = sorted(all_matches, key=lambda m: (
         match_type_order.get(m.match_type.lower(), 99),  # Unknown types go to the end
@@ -636,7 +768,8 @@ def submit_offline_data():
         # Check if entry already exists
         existing_data = ScoutingData.query.filter_by(
             team_id=team_id,
-            match_id=match_id
+            match_id=match_id,
+            scouting_team_number=current_user.scouting_team_number
         ).first()
         
         if existing_data:
@@ -654,7 +787,8 @@ def submit_offline_data():
                 scout_name=scout_name,
                 alliance=alliance,
                 data_json=json.dumps(scouting_data),
-                source='offline'
+                source='offline',
+                scouting_team_number=current_user.scouting_team_number
             )
             db.session.add(new_data)
             db.session.commit()
@@ -692,7 +826,7 @@ def save_scouting_data():
                 continue
                 
             # Find the element in the game config to determine its type
-            element_type = _get_element_type_from_config(key, current_app.config['GAME_CONFIG'])
+            element_type = _get_element_type_from_config(key, get_effective_game_config())
             perm_id = id_map.get(key, key)
             
             # Process based on type
@@ -715,7 +849,8 @@ def save_scouting_data():
         # Check if data already exists
         existing_data = ScoutingData.query.filter_by(
             team_id=team.id,
-            match_id=match.id
+            match_id=match.id,
+            scouting_team_number=current_user.scouting_team_number
         ).first()
         
         # Create or update scouting data
@@ -726,6 +861,7 @@ def save_scouting_data():
             existing_data.alliance = alliance
             existing_data.timestamp = datetime.utcnow()
             message = 'Scouting data updated successfully!'
+            saved_entry = existing_data
         else:
             new_data = ScoutingData(
                 team_id=team.id,
@@ -733,12 +869,17 @@ def save_scouting_data():
                 scout_name=scout_name,
                 scouting_station=scouting_station,
                 alliance=alliance,
-                data_json=json.dumps(data)
+                data_json=json.dumps(data),
+                scouting_team_number=current_user.scouting_team_number
             )
             db.session.add(new_data)
             message = 'Scouting data saved successfully!'
+            saved_entry = new_data
         
         db.session.commit()
+        
+        # Automatically sync to alliance members if alliance mode is active
+        auto_sync_alliance_data(saved_entry)
         
         # Return success response with redirection URL
         return jsonify({
@@ -806,7 +947,8 @@ def api_save():
         # Check if data already exists
         existing_data = ScoutingData.query.filter_by(
             team_id=team.id,
-            match_id=match.id
+            match_id=match.id,
+            scouting_team_number=current_user.scouting_team_number
         ).first()
         
         # Create or update scouting data
@@ -818,6 +960,7 @@ def api_save():
             existing_data.timestamp = datetime.utcnow()
             message = 'Scouting data updated successfully!'
             action = 'updated'
+            saved_entry = existing_data
         else:
             new_data = ScoutingData(
                 team_id=team.id,
@@ -825,13 +968,18 @@ def api_save():
                 scout_name=scout_name,
                 scouting_station=scouting_station,
                 alliance=alliance,
-                data_json=json.dumps(data)
+                data_json=json.dumps(data),
+                scouting_team_number=current_user.scouting_team_number
             )
             db.session.add(new_data)
             message = 'Scouting data saved successfully!'
             action = 'created'
+            saved_entry = new_data
         
         db.session.commit()
+        
+        # Automatically sync to alliance members if alliance mode is active
+        auto_sync_alliance_data(saved_entry)
         
         # Return success response without the redirect URL
         return jsonify({
@@ -856,13 +1004,13 @@ def api_save():
 def view_text_elements():
     """View all submitted text elements across all scouting data"""
     # Get game configuration to identify text elements
-    game_config = current_app.config['GAME_CONFIG']
+    game_config = get_effective_game_config()
     
     # Get current event based on configuration
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
-        current_event = Event.query.filter_by(code=current_event_code).first()
+        current_event = get_event_by_code(current_event_code)
     
     # Get all text elements from configuration
     text_elements = game_config.get('post_match', {}).get('text_elements', [])
@@ -872,7 +1020,7 @@ def view_text_elements():
         return redirect(url_for('scouting.index'))
     
     # Get scouting data with text elements
-    query = (ScoutingData.query
+    query = (ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number)
              .join(Match)
              .join(Event)
              .join(Team)
@@ -907,7 +1055,7 @@ def view_text_elements():
     # Get all events that have scouting data for the filter
     events = (Event.query
              .join(Match)
-             .join(ScoutingData)
+             .join(ScoutingData).filter(ScoutingData.scouting_team_number==current_user.scouting_team_number)
              .distinct()
              .order_by(Event.name)
              .all())

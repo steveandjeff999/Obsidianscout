@@ -1,0 +1,637 @@
+{% extends 'base.html' %}
+
+{% block title %}Setup Wizard{% endblock %}
+
+{% block heading %}ObsidianScout Setup Wizard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- Wizard Header -->
+            <div class="card shadow-lg">
+                <div class="card-header bg-primary text-white">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <h4 class="mb-0">
+                                <i class="fas fa-magic me-2"></i>Setup Wizard
+                            </h4>
+                            <p class="mb-0 opacity-75">Configure your scouting system in 5 easy steps</p>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-cogs fa-2x opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Progress Steps -->
+                <div class="card-body p-0">
+                    <div class="wizard-steps">
+                        <div class="step-container d-flex">
+                            <div class="step active" data-step="1">
+                                <div class="step-number">1</div>
+                                <div class="step-label">Configuration</div>
+                            </div>
+                            <div class="step-line"></div>
+                            <div class="step" data-step="2">
+                                <div class="step-number">2</div>
+                                <div class="step-label">Users</div>
+                            </div>
+                            <div class="step-line"></div>
+                            <div class="step" data-step="3">
+                                <div class="step-number">3</div>
+                                <div class="step-label">Events</div>
+                            </div>
+                            <div class="step-line"></div>
+                            <div class="step" data-step="4">
+                                <div class="step-number">4</div>
+                                <div class="step-label">Theme</div>
+                            </div>
+                            <div class="step-line"></div>
+                            <div class="step" data-step="5">
+                                <div class="step-number">5</div>
+                                <div class="step-label">Complete</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Wizard Content -->
+                <div class="card-body">
+                    <div id="wizard-content">
+                        <!-- Step 1: Team Information -->
+                        <div class="wizard-step active" id="step-1">
+                            <div class="text-center mb-4">
+                                <i class="fas fa-cogs fa-3x text-primary mb-3"></i>
+                                <h5>Configuration Setup</h5>
+                                <p class="text-muted">Configure your team's basic settings</p>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="alert alert-info mb-3">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        Use the simple configuration editor below to set up your team information, competition settings, and other basic configuration options.
+                                    </div>
+                                    
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">
+                                                <i class="fas fa-edit me-2"></i>
+                                                Simple Configuration Editor
+                                            </h6>
+                                        </div>
+                                        <div class="card-body p-0">
+                                            <iframe src="/config/simple-edit" 
+                                                    style="width: 100%; height: 600px; border: none;"
+                                                    id="config-iframe">
+                                            </iframe>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="alert alert-success mt-3" style="display: none;" id="config-saved-alert">
+                                        <i class="fas fa-check-circle me-2"></i>
+                                        Configuration saved successfully! You can proceed to the next step.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 2: Users -->
+                        <div class="wizard-step" id="step-2">
+                            <div class="text-center mb-4">
+                                <i class="fas fa-user-plus fa-3x text-success mb-3"></i>
+                                <h5>User Management</h5>
+                                <p class="text-muted">Create user accounts for your team members</p>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Add Team Members</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row mb-3">
+                                                <div class="col-md-4">
+                                                    <input type="text" class="form-control" 
+                                                           id="new-username" placeholder="Username">
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <input type="email" class="form-control" 
+                                                           id="new-email" placeholder="Email (optional)">
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <select class="form-select" id="new-role">
+                                                        <option value="scout">Scout</option>
+                                                        <option value="analytics">Analytics</option>
+                                                        <option value="admin">Admin</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-1">
+                                                    <button class="btn btn-success" onclick="addUser()">
+                                                        <i class="fas fa-plus"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            
+                                            <div id="users-list">
+                                                <!-- Dynamic user list will be populated here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h6>User Roles</h6>
+                                            <div class="mb-2">
+                                                <span class="badge bg-primary">Scout</span>
+                                                <small class="text-muted d-block">Enter match data and pit scouting</small>
+                                            </div>
+                                            <div class="mb-2">
+                                                <span class="badge bg-warning">Analytics</span>
+                                                <small class="text-muted d-block">View graphs and team rankings</small>
+                                            </div>
+                                            <div class="mb-2">
+                                                <span class="badge bg-danger">Admin</span>
+                                                <small class="text-muted d-block">Full system access and configuration</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 3: Events -->
+                        <div class="wizard-step" id="step-3">
+                            <div class="text-center mb-4">
+                                <i class="fas fa-calendar fa-3x text-warning mb-3"></i>
+                                <h5>Event Configuration</h5>
+                                <p class="text-muted">Set up competitions you'll be attending</p>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Add Events</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label class="form-label">Event Name</label>
+                                                <input type="text" class="form-control" 
+                                                       id="event-name" placeholder="Desert Regional">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Event Code</label>
+                                                <input type="text" class="form-control" 
+                                                       id="event-code" placeholder="CALN">
+                                            </div>
+                                            <div class="row">
+                                                <div class="col-6">
+                                                    <label class="form-label">Start Date</label>
+                                                    <input type="date" class="form-control" id="event-start">
+                                                </div>
+                                                <div class="col-6">
+                                                    <label class="form-label">End Date</label>
+                                                    <input type="date" class="form-control" id="event-end">
+                                                </div>
+                                            </div>
+                                            <div class="mt-3">
+                                                <button class="btn btn-success" onclick="addEvent()">
+                                                    <i class="fas fa-plus me-2"></i>Add Event
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Your Events</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="events-list">
+                                                <p class="text-muted text-center">No events added yet</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 4: Theme -->
+                        <div class="wizard-step" id="step-4">
+                            <div class="text-center mb-4">
+                                <i class="fas fa-palette fa-3x text-info mb-3"></i>
+                                <h5>Theme & Appearance</h5>
+                                <p class="text-muted">Customize how ObsidianScout looks</p>
+                            </div>
+                            
+                            <div class="row">
+                                {% for theme_id, theme in themes.items() %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="card theme-preview" data-theme="{{ theme_id }}">
+                                        <div class="card-body text-center">
+                                            <div class="theme-preview-colors mb-3">
+                                                <div class="color-swatch" style="background-color: {{ theme['colors']['primary'] }}"></div>
+                                                <div class="color-swatch" style="background-color: {{ theme['colors']['secondary'] }}"></div>
+                                                <div class="color-swatch" style="background-color: {{ theme['colors']['success'] }}"></div>
+                                            </div>
+                                            <h6>{{ theme['name'] }}</h6>
+                                            <p class="small text-muted">{{ theme['description'] }}</p>
+                                            <button class="btn btn-outline-primary btn-sm" onclick="selectTheme('{{ theme_id }}')">
+                                                Select
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <!-- Step 5: Complete -->
+                        <div class="wizard-step" id="step-5">
+                            <div class="text-center">
+                                <i class="fas fa-check-circle fa-4x text-success mb-4"></i>
+                                <h4>Setup Complete!</h4>
+                                <p class="lead">Your ObsidianScout system is ready to use</p>
+                                
+                                <div class="row mt-4">
+                                    <div class="col-md-4">
+                                        <div class="card bg-light">
+                                            <div class="card-body text-center">
+                                                <i class="fas fa-clipboard-list fa-2x text-primary mb-2"></i>
+                                                <h6>Start Scouting</h6>
+                                                <p class="small text-muted">Begin collecting match data</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="card bg-light">
+                                            <div class="card-body text-center">
+                                                <i class="fas fa-chart-line fa-2x text-warning mb-2"></i>
+                                                <h6>View Analytics</h6>
+                                                <p class="small text-muted">Analyze team performance</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="card bg-light">
+                                            <div class="card-body text-center">
+                                                <i class="fas fa-graduation-cap fa-2x text-info mb-2"></i>
+                                                <h6>Take Tutorial</h6>
+                                                <p class="small text-muted">Learn advanced features</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-4">
+                                    <button class="btn btn-success btn-lg" onclick="completeSetup()">
+                                        <i class="fas fa-rocket me-2"></i>Launch ObsidianScout
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Navigation Buttons -->
+                    <div class="d-flex justify-content-between mt-4 pt-3 border-top">
+                        <button class="btn btn-secondary" id="prev-btn" onclick="previousStep()" disabled>
+                            <i class="fas fa-arrow-left me-2"></i>Previous
+                        </button>
+                        
+                        <div class="text-muted">
+                            <small>Step <span id="current-step">1</span> of 5</small>
+                        </div>
+                        
+                        <button class="btn btn-primary" id="next-btn" onclick="nextStep()">
+                            Next<i class="fas fa-arrow-right ms-2"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentStep = 1;
+let wizardData = {};
+let users = [];
+let events = [];
+
+// Listen for messages from the config iframe
+window.addEventListener('message', function(event) {
+    // Check if message is from the config editor
+    if (event.data && event.data.type === 'config-saved') {
+        // Show success message
+        document.getElementById('config-saved-alert').style.display = 'block';
+    }
+});
+
+function showStep(step) {
+    // Hide all steps
+    document.querySelectorAll('.wizard-step').forEach(el => {
+        el.classList.remove('active');
+    });
+    
+    // Show current step
+    document.getElementById(`step-${step}`).classList.add('active');
+    
+    // Update progress indicators
+    document.querySelectorAll('.step').forEach((el, index) => {
+        el.classList.remove('active', 'completed');
+        if (index + 1 < step) {
+            el.classList.add('completed');
+        } else if (index + 1 === step) {
+            el.classList.add('active');
+        }
+    });
+    
+    // Update navigation
+    document.getElementById('prev-btn').disabled = (step === 1);
+    document.getElementById('next-btn').style.display = (step === 5) ? 'none' : 'inline-block';
+    document.getElementById('current-step').textContent = step;
+}
+
+function nextStep() {
+    if (currentStep < 5) {
+        saveCurrentStep();
+        currentStep++;
+        showStep(currentStep);
+    }
+}
+
+function previousStep() {
+    if (currentStep > 1) {
+        currentStep--;
+        showStep(currentStep);
+    }
+}
+
+function saveCurrentStep() {
+    const stepData = {};
+    
+    switch(currentStep) {
+        case 1:
+            // Configuration step - the iframe handles its own saving
+            // We just need to acknowledge that configuration is done
+            stepData.configurationCompleted = true;
+            // Show success message
+            document.getElementById('config-saved-alert').style.display = 'block';
+            break;
+        case 2:
+            stepData.users = users;
+            break;
+        case 3:
+            stepData.events = events;
+            break;
+        case 4:
+            stepData.selectedTheme = document.querySelector('.theme-preview.selected')?.dataset.theme;
+            break;
+    }
+    
+    wizardData[`step_${currentStep}`] = stepData;
+    
+    // Save to server
+    fetch('{{ url_for("setup.save_wizard_step") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            step: currentStep,
+            data: stepData
+        })
+    });
+}
+
+function addUser() {
+    const username = document.getElementById('new-username').value;
+    const email = document.getElementById('new-email').value;
+    const role = document.getElementById('new-role').value;
+    
+    if (!username) {
+        alert('Username is required');
+        return;
+    }
+    
+    users.push({ username, email, role });
+    updateUsersList();
+    
+    // Clear form
+    document.getElementById('new-username').value = '';
+    document.getElementById('new-email').value = '';
+    document.getElementById('new-role').value = 'scout';
+}
+
+function updateUsersList() {
+    const list = document.getElementById('users-list');
+    list.innerHTML = users.map((user, index) => `
+        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded">
+            <div>
+                <strong>${user.username}</strong>
+                <span class="badge bg-primary ms-2">${user.role}</span>
+                ${user.email ? `<br><small class="text-muted">${user.email}</small>` : ''}
+            </div>
+            <button class="btn btn-sm btn-outline-danger" onclick="removeUser(${index})">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+function removeUser(index) {
+    users.splice(index, 1);
+    updateUsersList();
+}
+
+function addEvent() {
+    const name = document.getElementById('event-name').value;
+    const code = document.getElementById('event-code').value;
+    const start = document.getElementById('event-start').value;
+    const end = document.getElementById('event-end').value;
+    
+    if (!name || !code) {
+        alert('Event name and code are required');
+        return;
+    }
+    
+    events.push({ name, code, start, end });
+    updateEventsList();
+    
+    // Clear form
+    document.getElementById('event-name').value = '';
+    document.getElementById('event-code').value = '';
+    document.getElementById('event-start').value = '';
+    document.getElementById('event-end').value = '';
+}
+
+function updateEventsList() {
+    const list = document.getElementById('events-list');
+    if (events.length === 0) {
+        list.innerHTML = '<p class="text-muted text-center">No events added yet</p>';
+        return;
+    }
+    
+    list.innerHTML = events.map((event, index) => `
+        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded">
+            <div>
+                <strong>${event.name}</strong> <span class="text-muted">(${event.code})</span>
+                ${event.start ? `<br><small class="text-muted">${event.start} - ${event.end}</small>` : ''}
+            </div>
+            <button class="btn btn-sm btn-outline-danger" onclick="removeEvent(${index})">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+function removeEvent(index) {
+    events.splice(index, 1);
+    updateEventsList();
+}
+
+function selectTheme(themeId) {
+    document.querySelectorAll('.theme-preview').forEach(el => {
+        el.classList.remove('selected');
+    });
+    document.querySelector(`[data-theme="${themeId}"]`).classList.add('selected');
+}
+
+function completeSetup() {
+    saveCurrentStep();
+    
+    fetch('{{ url_for("setup.complete_wizard") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(wizardData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.href = data.redirect;
+        } else {
+            alert('Error completing setup: ' + data.error);
+        }
+    });
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    showStep(1);
+});
+</script>
+
+<style>
+.wizard-steps {
+    padding: 2rem;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.step-container {
+    max-width: 600px;
+    margin: 0 auto;
+    align-items: center;
+}
+
+.step {
+    text-align: center;
+    z-index: 2;
+    position: relative;
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #e9ecef;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin: 0 auto 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.step-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.step.active .step-number {
+    background: #007bff;
+    color: white;
+}
+
+.step.active .step-label {
+    color: #007bff;
+}
+
+.step.completed .step-number {
+    background: #28a745;
+    color: white;
+}
+
+.step.completed .step-label {
+    color: #28a745;
+}
+
+.step-line {
+    flex: 1;
+    height: 2px;
+    background: #e9ecef;
+    margin: 0 1rem;
+    position: relative;
+    top: -20px;
+}
+
+.wizard-step {
+    display: none;
+    min-height: 400px;
+}
+
+.wizard-step.active {
+    display: block;
+}
+
+.theme-preview {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.theme-preview:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.theme-preview.selected {
+    border: 2px solid #007bff;
+    transform: translateY(-5px);
+    box-shadow: 0 4px 15px rgba(0,123,255,0.3);
+}
+
+.theme-preview-colors {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+}
+
+.color-swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+</style>
+{% endblock %}

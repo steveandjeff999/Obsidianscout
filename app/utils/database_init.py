@@ -35,6 +35,10 @@ def init_auth_system():
     # Create roles
     roles_data = [
         {
+            'name': 'superadmin',
+            'description': 'System-wide user management across all teams'
+        },
+        {
             'name': 'admin',
             'description': 'Full system access including user management and configuration'
         },
@@ -87,6 +91,13 @@ def init_auth_system():
         print("=" * 50)
     else:
         print(f"Admin user already exists: {admin_username}")
+    
+    # Check for super admin (created by separate script for security)
+    superadmin_user = User.query.filter_by(username='superadmin').first()
+    if superadmin_user:
+        print("Super admin user exists")
+    else:
+        print("Super admin not found - run init_superadmin.py to create")
 
 def init_default_configs():
     """Initialize default configuration files if they don't exist"""

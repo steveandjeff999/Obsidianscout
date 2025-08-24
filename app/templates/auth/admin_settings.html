@@ -30,13 +30,24 @@
         <div class="col-md-4">
             <div class="card">
                 <div class="card-header">
-                    <h5><i class="fas fa-shield-alt"></i> File Integrity</h5>
+                    <h5><i class="fas fa-user-lock"></i> Account Settings</h5>
                 </div>
                 <div class="card-body">
-                    <p>Configure file integrity monitoring and security settings.</p>
-                    <a href="{{ url_for('auth.admin_integrity') }}" class="btn btn-warning">
-                        <i class="fas fa-shield-alt"></i> Integrity Settings
-                    </a>
+                    <p>Control new account registration for your team.</p>
+                    <form method="POST" action="{{ url_for('auth.toggle_account_lock') }}" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        {% if account_creation_locked %}
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-unlock"></i> Unlock Account Creation
+                            </button>
+                            <p class="text-warning mt-2 small">Account creation is currently LOCKED</p>
+                        {% else %}
+                            <button type="submit" class="btn btn-warning">
+                                <i class="fas fa-lock"></i> Lock Account Creation
+                            </button>
+                            <p class="text-success mt-2 small">Account creation is currently UNLOCKED</p>
+                        {% endif %}
+                    </form>
                 </div>
             </div>
         </div>
@@ -64,6 +75,20 @@
                     <p>Customize the appearance of your ObsidianScout platform.</p>
                     <a href="{{ url_for('themes.index') }}" class="btn btn-primary">
                         <i class="fas fa-palette"></i> Manage Themes
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-handshake"></i> Scouting Alliances</h5>
+                </div>
+                <div class="card-body">
+                    <p>Collaborate with other scouting teams by sharing data and resources.</p>
+                    <a href="{{ url_for('scouting_alliances.dashboard') }}" class="btn btn-warning">
+                        <i class="fas fa-handshake"></i> Alliance Dashboard
                     </a>
                 </div>
             </div>
@@ -114,33 +139,7 @@
         </div>
     </div>
 
-    <div class="row mt-4">
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header {% if update_available %}bg-warning{% else %}bg-primary text-white{% endif %}">
-                    <h5>
-                        <i class="fas fa-sync-alt"></i> Application Update
-                        {% if update_available %}
-                            <span class="badge bg-warning text-dark float-end">Update Available</span>
-                        {% else %}
-                            <span class="badge bg-success float-end">Up to Date</span>
-                        {% endif %}
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <p>Update the application to the latest version from Git.</p>
-                    {% if current_version %}
-                    <p class="text-muted small mb-3">Current Version: {{ current_version }}</p>
-                    {% endif %}
-                    <a href="{{ url_for('admin.update_page') }}" class="btn btn-primary">
-                        <i class="fas fa-sync-alt"></i> Update Application
-                    </a>
-                </div>
-            </div>
-        </div>
 
-        <!-- Placeholder for additional admin cards -->
-    </div>
 
     <div class="row mt-4">
         <div class="col-md-12">

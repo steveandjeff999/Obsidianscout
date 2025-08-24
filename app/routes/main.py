@@ -8,9 +8,16 @@ from flask_socketio import emit, join_room
 from app import socketio
 import markdown2
 from app.utils.theme_manager import ThemeManager
+from app.utils.config_manager import (get_current_game_config, get_effective_game_config, save_game_config, 
+                                     get_available_default_configs, reset_config_to_default)
 from flask import request, jsonify
 from app import load_chat_history
 from app.models import User
+from datetime import datetime
+from app.utils.team_isolation import (
+    filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
+    filter_events_by_scouting_team, get_event_by_code, validate_user_in_same_team
+)
 
 connected_devices = {}
 
@@ -63,34 +70,40 @@ def index():
         flash("You don't have permission to access the dashboard. Redirected to scouting page.", "warning")
         return redirect(url_for('scouting.index'))
 
-    # Get game configuration from app config
-    game_config = current_app.config['GAME_CONFIG']
+    # Get game configuration from app config (use effective config for dashboard display)
+    game_config = get_effective_game_config()
     
     # Get current event based on configuration
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
-        current_event = Event.query.filter_by(code=current_event_code).first()
+        current_event = get_event_by_code(current_event_code)  # Use filtered function
     
-    # Get teams filtered by the current event if available
+    # Get teams filtered by the current event and scouting team
     if current_event:
-        teams = current_event.teams
+        teams = filter_teams_by_scouting_team().join(
+            Team.events
+        ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
     else:
         teams = []  # No teams if no current event is set
     
-    # Get matches filtered by the current event if available
+    # Get matches filtered by the current event and scouting team
     if current_event:
-        matches = Match.query.filter_by(event_id=current_event.id).order_by(Match.match_type, Match.match_number).all()
+        matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).order_by(Match.match_type, Match.match_number).all()
     else:
         matches = []  # No matches if no current event is set
     
-    scout_entries = ScoutingData.query.order_by(ScoutingData.timestamp.desc()).limit(5).all()
+    scout_entries = ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).order_by(ScoutingData.timestamp.desc()).limit(5).all()
+    
+    # Get total count of scouting entries for the dashboard
+    total_scout_entries = ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).count()
     
     return render_template('index.html', 
                           game_config=game_config,
                           teams=teams,
                           matches=matches,
                           scout_entries=scout_entries,
+                          total_scout_entries=total_scout_entries,
                           **get_theme_context())
 
 @bp.route('/about')
@@ -99,24 +112,56 @@ def about():
     """About page with info about the scouting system"""
     return render_template('about.html', **get_theme_context())
 
+@bp.route('/sponsors')
+@login_required
+def sponsors():
+    """Sponsors page to thank site sponsors"""
+    return render_template('sponsors.html', **get_theme_context())
+
 @bp.route('/config')
 @login_required
 def config():
     """View the current game configuration"""
-    game_config = current_app.config['GAME_CONFIG']
+    game_config = get_current_game_config()
     return render_template('config.html', game_config=game_config, **get_theme_context())
 
 @bp.route('/config/edit')
 def edit_config():
     """Edit the game configuration"""
-    game_config = copy.deepcopy(current_app.config['GAME_CONFIG'])
-    return render_template('config_edit.html', game_config=game_config, **get_theme_context())
+    game_config = copy.deepcopy(get_current_game_config())
+    default_configs = get_available_default_configs()
+    return render_template('config_edit.html', game_config=game_config, default_configs=default_configs, **get_theme_context())
 
 @bp.route('/config/simple-edit')
 def simple_edit_config():
     """Simple form-based configuration editor"""
-    game_config = copy.deepcopy(current_app.config['GAME_CONFIG'])
-    return render_template('config_simple_edit.html', game_config=game_config, **get_theme_context())
+    game_config = copy.deepcopy(get_current_game_config())
+    default_configs = get_available_default_configs()
+    return render_template('config_simple_edit.html', game_config=game_config, default_configs=default_configs, **get_theme_context())
+
+@bp.route('/config/reset', methods=['POST'])
+def reset_config():
+    """Reset configuration to a default template"""
+    try:
+        default_file = request.form.get('default_config')
+        config_type = request.form.get('config_type', 'game')
+        
+        if not default_file:
+            flash('No default configuration selected', 'error')
+            return redirect(url_for('main.edit_config'))
+        
+        success, message = reset_config_to_default(default_file, config_type)
+        
+        if success:
+            flash(message, 'success')
+        else:
+            flash(f'Error: {message}', 'error')
+            
+        return redirect(url_for('main.edit_config'))
+        
+    except Exception as e:
+        flash(f'Error resetting configuration: {str(e)}', 'error')
+        return redirect(url_for('main.edit_config'))
 
 @bp.route('/config/save', methods=['POST'])
 def save_config():
@@ -137,24 +182,13 @@ def save_config():
                 flash(f"Missing required configuration key: {key}", "danger")
                 return redirect(url_for('main.edit_config'))
         
-        # Get the path to the game_config.json file
-        config_path = os.path.join(current_app.instance_path, '..', 'config', 'game_config.json')
-        
-        # Create a backup of the existing configuration
-        backup_path = os.path.join(current_app.instance_path, '..', 'config', 'game_config_backup.json')
-        with open(config_path, 'r') as f:
-            current_config = f.read()
-            with open(backup_path, 'w') as backup_file:
-                backup_file.write(current_config)
-        
-        # Write the updated configuration to the file
-        with open(config_path, 'w') as f:
-            json.dump(updated_config, f, indent=2)
-            
-        # Update the configuration in the app
-        current_app.config['GAME_CONFIG'] = updated_config
-        
-        flash('Configuration updated successfully! A backup was created at config/game_config_backup.json', 'success')
+        # Save the updated configuration
+        if save_game_config(updated_config):
+            # Update the configuration in the app
+            current_app.config['GAME_CONFIG'] = updated_config
+            flash('Configuration updated successfully!', 'success')
+        else:
+            flash('Error saving configuration.', 'danger')
         return redirect(url_for('main.config'))
     except json.JSONDecodeError:
         flash('Invalid JSON configuration', 'danger')
@@ -167,7 +201,7 @@ def save_simple_config():
     """Save configuration from the simple editor"""
     try:
         # Get current config as base
-        updated_config = copy.deepcopy(current_app.config['GAME_CONFIG'])
+        updated_config = copy.deepcopy(get_current_game_config())
         
         # Update basic settings
         updated_config['game_name'] = request.form.get('game_name', '')
@@ -379,23 +413,12 @@ def save_simple_config():
             }
         
         # Save the configuration
-        config_path = os.path.join(current_app.instance_path, '..', 'config', 'game_config.json')
-        
-        # Create backup
-        backup_path = os.path.join(current_app.instance_path, '..', 'config', 'game_config_backup.json')
-        with open(config_path, 'r') as f:
-            current_config = f.read()
-            with open(backup_path, 'w') as backup_file:
-                backup_file.write(current_config)
-        
-        # Write updated config
-        with open(config_path, 'w') as f:
-            json.dump(updated_config, f, indent=2)
-        
-        # Update app config
-        current_app.config['GAME_CONFIG'] = updated_config
-        
-        flash('Configuration updated successfully! A backup was created at config/game_config_backup.json', 'success')
+        if save_game_config(updated_config):
+            # Update app config
+            current_app.config['GAME_CONFIG'] = updated_config
+            flash('Configuration updated successfully!', 'success')
+        else:
+            flash('Error saving configuration.', 'danger')
         return redirect(url_for('main.config'))
         
     except Exception as e:
@@ -427,6 +450,11 @@ def dm_history():
     from flask_login import current_user
     username = current_user.username
     other_user = request.args.get('user')
+    
+    # Validate that the other user is in the same scouting team
+    if not validate_user_in_same_team(other_user):
+        return jsonify({'history': []})  # Return empty history for users from different teams
+    
     history = load_chat_history()
     filtered = []
     for msg in history:
@@ -453,6 +481,11 @@ def send_dm():
     sender = current_user.username
     recipient = data.get('recipient')
     text = data.get('message')
+    
+    # Validate that recipient is in the same scouting team
+    if not validate_user_in_same_team(recipient):
+        return {'success': False, 'message': 'Cannot send message to user from different scouting team.'}, 403
+    
     from app import save_chat_message
     import datetime
     message = {
@@ -468,12 +501,23 @@ def send_dm():
     socketio.emit('dm_message', message, room=recipient)
     return {'success': True, 'message': 'Message sent.'}
 
+def get_chat_folder():
+    """Get the chat folder path and ensure it exists"""
+    chat_folder = os.path.join(current_app.instance_path, 'chat')
+    if not os.path.exists(chat_folder):
+        os.makedirs(chat_folder, exist_ok=True)
+    return chat_folder
+
+def get_user_chat_state_file(username):
+    """Get the path to a user's chat state file"""
+    return os.path.join(get_chat_folder(), f'chat_state_{username}.json')
+
 @bp.route('/chat/state', methods=['GET', 'POST'])
 @login_required
 def chat_state():
     import os, json
     from flask_login import current_user
-    state_file = os.path.join(current_app.instance_path, f'chat_state_{current_user.username}.json')
+    state_file = get_user_chat_state_file(current_user.username)
     if request.method == 'POST':
         data = request.get_json()
         # Ensure unreadCount is always present
@@ -498,7 +542,7 @@ def chat_state():
 def increment_unread():
     import os, json
     from flask_login import current_user
-    state_file = os.path.join(current_app.instance_path, f'chat_state_{current_user.username}.json')
+    state_file = get_user_chat_state_file(current_user.username)
     state = {'joinedGroups': [], 'currentGroup': '', 'lastDmUser': '', 'unreadCount': 0}
     if os.path.exists(state_file):
         with open(state_file, 'r', encoding='utf-8') as f:
@@ -514,7 +558,7 @@ def increment_unread():
 def reset_unread():
     import os, json
     from flask_login import current_user
-    state_file = os.path.join(current_app.instance_path, f'chat_state_{current_user.username}.json')
+    state_file = get_user_chat_state_file(current_user.username)
     state = {'joinedGroups': [], 'currentGroup': '', 'lastDmUser': '', 'unreadCount': 0}
     if os.path.exists(state_file):
         with open(state_file, 'r', encoding='utf-8') as f:
@@ -527,14 +571,171 @@ def reset_unread():
 @bp.route('/users', methods=['GET'])
 @login_required
 def users_page():
-    users = User.query.all()
+    users = User.query.filter_by(scouting_team_number=current_user.scouting_team_number).all()
     return render_template('users/index.html', users=users)
 
 @bp.route('/users/<int:user_id>')
 @login_required
 def user_profile(user_id):
-    user = User.query.get_or_404(user_id)
+    user = User.query.filter_by(id=user_id, scouting_team_number=current_user.scouting_team_number).first_or_404()
     return render_template('users/profile.html', user=user)
+
+@bp.route('/api/chat/users', methods=['GET'])
+@login_required
+def get_chat_users():
+    """Get users from the same scouting team for chat purposes."""
+    from app.utils.team_isolation import filter_users_by_scouting_team
+    users = filter_users_by_scouting_team().all()
+    # Exclude current user from the list
+    users = [user for user in users if user.username != current_user.username]
+    return jsonify([{'username': user.username, 'id': user.id} for user in users])
+
+@bp.route('/admin/global-config', methods=['GET', 'POST'])
+@login_required
+def admin_global_config():
+    """Admin panel for global config management and broadcasting"""
+    # Require admin role
+    if not current_user.has_role('admin'):
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('main.index'))
+    
+    if request.method == 'POST':
+        action = request.form.get('action')
+        
+        if action == 'reload_all':
+            try:
+                # Trigger a global config reload for all users
+                from app.utils.config_manager import get_effective_game_config, get_effective_pit_config
+                from datetime import datetime
+                
+                # Get fresh config data
+                fresh_config = {
+                    'game_config': get_effective_game_config(),
+                    'pit_config': get_effective_pit_config(),
+                    'timestamp': datetime.now().isoformat()
+                }
+                
+                # Broadcast to ALL users
+                socketio.emit('global_config_changed', {
+                    'type': 'admin_reload',
+                    'effective_game_config': fresh_config['game_config'],
+                    'effective_pit_config': fresh_config['pit_config'],
+                    'timestamp': fresh_config['timestamp'],
+                    'message': 'Configuration reloaded by administrator',
+                    'force_reload': True
+                })
+                
+                flash('Global configuration reload broadcast to all users.', 'success')
+                
+            except Exception as e:
+                flash(f'Error broadcasting config reload: {str(e)}', 'error')
+        
+        elif action == 'broadcast_message':
+            try:
+                message = request.form.get('message', '').strip()
+                if message:
+                    # Broadcast custom message to all users
+                    socketio.emit('global_config_changed', {
+                        'type': 'admin_message',
+                        'message': message,
+                        'timestamp': datetime.now().isoformat(),
+                        'show_notification': True
+                    })
+                    
+                    flash(f'Message broadcast to all users: "{message}"', 'success')
+                else:
+                    flash('Message cannot be empty.', 'error')
+                    
+            except Exception as e:
+                flash(f'Error broadcasting message: {str(e)}', 'error')
+        
+        return redirect(url_for('main.admin_global_config'))
+    
+    # GET request - show admin panel
+    from app.utils.config_manager import get_effective_game_config, get_effective_pit_config, is_alliance_mode_active, get_active_alliance_info
+    
+    current_config = {
+        'game_config': get_effective_game_config(),
+        'pit_config': get_effective_pit_config(),
+        'alliance_status': {
+            'is_active': is_alliance_mode_active(),
+            'alliance_info': get_active_alliance_info()
+        }
+    }
+    
+    return render_template('admin/global_config.html', 
+                          current_config=current_config,
+                          **get_theme_context())
+
+@bp.route('/sync-monitor')
+@login_required
+def enhanced_sync_monitor():
+    """Enhanced sync monitoring dashboard with reliability features"""
+    return render_template('sync_monitor_enhanced.html', **get_theme_context())
+
+@bp.route('/api/sync-status')
+@login_required
+def api_sync_status():
+    """API endpoint to check sync status and statistics"""
+    from app.models import Team, Match, Event, ScoutingData
+    from app.utils.config_manager import get_effective_game_config
+    
+    game_config = get_effective_game_config()
+    current_event_code = game_config.get('current_event_code')
+    
+    # Get basic statistics
+    total_teams = filter_teams_by_scouting_team().count()
+    total_matches = filter_matches_by_scouting_team().count()
+    total_events = filter_events_by_scouting_team().count()
+    
+    # Get current event info
+    current_event = None
+    if current_event_code:
+        current_event = get_event_by_code(current_event_code)
+        if current_event:
+            event_teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).count()
+            event_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).count()
+        else:
+            event_teams = 0
+            event_matches = 0
+    else:
+        event_teams = 0
+        event_matches = 0
+    
+    # Get recent sync activity (last 10 minutes)
+    from datetime import datetime, timedelta
+    recent_time = datetime.utcnow() - timedelta(minutes=10)
+    recent_teams = filter_teams_by_scouting_team().filter(Team.created_at >= recent_time).count() if hasattr(Team, 'created_at') else 0
+    recent_matches = filter_matches_by_scouting_team().filter(Match.created_at >= recent_time).count() if hasattr(Match, 'created_at') else 0
+    
+    status = {
+        'current_event_code': current_event_code,
+        'current_event_name': current_event.name if current_event else None,
+        'api_sync_enabled': True,  # Auto-sync is always enabled now
+        'statistics': {
+            'total_teams': total_teams,
+            'total_matches': total_matches,
+            'total_events': total_events,
+            'current_event_teams': event_teams,
+            'current_event_matches': event_matches,
+            'recent_teams_added': recent_teams,
+            'recent_matches_added': recent_matches
+        },
+        'sync_info': {
+            'alliance_sync_interval': '30 seconds',
+            'api_sync_interval': '3 minutes',
+            'last_check': datetime.utcnow().isoformat()
+        }
+    }
+    
+    return jsonify(status)
+
+def get_theme_context():
+    theme_manager = ThemeManager()
+    return {
+        'themes': theme_manager.get_available_themes(),
+        'current_theme_id': theme_manager.current_theme
+    }
 
 def parse_default_value(value, element_type):
     """Parse default value based on element type"""

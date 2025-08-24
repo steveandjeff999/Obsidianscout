@@ -217,6 +217,13 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Global config reload handler
+        if (typeof window.globalConfigReload === 'function') {
+            window.globalConfigReload = function() {
+                reloadMatchesWithNewConfig();
+            };
+        }
+        
         // Match type filtering
         const filterButtons = document.querySelectorAll('.filter-btn');
         const matchRows = document.querySelectorAll('tbody tr');
@@ -242,5 +249,63 @@
             });
         });
     });
+    
+    function reloadMatchesWithNewConfig() {
+        console.log('Reloading matches with new configuration...');
+        
+        // Show loading indicator
+        const cardBody = document.querySelector('.card-body');
+        if (cardBody) {
+            const loadingAlert = document.createElement('div');
+            loadingAlert.className = 'alert alert-info text-center mb-3';
+            loadingAlert.innerHTML = '<i class="fas fa-sync fa-spin me-2"></i>Updating matches with new configuration...';
+            cardBody.insertBefore(loadingAlert, cardBody.firstChild);
+        }
+        
+        // Fetch updated data via AJAX
+        fetch('/matches/data', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch updated matches configuration');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // For matches, we need to reload the page to show updated event data
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                throw new Error(data.error || 'Unknown error occurred');
+            }
+        })
+        .catch(error => {
+            console.error('Error reloading matches:', error);
+            
+            // Remove loading indicator and show error
+            const loadingAlert = document.querySelector('.alert-info');
+            if (loadingAlert) {
+                loadingAlert.remove();
+            }
+            
+            const errorAlert = document.createElement('div');
+            errorAlert.className = 'alert alert-warning alert-dismissible fade show';
+            errorAlert.innerHTML = `
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Failed to update matches configuration. Please refresh the page manually.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            if (cardBody) {
+                cardBody.insertBefore(errorAlert, cardBody.firstChild);
+            }
+        });
+    }
 </script>
 {% endblock %}
