@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Create Scouting Alliance{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-plus"></i> Create Scouting Alliance
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form id="createAllianceForm">
+                        <div class="mb-4">
+                            <label for="allianceName" class="form-label">Alliance Name *</label>
+                            <input type="text" class="form-control" id="allianceName" required
+                                   placeholder="e.g., Region Champions Alliance">
+                            <div class="form-text">Choose a descriptive name for your alliance</div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="allianceDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="allianceDescription" rows="4"
+                                      placeholder="Describe the purpose and goals of this alliance..."></textarea>
+                            <div class="form-text">Optional description to help teams understand your alliance</div>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <h6><i class="fas fa-info-circle"></i> Alliance Features</h6>
+                            <ul class="mb-0">
+                                <li>Share scouting data and pit scouting information</li>
+                                <li>Real-time chat with alliance members</li>
+                                <li>Configure shared events for data synchronization</li>
+                                <li>Automatic data updates across all member teams</li>
+                                <li><strong>Note:</strong> Strategy drawings and sensitive data remain private</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="alert alert-warning">
+                            <h6><i class="fas fa-exclamation-triangle"></i> Important Constraint</h6>
+                            <p class="mb-2">
+                                <strong>One Active Alliance:</strong> Teams can only be active in one alliance at a time. 
+                                When a team activates alliance mode, it will automatically deactivate any other active alliance.
+                            </p>
+                            <p class="mb-0">
+                                Teams can be members of multiple alliances but must choose which one to use for shared configurations.
+                            </p>
+                        </div>
+                        
+                        <div class="alert alert-warning">
+                            <i class="fas fa-crown"></i>
+                            <strong>Alliance Administrator:</strong> You will be the administrator of this alliance 
+                            and can invite other teams, manage events, and configure settings.
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('scouting_alliances.dashboard') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus"></i> Create Alliance
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('createAllianceForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const name = document.getElementById('allianceName').value;
+    const description = document.getElementById('allianceDescription').value;
+    
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    const originalHtml = submitButton.innerHTML;
+    submitButton.disabled = true;
+    submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating...';
+    
+    fetch('{{ url_for("scouting_alliances.create_alliance") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            name: name,
+            description: description
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message and redirect
+            const successAlert = document.createElement('div');
+            successAlert.className = 'alert alert-success';
+            successAlert.innerHTML = '<i class="fas fa-check"></i> Alliance created successfully! Redirecting...';
+            
+            const form = document.getElementById('createAllianceForm');
+            form.parentNode.insertBefore(successAlert, form);
+            
+            setTimeout(() => {
+                window.location.href = '{{ url_for("scouting_alliances.dashboard") }}';
+            }, 2000);
+        } else {
+            // Show error message
+            const errorAlert = document.createElement('div');
+            errorAlert.className = 'alert alert-danger';
+            errorAlert.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error creating alliance: ' + (data.error || 'Unknown error');
+            
+            const form = document.getElementById('createAllianceForm');
+            form.parentNode.insertBefore(errorAlert, form);
+            
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalHtml;
+        }
+    })
+    .catch(error => {
+        // Show network error
+        const errorAlert = document.createElement('div');
+        errorAlert.className = 'alert alert-danger';
+        errorAlert.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Network error. Please try again.';
+        
+        const form = document.getElementById('createAllianceForm');
+        form.parentNode.insertBefore(errorAlert, form);
+        
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalHtml;
+        
+        console.error('Error:', error);
+    });
+});
+</script>
+
+{% endblock %}

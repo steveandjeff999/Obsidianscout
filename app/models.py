@@ -6,7 +6,8 @@ from app import db
 import json
 import re
 import math
-from app.utils.config_manager import get_id_to_perm_id_mapping, get_scoring_element_by_perm_id
+from app.utils.config_manager import get_id_to_perm_id_mapping, get_scoring_element_by_perm_id, get_current_game_config
+from app.utils.concurrent_models import ConcurrentModelMixin
 
 # Association table for user roles (many-to-many)
 user_roles = db.Table('user_roles',
@@ -20,53 +21,19 @@ team_event = db.Table('team_event',
     db.Column('event_id', db.Integer, db.ForeignKey('event.id'), primary_key=True)
 )
 
-class ActivityLog(db.Model):
-    """Model to track user activity including keystrokes and actions"""
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    username = db.Column(db.String(80))  # Store username directly for quicker access
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    action_type = db.Column(db.String(50))  # e.g., 'keystroke', 'button_click', 'form_submit', 'page_view'
-    page = db.Column(db.String(200))  # The page/route where action occurred
-    element_id = db.Column(db.String(100), nullable=True)  # ID of UI element (if applicable)
-    element_type = db.Column(db.String(50), nullable=True)  # Type of element (button, input, etc.)
-    data = db.Column(db.Text, nullable=True)  # JSON data with action details
-    ip_address = db.Column(db.String(50), nullable=True)
-    user_agent = db.Column(db.String(255), nullable=True)
-    
-    # Relationship with User model
-    user = db.relationship('User', backref=db.backref('activity_logs', lazy=True))
-    
-    def __repr__(self):
-        return f'<ActivityLog {self.action_type} by {self.username} at {self.timestamp}>'
 
-    @staticmethod
-    def log_activity(user, action_type, page, element_id=None, element_type=None, data=None, ip_address=None, user_agent=None):
-        """Helper method to quickly log an activity"""
-        log = ActivityLog(
-            user_id=user.id if user else None,
-            username=user.username if user else "Anonymous",
-            action_type=action_type,
-            page=page,
-            element_id=element_id,
-            element_type=element_type,
-            data=json.dumps(data) if data else None,
-            ip_address=ip_address,
-            user_agent=user_agent
-        )
-        db.session.add(log)
-        db.session.commit()
-        return log
-
-class User(UserMixin, db.Model):
+class User(UserMixin, ConcurrentModelMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=True)
     password_hash = db.Column(db.String(128))
+    scouting_team_number = db.Column(db.Integer, nullable=True)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_login = db.Column(db.DateTime)
     profile_picture = db.Column(db.String(256), nullable=True, default='img/avatars/default.png')
+    must_change_password = db.Column(db.Boolean, default=False)
     
     # Many-to-many relationship with roles
     roles = db.relationship('Role', secondary=user_roles, lazy='subquery',
@@ -85,9 +52,20 @@ class User(UserMixin, db.Model):
     def get_role_names(self):
         """Get list of role names for this user"""
         return [role.name for role in self.roles]
+
+    def has_roles(self):
+        """Check if user has any roles"""
+        return len(self.roles) > 0
     
     def can_access_route(self, route_name):
         """Check if user can access a specific route based on their roles"""
+        # Superadmin can only access user management and basic functions
+        if self.has_role('superadmin'):
+            return route_name in [
+                'auth.manage_users', 'auth.edit_user', 'auth.delete_user', 
+                'auth.update_user', 'auth.add_user', 'auth.logout', 'auth.profile'
+            ]
+
         # Admin can access everything
         if self.has_role('admin'):
             return True
@@ -124,11 +102,55 @@ class Role(db.Model):
     def __repr__(self):
         return f'<Role {self.name}>'
 
-class Team(db.Model):
+class ScoutingTeamSettings(db.Model):
+    """Model to store team-level settings and preferences"""
     id = db.Column(db.Integer, primary_key=True)
-    team_number = db.Column(db.Integer, unique=True, nullable=False)
+    scouting_team_number = db.Column(db.Integer, unique=True, nullable=False)
+    account_creation_locked = db.Column(db.Boolean, default=False, nullable=False)
+    locked_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    locked_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship with User who locked/unlocked accounts
+    locked_by_user = db.relationship('User', backref=db.backref('locked_teams', lazy=True))
+    
+    def __repr__(self):
+        status = "LOCKED" if self.account_creation_locked else "UNLOCKED"
+        return f'<ScoutingTeamSettings Team {self.scouting_team_number}: {status}>'
+    
+    @staticmethod
+    def get_or_create_for_team(team_number):
+        """Get or create settings for a scouting team"""
+        settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=team_number).first()
+        if not settings:
+            settings = ScoutingTeamSettings(scouting_team_number=team_number)
+            db.session.add(settings)
+            db.session.commit()
+        return settings
+    
+    def lock_account_creation(self, user):
+        """Lock account creation for this team"""
+        self.account_creation_locked = True
+        self.locked_by_user_id = user.id
+        self.locked_at = datetime.utcnow()
+        self.updated_at = datetime.utcnow()
+        db.session.commit()
+    
+    def unlock_account_creation(self, user):
+        """Unlock account creation for this team"""
+        self.account_creation_locked = False
+        self.locked_by_user_id = user.id
+        self.locked_at = None
+        self.updated_at = datetime.utcnow()
+        db.session.commit()
+
+class Team(ConcurrentModelMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    team_number = db.Column(db.Integer, nullable=False)
     team_name = db.Column(db.String(100))
     location = db.Column(db.String(100))
+    scouting_team_number = db.Column(db.Integer, nullable=True)
     # Define relationship with ScoutingData
     scouting_data = db.relationship('ScoutingData', backref='team', lazy=True)
     # Track which events this team has participated in
@@ -154,17 +176,18 @@ class Team(db.Model):
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    code = db.Column(db.String(20), unique=True)  # Event code like "CALA" or "NYRO"
+    code = db.Column(db.String(20))  # Event code like "CALA" or "NYRO" - not unique anymore since multiple teams can have same event
     location = db.Column(db.String(100))
     start_date = db.Column(db.Date)
     end_date = db.Column(db.Date)
     year = db.Column(db.Integer, nullable=False)
+    scouting_team_number = db.Column(db.Integer, nullable=True)
     matches = db.relationship('Match', backref='event', lazy=True)
     
     def __repr__(self):
         return f"Event: {self.name} ({self.year})"
 
-class Match(db.Model):
+class Match(ConcurrentModelMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     match_number = db.Column(db.Integer, nullable=False)
     match_type = db.Column(db.String(20), nullable=False)
@@ -175,6 +198,7 @@ class Match(db.Model):
     blue_score = db.Column(db.Integer)
     winner = db.Column(db.String(10))  # 'red', 'blue', or 'tie'
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    scouting_team_number = db.Column(db.Integer, nullable=True)
     scouting_data = db.relationship('ScoutingData', backref='match', lazy=True)
     
     def __repr__(self):
@@ -194,10 +218,11 @@ class Match(db.Model):
         team_numbers = self.red_teams + self.blue_teams
         return Team.query.filter(Team.team_number.in_(team_numbers)).all()
 
-class ScoutingData(db.Model):
+class ScoutingData(ConcurrentModelMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     match_id = db.Column(db.Integer, db.ForeignKey('match.id'), nullable=False)
     team_id = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=False)
+    scouting_team_number = db.Column(db.Integer, nullable=True)
     scout_name = db.Column(db.String(50))
     scouting_station = db.Column(db.Integer)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
@@ -235,7 +260,7 @@ class ScoutingData(db.Model):
     def calculate_metric(self, formula_or_id):
         """Calculate metrics based on formulas or metric IDs defined in game config"""
         data = self.data
-        game_config = current_app.config.get('GAME_CONFIG', {})
+        game_config = get_current_game_config()
         
         # Check if this is a metric ID (not a formula)
         metric_config = None
@@ -375,7 +400,7 @@ class ScoutingData(db.Model):
     def _calculate_specific_metric(self, metric_id, formula, local_dict):
         """Calculate a specific metric based on its ID"""
         # Get game configuration
-        game_config = current_app.config.get('GAME_CONFIG', {})
+        game_config = get_current_game_config()
         
         if metric_id == 'tot':
             # Calculate total points dynamically based on components marked with is_total_component=true
@@ -413,7 +438,7 @@ class ScoutingData(db.Model):
     def _calculate_auto_points_dynamic(self, local_dict, game_config=None):
         """Dynamically calculate auto period points based on game pieces and scoring elements"""
         if not game_config:
-            game_config = current_app.config.get('GAME_CONFIG', {})
+            game_config = get_current_game_config()
             
         points = 0
         
@@ -452,7 +477,7 @@ class ScoutingData(db.Model):
     def _calculate_teleop_points_dynamic(self, local_dict, game_config=None):
         """Dynamically calculate teleop period points based on game pieces and scoring elements"""
         if not game_config:
-            game_config = current_app.config.get('GAME_CONFIG', {})
+            game_config = get_current_game_config()
             
         points = 0
         
@@ -495,7 +520,7 @@ class ScoutingData(db.Model):
     def _calculate_endgame_points_dynamic(self, local_dict, game_config=None):
         """Dynamically calculate endgame period points based on scoring elements"""
         if not game_config:
-            game_config = current_app.config.get('GAME_CONFIG', {})
+            game_config = get_current_game_config()
             
         points = 0
         
@@ -523,7 +548,7 @@ class ScoutingData(db.Model):
     def _calculate_accuracy_dynamic(self, local_dict, game_config, metric_config):
         """Dynamically calculate accuracy metrics for game pieces"""
         if not game_config:
-            game_config = current_app.config.get('GAME_CONFIG', {})
+            game_config = get_current_game_config()
             
         # Get the game piece ID from the metric config if specified
         target_game_piece_id = metric_config.get('game_piece_id') if metric_config else None
@@ -562,7 +587,7 @@ class ScoutingData(db.Model):
     def _calculate_gamepieces_per_match_dynamic(self, local_dict, game_config):
         """Dynamically calculate total game pieces scored in a match"""
         if not game_config:
-            game_config = current_app.config.get('GAME_CONFIG', {})
+            game_config = get_current_game_config()
             
         total_scored = 0
         
@@ -580,7 +605,7 @@ class ScoutingData(db.Model):
     def _calculate_scoring_frequency_dynamic(self, local_dict, game_config):
         """Dynamically calculate scoring frequency (game pieces per minute)"""
         if not game_config:
-            game_config = current_app.config.get('GAME_CONFIG', {})
+            game_config = get_current_game_config()
             
         # Get total match duration in minutes
         auto_duration = game_config.get('auto_period', {}).get('duration_seconds', 15)
@@ -660,6 +685,7 @@ class TeamListEntry(db.Model):
     reason = db.Column(db.Text)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     type = db.Column(db.String(50))  # For tracking entry type (do_not_pick or avoid)
+    scouting_team_number = db.Column(db.Integer, nullable=True)
 
     __mapper_args__ = {
         'polymorphic_identity': 'base',
@@ -687,6 +713,7 @@ class AllianceSelection(db.Model):
     third_pick = db.Column(db.Integer, db.ForeignKey('team.id'))  # Third pick (backup)
     event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    scouting_team_number = db.Column(db.Integer, nullable=True)
     
     # Relationships
     captain_team = db.relationship('Team', foreign_keys=[captain])
@@ -729,6 +756,7 @@ class PitScoutingData(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     team_id = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=False)
     event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=True)
+    scouting_team_number = db.Column(db.Integer, nullable=True)
     scout_name = db.Column(db.String(50), nullable=False)
     scout_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
@@ -812,6 +840,7 @@ class StrategyDrawing(db.Model):
     """Model to store strategy drawing data for each match"""
     id = db.Column(db.Integer, primary_key=True)
     match_id = db.Column(db.Integer, db.ForeignKey('match.id'), nullable=False, unique=True)
+    scouting_team_number = db.Column(db.Integer, nullable=True)
     data_json = db.Column(db.Text, nullable=False)  # JSON-encoded drawing data
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -832,3 +861,903 @@ class StrategyDrawing(db.Model):
     @data.setter
     def data(self, value):
         self.data_json = json.dumps(value)
+
+
+# ======== SCOUTING ALLIANCE MODELS ========
+
+class ScoutingAlliance(db.Model):
+    """Model to represent a scouting alliance between teams"""
+    __tablename__ = 'scouting_alliance'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    alliance_name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True)
+    
+    # Configuration sync settings
+    game_config_team = db.Column(db.Integer, nullable=True)  # Team whose game config to use
+    pit_config_team = db.Column(db.Integer, nullable=True)  # Team whose pit config to use
+    config_status = db.Column(db.String(50), default='pending')  # 'pending', 'configured', 'conflict'
+    shared_game_config = db.Column(db.Text)  # JSON game config data
+    shared_pit_config = db.Column(db.Text)  # JSON pit config data
+    
+    # Alliance members relationship
+    members = db.relationship('ScoutingAllianceMember', backref='alliance', cascade='all, delete-orphan')
+    events = db.relationship('ScoutingAllianceEvent', backref='alliance', cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<ScoutingAlliance {self.alliance_name}>'
+    
+    def get_active_members(self):
+        """Get all active members of this alliance"""
+        return [member for member in self.members if member.status == 'accepted']
+    
+    def get_member_team_numbers(self):
+        """Get list of team numbers in this alliance"""
+        return [member.team_number for member in self.get_active_members()]
+    
+    def is_member(self, team_number):
+        """Check if a team is a member of this alliance"""
+        return team_number in self.get_member_team_numbers()
+    
+    def get_shared_events(self):
+        """Get events this alliance is collaborating on"""
+        return [ae.event_code for ae in self.events if ae.is_active]
+    
+    def get_config_summary(self):
+        """Get a summary of configuration status"""
+        summary = {
+            'game_config_status': 'Not Set',
+            'pit_config_status': 'Not Set',
+            'game_config_team': self.game_config_team,
+            'pit_config_team': self.pit_config_team,
+            'overall_status': self.config_status
+        }
+        
+        if self.game_config_team:
+            summary['game_config_status'] = f"Using Team {self.game_config_team}'s config"
+        if self.pit_config_team:
+            summary['pit_config_status'] = f"Using Team {self.pit_config_team}'s config"
+            
+        return summary
+    
+    def has_config_conflicts(self):
+        """Check if there are configuration conflicts"""
+        return self.config_status == 'conflict'
+    
+    def is_config_complete(self):
+        """Check if configuration is complete"""
+        return self.game_config_team is not None and self.pit_config_team is not None
+
+class ScoutingAllianceMember(db.Model):
+    """Model to represent members of a scouting alliance"""
+    __tablename__ = 'scouting_alliance_member'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    alliance_id = db.Column(db.Integer, db.ForeignKey('scouting_alliance.id'), nullable=False)
+    team_number = db.Column(db.Integer, nullable=False)
+    team_name = db.Column(db.String(100))
+    role = db.Column(db.String(50), default='member')  # 'admin', 'member'
+    status = db.Column(db.String(50), default='pending')  # 'pending', 'accepted', 'declined'
+    joined_at = db.Column(db.DateTime, default=datetime.utcnow)
+    invited_by = db.Column(db.Integer, nullable=True)  # Team number that sent the invite
+    
+    def __repr__(self):
+        return f'<AllianceMember {self.team_number} in Alliance {self.alliance_id}>'
+
+class ScoutingAllianceInvitation(db.Model):
+    """Model to represent alliance invitations"""
+    __tablename__ = 'scouting_alliance_invitation'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    alliance_id = db.Column(db.Integer, db.ForeignKey('scouting_alliance.id'), nullable=False)
+    from_team_number = db.Column(db.Integer, nullable=False)
+    to_team_number = db.Column(db.Integer, nullable=False)
+    message = db.Column(db.Text)
+    status = db.Column(db.String(50), default='pending')  # 'pending', 'accepted', 'declined'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    responded_at = db.Column(db.DateTime)
+    
+    # Relationship to alliance
+    alliance = db.relationship('ScoutingAlliance', backref='invitations')
+    
+    def __repr__(self):
+        return f'<Invitation from {self.from_team_number} to {self.to_team_number}>'
+
+class ScoutingAllianceEvent(db.Model):
+    """Model to represent events an alliance is collaborating on"""
+    __tablename__ = 'scouting_alliance_event'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    alliance_id = db.Column(db.Integer, db.ForeignKey('scouting_alliance.id'), nullable=False)
+    event_code = db.Column(db.String(20), nullable=False)
+    event_name = db.Column(db.String(100))
+    is_active = db.Column(db.Boolean, default=True)
+    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<AllianceEvent {self.event_code} for Alliance {self.alliance_id}>'
+
+class ScoutingAllianceSync(db.Model):
+    """Model to track data synchronization between alliance members"""
+    __tablename__ = 'scouting_alliance_sync'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    alliance_id = db.Column(db.Integer, db.ForeignKey('scouting_alliance.id'), nullable=False)
+    from_team_number = db.Column(db.Integer, nullable=False)
+    to_team_number = db.Column(db.Integer, nullable=False)
+    data_type = db.Column(db.String(50), nullable=False)  # 'scouting_data', 'pit_data', 'chat'
+    data_count = db.Column(db.Integer, default=0)
+    last_sync = db.Column(db.DateTime, default=datetime.utcnow)
+    sync_status = db.Column(db.String(50), default='pending')  # 'pending', 'synced', 'failed'
+    
+    # Relationship to alliance
+    alliance = db.relationship('ScoutingAlliance', backref='sync_records')
+    
+    def __repr__(self):
+        return f'<Sync {self.data_type} from {self.from_team_number} to {self.to_team_number}>'
+
+class ScoutingAllianceChat(db.Model):
+    """Model for chat messages between alliance members"""
+    __tablename__ = 'scouting_alliance_chat'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    alliance_id = db.Column(db.Integer, db.ForeignKey('scouting_alliance.id'), nullable=False)
+    from_team_number = db.Column(db.Integer, nullable=False)
+    from_username = db.Column(db.String(80), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    message_type = db.Column(db.String(50), default='text')  # 'text', 'system', 'data_share'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_read = db.Column(db.Boolean, default=False)
+    
+    # Relationship to alliance
+    alliance = db.relationship('ScoutingAlliance', backref='chat_messages')
+    
+    def __repr__(self):
+        return f'<Chat from {self.from_username} in Alliance {self.alliance_id}>'
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'from_team_number': self.from_team_number,
+            'from_username': self.from_username,
+            'message': self.message,
+            'message_type': self.message_type,
+            'created_at': self.created_at.isoformat(),
+            'is_read': self.is_read
+        }
+
+class TeamAllianceStatus(db.Model):
+    """Model to track which alliance is currently active for each team"""
+    __tablename__ = 'team_alliance_status'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    team_number = db.Column(db.Integer, nullable=False, unique=True)
+    active_alliance_id = db.Column(db.Integer, db.ForeignKey('scouting_alliance.id'), nullable=True)
+    is_alliance_mode_active = db.Column(db.Boolean, default=False)
+    activated_at = db.Column(db.DateTime, nullable=True)
+    deactivated_at = db.Column(db.DateTime, nullable=True)
+    
+    # Relationship to active alliance
+    active_alliance = db.relationship('ScoutingAlliance', backref='active_teams')
+    
+    def __repr__(self):
+        return f'<TeamAllianceStatus Team {self.team_number} - Active: {self.is_alliance_mode_active}>'
+    
+    @classmethod
+    def get_active_alliance_for_team(cls, team_number):
+        """Get the currently active alliance for a team"""
+        status = cls.query.filter_by(
+            team_number=team_number, 
+            is_alliance_mode_active=True
+        ).first()
+        return status.active_alliance if status else None
+    
+    @classmethod
+    def is_alliance_mode_active_for_team(cls, team_number):
+        """Check if alliance mode is active for a team"""
+        status = cls.query.filter_by(team_number=team_number).first()
+        return status.is_alliance_mode_active if status else False
+    
+    @classmethod
+    def activate_alliance_for_team(cls, team_number, alliance_id):
+        """Activate an alliance for a team - automatically deactivates any other active alliance"""
+        status = cls.query.filter_by(team_number=team_number).first()
+        if not status:
+            status = cls(team_number=team_number)
+            db.session.add(status)
+        
+        # Check if team is trying to activate a different alliance
+        if status.is_alliance_mode_active and status.active_alliance_id != alliance_id:
+            # Automatically deactivate current alliance and switch to new one
+            status.deactivated_at = datetime.utcnow()
+        
+        status.active_alliance_id = alliance_id
+        status.is_alliance_mode_active = True
+        status.activated_at = datetime.utcnow()
+        status.deactivated_at = None
+        db.session.commit()
+        return status
+    
+    @classmethod
+    def deactivate_alliance_for_team(cls, team_number):
+        """Deactivate alliance mode for a team"""
+        status = cls.query.filter_by(team_number=team_number).first()
+        if status:
+            status.is_alliance_mode_active = False
+            status.deactivated_at = datetime.utcnow()
+            db.session.commit()
+        return status
+    
+    @classmethod
+    def can_team_join_alliance(cls, team_number, alliance_id):
+        """Check if a team can join a new alliance (not active in another alliance)"""
+        status = cls.query.filter_by(team_number=team_number).first()
+        if not status:
+            return True  # Team not in any alliance
+        
+        # Team can join if:
+        # 1. They're not currently active in any alliance, OR
+        # 2. They're trying to join the same alliance they're already active in
+        return not status.is_alliance_mode_active or status.active_alliance_id == alliance_id
+    
+    @classmethod
+    def get_active_alliance_name(cls, team_number):
+        """Get the name of the currently active alliance for a team"""
+        status = cls.query.filter_by(
+            team_number=team_number, 
+            is_alliance_mode_active=True
+        ).first()
+        return status.active_alliance.alliance_name if status and status.active_alliance else None
+
+class SharedGraph(db.Model):
+    """Model to store shared graph configurations for public viewing"""
+    __tablename__ = 'shared_graph'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    share_id = db.Column(db.String(36), unique=True, nullable=False)  # UUID for public URL
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    
+    # Graph configuration
+    team_numbers = db.Column(db.Text, nullable=False)  # JSON array of team numbers
+    event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=True)
+    metric = db.Column(db.String(100), nullable=False)
+    graph_types = db.Column(db.Text, nullable=False)  # JSON array of graph types
+    data_view = db.Column(db.String(50), default='averages')  # 'averages' or 'matches'
+    
+    # Metadata
+    created_by_team = db.Column(db.Integer, nullable=False)  # Team number that created the share
+    created_by_user = db.Column(db.String(80), nullable=False)  # Username that created the share
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=True)  # Optional expiration
+    view_count = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+    
+    # Privacy settings
+    is_public = db.Column(db.Boolean, default=True)  # Always true for now, but allows future extension
+    allow_comments = db.Column(db.Boolean, default=False)  # Future feature
+    
+    # Relationship to event
+    event = db.relationship('Event', backref='shared_graphs')
+    
+    def __repr__(self):
+        return f'<SharedGraph {self.share_id} - {self.title}>'
+    
+    @property
+    def team_numbers_list(self):
+        """Get team numbers as a Python list"""
+        try:
+            return json.loads(self.team_numbers)
+        except (json.JSONDecodeError, TypeError):
+            return []
+    
+    @team_numbers_list.setter
+    def team_numbers_list(self, value):
+        """Set team numbers from a Python list"""
+        self.team_numbers = json.dumps(value)
+    
+    @property
+    def graph_types_list(self):
+        """Get graph types as a Python list"""
+        try:
+            return json.loads(self.graph_types)
+        except (json.JSONDecodeError, TypeError):
+            return []
+    
+    @graph_types_list.setter
+    def graph_types_list(self, value):
+        """Set graph types from a Python list"""
+        self.graph_types = json.dumps(value)
+    
+    def is_expired(self):
+        """Check if this shared graph has expired"""
+        if not self.expires_at:
+            return False
+        return datetime.utcnow() > self.expires_at
+    
+    def get_teams(self):
+        """Get Team objects for the teams in this shared graph"""
+        team_numbers = self.team_numbers_list
+        if not team_numbers:
+            return []
+        return Team.query.filter(Team.team_number.in_(team_numbers)).all()
+    
+    def increment_view_count(self):
+        """Increment the view count for this shared graph"""
+        self.view_count += 1
+        db.session.commit()
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'share_id': self.share_id,
+            'title': self.title,
+            'description': self.description,
+            'team_numbers': self.team_numbers_list,
+            'event_id': self.event_id,
+            'event_name': self.event.name if self.event else None,
+            'metric': self.metric,
+            'graph_types': self.graph_types_list,
+            'data_view': self.data_view,
+            'created_by_team': self.created_by_team,
+            'created_by_user': self.created_by_user,
+            'created_at': self.created_at.isoformat(),
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'view_count': self.view_count,
+            'is_active': self.is_active,
+            'is_public': self.is_public,
+            'is_expired': self.is_expired()
+        }
+    
+    @classmethod
+    def create_share(cls, title, team_numbers, event_id, metric, graph_types, data_view, 
+                     created_by_team, created_by_user, description=None, expires_in_days=None):
+        """Create a new shared graph"""
+        import uuid
+        
+        share_id = str(uuid.uuid4())
+        
+        # Calculate expiration if specified
+        expires_at = None
+        if expires_in_days:
+            from datetime import timedelta
+            expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+        
+        shared_graph = cls(
+            share_id=share_id,
+            title=title,
+            description=description,
+            team_numbers=json.dumps(team_numbers),
+            event_id=event_id,
+            metric=metric,
+            graph_types=json.dumps(graph_types),
+            data_view=data_view,
+            created_by_team=created_by_team,
+            created_by_user=created_by_user,
+            expires_at=expires_at
+        )
+        
+        db.session.add(shared_graph)
+        db.session.commit()
+        return shared_graph
+    
+    @classmethod
+    def get_by_share_id(cls, share_id):
+        """Get a shared graph by its share ID"""
+        return cls.query.filter_by(share_id=share_id, is_active=True).first()
+    
+    @classmethod
+    def get_user_shares(cls, team_number, username=None):
+        """Get all shared graphs created by a team/user"""
+        query = cls.query.filter_by(created_by_team=team_number, is_active=True)
+        if username:
+            query = query.filter_by(created_by_user=username)
+        return query.order_by(cls.created_at.desc()).all()
+
+
+class SharedTeamRanks(db.Model):
+    """Model to store shared team ranking configurations for public viewing"""
+    __tablename__ = 'shared_team_ranks'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    share_id = db.Column(db.String(36), unique=True, nullable=False)  # UUID for public URL
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    
+    # Ranking configuration
+    event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=True)
+    metric = db.Column(db.String(100), nullable=False, default='tot')  # Metric to rank by
+    
+    # Metadata
+    created_by_team = db.Column(db.Integer, nullable=False)  # Team number that created the share
+    created_by_user = db.Column(db.String(80), nullable=False)  # Username that created the share
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=True)  # Optional expiration
+    view_count = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+    
+    # Privacy settings
+    is_public = db.Column(db.Boolean, default=True)  # Always true for now, but allows future extension
+    allow_comments = db.Column(db.Boolean, default=False)  # Future feature
+    
+    # Relationship to event
+    event = db.relationship('Event', backref='shared_team_ranks')
+    
+    def __repr__(self):
+        return f'<SharedTeamRanks {self.share_id} - {self.title}>'
+    
+    def is_expired(self):
+        """Check if this shared ranking has expired"""
+        if not self.expires_at:
+            return False
+        return datetime.utcnow() > self.expires_at
+    
+    def increment_view_count(self):
+        """Increment the view count for this shared ranking"""
+        self.view_count += 1
+        db.session.commit()
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'share_id': self.share_id,
+            'title': self.title,
+            'description': self.description,
+            'event_id': self.event_id,
+            'event_name': self.event.name if self.event else None,
+            'metric': self.metric,
+            'created_by_team': self.created_by_team,
+            'created_by_user': self.created_by_user,
+            'created_at': self.created_at.isoformat(),
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'view_count': self.view_count,
+            'is_active': self.is_active,
+            'is_public': self.is_public,
+            'is_expired': self.is_expired()
+        }
+    
+    @classmethod
+    def create_share(cls, title, event_id, metric, created_by_team, created_by_user, 
+                     description=None, expires_in_days=None):
+        """Create a new shared team ranking"""
+        import uuid
+        
+        share_id = str(uuid.uuid4())
+        
+        # Calculate expiration if specified
+        expires_at = None
+        if expires_in_days:
+            from datetime import timedelta
+            expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+        
+        shared_ranks = cls(
+            share_id=share_id,
+            title=title,
+            description=description,
+            event_id=event_id,
+            metric=metric,
+            created_by_team=created_by_team,
+            created_by_user=created_by_user,
+            expires_at=expires_at
+        )
+        
+        db.session.add(shared_ranks)
+        db.session.commit()
+        return shared_ranks
+    
+    @classmethod
+    def get_by_share_id(cls, share_id):
+        """Get shared team ranking by its share ID"""
+        return cls.query.filter_by(share_id=share_id, is_active=True).first()
+    
+    @classmethod
+    def get_user_shares(cls, team_number, username=None):
+        """Get all shared team rankings created by a team/user"""
+        query = cls.query.filter_by(created_by_team=team_number, is_active=True)
+        if username:
+            query = query.filter_by(created_by_user=username)
+        return query.order_by(cls.created_at.desc()).all()
+
+
+# =============================================================================
+# Multi-Server Synchronization Models
+# =============================================================================
+
+class SyncServer(ConcurrentModelMixin, db.Model):
+    """Model for tracking sync servers in the network"""
+    __tablename__ = 'sync_servers'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)  # Friendly name for the server
+    host = db.Column(db.String(255), nullable=False)  # IP address or domain
+    port = db.Column(db.Integer, default=5000)
+    protocol = db.Column(db.String(10), default='https')  # http or https
+    is_active = db.Column(db.Boolean, default=True)
+    is_primary = db.Column(db.Boolean, default=False)  # One server is designated as primary
+    last_sync = db.Column(db.DateTime, nullable=True)
+    last_ping = db.Column(db.DateTime, nullable=True)
+    sync_priority = db.Column(db.Integer, default=1)  # 1 = highest priority
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    
+    # Server metadata
+    server_version = db.Column(db.String(50), nullable=True)
+    server_id = db.Column(db.String(100), nullable=True)  # Unique server identifier
+    
+    # Sync settings
+    sync_enabled = db.Column(db.Boolean, default=True)
+    sync_database = db.Column(db.Boolean, default=True)
+    sync_instance_files = db.Column(db.Boolean, default=True)
+    sync_config_files = db.Column(db.Boolean, default=True)
+    sync_uploads = db.Column(db.Boolean, default=True)
+    
+    # Connection tracking
+    connection_timeout = db.Column(db.Integer, default=30)
+    retry_attempts = db.Column(db.Integer, default=3)
+    last_error = db.Column(db.Text, nullable=True)
+    error_count = db.Column(db.Integer, default=0)
+    
+    @property
+    def base_url(self):
+        """Get the full base URL for this server"""
+        return f"{self.protocol}://{self.host}:{self.port}"
+    
+    @property
+    def is_healthy(self):
+        """Check if server is considered healthy"""
+        if not self.is_active:
+            return False
+        if self.error_count > 10:  # Too many errors
+            return False
+        if self.last_ping:
+            # If we haven't pinged in 5 minutes, consider unhealthy
+            time_since_ping = datetime.utcnow() - self.last_ping
+            if time_since_ping.total_seconds() > 300:
+                return False
+        return True
+    
+    def update_ping(self, success=True, error_message=None):
+        """Update last ping time and error tracking"""
+        self.last_ping = datetime.utcnow()
+        if success:
+            self.error_count = max(0, self.error_count - 1)  # Decrease error count on success
+            self.last_error = None
+        else:
+            self.error_count += 1
+            self.last_error = error_message
+        db.session.commit()
+    
+    def to_dict(self):
+        """Convert to dictionary for API responses"""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'host': self.host,
+            'port': self.port,
+            'protocol': self.protocol,
+            'base_url': self.base_url,
+            'is_active': self.is_active,
+            'is_primary': self.is_primary,
+            'is_healthy': self.is_healthy,
+            'last_sync': self.last_sync.isoformat() if self.last_sync else None,
+            'last_ping': self.last_ping.isoformat() if self.last_ping else None,
+            'sync_priority': self.sync_priority,
+            'server_version': self.server_version,
+            'server_id': self.server_id,
+            'sync_settings': {
+                'sync_enabled': self.sync_enabled,
+                'sync_database': self.sync_database,
+                'sync_instance_files': self.sync_instance_files,
+                'sync_config_files': self.sync_config_files,
+                'sync_uploads': self.sync_uploads
+            },
+            'error_count': self.error_count,
+            'last_error': self.last_error
+        }
+
+
+class SyncLog(ConcurrentModelMixin, db.Model):
+    """Model for tracking sync operations"""
+    __tablename__ = 'sync_logs'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    server_id = db.Column(db.Integer, db.ForeignKey('sync_servers.id'), nullable=False)
+    sync_type = db.Column(db.String(50), nullable=False)  # 'database', 'files', 'config', 'full'
+    direction = db.Column(db.String(10), nullable=False)  # 'push', 'pull', 'bidirectional'
+    status = db.Column(db.String(20), nullable=False)  # 'pending', 'in_progress', 'completed', 'failed'
+    started_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    error_message = db.Column(db.Text, nullable=True)
+    
+    # Sync details
+    items_synced = db.Column(db.Integer, default=0)
+    total_items = db.Column(db.Integer, default=0)
+    bytes_transferred = db.Column(db.BigInteger, default=0)
+    sync_details = db.Column(db.Text, nullable=True)  # JSON with detailed info
+    
+    # Relationship
+    server = db.relationship('SyncServer', backref=db.backref('sync_logs', lazy=True))
+    
+    @property
+    def duration(self):
+        """Get sync duration in seconds"""
+        if self.completed_at and self.started_at:
+            return (self.completed_at - self.started_at).total_seconds()
+        return None
+    
+    @property
+    def success(self):
+        """Check if sync was successful"""
+        return self.status == 'completed' and not self.error_message
+    
+    @property
+    def progress_percentage(self):
+        """Get sync progress as percentage"""
+        if self.total_items > 0:
+            return min(100, (self.items_synced / self.total_items) * 100)
+        return 0
+    
+    def to_dict(self):
+        """Convert to dictionary for API responses"""
+        return {
+            'id': self.id,
+            'server_id': self.server_id,
+            'server_name': self.server.name if self.server else None,
+            'sync_type': self.sync_type,
+            'direction': self.direction,
+            'status': self.status,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'duration': self.duration,
+            'progress_percentage': self.progress_percentage,
+            'items_synced': self.items_synced,
+            'total_items': self.total_items,
+            'bytes_transferred': self.bytes_transferred,
+            'error_message': self.error_message,
+            'sync_details': json.loads(self.sync_details) if self.sync_details else None
+        }
+
+
+class FileChecksum(ConcurrentModelMixin, db.Model):
+    """Model for tracking file checksums to detect changes"""
+    __tablename__ = 'file_checksums'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    file_path = db.Column(db.String(500), nullable=False, index=True)
+    checksum = db.Column(db.String(64), nullable=False)  # SHA256 hash
+    file_size = db.Column(db.BigInteger, nullable=False)
+    last_modified = db.Column(db.DateTime, nullable=False)
+    last_checked = db.Column(db.DateTime, default=datetime.utcnow)
+    sync_status = db.Column(db.String(20), default='synced')  # 'synced', 'modified', 'new', 'deleted'
+    
+    @classmethod
+    def get_or_create(cls, file_path, checksum, file_size, last_modified):
+        """Get existing checksum record or create new one"""
+        existing = cls.query.filter_by(file_path=file_path).first()
+        if existing:
+            # Update existing record
+            if existing.checksum != checksum:
+                existing.sync_status = 'modified'
+            existing.checksum = checksum
+            existing.file_size = file_size
+            existing.last_modified = last_modified
+            existing.last_checked = datetime.utcnow()
+            return existing
+        else:
+            # Create new record
+            new_record = cls(
+                file_path=file_path,
+                checksum=checksum,
+                file_size=file_size,
+                last_modified=last_modified,
+                sync_status='new'
+            )
+            db.session.add(new_record)
+            return new_record
+    
+    def to_dict(self):
+        """Convert to dictionary for API responses"""
+        return {
+            'file_path': self.file_path,
+            'checksum': self.checksum,
+            'file_size': self.file_size,
+            'last_modified': self.last_modified.isoformat() if self.last_modified else None,
+            'last_checked': self.last_checked.isoformat() if self.last_checked else None,
+            'sync_status': self.sync_status
+        }
+
+
+class SyncConfig(ConcurrentModelMixin, db.Model):
+    """Model for storing sync configuration"""
+    __tablename__ = 'sync_config'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), nullable=False, unique=True)
+    value = db.Column(db.Text, nullable=True)
+    data_type = db.Column(db.String(20), default='string')  # 'string', 'integer', 'boolean', 'json'
+    description = db.Column(db.String(255), nullable=True)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    
+    @classmethod
+    def get_value(cls, key, default=None):
+        """Get configuration value by key"""
+        config = cls.query.filter_by(key=key).first()
+        if not config:
+            return default
+        
+        if config.data_type == 'boolean':
+            return config.value.lower() in ('true', '1', 'yes')
+        elif config.data_type == 'integer':
+            try:
+                return int(config.value)
+            except (ValueError, TypeError):
+                return default
+        elif config.data_type == 'json':
+            try:
+                return json.loads(config.value)
+            except (ValueError, TypeError):
+                return default
+        else:
+            return config.value
+    
+    @classmethod
+    def set_value(cls, key, value, data_type='string', description=None, user_id=None):
+        """Set configuration value"""
+        config = cls.query.filter_by(key=key).first()
+        if not config:
+            config = cls(key=key)
+            db.session.add(config)
+        
+        if data_type == 'json':
+            config.value = json.dumps(value)
+        else:
+            config.value = str(value)
+        
+        config.data_type = data_type
+        if description:
+            config.description = description
+        config.last_updated = datetime.utcnow()
+        config.updated_by = user_id
+        
+        db.session.commit()
+        return config
+
+
+class DatabaseChange(ConcurrentModelMixin, db.Model):
+    """Model for tracking database changes for synchronization"""
+    __tablename__ = 'database_changes'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    table_name = db.Column(db.String(100), nullable=False, index=True)
+    record_id = db.Column(db.String(100), nullable=False, index=True)  # String to handle UUIDs
+    operation = db.Column(db.String(20), nullable=False)  # 'insert', 'update', 'delete', 'soft_delete'
+    change_data = db.Column(db.Text, nullable=True)  # JSON of the record data
+    old_data = db.Column(db.Text, nullable=True)  # JSON of previous record data (for updates)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    sync_status = db.Column(db.String(20), default='pending')  # 'pending', 'synced', 'failed'
+    created_by_server = db.Column(db.String(100), nullable=True)  # Which server created this change
+    
+    def __repr__(self):
+        return f'<DatabaseChange {self.table_name}:{self.record_id} {self.operation}>'
+    
+    def to_dict(self):
+        """Convert to dictionary for sync operations"""
+        import json
+        return {
+            'id': self.id,
+            'table': self.table_name,
+            'record_id': self.record_id,
+            'operation': self.operation,
+            'data': json.loads(self.change_data) if self.change_data else None,
+            'old_data': json.loads(self.old_data) if self.old_data else None,
+            'timestamp': self.timestamp.isoformat(),
+            'created_by_server': self.created_by_server
+        }
+    
+    @classmethod
+    def log_change(cls, table_name, record_id, operation, new_data=None, old_data=None, server_id=None):
+        """Log a database change for synchronization"""
+        import json
+        
+        change = cls(
+            table_name=table_name,
+            record_id=str(record_id),
+            operation=operation,
+            change_data=json.dumps(new_data) if new_data else None,
+            old_data=json.dumps(old_data) if old_data else None,
+            created_by_server=server_id
+        )
+        
+        db.session.add(change)
+        # Don't commit here - let the calling code handle the transaction
+        return change
+
+
+class LoginAttempt(db.Model):
+    """Track failed login attempts for brute force protection"""
+    __tablename__ = 'login_attempts'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    ip_address = db.Column(db.String(45), nullable=False)  # Support IPv6
+    username = db.Column(db.String(80), nullable=True)  # Can be null for non-existent users
+    team_number = db.Column(db.Integer, nullable=True)
+    attempt_time = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    success = db.Column(db.Boolean, default=False, nullable=False)
+    user_agent = db.Column(db.String(500), nullable=True)
+    
+    @staticmethod
+    def record_attempt(ip_address, username=None, team_number=None, success=False, user_agent=None):
+        """Record a login attempt"""
+        attempt = LoginAttempt(
+            ip_address=ip_address,
+            username=username,
+            team_number=team_number,
+            success=success,
+            user_agent=user_agent
+        )
+        db.session.add(attempt)
+        db.session.commit()
+        return attempt
+    
+    @staticmethod
+    def get_failed_attempts_count(ip_address, username=None, since_minutes=60):
+        """Get count of failed attempts for IP/username in the last X minutes"""
+        from datetime import timedelta
+        
+        cutoff_time = datetime.utcnow() - timedelta(minutes=since_minutes)
+        
+        query = LoginAttempt.query.filter(
+            LoginAttempt.ip_address == ip_address,
+            LoginAttempt.success == False,
+            LoginAttempt.attempt_time >= cutoff_time
+        )
+        
+        # Optionally filter by username if provided
+        if username:
+            query = query.filter(LoginAttempt.username == username)
+        
+        return query.count()
+    
+    @staticmethod
+    def is_blocked(ip_address, username=None, max_attempts=10, lockout_minutes=15):
+        """Check if an IP/username combination is currently blocked"""
+        failed_count = LoginAttempt.get_failed_attempts_count(
+            ip_address, username, since_minutes=lockout_minutes
+        )
+        return failed_count >= max_attempts
+    
+    @staticmethod
+    def clear_successful_attempts(ip_address, username=None):
+        """Clear failed attempts after successful login"""
+        query = LoginAttempt.query.filter(
+            LoginAttempt.ip_address == ip_address,
+            LoginAttempt.success == False
+        )
+        
+        if username:
+            query = query.filter(LoginAttempt.username == username)
+        
+        # Delete old failed attempts for this IP/username
+        query.delete()
+        db.session.commit()
+    
+    @staticmethod 
+    def cleanup_old_attempts(days_old=30):
+        """Clean up old login attempts to prevent table bloat"""
+        from datetime import timedelta
+        
+        cutoff_time = datetime.utcnow() - timedelta(days=days_old)
+        
+        old_attempts = LoginAttempt.query.filter(
+            LoginAttempt.attempt_time < cutoff_time
+        ).delete()
+        
+        db.session.commit()
+        return old_attempts

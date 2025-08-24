@@ -6,12 +6,13 @@ from flask_login import LoginManager
 import os
 import json
 from datetime import datetime
-from app.utils.config_manager import ConfigManager
+from app.utils.config_manager import ConfigManager, get_current_game_config, load_game_config
 import threading
 
 # Initialize extensions
 db = SQLAlchemy()
 migrate = Migrate()
+# SocketIO configuration - will be updated based on server choice in run.py
 socketio = SocketIO(cors_allowed_origins="*", async_mode="threading")
 login_manager = LoginManager()
 config_manager = ConfigManager()
@@ -20,10 +21,21 @@ config_manager = ConfigManager()
 from app.utils.file_integrity import FileIntegrityMonitor
 file_integrity_monitor = FileIntegrityMonitor()
 
-CHAT_HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'instance', 'assistant_chat_history.json')
+# Initialize concurrent database manager
+from app.utils.database_manager import concurrent_db_manager
+
+# Chat storage configuration
+CHAT_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'instance', 'chat')
+CHAT_HISTORY_FILE = os.path.join(CHAT_FOLDER, 'assistant_chat_history.json')
 CHAT_HISTORY_LOCK = threading.Lock()
 
+def ensure_chat_folder():
+    """Ensure the chat folder exists"""
+    if not os.path.exists(CHAT_FOLDER):
+        os.makedirs(CHAT_FOLDER, exist_ok=True)
+
 def load_chat_history():
+    ensure_chat_folder()
     if not os.path.exists(CHAT_HISTORY_FILE):
         return []
     with open(CHAT_HISTORY_FILE, 'r', encoding='utf-8') as f:
@@ -34,6 +46,7 @@ def load_chat_history():
 
 def save_chat_message(message):
     with CHAT_HISTORY_LOCK:
+        ensure_chat_folder()
         history = load_chat_history()
         history.append(message)
         with open(CHAT_HISTORY_FILE, 'w', encoding='utf-8') as f:
@@ -42,6 +55,7 @@ def save_chat_message(message):
 # Socket.IO event handlers for assistant chat
 @socketio.on('assistant_chat_message')
 def handle_assistant_chat_message(data):
+    from app.utils.team_isolation import validate_user_in_same_team
     user = None
     try:
         from flask_login import current_user
@@ -62,10 +76,13 @@ def handle_assistant_chat_message(data):
         save_chat_message(reply)
         socketio.emit('assistant_chat_message', reply, room=sender)
     else:
-        message = {'sender': sender, 'recipient': recipient, 'text': text, 'timestamp': timestamp}
-        save_chat_message(message)
-        socketio.emit('assistant_chat_message', message, room=sender)
-        socketio.emit('assistant_chat_message', message, room=recipient)
+        # Validate that recipient is in the same scouting team for user-to-user messages
+        if validate_user_in_same_team(recipient):
+            message = {'sender': sender, 'recipient': recipient, 'text': text, 'timestamp': timestamp}
+            save_chat_message(message)
+            socketio.emit('assistant_chat_message', message, room=sender)
+            socketio.emit('assistant_chat_message', message, room=recipient)
+        # If not in same team, silently ignore the message
 
 @socketio.on('assistant_chat_history_request')
 def handle_assistant_chat_history_request():
@@ -91,17 +108,19 @@ group_members = {}  # {group_name: set([usernames])}
 
 @socketio.on('add_user_to_group')
 def add_user_to_group(data):
+    from app.utils.team_isolation import validate_user_in_same_team
     group = data.get('group')
     user = data.get('user')
-    if group and user:
+    if group and user and validate_user_in_same_team(user):
         group_members.setdefault(group, set()).add(user)
         socketio.emit('group_members_updated', {'group': group, 'members': list(group_members[group])}, room=group)
 
 @socketio.on('remove_user_from_group')
 def remove_user_from_group(data):
+    from app.utils.team_isolation import validate_user_in_same_team
     group = data.get('group')
     user = data.get('user')
-    if group and user and group in group_members:
+    if group and user and group in group_members and validate_user_in_same_team(user):
         group_members[group].discard(user)
         socketio.emit('group_members_updated', {'group': group, 'members': list(group_members[group])}, room=group)
 
@@ -138,6 +157,7 @@ def leave_group_room(data):
 
 @socketio.on('group_chat_message')
 def handle_group_chat_message(data):
+    from app.utils.team_isolation import validate_user_in_same_team
     user = None
     try:
         from flask_login import current_user
@@ -148,19 +168,49 @@ def handle_group_chat_message(data):
     group = data.get('group')
     text = data.get('text', '')
     timestamp = datetime.utcnow().isoformat()
-    # Only allow group members to send/receive
+    
+    # Only allow group members to send/receive and ensure sender is in same team
     if group and sender in group_members.get(group, set()):
-        message = {'sender': sender, 'group': group, 'text': text, 'timestamp': timestamp}
-        save_chat_message(message)
-        socketio.emit('group_chat_message', message, room=group)
+        # Validate all group members are in the same scouting team
+        valid_members = set()
+        for member in group_members[group]:
+            if validate_user_in_same_team(member):
+                valid_members.add(member)
+        
+        # Update group members to only include valid team members
+        group_members[group] = valid_members
+        
+        if sender in valid_members:
+            message = {'sender': sender, 'group': group, 'text': text, 'timestamp': timestamp}
+            save_chat_message(message)
+            socketio.emit('group_chat_message', message, room=group)
 
 @socketio.on('connect')
 def on_connect():
     try:
         from flask_login import current_user
         if current_user.is_authenticated:
+            # Join user-specific room
             join_room(current_user.username)
-    except Exception:
+            
+            # Join team-specific room for config updates
+            if hasattr(current_user, 'scouting_team_number') and current_user.scouting_team_number:
+                team_room = f'team_{current_user.scouting_team_number}'
+                join_room(team_room)
+                
+                # Also join alliance room if user is in an alliance
+                from app.models import ScoutingAllianceMember, TeamAllianceStatus
+                alliance_member = ScoutingAllianceMember.query.filter_by(
+                    team_number=current_user.scouting_team_number,
+                    status='accepted'
+                ).first()
+                
+                if alliance_member:
+                    alliance_room = f'alliance_{alliance_member.alliance_id}'
+                    join_room(alliance_room)
+                    
+    except Exception as e:
+        print(f"Error in socket connect: {e}")
         pass
 
 # Flask route to delete chat history (admin only)
@@ -170,8 +220,22 @@ def register_chat_history_routes(app):
         from flask_login import current_user
         if not current_user.is_authenticated or not current_user.has_role('admin'):
             return jsonify({'success': False, 'message': 'Admin only'}), 403
+        
+        # Delete the chat history file
         if os.path.exists(CHAT_HISTORY_FILE):
             os.remove(CHAT_HISTORY_FILE)
+        
+        # Optionally, clean up other chat files if they exist
+        if os.path.exists(CHAT_FOLDER):
+            try:
+                # Remove any other chat-related files in the folder
+                for file in os.listdir(CHAT_FOLDER):
+                    if file.endswith('.json') and 'chat' in file.lower():
+                        file_path = os.path.join(CHAT_FOLDER, file)
+                        os.remove(file_path)
+            except Exception as e:
+                print(f"Error cleaning chat folder: {e}")
+        
         return jsonify({'success': True, 'message': 'Chat history deleted'})
 
 def create_app(test_config=None):
@@ -183,6 +247,14 @@ def create_app(test_config=None):
         SECRET_KEY='dev',
         SQLALCHEMY_DATABASE_URI='sqlite:///' + os.path.join(app.instance_path, 'scouting.db'),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        SQLALCHEMY_ENGINE_OPTIONS={
+            'pool_pre_ping': True,
+            'pool_recycle': 3600,
+            'connect_args': {
+                'timeout': 30,
+                'check_same_thread': False,
+            }
+        },
         UPLOAD_FOLDER=os.path.join(app.instance_path, 'uploads'),
         # Browser AI settings (defaults to None to use fallback)
         BROWSER_AI_API_KEY=None,
@@ -205,26 +277,19 @@ def create_app(test_config=None):
     
     # Load game configuration from JSON file
     try:
-        config_path = os.path.join(os.getcwd(), 'config', 'game_config.json')
-        with open(config_path, 'r') as f:
-            app.config['GAME_CONFIG'] = json.load(f)
+        app.config['GAME_CONFIG'] = load_game_config()
             
-            # Set API configuration based on game config
-            if 'api_settings' in app.config['GAME_CONFIG']:
-                api_settings = app.config['GAME_CONFIG']['api_settings']
-                app.config['API_KEY'] = api_settings.get('auth_token', '')
-                app.config['API_BASE_URL'] = api_settings.get('base_url', 'https://frc-api.firstinspires.org')
-            
-            # Set TBA API configuration
-            if 'tba_api_settings' in app.config['GAME_CONFIG']:
-                tba_settings = app.config['GAME_CONFIG']['tba_api_settings']
-                app.config['TBA_API_KEY'] = tba_settings.get('auth_key', '')
-            
-            # Set TBA API configuration
-            if 'tba_api_settings' in app.config['GAME_CONFIG']:
-                tba_settings = app.config['GAME_CONFIG']['tba_api_settings']
-                app.config['TBA_API_KEY'] = tba_settings.get('auth_key', '')
-                app.config['TBA_BASE_URL'] = tba_settings.get('base_url', 'https://www.thebluealliance.com/api/v3')
+        # Set API configuration based on game config
+        if 'api_settings' in app.config['GAME_CONFIG']:
+            api_settings = app.config['GAME_CONFIG']['api_settings']
+            app.config['API_KEY'] = api_settings.get('auth_token', '')
+            app.config['API_BASE_URL'] = api_settings.get('base_url', 'https://frc-api.firstinspires.org')
+
+        # Set TBA API configuration
+        if 'tba_api_settings' in app.config['GAME_CONFIG']:
+            tba_settings = app.config['GAME_CONFIG']['tba_api_settings']
+            app.config['TBA_API_KEY'] = tba_settings.get('auth_key', '')
+            app.config['TBA_BASE_URL'] = tba_settings.get('base_url', 'https://www.thebluealliance.com/api/v3')
     except Exception as e:
         print(f"Error loading game configuration: {e}")
         app.config['GAME_CONFIG'] = {
@@ -270,11 +335,23 @@ def create_app(test_config=None):
     # Initialize file integrity monitor
     file_integrity_monitor.init_app(app)
     
+    # Initialize concurrent database manager
+    concurrent_db_manager.init_app(app)
+    
     # Initialize ConfigManager
     config_manager.init_app(app)
+    
+    # Initialize multi-server sync manager
+    from app.utils.multi_server_sync import sync_manager
+    sync_manager.init_app(app)
+    
+    # Initialize database change tracking for sync
+    from app.utils.change_tracking import setup_change_tracking
+    with app.app_context():
+        setup_change_tracking()
 
     # Import and register blueprints
-    from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, activity, assistant, integrity, pit_scouting, admin, themes
+    from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, assistant, integrity, pit_scouting, themes, scouting_alliances, setup, search, db_admin, sync_api, sync_management
     
     # Register template filters
     from app.utils import template_filters
@@ -289,23 +366,65 @@ def create_app(test_config=None):
     app.register_blueprint(graphs.bp)
     app.register_blueprint(events.bp)
     app.register_blueprint(alliances.bp)
+    app.register_blueprint(scouting_alliances.bp)
     app.register_blueprint(auth.bp)
-    app.register_blueprint(activity.activity_bp)
     app.register_blueprint(assistant.bp)
     app.register_blueprint(integrity.integrity_bp)
+    app.register_blueprint(setup.bp)
+    app.register_blueprint(search.bp)
+    app.register_blueprint(db_admin.db_admin_bp)
+    
+    # Register sync routes and API
+    app.register_blueprint(sync_api.sync_api)
+    app.register_blueprint(sync_management.sync_routes)
+    
+    # Register real-time replication API
+    from app.routes import realtime_api
+    app.register_blueprint(realtime_api.realtime_api)
+    
+    # Register real-time replication management routes
+    from app.routes import realtime_management
+    app.register_blueprint(realtime_management.realtime_routes)
     
     # Register API test blueprint (admin only)
     from app.routes import api_test
     app.register_blueprint(api_test.bp)
-    
-    # Register admin blueprint
-    app.register_blueprint(admin.bp)
     
     # Register themes blueprint
     app.register_blueprint(themes.bp)
 
     # Register chat history routes
     register_chat_history_routes(app)
+    
+    # Add global context processor for alliance status
+    @app.context_processor
+    def inject_alliance_status():
+        """Make alliance status available to all templates"""
+        try:
+            from app.utils.config_manager import is_alliance_mode_active, get_active_alliance_info
+            return {
+                'is_alliance_mode_active': is_alliance_mode_active(),
+                'active_alliance_info': get_active_alliance_info()
+            }
+        except Exception:
+            # If there's any error (like during database init), return defaults
+            return {
+                'is_alliance_mode_active': False,
+                'active_alliance_info': None
+            }
+    
+    @app.context_processor
+    def inject_csrf_token():
+        """Make csrf_token function available to all templates"""
+        import secrets
+        def csrf_token():
+            # Simple token generation for basic CSRF protection
+            # In production, you might want to use Flask-WTF for proper CSRF protection
+            return secrets.token_urlsafe(32)
+        
+        return {
+            'csrf_token': csrf_token
+        }
     
     # Create database tables (only if they don't exist)
     with app.app_context():
@@ -338,7 +457,7 @@ def create_app(test_config=None):
     # Add a context processor to make game_config available in all templates
     @app.context_processor
     def inject_game_config():
-        return dict(game_config=app.config.get('GAME_CONFIG', {}))
+        return dict(game_config=get_current_game_config())
     
     # Add a context processor to make theme data available in all templates
     @app.context_processor
@@ -357,4 +476,33 @@ def create_app(test_config=None):
             app.logger.error(f"Error loading theme data: {e}")
             return dict(current_theme={}, current_theme_id='default', theme_css_variables='', themes={})
     
+    # Initialize real-time replication system
+    try:
+        from app.utils.real_time_replication import enable_real_time_replication
+        enable_real_time_replication()
+        app.logger.info("✅ Real-time database replication enabled")
+    except Exception as e:
+        app.logger.error(f"❌ Failed to initialize real-time replication: {e}")
+    
+    # Initialize real-time file synchronization
+    try:
+        from app.utils.real_time_file_sync import setup_real_time_file_sync
+        setup_real_time_file_sync(app)
+        app.logger.info("✅ Real-time file synchronization enabled")
+    except Exception as e:
+        app.logger.error(f"❌ Failed to initialize real-time file sync: {e}")
+    
+    # Initialize catch-up synchronization system
+    try:
+        from app.utils.catchup_sync import catchup_sync_manager
+        catchup_sync_manager.init_app(app)
+        app.logger.info("✅ Catch-up synchronization system enabled")
+        
+        # Start catch-up scheduler
+        from app.utils.catchup_scheduler import start_catchup_scheduler
+        start_catchup_scheduler(app)
+        app.logger.info("✅ Catch-up scheduler started")
+    except Exception as e:
+        app.logger.error(f"❌ Failed to initialize catch-up sync: {e}")
+
     return app

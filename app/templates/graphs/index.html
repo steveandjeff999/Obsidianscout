@@ -140,16 +140,76 @@
                                     <i class="fas fa-chart-bar me-2 text-warning"></i>Select Graph Types
                                 </label>
                                 <select name="graph_types" id="graph_types" class="form-select" multiple>
-                                    <option value="bar" {% if 'bar' in selected_graph_types %}selected{% endif %}>
-                                        📊 Bar Chart
-                                    </option>
-                                    <option value="line" {% if 'line' in selected_graph_types %}selected{% endif %}>
-                                        📈 Line Chart
-                                    </option>
+                                    <optgroup label="Basic Charts">
+                                        <option value="bar" {% if 'bar' in selected_graph_types %}selected{% endif %}>
+                                            📊 Bar Chart
+                                        </option>
+                                        <option value="line" {% if 'line' in selected_graph_types %}selected{% endif %}>
+                                            📈 Line Chart
+                                        </option>
+                                        <option value="scatter" {% if 'scatter' in selected_graph_types %}selected{% endif %}>
+                                            🔵 Scatter Plot
+                                        </option>
+                                        <option value="area" {% if 'area' in selected_graph_types %}selected{% endif %}>
+                                            📊 Area Chart
+                                        </option>
+                                    </optgroup>
+                                    <optgroup label="Distribution Charts">
+                                        <option value="box" {% if 'box' in selected_graph_types %}selected{% endif %}>
+                                            📦 Box Plot
+                                        </option>
+                                        <option value="violin" {% if 'violin' in selected_graph_types %}selected{% endif %}>
+                                            🎻 Violin Plot
+                                        </option>
+                                        <option value="histogram" {% if 'histogram' in selected_graph_types %}selected{% endif %}>
+                                            📊 Histogram
+                                        </option>
+                                    </optgroup>
+                                    <optgroup label="Advanced Charts">
+                                        <option value="radar" {% if 'radar' in selected_graph_types %}selected{% endif %}>
+                                            🕸️ Radar Chart
+                                        </option>
+                                        <option value="heatmap" {% if 'heatmap' in selected_graph_types %}selected{% endif %}>
+                                            🔥 Heatmap
+                                        </option>
+                                        <option value="bubble" {% if 'bubble' in selected_graph_types %}selected{% endif %}>
+                                            🫧 Bubble Chart
+                                        </option>
+                                        <option value="sunburst" {% if 'sunburst' in selected_graph_types %}selected{% endif %}>
+                                            ☀️ Sunburst Chart
+                                        </option>
+                                        <option value="treemap" {% if 'treemap' in selected_graph_types %}selected{% endif %}>
+                                            🌳 Treemap
+                                        </option>
+                                        <option value="waterfall" {% if 'waterfall' in selected_graph_types %}selected{% endif %}>
+                                            💧 Waterfall Chart
+                                        </option>
+                                        <option value="sankey" {% if 'sankey' in selected_graph_types %}selected{% endif %}>
+                                            🌊 Sankey Diagram
+                                        </option>
+                                    </optgroup>
                                 </select>
                                 <div class="form-text">
                                     <i class="fas fa-info-circle me-1"></i>
-                                    Select one or both graph types to display.
+                                    Select multiple graph types to display. Some charts work better with specific metrics and data views.
+                                </div>
+                                
+                                <!-- Quick selection buttons for graph types -->
+                                <div class="mt-2">
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button type="button" class="btn btn-outline-primary" id="select-basic-graphs">
+                                            <i class="fas fa-chart-simple me-1"></i>Basic
+                                        </button>
+                                        <button type="button" class="btn btn-outline-info" id="select-distribution-graphs">
+                                            <i class="fas fa-chart-area me-1"></i>Distribution
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success" id="select-advanced-graphs">
+                                            <i class="fas fa-chart-pie me-1"></i>Advanced
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary" id="clear-graph-types">
+                                            <i class="fas fa-times me-1"></i>Clear
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -158,13 +218,17 @@
                     <!-- Submit Button - Full width on mobile, centered on desktop -->
                     <div class="row">
                         <div class="col-12">
-                            <div class="d-grid d-md-flex justify-content-md-center mt-3">
+                            <div class="d-grid d-md-flex justify-content-md-center mt-3 gap-2">
                                 <button type="submit" class="btn btn-primary btn-lg px-4" id="generate-graphs-btn">
                                     <i class="fas fa-chart-line me-2"></i>
                                     <span class="d-none d-sm-inline">Generate </span>Graphs
                                     <div class="spinner-border spinner-border-sm ms-2 d-none" role="status" id="loading-spinner">
                                         <span class="visually-hidden">Loading...</span>
                                     </div>
+                                </button>
+                                <button type="button" class="btn btn-success btn-lg px-4 {% if not plots %}d-none{% endif %}" data-bs-toggle="modal" data-bs-target="#shareModal" id="share-graphs-btn">
+                                    <i class="fas fa-share-alt me-2"></i>
+                                    <span class="d-none d-sm-inline">Share </span>Graphs
                                 </button>
                             </div>
                         </div>
@@ -242,9 +306,9 @@
                     <div class="col-md-3 mb-3">
                         <div class="card h-100">
                             <div class="card-body text-center">
-                                <h5 class="card-title"><i class="fas fa-chart-pie text-danger mb-3"></i><br>Radar Charts</h5>
-                                <p class="card-text">View team skill profiles across multiple metrics</p>
-                                <a href="{{ url_for('graphs.index') }}" class="btn btn-danger">View Profiles</a>
+                                <h5 class="card-title"><i class="fas fa-share-alt text-info mb-3"></i><br>My Shared Graphs</h5>
+                                <p class="card-text">View and manage your shared graph links</p>
+                                <a href="{{ url_for('graphs.my_shares') }}" class="btn btn-info">View Shares</a>
                             </div>
                         </div>
                     </div>
@@ -263,6 +327,170 @@
         </div>
     </div>
 </div>
+
+<!-- Share Modal -->
+{% if not viewer_disabled %}
+<div class="modal fade" id="shareModal" tabindex="-1" aria-labelledby="shareModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="shareModalLabel">
+                    <i class="fas fa-share-alt me-2"></i>Share Your Graphs
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('graphs.create_share') }}" method="post">
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Create a shareable link that allows others to view your graphs without needing to log in. 
+                        The shared graphs will be read-only and non-password protected, similar to Google Docs viewer mode.
+                    </div>
+                    
+                    <!-- Hidden fields to pass current graph configuration -->
+                    {% for team_num in selected_team_numbers %}
+                    <input type="hidden" name="teams" value="{{ team_num }}">
+                    {% endfor %}
+                    {% if selected_event_id %}
+                    <input type="hidden" name="event_id" value="{{ selected_event_id }}">
+                    {% endif %}
+                    <input type="hidden" name="metric" value="{{ selected_metric }}">
+                    {% for graph_type in selected_graph_types %}
+                    <input type="hidden" name="graph_types" value="{{ graph_type }}">
+                    {% endfor %}
+                    <input type="hidden" name="data_view" value="{{ selected_data_view }}">
+                    
+                    <!-- Share configuration -->
+                    <div class="mb-3">
+                        <label for="share_title" class="form-label fw-semibold">
+                            <i class="fas fa-heading me-2"></i>Title <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="share_title" name="share_title" 
+                               placeholder="Enter a title for your shared graphs" required maxlength="200">
+                        <div class="form-text">
+                            This title will be displayed at the top of the shared page.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="share_description" class="form-label fw-semibold">
+                            <i class="fas fa-align-left me-2"></i>Description (Optional)
+                        </label>
+                        <textarea class="form-control" id="share_description" name="share_description" 
+                                  rows="3" placeholder="Add a description or notes about these graphs"></textarea>
+                        <div class="form-text">
+                            Provide context or explanation for viewers.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="expires_in_days" class="form-label fw-semibold">
+                            <i class="fas fa-clock me-2"></i>Expiration (Optional)
+                        </label>
+                        <select class="form-select" id="expires_in_days" name="expires_in_days">
+                            <option value="">Never expires</option>
+                            <option value="1">1 day</option>
+                            <option value="7">1 week</option>
+                            <option value="30">1 month</option>
+                            <option value="90">3 months</option>
+                            <option value="365">1 year</option>
+                        </select>
+                        <div class="form-text">
+                            Choose when this shared link should expire.
+                        </div>
+                    </div>
+                    
+                    <!-- Simplified configuration summary -->
+                    <div class="card bg-light">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-info-circle me-2"></i>Share Summary:
+                            </h6>
+                        </div>
+                        <div class="card-body py-2">
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Teams:</small>
+                                    <span class="badge bg-primary">
+                                        {{ selected_team_numbers|length }} team{{ 's' if selected_team_numbers|length != 1 else '' }}
+                                    </span>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Event:</small>
+                                    <span class="badge bg-info">
+                                        {% if selected_event_id %}
+                                            Event Selected
+                                        {% else %}
+                                            All Events
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Metric:</small>
+                                    <span class="badge bg-success">{{ selected_metric|title or 'Points' }}</span>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Graph Types:</small>
+                                    <span class="badge bg-warning text-dark">{{ selected_graph_types|length }} type{{ 's' if selected_graph_types|length != 1 else '' }}</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Expandable details -->
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#shareDetails" aria-expanded="false">
+                                    <i class="fas fa-eye me-1"></i>View Details
+                                </button>
+                            </div>
+                            
+                            <div class="collapse mt-2" id="shareDetails">
+                                <div class="border-top pt-2">
+                                    <div class="row">
+                                        <div class="col-12">
+                                            <strong class="small">Teams:</strong>
+                                            <div class="small text-muted" style="max-height: 100px; overflow-y: auto;">
+                                                {% for team_num in selected_team_numbers %}
+                                                Team {{ team_num }}{% if not loop.last %}, {% endif %}
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        <div class="col-12 mt-2">
+                                            <strong class="small">Graph Types:</strong>
+                                            <div class="small text-muted">
+                                                {% for graph_type in selected_graph_types %}
+                                                {{ graph_type|title }}{% if not loop.last %}, {% endif %}
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% if selected_event_id %}
+                                        <div class="col-12 mt-2">
+                                            <strong class="small">Event:</strong>
+                                            <div class="small text-muted">
+                                                {% for event in all_events %}
+                                                    {% if event.id == selected_event_id %}{{ event.name }}{% endif %}
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-share-alt me-2"></i>Create Share Link
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block scripts %}
@@ -493,6 +721,23 @@
             $('#teams').val(topTeamValues).trigger('change');
         });
         
+        // Graph Type Selection Button Handlers
+        $('#select-basic-graphs').click(function() {
+            $('#graph_types').val(['bar', 'line', 'scatter', 'area']).trigger('change');
+        });
+        
+        $('#select-distribution-graphs').click(function() {
+            $('#graph_types').val(['box', 'violin', 'histogram']).trigger('change');
+        });
+        
+        $('#select-advanced-graphs').click(function() {
+            $('#graph_types').val(['radar', 'heatmap', 'bubble', 'sunburst', 'treemap']).trigger('change');
+        });
+        
+        $('#clear-graph-types').click(function() {
+            $('#graph_types').val(null).trigger('change');
+        });
+        
 
         
         // Form submission with loading state
@@ -521,6 +766,22 @@
             return true;
         });
         
+        // Show/hide share button based on whether graphs are generated
+        function toggleShareButton() {
+            const hasGraphs = $('.plotly-graph').length > 0;
+            const selectedTeams = $('#teams').val();
+            
+            if (hasGraphs && selectedTeams && selectedTeams.length > 0) {
+                $('#share-graphs-btn').removeClass('d-none');
+            } else {
+                $('#share-graphs-btn').addClass('d-none');
+            }
+        }
+        
+        // Check share button visibility on page load and form changes
+        toggleShareButton();
+        $('#teams').on('change', toggleShareButton);
+        
         // Responsive handling for Select2
         $(window).on('resize', function() {
             // Reinitialize Select2 on resize to handle template changes
@@ -543,6 +804,112 @@
         
         waitForPlotly();
     });
+    
+    // ======== REAL-TIME CONFIG UPDATE LISTENERS ========
+    
+    // Listen for game config updates that affect analytics
+    window.addEventListener('gameConfigUpdated', function(event) {
+        const newGameConfig = event.detail;
+        console.log('Game config updated in analytics:', newGameConfig);
+        
+        // Show notification
+        showAnalyticsConfigUpdateNotification('Analytics configuration updated due to alliance mode change.');
+        
+        // Automatically reload analytics data
+        reloadAnalyticsWithNewConfig();
+    });
+    
+    // Listen for global config reload events
+    window.addEventListener('globalConfigReload', function(event) {
+        const configData = event.detail;
+        console.log('Global config reload in analytics:', configData);
+        
+        // Show notification
+        showAnalyticsConfigUpdateNotification(`Configuration updated: ${configData.message}`);
+        
+        // Automatically reload analytics with new config
+        reloadAnalyticsWithNewConfig();
+    });
+    
+    // Listen for alliance status changes
+    window.addEventListener('allianceStatusUpdated', function(event) {
+        const allianceStatus = event.detail;
+        console.log('Alliance status updated in analytics:', allianceStatus);
+        
+        let message;
+        if (allianceStatus.is_active) {
+            message = `Alliance mode activated. Analytics now use shared data configuration from ${allianceStatus.alliance_info?.alliance_name || 'alliance'}.`;
+        } else {
+            message = 'Alliance mode deactivated. Analytics now use individual team configuration.';
+        }
+        
+        showAnalyticsConfigUpdateNotification(message);
+        reloadAnalyticsWithNewConfig();
+    });
+    
+    // Function to reload analytics content with new configuration
+    window.reloadAnalyticsWithNewConfig = function() {
+        console.log('Reloading analytics with new configuration...');
+        
+        try {
+            // Get current state
+            const currentState = {
+                team: document.getElementById('team-filter')?.value || '',
+                event: document.getElementById('event-filter')?.value || '',
+                match_type: document.getElementById('match-type-filter')?.value || '',
+                metric: document.getElementById('metric-selector')?.value || ''
+            };
+            
+            // Reload the analytics data without full page reload
+            fetch(window.location.pathname + '?' + new URLSearchParams(currentState))
+                .then(response => response.json())
+                .then(data => {
+                    // Update charts and data tables
+                    if (typeof updateAnalyticsCharts === 'function') {
+                        updateAnalyticsCharts(data);
+                    }
+                    
+                    // Update any metric selectors with new config
+                    if (typeof updateMetricSelectors === 'function') {
+                        updateMetricSelectors();
+                    }
+                    
+                    console.log('Analytics reloaded successfully with new configuration');
+                    showAnalyticsConfigUpdateNotification('Analytics updated with new configuration', 'success');
+                })
+                .catch(error => {
+                    console.error('Error reloading analytics:', error);
+                    showAnalyticsConfigUpdateNotification('Failed to reload analytics. Please refresh the page.', 'error');
+                });
+        } catch (error) {
+            console.error('Error in analytics reload:', error);
+            // Fallback to page reload
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        }
+    };
+    
+    // Function to show analytics-specific config update notifications
+    function showAnalyticsConfigUpdateNotification(message) {
+        const notification = document.createElement('div');
+        notification.className = 'alert alert-warning alert-dismissible fade show position-fixed';
+        notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 450px;';
+        notification.innerHTML = `
+            <i class="fas fa-chart-line me-2"></i>
+            <strong>Analytics Update:</strong> ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Auto-remove after 12 seconds (longer for analytics messages)
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 12000);
+    }
 </script>
 {% if viewer_disabled %}
 <script>

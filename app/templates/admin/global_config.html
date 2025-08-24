@@ -1,0 +1,279 @@
+{% extends 'base.html' %}
+
+{% block title %}Global Configuration Management{% endblock %}
+
+{% block heading %}Global Configuration Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Administrator Panel:</strong> Manage real-time configuration updates across all connected users and devices.
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Current Configuration Status -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-cog me-2"></i>Current Configuration Status</h5>
+            </div>
+            <div class="card-body">
+                <!-- Alliance Status -->
+                <div class="mb-3">
+                    <h6><i class="fas fa-users me-2"></i>Alliance Mode</h6>
+                    {% if current_config.alliance_status.is_active %}
+                    <div class="alert alert-success">
+                        <strong>Active:</strong> Alliance {{ current_config.alliance_status.alliance_info.color|title }} 
+                        (Teams: {{ current_config.alliance_status.alliance_info.teams|join(', ') }})
+                    </div>
+                    {% else %}
+                    <div class="alert alert-secondary">
+                        <strong>Inactive:</strong> Standard scouting mode
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Event Information -->
+                <div class="mb-3">
+                    <h6><i class="fas fa-calendar me-2"></i>Current Event</h6>
+                    {% if current_config.game_config.current_event_code %}
+                    <div class="alert alert-info">
+                        <strong>Event Code:</strong> {{ current_config.game_config.current_event_code }}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <strong>No event configured</strong>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Configuration Overview -->
+                <div class="mb-3">
+                    <h6><i class="fas fa-file-code me-2"></i>Configuration Overview</h6>
+                    <ul class="list-unstyled">
+                        <li><strong>Game Config Sections:</strong> {{ current_config.game_config.scouting.sections|length }}</li>
+                        <li><strong>Pit Config Sections:</strong> {{ current_config.pit_config.pit_scouting.sections|length }}</li>
+                        <li><strong>Total Game Elements:</strong> 
+                            {% set total_game_elements = [] %}
+                            {% for section in current_config.game_config.scouting.sections %}
+                                {% for element in section.elements %}
+                                    {% if total_game_elements.append(element) %}{% endif %}
+                                {% endfor %}
+                            {% endfor %}
+                            {{ total_game_elements|length }}
+                        </li>
+                        <li><strong>Total Pit Elements:</strong>
+                            {% set total_pit_elements = [] %}
+                            {% for section in current_config.pit_config.pit_scouting.sections %}
+                                {% for element in section.elements %}
+                                    {% if total_pit_elements.append(element) %}{% endif %}
+                                {% endfor %}
+                            {% endfor %}
+                            {{ total_pit_elements|length }}
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Global Actions -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-broadcast-tower me-2"></i>Global Actions</h5>
+            </div>
+            <div class="card-body">
+                <!-- Reload All Configurations -->
+                <div class="mb-4">
+                    <h6><i class="fas fa-sync me-2"></i>Force Configuration Reload</h6>
+                    <p class="text-muted small">
+                        Immediately reload configuration on all connected devices. Use this when configuration files 
+                        have been manually edited or when troubleshooting sync issues.
+                    </p>
+                    <form method="POST" onsubmit="return confirm('This will reload configuration on ALL connected devices. Continue?');">
+                        <input type="hidden" name="action" value="reload_all">
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-sync me-2"></i>Reload All Configurations
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- Broadcast Custom Message -->
+                <div class="mb-4">
+                    <h6><i class="fas fa-bullhorn me-2"></i>Broadcast Message</h6>
+                    <p class="text-muted small">
+                        Send a custom notification message to all connected users. This will appear as a config update notification.
+                    </p>
+                    <form method="POST">
+                        <input type="hidden" name="action" value="broadcast_message">
+                        <div class="mb-3">
+                            <label for="message" class="form-label">Message</label>
+                            <input type="text" class="form-control" id="message" name="message" 
+                                   placeholder="e.g., System maintenance in 5 minutes" maxlength="200" required>
+                            <div class="form-text">Maximum 200 characters</div>
+                        </div>
+                        <button type="submit" class="btn btn-info">
+                            <i class="fas fa-bullhorn me-2"></i>Broadcast Message
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Real-time Status -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-satellite-dish me-2"></i>Real-time Status Monitor</h5>
+            </div>
+            <div class="card-body">
+                <div id="status-container">
+                    <div class="alert alert-info" id="status-indicator">
+                        <i class="fas fa-circle text-success me-2"></i>
+                        <strong>System Status:</strong> <span id="status-text">Connected and monitoring</span>
+                        <small class="text-muted ms-3">Last updated: <span id="last-updated">{{ moment().format('HH:mm:ss') }}</span></small>
+                    </div>
+                </div>
+                
+                <!-- Connection Test -->
+                <div class="mt-3">
+                    <button type="button" class="btn btn-outline-primary" onclick="testConnection()">
+                        <i class="fas fa-wifi me-2"></i>Test Connection
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="clearLogs()">
+                        <i class="fas fa-broom me-2"></i>Clear Logs
+                    </button>
+                </div>
+                
+                <!-- Activity Log -->
+                <div class="mt-4">
+                    <h6><i class="fas fa-list me-2"></i>Recent Activity</h6>
+                    <div id="activity-log" class="border rounded p-3" style="height: 200px; overflow-y: auto; background-color: #f8f9fa;">
+                        <div class="text-muted">Activity log will appear here...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Global config reload handler
+    if (typeof window.globalConfigReload === 'function') {
+        window.globalConfigReload = function() {
+            addActivityLog('Config reload detected - refreshing admin panel', 'info');
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        };
+    }
+    
+    // Connect to Socket.IO for real-time monitoring
+    if (typeof socket !== 'undefined') {
+        // Listen for global config changes
+        socket.on('global_config_changed', function(data) {
+            addActivityLog(`Global config change: ${data.type} - ${data.message || 'Configuration updated'}`, 'success');
+            updateStatus('Configuration change detected', 'success');
+        });
+        
+        // Listen for connection events
+        socket.on('connect', function() {
+            addActivityLog('Connected to real-time monitoring', 'success');
+            updateStatus('Connected and monitoring', 'success');
+        });
+        
+        socket.on('disconnect', function() {
+            addActivityLog('Disconnected from real-time monitoring', 'warning');
+            updateStatus('Disconnected - attempting reconnection', 'warning');
+        });
+        
+        socket.on('reconnect', function() {
+            addActivityLog('Reconnected to real-time monitoring', 'success');
+            updateStatus('Reconnected and monitoring', 'success');
+        });
+    }
+});
+
+function updateStatus(message, type) {
+    const statusIndicator = document.getElementById('status-indicator');
+    const statusText = document.getElementById('status-text');
+    const lastUpdated = document.getElementById('last-updated');
+    
+    // Update status message
+    statusText.textContent = message;
+    lastUpdated.textContent = new Date().toLocaleTimeString();
+    
+    // Update status color
+    statusIndicator.className = 'alert';
+    const icon = statusIndicator.querySelector('i');
+    
+    switch(type) {
+        case 'success':
+            statusIndicator.classList.add('alert-success');
+            icon.className = 'fas fa-circle text-success me-2';
+            break;
+        case 'warning':
+            statusIndicator.classList.add('alert-warning');
+            icon.className = 'fas fa-circle text-warning me-2';
+            break;
+        case 'error':
+            statusIndicator.classList.add('alert-danger');
+            icon.className = 'fas fa-circle text-danger me-2';
+            break;
+        default:
+            statusIndicator.classList.add('alert-info');
+            icon.className = 'fas fa-circle text-primary me-2';
+    }
+}
+
+function addActivityLog(message, type = 'info') {
+    const activityLog = document.getElementById('activity-log');
+    const timestamp = new Date().toLocaleTimeString();
+    
+    const logEntry = document.createElement('div');
+    logEntry.className = `mb-1 text-${type === 'success' ? 'success' : type === 'warning' ? 'warning' : type === 'error' ? 'danger' : 'dark'}`;
+    logEntry.innerHTML = `<small>[${timestamp}] ${message}</small>`;
+    
+    // Add to top of log
+    if (activityLog.firstChild && activityLog.firstChild.classList && activityLog.firstChild.classList.contains('text-muted')) {
+        activityLog.removeChild(activityLog.firstChild);
+    }
+    activityLog.insertBefore(logEntry, activityLog.firstChild);
+    
+    // Limit to 50 entries
+    while (activityLog.children.length > 50) {
+        activityLog.removeChild(activityLog.lastChild);
+    }
+}
+
+function testConnection() {
+    addActivityLog('Testing connection...', 'info');
+    
+    if (typeof socket !== 'undefined' && socket.connected) {
+        addActivityLog('Connection test successful - Socket.IO connected', 'success');
+        updateStatus('Connection test passed', 'success');
+    } else {
+        addActivityLog('Connection test failed - Socket.IO not connected', 'error');
+        updateStatus('Connection test failed', 'error');
+    }
+}
+
+function clearLogs() {
+    const activityLog = document.getElementById('activity-log');
+    activityLog.innerHTML = '<div class="text-muted">Activity log cleared...</div>';
+    addActivityLog('Activity log cleared by administrator', 'info');
+}
+</script>
+{% endblock %}

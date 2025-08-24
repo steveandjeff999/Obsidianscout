@@ -2,6 +2,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from app.models import Event, Match, ScoutingData, Team
 from app import db
 from datetime import datetime
+from app.utils.config_manager import get_current_game_config, get_effective_game_config, save_game_config
+from app.utils.team_isolation import get_event_by_code
 
 bp = Blueprint('events', __name__, url_prefix='/events')
 
@@ -30,7 +32,7 @@ def add():
         
         # Check if event code already exists
         if code:
-            existing_event = Event.query.filter_by(code=code).first()
+            existing_event = get_event_by_code(code)
             if existing_event:
                 flash(f'Event with code {code} already exists!', 'danger')
                 return render_template('events/add.html')
@@ -74,7 +76,7 @@ def edit(event_id):
         
         # Check if event code already exists on a different event
         if event.code:
-            existing_event = Event.query.filter_by(code=event.code).first()
+            existing_event = get_event_by_code(event.code)
             if existing_event and existing_event.id != event_id:
                 flash(f'Another event with code {event.code} already exists!', 'danger')
                 return render_template('events/edit.html', event=event)
@@ -93,25 +95,40 @@ def edit(event_id):
 def delete(event_id):
     """Delete an event and all associated matches"""
     event = Event.query.get_or_404(event_id)
+    event_name = event.name  # Store name before deletion
     
     try:
-        # Delete all scouting data associated with matches from this event
-        match_ids = [match.id for match in event.matches]
-        if match_ids:
-            ScoutingData.query.filter(ScoutingData.match_id.in_(match_ids)).delete(synchronize_session=False)
+        # Import the DisableReplication context manager
+        from app.utils.real_time_replication import DisableReplication
         
-        # Remove event associations from teams
-        for team in event.teams:
-            team.events.remove(event)
+        # Temporarily disable replication during bulk delete to prevent queue issues
+        with DisableReplication():
+            # Delete all scouting data associated with matches from this event
+            match_ids = [match.id for match in event.matches]
+            if match_ids:
+                ScoutingData.query.filter(ScoutingData.match_id.in_(match_ids)).delete(synchronize_session=False)
+            
+            # Remove event associations from teams
+            for team in event.teams:
+                team.events.remove(event)
+            
+            # Delete all matches associated with this event
+            Match.query.filter_by(event_id=event_id).delete()
+            
+            # Finally delete the event itself
+            db.session.delete(event)
+            db.session.commit()
         
-        # Delete all matches associated with this event
-        Match.query.filter_by(event_id=event_id).delete()
+        # After the bulk delete is complete, queue a single replication operation
+        from app.utils.real_time_replication import real_time_replicator
+        real_time_replicator.replicate_operation(
+            'delete', 
+            'events', 
+            {'id': event_id, 'name': event_name}, 
+            str(event_id)
+        )
         
-        # Finally delete the event itself
-        db.session.delete(event)
-        db.session.commit()
-        
-        flash(f'Event "{event.name}" and all associated data deleted successfully!', 'success')
+        flash(f'Event "{event_name}" and all associated data deleted successfully!', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error deleting event: {str(e)}', 'danger')
@@ -132,24 +149,16 @@ def set_current_event(event_id):
     event = Event.query.get_or_404(event_id)
     
     # Update the game configuration
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    game_config = get_current_game_config()
     game_config['current_event_code'] = event.code
     
     # Save the updated configuration to file
-    try:
-        import json
-        import os
-        
-        config_path = os.path.join(current_app.root_path, '..', 'config', 'game_config.json')
-        with open(config_path, 'w') as f:
-            json.dump(game_config, f, indent=2)
-        
+    if save_game_config(game_config):
         # Update the app config as well
         current_app.config['GAME_CONFIG'] = game_config
-        
         flash(f'Current event set to: {event.name}', 'success')
-    except Exception as e:
-        flash(f'Error setting current event: {str(e)}', 'danger')
+    else:
+        flash(f'Error setting current event', 'danger')
     
     # Redirect to the referring page or specified route
     redirect_to = request.args.get('redirect_to')

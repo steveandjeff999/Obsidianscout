@@ -11,6 +11,16 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <h3 class="mb-0">Team Rankings by Average Points</h3>
+                    <div>
+                        {% if team_rankings and not viewer_disabled %}
+                        <button type="button" class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#shareModal">
+                            <i class="fas fa-share-alt me-2"></i>Share Rankings
+                        </button>
+                        {% endif %}
+                        <a href="{{ url_for('teams.my_ranks_shares') }}" class="btn btn-info">
+                            <i class="fas fa-list me-2"></i>My Shares
+                        </a>
+                    </div>
                 </div>
                 <!-- Event selector -->
                 <div class="mt-3">
@@ -98,4 +108,118 @@
         </div>
     </div>
 </div>
+
+<!-- Share Modal -->
+{% if team_rankings and not viewer_disabled %}
+<div class="modal fade" id="shareModal" tabindex="-1" aria-labelledby="shareModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="shareModalLabel">
+                    <i class="fas fa-share-alt me-2"></i>Share Team Rankings
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('teams.create_ranks_share') }}" method="post">
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Create a shareable link that allows others to view your team rankings without needing to log in. 
+                        The shared rankings will be read-only and publicly accessible.
+                    </div>
+                    
+                    <!-- Hidden fields to pass current ranking configuration -->
+                    {% if selected_event %}
+                    <input type="hidden" name="event_id" value="{{ selected_event.id }}">
+                    {% endif %}
+                    <input type="hidden" name="metric" value="{{ total_metric_id }}">
+                    
+                    <!-- Share configuration -->
+                    <div class="mb-3">
+                        <label for="share_title" class="form-label fw-semibold">
+                            <i class="fas fa-heading me-2"></i>Title <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="share_title" name="share_title" 
+                               placeholder="Enter a title for your shared rankings" required maxlength="200"
+                               value="{% if selected_event %}{{ selected_event.name }} {% endif %}Team Rankings">
+                        <div class="form-text">
+                            This title will be displayed at the top of the shared page.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="share_description" class="form-label fw-semibold">
+                            <i class="fas fa-align-left me-2"></i>Description (Optional)
+                        </label>
+                        <textarea class="form-control" id="share_description" name="share_description" 
+                                  rows="3" maxlength="1000" 
+                                  placeholder="Add a description for your shared rankings..."></textarea>
+                        <div class="form-text">
+                            Provide context about these rankings or what makes them noteworthy.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="expires_in_days" class="form-label fw-semibold">
+                            <i class="fas fa-clock me-2"></i>Expiration
+                        </label>
+                        <select class="form-select" id="expires_in_days" name="expires_in_days">
+                            <option value="">Never expires</option>
+                            <option value="7">1 week</option>
+                            <option value="30" selected>1 month</option>
+                            <option value="90">3 months</option>
+                            <option value="365">1 year</option>
+                        </select>
+                        <div class="form-text">
+                            Choose when this shared link should expire and become inaccessible.
+                        </div>
+                    </div>
+                    
+                    <!-- Summary Card -->
+                    <div class="card bg-light">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-info-circle me-2"></i>Share Summary:
+                            </h6>
+                        </div>
+                        <div class="card-body py-2">
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Event:</small>
+                                    <span class="badge bg-info">
+                                        {% if selected_event %}
+                                            {{ selected_event.name }}
+                                        {% else %}
+                                            All Events
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Metric:</small>
+                                    <span class="badge bg-success">Average Points</span>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Teams:</small>
+                                    <span class="badge bg-primary">{{ team_rankings|length }} team{{ 's' if team_rankings|length != 1 else '' }}</span>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Type:</small>
+                                    <span class="badge bg-warning text-dark">Team Rankings</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-share-alt me-2"></i>Create Share Link
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% endblock %} 

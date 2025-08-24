@@ -7,6 +7,7 @@ from app.utils.api_utils import get_matches, ApiError, api_to_db_match_conversio
 from app.utils.analysis import predict_match_outcome, get_match_details_with_teams
 from datetime import datetime
 from app.utils.theme_manager import ThemeManager
+from app.utils.config_manager import get_effective_game_config
 from flask_socketio import emit, join_room, leave_room
 from app.models import StrategyDrawing
 from app import socketio
@@ -15,6 +16,10 @@ from flask import send_from_directory
 from werkzeug.utils import secure_filename
 from PIL import Image
 import io
+from app.utils.team_isolation import (
+    filter_matches_by_scouting_team, filter_events_by_scouting_team,
+    filter_teams_by_scouting_team, assign_scouting_team_to_model, get_event_by_code
+)
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -30,7 +35,7 @@ bp = Blueprint('matches', __name__, url_prefix='/matches')
 def index():
     """Display matches for the current event from configuration"""
     # Get event code from config
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     
     # Get the current event
@@ -38,16 +43,19 @@ def index():
     event_id = request.args.get('event_id', type=int)
     
     if event_id:
-        # If a specific event ID is requested, use that
-        event = Event.query.get_or_404(event_id)
+        # If a specific event ID is requested, use that (filtered by scouting team)
+        event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+        if not event:
+            flash("Event not found or not accessible.", "error")
+            return redirect(url_for('matches.index'))
     elif current_event_code:
-        # Otherwise use the current event from config
-        event = Event.query.filter_by(code=current_event_code).first()
+        # Otherwise use the current event from config (filtered by scouting team)
+        event = get_event_by_code(current_event_code)
     
-    # Get all events for the dropdown
-    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+    # Get all events for the dropdown (filtered by scouting team)
+    events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
     
-    # Filter matches by the selected event
+    # Filter matches by the selected event and scouting team
     if event:
         # Define custom ordering for match types
         match_type_order = {
@@ -58,8 +66,8 @@ def index():
             'elimination': 3,  # Alternative name for playoff matches
         }
         
-        # Get all matches for this event
-        matches = Match.query.filter_by(event_id=event.id).all()
+        # Get all matches for this event (filtered by scouting team)
+        matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
         
         # Sort matches by type (using our custom order) and then by match number
         matches = sorted(matches, key=lambda m: (
@@ -78,22 +86,23 @@ def sync_from_config():
     """Sync matches from FIRST API using the event code from config file"""
     try:
         # Get event code from config
-        game_config = current_app.config.get('GAME_CONFIG', {})
+        game_config = get_effective_game_config()
         event_code = game_config.get('current_event_code')
         
         if not event_code:
             flash("No event code found in configuration. Please add 'current_event_code' to your game_config.json file.", 'danger')
             return redirect(url_for('matches.index'))
         
-        # Find or create the event in our database
+        # Find or create the event in our database (filtered by scouting team)
         current_year = game_config.get('season', 2026)
-        event = Event.query.filter_by(code=event_code).first()
+        event = get_event_by_code(event_code)
         if not event:
             event = Event(
                 name=f"Event {event_code}",  # Placeholder name until we get more data
                 code=event_code,
                 year=current_year
             )
+            assign_scouting_team_to_model(event)  # Assign current scouting team
             db.session.add(event)
             db.session.flush()  # Get the ID without committing yet
         
@@ -104,43 +113,66 @@ def sync_from_config():
         matches_added = 0
         matches_updated = 0
         
-        # Process each match from the API
-        for match_data in match_data_list:
-            # Set the event_id for the match
-            match_data['event_id'] = event.id
-            
-            if not match_data:
-                continue
-                
-            match_number = match_data.get('match_number')
-            match_type = match_data.get('match_type')
-            
-            if not match_number or not match_type:
-                continue
-            
-            # Check if the match already exists
-            match = Match.query.filter_by(
-                event_id=event.id,
-                match_number=match_number,
-                match_type=match_type
-            ).first()
-            
-            if match:
-                # Update existing match
-                match.red_alliance = match_data.get('red_alliance', match.red_alliance)
-                match.blue_alliance = match_data.get('blue_alliance', match.blue_alliance)
-                match.winner = match_data.get('winner', match.winner)
-                match.red_score = match_data.get('red_score', match.red_score)
-                match.blue_score = match_data.get('blue_score', match.blue_score)
-                matches_updated += 1
-            else:
-                # Add new match
-                match = Match(**match_data)
-                db.session.add(match)
-                matches_added += 1
+        # Import DisableReplication to prevent queue issues during bulk operations
+        from app.utils.real_time_replication import DisableReplication
         
-        # Commit all changes
-        db.session.commit()
+        # Temporarily disable replication during bulk sync to prevent queue issues
+        with DisableReplication():
+            # Process each match from the API
+            for match_data in match_data_list:
+                # Set the event_id for the match
+                match_data['event_id'] = event.id
+                
+                if not match_data:
+                    continue
+                    
+                match_number = match_data.get('match_number')
+                match_type = match_data.get('match_type')
+                
+                if not match_number or not match_type:
+                    continue
+                
+                # Check if the match already exists for this scouting team
+                match = filter_matches_by_scouting_team().filter(
+                    Match.event_id == event.id,
+                    Match.match_number == match_number,
+                    Match.match_type == match_type
+                ).first()
+                
+                if match:
+                    # Update existing match
+                    match.red_alliance = match_data.get('red_alliance', match.red_alliance)
+                    match.blue_alliance = match_data.get('blue_alliance', match.blue_alliance)
+                    match.winner = match_data.get('winner', match.winner)
+                    match.red_score = match_data.get('red_score', match.red_score)
+                    match.blue_score = match_data.get('blue_score', match.blue_score)
+                    matches_updated += 1
+                else:
+                    # Add new match
+                    match = Match(**match_data)
+                    assign_scouting_team_to_model(match)  # Assign current scouting team
+                    db.session.add(match)
+                    matches_added += 1
+            
+            # Commit all changes
+            db.session.commit()
+        
+        # After bulk sync, queue a single replication event for the match sync
+        if matches_added > 0 or matches_updated > 0:
+            from app.utils.real_time_replication import real_time_replicator
+            real_time_replicator.replicate_operation(
+                'update', 
+                'matches', 
+                {
+                    'event_code': event_code,
+                    'matches_added': matches_added,
+                    'matches_updated': matches_updated,
+                    'total_matches': len(match_data_list),
+                    'sync_type': 'bulk_sync',
+                    'sync_timestamp': datetime.utcnow().isoformat()
+                }, 
+                f"sync_summary_{event_code}"
+            )
         
         # Show success message
         flash(f"Matches sync complete! Added {matches_added} new matches and updated {matches_updated} existing matches.", 'success')
@@ -159,10 +191,10 @@ def view(match_id):
     match = Match.query.get_or_404(match_id)
     
     # Get scouting data for this match
-    scouting_data = ScoutingData.query.filter_by(match_id=match.id).all()
+    scouting_data = ScoutingData.query.filter_by(match_id=match.id, scouting_team_number=current_user.scouting_team_number).all()
     
     # Get game configuration
-    game_config = current_app.config['GAME_CONFIG']
+    game_config = get_effective_game_config()
     
     return render_template('matches/view.html', match=match, 
                           scouting_data=scouting_data, game_config=game_config, **get_theme_context())
@@ -171,19 +203,19 @@ def view(match_id):
 def add():
     """Add a new match"""
     # Get game configuration
-    game_config = current_app.config['GAME_CONFIG']
+    game_config = get_effective_game_config()
     
     # Get current event based on configuration
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
-        current_event = Event.query.filter_by(code=current_event_code).first()
+        current_event = get_event_by_code(current_event_code)
     
-    events = Event.query.all()
+    events = filter_events_by_scouting_team().all()
     
     # Get teams filtered by the current event if available
     if current_event:
-        teams = current_event.teams
+        teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
     else:
         teams = []  # No teams if no current event is set
     
@@ -195,7 +227,7 @@ def add():
         # Get alliance team numbers
         red_teams = []
         blue_teams = []
-        for i in range(current_app.config['GAME_CONFIG']['alliance_size']):
+        for i in range(get_effective_game_config()['alliance_size']):
             red_team = request.form.get(f'red_team_{i}')
             blue_team = request.form.get(f'blue_team_{i}')
             if red_team: red_teams.append(red_team)
@@ -230,27 +262,27 @@ def add():
         return redirect(url_for('matches.index'))
     
     return render_template('matches/add.html', events=events, teams=teams, 
-                          alliance_size=current_app.config['GAME_CONFIG']['alliance_size'],
-                          match_types=current_app.config['GAME_CONFIG']['match_types'], **get_theme_context())
+                          alliance_size=get_effective_game_config()['alliance_size'],
+                          match_types=get_effective_game_config()['match_types'], **get_theme_context())
 
 @bp.route('/<int:match_id>/edit', methods=['GET', 'POST'])
 def edit(match_id):
     """Edit match details"""
     match = Match.query.get_or_404(match_id)
-    events = Event.query.all()
+    events = filter_events_by_scouting_team().all()
     
     # Get game configuration
-    game_config = current_app.config['GAME_CONFIG']
+    game_config = get_effective_game_config()
     
     # Get current event based on configuration
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
-        current_event = Event.query.filter_by(code=current_event_code).first()
+        current_event = get_event_by_code(current_event_code)
     
     # Get teams filtered by the current event if available
     if current_event:
-        teams = current_event.teams
+        teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
     else:
         teams = []  # No teams if no current event is set
     
@@ -262,7 +294,7 @@ def edit(match_id):
         # Get alliance team numbers
         red_teams = []
         blue_teams = []
-        for i in range(current_app.config['GAME_CONFIG']['alliance_size']):
+        for i in range(get_effective_game_config()['alliance_size']):
             red_team = request.form.get(f'red_team_{i}')
             blue_team = request.form.get(f'blue_team_{i}')
             if red_team: red_teams.append(red_team)
@@ -285,8 +317,8 @@ def edit(match_id):
     
     return render_template('matches/edit.html', match=match, events=events, teams=teams,
                          red_teams=red_teams, blue_teams=blue_teams,
-                         alliance_size=current_app.config['GAME_CONFIG']['alliance_size'],
-                         match_types=current_app.config['GAME_CONFIG']['match_types'], **get_theme_context())
+                         alliance_size=get_effective_game_config()['alliance_size'],
+                         match_types=get_effective_game_config()['match_types'], **get_theme_context())
 
 @bp.route('/<int:match_id>/delete', methods=['POST'])
 def delete(match_id):
@@ -294,7 +326,7 @@ def delete(match_id):
     match = Match.query.get_or_404(match_id)
     
     # Delete associated scouting data
-    ScoutingData.query.filter_by(match_id=match.id).delete()
+    ScoutingData.query.filter_by(match_id=match.id, scouting_team_number=current_user.scouting_team_number).delete()
     
     db.session.delete(match)
     db.session.commit()
@@ -306,32 +338,38 @@ def delete(match_id):
 def predict():
     """Predict the outcome of a match based on team performance"""
     # Get event code from config
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    game_config = get_effective_game_config()
     
     # Get the current event
     event = None
     selected_match = None
     prediction = None
     
-    # Get all events for the dropdown
-    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+    # Get all events for the dropdown (filtered by scouting team)
+    events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
     
     # Get event from URL parameter or form
     event_id = request.args.get('event_id', type=int) or request.form.get('event_id', type=int)
     
     if event_id:
-        # If a specific event ID is requested, use that
-        event = Event.query.get_or_404(event_id)
+        # If a specific event ID is requested, use that (filtered by scouting team)
+        event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+        if not event:
+            flash("Event not found or not accessible.", "error")
+            return redirect(url_for('matches.predict'))
         
-        # Get all matches for this event
-        matches = Match.query.filter_by(event_id=event.id).order_by(Match.match_type, Match.match_number).all()
+        # Get all matches for this event (filtered by scouting team)
+        matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).order_by(Match.match_type, Match.match_number).all()
         
         # Check if a specific match is requested
         match_id = request.args.get('match_id', type=int) or request.form.get('match_id', type=int)
         
         if match_id:
-            # Get the match
-            selected_match = Match.query.get_or_404(match_id)
+            # Get the match (filtered by scouting team)
+            selected_match = filter_matches_by_scouting_team().filter(Match.id == match_id).first()
+            if not selected_match:
+                flash("Match not found or not accessible.", "error")
+                return redirect(url_for('matches.predict', event_id=event_id))
             
             # Get match details with prediction
             match_details = get_match_details_with_teams(match_id)
@@ -376,7 +414,9 @@ def predict_print(match_id):
         return redirect(url_for('matches.predict'))
     
     # Get game configuration
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    game_config = get_effective_game_config()
+    game_config = get_effective_game_config()
+    game_config = get_effective_game_config()
     
     # Render the printable template with the prediction data
     return render_template(
@@ -518,7 +558,7 @@ def strategy_draw():
     if event_id:
         event = Event.query.get_or_404(event_id)
     elif current_event_code:
-        event = Event.query.filter_by(code=current_event_code).first()
+        event = get_event_by_code(current_event_code)
     if event:
         matches = Match.query.filter_by(event_id=event.id).all()
         match_type_order = {
@@ -549,7 +589,7 @@ def strategy_draw():
 @bp.route('/api/strategy_drawing/<int:match_id>', methods=['GET'])
 @login_required
 def get_strategy_drawing(match_id):
-    drawing = StrategyDrawing.query.filter_by(match_id=match_id).first()
+    drawing = StrategyDrawing.query.filter_by(match_id=match_id, scouting_team_number=current_user.scouting_team_number).first()
     if drawing:
         bg_url = url_for('matches.get_strategy_background', filename=drawing.background_image) if drawing.background_image else None
         return jsonify({'data': drawing.data, 'last_updated': drawing.last_updated.isoformat() if drawing.last_updated else None, 'background_image': bg_url})
@@ -564,7 +604,7 @@ def on_join_strategy_room(data):
         room = f'strategy_match_{match_id}'
         join_room(room)
         # Send current drawing data to the new client
-        drawing = StrategyDrawing.query.filter_by(match_id=match_id).first()
+        drawing = StrategyDrawing.query.filter_by(match_id=match_id, scouting_team_number=current_user.scouting_team_number).first()
         emit('drawing_data', {
             'match_id': match_id,
             'data': drawing.data if drawing else None,
@@ -578,9 +618,9 @@ def on_drawing_update(data):
     if not match_id or drawing_data is None:
         return
     # Save to DB
-    drawing = StrategyDrawing.query.filter_by(match_id=match_id).first()
+    drawing = StrategyDrawing.query.filter_by(match_id=match_id, scouting_team_number=current_user.scouting_team_number).first()
     if not drawing:
-        drawing = StrategyDrawing(match_id=match_id, data_json='{}')
+        drawing = StrategyDrawing(match_id=match_id, data_json='{}', scouting_team_number=current_user.scouting_team_number)
         db.session.add(drawing)
     drawing.data = drawing_data
     db.session.commit()
@@ -622,3 +662,90 @@ def upload_strategy_background():
 @bp.route('/strategy_backgrounds/<filename>')
 def get_global_strategy_background(filename):
     return send_from_directory(os.path.abspath(STRATEGY_BG_UPLOAD_FOLDER), filename)
+
+@bp.route('/data')
+@analytics_required
+def matches_data():
+    """AJAX endpoint for matches data - used for real-time config updates"""
+    try:
+        # Get event code from config (alliance-aware)
+        game_config = get_effective_game_config()
+        current_event_code = game_config.get('current_event_code')
+        
+        if not current_event_code:
+            return jsonify({
+                'success': True,
+                'matches': [],
+                'current_event': None,
+                'message': 'No event selected in configuration',
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        # Get current event
+        current_event = get_event_by_code(current_event_code)
+        if not current_event:
+            return jsonify({
+                'success': True,
+                'matches': [],
+                'current_event': None,
+                'message': f'Event {current_event_code} not found',
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        # Get matches for this event
+        matches = filter_matches_by_scouting_team().filter_by(event_id=current_event.id).order_by(Match.match_number).all()
+        
+        # Get team data for context
+        teams = db.session.query(Team).join(Team.events).filter(Event.id == current_event.id).all()
+        
+        # Prepare matches data for JSON
+        matches_data = []
+        for match in matches:
+            match_data = {
+                'id': match.id,
+                'match_number': match.match_number,
+                'comp_level': match.comp_level,
+                'set_number': match.set_number,
+                'predicted_time': match.predicted_time.isoformat() if match.predicted_time else None,
+                'actual_time': match.actual_time.isoformat() if match.actual_time else None,
+                'alliances': {
+                    'red': {
+                        'teams': [match.red_1, match.red_2, match.red_3],
+                        'score': match.red_score
+                    },
+                    'blue': {
+                        'teams': [match.blue_1, match.blue_2, match.blue_3],
+                        'score': match.blue_score
+                    }
+                },
+                'winner': match.winner,
+                'status': 'completed' if match.winner else 'upcoming'
+            }
+            matches_data.append(match_data)
+        
+        # Get teams data
+        teams_data = [{'id': team.id, 'team_number': team.team_number, 'name': team.name or ''} for team in teams]
+        
+        return jsonify({
+            'success': True,
+            'game_config': game_config,
+            'current_event': {
+                'id': current_event.id,
+                'name': current_event.name,
+                'code': current_event.code,
+                'start_date': current_event.start_date.isoformat() if current_event.start_date else None,
+                'end_date': current_event.end_date.isoformat() if current_event.end_date else None
+            },
+            'matches': matches_data,
+            'teams': teams_data,
+            'stats': {
+                'total_matches': len(matches_data),
+                'completed_matches': len([m for m in matches_data if m['status'] == 'completed']),
+                'upcoming_matches': len([m for m in matches_data if m['status'] == 'upcoming'])
+            },
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in matches_data endpoint: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500

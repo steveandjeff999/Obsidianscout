@@ -7,7 +7,7 @@
     "base_url": "https://frc-api.firstinspires.org"
   },
   "tba_api_settings": {
-    "auth_key": "hae7pfixkaYpROTHhMx6XQ5qLkjT5v7jX7IymIp3sFadVOTsboxkSVJlYu4yoq9a",
+    "auth_key": "your tba api key here",
     "base_url": "https://www.thebluealliance.com/api/v3"
   },
   "auto_period": {
@@ -163,17 +163,21 @@
       {
         "id": "egh",
         "perm_id": "egh",
-        "name": "climb",
+        "name": "Climb",
         "type": "select",
-        "default": "none"
-      },
-      {
-        "id": "f",
-        "perm_id": "f",
-        "name": "f",
-        "type": "boolean",
-        "default": false,
-        "points": 0.0
+        "default": "0",
+        "options": [
+          "None",
+          "Park",
+          "Shallow ",
+          "Deep"
+        ],
+        "points": {
+          "None": 1.0,
+          "Park": 2.0,
+          "Shallow ": 3.0,
+          "Deep": 4.0
+        }
       }
     ]
   },

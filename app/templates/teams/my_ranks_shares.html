@@ -1,0 +1,265 @@
+{% extends 'base.html' %}
+
+{% block title %}My Shared Team Rankings{% endblock %}
+
+{% block heading %}My Shared Team Rankings{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-share-alt me-2"></i>My Shared Team Rankings
+                </h5>
+                <div>
+                    <a href="{{ url_for('teams.ranks') }}" class="btn btn-light btn-sm me-2">
+                        <i class="fas fa-trophy me-2"></i>View Rankings
+                    </a>
+                    <a href="{{ url_for('graphs.my_shares') }}" class="btn btn-light btn-sm">
+                        <i class="fas fa-chart-line me-2"></i>My Graph Shares
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">
+                    Manage your shared team rankings. Each shared ranking creates a public link that allows others to view 
+                    your team ranking data without requiring login credentials.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if shares %}
+<div class="row">
+    {% for share in shares %}
+    <div class="col-md-6 col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-start">
+                <h6 class="mb-0 flex-grow-1">{{ share.title }}</h6>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" 
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('teams.view_shared_ranks', share_id=share.share_id) }}" target="_blank">
+                                <i class="fas fa-external-link-alt me-2"></i>View
+                            </a>
+                        </li>
+                        <li>
+                            <button class="dropdown-item" onclick="copyShareLink('{{ url_for('teams.view_shared_ranks', share_id=share.share_id, _external=True) }}')">
+                                <i class="fas fa-copy me-2"></i>Copy Link
+                            </button>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <form action="{{ url_for('teams.delete_ranks_share', share_id=share.id) }}" method="post" 
+                                  onsubmit="return confirm('Are you sure you want to delete this shared ranking?')" style="display: inline;">
+                                <button type="submit" class="dropdown-item text-danger">
+                                    <i class="fas fa-trash me-2"></i>Delete
+                                </button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if share.description %}
+                <p class="card-text text-muted small">{{ share.description }}</p>
+                {% endif %}
+                
+                <!-- Share Details -->
+                <div class="mb-3">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <strong class="small">Event:</strong>
+                            <div class="small text-muted">
+                                {% if share.event %}
+                                    {{ share.event.name }}
+                                {% else %}
+                                    All Events
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <strong class="small">Metric:</strong>
+                            <div class="small text-muted">Average Points</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Share Link -->
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Share Link:</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control share-link-input" 
+                               value="{{ url_for('teams.view_shared_ranks', share_id=share.share_id, _external=True) }}" 
+                               readonly id="shareLink{{ share.id }}">
+                        <button class="btn btn-outline-secondary" type="button" 
+                                onclick="copyShareLink('{{ url_for('teams.view_shared_ranks', share_id=share.share_id, _external=True) }}', '{{ share.id }}')">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Status Indicators -->
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex gap-2">
+                        {% if share.is_expired() %}
+                        <span class="badge bg-danger">
+                            <i class="fas fa-clock me-1"></i>Expired
+                        </span>
+                        {% elif share.expires_at %}
+                        <span class="badge bg-warning">
+                            <i class="fas fa-clock me-1"></i>Expires {{ share.expires_at.strftime('%m/%d/%y') }}
+                        </span>
+                        {% else %}
+                        <span class="badge bg-success">
+                            <i class="fas fa-infinity me-1"></i>No Expiration
+                        </span>
+                        {% endif %}
+                        
+                        <span class="badge bg-info">
+                            <i class="fas fa-eye me-1"></i>{{ share.view_count }} view{{ 's' if share.view_count != 1 else '' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer text-muted small">
+                <i class="fas fa-calendar me-1"></i>
+                Created {{ share.created_at.strftime('%m/%d/%y at %I:%M %p') }}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Share Statistics -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="fas fa-chart-bar me-2"></i>Share Statistics
+                </h6>
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="stat-box">
+                            <h4 class="text-primary">{{ shares|length }}</h4>
+                            <small class="text-muted">Total Shares</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-box">
+                            <h4 class="text-success">{{ shares|selectattr('is_active')|list|length }}</h4>
+                            <small class="text-muted">Active Shares</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-box">
+                            <h4 class="text-info">{{ shares|sum(attribute='view_count') }}</h4>
+                            <small class="text-muted">Total Views</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-box">
+                            <h4 class="text-warning">{{ shares|selectattr('expires_at')|list|length }}</h4>
+                            <small class="text-muted">With Expiration</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- No Shares Message -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="fas fa-share-alt fa-3x text-muted mb-3"></i>
+                <h4 class="text-muted">No Shared Rankings Yet</h4>
+                <p class="text-muted mb-4">
+                    You haven't created any shared team rankings yet. Create rankings with your team data and share them 
+                    with others using public links.
+                </p>
+                <a href="{{ url_for('teams.ranks') }}" class="btn btn-primary">
+                    <i class="fas fa-trophy me-2"></i>Create Your First Rankings
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Copy Success Toast -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+    <div id="copyToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <i class="fas fa-check-circle text-success me-2"></i>
+            <strong class="me-auto">Success</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body">
+            Share link copied to clipboard!
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+
+function copyShareLink(url, shareId) {
+    navigator.clipboard.writeText(url).then(function() {
+        // Show success toast
+        const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+        toast.show();
+        
+        // Optional: temporarily highlight the input field
+        if (shareId) {
+            const input = document.getElementById('shareLink' + shareId);
+            if (input) {
+                input.classList.add('border-success');
+                setTimeout(() => {
+                    input.classList.remove('border-success');
+                }, 2000);
+            }
+        }
+    }).catch(function(err) {
+        console.error('Failed to copy: ', err);
+        alert('Failed to copy link to clipboard. Please copy manually.');
+    });
+}
+</script>
+
+<style>
+.stat-box {
+    padding: 1rem;
+}
+.share-link-input {
+    font-family: monospace;
+    font-size: 0.8rem;
+}
+.card {
+    transition: transform 0.2s;
+}
+.card:hover {
+    transform: translateY(-2px);
+}
+</style>
+{% endblock %}

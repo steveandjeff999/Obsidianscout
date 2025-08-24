@@ -8,6 +8,7 @@ from .tba_api_utils import (
     get_tba_event_details, tba_team_to_db_format, tba_match_to_db_format,
     tba_event_to_db_format, construct_tba_event_key, construct_tba_team_key
 )
+from app.utils.config_manager import get_current_game_config
 
 class ApiError(Exception):
     """Exception for API errors"""
@@ -15,7 +16,7 @@ class ApiError(Exception):
 
 def get_preferred_api_source():
     """Get preferred API source from config"""
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    game_config = get_current_game_config()
     return game_config.get('preferred_api_source', 'first')  # Default to FIRST API
 
 def get_api_key():
@@ -43,7 +44,7 @@ def get_api_headers():
     
     # For FIRST API, auth format is Basic Username:Auth_Token
     # Get username from config
-    api_settings = current_app.config.get('GAME_CONFIG', {}).get('api_settings', {})
+    api_settings = get_current_game_config().get('api_settings', {})
     username = api_settings.get('username', '')
     
     if username and auth_token:
@@ -70,7 +71,7 @@ def get_api_headers():
 def get_teams(event_code):
     """Get teams from FIRST API for a specific event"""
     base_url = current_app.config.get('API_BASE_URL', 'https://frc-api.firstinspires.org')
-    season = current_app.config.get('GAME_CONFIG', {}).get('season', 2026)
+    season = get_current_game_config().get('season', 2026)
     
     # FIRST API has multiple endpoint formats for teams at an event
     # Try them in sequence until one works
@@ -154,7 +155,7 @@ def get_teams(event_code):
 def get_matches(event_code):
     """Get matches from FIRST API for a specific event"""
     base_url = current_app.config.get('API_BASE_URL', 'https://frc-api.firstinspires.org')
-    season = current_app.config.get('GAME_CONFIG', {}).get('season', 2026)
+    season = get_current_game_config().get('season', 2026)
     
     # FIRST API has multiple endpoint formats for match schedules
     # Try them in sequence until one works
@@ -365,7 +366,7 @@ def api_to_db_match_conversion(api_match, event_id):
 def get_event_details(event_code):
     """Get event details from FIRST API"""
     base_url = current_app.config.get('API_BASE_URL', 'https://frc-api.firstinspires.org')
-    season = current_app.config.get('GAME_CONFIG', {}).get('season', 2026)
+    season = get_current_game_config().get('season', 2026)
     
     api_url = f"{base_url}/v2.0/{season}/events?eventCode={event_code}"
     
@@ -409,7 +410,7 @@ def get_teams_dual_api(event_code):
         if preferred_source == 'tba':
             print(f"Using TBA API for teams at event {event_code}")
             # Convert event code to TBA format
-            game_config = current_app.config.get('GAME_CONFIG', {})
+            game_config = get_current_game_config()
             season = game_config.get('season', 2026)
             tba_event_key = construct_tba_event_key(event_code, season)
             
@@ -447,7 +448,7 @@ def get_teams_dual_api(event_code):
         
         try:
             if fallback_source == 'tba':
-                game_config = current_app.config.get('GAME_CONFIG', {})
+                game_config = get_current_game_config()
                 season = game_config.get('season', 2026)
                 tba_event_key = construct_tba_event_key(event_code, season)
                 
@@ -483,7 +484,7 @@ def get_matches_dual_api(event_code):
         if preferred_source == 'tba':
             print(f"Using TBA API for matches at event {event_code}")
             # Convert event code to TBA format
-            game_config = current_app.config.get('GAME_CONFIG', {})
+            game_config = get_current_game_config()
             season = game_config.get('season', 2026)
             tba_event_key = construct_tba_event_key(event_code, season)
             
@@ -521,7 +522,7 @@ def get_matches_dual_api(event_code):
         
         try:
             if fallback_source == 'tba':
-                game_config = current_app.config.get('GAME_CONFIG', {})
+                game_config = get_current_game_config()
                 season = game_config.get('season', 2026)
                 tba_event_key = construct_tba_event_key(event_code, season)
                 
@@ -557,7 +558,7 @@ def get_event_details_dual_api(event_code):
         if preferred_source == 'tba':
             print(f"Using TBA API for event details: {event_code}")
             # Convert event code to TBA format
-            game_config = current_app.config.get('GAME_CONFIG', {})
+            game_config = get_current_game_config()
             season = game_config.get('season', 2026)
             tba_event_key = construct_tba_event_key(event_code, season)
             
@@ -583,7 +584,7 @@ def get_event_details_dual_api(event_code):
         
         try:
             if fallback_source == 'tba':
-                game_config = current_app.config.get('GAME_CONFIG', {})
+                game_config = get_current_game_config()
                 season = game_config.get('season', 2026)
                 tba_event_key = construct_tba_event_key(event_code, season)
                 

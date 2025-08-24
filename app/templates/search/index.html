@@ -1,0 +1,810 @@
+{% extends "base.html" %}
+{% block title %}Search{% if query %} - {{ query }}{% endif %}{% endblock %}
+
+{% block head %}
+<style>
+/* Enhanced main search page styles */
+.search-container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.search-box {
+    position: relative;
+    margin-bottom: 2rem;
+}
+
+.enhanced-search-main-container {
+    position: relative;
+    width: 100%;
+}
+
+.search-input-wrapper-main {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: var(--bs-body-bg);
+    border: 3px solid var(--bs-border-color);
+    border-radius: 35px;
+    transition: all 0.3s ease;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    min-height: 70px;
+}
+
+.search-input-wrapper-main:hover {
+    border-color: var(--bs-primary);
+    box-shadow: 0 8px 30px rgba(var(--bs-primary-rgb), 0.2);
+    transform: translateY(-2px);
+}
+
+.search-input-wrapper-main:focus-within {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+.search-icon-main {
+    position: absolute;
+    left: 24px;
+    color: var(--bs-secondary);
+    font-size: 1.2rem;
+    z-index: 2;
+    transition: color 0.3s ease;
+}
+
+.search-input-wrapper-main:focus-within .search-icon-main {
+    color: var(--bs-primary);
+}
+
+.enhanced-search-input-main {
+    flex: 1;
+    border: none !important;
+    outline: none !important;
+    background: transparent !important;
+    padding: 20px 70px 20px 60px !important;
+    font-size: 1.1rem;
+    color: var(--bs-body-color);
+    box-shadow: none !important;
+    border-radius: 0;
+}
+
+.enhanced-search-input-main::placeholder {
+    color: var(--bs-secondary);
+    font-style: italic;
+}
+
+.search-clear-btn-main {
+    position: absolute;
+    right: 70px;
+    background: none;
+    border: none;
+    color: var(--bs-secondary);
+    padding: 8px;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 2;
+}
+
+.search-clear-btn-main:hover {
+    background: var(--bs-secondary-bg);
+    color: var(--bs-danger);
+    transform: scale(1.1);
+}
+
+.search-submit-btn-main {
+    position: absolute;
+    right: 8px;
+    background: var(--bs-primary);
+    border: none;
+    color: white;
+    padding: 16px;
+    border-radius: 50%;
+    width: 54px;
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 2;
+    font-size: 1.1rem;
+}
+
+.search-submit-btn-main:hover {
+    background: var(--bs-primary);
+    filter: brightness(110%);
+    transform: scale(1.05);
+    box-shadow: 0 4px 15px rgba(var(--bs-primary-rgb), 0.4);
+}
+
+.search-submit-btn-main:active {
+    transform: scale(0.95);
+}
+
+/* Enhanced suggestions for main search */
+.enhanced-search-suggestions-main {
+    position: absolute;
+    top: calc(100% + 12px);
+    left: 0;
+    right: 0;
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+    z-index: 1060;
+    max-height: 400px;
+    overflow-y: auto;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.enhanced-search-suggestions-main.show {
+    display: block !important;
+    animation: mainSearchFadeIn 0.3s ease-out;
+}
+
+@keyframes mainSearchFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-15px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive design for main search */
+@media (max-width: 768px) {
+    .search-input-wrapper-main {
+        min-height: 60px;
+        border-radius: 30px;
+    }
+    
+    .enhanced-search-input-main {
+        padding: 16px 60px 16px 50px !important;
+        font-size: 1rem;
+    }
+    
+    .search-icon-main {
+        left: 18px;
+        font-size: 1rem;
+    }
+    
+    .search-submit-btn-main {
+        width: 44px;
+        height: 44px;
+        padding: 12px;
+        right: 8px;
+    }
+    
+    .search-clear-btn-main {
+        right: 60px;
+        width: 28px;
+        height: 28px;
+    }
+}
+
+@media (max-width: 576px) {
+    .search-container {
+        padding: 0 1rem;
+    }
+    
+    .search-input-wrapper-main {
+        min-height: 55px;
+        border-radius: 28px;
+    }
+    
+    .enhanced-search-input-main {
+        padding: 14px 55px 14px 45px !important;
+        font-size: 0.95rem;
+    }
+    
+    .search-icon-main {
+        left: 16px;
+        font-size: 0.9rem;
+    }
+    
+    .search-submit-btn-main {
+        width: 40px;
+        height: 40px;
+        padding: 10px;
+        font-size: 1rem;
+    }
+    
+    .search-clear-btn-main {
+        right: 50px;
+        width: 24px;
+        height: 24px;
+    }
+}
+
+/* Original styles kept for compatibility */
+.search-input {
+    font-size: 1.1rem;
+    padding: 15px 20px;
+    border-radius: 25px;
+    border: 2px solid #e0e0e0;
+    transition: all 0.3s ease;
+}
+
+.search-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    outline: none;
+}
+
+.search-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 1000;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.suggestion-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.2s;
+}
+
+.suggestion-item:hover {
+    background-color: #f8f9fa;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.result-item {
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 15px;
+    transition: all 0.3s ease;
+    background: white;
+}
+
+.result-item:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.result-icon {
+    width: 40px;
+    height: 40px;
+    background: var(--primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    margin-right: 15px;
+}
+
+.result-content {
+    flex: 1;
+}
+
+.result-title {
+    font-weight: 600;
+    margin-bottom: 5px;
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.result-title:hover {
+    text-decoration: underline;
+}
+
+.result-subtitle {
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+.result-type {
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.type-team { background: #e3f2fd; color: #1976d2; }
+.type-user { background: #f3e5f5; color: #7b1fa2; }
+.type-event { background: #e8f5e8; color: #388e3c; }
+.type-scouting_data { background: #fff3e0; color: #f57c00; }
+
+.no-results {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6c757d;
+}
+
+.search-stats {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    border-left: 4px solid var(--primary);
+}
+
+.spelling-suggestion {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.spelling-suggestion a {
+    color: var(--primary);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.spelling-suggestion a:hover {
+    text-decoration: underline;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="search-container">
+        <!-- Search Header -->
+        <div class="text-center mb-5">
+            <h1 class="mb-3">
+                <i class="fas fa-search text-primary me-2"></i>
+                Search ObsidianScout
+            </h1>
+            <p class="text-muted">Find teams, users, events, and scouting data</p>
+        </div>
+
+        <!-- Enhanced Search Box -->
+        <div class="search-box mb-4">
+            <form method="GET" action="{{ url_for('search.search_page') }}">
+                <div class="enhanced-search-main-container">
+                    <div class="search-input-wrapper-main">
+                        <i class="fas fa-search search-icon-main"></i>
+                        <input type="text" 
+                               class="form-control enhanced-search-input-main" 
+                               name="q" 
+                               value="{{ query }}" 
+                               placeholder="Search for teams, users, events, or data..."
+                               autocomplete="off"
+                               id="searchInput"
+                               aria-label="Search">
+                        <button type="button" class="search-clear-btn-main" id="mainSearchClearBtn" 
+                                aria-label="Clear search" style="display: {% if query %}flex{% else %}none{% endif %};">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <button class="search-submit-btn-main" type="submit" title="Search" aria-label="Submit search">
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </form>
+            
+            <!-- Enhanced suggestions dropdown -->
+            <div class="enhanced-search-suggestions-main" id="suggestions" style="display: none;" role="listbox" aria-label="Search suggestions"></div>
+        </div>
+
+        {% if query %}
+            <!-- Search Results -->
+            <div class="search-results">
+                {% if results %}
+                    <!-- Search Stats -->
+                    <div class="search-stats">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Found <strong>{{ results|length }}</strong> result{{ 's' if results|length != 1 else '' }} for "<strong>{{ query }}</strong>"
+                    </div>
+
+                    <!-- Results -->
+                    {% for result in results %}
+                    <div class="result-item">
+                        <div class="d-flex align-items-start">
+                            <div class="result-icon">
+                                <i class="{{ result.icon }}"></i>
+                            </div>
+                            <div class="result-content">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <a href="{{ result.url }}" class="result-title h6 mb-0">
+                                        {{ result.title }}
+                                    </a>
+                                    <span class="result-type type-{{ result.type }}">
+                                        {{ result.type.replace('_', ' ') }}
+                                    </span>
+                                </div>
+                                <div class="result-subtitle">
+                                    {{ result.subtitle }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                {% else %}
+                    <!-- No Results -->
+                    <div class="no-results">
+                        <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                        <h4>No results found</h4>
+                        <p>No results found for "<strong>{{ query }}</strong>"</p>
+
+                        {% if suggestions %}
+                            <!-- Spelling Suggestions -->
+                            <div class="spelling-suggestion">
+                                <strong>Did you mean:</strong>
+                                {% for suggestion in suggestions %}
+                                    <a href="{{ url_for('search.search_page', q=suggestion) }}">{{ suggestion }}</a>{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                                ?
+                            </div>
+                        {% endif %}
+
+                        <div class="mt-4">
+                            <h6>Search Tips:</h6>
+                            <ul class="text-start d-inline-block">
+                                <li>Try different keywords</li>
+                                <li>Check your spelling</li>
+                                <li>Use team numbers for exact matches</li>
+                                <li>Search by partial names or codes</li>
+                            </ul>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+
+        {% else %}
+            <!-- Search Tips -->
+            <div class="row mt-5">
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-users fa-3x text-primary mb-3"></i>
+                            <h5>Search Teams</h5>
+                            <p class="text-muted">Find teams by number, name, or location</p>
+                            <small class="text-muted">Example: "5454" or "Islanders"</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-user fa-3x text-success mb-3"></i>
+                            <h5>Search Users</h5>
+                            <p class="text-muted">Find users by username or email</p>
+                            <small class="text-muted">Example: "john.doe" or "admin"</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-calendar fa-3x text-info mb-3"></i>
+                            <h5>Search Events</h5>
+                            <p class="text-muted">Find events by name or code</p>
+                            <small class="text-muted">Example: "Regional" or "2025week1"</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-clipboard-list fa-3x text-warning mb-3"></i>
+                            <h5>Search Scouting Data</h5>
+                            <p class="text-muted">Find match data and notes</p>
+                            <small class="text-muted">Example: "Match 15" or "climb"</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const suggestions = document.getElementById('suggestions');
+    const clearBtn = document.getElementById('mainSearchClearBtn');
+    let debounceTimer;
+    let selectedIndex = -1;
+    let currentSuggestions = [];
+
+    // Clear button functionality
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function() {
+            searchInput.value = '';
+            searchInput.focus();
+            hideSuggestions();
+            this.style.display = 'none';
+        });
+    }
+
+    // Input event with debouncing and enhanced UX
+    searchInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const query = this.value.trim();
+
+        // Show/hide clear button
+        if (clearBtn) {
+            clearBtn.style.display = query ? 'flex' : 'none';
+        }
+
+        if (query.length < 2) {
+            hideSuggestions();
+            return;
+        }
+
+        // Show loading state
+        showLoading();
+
+        debounceTimer = setTimeout(() => {
+            fetchSuggestions(query);
+        }, 250);
+    });
+
+    // Focus handling
+    searchInput.addEventListener('focus', function() {
+        if (this.value.trim().length >= 2 && currentSuggestions.length > 0) {
+            suggestions.classList.add('show');
+        }
+    });
+
+    // Blur handling with delay to allow clicking suggestions
+    searchInput.addEventListener('blur', function() {
+        setTimeout(() => {
+            hideSuggestions();
+        }, 200);
+    });
+
+    // Enhanced keyboard navigation
+    searchInput.addEventListener('keydown', function(e) {
+        const items = suggestions.querySelectorAll('.suggestion-item');
+        
+        if (items.length === 0) {
+            if (e.key === 'Enter') {
+                // Allow form submission
+                return true;
+            }
+            return;
+        }
+
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+                updateSelectedSuggestion(items);
+                scrollToActive(items[selectedIndex]);
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                selectedIndex = Math.max(selectedIndex - 1, -1);
+                updateSelectedSuggestion(items);
+                if (selectedIndex >= 0) {
+                    scrollToActive(items[selectedIndex]);
+                }
+                break;
+            case 'Enter':
+                e.preventDefault();
+                if (selectedIndex >= 0 && items[selectedIndex]) {
+                    selectSuggestion(items[selectedIndex]);
+                } else {
+                    // Submit form
+                    searchInput.form.submit();
+                }
+                break;
+            case 'Escape':
+                hideSuggestions();
+                searchInput.blur();
+                break;
+        }
+    });
+
+    // Show loading state
+    function showLoading() {
+        suggestions.innerHTML = `
+            <div class="search-loading">
+                <div class="search-loading-spinner"></div>
+                Searching...
+            </div>
+        `;
+        suggestions.classList.add('show');
+    }
+
+    // Fetch suggestions with error handling
+    function fetchSuggestions(query) {
+        fetch(`{{ url_for('search.api_suggestions') }}?q=${encodeURIComponent(query)}&types=team,user,event`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                currentSuggestions = data.suggestions || [];
+                if (currentSuggestions.length > 0) {
+                    showSuggestions(currentSuggestions);
+                } else {
+                    showNoResults();
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching suggestions:', error);
+                showError();
+            });
+    }
+
+    // Enhanced suggestion display with categories
+    function showSuggestions(suggestionList) {
+        if (suggestionList.length === 0) {
+            showNoResults();
+            return;
+        }
+
+        // Group by type
+        const grouped = suggestionList.reduce((acc, suggestion) => {
+            const type = suggestion.type || 'other';
+            if (!acc[type]) acc[type] = [];
+            acc[type].push(suggestion);
+            return acc;
+        }, {});
+
+        let html = '';
+        const categoryOrder = ['team', 'user', 'event'];
+        const categoryLabels = {
+            'team': 'Teams',
+            'user': 'Users',
+            'event': 'Events'
+        };
+
+        categoryOrder.forEach(type => {
+            if (grouped[type] && grouped[type].length > 0) {
+                if (html) html += '';
+                html += `<div class="suggestion-category">${categoryLabels[type]}</div>`;
+                
+                grouped[type].forEach((suggestion, index) => {
+                    const iconClass = getIconForType(suggestion.type);
+                    const globalIndex = suggestionList.indexOf(suggestion);
+                    
+                    html += `
+                        <div class="suggestion-item" 
+                             data-index="${globalIndex}" 
+                             data-type="${suggestion.type}" 
+                             data-value="${escapeHtml(suggestion.text)}"
+                             onclick="selectSuggestionFromClick(this)">
+                            <div class="suggestion-icon">
+                                <i class="${iconClass}"></i>
+                            </div>
+                            <div class="suggestion-content">
+                                <div class="suggestion-title">${escapeHtml(suggestion.text)}</div>
+                                <div class="suggestion-type">${suggestion.type}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+        });
+
+        suggestions.innerHTML = html;
+        suggestions.classList.add('show');
+        selectedIndex = -1;
+    }
+
+    // Show no results
+    function showNoResults() {
+        suggestions.innerHTML = `
+            <div class="no-suggestions">
+                <i class="fas fa-search-minus mb-2"></i><br>
+                No suggestions found
+            </div>
+        `;
+        suggestions.classList.add('show');
+    }
+
+    // Show error
+    function showError() {
+        suggestions.innerHTML = `
+            <div class="no-suggestions">
+                <i class="fas fa-exclamation-triangle mb-2 text-warning"></i><br>
+                Error loading suggestions
+            </div>
+        `;
+        suggestions.classList.add('show');
+    }
+
+    // Hide suggestions
+    function hideSuggestions() {
+        suggestions.classList.remove('show');
+        selectedIndex = -1;
+    }
+
+    // Update selected suggestion
+    function updateSelectedSuggestion(items) {
+        items.forEach((item, index) => {
+            item.classList.toggle('active', index === selectedIndex);
+        });
+    }
+
+    // Scroll to active suggestion
+    function scrollToActive(activeItem) {
+        if (activeItem && suggestions) {
+            const containerRect = suggestions.getBoundingClientRect();
+            const itemRect = activeItem.getBoundingClientRect();
+            
+            if (itemRect.bottom > containerRect.bottom) {
+                activeItem.scrollIntoView({ block: 'end', behavior: 'smooth' });
+            } else if (itemRect.top < containerRect.top) {
+                activeItem.scrollIntoView({ block: 'start', behavior: 'smooth' });
+            }
+        }
+    }
+
+    // Select suggestion from click
+    function selectSuggestionFromClick(element) {
+        const text = element.dataset.value;
+        searchInput.value = text;
+        hideSuggestions();
+        
+        // Visual feedback
+        element.style.background = 'var(--bs-primary)';
+        element.style.color = 'white';
+        element.style.transform = 'scale(0.98)';
+        
+        // Submit after brief delay
+        setTimeout(() => {
+            searchInput.form.submit();
+        }, 150);
+    }
+
+    // Select suggestion from keyboard
+    function selectSuggestion(element) {
+        searchInput.value = element.dataset.value;
+        hideSuggestions();
+        searchInput.form.submit();
+    }
+
+    // Get icon for type
+    function getIconForType(type) {
+        const icons = {
+            'team': 'fas fa-users',
+            'user': 'fas fa-user',
+            'event': 'fas fa-calendar',
+            'match': 'fas fa-trophy',
+            'scouting_data': 'fas fa-clipboard-list'
+        };
+        return icons[type] || 'fas fa-search';
+    }
+
+    // Escape HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Handle keyboard navigation on page load if there's already a query
+    {% if query %}
+        if (clearBtn) {
+            clearBtn.style.display = 'flex';
+        }
+    {% endif %}
+});
+</script>
+{% endblock %}

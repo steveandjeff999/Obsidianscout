@@ -27,6 +27,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-overrides.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modal-fix.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-improvements.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/search-enhancements.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- Dynamic Theme CSS Variables -->
@@ -63,6 +65,458 @@
             background-clip: text;
             text-fill-color: transparent;
         }
+        
+        /* Enhanced Search Component Styles */
+        .search-wrapper {
+            position: relative;
+            flex: 1;
+            max-width: 320px;
+            min-width: 200px;
+        }
+        
+        .enhanced-search-container {
+            position: relative;
+            width: 100%;
+        }
+        
+        .search-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            background: var(--bs-body-bg);
+            border: 2px solid var(--bs-border-color);
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+        
+        .search-input-wrapper:hover {
+            border-color: var(--bs-primary);
+            box-shadow: 0 4px 12px rgba(var(--bs-primary-rgb), 0.15);
+        }
+        
+        .search-input-wrapper:focus-within {
+            border-color: var(--bs-primary);
+            box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 14px;
+            color: var(--bs-secondary);
+            font-size: 0.9rem;
+            z-index: 2;
+            transition: color 0.3s ease;
+        }
+        
+        .search-input-wrapper:focus-within .search-icon {
+            color: var(--bs-primary);
+        }
+        
+        .enhanced-search-input {
+            flex: 1;
+            border: none !important;
+            outline: none !important;
+            background: transparent !important;
+            padding: 10px 45px 10px 40px !important;
+            font-size: 0.9rem;
+            color: var(--bs-body-color);
+            box-shadow: none !important;
+            border-radius: 0;
+        }
+        
+        .enhanced-search-input::placeholder {
+            color: var(--bs-secondary);
+            font-style: italic;
+        }
+        
+        .search-clear-btn {
+            position: absolute;
+            right: 45px;
+            background: none;
+            border: none;
+            color: var(--bs-secondary);
+            padding: 4px;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            z-index: 2;
+        }
+        
+        .search-clear-btn:hover {
+            background: var(--bs-secondary-bg);
+            color: var(--bs-danger);
+        }
+        
+        .search-submit-btn {
+            position: absolute;
+            right: 4px;
+            background: var(--bs-primary);
+            border: none;
+            color: white;
+            padding: 8px;
+            border-radius: 50%;
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            z-index: 2;
+        }
+        
+        .search-submit-btn:hover {
+            background: var(--bs-primary);
+            filter: brightness(110%);
+            transform: scale(1.05);
+        }
+        
+        .search-submit-btn:active {
+            transform: scale(0.95);
+        }
+        
+        /* Enhanced Search Suggestions */
+        .enhanced-search-suggestions {
+            display: none !important;
+        }
+        
+        .enhanced-search-suggestions.show {
+            display: block !important;
+            z-index: 9999 !important;
+        }
+        
+        @keyframes searchFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .suggestion-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--bs-border-color);
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+        
+        .suggestion-item:hover,
+        .suggestion-item.active {
+            background: linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.1), rgba(var(--bs-primary-rgb), 0.05));
+            transform: translateX(4px);
+        }
+        
+        .suggestion-item.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: var(--bs-primary);
+            border-radius: 0 2px 2px 0;
+        }
+        
+        .suggestion-icon {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            background: rgba(var(--bs-primary-rgb), 0.1);
+            border-radius: 6px;
+            color: var(--bs-primary);
+            font-size: 0.8rem;
+            flex-shrink: 0;
+        }
+        
+        .suggestion-content {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .suggestion-title {
+            font-weight: 600;
+            color: var(--bs-body-color);
+            margin-bottom: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .suggestion-type {
+            font-size: 0.75rem;
+            color: var(--bs-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+        
+        .suggestion-category {
+            padding: 8px 16px;
+            background: var(--bs-secondary-bg);
+            color: var(--bs-secondary);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--bs-border-color);
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        
+        .search-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: var(--bs-secondary);
+        }
+        
+        .search-loading-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--bs-secondary-bg);
+            border-top: 2px solid var(--bs-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .no-suggestions {
+            padding: 20px;
+            text-align: center;
+            color: var(--bs-secondary);
+            font-style: italic;
+        }
+        
+        /* Mobile Search Button Enhancement */
+        .modern-search-mobile {
+            border-radius: 12px !important;
+            background: var(--bs-primary) !important;
+            border-color: var(--bs-primary) !important;
+            color: white !important;
+            transition: all 0.2s ease;
+        }
+        
+        .modern-search-mobile:hover {
+            background: var(--bs-primary) !important;
+            border-color: var(--bs-primary) !important;
+            color: white !important;
+            transform: scale(1.05);
+            filter: brightness(110%);
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 1400px) {
+            .search-wrapper {
+                max-width: 280px;
+                min-width: 180px;
+            }
+        }
+        
+        @media (max-width: 1200px) {
+            .search-wrapper {
+                max-width: 240px;
+                min-width: 160px;
+            }
+            
+            .enhanced-search-input {
+                font-size: 0.85rem;
+                padding: 9px 42px 9px 38px !important;
+            }
+            
+            .search-icon {
+                left: 12px;
+                font-size: 0.85rem;
+            }
+            
+            .search-submit-btn {
+                width: 30px;
+                height: 30px;
+                right: 3px;
+            }
+        }
+        
+        @media (max-width: 992px) {
+            .search-wrapper {
+                max-width: 200px;
+                min-width: 140px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .search-wrapper {
+                max-width: auto;
+                min-width: auto;
+                flex: 0 0 auto;
+            }
+        }
+        
+        /* Dark Mode Support */
+        .dark-mode .search-input-wrapper {
+            background: var(--card-bg);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .dark-mode .search-input-wrapper:hover {
+            border-color: var(--bs-primary);
+        }
+        
+        .dark-mode .enhanced-search-suggestions {
+            background: var(--card-bg);
+            border-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        .dark-mode .suggestion-item {
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .dark-mode .suggestion-item:hover,
+        .dark-mode .suggestion-item.active {
+            background: linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.2), rgba(var(--bs-primary-rgb), 0.1));
+        }
+        
+        .dark-mode .suggestion-category {
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Search functionality styles */
+        .search-wrapper {
+            position: relative;
+            flex: 1;
+            max-width: 280px;
+            min-width: 160px;
+        }
+        
+        @media (max-width: 1400px) {
+            .search-wrapper {
+                max-width: 220px;
+                min-width: 140px;
+            }
+        }
+        
+        @media (max-width: 1200px) {
+            .search-wrapper {
+                max-width: 180px;
+                min-width: 120px;
+            }
+        }
+        
+        @media (max-width: 992px) {
+            .search-wrapper {
+                max-width: 140px;
+                min-width: 100px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .search-wrapper {
+                max-width: auto;
+                min-width: auto;
+                flex: 0 0 auto;
+            }
+        }
+        
+        /* Make the navbar more responsive */
+        .navbar-actions {
+            flex-wrap: nowrap;
+            align-items: center;
+        }
+        
+        .navbar-actions > * {
+            flex-shrink: 0;
+        }
+        
+        /* Adjust button sizes for mobile */
+        @media (max-width: 768px) {
+            .btn-sm {
+                padding: 0.25rem 0.5rem;
+                font-size: 0.775rem;
+            }
+            
+            .dropdown-toggle::after {
+                margin-left: 0.255rem;
+            }
+        }
+        
+        .search-wrapper .form-control {
+            transition: width 0.3s ease;
+        }
+        
+        .search-wrapper .form-control:focus {
+            width: 100%;
+        }
+        
+        #searchSuggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--bs-body-bg);
+            border: 1px solid var(--bs-border-color);
+            border-radius: 0.375rem;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            z-index: 1060; /* Higher than navbar dropdowns */
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+        
+        .suggestion-item {
+            cursor: pointer;
+            border-bottom: 1px solid var(--bs-border-color);
+            transition: background-color 0.15s ease-in-out;
+        }
+        
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+        
+        .suggestion-item:hover,
+        .suggestion-item.active {
+            background-color: var(--bs-secondary-bg);
+        }
+        
+        .search-mobile-btn {
+            border: none;
+            background: none;
+            color: var(--bs-nav-link-color);
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.15s ease-in-out;
+        }
+        
+        .search-mobile-btn:hover {
+            background-color: var(--bs-secondary-bg);
+            color: var(--bs-nav-link-hover-color);
+        }
     </style>
     
     {% block head %}{% endblock %}
@@ -70,64 +524,138 @@
 <body class="d-flex flex-column h-100">
     <header class="app-header">
         <nav class="navbar navbar-expand-lg navbar-light shadow-sm">
-            <div class="container-fluid px-lg-4 px-md-3 px-2">
-                <a class="navbar-brand d-flex align-items-center" href="{% if user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics') %}{{ url_for('scouting.index') }}{% else %}{{ url_for('main.index') }}{% endif %}">
-                    <i class="fas fa-robot brand-icon me-2"></i>
+            <div class="container-fluid px-lg-3 px-md-2 px-1" style="max-width: 100%;">
+                <a class="navbar-brand d-flex align-items-center me-auto" href="{% if user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics') %}{{ url_for('scouting.index') }}{% else %}{{ url_for('main.index') }}{% endif %}">
+                    <i class="fas fa-robot brand-icon me-1 me-sm-2"></i>
                     <span class="brand-text fw-bold">
-                        <span class="obsidian-gradient">Obsidian</span>Scout <span class="d-none d-sm-inline">{{ game_config.season }}</span>
+                        <span class="obsidian-gradient">Obsidian</span>Scout <span class="d-none d-md-inline">{{ game_config.season }}</span>
                     </span>
                 </a>
                 
-                <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain" 
+                <button class="navbar-toggler border-0 ms-auto" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain" 
                         aria-controls="navbarMain" aria-expanded="false" aria-label="Toggle navigation">
                     <i class="fas fa-bars"></i>
                 </button>
                 
                 <div class="collapse navbar-collapse" id="navbarMain">
                     {% if current_user.is_authenticated %}
-                    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    
+                    {% if user_has_role('superadmin') %}
+                    <!-- Super Admin Navigation -->
+                    <ul class="navbar-nav me-auto mb-2 mb-lg-0 flex-nowrap">
+                        <li class="nav-item">
+                            <a class="nav-link px-3 py-2 {% if request.endpoint == 'auth.manage_users' %}active{% endif %}" 
+                               href="{{ url_for('auth.manage_users') }}">
+                                <i class="fas fa-user-shield nav-icon text-warning"></i> 
+                                <span class="nav-text">Super Admin Console</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link px-3 py-2 {% if request.endpoint == 'auth.add_user' %}active{% endif %}" 
+                               href="{{ url_for('auth.add_user') }}">
+                                <i class="fas fa-user-plus nav-icon text-success"></i> 
+                                <span class="nav-text">Add User</span>
+                            </a>
+                        </li>
+                    </ul>
+                    {% else %}
+                    
+                    <ul class="navbar-nav me-auto mb-2 mb-lg-0 flex-nowrap">
                         {% if not (user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics')) %}
                         <li class="nav-item">
-                            <a class="nav-link px-3 py-2 {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}">
+                            <a class="nav-link px-2 py-2 {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}">
                                 <i class="fas fa-home nav-icon"></i> 
-                                <span class="nav-text">Dashboard</span>
+                                <span class="nav-text d-none d-lg-inline">Dashboard</span>
                             </a>
                         </li>
                         {% endif %}
                         
                         {% if user_has_role('admin') or user_has_role('analytics') %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle px-3 py-2 {% if request.endpoint and (request.endpoint.startswith('teams') or request.endpoint.startswith('matches') or request.endpoint.startswith('alliances')) %}active{% endif %}" 
+                            <a class="nav-link dropdown-toggle px-2 py-2 {% if request.endpoint and (request.endpoint.startswith('teams') or request.endpoint.startswith('matches') or request.endpoint.startswith('alliances') or request.endpoint.startswith('graphs') or request.endpoint.startswith('visualization')) %}active{% endif %}" 
                                href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-trophy nav-icon"></i> 
-                                <span class="nav-text">Competition</span>
+                                <i class="fas fa-chart-bar nav-icon"></i> 
+                                <span class="nav-text d-none d-xl-inline">Analytics</span>
                             </a>
                             <ul class="dropdown-menu dropdown-menu-animated shadow">
+                                <li><h6 class="dropdown-header">Competition</h6></li>
                                 <li>
                                     <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('teams') and request.endpoint != 'teams.ranks' %}active{% endif %}" 
                                        href="{{ url_for('teams.index') }}">
-                                        <i class="fas fa-users nav-icon text-primary"></i> 
-                                        <span>Teams</span>
+                                        <i class="fas fa-users nav-icon text-primary me-2"></i> 
+                                        Teams
                                     </a>
                                 </li>
                                 <li>
                                     <a class="dropdown-item py-2 {% if request.endpoint == 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.ranks') }}">
-                                        <i class="fas fa-list-ol nav-icon text-purple"></i>
-                                        <span>Team Ranks</span>
+                                        <i class="fas fa-list-ol nav-icon text-purple me-2"></i>
+                                        Team Rankings
                                     </a>
                                 </li>
                                 <li>
                                     <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('matches') %}active{% endif %}" 
                                        href="{{ url_for('matches.index') }}">
-                                        <i class="fas fa-gamepad nav-icon text-danger"></i> 
-                                        <span>Matches</span>
+                                        <i class="fas fa-gamepad nav-icon text-danger me-2"></i> 
+                                        Matches
                                     </a>
                                 </li>
                                 <li>
                                     <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('alliances') %}active{% endif %}" 
                                        href="{{ url_for('alliances.index') }}">
-                                        <i class="fas fa-handshake nav-icon text-success"></i> 
-                                        <span>Alliance Selection</span>
+                                        <i class="fas fa-handshake nav-icon text-success me-2"></i> 
+                                        Alliance Selection
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider my-1"></li>
+                                <li><h6 class="dropdown-header">Analytics & Graphs</h6></li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('graphs') %}active{% endif %}" 
+                                       href="{{ url_for('graphs.index') }}">
+                                        <i class="fas fa-chart-line nav-icon text-primary me-2"></i> 
+                                        Team Performance
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('graphs') and 'side-by-side' in request.endpoint %}active{% endif %}" 
+                                       href="{{ url_for('graphs.side_by_side') }}">
+                                        <i class="fas fa-columns nav-icon text-success me-2"></i> 
+                                        Side-by-Side Comparison
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint == 'matches.predict' %}active{% endif %}" 
+                                       href="{{ url_for('matches.predict') }}">
+                                        <i class="fas fa-chart-line nav-icon text-warning me-2"></i> 
+                                        Match Predictions
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint == 'matches.strategy' %}active{% endif %}" 
+                                       href="{{ url_for('matches.strategy') }}">
+                                        <i class="fas fa-chess nav-icon text-info me-2"></i> 
+                                        Match Strategy
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint == 'matches.strategy_draw' %}active{% endif %}"
+                                       href="{{ url_for('matches.strategy_draw') }}">
+                                        <i class="fas fa-pen-ruler nav-icon text-primary me-2"></i>
+                                        Strategy Drawing
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint == 'graphs.my_shares' %}active{% endif %}"
+                                       href="{{ url_for('graphs.my_shares') }}">
+                                        <i class="fas fa-share-alt nav-icon text-info me-2"></i>
+                                        My Graph Shares
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint == 'teams.my_ranks_shares' %}active{% endif %}"
+                                       href="{{ url_for('teams.my_ranks_shares') }}">
+                                        <i class="fas fa-trophy nav-icon text-purple me-2"></i>
+                                        My Ranking Shares
                                     </a>
                                 </li>
                             </ul>
@@ -135,10 +663,10 @@
                         {% endif %}
                         
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle px-3 py-2 {% if request.endpoint and request.endpoint.startswith('scouting') %}active{% endif %}" 
+                            <a class="nav-link dropdown-toggle px-2 py-2 {% if request.endpoint and (request.endpoint.startswith('scouting') or request.endpoint.startswith('scouting_alliances')) %}active{% endif %}" 
                                href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="fas fa-clipboard-list nav-icon"></i> 
-                                <span class="nav-text">Scouting</span>
+                                <span class="nav-text d-none d-xl-inline">Scouting</span>
                             </a>
                             <ul class="dropdown-menu dropdown-menu-animated shadow">
                                 <li>
@@ -162,6 +690,13 @@
                                         <span>Pit Scouting</span>
                                     </a>
                                 </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('scouting_alliances') %}active{% endif %}" 
+                                       href="{{ url_for('scouting_alliances.dashboard') }}">
+                                        <i class="fas fa-users nav-icon text-info"></i> 
+                                        <span>Scouting Alliances</span>
+                                    </a>
+                                </li>
                                 <li><hr class="dropdown-divider my-1"></li>
                                 <li>
                                     <a class="dropdown-item py-2 {% if request.endpoint == 'scouting.list_data' %}active{% endif %}" 
@@ -181,109 +716,175 @@
                         </li>
                         
                         {% if user_has_role('admin') or user_has_role('analytics') %}
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle px-3 py-2 {% if request.endpoint and (request.endpoint.startswith('graphs') or request.endpoint.startswith('visualization')) %}active{% endif %}" 
-                               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-chart-line nav-icon"></i> 
-                                <span class="nav-text">Analytics</span>
+                        <li class="nav-item">
+                            <a class="nav-link px-2 py-2 {% if request.endpoint and request.endpoint.startswith('data') %}active{% endif %}" 
+                               href="{{ url_for('data.index') }}">
+                                <i class="fas fa-database nav-icon"></i> 
+                                <span class="nav-text d-none d-xl-inline">Data</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                        
+                        <!-- Combined Help & Tutorial dropdown -->
+                        <li class="nav-item dropdown d-lg-none">
+                            <a class="nav-link dropdown-toggle px-2 py-2" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-ellipsis-h nav-icon"></i> 
+                                <span class="nav-text">More</span>
                             </a>
                             <ul class="dropdown-menu dropdown-menu-animated shadow">
+                                <li><h6 class="dropdown-header">Help & Support</h6></li>
                                 <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('graphs') %}active{% endif %}" 
-                                       href="{{ url_for('graphs.index') }}">
-                                        <i class="fas fa-chart-bar nav-icon text-primary"></i> 
-                                        <span>Team Performance & Graphs</span>
+                                    <a class="dropdown-item py-2 {% if request.endpoint == 'main.help_page' %}active{% endif %}" href="{{ url_for('main.help_page') }}">
+                                        <i class="fas fa-question-circle nav-icon text-info me-2"></i>
+                                        Help & Documentation
                                     </a>
                                 </li>
                                 <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('graphs') and 'side-by-side' in request.endpoint %}active{% endif %}" 
-                                       href="{{ url_for('graphs.side_by_side') }}">
-                                        <i class="fas fa-columns nav-icon text-success"></i> 
-                                        <span>Side-by-Side Comparison</span>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('setup') %}active{% endif %}" href="{{ url_for('setup.index') }}">
+                                        <i class="fas fa-graduation-cap nav-icon text-success me-2"></i>
+                                        Setup & Tutorial
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider my-1"></li>
+                                <li><h6 class="dropdown-header">Community</h6></li>
+                                <li>
+                                    <a class="dropdown-item py-2" href="{{ url_for('main.users_page') }}">
+                                        <i class="fas fa-users nav-icon text-secondary me-2"></i>
+                                        Users
                                     </a>
                                 </li>
                                 <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint == 'matches.predict' %}active{% endif %}" 
-                                       href="{{ url_for('matches.predict') }}">
-                                        <i class="fas fa-chart-line nav-icon text-warning"></i> 
-                                        <span>Match Predictions</span>
+                                    <a class="dropdown-item py-2" href="{{ url_for('main.chat_page') }}">
+                                        <i class="fas fa-comments nav-icon text-primary me-2"></i>
+                                        Chat
+                                        <span id="chatUnreadBadgeMobile" class="badge rounded-pill bg-danger ms-1" style="display:none; font-size:0.7em;">0</span>
                                     </a>
                                 </li>
                                 <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint == 'matches.strategy' %}active{% endif %}" 
-                                       href="{{ url_for('matches.strategy') }}">
-                                        <i class="fas fa-chess nav-icon text-info"></i> 
-                                        <span>Match Strategy</span>
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint == 'matches.strategy_draw' %}active{% endif %}"
-                                       href="{{ url_for('matches.strategy_draw') }}">
-                                        <i class="fas fa-pen-ruler nav-icon text-primary"></i>
-                                        <span>Strategy Drawing</span>
+                                    <a class="dropdown-item py-2 {% if request.endpoint == 'main.sponsors' %}active{% endif %}" href="{{ url_for('main.sponsors') }}">
+                                        <i class="fas fa-handshake nav-icon text-warning me-2"></i>
+                                        Sponsors
                                     </a>
                                 </li>
                             </ul>
                         </li>
                         
-                        <li class="nav-item">
-                            <a class="nav-link px-3 py-2 {% if request.endpoint and request.endpoint.startswith('data') %}active{% endif %}" 
-                               href="{{ url_for('data.index') }}">
-                                <i class="fas fa-database nav-icon"></i> 
-                                <span class="nav-text">Data</span>
-                            </a>
-                        </li>
-                        {% endif %}
-                        <li class="nav-item">
-                            <a class="nav-link px-3 py-2 {% if request.endpoint == 'main.help_page' %}active{% endif %}" href="{{ url_for('main.help_page') }}">
+                        <!-- Desktop Help dropdown -->
+                        <li class="nav-item dropdown d-none d-lg-block">
+                            <a class="nav-link dropdown-toggle px-2 py-2 {% if request.endpoint == 'main.help_page' or (request.endpoint and request.endpoint.startswith('setup')) %}active{% endif %}" 
+                               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="fas fa-question-circle nav-icon"></i>
-                                <span class="nav-text">Help</span>
+                                <span class="nav-text d-none d-xl-inline">Help</span>
                             </a>
+                            <ul class="dropdown-menu dropdown-menu-animated shadow">
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint == 'main.help_page' %}active{% endif %}" href="{{ url_for('main.help_page') }}">
+                                        <i class="fas fa-book nav-icon text-info me-2"></i>
+                                        Documentation
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('setup') %}active{% endif %}" href="{{ url_for('setup.index') }}">
+                                        <i class="fas fa-play-circle nav-icon text-success me-2"></i>
+                                        Getting Started
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link px-3 py-2" href="{{ url_for('main.users_page') }}">
+                        <li class="nav-item d-none d-lg-block">
+                            <a class="nav-link px-2 py-2" href="{{ url_for('main.users_page') }}">
                                 <i class="fas fa-users nav-icon"></i>
-                                <span class="nav-text">Users</span>
+                                <span class="nav-text d-none d-xl-inline">Users</span>
                             </a>
                         </li>
-                        <li class="nav-item position-relative" id="chatNavItem">
-                            <a class="nav-link px-3 py-2" href="{{ url_for('main.chat_page') }}">
+                        <li class="nav-item position-relative d-none d-lg-block" id="chatNavItem">
+                            <a class="nav-link px-2 py-2" href="{{ url_for('main.chat_page') }}">
                                 <i class="fas fa-comments nav-icon"></i>
-                                <span class="nav-text">Chat</span>
+                                <span class="nav-text d-none d-xl-inline">Chat</span>
                                 <span id="chatUnreadBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="display:none; font-size:0.7em;">0</span>
+                            </a>
+                        </li>
+                        <li class="nav-item d-none d-lg-block">
+                            <a class="nav-link px-2 py-2 {% if request.endpoint == 'main.sponsors' %}active{% endif %}" href="{{ url_for('main.sponsors') }}">
+                                <i class="fas fa-handshake nav-icon"></i>
+                                <span class="nav-text d-none d-xl-inline">Sponsors</span>
                             </a>
                         </li>
                     </ul>
                     {% endif %}
+                    {% endif %}
                     
                     <div class="d-flex align-items-center navbar-actions">
-                        {% if game_config %}
-                        <div class="game-badge me-3 d-none d-lg-block">
-                            <span class="badge bg-light text-dark border">
-                                <i class="fas fa-gamepad me-1"></i> 
-                                <span class="d-none d-xl-inline">{{ game_config.game_name }}</span>
-                                <span class="d-xl-none">{{ game_config.season }}</span>
-                            </span>
-                        </div>
-                        {% endif %}
-                        
                         {% if current_user.is_authenticated %}
-                        <!-- User Menu -->
-                        <div class="dropdown me-2">
+                        <!-- Enhanced Search Component -->
+                        <div class="search-wrapper me-1 me-md-2 d-flex flex-shrink-1">
+                            <!-- Desktop Quick Search Form -->
+                            <form method="GET" action="{{ url_for('search.search_page') }}" class="d-none d-lg-flex w-100 position-relative">
+                                <div class="enhanced-search-container">
+                                    <div class="search-input-wrapper">
+                                        <i class="fas fa-search search-icon"></i>
+                                        <input type="text" class="form-control enhanced-search-input" name="q" 
+                                               placeholder="Search teams, users..." 
+                                               id="quickSearchInput" autocomplete="off"
+                                               aria-label="Search teams and users"
+                                               aria-expanded="false"
+                                               role="combobox">
+                                        <button type="button" class="search-clear-btn" id="searchClearBtn" 
+                                                aria-label="Clear search" style="display: none;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                        <button class="search-submit-btn" type="submit" title="Search" aria-label="Submit search">
+                                            <i class="fas fa-arrow-right"></i>
+                                        </button>
+                                    </div>
+                                    <!-- Enhanced Search Suggestions Dropdown -->
+                                    <div id="searchSuggestions" class="enhanced-search-suggestions" role="listbox" aria-label="Search suggestions"></div>
+                                </div>
+                            </form>
+                            <!-- Mobile Search Button -->
+                            <a href="{{ url_for('search.search_page') }}" class="btn btn-outline-secondary btn-sm d-lg-none modern-search-mobile" title="Search">
+                                <i class="fas fa-search"></i>
+                            </a>
+                        </div>
+                        
+                        <!-- Combined User & Admin Menu -->
+                        <div class="dropdown me-1 flex-shrink-0">
                             <button class="btn btn-outline-primary btn-sm d-flex align-items-center dropdown-toggle" 
                                     type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="fas fa-user-circle me-1"></i>
                                 <span class="d-none d-md-inline">{{ current_user.username }}</span>
-                                <span class="d-md-none">User</span>
+                                <span class="d-md-none d-none d-sm-inline">User</span>
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end shadow">
                                 <li>
                                     <div class="dropdown-header border-bottom pb-2 mb-2">
-                                        <div class="fw-bold text-primary">{{ current_user.username }}</div>
+                                        <div class="fw-bold text-primary">
+                                            {{ current_user.username }}
+                                            {% if user_has_role('superadmin') %}
+                                                <span class="badge bg-dark ms-1">
+                                                    <i class="fas fa-user-shield"></i> Super Admin
+                                                </span>
+                                            {% endif %}
+                                        </div>
                                         <div class="small text-muted">
                                             {% for role in current_user.roles %}
-                                                <span class="badge bg-secondary me-1">{{ role.name.title() }}</span>
+                                                {% if role.name == 'superadmin' %}
+                                                    <span class="badge bg-dark me-1">{{ role.name.title() }}</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary me-1">{{ role.name.title() }}</span>
+                                                {% endif %}
                                             {% endfor %}
+                                        </div>
+                                        <!-- Alliance Mode Status -->
+                                        <div class="small mt-1" data-alliance-status style="{% if not is_alliance_mode_active %}display: none;{% endif %}">
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-users me-1"></i>Alliance Mode Active
+                                            </span>
+                                            {% if active_alliance_info %}
+                                            <div class="text-muted mt-1" style="font-size: 0.75rem;">
+                                                {{ active_alliance_info.alliance_name }}
+                                            </div>
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </li>
@@ -292,81 +893,29 @@
                                         <i class="fas fa-user-edit me-2 text-primary"></i> Edit Profile
                                     </a>
                                 </li>
-                                {% if user_has_role('admin') %}
+                                
+                                <!-- Admin & Analytics Section -->
+                                {% if user_has_role('admin') or user_has_role('analytics') %}
                                 <li><hr class="dropdown-divider my-1"></li>
                                 <li>
-                                    <a class="dropdown-item py-2" href="{{ url_for('auth.admin_settings') }}">
-                                        <i class="fas fa-cogs me-2 text-info"></i> Admin Settings
-                                    </a>
+                                    <h6 class="dropdown-header">Settings & Configuration</h6>
                                 </li>
-                                <li>
-                                    <a class="dropdown-item py-2" href="{{ url_for('auth.admin_integrity') }}">
-                                        <i class="fas fa-shield-alt me-2 text-warning"></i> File Integrity
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2" href="{{ url_for('auth.manage_users') }}">
-                                        <i class="fas fa-users-cog me-2 text-success"></i> Manage Users
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2" href="{{ url_for('activity.view_logs') }}">
-                                        <i class="fas fa-history me-2 text-secondary"></i> Activity Logs
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2" href="{{ url_for('api_test.index') }}">
-                                        <i class="fas fa-code me-2 text-primary"></i> API Testing
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2" href="{{ url_for('auth.system_check') }}">
-                                        <i class="fas fa-heartbeat me-2 text-danger"></i> System Check
-                                    </a>
-                                </li>
-                                {% endif %}
-                                <li><hr class="dropdown-divider my-1"></li>
-                                <li>
-                                    <a class="dropdown-item py-2 text-danger" href="{{ url_for('auth.logout') }}">
-                                        <i class="fas fa-sign-out-alt me-2"></i> Logout
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                        {% endif %}
-                        
-                        {% if current_user.is_authenticated and (user_has_role('admin') or user_has_role('analytics')) %}
-                        <div class="dropdown">
-                            <button class="btn btn-outline-secondary btn-sm d-flex align-items-center dropdown-toggle" 
-                                    type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-cog me-1"></i>
-                                <span class="d-none d-lg-inline">Settings</span>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end shadow">
                                 <li>
                                     <a class="dropdown-item py-2 {% if request.endpoint == 'main.config' %}active{% endif %}" 
                                        href="{{ url_for('main.config') }}">
                                         <i class="fas fa-wrench me-2 text-primary"></i> Game Configuration
                                     </a>
                                 </li>
-                                {% if user_has_role('admin') %}
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint == 'themes.index' %}active{% endif %}" 
-                                       href="{{ url_for('themes.index') }}">
-                                        <i class="fas fa-palette me-2 text-info"></i> Theme Management
-                                    </a>
-                                </li>
-                                {% endif %}
                                 <li><hr class="dropdown-divider my-1"></li>
                                 <li>
-                                    <form id="themeSelectForm" method="POST" action="/themes/apply/" class="px-3 py-2">
+                                    <div class="px-3 py-2">
                                         <label for="themeSelect" class="form-label mb-1">Theme</label>
                                         <select id="themeSelect" name="theme_id" class="form-select form-select-sm">
                                             {% for theme_id, theme in themes.items() %}
                                             <option value="{{ theme_id }}" {% if theme_id == current_theme_id %}selected{% endif %}>{{ theme.name }}</option>
                                             {% endfor %}
                                         </select>
-                                    </form>
+                                    </div>
                                     <script>
                                     document.getElementById('themeSelect').addEventListener('change', function(e) {
                                         e.preventDefault();
@@ -401,6 +950,49 @@
                                         </div>
                                     </div>
                                 </li>
+                                {% endif %}
+                                
+                                <!-- Admin Only Section -->
+                                {% if user_has_role('admin') %}
+                                <li><hr class="dropdown-divider my-1"></li>
+                                <li>
+                                    <h6 class="dropdown-header">Administration</h6>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2" href="{{ url_for('auth.admin_settings') }}">
+                                        <i class="fas fa-cogs me-2 text-info"></i> Admin Settings
+                                    </a>
+                                </li>
+                                {% endif %}
+                                
+                                <!-- Super Admin Only Section -->
+                                {% if user_has_role('superadmin') %}
+                                <li><hr class="dropdown-divider my-1"></li>
+                                <li>
+                                    <h6 class="dropdown-header">Super Administration</h6>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2" href="{{ url_for('db_admin.database_status') }}">
+                                        <i class="fas fa-database me-2 text-success"></i> Database Admin
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2" href="{{ url_for('sync.dashboard') }}">
+                                        <i class="fas fa-sync-alt me-2 text-primary"></i> Multi-Server Sync
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2" href="{{ url_for('realtime.dashboard') }}">
+                                        <i class="fas fa-bolt me-2 text-warning"></i> Real-Time Replication
+                                    </a>
+                                </li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider my-1"></li>
+                                <li>
+                                    <a class="dropdown-item py-2 text-danger" href="{{ url_for('auth.logout') }}">
+                                        <i class="fas fa-sign-out-alt me-2"></i> Logout
+                                    </a>
+                                </li>
                             </ul>
                         </div>
                         {% endif %}
@@ -433,15 +1025,6 @@
     {% block breadcrumb %}{% endblock %}
 
     <main class="flex-shrink-0 py-4">
-        <!-- File Integrity Warning Banner -->
-        {% if integrity_status.integrity_compromised and integrity_status.warning_only_mode %}
-        <div class="alert alert-warning alert-dismissible fade show" role="alert">
-            <i class="fas fa-exclamation-triangle me-2"></i>
-            <strong>File Integrity Warning:</strong> Application files have been modified. Warning-only mode is enabled.
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        {% endif %}
-        
         <div class="container">
             <div class="row mb-4">
                 <div class="col-12">
@@ -492,7 +1075,51 @@
         </div>
     </div>
 
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" 
+            integrity="sha384-1H217gwSVyLSIfaLxHbE7dRb3v4mYCKbpQvzx0cegeju1MVsGrX5xXxAvs/HgeFs" 
+            crossorigin="anonymous"
+            onerror="this.onerror=null;this.src='https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js'"></script>
+    <script>
+        // Enhanced jQuery loading check with timeout
+        (function() {
+            let retryCount = 0;
+            const maxRetries = 5;
+            const checkInterval = 100; // 100ms
+            
+            function checkJQuery() {
+                if (typeof jQuery !== 'undefined' && typeof $ !== 'undefined') {
+                    console.log('jQuery loaded successfully');
+                    return true;
+                }
+                
+                retryCount++;
+                if (retryCount < maxRetries) {
+                    setTimeout(checkJQuery, checkInterval);
+                } else {
+                    // Final fallback - load jQuery synchronously
+                    console.warn('jQuery failed to load from CDNs, loading local fallback');
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js';
+                    script.integrity = 'sha384-1H217gwSVyLSIfaLxHbE7dRb3v4mYCKbpQvzx0cegeju1MVsGrX5xXxAvs/HgeFs';
+                    script.crossOrigin = 'anonymous';
+                    document.head.appendChild(script);
+                    
+                    script.onload = function() {
+                        console.log('jQuery loaded from fallback CDN');
+                    };
+                    
+                    script.onerror = function() {
+                        console.error('All jQuery CDNs failed to load');
+                        alert('jQuery failed to load from all sources. Please check your internet connection and refresh the page.');
+                    };
+                }
+                return false;
+            }
+            
+            // Start checking after a short delay
+            setTimeout(checkJQuery, 50);
+        })();
+    </script>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     
@@ -505,7 +1132,6 @@
     <script src="{{ url_for('static', filename='js/qrcode.min.js') }}"></script>
     
     <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/activity-logger.js') }}"></script>
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -858,7 +1484,1216 @@
                 fetch('/chat/reset-unread', {method: 'POST'}).then(updateChatUnreadBadge);
             });
         }
+        
+        // ======== REAL-TIME CONFIG SYNC ========
+        
+        // Store current config data globally
+        window.currentConfig = {
+            game_config: null,
+            pit_config: null,
+            alliance_status: null
+        };
+        
+        // Track if this is the initial config load
+        window.configInitialized = false;
+        
+        // Function to fetch current configuration
+        function fetchCurrentConfig() {
+            return fetch('/alliances/scouting/config/current')
+                .then(response => response.json())
+                .then(data => {
+                    window.currentConfig = data;
+                    return data;
+                })
+                .catch(error => {
+                    console.warn('Could not fetch current config:', error);
+                    return null;
+                });
+        }
+        
+        // Function to update alliance status in navigation
+        function updateAllianceStatusNav(allianceStatus, allianceInfo) {
+            const allianceStatusElement = document.querySelector('[data-alliance-status]');
+            if (allianceStatusElement) {
+                if (allianceStatus) {
+                    allianceStatusElement.innerHTML = `
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-users me-1"></i>Alliance Mode Active
+                            <small class="text-muted ms-1">
+                                ${allianceInfo ? allianceInfo.alliance_name : ''}
+                            </small>
+                        </div>
+                    `;
+                    allianceStatusElement.style.display = 'block';
+                } else {
+                    allianceStatusElement.style.display = 'none';
+                }
+            }
+        }
+        
+        // Function to show auto-sync notifications
+        function showAutoSyncNotification(message, type = 'info') {
+            // Create a notification banner
+            const notification = document.createElement('div');
+            notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+            notification.style.cssText = 'top: 80px; right: 20px; z-index: 9999; max-width: 400px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);';
+            
+            const iconMap = {
+                'info': 'fas fa-sync-alt',
+                'success': 'fas fa-check-circle',
+                'warning': 'fas fa-exclamation-triangle',
+                'danger': 'fas fa-times-circle'
+            };
+            
+            const icon = iconMap[type] || iconMap['info'];
+            
+            notification.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="${icon} me-2"></i>
+                    <div>
+                        <strong>Alliance Auto-Sync</strong><br>
+                        <small>${message}</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Auto-remove after 8 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    const bsAlert = new bootstrap.Alert(notification);
+                    bsAlert.close();
+                }
+            }, 8000);
+        }
+        
+        // Function to trigger config refresh events for other scripts
+        function triggerConfigUpdate(configData, isInitialLoad = false) {
+            // Only dispatch update events if this is not the initial load
+            if (!isInitialLoad && window.configInitialized) {
+                // Dispatch custom events that other pages can listen to
+                window.dispatchEvent(new CustomEvent('configUpdated', {
+                    detail: configData
+                }));
+                
+                window.dispatchEvent(new CustomEvent('gameConfigUpdated', {
+                    detail: configData.game_config
+                }));
+                
+                window.dispatchEvent(new CustomEvent('pitConfigUpdated', {
+                    detail: configData.pit_config
+                }));
+                
+                window.dispatchEvent(new CustomEvent('allianceStatusUpdated', {
+                    detail: configData.alliance_status
+                }));
+                
+                console.log('Config update events dispatched for real change');
+            } else {
+                console.log('Skipping config update events for initial load');
+            }
+        }
+        
+        // Socket.IO listeners for real-time updates
+        if (window.socket) {
+            // Auto-join team room when connected
+            window.socket.on('connect', function() {
+                console.log('Socket.IO connected, joining team room...');
+                {% if current_user.is_authenticated and current_user.scouting_team_number %}
+                    window.socket.emit('join_team_room');
+                    console.log('Joined team room for team {{ current_user.scouting_team_number }}');
+                {% endif %}
+            });
+            
+            // Handle team room join confirmation
+            window.socket.on('joined_team_room', function(data) {
+                console.log('Successfully joined team room:', data.team_number);
+            });
+            
+            // Listen for alliance mode toggles
+            window.socket.on('alliance_mode_toggled', function(data) {
+                console.log('Alliance mode toggled:', data);
+                window.currentConfig.game_config = data.effective_game_config;
+                window.currentConfig.pit_config = data.effective_pit_config;
+                window.currentConfig.alliance_status = {
+                    is_active: data.alliance_status,
+                    alliance_info: data.alliance_info,
+                    team_number: data.team_number
+                };
+                
+                triggerConfigUpdate(window.currentConfig, false); // This is a real update
+                updateAllianceStatusNav(data.alliance_status, data.alliance_info);
+            });
+            
+            // Listen for general config updates
+            window.socket.on('config_updated', function(data) {
+                console.log('Config updated:', data);
+                window.currentConfig.game_config = data.effective_game_config;
+                window.currentConfig.pit_config = data.effective_pit_config;
+                window.currentConfig.alliance_status = {
+                    is_active: data.alliance_status,
+                    alliance_info: data.alliance_info,
+                    team_number: data.team_number
+                };
+                
+                triggerConfigUpdate(window.currentConfig, false); // This is a real update
+            });
+            
+            // Listen for alliance status changes (for nav bar updates)
+            window.socket.on('alliance_status_changed', function(data) {
+                console.log('Alliance status changed:', data);
+                updateAllianceStatusNav(data.alliance_status, data.alliance_info);
+            });
+            
+            // ======== ALLIANCE AUTO-SYNC HANDLERS ========
+            // Listen for automatic alliance data sync
+            window.socket.on('alliance_data_sync_auto', function(data) {
+                console.log('Received auto-sync data from Team', data.from_team);
+                
+                // Automatically send acknowledgment that we received the data
+                window.socket.emit('alliance_auto_sync_received', data);
+                
+                // Show notification about incoming data (less verbose for periodic syncs)
+                if (data.type === 'periodic_sync') {
+                    // Only show periodic sync notifications if there's substantial data
+                    const totalEntries = data.scouting_data.length + data.pit_data.length;
+                    if (totalEntries > 0) {
+                        console.log(`Periodic sync: Received ${totalEntries} entries from Team ${data.from_team}`);
+                        // Show subtle notification only for large periodic syncs
+                        if (totalEntries >= 5) {
+                            showAutoSyncNotification(`Periodic sync: ${totalEntries} entries from Team ${data.from_team}`, 'info');
+                        }
+                    }
+                } else {
+                    // Show full notifications for manual/immediate syncs
+                    if (data.scouting_data.length > 0) {
+                        showAutoSyncNotification(`Received ${data.scouting_data.length} scouting entries from Team ${data.from_team} (${data.alliance_name})`);
+                    }
+                    if (data.pit_data.length > 0) {
+                        showAutoSyncNotification(`Received ${data.pit_data.length} pit scouting entries from Team ${data.from_team} (${data.alliance_name})`);
+                    }
+                }
+            });
+            
+            // Listen for auto-sync completion confirmations
+            window.socket.on('alliance_auto_sync_complete', function(data) {
+                console.log('Auto-sync completed:', data);
+                if (data.imported_count > 0) {
+                    if (data.type === 'periodic_sync') {
+                        // Less verbose for periodic syncs
+                        console.log(`Periodic sync completed: imported ${data.imported_count} entries from Team ${data.from_team}`);
+                        // Only show notification for substantial periodic imports
+                        if (data.imported_count >= 3) {
+                            showAutoSyncNotification(`Periodic sync: imported ${data.imported_count} entries from Team ${data.from_team}`, 'success');
+                        }
+                    } else {
+                        // Full notification for manual syncs
+                        showAutoSyncNotification(`Successfully imported ${data.imported_count} entries from Team ${data.from_team} (${data.alliance_name})`, 'success');
+                    }
+                    
+                    // Refresh current page if it's data-related
+                    if (window.location.pathname.includes('/scouting') || 
+                        window.location.pathname.includes('/analysis') || 
+                        window.location.pathname.includes('/pit-scouting')) {
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    }
+                }
+            });
+            
+            // ======== GLOBAL CONFIG CHANGE HANDLER ========
+            // Listen for global config changes that affect ALL pages
+            window.socket.on('global_config_changed', function(data) {
+                console.log('Global config changed:', data);
+                
+                // Update local config cache
+                window.currentConfig.game_config = data.effective_game_config;
+                window.currentConfig.pit_config = data.effective_pit_config;
+                window.currentConfig.alliance_status = {
+                    is_active: data.alliance_status,
+                    alliance_info: data.alliance_info,
+                    team_number: data.team_number
+                };
+                
+                // Trigger all config update events
+                triggerConfigUpdate(window.currentConfig, false);
+                updateAllianceStatusNav(data.alliance_status, data.alliance_info);
+                
+                // Dispatch global reload events for pages to refresh their content
+                window.dispatchEvent(new CustomEvent('globalConfigReload', {
+                    detail: {
+                        type: data.type,
+                        message: data.message,
+                        game_config: data.effective_game_config,
+                        pit_config: data.effective_pit_config,
+                        alliance_status: data.alliance_status,
+                        alliance_info: data.alliance_info,
+                        timestamp: data.timestamp
+                    }
+                }));
+                
+                // Show user notification
+                if (data.message) {
+                    showGlobalConfigNotification(data.message, data.type);
+                }
+                
+                // Reload page content that depends on config
+                reloadConfigDependentContent();
+            });
+        }
+        
+        // ======== GLOBAL CONFIG MANAGEMENT FUNCTIONS ========
+        
+        // Function to show global config notifications
+        function showGlobalConfigNotification(message, type) {
+            // Create or update notification element
+            let notificationId = 'global-config-notification';
+            let existingNotification = document.getElementById(notificationId);
+            
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+            
+            const notificationHtml = `
+                <div id="${notificationId}" class="alert alert-info alert-dismissible fade show position-fixed" 
+                     style="top: 20px; right: 20px; z-index: 9999; max-width: 400px;">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-sync-alt me-2"></i>
+                        <div>
+                            <strong>Configuration Updated</strong><br>
+                            <small>${message}</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', notificationHtml);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                const notification = document.getElementById(notificationId);
+                if (notification) {
+                    notification.remove();
+                }
+            }, 5000);
+        }
+        
+        // Function to reload config-dependent content on the current page
+        function reloadConfigDependentContent() {
+            const currentPath = window.location.pathname;
+            
+            // Page-specific content reloading
+            if (currentPath.includes('/scouting/form')) {
+                reloadScoutingFormContent();
+            } else if (currentPath.includes('/graphs') || currentPath.includes('/analytics')) {
+                reloadAnalyticsContent();
+            } else if (currentPath.includes('/pit_scouting')) {
+                reloadPitScoutingContent();
+            } else if (currentPath.includes('/matches')) {
+                reloadMatchesContent();
+            } else if (currentPath.includes('/alliances')) {
+                reloadAlliancesContent();
+            }
+            
+            // Reload any generic config-dependent elements
+            reloadGenericConfigElements();
+        }
+        
+        // Page-specific reload functions
+        function reloadScoutingFormContent() {
+            // Trigger form reload if function exists
+            if (typeof window.reloadFormWithNewConfig === 'function') {
+                window.reloadFormWithNewConfig();
+            }
+        }
+        
+        function reloadAnalyticsContent() {
+            // Trigger analytics reload if function exists
+            if (typeof window.reloadAnalyticsWithNewConfig === 'function') {
+                window.reloadAnalyticsWithNewConfig();
+            }
+        }
+        
+        function reloadPitScoutingContent() {
+            // Trigger pit scouting reload if function exists
+            if (typeof window.reloadPitScoutingWithNewConfig === 'function') {
+                window.reloadPitScoutingWithNewConfig();
+            }
+        }
+        
+        function reloadMatchesContent() {
+            // Trigger matches reload if function exists
+            if (typeof window.reloadMatchesWithNewConfig === 'function') {
+                window.reloadMatchesWithNewConfig();
+            }
+        }
+        
+        function reloadAlliancesContent() {
+            // Trigger alliances reload if function exists
+            if (typeof window.reloadAlliancesWithNewConfig === 'function') {
+                window.reloadAlliancesWithNewConfig();
+            }
+        }
+        
+        function reloadGenericConfigElements() {
+            // Reload any elements with data-config-dependent attribute
+            const configElements = document.querySelectorAll('[data-config-dependent]');
+            configElements.forEach(element => {
+                const reloadType = element.getAttribute('data-config-dependent');
+                if (reloadType === 'game' && window.currentConfig.game_config) {
+                    // Trigger custom event for this element
+                    element.dispatchEvent(new CustomEvent('configReload', {
+                        detail: { config: window.currentConfig.game_config, type: 'game' }
+                    }));
+                } else if (reloadType === 'pit' && window.currentConfig.pit_config) {
+                    element.dispatchEvent(new CustomEvent('configReload', {
+                        detail: { config: window.currentConfig.pit_config, type: 'pit' }
+                    }));
+                }
+            });
+        }
+        
+        // Initial config fetch on page load
+        fetchCurrentConfig().then(configData => {
+            if (configData) {
+                triggerConfigUpdate(configData, true); // Mark as initial load
+                updateAllianceStatusNav(
+                    configData.alliance_status.is_active, 
+                    configData.alliance_status.alliance_info
+                );
+                window.configInitialized = true; // Mark config as initialized
+            }
+        });
+        
+        // Navbar improvements
+        function initNavbarImprovements() {
+            // Sync chat badges between desktop and mobile
+            function syncChatBadges() {
+                const desktopBadge = document.getElementById('chatUnreadBadge');
+                const mobileBadge = document.getElementById('chatUnreadBadgeMobile');
+                
+                if (desktopBadge && mobileBadge) {
+                    // Sync visibility
+                    if (desktopBadge.style.display !== 'none') {
+                        mobileBadge.style.display = 'inline';
+                        mobileBadge.textContent = desktopBadge.textContent;
+                    } else {
+                        mobileBadge.style.display = 'none';
+                    }
+                }
+            }
+            
+            // Observe changes to desktop badge
+            const desktopBadge = document.getElementById('chatUnreadBadge');
+            if (desktopBadge) {
+                const observer = new MutationObserver(syncChatBadges);
+                observer.observe(desktopBadge, {
+                    attributes: true,
+                    childList: true,
+                    subtree: true
+                });
+                syncChatBadges(); // Initial sync
+            }
+            
+            // Enhanced dropdown animations
+            const dropdowns = document.querySelectorAll('.dropdown-menu-animated');
+            dropdowns.forEach(dropdown => {
+                const parent = dropdown.closest('.dropdown');
+                if (parent) {
+                    parent.addEventListener('show.bs.dropdown', function() {
+                        dropdown.classList.add('show');
+                    });
+                    
+                    parent.addEventListener('hide.bs.dropdown', function() {
+                        dropdown.classList.remove('show');
+                    });
+                }
+            });
+            
+            // Close mobile menu when clicking outside
+            document.addEventListener('click', function(e) {
+                const navbarCollapse = document.getElementById('navbarMain');
+                const navbarToggler = document.querySelector('.navbar-toggler');
+                
+                if (navbarCollapse && navbarCollapse.classList.contains('show')) {
+                    if (!navbarCollapse.contains(e.target) && !navbarToggler.contains(e.target)) {
+                        const collapse = new bootstrap.Collapse(navbarCollapse, {
+                            toggle: false
+                        });
+                        collapse.hide();
+                    }
+                }
+            });
+            
+            // Smooth scroll for navbar brand
+            const navbarBrand = document.querySelector('.navbar-brand');
+            if (navbarBrand) {
+                navbarBrand.addEventListener('click', function(e) {
+                    // Only smooth scroll if we're on the same page
+                    const href = this.getAttribute('href');
+                    if (href && window.location.pathname === href) {
+                        e.preventDefault();
+                        window.scrollTo({
+                            top: 0,
+                            behavior: 'smooth'
+                        });
+                    }
+                });
+            }
+            
+            // Active state management for single-page navigation
+            function updateActiveNavItem() {
+                const currentPath = window.location.pathname;
+                const navLinks = document.querySelectorAll('.nav-link, .dropdown-item');
+                
+                navLinks.forEach(link => {
+                    const href = link.getAttribute('href');
+                    if (href === currentPath) {
+                        link.classList.add('active');
+                        
+                        // Also activate parent dropdown if this is a dropdown item
+                        const parentDropdown = link.closest('.dropdown');
+                        if (parentDropdown) {
+                            const parentToggle = parentDropdown.querySelector('.dropdown-toggle');
+                            if (parentToggle) {
+                                parentToggle.classList.add('active');
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Call on initial load
+            updateActiveNavItem();
+        }
+        
+        // Initialize navbar improvements
+        initNavbarImprovements();
+        
+        // Initialize search functionality
+        initSearchFunctionality();
+        
+        // Reinitialize on window resize (when responsive classes change)
+        window.addEventListener('resize', function() {
+            clearTimeout(window.searchResizeTimeout);
+            window.searchResizeTimeout = setTimeout(initSearchFunctionality, 250);
+        });
+        
+        // Initialize dropdown positioning fix
+        initDropdownPositioning();
+        
+        // Global fallback for any dropdown that opens in the navbar
+        document.addEventListener('show.bs.dropdown', function(event) {
+            const dropdown = event.target.closest('.navbar .dropdown');
+            if (dropdown && window.innerWidth >= 992) {
+                const toggle = dropdown.querySelector('.dropdown-toggle');
+                const menu = dropdown.querySelector('.dropdown-menu');
+                if (toggle && menu) {
+                    setTimeout(() => {
+                        positionFixedDropdown(toggle, menu);
+                    }, 1);
+                }
+            }
+        });
+        
+        // Also catch the shown event as a final fallback
+        document.addEventListener('shown.bs.dropdown', function(event) {
+            const dropdown = event.target.closest('.navbar .dropdown');
+            if (dropdown && window.innerWidth >= 992) {
+                const toggle = dropdown.querySelector('.dropdown-toggle');
+                const menu = dropdown.querySelector('.dropdown-menu');
+                if (toggle && menu) {
+                    positionFixedDropdown(toggle, menu);
+                }
+            }
+        });
     });
+    
+    // Fix dropdown positioning for navbar dropdowns
+    function initDropdownPositioning() {
+        // Only apply to desktop navbar dropdowns
+        function handleDropdownPositioning() {
+            if (window.innerWidth >= 992) {
+                const navbarDropdowns = document.querySelectorAll('.navbar .dropdown');
+                
+                navbarDropdowns.forEach(dropdown => {
+                    const toggle = dropdown.querySelector('.dropdown-toggle');
+                    const menu = dropdown.querySelector('.dropdown-menu');
+                    
+                    if (toggle && menu) {
+                        // Remove any existing event listeners to prevent duplicates
+                        toggle.removeEventListener('click', handleDropdownClick);
+                        dropdown.removeEventListener('show.bs.dropdown', handleDropdownShow);
+                        dropdown.removeEventListener('shown.bs.dropdown', handleDropdownShown);
+                        
+                        // Add event listeners
+                        toggle.addEventListener('click', handleDropdownClick);
+                        dropdown.addEventListener('show.bs.dropdown', handleDropdownShow);
+                        dropdown.addEventListener('shown.bs.dropdown', handleDropdownShown);
+                        
+                        function handleDropdownClick(e) {
+                            setTimeout(() => {
+                                if (menu.classList.contains('show')) {
+                                    positionFixedDropdown(toggle, menu);
+                                }
+                            }, 5);
+                        }
+                        
+                        function handleDropdownShow() {
+                            setTimeout(() => {
+                                if (menu.classList.contains('show')) {
+                                    positionFixedDropdown(toggle, menu);
+                                }
+                            }, 5);
+                        }
+                        
+                        function handleDropdownShown() {
+                            positionFixedDropdown(toggle, menu);
+                        }
+                    }
+                });
+            } else {
+                // Reset any fixed positioning for mobile
+                const navbarDropdowns = document.querySelectorAll('.navbar .dropdown-menu');
+                navbarDropdowns.forEach(menu => {
+                    menu.style.position = '';
+                    menu.style.left = '';
+                    menu.style.top = '';
+                    menu.style.right = '';
+                    menu.style.bottom = '';
+                });
+            }
+        }
+        
+        handleDropdownPositioning();
+        
+        // Reposition on window resize
+        window.addEventListener('resize', function() {
+            handleDropdownPositioning();
+            
+            if (window.innerWidth >= 992) {
+                const visibleDropdowns = document.querySelectorAll('.navbar .dropdown-menu.show');
+                visibleDropdowns.forEach(menu => {
+                    const toggle = menu.closest('.dropdown').querySelector('.dropdown-toggle');
+                    if (toggle) {
+                        positionFixedDropdown(toggle, menu);
+                    }
+                });
+            }
+        });
+    }
+    
+    function positionFixedDropdown(toggle, menu) {
+        if (window.innerWidth < 992) return; // Don't apply to mobile
+        
+        // Force the menu to be visible but transparent to measure it
+        menu.style.opacity = '0';
+        menu.style.display = 'block';
+        menu.style.position = 'fixed';
+        menu.style.zIndex = '1060';
+        
+        const toggleRect = toggle.getBoundingClientRect();
+        const menuRect = menu.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // More generous edge buffers
+        const edgeBuffer = 15;
+        const bottomBuffer = 20;
+        
+        // Calculate initial position
+        let left = toggleRect.left;
+        let top = toggleRect.bottom + 8; // 8px margin-top
+        
+        // Check if this is a right-aligned dropdown (like user menu)
+        const isRightAligned = menu.classList.contains('dropdown-menu-end');
+        
+        if (isRightAligned) {
+            // For right-aligned dropdowns, align to the right edge of the button
+            left = toggleRect.right - menuRect.width;
+            
+            // Enhanced right edge detection - check if dropdown would go off screen
+            if (left + menuRect.width > viewportWidth - edgeBuffer) {
+                // Move dropdown further left to stay on screen
+                left = viewportWidth - menuRect.width - edgeBuffer;
+            }
+            
+            // Enhanced left edge detection - ensure dropdown doesn't go off left edge
+            if (left < edgeBuffer) {
+                left = edgeBuffer;
+                // If dropdown is still too wide for screen, reduce its width
+                if (menuRect.width > viewportWidth - (2 * edgeBuffer)) {
+                    menu.style.maxWidth = (viewportWidth - (2 * edgeBuffer)) + 'px';
+                    menu.style.overflowY = 'auto';
+                }
+            }
+        } else {
+            // For left-aligned dropdowns, check if they extend beyond right edge
+            if (left + menuRect.width > viewportWidth - edgeBuffer) {
+                // Try aligning to right edge of toggle button first
+                let rightAlignedLeft = toggleRect.right - menuRect.width;
+                if (rightAlignedLeft >= edgeBuffer) {
+                    left = rightAlignedLeft;
+                    menu.classList.add('dropdown-menu-end');
+                } else {
+                    // If that still doesn't work, force it to fit within viewport
+                    left = viewportWidth - menuRect.width - edgeBuffer;
+                    if (left < edgeBuffer) {
+                        left = edgeBuffer;
+                        menu.style.maxWidth = (viewportWidth - (2 * edgeBuffer)) + 'px';
+                        menu.style.overflowY = 'auto';
+                    }
+                }
+            } else {
+                menu.classList.remove('dropdown-menu-end');
+            }
+            // Ensure left-aligned dropdowns don't go off the left edge
+            left = Math.max(edgeBuffer, left);
+        }
+        
+        // Enhanced bottom edge detection
+        if (top + menuRect.height > viewportHeight - bottomBuffer) {
+            // Try showing above the toggle button
+            let newTop = toggleRect.top - menuRect.height - 8;
+            if (newTop >= 0) {
+                top = newTop;
+            } else {
+                // If it doesn't fit above either, constrain height and add scroll
+                top = edgeBuffer;
+                menu.style.maxHeight = (viewportHeight - (2 * edgeBuffer)) + 'px';
+                menu.style.overflowY = 'auto';
+            }
+        }
+        
+        // Apply positioning with !important to override any conflicting CSS
+        menu.style.setProperty('left', left + 'px', 'important');
+        menu.style.setProperty('top', top + 'px', 'important');
+        menu.style.setProperty('right', 'auto', 'important');
+        menu.style.setProperty('bottom', 'auto', 'important');
+        menu.style.setProperty('position', 'fixed', 'important');
+        menu.style.opacity = '1'; // Make visible again
+        
+        // Debug logging (can be removed in production)
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            console.log('Dropdown positioned:', {
+                toggleRect: toggleRect,
+                menuRect: menuRect,
+                finalLeft: left,
+                finalTop: top,
+                viewportWidth: viewportWidth,
+                isRightAligned: isRightAligned
+            });
+        }
+    }
+    
+    // Enhanced Search functionality
+    // Global function for hiding suggestions
+    window.hideSuggestions = function() {
+        const searchSuggestions = document.getElementById('searchSuggestions');
+        const searchInput = document.getElementById('quickSearchInput');
+        
+        if (searchSuggestions) {
+            searchSuggestions.classList.remove('show');
+            searchSuggestions.style.display = 'none';
+            selectedIndex = -1;
+            if (searchInput) {
+                searchInput.setAttribute('aria-expanded', 'false');
+            }
+            console.log('Suggestions hidden');
+        }
+    };
+
+    // Global variables for search functionality
+    let searchTimeout;
+    let selectedIndex = -1;
+    let currentSuggestions = [];
+    
+    // Global function for selecting suggestions
+    window.selectSuggestion = function(text, type, searchQuery) {
+        const searchInput = document.getElementById('quickSearchInput');
+        const searchSuggestions = document.getElementById('searchSuggestions');
+        
+        if (searchInput) {
+            // Use the provided searchQuery if available, otherwise fall back to extraction logic
+            let finalSearchQuery = searchQuery;
+            
+            if (!finalSearchQuery) {
+                // Extract meaningful search terms based on type (fallback)
+                if (type === 'team') {
+                    // For team suggestions like "Team 5454 - Obsidian", extract the team number
+                    const teamNumberMatch = text.match(/Team (\d+)/);
+                    if (teamNumberMatch) {
+                        finalSearchQuery = teamNumberMatch[1]; // Just the team number (e.g., "5454")
+                    } else {
+                        // If no team number found, use the full text
+                        finalSearchQuery = text;
+                    }
+                } else if (type === 'user') {
+                    // For users, use the username as-is
+                    finalSearchQuery = text;
+                } else {
+                    // For other types, use the full text
+                    finalSearchQuery = text;
+                }
+            }
+            
+            console.log('Selected suggestion:', text, 'Searching for:', finalSearchQuery);
+            
+            searchInput.value = finalSearchQuery;
+            window.hideSuggestions();
+            
+            // Navigate to search page with the optimized query
+            window.location.href = `/search?q=${encodeURIComponent(finalSearchQuery)}`;
+        }
+    };
+
+    function initSearchFunctionality() {
+        // Check if screen is large enough for desktop search
+        if (window.innerWidth < 992) {
+            console.log('Screen too small for desktop search, skipping initialization');
+            return;
+        }
+        
+        const searchInput = document.getElementById('quickSearchInput');
+        const searchSuggestions = document.getElementById('searchSuggestions');
+        const searchClearBtn = document.getElementById('searchClearBtn');
+        
+        console.log('Search elements found:', {
+            searchInput: !!searchInput,
+            searchSuggestions: !!searchSuggestions,
+            searchClearBtn: !!searchClearBtn
+        });
+        
+        if (!searchInput) {
+            console.warn('quickSearchInput element not found');
+            return;
+        }
+        
+        if (!searchSuggestions) {
+            console.warn('searchSuggestions element not found');
+            return;
+        }
+        
+        // Position search suggestions using absolute positioning
+        function positionSearchSuggestions() {
+            if (searchSuggestions && searchInput) {
+                console.log('Positioning search suggestions');
+                
+                // Get the search input wrapper position
+                const inputWrapper = searchInput.closest('.search-input-wrapper');
+                const inputRect = inputWrapper.getBoundingClientRect();
+                
+                // Position dropdown directly below the search bar
+                searchSuggestions.style.cssText = `
+                    position: fixed !important;
+                    top: ${inputRect.bottom + 8}px !important;
+                    left: ${inputRect.left}px !important;
+                    width: ${Math.max(inputRect.width, 300)}px !important;
+                    z-index: 2147483647 !important;
+                    background: var(--bs-body-bg) !important;
+                    border: 1px solid var(--bs-border-color) !important;
+                    border-radius: 12px !important;
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
+                    display: block !important;
+                    opacity: 1 !important;
+                    visibility: visible !important;
+                    pointer-events: auto !important;
+                    overflow-y: auto !important;
+                    max-height: 400px !important;
+                    backdrop-filter: blur(10px) !important;
+                    -webkit-backdrop-filter: blur(10px) !important;
+                `;
+                
+                console.log('Modern dropdown positioning applied');
+            }
+        }
+        
+        // Show loading state
+        function showLoading() {
+            if (!searchSuggestions) return;
+            console.log('Showing loading state');
+            searchSuggestions.innerHTML = `
+                <div class="search-loading" style="padding: 16px; text-align: center; color: var(--bs-secondary);">
+                    <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
+                    Searching...
+                </div>
+            `;
+            searchSuggestions.classList.add('show');
+            positionSearchSuggestions();
+        }
+        
+        // Handle search input with debouncing
+        searchInput.addEventListener('input', function(e) {
+            clearTimeout(searchTimeout);
+            const query = this.value.trim();
+            
+            console.log('Input event:', query, 'length:', query.length);
+            
+            // Show/hide clear button
+            if (searchClearBtn) {
+                searchClearBtn.style.display = query ? 'flex' : 'none';
+            }
+            
+            // Update ARIA attributes
+            searchInput.setAttribute('aria-expanded', query.length >= 2 ? 'true' : 'false');
+            
+            // Hide suggestions immediately if search is empty
+            if (query.length === 0) {
+                window.hideSuggestions();
+                return;
+            }
+            
+            if (query.length < 2) {
+                window.hideSuggestions();
+                return;
+            }
+            
+            // Show loading immediately for better UX
+            showLoading();
+            
+            searchTimeout = setTimeout(() => {
+                console.log('Fetching suggestions for:', query);
+                fetchSuggestions(query);
+            }, 300); // Increased delay to reduce API calls
+        });
+        
+        // Clear button functionality
+        if (searchClearBtn) {
+            searchClearBtn.addEventListener('click', function() {
+                searchInput.value = '';
+                searchInput.focus();
+                window.hideSuggestions();
+                this.style.display = 'none';
+                searchInput.setAttribute('aria-expanded', 'false');
+            });
+        }
+        
+        // Hide suggestions when search input loses focus (with delay for clicks)
+        searchInput.addEventListener('blur', function() {
+            // Small delay to allow for clicking on suggestions
+            setTimeout(() => {
+                window.hideSuggestions();
+            }, 150);
+        });
+        
+        // Show suggestions when search input gains focus (if there's content)
+        searchInput.addEventListener('focus', function() {
+            if (this.value.trim().length >= 2 && currentSuggestions.length > 0) {
+                searchSuggestions.classList.add('show');
+                positionSearchSuggestions();
+            }
+        });
+        
+        // Add click event delegation for suggestion items
+        if (searchSuggestions) {
+            searchSuggestions.addEventListener('click', function(e) {
+                const suggestionItem = e.target.closest('.suggestion-item');
+                if (suggestionItem) {
+                    const text = suggestionItem.getAttribute('data-value');
+                    const type = suggestionItem.getAttribute('data-type');
+                    const searchQuery = suggestionItem.getAttribute('data-search-query');
+                    if (text && type) {
+                        window.selectSuggestion(text, type, searchQuery);
+                    }
+                }
+            });
+        } else {
+            console.warn('searchSuggestions element not found for event delegation');
+        }
+        
+        // Reposition dropdown on window resize
+        window.addEventListener('resize', function() {
+            if (searchSuggestions && searchSuggestions.classList.contains('show')) {
+                positionSearchSuggestions();
+            }
+        });
+        
+        // Reposition dropdown on scroll
+        window.addEventListener('scroll', function() {
+            if (searchSuggestions && searchSuggestions.classList.contains('show')) {
+                positionSearchSuggestions();
+            }
+        });
+        
+        window.addEventListener('resize', positionSearchSuggestions);
+        
+        // Enhanced keyboard navigation
+        searchInput.addEventListener('keydown', function(e) {
+            const suggestions = searchSuggestions?.querySelectorAll('.suggestion-item');
+            
+            if (!suggestions || suggestions.length === 0) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    performQuickSearch();
+                }
+                return;
+            }
+            
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    selectedIndex = Math.min(selectedIndex + 1, suggestions.length - 1);
+                    updateSelectedSuggestion(suggestions);
+                    scrollToActiveSuggestion();
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    selectedIndex = Math.max(selectedIndex - 1, -1);
+                    updateSelectedSuggestion(suggestions);
+                    scrollToActiveSuggestion();
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+                        const text = suggestions[selectedIndex].getAttribute('data-value');
+                        const type = suggestions[selectedIndex].getAttribute('data-type');
+                        const searchQuery = suggestions[selectedIndex].getAttribute('data-search-query');
+                        if (text && type) {
+                            window.selectSuggestion(text, type, searchQuery);
+                        }
+                    } else {
+                        performQuickSearch();
+                    }
+                    break;
+                case 'Escape':
+                    window.hideSuggestions();
+                    searchInput.blur();
+                    break;
+                case 'Tab':
+                    // Allow tabbing through suggestions
+                    if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+                        e.preventDefault();
+                        const text = suggestions[selectedIndex].getAttribute('data-value');
+                        const type = suggestions[selectedIndex].getAttribute('data-type');
+                        const searchQuery = suggestions[selectedIndex].getAttribute('data-search-query');
+                        if (text && type) {
+                            window.selectSuggestion(text, type, searchQuery);
+                        }
+                    }
+                    break;
+            }
+        });
+        
+        // Scroll active suggestion into view
+        function scrollToActiveSuggestion() {
+            const activeSuggestion = searchSuggestions?.querySelector('.suggestion-item.active');
+            if (activeSuggestion && searchSuggestions) {
+                const containerRect = searchSuggestions.getBoundingClientRect();
+                const itemRect = activeSuggestion.getBoundingClientRect();
+                
+                if (itemRect.bottom > containerRect.bottom) {
+                    activeSuggestion.scrollIntoView({ block: 'end', behavior: 'smooth' });
+                } else if (itemRect.top < containerRect.top) {
+                    activeSuggestion.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                }
+            }
+        }
+        
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', function(e) {
+            // Don't hide if clicking on the search input, suggestions dropdown, or clear button
+            if (!e.target.closest('.enhanced-search-container') && 
+                !e.target.closest('#searchSuggestions') &&
+                !e.target.closest('#searchClearBtn')) {
+                window.hideSuggestions();
+            }
+        });
+        
+        // Prevent suggestions from hiding when clicking inside the dropdown
+        if (searchSuggestions) {
+            searchSuggestions.addEventListener('mousedown', function(e) {
+                // Prevent the blur event from firing when clicking on suggestions
+                e.preventDefault();
+            });
+        }
+        
+        // Enhanced fetch suggestions with categorization
+        function fetchSuggestions(query) {
+            console.log('Fetching suggestions for:', query); // Debug log
+            
+            fetch(`/search/api/suggestions?q=${encodeURIComponent(query)}&types=team,user`)
+                .then(response => {
+                    console.log('Response received:', response.status); // Debug log
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Data received:', data); // Debug log
+                    displaySuggestions(data.suggestions || []);
+                })
+                .catch(error => {
+                    console.error('Error fetching suggestions:', error);
+                    showNoResults();
+                });
+        }
+        
+        // Enhanced display suggestions with categories and icons
+        function displaySuggestions(suggestions) {
+            console.log('Displaying suggestions:', suggestions); // Debug log
+            
+            if (!searchSuggestions) {
+                console.log('No searchSuggestions element found'); // Debug log
+                return;
+            }
+            
+            if (suggestions.length === 0) {
+                console.log('No suggestions to display'); // Debug log
+                showNoResults();
+                return;
+            }
+            
+            currentSuggestions = suggestions;
+            console.log('Building HTML for', suggestions.length, 'suggestions'); // Debug log
+            
+            // Group suggestions by type
+            const grouped = suggestions.reduce((acc, suggestion) => {
+                const type = suggestion.type || 'other';
+                if (!acc[type]) acc[type] = [];
+                acc[type].push(suggestion);
+                return acc;
+            }, {});
+            
+            let html = '';
+            
+            // Define category order and labels
+            const categoryOrder = ['team', 'user'];
+            const categoryLabels = {
+                'team': 'Teams',
+                'user': 'Users'
+            };
+            
+            // Build HTML with categories
+            categoryOrder.forEach(type => {
+                if (grouped[type] && grouped[type].length > 0) {
+                    if (html) html += ''; // Separator between categories
+                    html += `<div class="suggestion-category">${categoryLabels[type]}</div>`;
+                    
+                    grouped[type].forEach((suggestion, index) => {
+                        const iconClass = getIconForType(suggestion.type);
+                        const globalIndex = suggestions.indexOf(suggestion);
+                        
+                        html += `
+                            <div class="suggestion-item" 
+                                 data-index="${globalIndex}" 
+                                 data-type="${suggestion.type}" 
+                                 data-value="${escapeHtml(suggestion.text)}"
+                                 data-search-query="${escapeHtml(suggestion.search_query || suggestion.text)}"
+                                 role="option">
+                                <div class="suggestion-icon">
+                                    <i class="${iconClass}"></i>
+                                </div>
+                                <div class="suggestion-content">
+                                    <div class="suggestion-title">${escapeHtml(suggestion.text)}</div>
+                                    <div class="suggestion-type">${suggestion.type}</div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+            });
+            
+            console.log('Generated HTML:', html.substring(0, 100) + '...'); // Debug log
+            
+            searchSuggestions.innerHTML = html;
+            console.log('HTML set, adding show class');
+            searchSuggestions.classList.add('show');
+            console.log('Show class added, checking visibility:', getComputedStyle(searchSuggestions).display);
+            positionSearchSuggestions();
+            selectedIndex = -1;
+            
+            // Debug: Check element dimensions and position
+            const rect = searchSuggestions.getBoundingClientRect();
+            console.log('Dropdown dimensions:', {
+                width: rect.width,
+                height: rect.height,
+                top: rect.top,
+                left: rect.left,
+                visible: rect.width > 0 && rect.height > 0,
+                hasContent: searchSuggestions.innerHTML.length > 0
+            });
+            
+            console.log('Suggestions should now be visible'); // Debug log
+            
+            // Update ARIA attributes
+            searchInput.setAttribute('aria-expanded', 'true');
+            searchSuggestions.setAttribute('aria-activedescendant', '');
+        }
+        
+        // Show no results message
+        function showNoResults() {
+            if (!searchSuggestions) return;
+            console.log('Showing no results message'); // Debug log
+            searchSuggestions.innerHTML = `
+                <div class="no-suggestions">
+                    <i class="fas fa-search-minus mb-2"></i><br>
+                    No suggestions found
+                </div>
+            `;
+            searchSuggestions.classList.add('show');
+            positionSearchSuggestions();
+        }
+        
+        // Update selected suggestion styling
+        function updateSelectedSuggestion(suggestions) {
+            suggestions.forEach((item, index) => {
+                item.classList.toggle('active', index === selectedIndex);
+            });
+            
+            // Update ARIA attributes
+            if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+                const activeId = `suggestion-${selectedIndex}`;
+                suggestions[selectedIndex].id = activeId;
+                searchInput.setAttribute('aria-activedescendant', activeId);
+            } else {
+                searchInput.setAttribute('aria-activedescendant', '');
+            }
+        }
+        
+        // Enhanced icon mapping
+        function getIconForType(type) {
+            const icons = {
+                'team': 'fas fa-users',
+                'user': 'fas fa-user',
+                'event': 'fas fa-calendar',
+                'match': 'fas fa-trophy',
+                'scouting_data': 'fas fa-clipboard-list'
+            };
+            return icons[type] || 'fas fa-search';
+        }
+        
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Perform quick search
+        function performQuickSearch() {
+            const query = searchInput.value.trim();
+            if (query) {
+                // Add a subtle animation before navigation
+                searchInput.style.transform = 'scale(0.98)';
+                setTimeout(() => {
+                    window.location.href = `/search?q=${encodeURIComponent(query)}`;
+                }, 100);
+            }
+        }
+    }
+    
+    // Helper function for performQuickSearch (moved outside initSearchFunctionality)
+    function performQuickSearch() {
+        const searchInput = document.getElementById('quickSearchInput');
+        if (searchInput) {
+            const query = searchInput.value.trim();
+            if (query) {
+                window.location.href = `/search?q=${encodeURIComponent(query)}`;
+            }
+        }
+    }
     </script>
 </body>
 </html>

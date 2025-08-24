@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+
+{% block title %}Database Administration{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1><i class="fas fa-database"></i> Database Administration</h1>
+            <p class="text-muted">Monitor and manage concurrent SQLite operations with CR-SQLite</p>
+        </div>
+    </div>
+
+    <!-- Database Information -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-info-circle"></i> Database Information</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr>
+                            <td><strong>SQLite Version:</strong></td>
+                            <td>{{ db_info.sqlite_version or 'Unknown' }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Journal Mode:</strong></td>
+                            <td>
+                                <span class="badge {% if db_info.journal_mode == 'wal' %}badge-success{% else %}badge-warning{% endif %}">
+                                    {{ db_info.journal_mode or 'Unknown' }}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Synchronous:</strong></td>
+                            <td>{{ db_info.synchronous or 'Unknown' }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Cache Size:</strong></td>
+                            <td>{{ db_info.cache_size or 'Unknown' }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>CR-SQLite Version:</strong></td>
+                            <td>
+                                {% if db_info.crsqlite_version %}
+                                    <span class="badge badge-success">{{ db_info.crsqlite_version }}</span>
+                                {% else %}
+                                    <span class="badge badge-danger">Not Available</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Concurrent Writes:</strong></td>
+                            <td>
+                                {% if db_info.concurrent_writes %}
+                                    <span class="badge badge-success">Enabled</span>
+                                {% else %}
+                                    <span class="badge badge-warning">Disabled</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connection Pool Statistics -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-network-wired"></i> Connection Pool Statistics</h5>
+                    <button class="btn btn-sm btn-outline-primary float-right" onclick="refreshStats()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="card-body" id="pool-stats">
+                    <table class="table table-sm">
+                        <tr>
+                            <td><strong>Pool Size:</strong></td>
+                            <td>{{ pool_stats.pool_size }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Checked In:</strong></td>
+                            <td>{{ pool_stats.checked_in }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Checked Out:</strong></td>
+                            <td>{{ pool_stats.checked_out }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Overflow:</strong></td>
+                            <td>{{ pool_stats.overflow }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Database Management Actions -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-tools"></i> Database Management</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h6>Optimization</h6>
+                            <p class="text-muted">Optimize database for better performance</p>
+                            <button class="btn btn-primary" onclick="optimizeDatabase()">
+                                <i class="fas fa-rocket"></i> Optimize Database
+                            </button>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <h6>WAL Mode</h6>
+                            <p class="text-muted">Enable Write-Ahead Logging for better concurrency</p>
+                            <button class="btn btn-success" onclick="enableWalMode()" 
+                                    {% if db_info.journal_mode == 'wal' %}disabled{% endif %}>
+                                <i class="fas fa-check-circle"></i> 
+                                {% if db_info.journal_mode == 'wal' %}Already Enabled{% else %}Enable WAL Mode{% endif %}
+                            </button>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <h6>Concurrent Test</h6>
+                            <p class="text-muted">Test concurrent read/write operations</p>
+                            <button class="btn btn-info" onclick="testConcurrentOps()">
+                                <i class="fas fa-vial"></i> Test Operations
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CR-SQLite Status -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-code-branch"></i> CR-SQLite Status</h5>
+                </div>
+                <div class="card-body">
+                    {% if db_info.crsqlite_version %}
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle"></i>
+                            <strong>CR-SQLite is active!</strong> 
+                            Version {{ db_info.crsqlite_version }} is loaded and concurrent writes are 
+                            {% if db_info.concurrent_writes %}enabled{% else %}disabled{% endif %}.
+                        </div>
+                        
+                        <h6>Benefits of CR-SQLite:</h6>
+                        <ul>
+                            <li>Multiple concurrent write transactions</li>
+                            <li>Automatic conflict resolution</li>
+                            <li>Better performance under load</li>
+                            <li>Distributed replication support</li>
+                        </ul>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>CR-SQLite not available.</strong> 
+                            The system is using standard SQLite with basic optimizations.
+                        </div>
+                        
+                        <h6>To enable CR-SQLite:</h6>
+                        <ol>
+                            <li>Install CR-SQLite: <code>pip install cr-sqlite</code></li>
+                            <li>Restart the application</li>
+                            <li>Refresh this page to verify installation</li>
+                        </ol>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-sm" role="document">
+        <div class="modal-content">
+            <div class="modal-body text-center">
+                <div class="spinner-border" role="status">
+                    <span class="sr-only">Loading...</span>
+                </div>
+                <p class="mt-2">Processing...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showLoading() {
+    $('#loadingModal').modal('show');
+}
+
+function hideLoading() {
+    $('#loadingModal').modal('hide');
+}
+
+function refreshStats() {
+    showLoading();
+    fetch('{{ url_for("db_admin.api_database_status") }}')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update pool stats table
+                let statsHtml = `
+                    <table class="table table-sm">
+                        <tr>
+                            <td><strong>Pool Size:</strong></td>
+                            <td>${data.pool_stats.pool_size}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Checked In:</strong></td>
+                            <td>${data.pool_stats.checked_in}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Checked Out:</strong></td>
+                            <td>${data.pool_stats.checked_out}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Overflow:</strong></td>
+                            <td>${data.pool_stats.overflow}</td>
+                        </tr>
+                    </table>
+                `;
+                document.getElementById('pool-stats').innerHTML = statsHtml;
+            } else {
+                alert('Error refreshing stats: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error refreshing stats');
+        })
+        .finally(() => {
+            hideLoading();
+        });
+}
+
+function optimizeDatabase() {
+    if (!confirm('This will optimize the database. Continue?')) return;
+    
+    showLoading();
+    fetch('{{ url_for("db_admin.optimize_database") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Database optimization completed successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error optimizing database');
+    })
+    .finally(() => {
+        hideLoading();
+    });
+}
+
+function enableWalMode() {
+    if (!confirm('This will enable WAL mode for better concurrency. Continue?')) return;
+    
+    showLoading();
+    fetch('{{ url_for("db_admin.enable_wal_mode") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('WAL mode enabled successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error enabling WAL mode');
+    })
+    .finally(() => {
+        hideLoading();
+    });
+}
+
+function testConcurrentOps() {
+    showLoading();
+    fetch('{{ url_for("db_admin.test_concurrent_operations") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            let message = 'Concurrent operations test completed!\n\n';
+            message += `User count: ${data.results.user_count}\n`;
+            message += `Write test: ${data.results.write_test}`;
+            alert(message);
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error testing concurrent operations');
+    })
+    .finally(() => {
+        hideLoading();
+    });
+}
+
+// Auto-refresh stats every 30 seconds
+setInterval(refreshStats, 30000);
+</script>
+{% endblock %}

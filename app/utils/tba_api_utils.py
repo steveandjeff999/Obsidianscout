@@ -8,6 +8,7 @@ import json
 import os
 from flask import current_app
 from datetime import datetime
+from app.utils.config_manager import get_current_game_config
 
 class TBAApiError(Exception):
     """Exception for TBA API errors"""
@@ -24,7 +25,7 @@ def get_tba_api_key():
     
     # Try to get from game config
     if not api_key:
-        game_config = current_app.config.get('GAME_CONFIG', {})
+        game_config = get_current_game_config()
         tba_settings = game_config.get('tba_api_settings', {})
         api_key = tba_settings.get('auth_key', '')
     

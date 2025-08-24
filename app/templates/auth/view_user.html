@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+
+{% block title %}User: {{ user.username }}{% endblock %}
+
+{% block heading %}User Profile: {{ user.username }}{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3 class="mb-0">User Information</h3>
+                    <div>
+                        {% if current_user.has_role('admin') or current_user.has_role('superadmin') or current_user.id == user.id %}
+                        <a href="{{ url_for('auth.edit_user', user_id=user.id) }}" class="btn btn-primary me-2">
+                            <i class="fas fa-edit me-2"></i> Edit User
+                        </a>
+                        {% endif %}
+                        <a href="{{ url_for('auth.manage_users') }}" class="btn btn-secondary">
+                            <i class="fas fa-users me-2"></i> Back to Users
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Profile Details</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <th>Username:</th>
+                        <td>{{ user.username }}</td>
+                    </tr>
+                    <tr>
+                        <th>Email:</th>
+                        <td>{{ user.email or 'Not provided' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Scouting Team:</th>
+                        <td>{{ user.scouting_team_number or 'Not assigned' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Status:</th>
+                        <td>
+                            {% if user.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactive</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Roles:</th>
+                        <td>
+                            {% if user.roles %}
+                                {% for role in user.roles %}
+                                    <span class="badge bg-info me-1">{{ role.name|title }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="text-muted">No roles assigned</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% if user.created_at %}
+                    <tr>
+                        <th>Member Since:</th>
+                        <td>{{ user.created_at.strftime('%B %d, %Y') if user.created_at else 'Unknown' }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        {% if recent_scouting %}
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Recent Scouting Activity</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Team</th>
+                                <th>Match</th>
+                                <th>Alliance</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for data in recent_scouting %}
+                            <tr>
+                                <td>{{ data.created_at.strftime('%m/%d/%Y') if data.created_at else 'Unknown' }}</td>
+                                <td>
+                                    <a href="{{ url_for('teams.view', team_number=data.team.team_number) }}" class="text-decoration-none">
+                                        Team {{ data.team.team_number }}
+                                    </a>
+                                </td>
+                                <td>{{ data.match.match_type }} {{ data.match.match_number }}</td>
+                                <td>
+                                    <span class="badge bg-{{ data.alliance }}">{{ data.alliance|title }}</span>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('scouting.view_data', id=data.id) }}" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-eye me-1"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-body">
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-info-circle me-2"></i> No scouting activity found for this user.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

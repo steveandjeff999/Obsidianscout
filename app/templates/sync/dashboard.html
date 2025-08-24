@@ -1,0 +1,434 @@
+{% extends "base.html" %}
+{% set active_page = "sync" %}
+
+{% block title %}Multi-Server Sync Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .server-card {
+        transition: transform 0.2s ease-in-out;
+    }
+    .server-card:hover {
+        transform: translateY(-2px);
+    }
+    .status-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+    }
+    .status-healthy { background-color: #28a745; }
+    .status-warning { background-color: #ffc107; }
+    .status-error { background-color: #dc3545; }
+    .status-offline { background-color: #6c757d; }
+    
+    .sync-progress {
+        height: 4px;
+        background-color: #e9ecef;
+        border-radius: 2px;
+        overflow: hidden;
+    }
+    .sync-progress-bar {
+        height: 100%;
+        background-color: #007bff;
+        transition: width 0.3s ease;
+    }
+    
+    .stats-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+    }
+    .stats-card .card-title {
+        font-size: 2.5rem;
+        font-weight: 300;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1><i class="fas fa-sync-alt me-2"></i>Multi-Server Sync Dashboard</h1>
+                    <p class="text-muted">Monitor and manage synchronization across multiple scouting servers</p>
+                </div>
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-primary" onclick="refreshStatus()">
+                        <i class="fas fa-refresh me-1"></i>Refresh
+                    </button>
+                    <a href="{{ url_for('sync.manage_servers') }}" class="btn btn-primary">
+                        <i class="fas fa-server me-1"></i>Manage Servers
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Real-Time Replication Status -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="alert alert-info d-flex align-items-center" role="alert">
+                <i class="fas fa-bolt text-warning me-2"></i>
+                <div class="flex-grow-1">
+                    <strong>Real-Time Replication Active:</strong> 
+                    All database changes are automatically replicated to all servers in real-time. 
+                    Manual sync is no longer needed!
+                </div>
+                <a href="{{ url_for('realtime.dashboard') }}" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-tachometer-alt me-1"></i>View Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Overview -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card stats-card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">{{ sync_status.server_count }}</h5>
+                    <p class="card-text">Total Servers</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stats-card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">{{ sync_status.healthy_servers }}</h5>
+                    <p class="card-text">Healthy Servers</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stats-card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">
+                        {% if sync_status.sync_enabled %}
+                            <i class="fas fa-check-circle text-success"></i>
+                        {% else %}
+                            <i class="fas fa-times-circle text-danger"></i>
+                        {% endif %}
+                    </h5>
+                    <p class="card-text">Legacy Sync</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stats-card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">{{ sync_status.sync_interval }}s</h5>
+                    <p class="card-text">Sync Interval</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="fas fa-bolt me-2"></i>Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="btn-group me-2" role="group">
+                        <form method="POST" action="{{ url_for('sync.sync_all') }}" style="display: inline;">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-sync me-1"></i>Sync All Servers
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('sync.force_sync') }}" style="display: inline;">
+                            <button type="submit" class="btn btn-warning">
+                                <i class="fas fa-sync-alt me-1"></i>Force Full Sync
+                            </button>
+                        </form>
+                    </div>
+                    <div class="btn-group" role="group">
+                        <a href="{{ url_for('sync.sync_config') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-cog me-1"></i>Settings
+                        </a>
+                        <a href="{{ url_for('sync.view_logs') }}" class="btn btn-outline-info">
+                            <i class="fas fa-list me-1"></i>View Logs
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Server Status -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="fas fa-server me-2"></i>Server Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row" id="server-status">
+                        {% for server in servers %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card server-card h-100">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <span class="status-indicator status-{{ 'healthy' if server.is_healthy else 'error' }}"></span>
+                                        <h6 class="card-title mb-0">{{ server.name }}</h6>
+                                    </div>
+                                    <p class="card-text text-muted mb-2">
+                                        <small>{{ server.protocol }}://{{ server.host }}:{{ server.port }}</small>
+                                    </p>
+                                    
+                                    {% if server.last_sync %}
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            Last sync: {{ server.last_sync.strftime('%H:%M:%S') }}
+                                        </small>
+                                    </p>
+                                    {% endif %}
+                                    
+                                    {% if server.last_error %}
+                                    <div class="alert alert-danger alert-sm">
+                                        <small>{{ server.last_error }}</small>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    <div class="btn-group btn-group-sm w-100" role="group">
+                                        <form method="POST" action="{{ url_for('sync.ping_server', server_id=server.id) }}" style="display: inline;">
+                                            <button type="submit" class="btn btn-outline-info btn-sm">
+                                                <i class="fas fa-heartbeat"></i>
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('sync.sync_server', server_id=server.id) }}" style="display: inline;">
+                                            <button type="submit" class="btn btn-outline-success btn-sm">
+                                                <i class="fas fa-sync"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        
+                        {% if not servers %}
+                        <div class="col-12">
+                            <div class="text-center py-4">
+                                <i class="fas fa-server fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">No servers configured</h5>
+                                <p class="text-muted">Add your first sync server to get started.</p>
+                                <a href="{{ url_for('sync.add_server') }}" class="btn btn-primary">
+                                    <i class="fas fa-plus me-1"></i>Add Server
+                                </a>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Sync Activity -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="fas fa-history me-2"></i>Recent Sync Activity</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Server</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Started</th>
+                                    <th>Duration</th>
+                                    <th>Items</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-logs">
+                                {% for log in recent_logs %}
+                                <tr>
+                                    <td>{{ log.server.name if log.server else 'Unknown' }}</td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ log.sync_type }}</span>
+                                    </td>
+                                    <td>
+                                        {% if log.status == 'completed' %}
+                                            <span class="badge bg-success">Completed</span>
+                                        {% elif log.status == 'failed' %}
+                                            <span class="badge bg-danger">Failed</span>
+                                        {% elif log.status == 'in_progress' %}
+                                            <span class="badge bg-primary">In Progress</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">{{ log.status|title }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ log.started_at.strftime('%H:%M:%S') }}</td>
+                                    <td>
+                                        {% if log.duration %}
+                                            {{ "%.1f"|format(log.duration) }}s
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ log.items_synced }}/{{ log.total_items }}</td>
+                                </tr>
+                                {% endfor %}
+                                
+                                {% if not recent_logs %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">No sync activity yet</td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let syncSocket;
+
+function initializeWebSocket() {
+    if (!syncSocket) {
+        syncSocket = io('/sync');
+        
+        syncSocket.on('sync_completed', function(data) {
+            showToast('Sync completed with ' + data.server_name, 'success');
+            refreshStatus();
+        });
+        
+        syncSocket.on('file_synced', function(data) {
+            showToast('File synced: ' + data.file_path, 'info');
+        });
+    }
+}
+
+function refreshStatus() {
+    fetch('{{ url_for("sync.api_status") }}')
+        .then(response => response.json())
+        .then(data => {
+            // Update status cards
+            updateStatusCards(data);
+        })
+        .catch(error => {
+            console.error('Failed to refresh status:', error);
+        });
+    
+    // Refresh server status
+    fetch('{{ url_for("sync.api_servers") }}')
+        .then(response => response.json())
+        .then(servers => {
+            updateServerStatus(servers);
+        })
+        .catch(error => {
+            console.error('Failed to refresh servers:', error);
+        });
+    
+    // Refresh recent logs
+    fetch('{{ url_for("sync.api_logs") }}?limit=10')
+        .then(response => response.json())
+        .then(logs => {
+            updateRecentLogs(logs);
+        })
+        .catch(error => {
+            console.error('Failed to refresh logs:', error);
+        });
+}
+
+function updateStatusCards(data) {
+    // Update status indicators based on new data
+    // This would update the stats cards at the top
+}
+
+function updateServerStatus(servers) {
+    // Update server status cards
+    // This would refresh the server grid
+}
+
+function updateRecentLogs(logs) {
+    // Update recent activity table
+    const tbody = document.getElementById('recent-logs');
+    tbody.innerHTML = '';
+    
+    if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No sync activity yet</td></tr>';
+        return;
+    }
+    
+    logs.forEach(log => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${log.server_name || 'Unknown'}</td>
+            <td><span class="badge bg-secondary">${log.sync_type}</span></td>
+            <td>
+                <span class="badge bg-${getStatusColor(log.status)}">${log.status}</span>
+            </td>
+            <td>${new Date(log.started_at).toLocaleTimeString()}</td>
+            <td>${log.duration ? log.duration.toFixed(1) + 's' : '-'}</td>
+            <td>${log.items_synced}/${log.total_items}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function getStatusColor(status) {
+    switch(status) {
+        case 'completed': return 'success';
+        case 'failed': return 'danger';
+        case 'in_progress': return 'primary';
+        default: return 'warning';
+    }
+}
+
+function showToast(message, type = 'info') {
+    // Create and show bootstrap toast
+    const toastHtml = `
+        <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `;
+    
+    const toastContainer = document.getElementById('toast-container') || createToastContainer();
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    
+    const toastEl = toastContainer.lastElementChild;
+    const toast = new bootstrap.Toast(toastEl);
+    toast.show();
+    
+    toastEl.addEventListener('hidden.bs.toast', () => {
+        toastEl.remove();
+    });
+}
+
+function createToastContainer() {
+    const container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container position-fixed top-0 end-0 p-3';
+    container.style.zIndex = '9999';
+    document.body.appendChild(container);
+    return container;
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    initializeWebSocket();
+    
+    // Auto-refresh every 30 seconds
+    setInterval(refreshStatus, 30000);
+});
+</script>
+{% endblock %}

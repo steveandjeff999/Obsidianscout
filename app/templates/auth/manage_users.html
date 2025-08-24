@@ -2,6 +2,11 @@
 
 {% block title %}Manage Users{% endblock %}
 
+{% block head %}
+{{ super() }}
+<meta name="csrf-token" content="{{ csrf_token() if csrf_token else '' }}">
+{% endblock %}
+
 {% block heading %}User Management{% endblock %}
 
 {% block content %}
@@ -23,82 +28,79 @@
                 </div>
             </div>
             <div class="card-body">
+                <form method="get" class="mb-4">
+                    <div class="input-group">
+                        <input type="text" name="search" class="form-control" placeholder="Search by username or team number..." value="{{ search or '' }}">
+                        <button class="btn btn-outline-secondary" type="submit"><i class="fas fa-search"></i></button>
+                    </div>
+                </form>
                 {% if users %}
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead class="table-dark">
                             <tr>
                                 <th>Username</th>
-                                <th>Email</th>
+                                <th>Team</th>
                                 <th>Roles</th>
+                                <th>New Password</th>
                                 <th>Status</th>
-                                <th>Created</th>
-                                <th>Last Login</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for user in users %}
                             <tr>
-                                <td>
-                                    <strong>{{ user.username }}</strong>
-                                    {% if user.id == current_user.id %}
-                                        <span class="badge bg-success ms-2">You</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ user.email or '-' }}</td>
-                                <td>
-                                    {% for role in user.roles %}
-                                        {% if role.name == 'admin' %}
-                                            <span class="badge bg-danger me-1">
-                                                <i class="fas fa-crown me-1"></i>Admin
-                                            </span>
-                                        {% elif role.name == 'analytics' %}
-                                            <span class="badge bg-warning me-1">
-                                                <i class="fas fa-chart-line me-1"></i>Analytics
-                                            </span>
-                                        {% elif role.name == 'scout' %}
-                                            <span class="badge bg-info me-1">
-                                                <i class="fas fa-search me-1"></i>Scout
-                                            </span>
-                                        {% elif role.name == 'viewer' %}
-                                            <span class="badge bg-secondary me-1">
-                                                <i class="fas fa-eye me-1"></i>Viewer
-                                            </span>
-                                        {% else %}
-                                            <span class="badge bg-secondary me-1">{{ role.name.title() }}</span>
-                                        {% endif %}
-                                    {% endfor %}
-                                </td>
-                                <td>
-                                    {% if user.is_active %}
-                                        <span class="badge bg-success">Active</span>
-                                    {% else %}
-                                        <span class="badge bg-danger">Inactive</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ user.created_at.strftime('%m/%d/%Y') }}</td>
-                                <td>
-                                    {% if user.last_login %}
-                                        {{ user.last_login.strftime('%m/%d/%Y %I:%M %p') }}
-                                    {% else %}
-                                        <span class="text-muted">Never</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div class="btn-group btn-group-sm" role="group">
-                                        <a href="{{ url_for('auth.edit_user', user_id=user.id) }}" 
-                                           class="btn btn-outline-primary">
-                                            <i class="fas fa-edit"></i>
-                                        </a>
-                                        {% if user.id != current_user.id %}
-                                        <button type="button" class="btn btn-outline-danger" 
-                                                onclick="confirmDelete('{{ user.username }}', {{ user.id }})">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                        {% endif %}
-                                    </div>
-                                </td>
+                                <form method="post" action="{{ url_for('auth.update_user', user_id=user.id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <td>
+                                        <input type="text" name="username" class="form-control form-control-sm" value="{{ user.username }}" {% if not current_user.has_role('superadmin') %}readonly{% endif %}>
+                                    </td>
+                                    <td>
+                                        <input type="number" name="scouting_team_number" class="form-control form-control-sm" value="{{ user.scouting_team_number }}" {% if not current_user.has_role('superadmin') %}readonly{% endif %}>
+                                    </td>
+                                    <td>
+                                        <select name="roles" multiple class="form-select form-select-sm" {% if not current_user.has_role('superadmin') %}disabled{% endif %}>
+                                            {% for role in all_roles %}
+                                                {% if role.name != 'superadmin' or current_user.has_role('superadmin') %}
+                                                <option value="{{ role.id }}" {% if role in user.roles %}selected{% endif %}>
+                                                    {{ role.name.title() }}
+                                                </option>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input type="password" name="password" class="form-control form-control-sm" placeholder="New password..." {% if not current_user.has_role('superadmin') %}readonly{% endif %}>
+                                    </td>
+                                    <td>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="is_active" 
+                                                   {% if user.is_active %}checked{% endif %} 
+                                                   {% if not current_user.has_role('superadmin') %}disabled{% endif %}
+                                                   onchange="if(this.closest('form')) this.closest('form').submit();">
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            {% if current_user.has_role('superadmin') %}
+                                            <button type="submit" class="btn btn-outline-success">
+                                                <i class="fas fa-save"></i>
+                                            </button>
+                                            {% endif %}
+                                            <a href="{{ url_for('auth.edit_user', user_id=user.id) }}"
+                                               class="btn btn-outline-primary">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            {% if current_user.has_role('superadmin') and user.id != current_user.id and not user.has_role('superadmin') %}
+                                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                                    onclick="confirmDeleteUser('{{ user.username }}', {{ user.id }})"
+                                                    title="Delete User">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </form>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -118,27 +120,28 @@
     </div>
 </div>
 
-<!-- Delete Confirmation Modal -->
-<div class="modal fade" id="deleteModal" tabindex="-1">
+<!-- Delete User Confirmation Modal -->
+<div class="modal fade" id="deleteUserModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
                 <h5 class="modal-title">
                     <i class="fas fa-exclamation-triangle me-2"></i>
-                    Confirm Deletion
+                    Delete User
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <p>Are you sure you want to delete the user <strong><span id="deleteUsername"></span></strong>?</p>
-                <p class="text-danger mb-0">
-                    <i class="fas fa-warning me-1"></i>
-                    This action cannot be undone.
-                </p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    <strong>WARNING:</strong> This action will permanently remove the user from the database. This deletion will be synchronized across all servers.
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <form id="deleteForm" method="POST" style="display: inline;">
+                <form id="deleteUserForm" method="POST" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                     <button type="submit" class="btn btn-danger">
                         <i class="fas fa-trash me-2"></i>Delete User
                     </button>
@@ -151,10 +154,43 @@
 
 {% block scripts %}
 <script>
-function confirmDelete(username, userId) {
+// Auto-submit form when toggle switch changes and add visual feedback
+document.addEventListener('DOMContentLoaded', function() {
+    const toggleSwitches = document.querySelectorAll('input[name="is_active"]');
+    
+    toggleSwitches.forEach(function(toggle) {
+        toggle.addEventListener('change', function() {
+            // Add visual feedback that something is happening
+            const row = this.closest('tr');
+            if (row) {
+                row.style.opacity = '0.6';
+                row.style.pointerEvents = 'none';
+                
+                // Show a loading indicator
+                const saveButton = row.querySelector('button[type="submit"]');
+                if (saveButton) {
+                    const originalText = saveButton.innerHTML;
+                    saveButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                    
+                    // Restore after form submission
+                    setTimeout(function() {
+                        row.style.opacity = '1';
+                        row.style.pointerEvents = 'auto';
+                        saveButton.innerHTML = originalText;
+                    }, 1000);
+                }
+            }
+            
+            // Submit the form
+            this.closest('form').submit();
+        });
+    });
+});
+
+function confirmDeleteUser(username, userId) {
     document.getElementById('deleteUsername').textContent = username;
-    document.getElementById('deleteForm').action = "{{ url_for('auth.delete_user', user_id=0) }}".replace('0', userId);
-    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+    document.getElementById('deleteUserForm').action = "{{ url_for('auth.delete_user_permanently', user_id=0) }}".replace('0', userId);
+    new bootstrap.Modal(document.getElementById('deleteUserModal')).show();
 }
 </script>
 {% endblock %}

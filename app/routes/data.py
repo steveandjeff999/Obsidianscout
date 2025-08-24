@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
-from flask_login import login_required
+from flask_login import login_required, current_user
 from app.routes.auth import analytics_required
-from app.models import Team, Match, Event, ScoutingData, StrategyDrawing
+from app.models import Team, Match, Event, ScoutingData, StrategyDrawing, PitScoutingData, AllianceSelection, DoNotPickEntry, AvoidEntry
 from app import db
 import pandas as pd
 import json
@@ -11,6 +11,11 @@ import qrcode
 from io import BytesIO
 import base64
 from app.utils.theme_manager import ThemeManager
+from app.utils.config_manager import get_effective_game_config
+from app.utils.team_isolation import (
+    filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
+    filter_events_by_scouting_team, get_event_by_code
+)
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -28,7 +33,7 @@ def index():
     # Get database statistics
     teams_count = Team.query.count()
     matches_count = Match.query.count()
-    scouting_count = ScoutingData.query.count()
+    scouting_count = ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).count()
     
     return render_template('data/index.html', 
                           teams_count=teams_count,
@@ -60,7 +65,7 @@ def import_excel():
                 df = pd.read_excel(file_path)
                 
                 # Get game configuration
-                game_config = current_app.config['GAME_CONFIG']
+                game_config = get_effective_game_config()
                 
                 # Process each row as scouting data
                 records_added = 0
@@ -135,7 +140,8 @@ def import_excel():
                         # Check if scouting data already exists
                         existing_data = ScoutingData.query.filter_by(
                             match_id=match.id, 
-                            team_id=team.id
+                            team_id=team.id,
+                            scouting_team_number=current_user.scouting_team_number
                         ).first()
                         
                         if existing_data:
@@ -151,7 +157,8 @@ def import_excel():
                                 team_id=team.id,
                                 scout_name=scout_name,
                                 alliance=alliance,
-                                data_json=json.dumps(data)
+                                data_json=json.dumps(data),
+                                scouting_team_number=current_user.scouting_team_number
                             )
                             db.session.add(scouting_data)
                             records_added += 1
@@ -249,7 +256,7 @@ def import_qr():
                 match = Match.query.filter_by(match_number=match_number, match_type=match_type).first()
                 if not match:
                     # Need to find or create an event first
-                    game_config = current_app.config['GAME_CONFIG']
+                    game_config = get_effective_game_config()
                     event_name = scouting_data_json.get('event_name', 'Unknown Event')
                     event = Event.query.filter_by(name=event_name).first()
                     if not event:
@@ -300,7 +307,7 @@ def import_qr():
                 match = Match.query.filter_by(match_number=match_number, match_type=match_type).first()
                 if not match:
                     # Need to find or create an event first
-                    game_config = current_app.config['GAME_CONFIG']
+                    game_config = get_effective_game_config()
                     event_name = scouting_data_json.get('event_name', 'Unknown Event')
                     event = Event.query.filter_by(name=event_name).first()
                     if not event:
@@ -335,7 +342,8 @@ def import_qr():
             # Check if scouting data already exists
             existing_data = ScoutingData.query.filter_by(
                 match_id=match.id, 
-                team_id=team.id
+                team_id=team.id,
+                scouting_team_number=current_user.scouting_team_number
             ).first()
             
             if existing_data:
@@ -357,7 +365,7 @@ def import_qr():
                     scout_name=scout_name,
                     alliance=alliance,
                     data_json=json.dumps(data),
-
+                    scouting_team_number=current_user.scouting_team_number
                 )
                 db.session.add(new_scouting_data)
                 db.session.commit()
@@ -389,10 +397,10 @@ def import_qr():
 def export_excel():
     """Export all scouting data to Excel"""
     # Get game configuration
-    game_config = current_app.config['GAME_CONFIG']
+    game_config = get_effective_game_config()
     
     # Get all scouting data
-    scouting_data = ScoutingData.query.all()
+    scouting_data = ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).all()
     
     # Create a list of dictionaries for the DataFrame
     data_list = []
@@ -435,16 +443,16 @@ def export_excel():
 def manage_entries():
     """Manage database entries (view, edit, delete)."""
     # Get game configuration
-    game_config = current_app.config['GAME_CONFIG']
+    game_config = get_effective_game_config()
     
     # Get current event based on configuration
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
-        current_event = Event.query.filter_by(code=current_event_code).first()
+        current_event = get_event_by_code(current_event_code)
     
     # Fetch all scouting entries with eager loading of related models
-    scouting_entries = (ScoutingData.query
+    scouting_entries = (ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number)
                        .join(Match)
                        .join(Event)
                        .join(Team)
@@ -453,7 +461,7 @@ def manage_entries():
     
     # Get teams and matches filtered by the current event if available
     if current_event:
-        teams = current_event.teams
+        teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
         matches = Match.query.filter_by(event_id=current_event.id).order_by(Match.match_type, Match.match_number).all()
     else:
         teams = []  # No teams if no current event is set
@@ -469,10 +477,10 @@ def manage_entries():
 def edit_entry(entry_id):
     """Edit a scouting data entry"""
     # Get the scouting data entry
-    entry = ScoutingData.query.get_or_404(entry_id)
+    entry = ScoutingData.query.filter_by(id=entry_id, scouting_team_number=current_user.scouting_team_number).first_or_404()
     
     # Get game configuration
-    game_config = current_app.config['GAME_CONFIG']
+    game_config = get_effective_game_config()
     
     if request.method == 'POST':
         # Update scout name and alliance
@@ -515,7 +523,7 @@ def edit_entry(entry_id):
 @bp.route('/delete/<int:entry_id>', methods=['POST'])
 def delete_entry(entry_id):
     """Delete a scouting data entry"""
-    entry = ScoutingData.query.get_or_404(entry_id)
+    entry = ScoutingData.query.filter_by(id=entry_id, scouting_team_number=current_user.scouting_team_number).first_or_404()
     
     team_number = entry.team.team_number
     match_number = entry.match.match_number
@@ -528,16 +536,41 @@ def delete_entry(entry_id):
 
 @bp.route('/wipe_database', methods=['POST'])
 def wipe_database():
-    """Wipe all data from the database and custom strategy backgrounds/drawings"""
+    """Wipe all data for the current scouting team from the database"""
     try:
-        # Delete all data in order to respect foreign key constraints
-        ScoutingData.query.delete()
-        Match.query.delete()
-        Team.query.delete()
-        Event.query.delete()
-        StrategyDrawing.query.delete()
+        scouting_team_number = current_user.scouting_team_number
+        
+        # Check if scouting team number is None or empty string (but allow 0 for admin/superadmin)
+        if scouting_team_number is None or scouting_team_number == '':
+            flash("Error: No scouting team number found for current user.", "danger")
+            return redirect(url_for('data.index'))
+        
+        # Count records before deletion for reporting
+        scouting_data_count = ScoutingData.query.filter_by(scouting_team_number=scouting_team_number).count()
+        pit_data_count = PitScoutingData.query.filter_by(scouting_team_number=scouting_team_number).count()
+        strategy_count = StrategyDrawing.query.filter_by(scouting_team_number=scouting_team_number).count()
+        alliance_count = AllianceSelection.query.filter_by(scouting_team_number=scouting_team_number).count()
+        dnp_count = DoNotPickEntry.query.filter_by(scouting_team_number=scouting_team_number).count()
+        avoid_count = AvoidEntry.query.filter_by(scouting_team_number=scouting_team_number).count()
+        match_count = Match.query.filter_by(scouting_team_number=scouting_team_number).count()
+        event_count = Event.query.filter_by(scouting_team_number=scouting_team_number).count()
+        team_count = Team.query.filter_by(scouting_team_number=scouting_team_number).count()
+        
+        # Delete all data for this scouting team (in order to respect foreign key constraints)
+        ScoutingData.query.filter_by(scouting_team_number=scouting_team_number).delete()
+        PitScoutingData.query.filter_by(scouting_team_number=scouting_team_number).delete()
+        StrategyDrawing.query.filter_by(scouting_team_number=scouting_team_number).delete()
+        AllianceSelection.query.filter_by(scouting_team_number=scouting_team_number).delete()
+        DoNotPickEntry.query.filter_by(scouting_team_number=scouting_team_number).delete()
+        AvoidEntry.query.filter_by(scouting_team_number=scouting_team_number).delete()
+        Match.query.filter_by(scouting_team_number=scouting_team_number).delete()
+        Event.query.filter_by(scouting_team_number=scouting_team_number).delete()
+        Team.query.filter_by(scouting_team_number=scouting_team_number).delete()
+
         db.session.commit()
-        # Delete all custom strategy background images
+        
+        # Delete custom strategy background images (these are shared across teams)
+        # Only delete if this is the last scouting team or if user specifically wants to
         bg_folder = os.path.join('app', 'static', 'strategy_backgrounds')
         if os.path.exists(bg_folder):
             for f in os.listdir(bg_folder):
@@ -546,10 +579,33 @@ def wipe_database():
                         os.remove(os.path.join(bg_folder, f))
                     except Exception:
                         pass
-        flash("Database and custom strategy backgrounds/drawings wiped successfully. All data has been deleted.", "success")
+        
+        # Build success message with deletion counts
+        deleted_items = []
+        if team_count > 0:
+            deleted_items.append(f"{team_count} teams")
+        if event_count > 0:
+            deleted_items.append(f"{event_count} events")
+        if match_count > 0:
+            deleted_items.append(f"{match_count} matches")
+        if scouting_data_count > 0:
+            deleted_items.append(f"{scouting_data_count} scouting entries")
+        if pit_data_count > 0:
+            deleted_items.append(f"{pit_data_count} pit scouting entries")
+        if alliance_count > 0:
+            deleted_items.append(f"{alliance_count} alliance selections")
+        if strategy_count > 0:
+            deleted_items.append(f"{strategy_count} strategy drawings")
+        
+        if deleted_items:
+            items_text = ", ".join(deleted_items)
+            flash(f"Database wiped successfully for scouting team {scouting_team_number}. Deleted: {items_text}.", "success")
+        else:
+            flash(f"No data found to delete for scouting team {scouting_team_number}.", "info")
+            
     except Exception as e:
         db.session.rollback()
-        flash(f"Error wiping database: {str(e)}", "danger")
+        flash(f"Error wiping database for scouting team {current_user.scouting_team_number}: {str(e)}", "danger")
     return redirect(url_for('data.index'))
 
 @bp.route('/validate', methods=['GET'])
@@ -560,14 +616,14 @@ def validate_data():
     from app.utils.api_utils import get_matches_dual_api
     from app.models import Event, Match, ScoutingData, Team
     from app.utils.analysis import calculate_team_metrics
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     event_id = request.args.get('event_id', type=int)
     events = Event.query.order_by(Event.year.desc(), Event.name).all()
     if event_id:
         event = Event.query.get_or_404(event_id)
     elif current_event_code:
-        event = Event.query.filter_by(code=current_event_code).first()
+        event = get_event_by_code(current_event_code)
     else:
         event = events[0] if events else None
     if not event:
@@ -595,7 +651,7 @@ def validate_data():
         key = (match.match_type.lower(), str(match.match_number))
         api_scores = api_score_lookup.get(key, {'red_score': None, 'blue_score': None})
         # Aggregate scouting data for this match
-        scouting = ScoutingData.query.filter_by(match_id=match.id).all()
+        scouting = ScoutingData.query.filter_by(match_id=match.id, scouting_team_number=current_user.scouting_team_number).all()
         red_total = 0
         blue_total = 0
         for sd in scouting:
@@ -642,3 +698,63 @@ def validate_data():
         return (type_key, num_key, str(row['match_number']))
     results = sorted(results, key=match_sort_key)
     return render_template('data/validate.html', results=results, events=events, selected_event=event, **get_theme_context())
+
+@bp.route('/api/stats')
+@analytics_required
+def data_stats():
+    """AJAX endpoint for data management stats - used for real-time config updates"""
+    try:
+        from flask import jsonify
+        from datetime import datetime
+        
+        # Get current config
+        game_config = get_effective_game_config()
+        current_event_code = game_config.get('current_event_code')
+        
+        # Get current event if configured
+        current_event = None
+        if current_event_code:
+            current_event = get_event_by_code(current_event_code)
+        
+        # Get database statistics
+        teams_count = Team.query.count()
+        matches_count = Match.query.count()
+        scouting_count = ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).count()
+        pit_scouting_count = PitScoutingData.query.count()
+        events_count = Event.query.count()
+        
+        # Event-specific stats if current event is set
+        event_stats = {}
+        if current_event:
+            event_teams = Team.query.join(Team.events).filter(Event.id == current_event.id).count()
+            event_matches = Match.query.filter_by(event_id=current_event.id).count()
+            event_scouting = ScoutingData.query.join(Match).filter(Match.event_id == current_event.id).filter_by(scouting_team_number=current_user.scouting_team_number).count()
+            
+            event_stats = {
+                'teams': event_teams,
+                'matches': event_matches,
+                'scouting_entries': event_scouting
+            }
+        
+        return jsonify({
+            'success': True,
+            'game_config': game_config,
+            'current_event': {
+                'id': current_event.id if current_event else None,
+                'name': current_event.name if current_event else None,
+                'code': current_event.code if current_event else None
+            } if current_event else None,
+            'total_stats': {
+                'teams': teams_count,
+                'matches': matches_count,
+                'scouting_entries': scouting_count,
+                'pit_scouting_entries': pit_scouting_count,
+                'events': events_count
+            },
+            'event_stats': event_stats,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in data_stats endpoint: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500

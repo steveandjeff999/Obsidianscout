@@ -1,0 +1,216 @@
+{% extends 'base.html' %}
+
+{% block title %}First Run Setup{% endblock %}
+
+{% block heading %}First Time Setup{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-lg">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0 text-center">
+                        <i class="fas fa-rocket me-2"></i>
+                        Setup Your ObsidianScout Platform
+                    </h4>
+                </div>
+                <div class="card-body p-4">
+                    <!-- Progress Bar -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small class="text-muted">Step {{ step }} of 2</small>
+                            <small class="text-muted">{{ (step * 50)|int }}% Complete</small>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-success" style="width: {{ (step * 50)|int }}%"></div>
+                        </div>
+                    </div>
+
+                    {% if step == 1 %}
+                    <!-- Step 1: Basic Information -->
+                    <form method="POST">
+                        <input type="hidden" name="step" value="1">
+                        
+                        <div class="text-center mb-4">
+                            <i class="fas fa-users fa-3x text-primary mb-3"></i>
+                            <h5>Team Information</h5>
+                            <p class="text-muted">Let's start with your team details</p>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="team_number" class="form-label">
+                                <i class="fas fa-hashtag me-1"></i>Team Number <span class="text-danger">*</span>
+                            </label>
+                            <input type="number" class="form-control form-control-lg" id="team_number" 
+                                   name="team_number" required min="1" max="99999"
+                                   value="{{ setup_data.team_number or '' }}"
+                                   placeholder="e.g., 5454">
+                            <div class="form-text">Your FRC team number</div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="team_name" class="form-label">
+                                <i class="fas fa-tag me-1"></i>Team Name
+                            </label>
+                            <input type="text" class="form-control form-control-lg" id="team_name" 
+                                   name="team_name" value="{{ setup_data.team_name or '' }}"
+                                   placeholder="e.g., La Cañada Flintridge Prep Griffins">
+                            <div class="form-text">Your team's full name (optional)</div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <div class="text-center mb-3">
+                            <h6><i class="fas fa-user-shield me-1"></i>Administrator Account</h6>
+                            <p class="text-muted small">Create your admin login credentials</p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="admin_username" class="form-label">
+                                <i class="fas fa-user me-1"></i>Admin Username <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="admin_username" 
+                                   name="admin_username" required
+                                   value="{{ setup_data.admin_username or 'admin' }}">
+                            <div class="form-text">Used to log into the admin account</div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="admin_password" class="form-label">
+                                <i class="fas fa-lock me-1"></i>Admin Password <span class="text-danger">*</span>
+                            </label>
+                            <input type="password" class="form-control" id="admin_password" 
+                                   name="admin_password" required minlength="6"
+                                   value="{{ setup_data.admin_password or 'password' }}">
+                            <div class="form-text">Choose a secure password (minimum 6 characters)</div>
+                        </div>
+
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Important:</strong> Remember these credentials - you'll need them to log in and manage your scouting platform.
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('setup.index') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-2"></i>Back
+                            </a>
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-arrow-right me-2"></i>Continue
+                            </button>
+                        </div>
+                    </form>
+                    {% elif step == 2 %}
+                    <!-- Step 2: Confirmation and Setup -->
+                    <div class="text-center mb-4">
+                        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                        <h5>Ready to Initialize</h5>
+                        <p class="text-muted">Review your settings and complete setup</p>
+                    </div>
+
+                    <div class="card bg-light mb-4">
+                        <div class="card-body">
+                            <h6><i class="fas fa-info-circle me-2"></i>Setup Summary</h6>
+                            <ul class="list-unstyled mb-0">
+                                <li><strong>Team Number:</strong> {{ setup_data.team_number }}</li>
+                                {% if setup_data.team_name %}
+                                <li><strong>Team Name:</strong> {{ setup_data.team_name }}</li>
+                                {% endif %}
+                                <li><strong>Admin Username:</strong> {{ setup_data.admin_username }}</li>
+                                <li><strong>Password:</strong> ••••••••</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="fas fa-cogs me-2"></i>
+                        <strong>What happens next:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Database tables will be created</li>
+                            <li>Your admin account will be set up</li>
+                            <li>Default configurations will be initialized</li>
+                            <li>Your team record will be created</li>
+                        </ul>
+                    </div>
+
+                    <form method="POST">
+                        <input type="hidden" name="step" value="2">
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('setup.first_run') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-2"></i>Back
+                            </a>
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-rocket me-2"></i>Initialize System
+                            </button>
+                        </div>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Help Card -->
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h6><i class="fas fa-question-circle me-2"></i>Need Help?</h6>
+                    <p class="text-muted small mb-2">
+                        This setup wizard will create your scouting platform database and initial admin account. 
+                        After setup, you can add more users, configure game settings, and start scouting!
+                    </p>
+                    <a href="{{ url_for('setup.features') }}" class="btn btn-outline-info btn-sm">
+                        <i class="fas fa-info-circle me-1"></i>Learn About Features
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Team number validation
+    const teamNumberInput = document.getElementById('team_number');
+    if (teamNumberInput) {
+        teamNumberInput.addEventListener('blur', function() {
+            const teamNumber = this.value;
+            if (teamNumber) {
+                fetch(`{{ url_for('setup.api_check_team', team_number=0) }}`.replace('0', teamNumber))
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!data.available) {
+                            if (data.team_exists || data.users_exist) {
+                                this.setCustomValidity('This team number is already in use');
+                                this.classList.add('is-invalid');
+                            }
+                        } else {
+                            this.setCustomValidity('');
+                            this.classList.remove('is-invalid');
+                        }
+                    })
+                    .catch(error => console.error('Team check failed:', error));
+            }
+        });
+    }
+
+    // Show password toggle
+    const passwordInput = document.getElementById('admin_password');
+    if (passwordInput) {
+        const toggleButton = document.createElement('button');
+        toggleButton.type = 'button';
+        toggleButton.className = 'btn btn-outline-secondary btn-sm mt-1';
+        toggleButton.innerHTML = '<i class="fas fa-eye"></i> Show';
+        toggleButton.onclick = function() {
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleButton.innerHTML = '<i class="fas fa-eye-slash"></i> Hide';
+            } else {
+                passwordInput.type = 'password';
+                toggleButton.innerHTML = '<i class="fas fa-eye"></i> Show';
+            }
+        };
+        passwordInput.parentNode.appendChild(toggleButton);
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% set active_page = "sync" %}
+
+{% block title %}Edit Sync Server{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1><i class="fas fa-edit me-2"></i>Edit Sync Server</h1>
+                    <p class="text-muted">Edit server configuration and sync settings</p>
+                </div>
+                <a href="{{ url_for('sync.manage_servers') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-1"></i>Back to Servers
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><i class="fas fa-server me-2"></i>Server Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Server Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="name" name="name" required
+                                   value="{{ server.name }}" placeholder="e.g., Main Scouting Server" maxlength="100">
+                            <div class="form-text">A friendly name to identify this server</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="host" class="form-label">Host Address <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="host" name="host" required
+                                   value="{{ server.host }}" placeholder="e.g., 192.168.1.100 or scout.team5454.org" maxlength="255">
+                            <div class="form-text">IP address or domain name of the server</div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="protocol" class="form-label">Protocol</label>
+                                    <select class="form-select" id="protocol" name="protocol">
+                                        <option value="https" {% if server.protocol == 'https' %}selected{% endif %}>HTTPS (Recommended)</option>
+                                        <option value="http" {% if server.protocol == 'http' %}selected{% endif %}>HTTP</option>
+                                    </select>
+                                    <div class="form-text">Use HTTPS when possible for security</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="port" class="form-label">Port</label>
+                                    <input type="number" class="form-control" id="port" name="port" 
+                                           value="{{ server.port }}" min="1" max="65535">
+                                    <div class="form-text">Server port (usually 5000)</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="sync_priority" class="form-label">Sync Priority</label>
+                            <select class="form-select" id="sync_priority" name="sync_priority">
+                                <option value="1" {% if server.sync_priority == 1 %}selected{% endif %}>High Priority</option>
+                                <option value="2" {% if server.sync_priority == 2 %}selected{% endif %}>Normal Priority</option>
+                                <option value="3" {% if server.sync_priority == 3 %}selected{% endif %}>Low Priority</option>
+                            </select>
+                            <div class="form-text">Higher priority servers are synced first</div>
+                        </div>
+
+                        <hr>
+
+                        <h6 class="mb-3"><i class="fas fa-cog me-2"></i>Sync Settings</h6>
+                        <p class="text-muted mb-3">Configure what data should be synchronized with this server:</p>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="sync_enabled" 
+                                       name="sync_enabled" {% if server.sync_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="sync_enabled">
+                                    <i class="fas fa-power-off me-2"></i>Enable Synchronization
+                                </label>
+                                <div class="form-text">Enable or disable syncing with this server</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="sync_database" 
+                                       name="sync_database" {% if server.sync_database %}checked{% endif %}>
+                                <label class="form-check-label" for="sync_database">
+                                    <i class="fas fa-database me-2"></i>Database Synchronization
+                                </label>
+                                <div class="form-text">Sync scouting data, teams, matches, and other database content</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="sync_instance_files" 
+                                       name="sync_instance_files" {% if server.sync_instance_files %}checked{% endif %}>
+                                <label class="form-check-label" for="sync_instance_files">
+                                    <i class="fas fa-folder me-2"></i>Instance Files
+                                </label>
+                                <div class="form-text">Sync instance folder contents (database files, etc.)</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="sync_config_files" 
+                                       name="sync_config_files" {% if server.sync_config_files %}checked{% endif %}>
+                                <label class="form-check-label" for="sync_config_files">
+                                    <i class="fas fa-cogs me-2"></i>Configuration Files
+                                </label>
+                                <div class="form-text">Sync configuration files (game config, themes, etc.)</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="sync_uploads" 
+                                       name="sync_uploads" {% if server.sync_uploads %}checked{% endif %}>
+                                <label class="form-check-label" for="sync_uploads">
+                                    <i class="fas fa-upload me-2"></i>Uploaded Files
+                                </label>
+                                <div class="form-text">Sync uploaded images, documents, and other files</div>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        {% if server.last_sync %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Last Sync:</strong> {{ server.last_sync.strftime('%Y-%m-%d %H:%M:%S') }}
+                            {% if server.status %}
+                                <br><strong>Status:</strong> {{ server.status }}
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{{ url_for('sync.manage_servers') }}" class="btn btn-secondary me-md-2">
+                                Cancel
+                            </a>
+                            <button type="button" class="btn btn-outline-primary me-md-2" onclick="testConnection()">
+                                <i class="fas fa-vial me-1"></i>Test Connection
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i>Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection Test Results -->
+    <div class="row justify-content-center mt-3">
+        <div class="col-md-8 col-lg-6">
+            <div id="testResult"></div>
+        </div>
+    </div>
+
+    <!-- Server Status Card -->
+    <div class="row justify-content-center mt-4">
+        <div class="col-md-8 col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0"><i class="fas fa-chart-line me-2"></i>Server Statistics</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="border-end">
+                                <h5 class="text-primary">{{ server.sync_count or 0 }}</h5>
+                                <small class="text-muted">Total Syncs</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border-end">
+                                <h5 class="{% if server.is_online %}text-success{% else %}text-danger{% endif %}">
+                                    {% if server.is_online %}Online{% else %}Offline{% endif %}
+                                </h5>
+                                <small class="text-muted">Status</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border-end">
+                                <h5 class="text-info">{{ server.sync_priority or 2 }}</h5>
+                                <small class="text-muted">Priority</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <h5 class="{% if server.sync_enabled %}text-success{% else %}text-secondary{% endif %}">
+                                {% if server.sync_enabled %}Enabled{% else %}Disabled{% endif %}
+                            </h5>
+                            <small class="text-muted">Sync Status</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function testConnection() {
+    const host = document.getElementById('host').value;
+    const port = document.getElementById('port').value;
+    const protocol = document.getElementById('protocol').value;
+    const resultDiv = document.getElementById('testResult');
+    
+    if (!host) {
+        resultDiv.innerHTML = '<div class="alert alert-warning">Please enter a server address</div>';
+        return;
+    }
+    
+    resultDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin me-2"></i>Testing connection...</div>';
+    
+    // Test connection (this would need to be implemented as an API endpoint)
+    fetch('/api/sync/test-connection', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            host: host,
+            port: parseInt(port),
+            protocol: protocol
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resultDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>
+                    Connection successful! Server version: ${data.version || 'Unknown'}
+                </div>
+            `;
+        } else {
+            resultDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-times-circle me-2"></i>
+                    Connection failed: ${data.error}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        resultDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-times-circle me-2"></i>
+                Connection test failed: ${error.message}
+            </div>
+        `;
+    });
+}
+
+// Auto-fill port based on protocol
+document.getElementById('protocol').addEventListener('change', function() {
+    const portField = document.getElementById('port');
+    if (this.value === 'https' && portField.value === '80') {
+        portField.value = '443';
+    } else if (this.value === 'http' && portField.value === '443') {
+        portField.value = '80';
+    } else if (this.value === 'https' && portField.value === '5000') {
+        // Keep 5000 for HTTPS as it's commonly used for Flask apps
+    } else if (this.value === 'http' && portField.value === '5000') {
+        // Keep 5000 for HTTP as it's commonly used for Flask apps
+    }
+});
+
+// Show/hide sync options based on sync_enabled checkbox
+document.getElementById('sync_enabled').addEventListener('change', function() {
+    const syncOptions = ['sync_database', 'sync_instance_files', 'sync_config_files', 'sync_uploads'];
+    syncOptions.forEach(optionId => {
+        const option = document.getElementById(optionId);
+        const label = option.closest('.form-check');
+        if (this.checked) {
+            label.style.opacity = '1';
+            option.disabled = false;
+        } else {
+            label.style.opacity = '0.5';
+            option.disabled = true;
+        }
+    });
+});
+
+// Initialize sync options state on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const syncEnabledCheckbox = document.getElementById('sync_enabled');
+    if (syncEnabledCheckbox) {
+        syncEnabledCheckbox.dispatchEvent(new Event('change'));
+    }
+});
+</script>
+{% endblock %}

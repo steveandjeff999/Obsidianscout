@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ shared_graph.title }} - Shared Graphs</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    
+    <style>
+        .shared-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+        .graph-container {
+            margin-bottom: 2rem;
+        }
+        .watermark {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.1);
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        .view-count {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        .team-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .team-badge {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="shared-header">
+        <div class="container">
+            <div class="row">
+                <div class="col-12">
+                    <h1 class="mb-3">
+                        <i class="fas fa-chart-line me-3"></i>{{ shared_graph.title }}
+                    </h1>
+                    {% if shared_graph.description %}
+                    <p class="lead mb-3">{{ shared_graph.description }}</p>
+                    {% endif %}
+                    
+                    <!-- Graph Information -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="d-flex flex-column gap-2">
+                                <div>
+                                    <i class="fas fa-users me-2"></i>
+                                    <strong>Teams:</strong>
+                                    {% if teams|length <= 10 %}
+                                    <div class="team-list mt-1">
+                                        {% for team in teams %}
+                                        <span class="team-badge">Team {{ team.team_number }}</span>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <div class="mt-1">
+                                        <span class="badge bg-primary">{{ teams|length }} teams</span>
+                                        <button class="btn btn-sm btn-outline-primary ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#teamList" aria-expanded="false">
+                                            <i class="fas fa-list me-1"></i>View All Teams
+                                        </button>
+                                        <div class="collapse mt-2" id="teamList">
+                                            <div class="team-list" style="max-height: 200px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0.5rem;">
+                                                {% for team in teams %}
+                                                <span class="team-badge">Team {{ team.team_number }}</span>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% if shared_graph.event %}
+                                <div>
+                                    <i class="fas fa-calendar-alt me-2"></i>
+                                    <strong>Event:</strong> {{ shared_graph.event.name }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex flex-column gap-2">
+                                <div>
+                                    <i class="fas fa-chart-bar me-2"></i>
+                                    <strong>Metric:</strong> {{ shared_graph.metric|title if shared_graph.metric and shared_graph.metric != 'points' else 'Total Points' }}
+                                </div>
+                                <div>
+                                    <i class="fas fa-eye me-2"></i>
+                                    <strong>Data View:</strong> {{ shared_graph.data_view|title }}
+                                </div>
+                                <div>
+                                    <i class="fas fa-chart-pie me-2"></i>
+                                    <strong>Graph Types:</strong> {{ shared_graph.graph_types_list|join(', ')|title }}
+                                </div>
+                                {% if teams|length > 10 %}
+                                <div>
+                                    <i class="fas fa-database me-2"></i>
+                                    <strong>Dataset:</strong> {{ teams|length }} teams analyzed
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Meta Information -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <small class="text-light">
+                                <i class="fas fa-user me-1"></i>Shared by Team {{ shared_graph.created_by_team }}
+                                <span class="ms-3">
+                                    <i class="fas fa-clock me-1"></i>{{ shared_graph.created_at.strftime('%B %d, %Y at %I:%M %p') }}
+                                </span>
+                                <span class="ms-3 view-count">
+                                    <i class="fas fa-eye me-1"></i>{{ shared_graph.view_count }} view{{ 's' if shared_graph.view_count != 1 else '' }}
+                                </span>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        {% if plots %}
+        <!-- Generated Graphs -->
+        <div class="row">
+            {% for plot_id, plot_json in plots.items() %}
+            <div class="col-12 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div id="{{ plot_id }}" class="plotly-graph" data-graph='{{ plot_json }}' style="height: 500px;"></div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Data Summary -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card bg-light">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-chart-area me-2"></i>Data Summary
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <div class="border-end h-100 d-flex flex-column justify-content-center">
+                                    <h4 class="text-primary mb-1">{{ teams|length }}</h4>
+                                    <small class="text-muted">Team{{ 's' if teams|length != 1 else '' }} Analyzed</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="border-end h-100 d-flex flex-column justify-content-center">
+                                    <h4 class="text-success mb-1">{{ shared_graph.graph_types_list|length }}</h4>
+                                    <small class="text-muted">Graph Type{{ 's' if shared_graph.graph_types_list|length != 1 else '' }}</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="border-end h-100 d-flex flex-column justify-content-center">
+                                    <h4 class="text-info mb-1">{{ shared_graph.metric|title if shared_graph.metric and shared_graph.metric != 'points' else 'Total Points' }}</h4>
+                                    <small class="text-muted">Primary Metric</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="h-100 d-flex flex-column justify-content-center">
+                                    <h4 class="text-warning mb-1">{{ shared_graph.data_view|title }}</h4>
+                                    <small class="text-muted">Data View</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- No Data Message -->
+        <div class="row">
+            <div class="col-12">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    No data is currently available for the teams and configuration specified in this shared graph.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Info Section -->
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">
+                            <i class="fas fa-info-circle me-2"></i>About This Shared Graph
+                        </h5>
+                        <p class="card-text">
+                            This is a read-only view of scouting data graphs. The data shown reflects the configuration 
+                            set by the sharing team at the time this link was created.
+                        </p>
+                        <p class="card-text">
+                            <small class="text-muted">
+                                Powered by Scout2026 Scouting System
+                                {% if shared_graph.expires_at %}
+                                <br>This link expires on {{ shared_graph.expires_at.strftime('%B %d, %Y') }}
+                                {% endif %}
+                            </small>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Watermark -->
+    <div class="watermark">
+        <i class="fas fa-chart-line me-1"></i>Shared Graph
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Plotly Graph Rendering -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Render all Plotly graphs
+            document.querySelectorAll('.plotly-graph').forEach(function(element) {
+                try {
+                    const graphData = JSON.parse(element.getAttribute('data-graph'));
+                    const config = {
+                        responsive: true,
+                        displayModeBar: true,
+                        modeBarButtonsToRemove: ['sendDataToCloud', 'editInChartStudio'],
+                        displaylogo: false,
+                        toImageButtonOptions: {
+                            format: 'png',
+                            filename: 'shared_graph',
+                            height: 500,
+                            width: 800,
+                            scale: 1
+                        }
+                    };
+                    
+                    Plotly.newPlot(element.id, graphData.data, graphData.layout, config);
+                } catch (error) {
+                    console.error('Error rendering graph:', error);
+                    element.innerHTML = '<div class="alert alert-danger">Error loading graph</div>';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

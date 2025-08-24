@@ -1,0 +1,817 @@
+{% extends "base.html" %}
+{% block title %}Scouting Alliance Dashboard{% endblock %}
+
+{% block head %}
+<style>
+    .alliance-mode-toggle:disabled {
+        opacity: 0.6;
+        cursor: pointer !important;
+    }
+    
+    .alliance-mode-toggle:disabled + label {
+        cursor: pointer;
+        opacity: 0.8;
+    }
+    
+    .alliance-mode-toggle:disabled:hover {
+        opacity: 0.8;
+    }
+    
+    .alliance-mode-toggle:disabled + label:hover {
+        opacity: 1;
+        color: #007bff !important;
+    }
+    
+    .card-footer {
+        background-color: #f8f9fa;
+    }
+    
+    .form-check-input:checked {
+        background-color: #28a745;
+        border-color: #28a745;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>
+                    <i class="fas fa-handshake"></i> Scouting Alliance Dashboard
+                </h2>
+                <div>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createAllianceModal">
+                        <i class="fas fa-plus"></i> Create Alliance
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="searchTeams()">
+                        <i class="fas fa-search"></i> Search Teams
+                    </button>
+                </div>
+            </div>
+            
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i>
+                <strong>Scouting Alliances</strong> allow multiple teams to share scouting data and collaborate during events. 
+                Only scouting data and chat are shared - strategy drawings and other sensitive information remain private.
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Invitations -->
+    {% if pending_invitations %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-envelope"></i> Pending Invitations ({{ pending_invitations|length }})
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% for invitation in pending_invitations %}
+                    <div class="alert alert-light border" id="invitation-{{ invitation.id }}">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h6><i class="fas fa-handshake"></i> {{ invitation.alliance.alliance_name }}</h6>
+                                <p class="mb-1">
+                                    <strong>From:</strong> Team {{ invitation.from_team_number }}<br>
+                                    <strong>Created:</strong> {{ invitation.created_at.strftime('%m/%d/%Y %I:%M %p') }}
+                                </p>
+                                {% if invitation.message %}
+                                <p class="mb-2"><strong>Message:</strong> {{ invitation.message }}</p>
+                                {% endif %}
+                                <small class="text-muted">{{ invitation.alliance.description }}</small>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <button class="btn btn-success btn-sm me-2" onclick="respondToInvitation({{ invitation.id }}, 'accept')">
+                                    <i class="fas fa-check"></i> Accept
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="respondToInvitation({{ invitation.id }}, 'decline')">
+                                    <i class="fas fa-times"></i> Decline
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- My Alliances -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h4><i class="fas fa-users"></i> My Alliances ({{ my_alliances|length }})</h4>
+                {% if is_alliance_mode_active and active_alliance %}
+                <div class="alert alert-success mb-0 py-2">
+                    <i class="fas fa-check-circle"></i> 
+                    <strong>Currently Active:</strong> {{ active_alliance.alliance_name }}
+                </div>
+                {% elif my_alliances %}
+                <div class="alert alert-info mb-0 py-2">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>No Active Alliance</strong> - activate an alliance to use shared configurations
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if my_alliances %}
+    <div class="row">
+        {% for alliance in my_alliances %}
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 {% if is_alliance_mode_active and active_alliance and active_alliance.id == alliance.id %}border-success{% endif %}">
+                <div class="card-header {% if is_alliance_mode_active and active_alliance and active_alliance.id == alliance.id %}bg-success{% else %}bg-primary{% endif %} text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-handshake"></i> {{ alliance.alliance_name }}
+                        {% if is_alliance_mode_active and active_alliance and active_alliance.id == alliance.id %}
+                        <span class="badge bg-light text-success ms-2">
+                            <i class="fas fa-check-circle"></i> ACTIVE
+                        </span>
+                        {% endif %}
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">{{ alliance.description or 'No description provided.' }}</p>
+                    
+                    <div class="mb-3">
+                        <small class="text-muted">
+                            <strong>Members:</strong> {{ alliance.get_active_members()|length }}<br>
+                            <strong>Events:</strong> {{ alliance.get_shared_events()|length }}<br>
+                            <strong>Created:</strong> {{ alliance.created_at.strftime('%m/%d/%Y') }}
+                        </small>
+                    </div>
+                    
+                    <!-- Recent activity indicators -->
+                    <div class="mb-3">
+                        {% if alliance.chat_messages %}
+                            {% set recent_chat = alliance.chat_messages|selectattr('created_at')|list|sort(attribute='created_at', reverse=True)|first %}
+                            <small class="text-success">
+                                <i class="fas fa-comments"></i> Last message: {{ recent_chat.created_at.strftime('%m/%d %I:%M %p') }}
+                            </small>
+                        {% else %}
+                            <small class="text-muted">
+                                <i class="fas fa-comments"></i> No messages yet
+                            </small>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <!-- Alliance Mode Toggle -->
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="text-muted">
+                            <strong>Alliance Mode:</strong>
+                        </small>
+                        <div class="form-check form-switch">
+                            {% set is_this_alliance_active = is_alliance_mode_active and active_alliance and active_alliance.id == alliance.id %}
+                            <input class="form-check-input alliance-mode-toggle" 
+                                   type="checkbox" 
+                                   id="allianceToggle{{ alliance.id }}"
+                                   data-alliance-id="{{ alliance.id }}"
+                                   data-alliance-name="{{ alliance.alliance_name }}"
+                                   {{ 'checked' if is_this_alliance_active }}
+                                   {% if is_alliance_mode_active and not is_this_alliance_active %}
+                                   disabled
+                                   title="Click to switch to this alliance"
+                                   {% endif %}
+                                   style="transform: scale(1.2);">
+                            <label class="form-check-label" for="allianceToggle{{ alliance.id }}"
+                                   {% if is_alliance_mode_active and not is_this_alliance_active %}
+                                   title="Click to switch to this alliance"
+                                   {% endif %}>
+                                {% if is_this_alliance_active %}
+                                    <span class="text-success"><strong>Active</strong></span>
+                                {% elif is_alliance_mode_active %}
+                                    <span class="text-primary">Click to Switch</span>
+                                {% else %}
+                                    <span class="text-muted">Inactive</span>
+                                {% endif %}
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="btn-group w-100" role="group">
+                        <a href="{{ url_for('scouting_alliances.view_alliance', alliance_id=alliance.id) }}" 
+                           class="btn btn-primary btn-sm">
+                            <i class="fas fa-eye"></i> View
+                        </a>
+                        <button class="btn btn-outline-primary btn-sm" onclick="syncAllianceData({{ alliance.id }})">
+                            <i class="fas fa-sync"></i> Sync
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="openChat({{ alliance.id }})">
+                            <i class="fas fa-comments"></i> Chat
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="leaveAllianceFromDashboard({{ alliance.id }}, '{{ alliance.alliance_name }}')">
+                            <i class="fas fa-sign-out-alt"></i> Leave
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="row">
+        <div class="col-md-12">
+            <div class="alert alert-light text-center">
+                <i class="fas fa-handshake fa-3x text-muted mb-3"></i>
+                <h5>No Alliances Yet</h5>
+                <p>Create a new alliance or wait for invitations from other teams.</p>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createAllianceModal">
+                    <i class="fas fa-plus"></i> Create Your First Alliance
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Sent Invitations -->
+    {% if sent_invitations %}
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <h5><i class="fas fa-paper-plane"></i> Sent Invitations</h5>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Alliance</th>
+                            <th>To Team</th>
+                            <th>Sent</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for invitation in sent_invitations %}
+                        <tr>
+                            <td>{{ invitation.alliance.alliance_name }}</td>
+                            <td>Team {{ invitation.to_team_number }}</td>
+                            <td>{{ invitation.created_at.strftime('%m/%d/%Y %I:%M %p') }}</td>
+                            <td>
+                                <span class="badge bg-warning">
+                                    <i class="fas fa-clock"></i> Pending
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Create Alliance Modal -->
+<div class="modal fade" id="createAllianceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus"></i> Create Scouting Alliance
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="createAllianceForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="allianceName" class="form-label">Alliance Name *</label>
+                        <input type="text" class="form-control" id="allianceName" required
+                               placeholder="e.g., Region Champions Alliance">
+                    </div>
+                    <div class="mb-3">
+                        <label for="allianceDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="allianceDescription" rows="3"
+                                  placeholder="Describe the purpose and goals of this alliance..."></textarea>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        You will be added as the alliance administrator and can invite other teams.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Create Alliance
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Team Search Modal -->
+<div class="modal fade" id="teamSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-search"></i> Search Teams
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <input type="text" class="form-control" id="teamSearchInput" 
+                           placeholder="Enter team number or name...">
+                </div>
+                <div id="teamSearchResults">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-search fa-2x mb-3"></i>
+                        <p>Enter a team number or name to search</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chat Modal -->
+<div class="modal fade" id="chatModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-comments"></i> Alliance Chat
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="chatMessages" class="border rounded p-3 mb-3" style="height: 300px; overflow-y: auto;">
+                    <!-- Messages will be loaded here -->
+                </div>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="chatInput" 
+                           placeholder="Type your message...">
+                    <button class="btn btn-primary" onclick="sendChatMessage()">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentChatAlliance = null;
+let socket = null;
+
+// Initialize Socket.IO
+document.addEventListener('DOMContentLoaded', function() {
+    socket = io();
+    
+    // Join team room for notifications
+    socket.emit('join_team_room');
+    
+    // Initialize alliance mode toggles
+    initializeAllianceModeToggles();
+    
+    // Listen for alliance invitations
+    socket.on('alliance_invitation', function(data) {
+        showToast(`New alliance invitation from Team ${data.from_team} for "${data.alliance_name}"`, 'info');
+        setTimeout(() => location.reload(), 2000);
+    });
+    
+    // Listen for alliance member joins
+    socket.on('alliance_member_joined', function(data) {
+        showToast(`${data.team_name} joined the alliance!`, 'success');
+    });
+    
+    // Listen for alliance member leaves
+    socket.on('alliance_member_left', function(data) {
+        showToast(`${data.team_name} left the alliance "${data.alliance_name}"`, 'warning');
+        setTimeout(() => location.reload(), 2000);
+    });
+    
+    // Listen for chat messages
+    socket.on('alliance_chat_message', function(data) {
+        if (currentChatAlliance && $('#chatModal').is(':visible')) {
+            appendChatMessage(data);
+        }
+    });
+});
+
+// Create Alliance
+document.getElementById('createAllianceForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const name = document.getElementById('allianceName').value;
+    const description = document.getElementById('allianceDescription').value;
+    
+    fetch('{{ url_for("scouting_alliances.create_alliance") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            name: name,
+            description: description
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Alliance created successfully!', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('createAllianceModal')).hide();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('Error creating alliance: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        showToast('Network error', 'danger');
+        console.error('Error:', error);
+    });
+});
+
+// Initialize alliance mode toggles
+function initializeAllianceModeToggles() {
+    document.querySelectorAll('.alliance-mode-toggle').forEach(toggle => {
+        toggle.addEventListener('change', function() {
+            const allianceId = this.getAttribute('data-alliance-id');
+            const allianceName = this.getAttribute('data-alliance-name');
+            const isActive = this.checked;
+            
+            if (isActive) {
+                // Activating this alliance
+                const message = `This will activate "${allianceName}" and deactivate any other active alliance. Continue?`;
+                if (confirm(message)) {
+                    toggleAllianceMode(allianceId, true, allianceName);
+                } else {
+                    // Revert the toggle if user cancels
+                    this.checked = false;
+                }
+            } else {
+                // Deactivating this alliance
+                const message = `This will deactivate "${allianceName}" and switch to individual team configuration. Continue?`;
+                if (confirm(message)) {
+                    toggleAllianceMode(allianceId, false, allianceName);
+                } else {
+                    // Revert the toggle if user cancels
+                    this.checked = true;
+                }
+            }
+        });
+        
+        // Add click handler for disabled toggles to allow switching
+        toggle.addEventListener('click', function(e) {
+            if (this.disabled && !this.checked) {
+                e.preventDefault();
+                const allianceId = this.getAttribute('data-alliance-id');
+                const allianceName = this.getAttribute('data-alliance-name');
+                
+                const message = `Switch to "${allianceName}"? This will deactivate your current alliance.`;
+                if (confirm(message)) {
+                    this.disabled = false;
+                    this.checked = true;
+                    toggleAllianceMode(allianceId, true, allianceName);
+                }
+            }
+        });
+    });
+}
+
+// Toggle alliance mode for a specific alliance
+function toggleAllianceMode(allianceId, isActive, allianceName) {
+    const toggle = document.getElementById(`allianceToggle${allianceId}`);
+    
+    // Show loading state
+    toggle.disabled = true;
+    const label = toggle.nextElementSibling;
+    const originalText = label.innerHTML;
+    label.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+    
+    fetch('/alliances/scouting/api/toggle-alliance-mode', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            alliance_id: allianceId,
+            is_active: isActive
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(data.message || `Alliance mode ${isActive ? 'activated' : 'deactivated'} successfully!`, 'success');
+            // Reload page to update all UI elements
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('Error: ' + (data.error || 'Unknown error'), 'danger');
+            // Revert toggle state
+            toggle.checked = !isActive;
+            label.innerHTML = originalText;
+            toggle.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Network error occurred', 'danger');
+        // Revert toggle state
+        toggle.checked = !isActive;
+        label.innerHTML = originalText;
+        toggle.disabled = false;
+    });
+}
+
+// Respond to invitation
+function respondToInvitation(invitationId, response) {
+    fetch(`/alliances/scouting/invitation/${invitationId}/respond`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            response: response
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const message = response === 'accept' ? 'Invitation accepted!' : 'Invitation declined.';
+            showToast(message, response === 'accept' ? 'success' : 'info');
+            document.getElementById(`invitation-${invitationId}`).remove();
+            
+            if (response === 'accept') {
+                setTimeout(() => location.reload(), 1000);
+            }
+        } else {
+            showToast('Error: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        showToast('Network error', 'danger');
+        console.error('Error:', error);
+    });
+}
+
+// Search teams
+function searchTeams() {
+    const modal = new bootstrap.Modal(document.getElementById('teamSearchModal'));
+    modal.show();
+    
+    const searchInput = document.getElementById('teamSearchInput');
+    searchInput.focus();
+    
+    searchInput.addEventListener('input', function() {
+        const query = this.value.trim();
+        if (query.length >= 1) {
+            fetch(`{{ url_for("scouting_alliances.search_teams") }}?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    displaySearchResults(data.teams);
+                })
+                .catch(error => {
+                    console.error('Search error:', error);
+                });
+        } else {
+            document.getElementById('teamSearchResults').innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-search fa-2x mb-3"></i>
+                    <p>Enter a team number or name to search</p>
+                </div>
+            `;
+        }
+    });
+}
+
+function displaySearchResults(teams) {
+    const resultsDiv = document.getElementById('teamSearchResults');
+    
+    if (teams.length === 0) {
+        resultsDiv.innerHTML = `
+            <div class="text-center text-muted">
+                <i class="fas fa-search fa-2x mb-3"></i>
+                <p>No teams found</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '<div class="list-group">';
+    teams.forEach(team => {
+        html += `
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">Team ${team.team_number}</h6>
+                        <small class="text-muted">${team.team_name}</small>
+                    </div>
+                    <div>
+                        <button class="btn btn-outline-primary btn-sm" onclick="showInviteOptions(${team.team_number})">
+                            <i class="fas fa-envelope"></i> Invite
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    resultsDiv.innerHTML = html;
+}
+
+// Sync alliance data
+function syncAllianceData(allianceId) {
+    const button = event.target;
+    const originalHtml = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing...';
+    
+    fetch(`/alliances/scouting/${allianceId}/sync/data`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(data.message || `Sync complete! Imported ${data.imported_count} entries, shared ${data.shared_count} entries with ${data.synced_to} teams.`, 'success');
+        } else {
+            showToast('Sync failed: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        showToast('Sync error', 'danger');
+        console.error('Error:', error);
+    })
+    .finally(() => {
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+    });
+}
+
+// Open chat
+function openChat(allianceId) {
+    currentChatAlliance = allianceId;
+    
+    // Join alliance room
+    socket.emit('join_alliance_room', {alliance_id: allianceId});
+    
+    // Load chat messages
+    fetch(`/alliances/scouting/${allianceId}/chat`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const chatDiv = document.getElementById('chatMessages');
+                chatDiv.innerHTML = '';
+                data.messages.forEach(message => {
+                    appendChatMessage(message);
+                });
+                
+                // Show modal
+                const modal = new bootstrap.Modal(document.getElementById('chatModal'));
+                modal.show();
+                
+                // Scroll to bottom
+                chatDiv.scrollTop = chatDiv.scrollHeight;
+            }
+        })
+        .catch(error => {
+            console.error('Chat error:', error);
+        });
+}
+
+function appendChatMessage(message) {
+    const chatDiv = document.getElementById('chatMessages');
+    const messageDate = new Date(message.created_at);
+    const isOwnMessage = message.from_team_number === {{ current_team }};
+    
+    const messageHtml = `
+        <div class="mb-2 ${isOwnMessage ? 'text-end' : 'text-start'}">
+            <div class="d-inline-block p-2 rounded ${isOwnMessage ? 'bg-primary text-white' : 'bg-light'}" 
+                 style="max-width: 70%;">
+                <div class="fw-bold small">${message.from_username} (Team ${message.from_team_number})</div>
+                <div>${message.message}</div>
+                <div class="small opacity-75">${messageDate.toLocaleTimeString()}</div>
+            </div>
+        </div>
+    `;
+    
+    chatDiv.insertAdjacentHTML('beforeend', messageHtml);
+    chatDiv.scrollTop = chatDiv.scrollHeight;
+}
+
+function sendChatMessage() {
+    const input = document.getElementById('chatInput');
+    const message = input.value.trim();
+    
+    if (!message || !currentChatAlliance) return;
+    
+    fetch(`/alliances/scouting/${currentChatAlliance}/chat/send`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            message: message
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            input.value = '';
+        } else {
+            showToast('Failed to send message', 'danger');
+        }
+    })
+    .catch(error => {
+        showToast('Network error', 'danger');
+        console.error('Error:', error);
+    });
+}
+
+// Handle Enter key in chat
+document.getElementById('chatInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        sendChatMessage();
+    }
+});
+
+// Toast notification function
+function showToast(message, type) {
+    // Create toast element
+    const toastHtml = `
+        <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `;
+    
+    // Add to toast container (create if doesn't exist)
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '1055';
+        document.body.appendChild(toastContainer);
+    }
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    
+    // Show toast
+    const toastElement = toastContainer.lastElementChild;
+    const toast = new bootstrap.Toast(toastElement);
+    toast.show();
+    
+    // Remove after it's hidden
+    toastElement.addEventListener('hidden.bs.toast', function() {
+        toastElement.remove();
+    });
+}
+
+// Leave Alliance function from dashboard
+function leaveAllianceFromDashboard(allianceId, allianceName) {
+    // Show confirmation dialog
+    const confirmMessage = `Are you sure you want to leave the alliance "${allianceName}"?\n\n` +
+                          `This will:\n` +
+                          `• Remove you from the alliance\n` +
+                          `• Deactivate alliance mode if currently active\n` +
+                          `• Stop sharing scouting data with alliance members\n\n` +
+                          `This action cannot be undone.`;
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    fetch('/alliances/scouting/api/leave-alliance', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            alliance_id: allianceId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(data.message, 'success');
+            
+            // Reload page after a short delay to update the UI
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            showToast('Error leaving alliance: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error leaving alliance:', error);
+        showToast('Network error occurred while leaving alliance', 'danger');
+    });
+}
+</script>
+
+{% endblock %}

@@ -1,0 +1,302 @@
+{% extends 'base.html' %}
+
+{% block title %}System Check{% endblock %}
+
+{% block heading %}System Health Check{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>System Health Check:</strong> This page shows the current status of your ObsidianScout installation.
+            </div>
+        </div>
+    </div>
+
+    <!-- Database Health -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-database me-2"></i>Database Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <div class="text-center">
+                                <i class="fas fa-database fa-2x {% if health.database_exists %}text-success{% else %}text-danger{% endif %} mb-2"></i>
+                                <h6>Database</h6>
+                                <span class="badge {% if health.database_exists %}bg-success{% else %}bg-danger{% endif %}">
+                                    {% if health.database_exists %}Connected{% else %}Missing{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="text-center">
+                                <i class="fas fa-table fa-2x {% if health.tables_created %}text-success{% else %}text-warning{% endif %} mb-2"></i>
+                                <h6>Tables</h6>
+                                <span class="badge {% if health.tables_created %}bg-success{% else %}bg-warning{% endif %}">
+                                    {% if health.tables_created %}Created{% else %}Missing{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="text-center">
+                                <i class="fas fa-users fa-2x {% if health.has_users %}text-success{% else %}text-warning{% endif %} mb-2"></i>
+                                <h6>Users</h6>
+                                <span class="badge {% if health.has_users %}bg-success{% else %}bg-warning{% endif %}">
+                                    {{ health.user_count }} Users
+                                </span>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="text-center">
+                                <i class="fas fa-user-shield fa-2x {% if health.has_admin %}text-success{% else %}text-danger{% endif %} mb-2"></i>
+                                <h6>Admin</h6>
+                                <span class="badge {% if health.has_admin %}bg-success{% else %}bg-danger{% endif %}">
+                                    {% if health.has_admin %}Available{% else %}Missing{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Files -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-alt me-2"></i>Configuration Files
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for config_name, exists in config_status.items() %}
+                        <div class="col-md-3 mb-3">
+                            <div class="card {% if exists %}border-success{% else %}border-warning{% endif %} h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-cog fa-2x {% if exists %}text-success{% else %}text-warning{% endif %} mb-2"></i>
+                                    <h6>{{ config_name.replace('_', ' ').title() }}</h6>
+                                    <span class="badge {% if exists %}bg-success{% else %}bg-warning{% endif %}">
+                                        {% if exists %}Found{% else %}Missing{% endif %}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Directory Structure -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-folder me-2"></i>Directory Structure
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for dir_name, exists in directory_status.items() %}
+                        <div class="col-md-4 mb-2">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-folder{% if exists %}-open text-success{% else %} text-warning{% endif %} me-2"></i>
+                                <span class="me-2">{{ dir_name }}</span>
+                                <span class="badge {% if exists %}bg-success{% else %}bg-warning{% endif %} badge-sm">
+                                    {% if exists %}✓{% else %}✗{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Roles -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-warning text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-users me-2"></i>User Roles Distribution
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if role_counts %}
+                    <div class="row">
+                        {% for role_name, count in role_counts.items() %}
+                        <div class="col-md-3 mb-3">
+                            <div class="card border-secondary h-100">
+                                <div class="card-body text-center">
+                                    {% if role_name == 'admin' %}
+                                        <i class="fas fa-crown fa-2x text-danger mb-2"></i>
+                                    {% elif role_name == 'analytics' %}
+                                        <i class="fas fa-chart-line fa-2x text-info mb-2"></i>
+                                    {% elif role_name == 'scout' %}
+                                        <i class="fas fa-clipboard-list fa-2x text-success mb-2"></i>
+                                    {% elif role_name == 'superadmin' %}
+                                        <i class="fas fa-user-shield fa-2x text-dark mb-2"></i>
+                                    {% else %}
+                                        <i class="fas fa-user fa-2x text-secondary mb-2"></i>
+                                    {% endif %}
+                                    <h6>{{ role_name.title() }}</h6>
+                                    <span class="badge bg-secondary">{{ count }} users</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        No user roles found. The authentication system may need initialization.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Actions -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-tools me-2"></i>System Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <div class="card border-primary h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-sync fa-2x text-primary mb-2"></i>
+                                    <h6>Refresh Check</h6>
+                                    <button class="btn btn-primary" onclick="window.location.reload()">
+                                        <i class="fas fa-sync me-2"></i>Refresh
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card border-warning h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-database fa-2x text-warning mb-2"></i>
+                                    <h6>Sample Data</h6>
+                                    <button class="btn btn-warning" onclick="initializeSampleData()" id="sample-data-btn">
+                                        <i class="fas fa-plus me-2"></i>Add Sample Data
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card border-info h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-download fa-2x text-info mb-2"></i>
+                                    <h6>Export Logs</h6>
+                                    <a href="{{ url_for('activity.view_logs') }}" class="btn btn-info">
+                                        <i class="fas fa-eye me-2"></i>View Logs
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h6>Quick Actions</h6>
+                    <a href="{{ url_for('setup.index') }}" class="btn btn-outline-secondary me-2">
+                        <i class="fas fa-home me-1"></i>Setup Home
+                    </a>
+                    <a href="{{ url_for('auth.manage_users') }}" class="btn btn-outline-danger me-2">
+                        <i class="fas fa-users me-1"></i>Manage Users
+                    </a>
+                    <a href="{{ url_for('main.config') }}" class="btn btn-outline-warning me-2">
+                        <i class="fas fa-cog me-1"></i>Configuration
+                    </a>
+                    <a href="{{ url_for('main.index') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-home me-1"></i>Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function initializeSampleData() {
+    const btn = document.getElementById('sample-data-btn');
+    const originalText = btn.innerHTML;
+    
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Initializing...';
+    btn.disabled = true;
+    
+    fetch('{{ url_for("setup.initialize_sample_data") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            btn.innerHTML = '<i class="fas fa-check me-2"></i>Success!';
+            btn.className = 'btn btn-success';
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            btn.innerHTML = '<i class="fas fa-times me-2"></i>Failed';
+            btn.className = 'btn btn-danger';
+            console.error('Sample data initialization failed:', data.error);
+        }
+    })
+    .catch(error => {
+        btn.innerHTML = '<i class="fas fa-times me-2"></i>Error';
+        btn.className = 'btn btn-danger';
+        console.error('Sample data initialization error:', error);
+    })
+    .finally(() => {
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.className = 'btn btn-warning';
+            btn.disabled = false;
+        }, 3000);
+    });
+}
+
+// Auto-refresh every 30 seconds
+setInterval(() => {
+    fetch('{{ url_for("setup.api_check_database") }}')
+        .then(response => response.json())
+        .then(data => {
+            console.log('System status updated:', data);
+        })
+        .catch(error => console.error('Status update failed:', error));
+}, 30000);
+</script>
+{% endblock %}

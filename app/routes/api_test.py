@@ -6,6 +6,7 @@ from app.utils.tba_api_utils import TBAApiError, construct_tba_event_key
 from app.models import Event, Team, Match
 from app import db
 from app.utils.theme_manager import ThemeManager
+from app.utils.config_manager import get_current_game_config
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -85,7 +86,7 @@ def test_event(event_code):
 @admin_required
 def test_api_status():
     """Test API configuration status"""
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    game_config = get_current_game_config()
     
     # Check FIRST API settings
     first_api_settings = game_config.get('api_settings', {})

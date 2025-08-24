@@ -8,6 +8,7 @@ from app.assistant import get_assistant, get_visualizer
 from functools import wraps
 import os
 import markdown2
+from app.utils.team_isolation import filter_users_by_scouting_team
 from app.utils.theme_manager import ThemeManager
 from app.models import User
 
@@ -194,7 +195,8 @@ def clear_assistant_history():
 @bp.route('/chat-users')
 @login_required
 def chat_users():
-    users = User.query.with_entities(User.username).all()
+    # Use team isolation to only show users from the same scouting team
+    users = filter_users_by_scouting_team().with_entities(User.username).all()
     user_list = [u.username for u in users if u.username != current_user.username]
     return jsonify({
         'users': user_list,

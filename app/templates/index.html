@@ -9,16 +9,6 @@
 
 {% block content %}
 {% if current_user.has_role('admin') and update_available %}
-<div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
-    <div class="d-flex align-items-center">
-        <i class="fas fa-sync-alt me-3 fa-lg fa-spin"></i>
-        <div>
-            <strong>Update Available!</strong> A new version of the application is available.
-            <a href="{{ url_for('admin.update_page') }}" class="alert-link">Click here to update</a>.
-        </div>
-    </div>
-    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-</div>
 {% endif %}
 <!-- Quick Stats Section -->
 <div class="row mb-4">
@@ -50,7 +40,7 @@
                 <i class="fas fa-clipboard-check"></i>
             </div>
             <div>
-                <div class="stat-value text-danger">{{ scout_entries|length if scout_entries is defined else '0' }}</div>
+                <div class="stat-value text-danger">{{ total_scout_entries if total_scout_entries is defined else '0' }}</div>
                 <div class="stat-label">Scouting Entries</div>
             </div>
         </div>
@@ -69,6 +59,31 @@
                     {% endif %}
                 </div>
                 <div class="stat-label">Current Event</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Real-Time Replication Status Widget -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card bg-success text-white">
+            <div class="card-body d-flex align-items-center">
+                <div class="me-3">
+                    <i class="fas fa-bolt fa-2x"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <h6 class="card-title mb-1">Real-Time Database Replication Active</h6>
+                    <p class="card-text mb-0 opacity-75">
+                        All data changes are automatically synchronized across all servers. Manual sync is no longer needed.
+                    </p>
+                </div>
+                <div class="text-end">
+                    <div class="text-white opacity-75 small">Queue: <span id="replication-queue">-</span></div>
+                    <a href="{{ url_for('realtime.dashboard') }}" class="btn btn-light btn-sm">
+                        <i class="fas fa-tachometer-alt me-1"></i>Monitor
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -274,6 +289,124 @@
         document.querySelectorAll('.stat-card').forEach(card => {
             card.classList.add('card-interactive');
         });
+        
+        // Socket.IO listeners for real-time config updates
+        if (typeof io !== 'undefined') {
+            const socket = io();
+            
+            // Listen for global configuration changes (including alliance mode toggles)
+            socket.on('global_config_changed', function(data) {
+                console.log('Global config changed:', data);
+                
+                // Update current event display if it changed
+                if (data.effective_game_config && data.effective_game_config.current_event_code) {
+                    const currentEventElement = document.querySelector('.stat-value.text-info');
+                    if (currentEventElement) {
+                        const newEventCode = data.effective_game_config.current_event_code;
+                        if (currentEventElement.textContent.trim() !== newEventCode) {
+                            currentEventElement.textContent = newEventCode;
+                            
+                            // Add a brief highlight animation to show the change
+                            currentEventElement.style.transition = 'background-color 0.3s ease';
+                            currentEventElement.style.backgroundColor = '#28a745';
+                            currentEventElement.style.color = 'white';
+                            currentEventElement.style.borderRadius = '4px';
+                            currentEventElement.style.padding = '2px 6px';
+                            
+                            setTimeout(() => {
+                                currentEventElement.style.backgroundColor = '';
+                                currentEventElement.style.color = '';
+                                currentEventElement.style.borderRadius = '';
+                                currentEventElement.style.padding = '';
+                            }, 2000);
+                        }
+                    }
+                } else if (data.effective_game_config && !data.effective_game_config.current_event_code) {
+                    // No current event set
+                    const currentEventElement = document.querySelector('.stat-value.text-info');
+                    if (currentEventElement) {
+                        currentEventElement.innerHTML = '<span class="text-muted">-</span>';
+                    }
+                }
+                
+                // Show notification about config change
+                if (data.message && data.type === 'alliance_toggle') {
+                    showToast('Configuration Updated', data.message, 'success');
+                }
+            });
+            
+            // Listen for alliance mode toggles specifically
+            socket.on('alliance_mode_toggled', function(data) {
+                console.log('Alliance mode toggled:', data);
+                // The global_config_changed event should handle the UI update
+            });
+            
+            // Listen for alliance status changes
+            socket.on('alliance_status_changed', function(data) {
+                console.log('Alliance status changed:', data);
+                // Update any alliance-specific UI elements if needed
+            });
+        }
     });
+    
+    // Toast notification function
+    function showToast(title, message, type = 'info') {
+        // Create toast HTML
+        const toastHtml = `
+            <div class="toast align-items-center text-white bg-${type === 'success' ? 'success' : (type === 'error' ? 'danger' : 'info')} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <strong>${title}</strong><br>${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `;
+        
+        // Find or create toast container
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '9999';
+            document.body.appendChild(toastContainer);
+        }
+        
+        // Add toast to container
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        
+        // Initialize and show the toast
+        const toastElement = toastContainer.lastElementChild;
+        const toast = new bootstrap.Toast(toastElement, { delay: 4000 });
+        toast.show();
+        
+        // Remove toast element after it's hidden
+        toastElement.addEventListener('hidden.bs.toast', function() {
+            toastElement.remove();
+        });
+    }
+    
+    // Update real-time replication status
+    function updateReplicationStatus() {
+        fetch('/realtime/status')
+            .then(response => response.json())
+            .then(data => {
+                const queueElement = document.getElementById('replication-queue');
+                if (queueElement && data.queue_size !== undefined) {
+                    queueElement.textContent = data.queue_size;
+                }
+            })
+            .catch(error => {
+                console.log('Replication status update failed:', error);
+                const queueElement = document.getElementById('replication-queue');
+                if (queueElement) {
+                    queueElement.textContent = '?';
+                }
+            });
+    }
+    
+    // Update replication status every 10 seconds
+    updateReplicationStatus();
+    setInterval(updateReplicationStatus, 10000);
 </script>
 {% endblock %}
