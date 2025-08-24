@@ -12,7 +12,7 @@ from app.utils.database_init import initialize_database, check_database_health
 # SERVER CONFIGURATION FLAG
 # Set to True to use Waitress WSGI server, False to use Flask dev server with SSL
 # ============================================================================
-USE_WAITRESS = True  # Change this to False to use Flask development server with SSL
+USE_WAITRESS = False  # Change this to False to use Flask development server with SSL
 
 app = create_app()
 
@@ -64,7 +64,7 @@ if __name__ == '__main__':
     IS_PRODUCTION = 'RENDER' in os.environ
 
     # Get port from environment variables, fallback to 5000 for local dev
-    port = int(os.environ.get('PORT', 80))
+    port = int(os.environ.get('PORT', 8080))
 
     # Initialize database first
     print("Starting FRC Scouting Platform...")
