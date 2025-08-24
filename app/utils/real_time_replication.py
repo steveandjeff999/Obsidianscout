@@ -35,6 +35,7 @@ class RealTimeReplicator:
         """Start the real-time replication worker"""
         if not self.running:
             self.running = True
+            # worker will use the Flask app passed to start (if any) to create an app context
             self.worker_thread = threading.Thread(target=self._worker, daemon=True)
             self.worker_thread.start()
             logger.info("🚀 Real-time database replication started")
@@ -85,12 +86,19 @@ class RealTimeReplicator:
             try:
                 # Get operation from queue (wait up to 1 second)
                 operation = self.replication_queue.get(timeout=1)
-                
-                # Get all active sync servers within app context
-                from app import create_app
-                app = create_app()
-                with app.app_context():
-                    servers = SyncServer.query.filter_by(sync_enabled=True).all()
+                # Get all active sync servers within the provided app context
+                # Avoid calling create_app() here because that would re-run
+                # application startup (and re-register event listeners), which
+                # can mutate SQLAlchemy's listener deque while it's being iterated.
+                if getattr(self, 'app', None) is not None:
+                    with self.app.app_context():
+                        servers = SyncServer.query.filter_by(sync_enabled=True).all()
+                else:
+                    # No app provided; skip this iteration to avoid creating
+                    # a fresh app and re-running startup logic.
+                    time.sleep(0.5)
+                    self.replication_queue.task_done()
+                    continue
                     
                     if servers:
                         self._replicate_to_servers(operation, servers)
@@ -175,6 +183,9 @@ def enable_real_time_replication():
     for model_class in models_to_track:
         setup_real_time_tracking(model_class)
     
+    # Start the worker; the application should pass its Flask app instance
+    # into start() if available. If not, the worker will run but will avoid
+    # creating a new app (see worker logic).
     real_time_replicator.start()
     real_time_replicator.enabled = True
     logger.info("✅ Real-time replication enabled for all models")
