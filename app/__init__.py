@@ -478,7 +478,13 @@ def create_app(test_config=None):
     
     # Initialize real-time replication system
     try:
-        from app.utils.real_time_replication import enable_real_time_replication
+        from app.utils.real_time_replication import enable_real_time_replication, real_time_replicator
+        # Provide the Flask app instance to the replicator so its worker can
+        # use the existing app context instead of creating a new app.
+        try:
+            real_time_replicator.app = app
+        except Exception:
+            pass
         enable_real_time_replication()
         app.logger.info("✅ Real-time database replication enabled")
     except Exception as e:
