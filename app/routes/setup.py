@@ -66,8 +66,9 @@ def index():
                          **get_theme_context())
 
 @bp.route('/tutorial')
+@login_required
 def tutorial():
-    """Interactive tutorial for new users"""
+    """Interactive tutorial for new users (requires login)"""
     return render_template('setup/tutorial.html', **get_theme_context())
 
 @bp.route('/first-run', methods=['GET', 'POST'])

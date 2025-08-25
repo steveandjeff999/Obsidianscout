@@ -8,7 +8,8 @@ import json
 import os
 from flask import current_app
 from datetime import datetime
-from app.utils.config_manager import get_current_game_config
+from app.utils.config_manager import get_current_game_config, load_game_config
+from flask_login import current_user
 
 class TBAApiError(Exception):
     """Exception for TBA API errors"""
@@ -16,19 +17,34 @@ class TBAApiError(Exception):
 
 def get_tba_api_key():
     """Get TBA API key from config"""
-    # Try to get API key from environment variable
+    # Prefer team-specific instance config when available
+    api_key = None
+    try:
+        team_number = None
+        if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and hasattr(current_user, 'scouting_team_number'):
+            team_number = current_user.scouting_team_number
+
+        if team_number:
+            game_config = load_game_config(team_number=team_number)
+            tba_settings = game_config.get('tba_api_settings', {})
+            api_key = tba_settings.get('auth_key')
+            if api_key:
+                api_key = api_key.strip()
+                return api_key
+    except Exception:
+        # If team lookup fails, fall back to other sources
+        api_key = None
+
+    # Next, check environment variable
     api_key = os.environ.get('TBA_API_KEY')
-    
-    # If not in environment, get from app config
-    if not api_key:
-        api_key = current_app.config.get('TBA_API_KEY')
-    
-    # Try to get from game config
-    if not api_key:
-        game_config = get_current_game_config()
-        tba_settings = game_config.get('tba_api_settings', {})
-        api_key = tba_settings.get('auth_key', '')
-    
+    if api_key and isinstance(api_key, str):
+        return api_key.strip()
+
+    # Finally, check global app config
+    api_key = current_app.config.get('TBA_API_KEY')
+    if isinstance(api_key, str):
+        api_key = api_key.strip()
+
     return api_key
 
 def get_tba_api_headers():
@@ -58,9 +74,12 @@ def get_tba_teams_at_event(event_key):
     try:
         print(f"Fetching teams from TBA: {api_url}")
         
+        headers = get_tba_api_headers()
+        print(f"Using headers: {list(headers.keys())} for TBA teams request")
+
         response = requests.get(
             api_url,
-            headers=get_tba_api_headers(),
+            headers=headers,
             timeout=15
         )
         
@@ -80,7 +99,14 @@ def get_tba_teams_at_event(event_key):
                 error_msg = error_data.get('Error', f"HTTP {response.status_code}")
             except:
                 error_msg = f"HTTP {response.status_code}"
-            
+            if response.status_code == 401:
+                print("Authentication failed (401) when contacting TBA API.")
+                print(f"Authorization header present: {'X-TBA-Auth-Key' in headers}")
+                try:
+                    print(f"Response body: {response.text}")
+                except Exception:
+                    pass
+
             raise TBAApiError(f"TBA API Error: {error_msg}")
             
     except requests.RequestException as e:
@@ -97,9 +123,12 @@ def get_tba_event_matches(event_key):
     try:
         print(f"Fetching matches from TBA: {api_url}")
         
+        headers = get_tba_api_headers()
+        print(f"Using headers: {list(headers.keys())} for TBA matches request")
+
         response = requests.get(
             api_url,
-            headers=get_tba_api_headers(),
+            headers=headers,
             timeout=15
         )
         
@@ -119,7 +148,14 @@ def get_tba_event_matches(event_key):
                 error_msg = error_data.get('Error', f"HTTP {response.status_code}")
             except:
                 error_msg = f"HTTP {response.status_code}"
-            
+            if response.status_code == 401:
+                print("Authentication failed (401) when contacting TBA API for matches.")
+                print(f"Authorization header present: {'X-TBA-Auth-Key' in headers}")
+                try:
+                    print(f"Response body: {response.text}")
+                except Exception:
+                    pass
+
             raise TBAApiError(f"TBA API Error: {error_msg}")
             
     except requests.RequestException as e:
@@ -136,9 +172,12 @@ def get_tba_event_details(event_key):
     try:
         print(f"Fetching event details from TBA: {api_url}")
         
+        headers = get_tba_api_headers()
+        print(f"Using headers: {list(headers.keys())} for TBA event details request")
+
         response = requests.get(
             api_url,
-            headers=get_tba_api_headers(),
+            headers=headers,
             timeout=10
         )
         
@@ -156,7 +195,14 @@ def get_tba_event_details(event_key):
                 error_msg = error_data.get('Error', f"HTTP {response.status_code}")
             except:
                 error_msg = f"HTTP {response.status_code}"
-            
+            if response.status_code == 401:
+                print("Authentication failed (401) when contacting TBA API for event details.")
+                print(f"Authorization header present: {'X-TBA-Auth-Key' in headers}")
+                try:
+                    print(f"Response body: {response.text}")
+                except Exception:
+                    pass
+
             raise TBAApiError(f"TBA API Error: {error_msg}")
             
     except requests.RequestException as e:
