@@ -13,18 +13,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 def require_superadmin(f):
-    """Decorator to require superadmin or admin role"""
+    """Decorator to require superadmin role only"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
             return redirect(url_for('auth.login'))
-        
-        # Check if user has superadmin or admin role
+
+        # Only allow superadmin
         user_roles = [role.name for role in current_user.roles]
-        if not any(role in ['superadmin', 'admin'] for role in user_roles):
-            flash('You need admin or superadmin privileges to access this page.', 'error')
+        if 'superadmin' not in user_roles:
+            flash('You need superadmin privileges to access this page.', 'error')
             return redirect(url_for('main.index'))
-        
+
         return f(*args, **kwargs)
     return decorated_function
 
