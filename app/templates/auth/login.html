@@ -118,9 +118,14 @@
                 </form>
                 
                 <div class="mt-4 text-center">
-                    <small class="text-muted">
+                    <small class="text-muted d-block mb-2">
                         Don't have an account? <a href="{{ url_for('auth.register') }}">Sign Up</a>
                     </small>
+
+                    <!-- About / Features button - links to public feature overview -->
+                    <a href="{{ url_for('setup.features') }}" class="btn btn-outline-secondary btn-sm" title="About ObsidianScout - Features">
+                        <i class="fas fa-info-circle me-1"></i> About / Features
+                    </a>
                 </div>
             </div>
         </div>

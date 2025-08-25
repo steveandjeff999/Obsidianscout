@@ -363,9 +363,19 @@ def manage_users():
     if not current_user.has_role('superadmin'):
         query = query.filter_by(scouting_team_number=current_user.scouting_team_number)
 
+    # Compute counts: for superadmins show global totals; for regular admins show team-limited totals
+    if current_user.has_role('superadmin'):
+        total_users = User.query.count()
+        active_users = User.query.filter_by(is_active=True).count()
+    else:
+        total_users = User.query.filter_by(scouting_team_number=current_user.scouting_team_number).count()
+        active_users = User.query.filter_by(scouting_team_number=current_user.scouting_team_number, is_active=True).count()
+
     users = query.all()
     all_roles = Role.query.all()
-    return render_template('auth/manage_users.html', users=users, all_roles=all_roles, search=search, **get_theme_context())
+    return render_template('auth/manage_users.html', users=users, all_roles=all_roles, search=search,
+                           total_users=total_users, active_users=active_users,
+                           **get_theme_context())
 
 @bp.route('/add_user', methods=['GET', 'POST'])
 @admin_required

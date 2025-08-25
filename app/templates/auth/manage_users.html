@@ -14,10 +14,17 @@
     <div class="col-md-12">
         <div class="card">
             <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="fas fa-users me-2"></i>
-                    System Users
-                </h5>
+                <div>
+                    <h5 class="mb-0">
+                        <i class="fas fa-users me-2"></i>
+                        System Users
+                    </h5>
+                    <small class="text-light">
+                        {% if total_users is defined and active_users is defined %}
+                            Total: {{ total_users }} &nbsp;|&nbsp; Active: {{ active_users }}
+                        {% endif %}
+                    </small>
+                </div>
                 <div>
                     <a href="{{ url_for('auth.add_user') }}" class="btn btn-light btn-sm me-2">
                         <i class="fas fa-plus me-2"></i>Add User
@@ -92,9 +99,9 @@
                                                 <i class="fas fa-edit"></i>
                                             </a>
                                             {% if current_user.has_role('superadmin') and user.id != current_user.id and not user.has_role('superadmin') %}
-                                            <button type="button" class="btn btn-outline-danger btn-sm"
-                                                    onclick="confirmDeleteUser('{{ user.username }}', {{ user.id }})"
-                                                    title="Delete User">
+                        <button type="button" class="btn btn-outline-danger btn-sm"
+                            onclick="confirmDeleteUser({{ user.username|tojson }}, {{ user.id }})"
+                            title="Delete User">
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                             {% endif %}

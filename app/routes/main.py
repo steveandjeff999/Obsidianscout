@@ -426,7 +426,6 @@ def save_simple_config():
         return redirect(url_for('main.simple_edit_config'))
 
 @bp.route('/help')
-@login_required
 def help_page():
     files = get_help_files()
     selected = request.args.get('file')

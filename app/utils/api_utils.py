@@ -20,14 +20,34 @@ def get_preferred_api_source():
     return game_config.get('preferred_api_source', 'first')  # Default to FIRST API
 
 def get_api_key():
-    """Get API key from config"""
-    # Try to get API key from environment variable
+    """Get API key from config - prefer team-specific instance config."""
+    # Prefer team-specific instance config when available
+    try:
+        from flask_login import current_user
+        team_number = None
+        if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and hasattr(current_user, 'scouting_team_number'):
+            team_number = current_user.scouting_team_number
+
+        if team_number:
+            from app.utils.config_manager import load_game_config
+            game_config = load_game_config(team_number=team_number)
+            api_settings = game_config.get('api_settings', {})
+            api_key = api_settings.get('auth_token')
+            if api_key and isinstance(api_key, str):
+                return api_key.strip()
+    except Exception:
+        pass
+
+    # Next, check environment variable
     api_key = os.environ.get('FRC_API_KEY')
-    
-    # If not in environment, get from app config
-    if not api_key:
-        api_key = current_app.config.get('API_KEY')
-    
+    if api_key and isinstance(api_key, str):
+        return api_key.strip()
+
+    # Finally, check global app config
+    api_key = current_app.config.get('API_KEY')
+    if isinstance(api_key, str):
+        api_key = api_key.strip()
+
     return api_key
 
 def get_api_headers():
@@ -62,11 +82,24 @@ def get_api_headers():
         }
     
     # Fallback to just using the token directly
-    return {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': f'Basic {auth_token}'
-    }
+    # Some setups only provide a token. Construct a Basic auth blob with an empty
+    # username so the header is syntactically correct (Base64 of ":token").
+    # This avoids sending the raw token as-is which was likely rejected by some
+    # servers and resulted in 401 responses.
+    try:
+        fallback_string = f":{auth_token}"
+        fallback_b64 = base64.b64encode(fallback_string.encode('ascii')).decode('ascii')
+        return {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': f'Basic {fallback_b64}'
+        }
+    except Exception:
+        # Last-resort minimal headers
+        return {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
 
 def get_teams(event_code):
     """Get teams from FIRST API for a specific event"""
@@ -88,10 +121,13 @@ def get_teams(event_code):
         api_url = f"{base_url}{endpoint}"
         try:
             print(f"Trying teams endpoint: {api_url}")
-            
+            headers = get_api_headers()
+            # Print which header keys are being sent (do not print values)
+            print(f"Using headers: {list(headers.keys())}")
+
             response = requests.get(
                 api_url,
-                headers=get_api_headers(),
+                headers=headers,
                 timeout=15  # Increased timeout for potentially slow API responses
             )
             
@@ -132,9 +168,16 @@ def get_teams(event_code):
                     error_msg = error_data.get('message', f"HTTP {response.status_code}")
                 except:
                     error_msg = f"HTTP {response.status_code}"
-                
                 last_error = f"API Error: {error_msg}"
                 print(f"Endpoint {api_url} failed: {last_error}")
+                if response.status_code == 401:
+                    # Helpful debug without printing secrets
+                    print("Authentication failed (401) when contacting FIRST API.")
+                    print(f"Authorization header present: {'Authorization' in headers}")
+                    try:
+                        print(f"Response body: {response.text}")
+                    except Exception:
+                        pass
                 # Continue to try the next endpoint
         
         except Exception as e:
@@ -175,10 +218,12 @@ def get_matches(event_code):
         api_url = f"{base_url}{endpoint}"
         try:
             print(f"Trying endpoint: {api_url}")
-            
+            headers = get_api_headers()
+            print(f"Using headers: {list(headers.keys())}")
+
             response = requests.get(
                 api_url,
-                headers=get_api_headers(),
+                headers=headers,
                 timeout=15  # Increased timeout for potentially slow API responses
             )
             
@@ -210,9 +255,15 @@ def get_matches(event_code):
                     error_msg = error_data.get('message', f"HTTP {response.status_code}")
                 except:
                     error_msg = f"HTTP {response.status_code}"
-                
                 last_error = f"API Error: {error_msg}"
                 print(f"Endpoint {api_url} failed: {last_error}")
+                if response.status_code == 401:
+                    print("Authentication failed (401) when contacting FIRST API for matches.")
+                    print(f"Authorization header present: {'Authorization' in headers}")
+                    try:
+                        print(f"Response body: {response.text}")
+                    except Exception:
+                        pass
                 # Continue to try the next endpoint
         
         except Exception as e:
