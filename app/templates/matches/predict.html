@@ -11,7 +11,7 @@
             <h2 class="card-title h5 mb-0">Select Match</h2>
         </div>
         <div class="card-body">
-            <form method="post" action="{{ url_for('matches.predict') }}">
+            <form id="predict-match-form" method="post" action="{{ url_for('matches.predict') }}">
                 <div class="row mb-3">
                     <!-- Event Selection -->
                     <div class="col-md-6">
@@ -294,11 +294,19 @@ function updateEventSelection(eventId) {
     }
 }
 
-// Handle match selection change
-document.getElementById('match_id').addEventListener('change', function() {
-    if (this.value) {
-        document.querySelector('form').submit();
-    }
-});
+// Handle match selection change - submit the specific predict form (avoid submitting the navbar search form)
+(function() {
+    var matchSelect = document.getElementById('match_id');
+    if (!matchSelect) return;
+
+    matchSelect.addEventListener('change', function() {
+        if (this.value) {
+            var predictForm = document.getElementById('predict-match-form');
+            if (predictForm) {
+                predictForm.submit();
+            }
+        }
+    });
+})();
 </script>
 {% endblock %}
