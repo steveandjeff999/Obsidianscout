@@ -4,5 +4,61 @@
     "recipient": "superadmin",
     "text": "hi",
     "timestamp": "2025-08-13T00:19:26.917466"
+  },
+  {
+    "sender": "Seth Herod",
+    "recipient": "assistant",
+    "text": "hi",
+    "timestamp": "2025-08-26T01:41:23.959177",
+    "owner": "Seth Herod"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "Seth Herod",
+    "text": "I'm not sure how to answer that question. Try asking about team stats, match results, or say 'help' for more options.",
+    "timestamp": "2025-08-26T01:41:23.959190",
+    "owner": "Seth Herod"
+  },
+  {
+    "sender": "Seth Herod",
+    "recipient": "assistant",
+    "text": "Please provide a concise summary (3 bullet points) and 1-sentence recommendation for this page.\n\nTitle: Dashboard - REEFSCAPE 2025\n\nContent: Dashboard REEFSCAPE 2025 ObsidianScout 48 Teams 128 Matches 0 Scouting Entries okok Current Event Quick Actions Scout Match View Analytics Event Data Management Configure Event Current event code: okok Teams Sync teams registered for this event from FIRST API 48 Sync Teams Matches Sync match schedule from FIRST API 128 Sync Matches Game Configuration Edit Game Name REEFSCAPE Season 2025 Auto Period 15s Teleop Period 120s Endgame Period 30s Data Tools Data Management Import and export scouting data Scan QR Code Import data from QR codes Advanced Graphs Create custom data visualizations",
+    "timestamp": "2025-08-26T02:17:53.286526",
+    "owner": "Seth Herod"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "Seth Herod",
+    "text": "Statistics for Oklahoma Regional:",
+    "timestamp": "2025-08-26T02:17:53.286535",
+    "owner": "Seth Herod"
+  },
+  {
+    "sender": "Seth Herod",
+    "recipient": "assistant",
+    "text": "Please provide a concise summary (3 bullet points) and 1-sentence recommendation for this page.\n\nTitle: Dashboard - REEFSCAPE 2025\n\nContent: Dashboard REEFSCAPE 2025 ObsidianScout 48 Teams 128 Matches 0 Scouting Entries okok Current Event Quick Actions Scout Match View Analytics Event Data Management Configure Event Current event code: okok Teams Sync teams registered for this event from FIRST API 48 Sync Teams Matches Sync match schedule from FIRST API 128 Sync Matches Game Configuration Edit Game Name REEFSCAPE Season 2025 Auto Period 15s Teleop Period 120s Endgame Period 30s Data Tools Data Management Import and export scouting data Scan QR Code Import data from QR codes Advanced Graphs Create custom data visualizations",
+    "timestamp": "2025-08-26T02:21:06.951994",
+    "owner": "Seth Herod"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "Seth Herod",
+    "text": "Statistics for Oklahoma Regional:",
+    "timestamp": "2025-08-26T02:21:06.952006",
+    "owner": "Seth Herod"
+  },
+  {
+    "sender": "Seth Herod",
+    "recipient": "assistant",
+    "text": "Please provide a concise summary (3 bullet points) and 1-sentence recommendation for this page.\n\nTitle: Dashboard - REEFSCAPE 2025\n\nContent: Dashboard REEFSCAPE 2025 ObsidianScout 48 Teams 128 Matches 0 Scouting Entries okok Current Event Quick Actions Scout Match View Analytics Event Data Management Configure Event Current event code: okok Teams Sync teams registered for this event from FIRST API 48 Sync Teams Matches Sync match schedule from FIRST API 128 Sync Matches Game Configuration Edit Game Name REEFSCAPE Season 2025 Auto Period 15s Teleop Period 120s Endgame Period 30s Data Tools Data Management Import and export scouting data Scan QR Code Import data from QR codes Advanced Graphs Create custom data visualizations",
+    "timestamp": "2025-08-26T02:21:14.045806",
+    "owner": "Seth Herod"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "Seth Herod",
+    "text": "Statistics for Oklahoma Regional:",
+    "timestamp": "2025-08-26T02:21:14.045820",
+    "owner": "Seth Herod"
   }
 ]
