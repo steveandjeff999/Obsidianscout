@@ -484,7 +484,11 @@ def edit_entry(entry_id):
     
     if request.method == 'POST':
         # Update scout name and alliance
-        entry.scout_name = request.form.get('scout_name')
+        scout_name = request.form.get('scout_name')
+        # If blank, fall back to the account username so we always have a visible name
+        if not scout_name or str(scout_name).strip() == '':
+            scout_name = getattr(current_user, 'username', 'Unknown')
+        entry.scout_name = scout_name
         entry.alliance = request.form.get('alliance')
         
         # Build updated data dictionary from form

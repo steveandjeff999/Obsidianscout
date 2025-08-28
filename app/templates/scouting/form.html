@@ -145,6 +145,11 @@
             // Setup save button with enhanced functionality
             setupSaveButton();
 
+            // Setup save locally handler (if scripts.js provided it)
+            if (typeof setupSaveLocally === 'function') {
+                try { setupSaveLocally(); } catch (e) { /* ignore */ }
+            }
+
             // Make sure points are calculated on page load
             updatePointsCalculation();
         }

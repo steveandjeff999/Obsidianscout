@@ -224,10 +224,14 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
     team_id = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=False)
     scouting_team_number = db.Column(db.Integer, nullable=True)
     scout_name = db.Column(db.String(50))
+    scout_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     scouting_station = db.Column(db.Integer)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     alliance = db.Column(db.String(10))  # 'red' or 'blue'
     data_json = db.Column(db.Text, nullable=False)  # JSON data based on game config
+
+    # Relationship to the User who submitted this entry (optional)
+    scout = db.relationship('User', backref=db.backref('scouting_entries', lazy=True))
     
     def __repr__(self):
         return f"Scouting Data for Team {self.team.team_number} in Match {self.match.match_number}"
