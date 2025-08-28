@@ -214,7 +214,7 @@
       },
       {
         "id": "rwk",
-        "name": "Weaknesses",
+        "name": "Weakness",
         "type": "text",
         "multiline": true
       }

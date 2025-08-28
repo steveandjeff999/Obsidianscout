@@ -19,7 +19,9 @@
 <!-- Scouting Form Card -->
 <form id="scouting-form" class="scouting-form" action="{{ url_for('scouting.scouting_form') }}" method="post" onsubmit="return false;">
     <input type="hidden" name="team_id" value="{{ team.id }}">
+    <input type="hidden" name="team_number" value="{{ team.team_number }}">
     <input type="hidden" name="match_id" value="{{ match.id }}">
+    <input type="hidden" name="match_number" value="{{ match.match_number }}">
     <input type="hidden" name="alliance" value="{{ alliance }}">
     
     <!-- Scout Information -->
@@ -30,12 +32,14 @@
         
         <div class="row">
             <div class="col-md-6">
-                <label for="scout_name" class="form-label">Your Name</label>
-                <div class="input-group mb-3">
+                <label for="scout_name" class="form-label">Display Name (optional)</label>
+                <div class="input-group mb-1">
                     <span class="input-group-text"><i class="fas fa-user"></i></span>
-                    <input type="text" class="form-control" id="scout_name" name="scout_name" required 
-                            value="{{ form_data.get('scout_name', '') }}" placeholder="Enter your name">
+                    <!-- Show user's account username as placeholder; leave input optional -->
+                    <input type="text" class="form-control" id="scout_name" name="scout_name" 
+                            value="{{ form_data.get('scout_name', '') }}" placeholder="{{ current_user.username }}">
                 </div>
+                <div class="form-text">If left blank the system will display your account name ({{ current_user.username }}) while keeping your account ID with the entry.</div>
             </div>
         </div>
     </div>
@@ -370,6 +374,9 @@
                 <button type="button" id="generateQR" class="btn btn-lg btn-outline-primary px-4 me-2">
                     <i class="fas fa-qrcode me-2"></i> Generate QR
                 </button>
+                <button type="button" id="save-local-button" class="btn btn-lg btn-outline-secondary px-4 me-2">
+                    <i class="fas fa-hdd me-2"></i> Save Locally
+                </button>
                 <button type="button" id="save-button" class="btn btn-lg btn-success px-4">
                     <i class="fas fa-save me-2"></i> Save Data
                 </button>
@@ -377,3 +384,20 @@
         </div>
     </div>
 </form>
+
+<script>
+// Auto-fill the display name with the account username if the field is empty
+(function(){
+    try {
+        const input = document.getElementById('scout_name');
+        if (!input) return;
+        // Only set value when the input is empty so user-entered values are preserved
+        if (!input.value || input.value.trim() === '') {
+            input.value = "{{ current_user.username }}";
+        }
+    } catch (e) {
+        // fail silently
+        console && console.error && console.error('scout_name autofill error', e);
+    }
+})();
+</script>

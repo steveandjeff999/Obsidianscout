@@ -502,6 +502,17 @@ function generateQRCode() {
                     }
                 }
             });
+
+            // Defensive fallback: ensure scout_name is populated even if the input was left blank
+            try {
+                const scoutField = form.elements['scout_name'] || document.getElementById('scout_name');
+                const fallbackScout = (scoutField && scoutField.placeholder) ? scoutField.placeholder : (scoutField && scoutField.value) ? scoutField.value : 'Unknown';
+                if (!formObject.scout_name || (typeof formObject.scout_name === 'string' && formObject.scout_name.trim() === '')) {
+                    formObject.scout_name = fallbackScout;
+                }
+            } catch (e) {
+                // ignore any issues from missing elements
+            }
             
             // Add metadata
             formObject.generated_at = new Date().toISOString();
@@ -2217,6 +2228,11 @@ function initScoutingForm() {
             generateQRCode();
         }
     });
+
+    // Attach save-local handler via reusable function
+    if (typeof setupSaveLocally === 'function') {
+        try { setupSaveLocally(); } catch (e) { /* ignore */ }
+    }
     
     // Submit the form data directly to the server
     function submitScoutingForm() {
@@ -2274,6 +2290,110 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add to the existing event listeners
     initScoutingForm();
 });
+
+/**
+ * Attach handler to "Save Locally" button to persist form to localStorage
+ */
+function setupSaveLocally() {
+    const form = document.getElementById('scouting-form');
+    const saveLocalButton = document.getElementById('save-local-button');
+    if (!form || !saveLocalButton) return;
+
+    // Remove previous listener if present by cloning
+    const newBtn = saveLocalButton.cloneNode(true);
+    saveLocalButton.parentNode.replaceChild(newBtn, saveLocalButton);
+
+    newBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+
+        if (!form.checkValidity()) {
+            form.classList.add('was-validated');
+            showToast('Please fix form errors before saving locally', 'warning');
+            return;
+        }
+
+        try {
+            const formData = new FormData(form);
+            const formObject = {};
+
+            formData.forEach((value, key) => {
+                const element = form.elements[key];
+                if (element && element.type === 'checkbox') {
+                    formObject[key] = element.checked;
+                } else if (element && element.type === 'number' || (!isNaN(value) && value !== '')) {
+                    formObject[key] = Number(value);
+                } else {
+                    formObject[key] = value;
+                }
+            });
+
+            // Ensure unchecked checkboxes are included
+            form.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                if (!formObject.hasOwnProperty(checkbox.id)) {
+                    formObject[checkbox.id] = false;
+                }
+            });
+
+            // Add calculated points
+            const pointsElements = document.querySelectorAll('.points-display');
+            pointsElements.forEach(element => {
+                const metricId = element.dataset.metricId;
+                if (metricId) {
+                    const pointsValue = element.querySelector('.points-value');
+                    if (pointsValue) {
+                        formObject[metricId + '_points'] = parseInt(pointsValue.textContent || '0');
+                    }
+                }
+            });
+
+            // Metadata
+            formObject.generated_at = new Date().toISOString();
+            formObject.offline_saved = true;
+
+            // Defensive fallback: ensure scout_name is populated even if the input was left blank
+            try {
+                const scoutField = form.elements['scout_name'] || document.getElementById('scout_name');
+                const fallbackScout = (scoutField && scoutField.placeholder) ? scoutField.placeholder : (scoutField && scoutField.value) ? scoutField.value : 'Unknown';
+                if (!formObject.scout_name || (typeof formObject.scout_name === 'string' && formObject.scout_name.trim() === '')) {
+                    formObject.scout_name = fallbackScout;
+                }
+            } catch (e) {
+                // ignore any issues from missing elements
+            }
+
+            // Build storage key and index entry
+            const timestamp = new Date().toISOString();
+            const storageKey = `offline_scouting_${Date.now()}`;
+
+            // Try to capture team/match numbers for the index
+            const teamNumber = formObject.team_number || formObject.team_id || '';
+            const matchNumber = formObject.match_number || formObject.match_id || '';
+
+            // Save item
+            localStorage.setItem(storageKey, JSON.stringify(formObject));
+
+            // Update index
+            let index = JSON.parse(localStorage.getItem('offline_scouting_index') || '[]');
+            index.push({
+                storage_key: storageKey,
+                team_number: teamNumber,
+                match_number: matchNumber,
+                timestamp: timestamp
+            });
+            localStorage.setItem('offline_scouting_index', JSON.stringify(index));
+
+            showToast('Form saved locally. You can sync it later from the Offline Data page.', 'success');
+
+            // Refresh offline manager UI if present
+            if (typeof setupOfflineDataManager === 'function') {
+                try { setupOfflineDataManager(); } catch (e) { /* ignore */ }
+            }
+        } catch (error) {
+            console.error('Error saving form locally:', error);
+            showToast('Failed to save locally', 'danger');
+        }
+    });
+}
 
 function showDeleteConfirmNotification(btn, entryId) {
     // Use Bootstrap toast if available, else fallback to alert

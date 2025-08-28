@@ -322,6 +322,11 @@ def scouting_form():
         
         scout_name = request.form.get('scout_name')
         scouting_station = request.form.get('scouting_station', type=int)
+        # Keep track of the user id who submitted this; store account id and optional display name
+        scout_id = getattr(current_user, 'id', None)
+        if not scout_name or scout_name.strip() == '':
+            # Use account username as display name when none provided
+            scout_name = getattr(current_user, 'username', 'Unknown')
         
         # Build data dictionary from form
         data = {}
@@ -365,6 +370,7 @@ def scouting_form():
         if existing_data:
             existing_data.data = data
             existing_data.scout_name = scout_name
+            existing_data.scout_id = scout_id
             existing_data.scouting_station = scouting_station
             existing_data.alliance = alliance
             existing_data.timestamp = datetime.utcnow()
@@ -374,6 +380,7 @@ def scouting_form():
                 team_id=team.id,
                 match_id=match.id,
                 scout_name=scout_name,
+                scout_id=scout_id,
                 scouting_station=scouting_station,
                 alliance=alliance,
                 data_json=json.dumps(data),
@@ -754,8 +761,11 @@ def submit_offline_data():
             return jsonify({'success': False, 'message': 'Team or match not found'})
             
         # Process the form data
-        scout_name = data.get('scout_name', 'Unknown (offline)')
+        scout_name = data.get('scout_name')
         alliance = data.get('alliance', 'unknown')
+        scout_id = getattr(current_user, 'id', None)
+        if not scout_name or str(scout_name).strip() == '':
+            scout_name = getattr(current_user, 'username', 'Unknown (offline)')
         
         # Extract actual scouting data
         scouting_data = {}
@@ -775,9 +785,9 @@ def submit_offline_data():
         if existing_data:
             existing_data.data = scouting_data
             existing_data.scout_name = scout_name
+            existing_data.scout_id = scout_id
             existing_data.alliance = alliance
             existing_data.timestamp = datetime.utcnow()
-            existing_data.source = 'offline'
             db.session.commit()
             return jsonify({'success': True, 'message': 'Offline data updated successfully'})
         else:
@@ -785,9 +795,9 @@ def submit_offline_data():
                 team_id=team_id,
                 match_id=match_id,
                 scout_name=scout_name,
+                scout_id=scout_id,
                 alliance=alliance,
                 data_json=json.dumps(scouting_data),
-                source='offline',
                 scouting_team_number=current_user.scouting_team_number
             )
             db.session.add(new_data)
@@ -814,6 +824,9 @@ def save_scouting_data():
         alliance = request.form.get('alliance', 'unknown')
         scout_name = request.form.get('scout_name')
         scouting_station = request.form.get('scouting_station', type=int)
+        scout_id = getattr(current_user, 'id', None)
+        if not scout_name or scout_name.strip() == '':
+            scout_name = getattr(current_user, 'username', 'Unknown')
         
         # Build data dictionary from form
         data = {}
@@ -857,6 +870,7 @@ def save_scouting_data():
         if existing_data:
             existing_data.data = data
             existing_data.scout_name = scout_name
+            existing_data.scout_id = scout_id
             existing_data.scouting_station = scouting_station
             existing_data.alliance = alliance
             existing_data.timestamp = datetime.utcnow()
@@ -867,6 +881,7 @@ def save_scouting_data():
                 team_id=team.id,
                 match_id=match.id,
                 scout_name=scout_name,
+                scout_id=scout_id,
                 scouting_station=scouting_station,
                 alliance=alliance,
                 data_json=json.dumps(data),
@@ -912,6 +927,9 @@ def api_save():
         alliance = request.form.get('alliance', 'unknown')
         scout_name = request.form.get('scout_name')
         scouting_station = request.form.get('scouting_station', type=int)
+        scout_id = getattr(current_user, 'id', None)
+        if not scout_name or scout_name.strip() == '':
+            scout_name = getattr(current_user, 'username', 'Unknown')
         
         # Build data dictionary from form
         data = {}
@@ -955,6 +973,7 @@ def api_save():
         if existing_data:
             existing_data.data = data
             existing_data.scout_name = scout_name
+            existing_data.scout_id = scout_id
             existing_data.scouting_station = scouting_station
             existing_data.alliance = alliance
             existing_data.timestamp = datetime.utcnow()
@@ -966,6 +985,7 @@ def api_save():
                 team_id=team.id,
                 match_id=match.id,
                 scout_name=scout_name,
+                scout_id=scout_id,
                 scouting_station=scouting_station,
                 alliance=alliance,
                 data_json=json.dumps(data),
