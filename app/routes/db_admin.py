@@ -140,7 +140,7 @@ def test_concurrent_operations():
 @db_admin_bp.route('/export', methods=['GET', 'POST'])
 @login_required
 def export_database():
-    """Export entire database to JSON format"""
+    """Export entire database to JSON format (includes both users.db and scouting.db)"""
     if not current_user.has_role('superadmin'):
         return jsonify({'error': 'Super Admin access required'}), 403
     
@@ -274,7 +274,7 @@ def export_database():
 @db_admin_bp.route('/import', methods=['POST'])
 @login_required
 def import_database():
-    """Import database from JSON file"""
+    """Import database from JSON file (handles both users.db and scouting.db)"""
     if not current_user.has_role('superadmin'):
         return jsonify({'error': 'Super Admin access required'}), 403
     
@@ -498,8 +498,17 @@ def import_database():
         # Handle team-event relationships after both are imported
         if 'teams' in import_data['tables'] and 'events' in import_data['tables'] and 'team_event' in import_data.get('tables', {}):
             try:
-                # Clear existing team-event relationships
-                db.session.execute(db.text('DELETE FROM team_event'))
+                # Clear existing team-event relationships (default bind)
+                default_engine = db.get_engine(current_app._get_current_object())
+                try:
+                    with default_engine.begin() as conn:
+                        conn.execute(db.text('DELETE FROM team_event'))
+                except Exception:
+                    # Fall back to session-level delete if the raw table isn't present
+                    try:
+                        db.session.execute(db.text('DELETE FROM team_event'))
+                    except Exception:
+                        pass
                 
                 # Restore team-event relationships
                 for team_event_data in import_data['tables']['team_event']:
@@ -583,7 +592,7 @@ def import_database():
 @db_admin_bp.route('/clear', methods=['POST'])
 @login_required
 def clear_database():
-    """Clear all data from database (except superadmin user)"""
+    """Clear all scouting data from database (preserves users and roles in users.db)"""
     if not current_user.has_role('superadmin'):
         return jsonify({'error': 'Super Admin access required'}), 403
     
@@ -608,6 +617,9 @@ def clear_database():
         ]
         
         cleared_counts = {}
+        from flask import current_app as flask_current_app
+        
+        # Clear tables from default bind (scouting.db)
         for model_class in models_to_clear:
             try:
                 count = model_class.query.count()
@@ -616,6 +628,32 @@ def clear_database():
             except Exception as e:
                 logger.warning(f"Error clearing table {model_class.__name__}: {e}")
                 cleared_counts[model_class.__name__] = 0
+        
+        # Also clear association tables that might not be covered by the models above
+        try:
+            # Clear team_event association table
+            default_engine = db.get_engine(flask_current_app._get_current_object())
+            with default_engine.begin() as conn:
+                conn.execute(db.text('DELETE FROM team_event'))
+            logger.info("Cleared team_event association table")
+        except Exception as e:
+            logger.warning(f"Error clearing team_event table: {e}")
+        
+        # Clear user-related tables from users bind if they exist and we want to clear them
+        # Note: This preserves the superadmin user by not clearing User/Role tables
+        # If you want to clear ALL data including users, uncomment the following:
+        """
+        try:
+            users_engine = db.get_engine(flask_current_app._get_current_object(), bind='users')
+            with users_engine.begin() as conn:
+                # Clear user_roles association table
+                conn.execute(db.text('DELETE FROM user_roles'))
+                # Reset auto-increment for users bind
+                conn.execute(db.text('DELETE FROM sqlite_sequence'))
+            logger.info("Cleared user_roles association table from users bind")
+        except Exception as e:
+            logger.warning(f"Error clearing user_roles from users bind: {e}")
+        """
         
         db.session.commit()
         
