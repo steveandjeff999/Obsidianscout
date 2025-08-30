@@ -12,9 +12,38 @@ from app.models import User, Role, Team, Event, Match
 def initialize_database():
     """Initialize database with all required tables and default data"""
     print("Initializing database...")
-    
-    # Create all database tables
-    db.create_all()
+    # Create users bind tables first (if configured), then create other tables
+    from flask import current_app
+    try:
+        app = current_app._get_current_object()
+        # If a separate users bind is configured, create those tables first using the users engine.
+        if 'SQLALCHEMY_BINDS' in app.config and 'users' in app.config['SQLALCHEMY_BINDS']:
+            try:
+                users_engine = db.get_engine(app, bind='users')
+                from app.models import Role, User, user_roles
+                Role.__table__.create(users_engine, checkfirst=True)
+                User.__table__.create(users_engine, checkfirst=True)
+                user_roles.create(users_engine, checkfirst=True)
+            except Exception as e:
+                print(f"Could not create users bind tables explicitly: {e}")
+
+        # Create remaining tables on the default bind individually to avoid
+        # SQLAlchemy attempting to sort cross-bind dependencies.
+        default_engine = db.get_engine(app)
+        users_table_names = set(['role', 'user', 'user_roles'])
+        for table in db.metadata.sorted_tables:
+            if table.name in users_table_names:
+                continue
+            try:
+                table.create(default_engine, checkfirst=True)
+            except Exception as e:
+                print(f"Warning: could not create table {table.name}: {e}")
+    except Exception as e:
+        # Fallback to a single create_all if something unexpected occurs
+        try:
+            db.create_all()
+        except Exception as e2:
+            print(f"Database initialization error during fallback create_all: {e2}")
     
     # Initialize authentication system
     init_auth_system()
@@ -257,6 +286,34 @@ def create_default_game_config(config_path):
 def should_seed_sample_data():
     """Check if we should seed with sample data (only if no teams exist)"""
     return Team.query.count() == 0
+
+
+def ensure_default_tables(app):
+    """Ensure that all non-user (default-bind) tables exist.
+    This is safe to call at runtime when the default SQLite DB file
+    has been deleted or is missing tables. It creates tables per-table
+    to avoid SQLAlchemy sorting issues across multiple binds.
+    """
+    try:
+        db.init_app(app)
+        default_engine = db.get_engine(app)
+        users_table_names = set(['role', 'user', 'user_roles'])
+        for table in db.metadata.sorted_tables:
+            if table.name in users_table_names:
+                continue
+            try:
+                table.create(default_engine, checkfirst=True)
+            except Exception as te:
+                app.logger.debug(f"Could not create table {table.name}: {te}")
+        return True
+    except Exception as e:
+        try:
+            # Last resort: attempt db.create_all()
+            db.create_all()
+            return True
+        except Exception as e2:
+            print(f"ensure_default_tables failed: {e2}")
+            return False
 
 def seed_sample_data():
     """Add sample data to the database for testing"""

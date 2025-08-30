@@ -59,6 +59,10 @@
                                         <span class="badge bg-danger me-2">
                                             <i class="fas fa-crown me-1"></i>{{ role.name.title() }}
                                         </span>
+                                    {% elif role.name == 'superadmin' %}
+                                        <span class="badge bg-dark me-2">
+                                            <i class="fas fa-star me-1"></i>{{ role.name.title() }}
+                                        </span>
                                     {% elif role.name == 'analytics' %}
                                         <span class="badge bg-warning me-2">
                                             <i class="fas fa-chart-line me-1"></i>{{ role.name.title() }}
@@ -94,7 +98,14 @@
                     <div class="col-12">
                         <h6 class="fw-bold mb-3">Access Permissions:</h6>
                         <div class="row">
-                            {% if user.has_role('admin') %}
+                            {% if user.has_role('superadmin') %}
+                                <div class="col-md-12">
+                                    <div class="alert alert-dark">
+                                        <i class="fas fa-star me-2"></i>
+                                        <strong>Super Administrator Access:</strong> You have complete system access including database management, user administration, and all system configuration. You can export, import, and clear the entire database.
+                                    </div>
+                                </div>
+                            {% elif user.has_role('admin') %}
                                 <div class="col-md-12">
                                     <div class="alert alert-info">
                                         <i class="fas fa-crown me-2"></i>
@@ -128,13 +139,18 @@
                         <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
                     </a>
                     
-                    {% if user.has_role('admin') %}
                     <div>
+                        {% if user.has_role('superadmin') %}
+                        <a href="{{ url_for('db_admin.database_status') }}" class="btn btn-dark me-2">
+                            <i class="fas fa-database me-2"></i>Database Admin
+                        </a>
+                        {% endif %}
+                        {% if user.has_role('admin') %}
                         <a href="{{ url_for('auth.admin_settings') }}" class="btn btn-primary me-2">
                             <i class="fas fa-cogs me-2"></i>Admin Settings
                         </a>
+                        {% endif %}
                     </div>
-                    {% endif %}
                 </div>
             </div>
         </div>

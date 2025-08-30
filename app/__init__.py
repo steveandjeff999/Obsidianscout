@@ -246,6 +246,10 @@ def create_app(test_config=None):
     app.config.from_mapping(
         SECRET_KEY='dev',
         SQLALCHEMY_DATABASE_URI='sqlite:///' + os.path.join(app.instance_path, 'scouting.db'),
+        # Additional database bind for user accounts (stored separately)
+        SQLALCHEMY_BINDS={
+            'users': 'sqlite:///' + os.path.join(app.instance_path, 'users.db')
+        },
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SQLALCHEMY_ENGINE_OPTIONS={
             'pool_pre_ping': True,
@@ -429,9 +433,50 @@ def create_app(test_config=None):
     # Create database tables (only if they don't exist)
     with app.app_context():
         try:
-            db.create_all()
+            # If a separate users bind is configured, create those tables first using the users engine.
+            # Create user-related tables explicitly to avoid cross-bind foreign key ordering issues.
+            if 'SQLALCHEMY_BINDS' in app.config and 'users' in app.config['SQLALCHEMY_BINDS']:
+                try:
+                    users_engine = db.get_engine(app, bind='users')
+                    # Create user-related tables explicitly using their Table objects to
+                    # ensure the referenced tables exist before creating association tables.
+                    try:
+                        from app.models import Role, User, user_roles
+                        # Create tables in order: Role, User, association
+                        Role.__table__.create(users_engine, checkfirst=True)
+                        User.__table__.create(users_engine, checkfirst=True)
+                        user_roles.create(users_engine, checkfirst=True)
+                    except Exception as e:
+                        # Fall back to metadata-based create_all if something unexpected occurs
+                        users_table_names = ['role', 'user', 'user_roles']
+                        users_tables = [t for name, t in db.metadata.tables.items() if name in users_table_names]
+                        if users_tables:
+                            db.metadata.create_all(bind=users_engine, tables=users_tables)
+                except Exception as e:
+                    app.logger.info('Could not create users bind tables via metadata.create_all; will attempt full create_all: %s', e)
+
+            # Finally create all remaining tables on the default bind.
+            # Creating per-table avoids SQLAlchemy attempting to sort cross-bind
+            # dependencies which can raise NoReferencedTableError when tables
+            # are split across multiple SQLite files.
+            try:
+                default_engine = db.get_engine(app)
+                # Names of tables that belong to the users bind and were already created
+                users_table_names = set(['role', 'user', 'user_roles'])
+
+                # Create each table individually for the default bind, skipping user tables
+                for table in db.metadata.sorted_tables:
+                    if table.name in users_table_names:
+                        continue
+                    try:
+                        table.create(default_engine, checkfirst=True)
+                    except Exception as te:
+                        # Log but continue creating other tables
+                        app.logger.debug(f"Could not create table {table.name}: {te}")
+            except Exception as e:
+                print(f"Warning: Database tables may already exist or per-table create failed: {e}")
         except Exception as e:
-            print(f"Warning: Database tables may already exist: {e}")
+            print(f"Warning: Database initialization encountered an error: {e}")
     
     # Error handlers
     @app.errorhandler(404)

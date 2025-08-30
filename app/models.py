@@ -11,8 +11,9 @@ from app.utils.concurrent_models import ConcurrentModelMixin
 
 # Association table for user roles (many-to-many)
 user_roles = db.Table('user_roles',
-    db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
-    db.Column('role_id', db.Integer, db.ForeignKey('role.id'), primary_key=True)
+    db.Column('user_id', db.Integer, primary_key=True),
+    db.Column('role_id', db.Integer, primary_key=True),
+    info={'bind_key': 'users'}
 )
 
 # Create an association table for the many-to-many relationship between teams and events
@@ -23,6 +24,7 @@ team_event = db.Table('team_event',
 
 
 class User(UserMixin, ConcurrentModelMixin, db.Model):
+    __bind_key__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=True)
@@ -36,8 +38,8 @@ class User(UserMixin, ConcurrentModelMixin, db.Model):
     must_change_password = db.Column(db.Boolean, default=False)
     
     # Many-to-many relationship with roles
-    roles = db.relationship('Role', secondary=user_roles, lazy='subquery',
-                           backref=db.backref('users', lazy=True))
+    # roles relationship will be defined after Role class to provide explicit
+    # join conditions when the association table does not include DB-level FKs.
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -95,6 +97,7 @@ class User(UserMixin, ConcurrentModelMixin, db.Model):
         return f'<User {self.username}>'
 
 class Role(db.Model):
+    __bind_key__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), unique=True, nullable=False)
     description = db.Column(db.String(255))
@@ -102,18 +105,38 @@ class Role(db.Model):
     def __repr__(self):
         return f'<Role {self.name}>'
 
+# Define the many-to-many relationship between User and Role now that both
+# table objects are available. Use explicit join conditions because the
+# association table does not contain DB-level ForeignKey constraints (separate
+# DB files cannot enforce cross-file FKs).
+User.roles = db.relationship(
+    'Role',
+    secondary=user_roles,
+    primaryjoin=(User.id == user_roles.c.user_id),
+    secondaryjoin=(Role.id == user_roles.c.role_id),
+    backref=db.backref('users', lazy=True),
+    lazy='subquery'
+)
+
 class ScoutingTeamSettings(db.Model):
     """Model to store team-level settings and preferences"""
     id = db.Column(db.Integer, primary_key=True)
     scouting_team_number = db.Column(db.Integer, unique=True, nullable=False)
     account_creation_locked = db.Column(db.Boolean, default=False, nullable=False)
-    locked_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    locked_by_user_id = db.Column(db.Integer, nullable=True)
     locked_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationship with User who locked/unlocked accounts
-    locked_by_user = db.relationship('User', backref=db.backref('locked_teams', lazy=True))
+    # Accessor for the User who locked/unlocked accounts. We avoid an ORM
+    # relationship here because User lives in a separate DB bind; instead
+    # provide a runtime lookup by id.
+    @property
+    def locked_by_user(self):
+        try:
+            return User.query.get(self.locked_by_user_id) if self.locked_by_user_id else None
+        except Exception:
+            return None
     
     def __repr__(self):
         status = "LOCKED" if self.account_creation_locked else "UNLOCKED"
@@ -224,14 +247,19 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
     team_id = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=False)
     scouting_team_number = db.Column(db.Integer, nullable=True)
     scout_name = db.Column(db.String(50))
-    scout_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    scout_id = db.Column(db.Integer, nullable=True)
     scouting_station = db.Column(db.Integer)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     alliance = db.Column(db.String(10))  # 'red' or 'blue'
     data_json = db.Column(db.Text, nullable=False)  # JSON data based on game config
 
-    # Relationship to the User who submitted this entry (optional)
-    scout = db.relationship('User', backref=db.backref('scouting_entries', lazy=True))
+    # Accessor to the User who submitted this entry (optional)
+    @property
+    def scout(self):
+        try:
+            return User.query.get(self.scout_id) if self.scout_id else None
+        except Exception:
+            return None
     
     def __repr__(self):
         return f"Scouting Data for Team {self.team.team_number} in Match {self.match.match_number}"
@@ -762,7 +790,7 @@ class PitScoutingData(db.Model):
     event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=True)
     scouting_team_number = db.Column(db.Integer, nullable=True)
     scout_name = db.Column(db.String(50), nullable=False)
-    scout_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    scout_id = db.Column(db.Integer, nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     data_json = db.Column(db.Text, nullable=False)  # JSON data based on pit config
     
@@ -775,7 +803,12 @@ class PitScoutingData(db.Model):
     # Relationships
     team = db.relationship('Team', backref=db.backref('pit_scouting_data', lazy=True))
     event = db.relationship('Event', backref=db.backref('pit_scouting_data', lazy=True))
-    scout = db.relationship('User', backref=db.backref('pit_scouting_data', lazy=True))
+    @property
+    def scout(self):
+        try:
+            return User.query.get(self.scout_id) if self.scout_id else None
+        except Exception:
+            return None
     
     def __repr__(self):
         return f"<PitScoutingData Team {self.team.team_number} by {self.scout_name}>"
@@ -1388,7 +1421,7 @@ class SyncServer(ConcurrentModelMixin, db.Model):
     last_ping = db.Column(db.DateTime, nullable=True)
     sync_priority = db.Column(db.Integer, default=1)  # 1 = highest priority
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_by = db.Column(db.Integer, nullable=True)
     
     # Server metadata
     server_version = db.Column(db.String(50), nullable=True)
@@ -1587,7 +1620,7 @@ class SyncConfig(ConcurrentModelMixin, db.Model):
     data_type = db.Column(db.String(20), default='string')  # 'string', 'integer', 'boolean', 'json'
     description = db.Column(db.String(255), nullable=True)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    updated_by = db.Column(db.Integer, nullable=True)
     
     @classmethod
     def get_value(cls, key, default=None):
@@ -1699,6 +1732,7 @@ class LoginAttempt(db.Model):
     @staticmethod
     def record_attempt(ip_address, username=None, team_number=None, success=False, user_agent=None):
         """Record a login attempt"""
+        from sqlalchemy.exc import OperationalError
         attempt = LoginAttempt(
             ip_address=ip_address,
             username=username,
@@ -1707,8 +1741,18 @@ class LoginAttempt(db.Model):
             user_agent=user_agent
         )
         db.session.add(attempt)
-        db.session.commit()
-        return attempt
+        try:
+            db.session.commit()
+            return attempt
+        except OperationalError as oe:
+            # Likely missing table because default DB was deleted. Try to recreate
+            from app.utils.database_init import ensure_default_tables
+            from flask import current_app
+            db.session.rollback()
+            ensure_default_tables(current_app._get_current_object())
+            db.session.add(attempt)
+            db.session.commit()
+            return attempt
     
     @staticmethod
     def get_failed_attempts_count(ip_address, username=None, since_minutes=60):
@@ -1717,11 +1761,22 @@ class LoginAttempt(db.Model):
         
         cutoff_time = datetime.utcnow() - timedelta(minutes=since_minutes)
         
-        query = LoginAttempt.query.filter(
-            LoginAttempt.ip_address == ip_address,
-            LoginAttempt.success == False,
-            LoginAttempt.attempt_time >= cutoff_time
-        )
+        from sqlalchemy.exc import OperationalError
+        try:
+            query = LoginAttempt.query.filter(
+                LoginAttempt.ip_address == ip_address,
+                LoginAttempt.success == False,
+                LoginAttempt.attempt_time >= cutoff_time
+            )
+        except OperationalError:
+            from app.utils.database_init import ensure_default_tables
+            from flask import current_app
+            ensure_default_tables(current_app._get_current_object())
+            query = LoginAttempt.query.filter(
+                LoginAttempt.ip_address == ip_address,
+                LoginAttempt.success == False,
+                LoginAttempt.attempt_time >= cutoff_time
+            )
         
         # Optionally filter by username if provided
         if username:
@@ -1740,17 +1795,29 @@ class LoginAttempt(db.Model):
     @staticmethod
     def clear_successful_attempts(ip_address, username=None):
         """Clear failed attempts after successful login"""
-        query = LoginAttempt.query.filter(
-            LoginAttempt.ip_address == ip_address,
-            LoginAttempt.success == False
-        )
-        
-        if username:
-            query = query.filter(LoginAttempt.username == username)
-        
-        # Delete old failed attempts for this IP/username
-        query.delete()
-        db.session.commit()
+        from sqlalchemy.exc import OperationalError
+        try:
+            query = LoginAttempt.query.filter(
+                LoginAttempt.ip_address == ip_address,
+                LoginAttempt.success == False
+            )
+            if username:
+                query = query.filter(LoginAttempt.username == username)
+            query.delete()
+            db.session.commit()
+        except OperationalError:
+            from app.utils.database_init import ensure_default_tables
+            from flask import current_app
+            db.session.rollback()
+            ensure_default_tables(current_app._get_current_object())
+            query = LoginAttempt.query.filter(
+                LoginAttempt.ip_address == ip_address,
+                LoginAttempt.success == False
+            )
+            if username:
+                query = query.filter(LoginAttempt.username == username)
+            query.delete()
+            db.session.commit()
     
     @staticmethod 
     def cleanup_old_attempts(days_old=30):
@@ -1759,9 +1826,20 @@ class LoginAttempt(db.Model):
         
         cutoff_time = datetime.utcnow() - timedelta(days=days_old)
         
-        old_attempts = LoginAttempt.query.filter(
-            LoginAttempt.attempt_time < cutoff_time
-        ).delete()
-        
-        db.session.commit()
-        return old_attempts
+        from sqlalchemy.exc import OperationalError
+        try:
+            old_attempts = LoginAttempt.query.filter(
+                LoginAttempt.attempt_time < cutoff_time
+            ).delete()
+            db.session.commit()
+            return old_attempts
+        except OperationalError:
+            from app.utils.database_init import ensure_default_tables
+            from flask import current_app
+            db.session.rollback()
+            ensure_default_tables(current_app._get_current_object())
+            old_attempts = LoginAttempt.query.filter(
+                LoginAttempt.attempt_time < cutoff_time
+            ).delete()
+            db.session.commit()
+            return old_attempts
