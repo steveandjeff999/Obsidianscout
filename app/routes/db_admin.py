@@ -354,6 +354,28 @@ def import_database():
             except Exception as e:
                 logger.warning(f"Error clearing table {model_class.__name__}: {e}")
 
+        # Additional explicit clearing for ScoutingTeamSettings to ensure it's completely cleared
+        try:
+            scouting_engine = db.get_engine(flask_current_app._get_current_object())
+            with scouting_engine.begin() as conn:
+                # Check how many records exist before clearing
+                result = conn.execute(db.text('SELECT COUNT(*) FROM scouting_team_settings'))
+                count_before = result.fetchone()[0]
+                if count_before > 0:
+                    logger.warning(f"Found {count_before} records in scouting_team_settings before explicit clearing")
+                
+                conn.execute(db.text('DELETE FROM scouting_team_settings'))
+                
+                # Verify clearing was successful
+                result = conn.execute(db.text('SELECT COUNT(*) FROM scouting_team_settings'))
+                count_after = result.fetchone()[0]
+                if count_after > 0:
+                    logger.error(f"Failed to clear scouting_team_settings table - {count_after} records remain")
+                else:
+                    logger.info("Successfully cleared scouting_team_settings table")
+        except Exception as e:
+            logger.warning(f"Error in explicit clearing of scouting_team_settings: {e}")
+
         # Reset auto-increment counters for each SQLite file/engine used
         try:
             engines = [db.get_engine(flask_current_app._get_current_object())]
@@ -406,8 +428,18 @@ def import_database():
         for model_class, table_name in import_order:
             if table_name in import_data['tables']:
                 count = 0
+                seen_scouting_team_numbers = set()  # Track scouting_team_numbers to prevent duplicates
+                
                 for record_data in import_data['tables'][table_name]:
                     try:
+                        # Special handling for ScoutingTeamSettings to prevent duplicate scouting_team_number
+                        if table_name == 'scouting_team_settings':
+                            scouting_team_number = record_data.get('scouting_team_number')
+                            if scouting_team_number in seen_scouting_team_numbers:
+                                logger.warning(f"Skipping duplicate scouting_team_number {scouting_team_number} in import data")
+                                continue
+                            seen_scouting_team_numbers.add(scouting_team_number)
+                        
                         # Create new record
                         record = model_class()
                         for key, value in record_data.items():
@@ -619,12 +651,33 @@ def clear_database():
         cleared_counts = {}
         from flask import current_app as flask_current_app
         
-        # Clear tables from default bind (scouting.db)
+        # Clear tables from default bind (scouting.db) using raw SQL for consistency
         for model_class in models_to_clear:
             try:
-                count = model_class.query.count()
-                model_class.query.delete()
-                cleared_counts[model_class.__name__] = count
+                table_name = model_class.__tablename__
+                bind_key = getattr(model_class, '__bind_key__', None)
+                if bind_key:
+                    engine = db.get_engine(flask_current_app._get_current_object(), bind=bind_key)
+                else:
+                    engine = db.get_engine(flask_current_app._get_current_object())
+
+                # Get count before clearing
+                try:
+                    with engine.begin() as conn:
+                        result = conn.execute(db.text(f'SELECT COUNT(*) FROM {table_name}'))
+                        count = result.fetchone()[0]
+                except Exception:
+                    count = 0
+
+                # Execute delete using raw SQL
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(db.text(f'DELETE FROM {table_name}'))
+                    cleared_counts[model_class.__name__] = count
+                    logger.info(f"Cleared {count} records from {table_name}")
+                except Exception as inner_e:
+                    logger.warning(f"Error executing DELETE on {table_name}: {inner_e}")
+                    cleared_counts[model_class.__name__] = 0
             except Exception as e:
                 logger.warning(f"Error clearing table {model_class.__name__}: {e}")
                 cleared_counts[model_class.__name__] = 0
@@ -638,6 +691,31 @@ def clear_database():
             logger.info("Cleared team_event association table")
         except Exception as e:
             logger.warning(f"Error clearing team_event table: {e}")
+        
+        # Explicitly clear scouting_team_settings to ensure complete clearing
+        try:
+            scouting_engine = db.get_engine(flask_current_app._get_current_object())
+            with scouting_engine.begin() as conn:
+                # Check how many records exist before clearing
+                result = conn.execute(db.text('SELECT COUNT(*) FROM scouting_team_settings'))
+                count_before = result.fetchone()[0]
+                if count_before > 0:
+                    logger.info(f"Clearing {count_before} records from scouting_team_settings")
+                
+                conn.execute(db.text('DELETE FROM scouting_team_settings'))
+                
+                # Verify clearing was successful
+                result = conn.execute(db.text('SELECT COUNT(*) FROM scouting_team_settings'))
+                count_after = result.fetchone()[0]
+                if count_after > 0:
+                    logger.error(f"Failed to clear scouting_team_settings table - {count_after} records remain")
+                    cleared_counts['ScoutingTeamSettings'] = count_before - count_after
+                else:
+                    logger.info("Successfully cleared scouting_team_settings table")
+                    cleared_counts['ScoutingTeamSettings'] = count_before
+        except Exception as e:
+            logger.warning(f"Error clearing scouting_team_settings: {e}")
+            cleared_counts['ScoutingTeamSettings'] = 0
         
         # Clear user-related tables from users bind if they exist and we want to clear them
         # Note: This preserves the superadmin user by not clearing User/Role tables
