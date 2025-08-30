@@ -138,6 +138,63 @@
         </div>
     </div>
 
+    <!-- Database Backup/Restore Operations -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card border-warning">
+                <div class="card-header bg-warning">
+                    <h5><i class="fas fa-database"></i> Database Backup & Restore</h5>
+                    <small class="text-muted">Export, import, or clear database data</small>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h6 class="text-success"><i class="fas fa-download"></i> Export Database</h6>
+                            <p class="text-muted">Download all database data as JSON file</p>
+                            <button class="btn btn-success" onclick="exportDatabase()">
+                                <i class="fas fa-download"></i> Export to JSON
+                            </button>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <h6 class="text-primary"><i class="fas fa-upload"></i> Import Database</h6>
+                            <p class="text-muted">Upload and restore database from JSON file</p>
+                            <form id="importForm" enctype="multipart/form-data">
+                                <input type="file" class="form-control mb-2" id="importFile" name="import_file" accept=".json" required>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-upload"></i> Import from JSON
+                                </button>
+                            </form>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <h6 class="text-danger"><i class="fas fa-trash-alt"></i> Clear Database</h6>
+                            <p class="text-muted">Remove all data (keeps superadmin user)</p>
+                            <button class="btn btn-danger" onclick="clearDatabase()">
+                                <i class="fas fa-trash-alt"></i> Clear All Data
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>Important:</strong> 
+                                <ul class="mb-0 mt-2">
+                                    <li>Export downloads a timestamped JSON file directly to your browser</li>
+                                    <li>Import will replace all existing data with the uploaded file contents</li>
+                                    <li>Clear operation preserves the superadmin user account</li>
+                                    <li>Always backup before importing or clearing!</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- CR-SQLite Status -->
     <div class="row mt-4">
         <div class="col-12">
@@ -328,6 +385,134 @@ function testConcurrentOps() {
         hideLoading();
     });
 }
+
+function exportDatabase() {
+    if (!confirm('This will export the entire database to a JSON file and download it to your browser. Continue?')) return;
+    
+    showLoading();
+    
+    // Use fetch to get the file and trigger download
+    fetch('{{ url_for("db_admin.export_database") }}', {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json',
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        // Get filename from response headers
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'database_export.json';
+        if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+            if (filenameMatch) {
+                filename = filenameMatch[1];
+            }
+        }
+        
+        return response.blob().then(blob => ({ blob, filename }));
+    })
+    .then(({ blob, filename }) => {
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        
+        // Trigger download
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Clean up
+        window.URL.revokeObjectURL(url);
+        
+        alert('Database export downloaded successfully!');
+    })
+    .catch(error => {
+        console.error('Export error:', error);
+        alert('Error exporting database: ' + error.message);
+    })
+    .finally(() => {
+        hideLoading();
+    });
+}
+
+function clearDatabase() {
+    if (!confirm('WARNING: This will delete ALL database data except the superadmin user. This action cannot be undone. Continue?')) return;
+    if (!confirm('Are you absolutely sure? This will permanently delete all scouting data, teams, matches, etc.')) return;
+    
+    showLoading();
+    fetch('{{ url_for("db_admin.clear_database") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Database cleared successfully! Superadmin user preserved.');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error clearing database');
+    })
+    .finally(() => {
+        hideLoading();
+    });
+}
+
+// Handle import form submission
+document.getElementById('importForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const fileInput = document.getElementById('importFile');
+    if (!fileInput.files[0]) {
+        alert('Please select a file to import');
+        return;
+    }
+    
+    if (!confirm('WARNING: This will replace ALL existing database data with the contents of the uploaded file. Continue?')) return;
+    if (!confirm('Are you absolutely sure? This will permanently overwrite all current data.')) return;
+    
+    showLoading();
+    
+    const formData = new FormData();
+    formData.append('import_file', fileInput.files[0]);
+    
+    fetch('{{ url_for("db_admin.import_database") }}', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            let message = 'Database imported successfully!\n\nImported records:\n';
+            for (const [table, count] of Object.entries(data.imported_counts)) {
+                message += `${table}: ${count}\n`;
+            }
+            alert(message);
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error importing database');
+    })
+    .finally(() => {
+        hideLoading();
+    });
+});
 
 // Auto-refresh stats every 30 seconds
 setInterval(refreshStats, 30000);

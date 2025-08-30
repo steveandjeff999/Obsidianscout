@@ -23,7 +23,7 @@ class SyncServer(ConcurrentModelMixin, db.Model):
     last_ping = db.Column(db.DateTime, nullable=True)
     sync_priority = db.Column(db.Integer, default=1)  # 1 = highest priority
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_by = db.Column(db.Integer, nullable=True)
     
     # Server metadata
     server_version = db.Column(db.String(50), nullable=True)
@@ -217,7 +217,7 @@ class SyncConfig(ConcurrentModelMixin, db.Model):
     data_type = db.Column(db.String(20), default='string')  # 'string', 'integer', 'boolean', 'json'
     description = db.Column(db.String(255), nullable=True)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    updated_by = db.Column(db.Integer, nullable=True)
     
     @classmethod
     def get_value(cls, key, default=None):

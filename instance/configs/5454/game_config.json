@@ -225,7 +225,7 @@
   "scouting_stations": 6,
   "season": 2025,
   "tba_api_settings": {
-    "auth_key": "your auth key",
+    "auth_key": "",
     "base_url": "https://www.thebluealliance.com/api/v3"
   },
   "teleop_period": {
