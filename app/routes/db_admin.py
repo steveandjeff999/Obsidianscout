@@ -332,22 +332,49 @@ def import_database():
             }
         
         # Clear existing data more thoroughly
+        from flask import current_app as flask_current_app
         for model_class in models_to_clear:
             try:
-                # Use raw SQL to ensure complete clearing
+                # Use the proper engine for the model's bind (handles separate users DB)
                 table_name = model_class.__tablename__
-                db.session.execute(db.text(f'DELETE FROM {table_name}'))
-                logger.info(f"Cleared table {table_name}")
+                bind_key = getattr(model_class, '__bind_key__', None)
+                if bind_key:
+                    engine = db.get_engine(flask_current_app._get_current_object(), bind=bind_key)
+                else:
+                    engine = db.get_engine(flask_current_app._get_current_object())
+
+                # Execute delete using a connection from the appropriate engine
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(db.text(f'DELETE FROM {table_name}'))
+                    logger.info(f"Cleared table {table_name} (bind={bind_key or 'default'})")
+                except Exception as inner_e:
+                    # Log and continue; some tables may not exist on that bind
+                    logger.warning(f"Error executing DELETE on {table_name} (bind={bind_key}): {inner_e}")
             except Exception as e:
                 logger.warning(f"Error clearing table {model_class.__name__}: {e}")
-        
-        # Reset auto-increment counters
+
+        # Reset auto-increment counters for each SQLite file/engine used
         try:
-            db.session.execute(db.text('DELETE FROM sqlite_sequence'))
-            logger.info("Reset auto-increment counters")
+            engines = [db.get_engine(flask_current_app._get_current_object())]
+            # Add configured binds (e.g., 'users') if present
+            binds = flask_current_app.config.get('SQLALCHEMY_BINDS', {}) or {}
+            for bind_key in binds.keys():
+                try:
+                    engines.append(db.get_engine(flask_current_app._get_current_object(), bind=bind_key))
+                except Exception:
+                    pass
+
+            for engine in engines:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(db.text('DELETE FROM sqlite_sequence'))
+                    logger.info("Reset auto-increment counters on engine")
+                except Exception as e:
+                    logger.warning(f"Error resetting auto-increment on engine: {e}")
         except Exception as e:
-            logger.warning(f"Error resetting auto-increment: {e}")
-        
+            logger.warning(f"Error preparing auto-increment reset: {e}")
+
         db.session.commit()
         
         # Import data (in dependency order)
@@ -436,24 +463,33 @@ def import_database():
         # Handle user-role relationships after both are imported
         if 'users' in import_data['tables'] and 'user_roles' in import_data.get('tables', {}):
             try:
-                # Clear existing user-role relationships
-                db.session.execute(db.text('DELETE FROM user_roles'))
-                
+                # Clear existing user-role relationships (users bind)
+                users_engine = db.get_engine(current_app._get_current_object(), bind='users')
+                try:
+                    with users_engine.begin() as conn:
+                        conn.execute(db.text('DELETE FROM user_roles'))
+                except Exception:
+                    # Fall back to session-level delete if the raw table isn't present
+                    try:
+                        db.session.execute(db.text('DELETE FROM user_roles'))
+                    except Exception:
+                        pass
+
                 # Restore user-role relationships
                 for user_role_data in import_data['tables']['user_roles']:
                     try:
                         user_id = user_role_data.get('user_id')
                         role_id = user_role_data.get('role_id')
-                        
+
                         # Find the user and role by their original IDs or by matching data
                         user = User.query.filter_by(id=user_id).first()
                         role = Role.query.filter_by(id=role_id).first()
-                        
+
                         if user and role and role not in user.roles:
                             user.roles.append(role)
                     except Exception as e:
                         logger.warning(f"Error restoring user-role relationship: {e}")
-                
+
                 db.session.commit()
                 logger.info("User-role relationships restored")
             except Exception as e:
