@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block title %}Manage Notifications{% endblock %}
+{% block content %}
+  <div class="row">
+    <div class="col-md-8">
+      <h2>Site Notifications</h2>
+      <form method="POST" action="{{ url_for('auth.create_notification') }}">
+        <div class="mb-2">
+          <label class="form-label">Message</label>
+          <textarea name="message" class="form-control" required></textarea>
+        </div>
+        <div class="mb-2 d-flex gap-2">
+          <select name="level" class="form-select w-auto">
+            <option value="info">Information (blue)</option>
+            <option value="important">Important (yellow)</option>
+            <option value="urgent">Urgent (red)</option>
+          </select>
+          <select name="audience" class="form-select w-auto">
+            <option value="site">Site-wide</option>
+            <option value="teams">Teams (comma-separated team numbers in teams field)</option>
+            <option value="users">Specific users (comma-separated usernames in users field)</option>
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Teams (optional)</label>
+          <input name="teams" class="form-control" placeholder="e.g. 1234, 5678">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Users (optional)</label>
+          <input name="users" class="form-control" placeholder="e.g. alice,bob">
+        </div>
+        <div>
+          <button class="btn btn-primary">Create Notification</button>
+        </div>
+      </form>
+
+      <hr>
+
+      <h3>Existing Notifications</h3>
+      <div class="list-group">
+        {% for n in notifications %}
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+              <strong>[{{ n.level|upper }}]</strong> {{ n.message|safe }}
+              <div class="small text-muted">Audience: {{ n.audience }} Teams: {{ n.teams|join(', ') }} Users: {{ n.users|join(', ') }}</div>
+            </div>
+            <div>
+              <form method="POST" action="{{ url_for('auth.delete_notification', notif_id=n.id) }}" style="display:inline">
+                <button class="btn btn-sm btn-danger">Delete</button>
+              </form>
+              <form method="POST" action="{{ url_for('auth.send_notification_as_email', notif_id=n.id) }}" style="display:inline; margin-left:6px;">
+                <button class="btn btn-sm btn-primary">Send as Email</button>
+              </form>
+            </div>
+          </div>
+        {% else %}
+          <div class="list-group-item">No notifications configured.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+{% endblock %}

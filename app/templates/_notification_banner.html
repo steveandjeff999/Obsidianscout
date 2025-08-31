@@ -1,0 +1,58 @@
+{# Notification banner include - expects `site_notifications` in context #}
+{# Only show notifications that apply to the current viewer (site-wide, their team, or their username) #}
+{% if site_notifications %}
+  <div id="site-notification-wrapper" class="container-fluid" style="position:relative;top:0;left:0;right:0;"> 
+    {% for n in site_notifications %}
+      {%- set show = False -%}
+      {# Site-wide always shows #}
+      {% if n.audience == 'site' %}
+        {% set show = True %}
+      {% elif n.audience == 'teams' %}
+        {% if current_user.is_authenticated and current_user.scouting_team_number %}
+          {# teams may be saved as strings or numbers; compare both ways #}
+          {% set team_str = current_user.scouting_team_number|string %}
+          {% if team_str in (n.teams or []) or current_user.scouting_team_number in (n.teams or []) %}
+            {% set show = True %}
+          {% endif %}
+        {% endif %}
+      {% elif n.audience == 'users' %}
+        {% if current_user.is_authenticated and current_user.username %}
+          {% if current_user.username in (n.users or []) %}
+            {% set show = True %}
+          {% endif %}
+        {% endif %}
+      {% endif %}
+
+      {% if show %}
+      <div class="site-notification alert notification-level-{{ n.level }} alert-dismissible fade show mb-0 d-flex align-items-center justify-content-between" role="alert">
+        <div class="d-flex align-items-center">
+          <strong class="me-2">{% if n.level == 'urgent' %}URGENT{% elif n.level == 'important' %}IMPORTANT{% else %}INFO{% endif %}</strong>
+          <div class="notification-message">{{ n.message | safe }}</div>
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2" aria-label="Close" data-notif-id="{{ n.id }}"></button>
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+  <style>
+    /* Embedded banner styles - use hard-coded high-contrast colors so themes/dark-mode don't override them */
+    .site-notification { border-radius: 0; margin: 0; padding: 0.75rem 1rem; }
+    .site-notification .notification-message { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Importance colors - literal values to resist theme overrides */
+    .notification-level-info { background-color: #0d6efd !important; color: #ffffff !important; }
+    .notification-level-important { background-color: #ffc107 !important; color: #222222 !important; }
+    .notification-level-urgent { background-color: #dc3545 !important; color: #ffffff !important; }
+
+    /* Dark mode overrides to keep contrast correct */
+    .dark-mode .notification-level-info { background-color: #0b5ed7 !important; color: #ffffff !important; }
+    .dark-mode .notification-level-important { background-color: #ffca2c !important; color: #111111 !important; }
+    .dark-mode .notification-level-urgent { background-color: #c82333 !important; color: #ffffff !important; }
+
+    /* Make sure the banner sits below the navbar and doesn't overlap content */
+  /* ensure banner sits below sticky header (header z-index is 1051) */
+  #site-notification-wrapper { z-index: 1049; box-shadow: 0 1px 2px rgba(0,0,0,0.06); position: relative; }
+  /* no empty rules here */
+  </style>
+  <script src="{{ url_for('static', filename='js/notification-banner.js') }}"></script>
+{% endif %}

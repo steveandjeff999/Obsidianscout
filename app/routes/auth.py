@@ -14,6 +14,11 @@ from app.utils.system_check import SystemCheck
 from app.utils.theme_manager import ThemeManager
 from werkzeug.utils import secure_filename
 import os
+from app.utils import notifications as notif_util
+from app.utils import emailer as emailer_util
+from app.utils import token as token_util
+import json
+ 
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -38,6 +43,12 @@ def role_required(*roles):
                     'auth.manage_users', 'auth.edit_user', 'auth.delete_user', 
                     'auth.update_user', 'auth.add_user', 'auth.logout', 'auth.profile',
                     'auth.delete_user_permanently', 'auth.hard_delete_user', 'auth.restore_user'
+                ]
+                # Allow superadmins to manage site notifications without being redirected
+                allowed_superadmin_routes += [
+                    'auth.notifications_page', 'auth.create_notification', 'auth.delete_notification',
+                    'auth.email_settings', 'auth.email_test', 'auth.send_notification_as_email',
+                    'auth.dismiss_notification', 'auth.get_dismissed_notifications'
                 ]
                 if request.endpoint not in allowed_superadmin_routes:
                     return redirect(url_for('auth.manage_users'))
@@ -177,6 +188,85 @@ def login():
     
     return render_template('auth/login.html', **get_theme_context())
 
+
+@bp.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        if not email:
+            flash('Email is required', 'error')
+            return redirect(url_for('auth.forgot_password'))
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            # Don't reveal user existence; send generic message
+            flash('If an account with that email exists, a reset link has been sent.', 'info')
+            return redirect(url_for('auth.login'))
+
+        token = token_util.generate_reset_token(email)
+        reset_url = url_for('auth.reset_password', token=token, _external=True)
+        subject = 'ObsidianScout password reset'
+        body = f"Hello {user.username},\n\nA password reset was requested for your account.\n\nUsername: {user.username}\n\nClick the link below to reset your password (valid for 1 hour):\n\n{reset_url}\n\nIf you did not request this, please ignore this email."
+        ok, msg = emailer_util.send_email(to=email, subject=subject, body=body)
+        if ok:
+            flash('If an account with that email exists, a reset link has been sent.', 'info')
+            return redirect(url_for('auth.login'))
+
+        # Sending failed. Persist the outgoing reset email to instance/reset_outbox.json for manual review
+        try:
+            outbox_path = os.path.join(current_app.instance_path, 'reset_outbox.json')
+            if not os.path.exists(current_app.instance_path):
+                os.makedirs(current_app.instance_path, exist_ok=True)
+            out = []
+            if os.path.exists(outbox_path):
+                try:
+                    with open(outbox_path, 'r', encoding='utf-8') as f:
+                        out = json.load(f) or []
+                except Exception:
+                    out = []
+            entry = {
+                'to': email,
+                'subject': subject,
+                'body': body,
+                'created_at': datetime.utcnow().isoformat() + 'Z'
+            }
+            out.append(entry)
+            with open(outbox_path, 'w', encoding='utf-8') as f:
+                json.dump(out, f, indent=2)
+        except Exception:
+            current_app.logger.exception('Failed to write reset_outbox.json')
+
+        # Show helpful messages: generic flash plus debug-mode immediate link for testing
+        flash('Failed to send reset email; the reset has been queued for manual review by an administrator.', 'warning')
+        if current_app.debug:
+            # In debug mode, render a page showing the reset link so you can finish testing.
+            return render_template('auth/forgot_password.html', debug_reset_url=reset_url, **get_theme_context())
+        return redirect(url_for('auth.login'))
+    return render_template('auth/forgot_password.html', **get_theme_context())
+
+
+@bp.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    email = token_util.verify_reset_token(token)
+    if not email:
+        flash('Reset link is invalid or expired.', 'error')
+        return redirect(url_for('auth.login'))
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        flash('Invalid reset link.', 'error')
+        return redirect(url_for('auth.login'))
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm = request.form.get('confirm')
+        if not password or password != confirm:
+            flash('Passwords do not match or are empty.', 'error')
+            return redirect(url_for('auth.reset_password', token=token))
+        user.set_password(password)
+        user.must_change_password = False
+        db.session.commit()
+        flash('Password has been reset. You may now log in.', 'success')
+        return redirect(url_for('auth.login'))
+    return render_template('auth/reset_password.html', token=token, **get_theme_context())
+
 @bp.route('/change-password', methods=['GET', 'POST'])
 @login_required
 def change_password():
@@ -230,11 +320,13 @@ def change_password():
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
+
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
         confirm_password = request.form['confirm_password']
         team_number = request.form.get('team_number')
+        email = request.form.get('email')
 
         if not team_number:
             flash('Team number is required.', 'error')
@@ -256,7 +348,15 @@ def register():
             flash('Username already exists.', 'error')
             return redirect(url_for('auth.register'))
 
-        new_user = User(username=username, scouting_team_number=team_number)
+        # Normalize email value: treat empty string as None
+        if email == '':
+            email = None
+        # Check for duplicate email if provided
+        if email and User.query.filter_by(email=email).first():
+            flash('Email already exists.', 'error')
+            return redirect(url_for('auth.register'))
+
+        new_user = User(username=username, email=email, scouting_team_number=team_number)
         new_user.set_password(password)
         db.session.add(new_user)
         db.session.commit()
@@ -310,31 +410,162 @@ def logout():
 @login_required
 def profile():
     if request.method == 'POST':
-        if 'profile_picture' in request.files:
+        # If a profile picture was uploaded, handle it first
+        if 'profile_picture' in request.files and request.files['profile_picture'].filename:
             file = request.files['profile_picture']
-            if file and file.filename:
-                filename = secure_filename(file.filename)
-                ext = os.path.splitext(filename)[1].lower()
-                if ext in ['.jpg', '.jpeg', '.png']:
-                    if len(file.read()) > 2 * 1024 * 1024:
-                        flash('Profile picture must be less than 2MB.', 'error')
-                        return redirect(request.url)
-                    file.seek(0)
-                    avatar_dir = os.path.join(current_app.root_path, 'static', 'img', 'avatars')
-                    if not os.path.exists(avatar_dir):
-                        os.makedirs(avatar_dir)
-                    avatar_filename = f'user_{current_user.id}{ext}'
-                    file_path = os.path.join(avatar_dir, avatar_filename)
-                    file.save(file_path)
-                    current_user.profile_picture = f'img/avatars/{avatar_filename}'
-                    db.session.commit()
-                    flash('Profile picture updated!', 'success')
-                else:
-                    flash('Only JPG and PNG images are allowed.', 'error')
+            filename = secure_filename(file.filename)
+            ext = os.path.splitext(filename)[1].lower()
+            if ext in ['.jpg', '.jpeg', '.png']:
+                if len(file.read()) > 2 * 1024 * 1024:
+                    flash('Profile picture must be less than 2MB.', 'error')
+                    return redirect(request.url)
+                file.seek(0)
+                avatar_dir = os.path.join(current_app.root_path, 'static', 'img', 'avatars')
+                if not os.path.exists(avatar_dir):
+                    os.makedirs(avatar_dir)
+                avatar_filename = f'user_{current_user.id}{ext}'
+                file_path = os.path.join(avatar_dir, avatar_filename)
+                file.save(file_path)
+                current_user.profile_picture = f'img/avatars/{avatar_filename}'
+                db.session.commit()
+                flash('Profile picture updated!', 'success')
             else:
-                flash('No file selected.', 'error')
+                flash('Only JPG and PNG images are allowed.', 'error')
+            return redirect(request.url)
+
+        # Otherwise process username/email update from the form
+        new_username = request.form.get('username')
+        new_email = request.form.get('email')
+
+        # Validate username uniqueness if changed
+        if new_username and new_username != current_user.username:
+            if User.query.filter_by(username=new_username).first():
+                flash('Username already exists.', 'error')
+                return redirect(request.url)
+            current_user.username = new_username
+
+        # Normalize email (empty string => None) and validate uniqueness
+        if new_email == '':
+            new_email = None
+        if new_email and new_email != current_user.email:
+            if User.query.filter_by(email=new_email).first():
+                flash('Email already exists.', 'error')
+                return redirect(request.url)
+            current_user.email = new_email
+        elif new_email is None:
+            current_user.email = None
+
+        db.session.commit()
+        flash('Profile updated successfully.', 'success')
         return redirect(request.url)
     return render_template('auth/profile.html', user=current_user, **get_theme_context())
+
+
+# Notifications management (simple file-backed storage to avoid DB migrations)
+@bp.context_processor
+def inject_notifications():
+    try:
+        current = notif_util.load_notifications()
+    except Exception:
+        current = []
+    # Filter out expired notifications here if desired
+    return {'site_notifications': current}
+
+
+@bp.route('/notifications', methods=['GET'])
+@role_required('superadmin')
+def notifications_page():
+    notifs = notif_util.load_notifications()
+    return render_template('auth/notifications.html', notifications=notifs, **get_theme_context())
+
+
+@bp.route('/notifications/create', methods=['POST'])
+@role_required('superadmin')
+def create_notification():
+    data = request.form or request.get_json() or {}
+    message = data.get('message') or ''
+    level = data.get('level') or 'info'
+    audience = data.get('audience') or 'site'
+    teams = data.get('teams') or []
+    users = data.get('users') or []
+    if isinstance(teams, str) and teams:
+        teams = [t.strip() for t in teams.split(',') if t.strip()]
+    notif = notif_util.add_notification(message=message, level=level, audience=audience, teams=teams, users=users)
+    flash('Notification created', 'success')
+    return redirect(url_for('auth.notifications_page'))
+
+
+@bp.route('/notifications/delete/<notif_id>', methods=['POST'])
+@role_required('superadmin')
+def delete_notification(notif_id):
+    notif_util.remove_notification(notif_id)
+    flash('Notification removed', 'info')
+    return redirect(url_for('auth.notifications_page'))
+
+
+@bp.route('/notifications/dismiss', methods=['POST'])
+@login_required
+def dismiss_notification():
+    """Record a server-side dismissal for the current user (optional)"""
+    data = request.get_json() or {}
+    notif_id = data.get('notif_id')
+    if not notif_id:
+        return jsonify({'success': False, 'message': 'notif_id required'}), 400
+    ok = notif_util.dismiss_for_user(current_user.username, notif_id)
+    return jsonify({'success': bool(ok)})
+
+
+@bp.route('/notifications/dismissed', methods=['GET'])
+@login_required
+def get_dismissed_notifications():
+    dismissed = notif_util.get_dismissed_for_user(current_user.username)
+    return jsonify({'dismissed': dismissed})
+
+
+@bp.route('/notifications/send-email/<notif_id>', methods=['POST'])
+@role_required('superadmin')
+def send_notification_as_email(notif_id):
+    notifs = notif_util.load_notifications()
+    notif = next((n for n in notifs if str(n.get('id')) == str(notif_id)), None)
+    if not notif:
+        flash('Notification not found', 'error')
+        return redirect(url_for('auth.notifications_page'))
+
+    # Resolve recipients based on audience
+    recipients = []
+    if notif.get('audience') == 'site':
+        # all users with emails
+        recipients = [u.email for u in User.query.filter(User.email != None).all() if u.email]
+    elif notif.get('audience') == 'teams':
+        teams = notif.get('teams') or []
+        for t in teams:
+            try:
+                tn = int(t)
+            except Exception:
+                continue
+            recipients += [u.email for u in User.query.filter_by(scouting_team_number=tn).filter(User.email != None).all() if u.email]
+    elif notif.get('audience') == 'users':
+        users = notif.get('users') or []
+        for uname in users:
+            u = User.query.filter_by(username=uname).first()
+            if u and u.email:
+                recipients.append(u.email)
+
+    # Deduplicate and limit (safety)
+    recipients = list({r for r in recipients if r})
+    if not recipients:
+        flash('No recipients with email addresses found', 'warning')
+        return redirect(url_for('auth.notifications_page'))
+
+    cfg = emailer_util.load_email_config()
+    subject = f"[{notif.get('level','info').upper()}] Site Notification"
+    body = notif.get('message', '')
+    ok, msg = emailer_util.send_email(to=recipients, subject=subject, body=body)
+    if ok:
+        flash('Notification sent as email', 'success')
+    else:
+        flash('Failed to send email: ' + str(msg), 'error')
+    return redirect(url_for('auth.notifications_page'))
 
 @bp.route('/users')
 @admin_required
@@ -748,15 +979,98 @@ def system_check():
 @admin_required
 def admin_settings():
     """Admin settings page"""
-    
     # Get account lock status for current user's team
     from app.models import ScoutingTeamSettings
     team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
     account_creation_locked = team_settings.account_creation_locked if team_settings else False
-    
+
     return render_template('auth/admin_settings.html', 
                           account_creation_locked=account_creation_locked,
                           **get_theme_context())
+
+
+@bp.route('/admin/email-settings', methods=['GET', 'POST'])
+@role_required('superadmin')
+def email_settings():
+    cfg = emailer_util.load_email_config()
+    if request.method == 'POST':
+        # Save email config
+        cfg['host'] = request.form.get('host')
+        cfg['port'] = request.form.get('port')
+        cfg['username'] = request.form.get('username')
+        cfg['password'] = request.form.get('password')
+        cfg['use_tls'] = 'use_tls' in request.form
+        cfg['use_ssl'] = 'use_ssl' in request.form
+        df = request.form.get('default_from')
+        cfg['default_from'] = df if df and df.strip() else None
+
+        # If the user requested validation only, perform validation and show result without saving
+        validate_only = 'validate_only' in request.form
+        ok, valmsg = emailer_util.validate_smtp(cfg)
+        if validate_only:
+            if ok:
+                flash('SMTP validation succeeded', 'success')
+            else:
+                flash('SMTP validation failed: ' + str(valmsg), 'error')
+            return redirect(url_for('auth.email_settings'))
+
+        # Save email config to disk
+        emailer_util.save_email_config(cfg)
+        # Apply to current app config so Flask-Mail picks it up immediately
+        try:
+            current_app.config['MAIL_SERVER'] = cfg.get('host')
+            try:
+                current_app.config['MAIL_PORT'] = int(cfg.get('port') or 0)
+            except Exception:
+                current_app.config['MAIL_PORT'] = cfg.get('port')
+            current_app.config['MAIL_USERNAME'] = cfg.get('username')
+            current_app.config['MAIL_PASSWORD'] = cfg.get('password')
+            current_app.config['MAIL_USE_TLS'] = bool(cfg.get('use_tls'))
+            current_app.config['MAIL_USE_SSL'] = bool(cfg.get('use_ssl'))
+            current_app.config['MAIL_DEFAULT_SENDER'] = cfg.get('default_from') or cfg.get('username')
+            # If a Mail instance was previously created, remove it so it will be recreated with new settings
+            if hasattr(current_app, 'extensions') and 'flask-mail' in current_app.extensions:
+                try:
+                    del current_app.extensions['flask-mail']
+                except Exception:
+                    pass
+        except Exception:
+            # Non-fatal; settings still saved to file
+            pass
+        if ok:
+            flash('Email configuration saved and validated', 'success')
+        else:
+            # Save succeeded but validation failed; surface the error so admin can take action
+            flash('Email configuration saved but validation failed: ' + str(valmsg), 'warning')
+        return redirect(url_for('auth.email_settings'))
+    return render_template('auth/email_settings.html', config=cfg, **get_theme_context())
+
+
+@bp.route('/admin/email-test', methods=['POST'])
+@role_required('superadmin')
+def email_test():
+    to = request.form.get('to')
+    subject = request.form.get('subject') or 'Test Email from ObsidianScout'
+    body = request.form.get('body') or 'This is a test email.'
+    # Pass default_from as sender if configured
+    cfg = emailer_util.load_email_config()
+    from_addr = cfg.get('default_from') or cfg.get('username')
+    ok, msg = emailer_util.send_email(to=to, subject=subject, body=body, from_addr=from_addr)
+    if ok:
+        flash('Test email sent', 'success')
+    else:
+        flash('Failed to send email: ' + str(msg), 'error')
+    return redirect(url_for('auth.email_settings'))
+
+
+@bp.route('/admin/account-lock-status', methods=['GET'])
+@admin_required
+def account_lock_status():
+    """Return JSON with current account creation lock status for the admin's team"""
+    from app.models import ScoutingTeamSettings
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    locked = team_settings.account_creation_locked if team_settings else False
+    return jsonify({'locked': bool(locked)})
 
 @bp.route('/admin/toggle-account-lock', methods=['POST'])
 @admin_required

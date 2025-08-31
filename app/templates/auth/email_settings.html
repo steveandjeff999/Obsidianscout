@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Email Settings{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Email Settings</h2>
+  <p class="text-muted">Configure SMTP settings for sending notifications and password resets.</p>
+  <form method="POST">
+    <div class="mb-2">
+      <label class="form-label">SMTP Host</label>
+      <input name="host" class="form-control" value="{{ config.get('host', '') }}">
+    </div>
+    <div class="mb-2 d-flex gap-2">
+      <div class="w-25">
+        <label class="form-label">Port</label>
+        <input name="port" class="form-control" value="{{ config.get('port', '') }}">
+      </div>
+      <div class="w-50">
+        <label class="form-label">Username</label>
+        <input name="username" class="form-control" value="{{ config.get('username', '') }}">
+      </div>
+      <div class="w-25">
+        <label class="form-label">From</label>
+        <input name="default_from" class="form-control" value="{{ config.get('default_from','') }}">
+      </div>
+    </div>
+    <div class="mb-2">
+      <label class="form-label">Password</label>
+      <input name="password" class="form-control" value="{{ config.get('password','') }}" type="password">
+    </div>
+    <div class="mb-2 form-check">
+      <input type="checkbox" class="form-check-input" id="use_tls" name="use_tls" {% if config.get('use_tls') %}checked{% endif %}>
+      <label for="use_tls" class="form-check-label">Use STARTTLS</label>
+    </div>
+    <div class="mb-2 form-check">
+      <input type="checkbox" class="form-check-input" id="use_ssl" name="use_ssl" {% if config.get('use_ssl') %}checked{% endif %}>
+      <label for="use_ssl" class="form-check-label">Use SSL</label>
+    </div>
+    <div>
+      <button class="btn btn-primary">Save</button>
+      <a class="btn btn-secondary" href="{{ url_for('auth.admin_settings') }}">Back</a>
+    </div>
+  </form>
+
+  <hr>
+  <h3>Send Test Email</h3>
+  <form method="POST" action="{{ url_for('auth.email_test') }}">
+    <div class="mb-2">
+      <label class="form-label">To</label>
+      <input name="to" class="form-control" required placeholder="you@example.com">
+    </div>
+    <div class="mb-2">
+      <label class="form-label">Subject</label>
+      <input name="subject" class="form-control" value="Test Email from ObsidianScout">
+    </div>
+    <div class="mb-2">
+      <label class="form-label">Body</label>
+      <textarea name="body" class="form-control">This is a test email sent from ObsidianScout.</textarea>
+    </div>
+    <div>
+      <button class="btn btn-success">Send Test</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -551,6 +551,13 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link px-3 py-2 {% if request.endpoint == 'auth.notifications_page' %}active{% endif %}" 
+                               href="{{ url_for('auth.notifications_page') }}">
+                                <i class="fas fa-bell nav-icon text-warning"></i>
+                                <span class="nav-text">Notifications</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link px-3 py-2 {% if request.endpoint == 'auth.add_user' %}active{% endif %}" 
                                href="{{ url_for('auth.add_user') }}">
                                 <i class="fas fa-user-plus nav-icon text-success"></i> 
@@ -986,6 +993,11 @@
                                         <i class="fas fa-bolt me-2 text-warning"></i> Real-Time Replication
                                     </a>
                                 </li>
+                                <li>
+                                    <a class="dropdown-item py-2" href="{{ url_for('auth.email_settings') }}">
+                                        <i class="fas fa-envelope me-2 text-primary"></i> Email Settings
+                                    </a>
+                                </li>
                                 {% endif %}
                                 <li><hr class="dropdown-divider my-1"></li>
                                 <li>
@@ -1001,6 +1013,8 @@
             </div>
         </nav>
     </header>
+    {# Embedded site-wide notification banner placed directly under the navbar #}
+    {% include '_notification_banner.html' %}
 
     <div class="toast-container position-fixed top-0 end-0 p-3">
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -1291,18 +1305,20 @@
             window.socket = io();
         }
         const socket = window.socket;
-        const recipientSelect = document.getElementById('assistantChatRecipient');
-        const chatContainer = document.getElementById('assistantChatContainer');
-        const chatInput = document.getElementById('assistantChatInput');
-        const sendBtn = document.getElementById('assistantSendBtn');
-        const deleteBtn = document.getElementById('assistantDeleteHistoryBtn');
+    const recipientSelect = document.getElementById('assistantChatRecipient');
+    const chatContainer = document.getElementById('assistantChatContainer');
+    const chatInput = document.getElementById('assistantChatInput');
+    const sendBtn = document.getElementById('assistantSendBtn');
+    const deleteBtn = document.getElementById('assistantDeleteHistoryBtn');
         let allMessages = [];
         let currentRecipient = 'assistant';
         let usernameLoaded = false;
 
         // Fetch user list for chat (including 'assistant')
         function fetchRecipients() {
-            fetch('/assistant/chat-users')
+            // If the recipient select isn't present on this page, no-op
+            if (!recipientSelect) return Promise.resolve();
+            return fetch('/assistant/chat-users')
                 .then(r => r.json())
                 .then(data => {
                     recipientSelect.innerHTML = '';
@@ -1321,10 +1337,12 @@
                 });
         }
 
-        recipientSelect.addEventListener('change', function() {
-            currentRecipient = this.value;
-            renderHistory(allMessages);
-        });
+        if (recipientSelect) {
+            recipientSelect.addEventListener('change', function() {
+                currentRecipient = this.value;
+                renderHistory(allMessages);
+            });
+        }
 
         function renderMessage(msg) {
             // Only show messages for the selected recipient
@@ -1351,32 +1369,39 @@
         });
         socket.on('assistant_chat_history', renderHistory);
 
-        sendBtn.disabled = true;
+        if (sendBtn) {
+            sendBtn.disabled = true;
 
-        sendBtn.addEventListener('click', function() {
-            const text = chatInput.value.trim();
-            if (text && window.currentUsername) {
-                console.log('Sending:', { text, recipient: currentRecipient, sender: window.currentUsername });
-                socket.emit('assistant_chat_message', { text, recipient: currentRecipient, sender: window.currentUsername });
-                chatInput.value = '';
-            } else {
-                alert('Username not loaded yet. Please wait.');
-            }
-        });
-        chatInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') sendBtn.click();
-        });
-        deleteBtn.addEventListener('click', function() {
-            fetch('/assistant/delete-chat-history', { method: 'POST' })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        chatContainer.innerHTML = '';
-                    } else {
-                        alert(data.message || 'Failed to delete chat history');
-                    }
+            sendBtn.addEventListener('click', function() {
+                const text = (chatInput && chatInput.value || '').trim();
+                if (text && window.currentUsername) {
+                    console.log('Sending:', { text, recipient: currentRecipient, sender: window.currentUsername });
+                    socket.emit('assistant_chat_message', { text, recipient: currentRecipient, sender: window.currentUsername });
+                    if (chatInput) chatInput.value = '';
+                } else {
+                    alert('Username not loaded yet. Please wait.');
+                }
+            });
+            if (chatInput) {
+                chatInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') sendBtn.click();
                 });
-        });
+            }
+        }
+
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', function() {
+                fetch('/assistant/delete-chat-history', { method: 'POST' })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            if (chatContainer) chatContainer.innerHTML = '';
+                        } else {
+                            alert(data.message || 'Failed to delete chat history');
+                        }
+                    });
+            });
+        }
 
         // On modal open, fetch recipients and chat history
         const openBtn = document.getElementById('openAssistantModalBtn');
