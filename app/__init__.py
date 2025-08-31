@@ -397,6 +397,18 @@ def create_app(test_config=None):
     # Register themes blueprint
     app.register_blueprint(themes.bp)
 
+    # Expose site notifications to templates (file-backed, no DB migrations)
+    try:
+        from app.utils.notifications import load_notifications
+        @app.context_processor
+        def inject_site_notifications():
+            try:
+                return {'site_notifications': load_notifications()}
+            except Exception:
+                return {'site_notifications': []}
+    except Exception:
+        pass
+
     # Register chat history routes
     register_chat_history_routes(app)
     

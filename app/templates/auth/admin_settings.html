@@ -36,17 +36,11 @@
                     <p>Control new account registration for your team.</p>
                     <form method="POST" action="{{ url_for('auth.toggle_account_lock') }}" style="display: inline;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        {% if account_creation_locked %}
-                            <button type="submit" class="btn btn-success">
-                                <i class="fas fa-unlock"></i> Unlock Account Creation
-                            </button>
-                            <p class="text-warning mt-2 small">Account creation is currently LOCKED</p>
-                        {% else %}
-                            <button type="submit" class="btn btn-warning">
-                                <i class="fas fa-lock"></i> Lock Account Creation
-                            </button>
-                            <p class="text-success mt-2 small">Account creation is currently UNLOCKED</p>
-                        {% endif %}
+                        <button id="accountLockBtn" type="submit" class="btn btn-secondary">
+                            <i id="accountLockIcon" class="fas fa-spinner fa-spin"></i>
+                            <span id="accountLockText">Loading...</span>
+                        </button>
+                        <p id="accountLockStatus" class="mt-2 small text-muted">Checking server...</p>
                     </form>
                 </div>
             </div>
@@ -165,4 +159,48 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const statusEl = document.getElementById('accountLockStatus');
+    const btn = document.getElementById('accountLockBtn');
+    const icon = document.getElementById('accountLockIcon');
+    const text = document.getElementById('accountLockText');
+
+    async function refreshStatus() {
+        try {
+            const resp = await fetch("{{ url_for('auth.account_lock_status') }}", {headers: {'X-Requested-With':'XMLHttpRequest'}});
+            const data = await resp.json();
+            const locked = !!data.locked;
+            if (locked) {
+                btn.className = 'btn btn-success';
+                icon.className = 'fas fa-unlock';
+                text.textContent = 'Unlock Account Creation';
+                statusEl.className = 'mt-2 small text-warning';
+                statusEl.textContent = 'Account creation is currently LOCKED';
+            } else {
+                btn.className = 'btn btn-warning';
+                icon.className = 'fas fa-lock';
+                text.textContent = 'Lock Account Creation';
+                statusEl.className = 'mt-2 small text-success';
+                statusEl.textContent = 'Account creation is currently UNLOCKED';
+            }
+        } catch (e) {
+            statusEl.className = 'mt-2 small text-muted';
+            statusEl.textContent = 'Could not fetch server status';
+            btn.className = 'btn btn-secondary';
+            icon.className = 'fas fa-exclamation-triangle';
+            text.textContent = 'Retry';
+        }
+    }
+
+    // Refresh on load
+    refreshStatus();
+
+    // Optional: poll every 10s to keep UI in sync across devices
+    setInterval(refreshStatus, 10000);
+});
+</script>
 {% endblock %}

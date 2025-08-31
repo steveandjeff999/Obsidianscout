@@ -10,7 +10,9 @@ The script will:
   - refuse to run if common server ports appear in use (5000,8000,8080,80) unless --force is provided
   - extract a ZIP release to a temp dir if --zip is specified
   - create a timestamped backup of files/directories that will be overwritten under ./backups/
-  - copy files from the new release into the current repo root, skipping (preserving) configured user-data paths
+  - copy files from the new release into the current repo root.
+  - For configured user-data paths (preserved paths), it will merge in any NEW files or directories
+    from the release without overwriting or deleting existing content in those paths.
   - preserve file metadata where possible
 
 Default preserve paths (top-level names): instance, uploads, config, migrations, translations, ssl, .env, app_config.json, .venv, venv
@@ -116,6 +118,50 @@ def copy_item(src: Path, dst: Path, backup_root: Path, dry_run: bool = False, lo
             shutil.copy2(src, dst)
 
 
+def merge_add_only(src_path: Path, dst_path: Path, dry_run: bool, log: callable, repo_root: Path) -> list[str]:
+    """
+    Recursively copies items from src_path to dst_path ONLY if they don't already exist in dst_path.
+    This allows adding new files to preserved directories without overwriting existing ones.
+    Returns a list of relative paths of items that were added.
+    """
+    added_items = []
+
+    # If the source is a directory, iterate through its contents
+    if src_path.is_dir():
+        # If the destination directory doesn't exist at all, copy the entire source tree
+        if not dst_path.exists():
+            log(f"[Preserved Add] Adding new directory: '{dst_path.relative_to(repo_root)}'")
+            if not dry_run:
+                shutil.copytree(src_path, dst_path)
+            # Add all contained paths to the list
+            for root, _, files in os.walk(src_path):
+                for name in files:
+                    added_items.append(str(Path(root) / name))
+            return added_items
+
+        # If destination exists and is a directory, recurse
+        if dst_path.is_dir():
+            for src_item in src_path.iterdir():
+                dst_item = dst_path / src_item.name
+                added_items.extend(merge_add_only(src_item, dst_item, dry_run, log, repo_root))
+        # If dst_path exists but is a file, we don't touch it
+        return added_items
+
+    # If the source is a file
+    elif src_path.is_file():
+        if not dst_path.exists():
+            log(f"[Preserved Add] Adding new file: '{dst_path.relative_to(repo_root)}'")
+            if not dry_run:
+                dst_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src_path, dst_path)
+            return [str(dst_path)]
+        else:
+            # File exists at destination, do nothing
+            return []
+    
+    return added_items
+
+
 def perform_update(release: str | Path, is_zip: bool = False, preserve_extra: set[str] | None = None,
                    dry_run: bool = False, force: bool = False, repo_root: Path | None = None,
                    log_callback=None):
@@ -187,17 +233,27 @@ def perform_update(release: str | Path, is_zip: bool = False, preserve_extra: se
         skipped = []
         for entry in release_dir.iterdir():
             name = entry.name
+            target = repo_root / name
+
             # Skip VCS directories inside release (optional)
             if name in ('.git', '.github'):
                 skipped.append((name, 'VCS - skipped'))
                 continue
 
-            # Preserve top-level names
+            # For preserved paths, merge new files/dirs without overwriting existing content.
             if name in preserve:
-                skipped.append((name, 'preserved'))
+                try:
+                    added_items = merge_add_only(entry, target, dry_run=dry_run, log=_log, repo_root=repo_root)
+                    if added_items:
+                        summary = f'preserved (merged {len(added_items)} new item{"s" if len(added_items) > 1 else ""})'
+                        skipped.append((name, summary))
+                    else:
+                        skipped.append((name, 'preserved (no new files)'))
+                except Exception as e:
+                    _log(f"ERROR merging preserved path '{entry.name}': {e}")
                 continue
 
-            target = repo_root / name
+            # For all other paths, perform a full backup and replace.
             try:
                 copy_item(entry, target, backup_root, dry_run=dry_run, log=_log)
                 changed.append(name)
@@ -353,3 +409,4 @@ if __name__ == '__main__':
         launch_gui()
     else:
         main()
+
