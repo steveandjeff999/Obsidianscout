@@ -400,6 +400,18 @@
     z-index: 2;
 }
 
+/* Notifications autocomplete dropdown styles */
+.ns-autocomplete-dropdown {
+    background: var(--bs-body-bg, #fff);
+    border-radius: 6px;
+    border: 1px solid rgba(0,0,0,0.12);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    overflow: auto;
+    max-height: 320px;
+    z-index: 99999;
+}
+.ns-autocomplete-item:hover { background: rgba(0,0,0,0.04); }
+
 .search-clear-btn-main:hover {
     background: var(--bs-secondary-bg);
     color: var(--bs-danger);

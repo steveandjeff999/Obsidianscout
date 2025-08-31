@@ -643,24 +643,40 @@ def upload_strategy_background():
     file = request.files['background']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
-    # Convert to PNG and save as default_bg.png
+
+    # Determine team-specific folder (fall back to global if no scouting team)
+    team_number = getattr(current_user, 'scouting_team_number', None)
+
     try:
         img = Image.open(file.stream)
-        save_path = os.path.join(STRATEGY_BG_UPLOAD_FOLDER, 'default_bg.png')
-        os.makedirs(STRATEGY_BG_UPLOAD_FOLDER, exist_ok=True)
-        img.convert('RGBA').save(save_path, format='PNG')
+
+        if team_number:
+            team_folder = os.path.join(STRATEGY_BG_UPLOAD_FOLDER, str(team_number))
+            os.makedirs(team_folder, exist_ok=True)
+            save_path = os.path.join(team_folder, 'default_bg.png')
+            img.convert('RGBA').save(save_path, format='PNG')
+            bg_url = url_for('matches.get_strategy_background', filename=f"{team_number}/default_bg.png")
+        else:
+            # global default
+            os.makedirs(STRATEGY_BG_UPLOAD_FOLDER, exist_ok=True)
+            save_path = os.path.join(STRATEGY_BG_UPLOAD_FOLDER, 'default_bg.png')
+            img.convert('RGBA').save(save_path, format='PNG')
+            bg_url = url_for('matches.get_strategy_background', filename='default_bg.png')
+
     except Exception as e:
         return jsonify({'error': f'Image conversion failed: {str(e)}'}), 400
-    # Notify via Socket.IO (all matches)
-    bg_url = url_for('matches.get_global_strategy_background', filename='default_bg.png')
+
+    # Notify via Socket.IO so clients can update their background image
     socketio.emit('background_image_update', {
         'match_id': None,
         'background_image': bg_url
     })
     return jsonify({'background_image': bg_url})
 
-@bp.route('/strategy_backgrounds/<filename>')
-def get_global_strategy_background(filename):
+@bp.route('/strategy_backgrounds/<path:filename>')
+def get_strategy_background(filename):
+    # Serve team-specific or global strategy background files from the strategy_backgrounds folder.
+    # filename may include a team subfolder (e.g. "5568/default_bg.png").
     return send_from_directory(os.path.abspath(STRATEGY_BG_UPLOAD_FOLDER), filename)
 
 @bp.route('/data')

@@ -23,11 +23,13 @@
         </div>
         <div class="mb-2">
           <label class="form-label">Teams (optional)</label>
-          <input name="teams" class="form-control" placeholder="e.g. 1234, 5678">
+          <input name="teams" data-autocomplete="teams" class="form-control" placeholder="e.g. 1234, 5678">
+          <div class="form-text">Start typing a team number to see suggestions.</div>
         </div>
         <div class="mb-2">
           <label class="form-label">Users (optional)</label>
-          <input name="users" class="form-control" placeholder="e.g. alice,bob">
+          <input name="users" data-autocomplete="users" class="form-control" placeholder="e.g. alice,bob">
+          <div class="form-text">Start typing a username to see suggestions.</div>
         </div>
         <div>
           <button class="btn btn-primary">Create Notification</button>
@@ -59,4 +61,9 @@
       </div>
     </div>
   </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ url_for('static', filename='js/notifications-autocomplete.js') }}"></script>
 {% endblock %}
