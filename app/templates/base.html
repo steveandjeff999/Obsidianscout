@@ -1149,67 +1149,65 @@
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize dark mode
-            const darkModeToggle = document.getElementById('darkModeToggle');
-            const body = document.body;
-            
-            // Check for system preference first, then user's localStorage preference
-            const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const storedPreference = localStorage.getItem('darkMode');
-            
-            // Set initial state based on user preference (if set) or system preference
-            const isDarkMode = storedPreference !== null ? storedPreference === 'true' : prefersDarkMode;
-            
-            // Set initial state
-            const darkModeIcon = document.getElementById('darkModeIcon');
-            const darkModeLabel = document.getElementById('darkModeLabel');
-            
-            if (isDarkMode) {
-                body.classList.add('dark-mode');
-                darkModeToggle.checked = true;
-                darkModeIcon.classList.remove('fa-moon');
-                darkModeIcon.classList.add('fa-sun');
-                darkModeLabel.textContent = 'Light Mode';
-            }
-            
-            // Toggle dark mode on change
-            darkModeToggle.addEventListener('change', function() {
-                const darkModeIcon = document.getElementById('darkModeIcon');
-                const darkModeLabel = document.getElementById('darkModeLabel');
-                
-                if (this.checked) {
-                    body.classList.add('dark-mode');
-                    localStorage.setItem('darkMode', 'true');
-                    darkModeIcon.classList.remove('fa-moon');
-                    darkModeIcon.classList.add('fa-sun');
-                    darkModeLabel.textContent = 'Light Mode';
-                } else {
-                    body.classList.remove('dark-mode');
-                    localStorage.setItem('darkMode', 'false');
-                    darkModeIcon.classList.remove('fa-sun');
-                    darkModeIcon.classList.add('fa-moon');
-                    darkModeLabel.textContent = 'Dark Mode';
-                }
-                
-                // Force refresh computedStyle to ensure all dark mode styles are applied
-                document.documentElement.style.display='none';
-                document.documentElement.offsetHeight;
-                document.documentElement.style.display='';
-            });
-            
-            // Listen for system preference changes
-            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-                // Only change if user hasn't set a preference
-                if (localStorage.getItem('darkMode') === null) {
-                    if (e.matches) {
+            // Initialize dark mode (guarded - some pages omit the toggle element)
+                const darkModeToggle = document.getElementById('darkModeToggle');
+                const body = document.body;
+                if (darkModeToggle) {
+                    // Check for system preference first, then user's localStorage preference
+                    const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    const storedPreference = localStorage.getItem('darkMode');
+
+                    // Set initial state based on user preference (if set) or system preference
+                    const isDarkMode = storedPreference !== null ? storedPreference === 'true' : prefersDarkMode;
+
+                    // Set initial state
+                    const darkModeIcon = document.getElementById('darkModeIcon');
+                    const darkModeLabel = document.getElementById('darkModeLabel');
+
+                    if (isDarkMode) {
                         body.classList.add('dark-mode');
-                        darkModeToggle.checked = true;
-                    } else {
-                        body.classList.remove('dark-mode');
-                        darkModeToggle.checked = false;
+                        try { darkModeToggle.checked = true; } catch(e) {}
+                        if (darkModeIcon) { darkModeIcon.classList.remove('fa-moon'); darkModeIcon.classList.add('fa-sun'); }
+                        if (darkModeLabel) { darkModeLabel.textContent = 'Light Mode'; }
                     }
+
+                    // Toggle dark mode on change
+                    darkModeToggle.addEventListener('change', function() {
+                        const darkModeIcon = document.getElementById('darkModeIcon');
+                        const darkModeLabel = document.getElementById('darkModeLabel');
+
+                        if (this.checked) {
+                            body.classList.add('dark-mode');
+                            localStorage.setItem('darkMode', 'true');
+                            if (darkModeIcon) { darkModeIcon.classList.remove('fa-moon'); darkModeIcon.classList.add('fa-sun'); }
+                            if (darkModeLabel) { darkModeLabel.textContent = 'Light Mode'; }
+                        } else {
+                            body.classList.remove('dark-mode');
+                            localStorage.setItem('darkMode', 'false');
+                            if (darkModeIcon) { darkModeIcon.classList.remove('fa-sun'); darkModeIcon.classList.add('fa-moon'); }
+                            if (darkModeLabel) { darkModeLabel.textContent = 'Dark Mode'; }
+                        }
+
+                        // Force refresh computedStyle to ensure all dark mode styles are applied
+                        document.documentElement.style.display='none';
+                        document.documentElement.offsetHeight;
+                        document.documentElement.style.display='';
+                    });
+
+                    // Listen for system preference changes
+                    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+                        // Only change if user hasn't set a preference
+                        if (localStorage.getItem('darkMode') === null) {
+                            if (e.matches) {
+                                body.classList.add('dark-mode');
+                                try { darkModeToggle.checked = true; } catch(e) {}
+                            } else {
+                                body.classList.remove('dark-mode');
+                                try { darkModeToggle.checked = false; } catch(e) {}
+                            }
+                        }
+                    });
                 }
-            });
             
             // Initialize toasts
             var toastElList = document.querySelectorAll('.toast');

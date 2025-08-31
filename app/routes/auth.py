@@ -495,6 +495,45 @@ def create_notification():
     return redirect(url_for('auth.notifications_page'))
 
 
+@bp.route('/notifications/suggestions', methods=['GET'])
+@login_required
+def notification_suggestions():
+    """Return JSON suggestions for users or teams for the notifications form.
+
+    Query params:
+      - q: search string
+      - type: 'users' or 'teams' (default 'users')
+    """
+    q = (request.args.get('q') or '').strip()
+    typ = (request.args.get('type') or 'users').lower()
+    results = []
+    try:
+        # Debug log to help track why the endpoint might return HTML (e.g. redirects)
+        try:
+            current_app.logger.debug('notifications_suggestions requested by %s from %s', getattr(current_user, 'username', 'anonymous'), request.remote_addr)
+        except Exception:
+            pass
+        if typ == 'teams':
+            # Distinct team numbers (as strings)
+            query = User.query.filter(User.scouting_team_number != None)
+            if q:
+                query = query.filter(func.cast(User.scouting_team_number, db.String).contains(q))
+            teams = query.with_entities(User.scouting_team_number).distinct().limit(200).all()
+            # Flatten and convert to strings
+            results = [str(t[0]) for t in teams if t[0] is not None]
+        else:
+            # users
+            query = User.query
+            if q:
+                query = query.filter(User.username.ilike(f"%{q}%"))
+            users = query.with_entities(User.username).limit(200).all()
+            results = [u[0] for u in users if u[0]]
+    except Exception:
+        # On error return empty list but still 200 so frontend can handle gracefully
+        results = []
+    return jsonify({'results': results})
+
+
 @bp.route('/notifications/delete/<notif_id>', methods=['POST'])
 @role_required('superadmin')
 def delete_notification(notif_id):
