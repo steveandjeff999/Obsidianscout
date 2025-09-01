@@ -417,6 +417,12 @@ def create_app(test_config=None):
     def service_worker():
         # Send the sw.js file from the static folder (typically app/static/sw.js)
         return send_from_directory(app.static_folder, 'sw.js')
+
+    # Public PWA install page so browsers can fetch a login-free start URL.
+    @app.route('/pwa')
+    def pwa_install():
+        # Serve a minimal static install page that links the manifest and registers the SW.
+        return send_from_directory(app.static_folder, 'pwa.html')
     
     # Add global context processor for alliance status
     @app.context_processor
