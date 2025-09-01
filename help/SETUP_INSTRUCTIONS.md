@@ -34,15 +34,23 @@ Use the Help page to search for answers or contact your admin for support.
    This will fix any issues with empty email fields in the database.
 
 3. Start the application:
-   ```
+   ```powershell
    python run.py
    ```
 
-4. Open your browser and navigate to http://127.0.0.1:5000/
+   By default `run.py` reads the `PORT` environment variable and falls back to port `8080` when not set. If running locally in development mode, the server may start with a self-signed SSL certificate and serve HTTPS. Example:
 
-5. You will be redirected to the login page. Log in with:
-   - Username: admin
-   - Password: password
+   - Default HTTP port: 8080
+   - To change the port for the current shell (PowerShell):
+     ```powershell
+     $env:PORT = '5000'; python run.py
+     ```
+
+4. Open your browser and navigate to the server URL printed by `run.py` (for example `https://localhost:8080` or `http://localhost:8080` depending on SSL configuration).
+
+5. You will be redirected to the login page. Default convenience accounts:
+   - `superadmin` / `password` — auto-created by `run.py` on first run (must change password at first login)
+   - `admin` / `password` — can be created or reset with `python other/reset_admin.py`
 
 6. Once logged in as admin, you can:
    - Access the User Management page from your user dropdown menu

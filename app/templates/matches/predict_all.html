@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}All Match Predictions{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Predictions for {{ selected_event.name if selected_event else 'Event' }}</h1>
+
+    {% if not predictions %}
+        <div class="alert alert-warning">No matches found for this event.</div>
+    {% else %}
+        <div class="list-group">
+            {% for item in predictions %}
+            <div class="list-group-item mb-3">
+                <h4 class="mb-1">{{ item.match.match_type|capitalize }} {{ item.match.match_number }}</h4>
+
+                {% if item.prediction %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="text-danger">Red Alliance - {{ item.prediction.red_alliance.predicted_score }} pts</h5>
+                            <ul>
+                                {% for t in item.prediction.red_alliance.teams %}
+                                    <li>{{ t.team.team_number }} - {{ t.team.team_name or 'Unknown' }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h5 class="text-primary">Blue Alliance - {{ item.prediction.blue_alliance.predicted_score }} pts</h5>
+                            <ul>
+                                {% for t in item.prediction.blue_alliance.teams %}
+                                    <li>{{ t.team.team_number }} - {{ t.team.team_name or 'Unknown' }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="mt-2">
+                        <strong>Predicted winner:</strong> {{ item.prediction.predicted_winner|upper }} &nbsp;|
+                        <strong>Confidence:</strong> {{ (item.prediction.confidence * 100)|round(1) if item.prediction.confidence is not none else 'N/A' }}%
+                    </div>
+                {% else %}
+                    <div class="alert alert-secondary">No prediction available for this match.</div>
+                {% endif %}
+
+            </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+</div>
+{% endblock %}

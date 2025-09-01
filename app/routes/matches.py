@@ -388,6 +388,50 @@ def predict():
         game_config=game_config, **get_theme_context()
     )
 
+
+@bp.route('/predict_all')
+def predict_all():
+    """Predict every match in the event and list them sequentially"""
+    game_config = get_effective_game_config()
+
+    # Resolve event_id from params or current config
+    event = None
+    event_id = request.args.get('event_id', type=int) or request.form.get('event_id', type=int)
+    if event_id:
+        event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+    else:
+        current_event_code = game_config.get('current_event_code')
+        if current_event_code:
+            event = get_event_by_code(current_event_code)
+
+    if not event:
+        flash('No event selected or event not accessible for predictions.', 'warning')
+        return redirect(url_for('matches.predict'))
+
+    # Get matches for this event
+    matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).order_by(Match.match_type, Match.match_number).all()
+
+    # Collect predictions for each match (use get_match_details_with_teams)
+    predictions = []
+    for m in matches:
+        try:
+            details = get_match_details_with_teams(m.id)
+            pred = details.get('prediction') if details else None
+        except Exception as e:
+            pred = None
+        predictions.append({
+            'match': m,
+            'prediction': pred
+        })
+
+    return render_template(
+        'matches/predict_all.html',
+        selected_event=event,
+        predictions=predictions,
+        game_config=game_config,
+        **get_theme_context()
+    )
+
 @bp.route('/api/predict/<int:match_id>')
 def api_predict(match_id):
     """API endpoint to get match prediction data"""
