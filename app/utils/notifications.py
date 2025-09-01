@@ -34,8 +34,9 @@ def add_notification(message, level='info', audience='site', teams=None, users=N
         'message': message,
         'level': level,  # info, important, urgent
         'audience': audience,  # site, teams, users
-        'teams': teams or [],
-        'users': users or [],
+    # If teams/users are provided as a single string, keep as single entry (don't split on @ or other chars)
+    'teams': teams if isinstance(teams, (list, tuple)) else ([teams] if teams is not None and teams != '' else []),
+    'users': users if isinstance(users, (list, tuple)) else ([users] if users is not None and users != '' else []),
         'created': datetime.utcnow().isoformat(),
         'expires': expires
     }

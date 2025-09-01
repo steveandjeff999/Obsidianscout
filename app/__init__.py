@@ -411,6 +411,12 @@ def create_app(test_config=None):
 
     # Register chat history routes
     register_chat_history_routes(app)
+
+    # Serve service worker at root path so tools (and PWABuilder) can fetch it at /sw.js
+    @app.route('/sw.js')
+    def service_worker():
+        # Send the sw.js file from the static folder (typically app/static/sw.js)
+        return send_from_directory(app.static_folder, 'sw.js')
     
     # Add global context processor for alliance status
     @app.context_processor

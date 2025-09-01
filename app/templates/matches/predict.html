@@ -62,14 +62,18 @@
                 <!-- Match Details -->
                 <div class="col-12 mb-4">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h3 class="h5">Predicted Winner: 
-                            <span class="badge {% if prediction.predicted_winner == 'red' %}bg-danger{% else %}bg-primary{% endif %}">
-                                {{ prediction.predicted_winner|upper }} ALLIANCE
-                            </span>
+                        <h3 class="h5">Predicted Outcome: 
+                            {% if prediction.predicted_winner == 'tie' %}
+                                <span class="badge bg-secondary">TIE</span>
+                            {% else %}
+                                <span class="badge {% if prediction.predicted_winner == 'red' %}bg-danger{% else %}bg-primary{% endif %}">
+                                    {{ prediction.predicted_winner|upper }} ALLIANCE
+                                </span>
+                            {% endif %}
                         </h3>
                         <div>
                             Confidence: 
-                            <div class="progress" style="width: 150px; display: inline-block;">
+                            <div class="progress d-inline-block" style="width: 150px; vertical-align: middle; margin-right: 10px;">
                                 <div class="progress-bar {% if prediction.confidence < 0.3 %}bg-warning{% elif prediction.confidence > 0.7 %}bg-success{% else %}bg-info{% endif %}" 
                                     role="progressbar" 
                                     style="width: {{ (prediction.confidence * 100)|round }}%;" 
@@ -77,6 +81,12 @@
                                     aria-valuemin="0" 
                                     aria-valuemax="100">{{ (prediction.confidence * 100)|round }}%</div>
                             </div>
+                            {# Probability breakdown for red/blue/tie if available #}
+                            {% if prediction.probabilities %}
+                            <small class="text-muted">
+                                (Red: {{ (prediction.probabilities.red * 100)|round(1) }}% • Blue: {{ (prediction.probabilities.blue * 100)|round(1) }}% • Tie: {{ (prediction.probabilities.tie * 100)|round(1) }}%)
+                            </small>
+                            {% endif %}
                         </div>
                     </div>
                 </div>

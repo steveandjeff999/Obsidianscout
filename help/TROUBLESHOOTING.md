@@ -56,17 +56,23 @@ The database schema hasn't been created. Run the initialization script:
 python init_auth.py
 ```
 
-### 4. Can't login as admin
+### 4. Can't login as admin or superadmin
 
 **Solution:**
-If you can't log in with the default admin account:
+There are two convenience accounts used during setup:
+
+- `superadmin` — auto-created by `run.py` on first run if no users exist. Default password is `password` and the account is created with `must_change_password=True` so you will be prompted to change it at first login.
+- `admin` — can be created or reset at any time using the helper script located at `other/reset_admin.py`:
+
 ```
-python reset_admin.py
+python other/reset_admin.py
 ```
 
-This will create or reset the admin user:
-- Username: admin
-- Password: password
+The reset script will create or update the `admin` user with these credentials:
+- Username: `admin`
+- Password: `password`
+
+If you still cannot log in after using the script, check application logs for errors and ensure the database exists and is accessible.
 
 ### 5. Unable to add new users
 

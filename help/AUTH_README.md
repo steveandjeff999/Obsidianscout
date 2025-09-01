@@ -12,10 +12,14 @@ The system supports three user roles with different permissions:
 - **Scout:** Can enter and view scouting data, limited access to admin features.
 
 1. **Admin**
-   - Full system access
-   - Can manage users
-   - Can configure system settings
-   - Username: `admin`, Password: `password` (default admin)
+    - Full system access
+    - Can manage users
+    - Can configure system settings
+    - Default admin account: the project includes a helper script to create/reset an `admin` user (`other/reset_admin.py`). The script creates or resets an `admin` account with these credentials:
+       - Username: `admin`
+       - Password: `password`
+       - Run: `python other/reset_admin.py`
+    - Note: The application also auto-creates a `superadmin` account on first run when no users exist (see "Getting Started" below).
 
 2. **Analytics**
    - Access to data analysis features
@@ -34,13 +38,22 @@ The system supports three user roles with different permissions:
 ## Getting Started
 
 1. Initialize the authentication system:
-   ```
-   python init_auth.py
-   ```
+    ```
+    python init_auth.py
+    ```
 
-   This will create the necessary roles and the default admin user:
-   - Username: admin
-   - Password: password
+    This will create the necessary roles. Default accounts are handled as follows:
+
+    - On first run, `run.py` automatically attempts to create a `superadmin` account if no users exist. That account uses:
+       - Username: `superadmin`
+       - Password: `password`
+       - Team Number: `0`
+       - The created `superadmin` has `must_change_password=True` so the user must change the password on first login.
+
+    - The `other/reset_admin.py` script is provided to create or reset an `admin` account (username `admin`, password `password`) at any time:
+       ```
+       python other/reset_admin.py
+       ```
 
 2. Log in with the admin account and create additional users as needed.
 

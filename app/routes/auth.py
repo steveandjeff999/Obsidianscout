@@ -490,6 +490,9 @@ def create_notification():
     users = data.get('users') or []
     if isinstance(teams, str) and teams:
         teams = [t.strip() for t in teams.split(',') if t.strip()]
+    # Normalize users: allow comma-separated string or list
+    if isinstance(users, str) and users:
+        users = [u.strip() for u in users.split(',') if u.strip()]
     notif = notif_util.add_notification(message=message, level=level, audience=audience, teams=teams, users=users)
     flash('Notification created', 'success')
     return redirect(url_for('auth.notifications_page'))

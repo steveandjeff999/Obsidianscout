@@ -637,6 +637,13 @@
                                     </a>
                                 </li>
                                 <li>
+                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint == 'matches.predict_all' %}active{% endif %}"
+                                       href="{{ url_for('matches.predict_all') }}">
+                                        <i class="fas fa-list nav-icon text-secondary me-2"></i>
+                                        All Match Predictions
+                                    </a>
+                                </li>
+                                <li>
                                     <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint == 'matches.strategy' %}active{% endif %}" 
                                        href="{{ url_for('matches.strategy') }}">
                                         <i class="fas fa-chess nav-icon text-info me-2"></i> 
@@ -1225,6 +1232,15 @@
     
     {% block scripts %}{% endblock %}
     {% block extra_js %}{% endblock %}
+
+    <script>
+    // Ensure service worker is registered at root (/sw.js) so PWABuilder and other tools can detect it
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(reg => console.log('SW root registered:', reg.scope))
+            .catch(err => console.warn('SW root registration failed:', err));
+    }
+    </script>
 
     {# Add a floating button for the assistant modal #}
     {# Remove the floating assistant button:

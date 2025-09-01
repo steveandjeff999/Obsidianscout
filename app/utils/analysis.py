@@ -99,6 +99,11 @@ def calculate_team_metrics(team_id):
         if values:
             # Store with both the dynamic ID and a standardized key for backward compatibility
             metrics[metric_id] = statistics.mean(values)
+            # Also store a measure of variability for simulation
+            try:
+                metrics[f"{metric_id}_std"] = statistics.stdev(values) if len(values) > 1 else 0.0
+            except Exception:
+                metrics[f"{metric_id}_std"] = 0.0
             
             # Create standardized keys for the frontend
             if metric_id in component_metric_ids:
@@ -113,6 +118,8 @@ def calculate_team_metrics(team_id):
             # Map total metric ID to standard key
             if metric_id == total_metric_id:
                 metrics['total_points'] = metrics[metric_id]
+                # Map std as well
+                metrics['total_points_std'] = metrics.get(f"{metric_id}_std", 0.0)
     
     # Custom calculation for endgame capability - find highest position the team has reached
     if endgame_positions:
@@ -168,6 +175,91 @@ def calculate_team_metrics(team_id):
                 metrics[metric_id] = statistics.mean(metric_values)
     
     return metrics
+
+
+def _simulate_match_outcomes(red_alliance_teams, blue_alliance_teams, total_metric_id, n_simulations=2000, seed=None):
+    """Monte Carlo simulate match outcomes using per-team mean/std for total metric.
+
+    Returns a dict with expected_red, expected_blue, win_probability_for_red.
+    """
+    if seed is not None:
+        random.seed(seed)
+
+    red_means = []
+    red_stds = []
+    for team_data in red_alliance_teams:
+        m = team_data['metrics'].get(total_metric_id, team_data['metrics'].get('total_points', 0.0))
+        s = team_data['metrics'].get(f"{total_metric_id}_std", team_data['metrics'].get('total_points_std', 0.0))
+        red_means.append(float(m))
+        red_stds.append(max(0.0, float(s)))
+
+    blue_means = []
+    blue_stds = []
+    for team_data in blue_alliance_teams:
+        m = team_data['metrics'].get(total_metric_id, team_data['metrics'].get('total_points', 0.0))
+        s = team_data['metrics'].get(f"{total_metric_id}_std", team_data['metrics'].get('total_points_std', 0.0))
+        blue_means.append(float(m))
+        blue_stds.append(max(0.0, float(s)))
+
+    # If no teams or no data, fall back to deterministic sum
+    if not red_means and not blue_means:
+        return {'expected_red': 0.0, 'expected_blue': 0.0, 'red_win_prob': 0.5}
+
+    red_wins = 0
+    blue_wins = 0
+    ties = 0
+    total_red = 0.0
+    total_blue = 0.0
+
+    # Pre-calc deterministic sums when std is zero to speed up
+    red_det = sum(red_means)
+    blue_det = sum(blue_means)
+
+    # If all stds are zero, deterministic outcome
+    if all(s == 0.0 for s in red_stds) and all(s == 0.0 for s in blue_stds):
+        red_score = red_det
+        blue_score = blue_det
+        if red_score > blue_score:
+            return {'expected_red': red_score, 'expected_blue': blue_score, 'red_win_prob': 1.0, 'blue_win_prob': 0.0, 'tie_prob': 0.0}
+        elif blue_score > red_score:
+            return {'expected_red': red_score, 'expected_blue': blue_score, 'red_win_prob': 0.0, 'blue_win_prob': 1.0, 'tie_prob': 0.0}
+        else:
+            return {'expected_red': red_score, 'expected_blue': blue_score, 'red_win_prob': 0.0, 'blue_win_prob': 0.0, 'tie_prob': 1.0}
+
+    for _ in range(n_simulations):
+        # sample per-team totals
+        sim_red = 0.0
+        for m, s in zip(red_means, red_stds):
+            if s > 0:
+                val = random.gauss(m, s)
+            else:
+                val = m
+            sim_red += max(0.0, val)
+
+        sim_blue = 0.0
+        for m, s in zip(blue_means, blue_stds):
+            if s > 0:
+                val = random.gauss(m, s)
+            else:
+                val = m
+            sim_blue += max(0.0, val)
+
+        total_red += sim_red
+        total_blue += sim_blue
+        if sim_red > sim_blue:
+            red_wins += 1
+        elif sim_blue > sim_red:
+            blue_wins += 1
+        else:
+            ties += 1
+
+    expected_red = total_red / n_simulations
+    expected_blue = total_blue / n_simulations
+    red_win_prob = red_wins / n_simulations
+    blue_win_prob = blue_wins / n_simulations
+    tie_prob = ties / n_simulations
+
+    return {'expected_red': expected_red, 'expected_blue': expected_blue, 'red_win_prob': red_win_prob, 'blue_win_prob': blue_win_prob, 'tie_prob': tie_prob}
 
 def predict_match_outcome(match_id):
     """Predict the outcome of a match based on team performance metrics"""
@@ -326,35 +418,46 @@ def predict_match_outcome(match_id):
         
         blue_alliance_score += team_score
     
-    # Add some randomness to the prediction (matches aren't perfectly predictable)
-    red_random_factor = 0.9 + 0.2 * random.random()
-    blue_random_factor = 0.9 + 0.2 * random.random()
-    
-    final_red_score = red_alliance_score * red_random_factor
-    final_blue_score = blue_alliance_score * blue_random_factor
-    
-    print(f"\nFINAL SCORES:")
-    print(f"  Red alliance base score: {red_alliance_score}, random factor: {red_random_factor:.2f}, final: {final_red_score:.1f}")
-    print(f"  Blue alliance base score: {blue_alliance_score}, random factor: {blue_random_factor:.2f}, final: {final_blue_score:.1f}")
-    
-    # Determine expected winner
-    winner = 'red' if final_red_score > final_blue_score else 'blue'
-    confidence = abs(final_red_score - final_blue_score) / (final_red_score + final_blue_score) if (final_red_score + final_blue_score) > 0 else 0
-    
-    print(f"  Predicted winner: {winner.upper()} with {confidence*100:.1f}% confidence")
+    # Perform Monte Carlo simulation using per-team totals and stddevs (if available)
+    sim = _simulate_match_outcomes(red_alliance_teams, blue_alliance_teams, total_metric_id, n_simulations=2000)
+
+    expected_red = sim.get('expected_red', red_alliance_score)
+    expected_blue = sim.get('expected_blue', blue_alliance_score)
+    red_win_prob = sim.get('red_win_prob', 0.5)
+    blue_win_prob = sim.get('blue_win_prob', 1.0 - red_win_prob)
+    tie_prob = sim.get('tie_prob', 0.0)
+
+    print(f"\nSIMULATION RESULTS:")
+    print(f"  Expected red score: {expected_red:.1f}")
+    print(f"  Expected blue score: {expected_blue:.1f}")
+    print(f"  Red win probability: {red_win_prob*100:.1f}%")
+
+    # Pick predicted winner based on the highest probability among red/blue/tie
+    probs = {'red': red_win_prob, 'blue': blue_win_prob, 'tie': tie_prob}
+    # Choose the outcome with the maximum probability; ties will be chosen if that has highest prob
+    winner = max(probs.items(), key=lambda kv: kv[1])[0]
+
+    print(f"  Predicted winner: {winner.upper()} with probability: {red_win_prob*100:.1f}% (red win prob)")
     print("="*80 + "\n")
-    
+
     prediction = {
         'red_alliance': {
             'teams': red_alliance_teams,
-            'predicted_score': round(final_red_score)
+            'predicted_score': round(expected_red)
         },
         'blue_alliance': {
             'teams': blue_alliance_teams,
-            'predicted_score': round(final_blue_score)
+            'predicted_score': round(expected_blue)
         },
         'predicted_winner': winner,
-        'confidence': confidence
+        # Provide a breakdown of probabilities for consumers (red/blue/tie)
+        'probabilities': {
+            'red': red_win_prob,
+            'blue': blue_win_prob,
+            'tie': tie_prob
+        },
+        # For backward compatibility many templates use 'confidence' - set to the probability of the predicted outcome
+        'confidence': probs.get(winner, red_win_prob)
     }
     
     return prediction
@@ -809,36 +912,28 @@ def _predict_strategy_outcome(red_alliance_data, blue_alliance_data, game_config
     blue_expected = sum(team_data['metrics'].get('tot', team_data['metrics'].get('total_points', 0)) 
                        for team_data in blue_alliance_data)
     
-    # Add some variance for realism
-    red_variance = red_expected * 0.1 * random.uniform(-1, 1)
-    blue_variance = blue_expected * 0.1 * random.uniform(-1, 1)
-    
-    red_predicted = red_expected + red_variance
-    blue_predicted = blue_expected + blue_variance
-    
-    # Determine winner and confidence
-    winner = 'red' if red_predicted > blue_predicted else 'blue'
-    margin = abs(red_predicted - blue_predicted)
-    
-    # Calculate confidence based on margin
-    if margin > 20:
-        confidence = 'high'
-    elif margin > 10:
-        confidence = 'medium'
-    else:
-        confidence = 'low'
-    
+    # Use Monte Carlo simulation for better estimates
+    sim = _simulate_match_outcomes(red_alliance_data, blue_alliance_data, 'tot')
+    expected_red = sim.get('expected_red', red_expected)
+    expected_blue = sim.get('expected_blue', blue_expected)
+    red_win_prob = sim.get('red_win_prob', 0.5)
+
+    # Determine winner based on expected scores
+    winner = 'red' if expected_red > expected_blue else 'blue' if expected_blue > expected_red else 'tie'
+    margin = abs(expected_red - expected_blue)
+
     return {
         'predicted_winner': winner,
-        'red_score': round(red_predicted, 1),
-        'blue_score': round(blue_predicted, 1),
+        'red_score': round(expected_red, 1),
+        'blue_score': round(expected_blue, 1),
         'margin': round(margin, 1),
-        'confidence': confidence,
+        # Numeric probability of red winning
+        'confidence': round(red_win_prob, 3),
         'reasoning': [
-            f"Red alliance expected total: {red_expected:.1f} points",
-            f"Blue alliance expected total: {blue_expected:.1f} points",
+            f"Red alliance expected total: {expected_red:.1f} points",
+            f"Blue alliance expected total: {expected_blue:.1f} points",
             f"Predicted margin: {margin:.1f} points",
-            f"Confidence level: {confidence.upper()}"
+            f"Red win probability: {red_win_prob*100:.1f}%"
         ]
     }
 

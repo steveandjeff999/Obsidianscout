@@ -99,8 +99,8 @@
                                                 <i class="fas fa-edit"></i>
                                             </a>
                                             {% if current_user.has_role('superadmin') and user.id != current_user.id and not user.has_role('superadmin') %}
-                        <button type="button" class="btn btn-outline-danger btn-sm"
-                            onclick="confirmDeleteUser({{ user.username|tojson }}, {{ user.id }})"
+                        <button type="button" class="btn btn-outline-danger btn-sm delete-user-btn"
+                            data-delete-username="{{ user.username|e }}" data-delete-userid="{{ user.id }}"
                             title="Delete User">
                                                 <i class="fas fa-trash"></i>
                                             </button>
@@ -192,12 +192,23 @@ document.addEventListener('DOMContentLoaded', function() {
             this.closest('form').submit();
         });
     });
-});
 
-function confirmDeleteUser(username, userId) {
-    document.getElementById('deleteUsername').textContent = username;
-    document.getElementById('deleteUserForm').action = "{{ url_for('auth.delete_user_permanently', user_id=0) }}".replace('0', userId);
-    new bootstrap.Modal(document.getElementById('deleteUserModal')).show();
-}
+    // Attach delete button listeners (replace inline onclick handlers)
+    var deleteButtons = document.querySelectorAll('.delete-user-btn');
+    deleteButtons.forEach(function(btn){
+        btn.addEventListener('click', function(){
+            var username = this.getAttribute('data-delete-username');
+            var userId = this.getAttribute('data-delete-userid');
+            var deleteUsernameEl = document.getElementById('deleteUsername');
+            if (deleteUsernameEl) deleteUsernameEl.textContent = username;
+            var deleteForm = document.getElementById('deleteUserForm');
+            if (deleteForm) {
+                deleteForm.action = "{{ url_for('auth.delete_user_permanently', user_id=0) }}".replace('0', userId);
+            }
+            new bootstrap.Modal(document.getElementById('deleteUserModal')).show();
+        });
+    });
+});
+// removed inline confirmDeleteUser; event listeners handle deletion modal
 </script>
 {% endblock %}
