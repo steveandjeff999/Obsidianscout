@@ -2,7 +2,6 @@
 
 const CACHE_NAME = 'scout-app-cache-v2';
 const STATIC_ASSETS = [
-  '/',
   '/static/css/styles.css',
   '/static/css/theme-management.css',
   '/static/css/theme-overrides.css',
