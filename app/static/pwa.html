@@ -11,18 +11,22 @@
 <body>
   <div class="card">
     <h1>Install ObsidianScout</h1>
-    <p>This page allows browsers to fetch the PWA manifest and service worker without requiring a user login.</p>
+    <p>This page allows browsers to install the ObsidianScout Progressive Web App.</p>
     <p>To install: use your browser's install or add-to-home-screen option.</p>
-    <p>If your browser needs the service worker at <code>/sw.js</code>, we serve it from the app static folder.</p>
-    <p><a href="/">Open site</a></p>
+    <p><a href="/">Open ObsidianScout</a></p>
   </div>
 
   <script>
     if ('serviceWorker' in navigator) {
-      // Attempt to register the root-scoped service worker at /sw.js if available
-      navigator.serviceWorker.register('/sw.js', { scope: '/' })
-        .then(function(reg) { console.log('ServiceWorker registered on /sw.js', reg); })
-        .catch(function(err) { console.warn('ServiceWorker registration failed:', err); });
+      navigator.serviceWorker.register('/sw.js?v=2', { scope: '/' })
+        .then(function(reg) { 
+          console.log('ServiceWorker registered successfully', reg); 
+          // Force update check
+          reg.update();
+        })
+        .catch(function(err) { 
+          console.warn('ServiceWorker registration failed:', err); 
+        });
     }
   </script>
 </body>

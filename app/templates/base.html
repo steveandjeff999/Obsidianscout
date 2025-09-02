@@ -1236,8 +1236,12 @@
     <script>
     // Ensure service worker is registered at root (/sw.js) so PWABuilder and other tools can detect it
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js', { scope: '/' })
-            .then(reg => console.log('SW root registered:', reg.scope))
+        navigator.serviceWorker.register('/sw.js?v=2', { scope: '/' })
+            .then(reg => {
+                console.log('SW root registered:', reg.scope);
+                // Force update check
+                reg.update();
+            })
             .catch(err => console.warn('SW root registration failed:', err));
     }
     </script>

@@ -2,7 +2,7 @@
   "name": "ObsidianScout",
   "short_name": "OScout",
   "description": "FRC Team 5454 Scouting Platform",
-  "start_url": "/pwa",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#1976d2",
