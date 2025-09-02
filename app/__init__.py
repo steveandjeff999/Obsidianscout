@@ -415,8 +415,13 @@ def create_app(test_config=None):
     # Serve service worker at root path so tools (and PWABuilder) can fetch it at /sw.js
     @app.route('/sw.js')
     def service_worker():
-        # Send the sw.js file from the static folder (typically app/static/sw.js)
-        return send_from_directory(app.static_folder, 'sw.js')
+        # Send the sw.js file from the static folder with cache control headers
+        response = send_from_directory(app.static_folder, 'sw.js')
+        # Prevent caching of service worker to ensure updates are loaded
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
 
     # Public PWA install page so browsers can fetch a login-free start URL.
     @app.route('/pwa')

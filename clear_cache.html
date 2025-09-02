@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Service Worker Cache</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .status { margin: 10px 0; padding: 10px; border-radius: 4px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <h1>Clear Service Worker Cache</h1>
+    <p>This page helps clear old service worker caches and data.</p>
+    
+    <button onclick="clearAllCaches()">Clear All Caches</button>
+    <button onclick="unregisterServiceWorkers()">Unregister Service Workers</button>
+    <button onclick="clearIndexedDB()">Clear IndexedDB</button>
+    <button onclick="clearAll()">Clear Everything</button>
+    
+    <div id="status"></div>
+
+    <script>
+        function log(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            statusDiv.appendChild(div);
+        }
+
+        async function clearAllCaches() {
+            try {
+                const cacheNames = await caches.keys();
+                log(`Found ${cacheNames.length} caches`);
+                
+                for (const cacheName of cacheNames) {
+                    await caches.delete(cacheName);
+                    log(`Deleted cache: ${cacheName}`, 'success');
+                }
+                
+                log('All caches cleared successfully!', 'success');
+            } catch (error) {
+                log(`Error clearing caches: ${error.message}`, 'error');
+            }
+        }
+
+        async function unregisterServiceWorkers() {
+            try {
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    log(`Found ${registrations.length} service worker registrations`);
+                    
+                    for (const registration of registrations) {
+                        await registration.unregister();
+                        log(`Unregistered service worker: ${registration.scope}`, 'success');
+                    }
+                    
+                    log('All service workers unregistered!', 'success');
+                } else {
+                    log('Service workers not supported', 'error');
+                }
+            } catch (error) {
+                log(`Error unregistering service workers: ${error.message}`, 'error');
+            }
+        }
+
+        async function clearIndexedDB() {
+            try {
+                // Clear the ScoutAppDB that was used for offline analytics
+                const deleteDB = indexedDB.deleteDatabase('ScoutAppDB');
+                deleteDB.onsuccess = () => {
+                    log('IndexedDB cleared successfully!', 'success');
+                };
+                deleteDB.onerror = () => {
+                    log('Error clearing IndexedDB', 'error');
+                };
+                deleteDB.onblocked = () => {
+                    log('IndexedDB deletion blocked (close other tabs)', 'error');
+                };
+            } catch (error) {
+                log(`Error clearing IndexedDB: ${error.message}`, 'error');
+            }
+        }
+
+        async function clearAll() {
+            log('Starting complete cleanup...', 'info');
+            await clearAllCaches();
+            await unregisterServiceWorkers();
+            await clearIndexedDB();
+            log('Complete cleanup finished! Please reload the page.', 'success');
+        }
+
+        // Auto-run cleanup on page load
+        window.addEventListener('load', () => {
+            log('Page loaded. Ready to clear caches.', 'info');
+        });
+    </script>
+</body>
+</html>

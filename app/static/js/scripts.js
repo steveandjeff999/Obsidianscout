@@ -7,9 +7,11 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Register service worker for offline support
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/static/sw.js')
+        navigator.serviceWorker.register('/sw.js?v=2', { scope: '/' })
             .then(reg => {
                 console.log('Service Worker registered:', reg.scope);
+                // Force update check
+                reg.update();
             })
             .catch(err => {
                 console.warn('Service Worker registration failed:', err);
