@@ -253,7 +253,7 @@
                             <button type="button" class="btn btn-outline-success" onclick="exportToPDF()">
                                 <i class="fas fa-file-pdf me-2"></i>Export to PDF
                             </button>
-                            <button type="button" class="btn btn-outline-info" onclick="shareStrategy()">
+                            <button type="button" class="btn btn-outline-info" onclick="shareStrategy()" id="shareBtn">
                                 <i class="fas fa-share me-2"></i>Share Strategy
                             </button>
                         </div>
@@ -294,7 +294,10 @@ function analyzeSelectedMatch() {
     showLoadingSpinner();
     hideStrategyResults();
     
-    fetch(`/matches/strategy/analyze/${currentMatchId}`)
+    // If page was opened via a public share token, call the public analyze endpoint
+    const publicToken = window.PUBLIC_SHARE_TOKEN || null;
+    const analyzeUrl = publicToken ? `/matches/strategy/public/analyze/${publicToken}/${currentMatchId}` : `/matches/strategy/analyze/${currentMatchId}`;
+    fetch(analyzeUrl)
         .then(response => response.json())
         .then(data => {
             if (data.error) {
@@ -392,9 +395,9 @@ function displayPredictedOutcome(prediction) {
                     <p class="lead">Expected Score</p>
                 </div>
             </div>
-            <div class="col-md-4">
+                    <div class="col-md-4">
                 <div class="text-center">
-                    <h2 class="text-info">${prediction.confidence.toUpperCase()}</h2>
+                    <h2 class="text-info">${typeof prediction.confidence === 'number' ? Math.round(prediction.confidence * 100) + '%' : (prediction.confidence || '')}</h2>
                     <p class="lead">Confidence Level</p>
                 </div>
             </div>
@@ -851,19 +854,37 @@ function exportToPDF() {
 }
 
 function shareStrategy() {
-    if (navigator.share) {
-        navigator.share({
-            title: 'Match Strategy Analysis',
-            text: 'Check out this match strategy analysis',
-            url: window.location.href
-        });
-    } else {
-        // Fallback for browsers that don't support Web Share API
-        const url = window.location.href;
-        navigator.clipboard.writeText(url).then(() => {
-            alert('Strategy page URL copied to clipboard!');
-        });
+    // Create a public share token via the backend
+    if (!currentMatchId) {
+        alert('Select a match to share');
+        return;
     }
+
+    fetch('/matches/strategy/share', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({match_id: currentMatchId})
+    }).then(r => r.json()).then(data => {
+        if (data.error) {
+            alert('Error creating share: ' + data.error);
+            return;
+        }
+        // Server returns a path; client constructs full URL using its origin
+        const path = data.path || '/';
+        const origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
+        const url = origin.replace(/\/$/, '') + path;
+        // Try Web Share API
+        if (navigator.share) {
+            navigator.share({title: 'Shared Match Strategy', text: 'View this shared match strategy', url});
+        } else if (navigator.clipboard) {
+            navigator.clipboard.writeText(url).then(() => alert('Public strategy URL copied to clipboard!'));
+        } else {
+            prompt('Copy this URL to share:', url);
+        }
+    }).catch(err => {
+        console.error(err);
+        alert('Error creating share token');
+    })
 }
 
 function filterMatches() {
@@ -891,7 +912,39 @@ function filterMatches() {
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
-    // Any initialization code here
+    // If the server provided a public share token, expose it to JS (safe JSON serialization)
+    {% if public_share_token is defined %}
+    window.PUBLIC_SHARE_TOKEN = {{ public_share_token|tojson }};
+    {% else %}
+    window.PUBLIC_SHARE_TOKEN = null;
+    {% endif %}
+
+    {% if public_shared_match_id is defined %}
+    window.PUBLIC_SHARED_MATCH_ID = {{ public_shared_match_id }};
+    {% else %}
+    window.PUBLIC_SHARED_MATCH_ID = null;
+    {% endif %}
+
+    // If the server provided precomputed strategy data for the public share, expose it
+    {% if public_strategy_data is defined and public_strategy_data %}
+    window.PUBLIC_STRATEGY_DATA = {{ public_strategy_data|tojson }};
+    {% else %}
+    window.PUBLIC_STRATEGY_DATA = null;
+    {% endif %}
+
+    // If preloaded strategy data exists for this public share, use it immediately
+    if (window.PUBLIC_STRATEGY_DATA) {
+        strategyData = window.PUBLIC_STRATEGY_DATA;
+        // Try to set currentMatchId from provided values
+        currentMatchId = window.PUBLIC_SHARED_MATCH_ID || (strategyData && strategyData.match && strategyData.match.id) || null;
+        displayStrategyResults(strategyData);
+    } else if (window.PUBLIC_SHARE_TOKEN && window.PUBLIC_SHARED_MATCH_ID) {
+        // Otherwise, fall back to fetching the public analyze endpoint
+        currentMatchId = window.PUBLIC_SHARED_MATCH_ID;
+        analyzeSelectedMatch();
+    }
+
+    // Any additional initialization code here
 });
 </script>
 

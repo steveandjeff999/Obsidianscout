@@ -583,6 +583,213 @@ def analyze_strategy(match_id):
         traceback.print_exc()
         return jsonify({'error': f'Error generating strategy analysis: {str(e)}'}), 500
 
+
+@bp.route('/strategy/share', methods=['POST'])
+@login_required
+def create_strategy_share():
+    """Create a public share token for a match strategy.
+
+    Expects JSON body: {"match_id": <int>}
+    Returns: {"url": ".../matches/strategy/public/<token>"}
+    """
+    # Only allow users with appropriate roles to create shares
+    user_roles = current_user.get_role_names()
+    if not any(role in user_roles for role in ['admin', 'analytics']):
+        return jsonify({'error': 'Insufficient permissions'}), 403
+
+    data = request.get_json() or {}
+    match_id = data.get('match_id')
+    if not match_id:
+        return jsonify({'error': 'match_id required'}), 400
+
+    match = Match.query.get(match_id)
+    if not match:
+        return jsonify({'error': 'Match not found'}), 404
+
+    import secrets, json
+    token = secrets.token_urlsafe(24)
+
+    # File-backed storage for shares to avoid DB migrations
+    shares_file = os.path.join(current_app.instance_path, 'strategy_shares.json')
+    os.makedirs(current_app.instance_path, exist_ok=True)
+    try:
+        if os.path.exists(shares_file):
+            with open(shares_file, 'r') as f:
+                shares = json.load(f) or {}
+        else:
+            shares = {}
+    except Exception:
+        shares = {}
+
+    shares[token] = {
+        'match_id': match_id,
+        'created_by': current_user.id if current_user.is_authenticated else None,
+        'created_at': datetime.utcnow().isoformat(),
+        'revoked': False
+    }
+
+    # Attempt to generate and store the serialized strategy data so public viewers get immediate results
+    try:
+        from app.utils.analysis import generate_match_strategy_analysis
+        strategy_data = generate_match_strategy_analysis(match_id)
+        if strategy_data:
+            # Serialize team objects to primitives (like public_analyze_strategy does)
+            def serialize_team_data(team_data):
+                if isinstance(team_data, dict) and 'team' in team_data:
+                    serialized = team_data.copy()
+                    team = serialized.get('team')
+                    if hasattr(team, 'id'):
+                        serialized['team'] = {
+                            'id': team.id,
+                            'team_number': team.team_number,
+                            'team_name': team.team_name,
+                            'location': team.location
+                        }
+                    # drop scouting_data for size and privacy
+                    if 'scouting_data' in serialized:
+                        del serialized['scouting_data']
+                    return serialized
+                return team_data
+
+            if 'red_alliance' in strategy_data and 'teams' in strategy_data['red_alliance']:
+                strategy_data['red_alliance']['teams'] = [serialize_team_data(td) for td in strategy_data['red_alliance']['teams']]
+            if 'blue_alliance' in strategy_data and 'teams' in strategy_data['blue_alliance']:
+                strategy_data['blue_alliance']['teams'] = [serialize_team_data(td) for td in strategy_data['blue_alliance']['teams']]
+
+            shares[token]['data'] = strategy_data
+            shares[token]['data_generated_at'] = datetime.utcnow().isoformat()
+    except Exception:
+        # If analysis generation fails, continue without preloaded data
+        pass
+
+    # Atomic write
+    tmp_path = shares_file + '.tmp'
+    with open(tmp_path, 'w') as f:
+        json.dump(shares, f)
+    os.replace(tmp_path, shares_file)
+
+    # Prefer client-provided origin (browser's address) so shared link uses the same host
+    from urllib.parse import urlparse
+    origin = request.headers.get('Origin') or request.headers.get('Referer')
+    if origin:
+        # Normalize origin to scheme://host[:port]
+        parsed = urlparse(origin)
+        base = f"{parsed.scheme}://{parsed.netloc}"
+    else:
+        base = request.url_root.rstrip('/')
+
+    public_path = url_for('matches.public_strategy_view', token=token)
+    # Return only the path; client JS will prepend the client's origin
+    return jsonify({'path': public_path, 'token': token})
+
+
+@bp.route('/strategy/public/<token>')
+def public_strategy_view(token):
+    """Public-facing strategy page rendered without authentication when a valid token is provided."""
+    # Load file-backed shares
+    import json
+    shares_file = os.path.join(current_app.instance_path, 'strategy_shares.json')
+    share = None
+    try:
+        if os.path.exists(shares_file):
+            with open(shares_file, 'r') as f:
+                shares = json.load(f) or {}
+                entry = shares.get(token)
+                if entry and not entry.get('revoked'):
+                    share = entry
+    except Exception:
+        share = None
+
+    if not share:
+        flash('Shared strategy not found or access revoked.', 'danger')
+        return redirect(url_for('matches.strategy'))
+
+    # Render the same template but include the token and shared match id so JS can call the public analyze endpoint
+    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+    game_config = current_app.config.get('GAME_CONFIG', {})
+    # Fetch the match for the share
+    match = Match.query.get(share.get('match_id'))
+    selected_event = match.event if match else None
+    matches = [match] if match else []
+    # Provide preloaded data if available to avoid an extra analyze fetch
+    preloaded = None
+    try:
+        if 'data' in shares and token in shares:
+            # This branch won't be reached because shares variable is local above — read file again safely
+            pass
+        # Read the entry again to get any stored 'data'
+        with open(shares_file, 'r') as f:
+            all_shares = json.load(f) or {}
+            entry = all_shares.get(token)
+            if entry and entry.get('data'):
+                preloaded = entry.get('data')
+    except Exception:
+        preloaded = None
+
+    return render_template('matches/strategy.html', events=events, selected_event=selected_event, matches=matches, game_config=game_config, public_share_token=token, public_shared_match_id=match.id if match else None, public_strategy_data=preloaded, **get_theme_context())
+
+
+@bp.route('/strategy/public/analyze/<token>/<int:match_id>')
+def public_analyze_strategy(token, match_id):
+    """Public analyze endpoint that returns strategy JSON if token is valid for the match."""
+    # Validate token against file-backed store
+    import json
+    shares_file = os.path.join(current_app.instance_path, 'strategy_shares.json')
+    try:
+        if os.path.exists(shares_file):
+            with open(shares_file, 'r') as f:
+                shares = json.load(f) or {}
+                entry = shares.get(token)
+                if not entry or entry.get('revoked') or int(entry.get('match_id')) != int(match_id):
+                    return jsonify({'error': 'Invalid or revoked share token'}), 403
+        else:
+            return jsonify({'error': 'Invalid or revoked share token'}), 403
+    except Exception as e:
+        return jsonify({'error': 'Invalid or revoked share token'}), 403
+
+    from app.utils.analysis import generate_match_strategy_analysis
+    # First try to return precomputed data from the share file to save time
+    try:
+        with open(shares_file, 'r') as f:
+            shares = json.load(f) or {}
+            entry = shares.get(token)
+            if entry and entry.get('data'):
+                return jsonify(entry.get('data'))
+    except Exception:
+        # Fall back to live computation if reading precomputed data fails
+        pass
+
+    try:
+        strategy_data = generate_match_strategy_analysis(match_id)
+        if not strategy_data:
+            return jsonify({'error': 'Unable to generate strategy analysis for this match'}), 404
+
+        # Reuse serialization logic from analyze_strategy
+        def serialize_team_data(team_data):
+            if isinstance(team_data, dict) and 'team' in team_data:
+                serialized = team_data.copy()
+                serialized['team'] = {
+                    'id': team_data['team'].id,
+                    'team_number': team_data['team'].team_number,
+                    'team_name': team_data['team'].team_name,
+                    'location': team_data['team'].location
+                }
+                if 'scouting_data' in serialized:
+                    del serialized['scouting_data']
+                return serialized
+            return team_data
+
+        if 'red_alliance' in strategy_data and 'teams' in strategy_data['red_alliance']:
+            strategy_data['red_alliance']['teams'] = [serialize_team_data(td) for td in strategy_data['red_alliance']['teams']]
+        if 'blue_alliance' in strategy_data and 'teams' in strategy_data['blue_alliance']:
+            strategy_data['blue_alliance']['teams'] = [serialize_team_data(td) for td in strategy_data['blue_alliance']['teams']]
+
+        return jsonify(strategy_data)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 @bp.route('/strategy/draw')
 @login_required
 def strategy_draw():

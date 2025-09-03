@@ -26,6 +26,68 @@
     </div>
 </div>
 
+            {% if strategy_shares and strategy_shares|length > 0 %}
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="fas fa-bullhorn me-2"></i>My Shared Strategies
+                            </h5>
+                            <small class="text-light">Public match strategy links</small>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                {% for s in strategy_shares %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="card h-100">
+                                        <div class="card-header d-flex justify-content-between align-items-start">
+                                            <h6 class="mb-0">Match ID: {{ s.match_id }}</h6>
+                                            <div class="dropdown">
+                                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                    <i class="fas fa-ellipsis-v"></i>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end">
+                                                    <li>
+                                                        <button class="dropdown-item" type="button" onclick="window.open((window.location.origin||window.location.protocol+'//'+window.location.host).replace(/\/$/, '') + '{{ s.path }}', '_blank')">
+                                                            <i class="fas fa-external-link-alt me-2"></i>View
+                                                        </button>
+                                                    </li>
+                                                    <li>
+                                                        <button class="dropdown-item" onclick="copyShareLink('{{ s.path }}', 'strategy{{ loop.index }}')">
+                                                            <i class="fas fa-copy me-2"></i>Copy Link
+                                                        </button>
+                                                    </li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <form action="{{ url_for('graphs.revoke_strategy_share', token=s.token) }}" method="post" onsubmit="return confirm('Revoke this strategy share?')">
+                                                            <button type="submit" class="dropdown-item text-danger">
+                                                                <i class="fas fa-ban me-2"></i>Revoke
+                                                            </button>
+                                                        </form>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <p class="small text-muted mb-2">Created: {{ s.created_at }}</p>
+                                            <div class="input-group input-group-sm">
+                                                <input type="text" class="form-control share-link-input" value="{{ s.path }}" readonly id="strategyShareLink{{ loop.index }}">
+                                                <button class="btn btn-outline-secondary" type="button" onclick="copyShareLink('{{ s.path }}', 'strategy{{ loop.index }}')">
+                                                    <i class="fas fa-copy"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
 {% if shares %}
 <div class="row">
     {% for share in shares %}
@@ -229,7 +291,18 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function copyShareLink(url, shareId) {
-    navigator.clipboard.writeText(url).then(function() {
+    // If server provided a path, build full URL from client's origin
+    let finalUrl = url;
+    try {
+        if (typeof url === 'string' && url.startsWith('/')) {
+            const origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
+            finalUrl = origin.replace(/\/$/, '') + url;
+        }
+    } catch (e) {
+        finalUrl = url;
+    }
+
+    navigator.clipboard.writeText(finalUrl).then(function() {
         // Show success toast
         const toast = new bootstrap.Toast(document.getElementById('copyToast'));
         toast.show();

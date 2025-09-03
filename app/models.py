@@ -241,6 +241,27 @@ class Match(ConcurrentModelMixin, db.Model):
         team_numbers = self.red_teams + self.blue_teams
         return Team.query.filter(Team.team_number.in_(team_numbers)).all()
 
+
+class StrategyShare(db.Model):
+    """Public share tokens for match strategy analysis.
+
+    A short-lived or permanent token can be created by an authorized user and
+    distributed as a URL that allows non-authenticated users to view the
+    strategy analysis for a specific match.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    match_id = db.Column(db.Integer, db.ForeignKey('match.id'), nullable=False)
+    token = db.Column(db.String(128), unique=True, nullable=False, index=True)
+    created_by = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    revoked = db.Column(db.Boolean, default=False)
+    # Relationship to match for convenient access
+    match = db.relationship('Match', backref=db.backref('strategy_shares', lazy=True))
+
+    def __repr__(self):
+        return f'<StrategyShare match={self.match_id} token={self.token[:8]}... revoked={self.revoked}>'
+    
+
 class ScoutingData(ConcurrentModelMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     match_id = db.Column(db.Integer, db.ForeignKey('match.id'), nullable=False)
