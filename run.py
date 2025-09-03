@@ -7,7 +7,6 @@ from flask import redirect, url_for, request, flash
 from sqlalchemy.exc import IntegrityError, OperationalError
 from app.models import User, Role
 from app.utils.database_init import initialize_database, check_database_health
-
 # ============================================================================
 # SERVER CONFIGURATION FLAG
 # Set to True to use Waitress WSGI server, False to use Flask dev server with SSL

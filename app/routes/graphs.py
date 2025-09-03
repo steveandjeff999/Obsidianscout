@@ -19,6 +19,7 @@ from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
     filter_events_by_scouting_team, get_event_by_code
 )
+import os
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -2446,8 +2447,17 @@ def create_share():
             expires_in_days=expires_in_days
         )
         
-        # Generate the share URL
-        share_url = url_for('graphs.view_shared', share_id=shared_graph.share_id, _external=True)
+        # Generate the share URL using client's origin if available
+        from urllib.parse import urlparse
+        origin = request.headers.get('Origin') or request.headers.get('Referer')
+        if origin:
+            parsed = urlparse(origin)
+            base = f"{parsed.scheme}://{parsed.netloc}"
+        else:
+            base = request.url_root.rstrip('/')
+
+        share_path = url_for('graphs.view_shared', share_id=shared_graph.share_id)
+        share_url = base.rstrip('/') + share_path
         
         flash(f'Graph shared successfully! Share URL: {share_url}', 'success')
         return redirect(url_for('graphs.index'))
@@ -2575,10 +2585,72 @@ def view_shared(share_id):
 def my_shares():
     """View user's created shared graphs"""
     shares = SharedGraph.get_user_shares(current_user.scouting_team_number, current_user.username)
-    
+    # Load strategy shares from instance file (if any)
+    strategy_shares = []
+    try:
+        shares_file = os.path.join(current_app.instance_path, 'strategy_shares.json')
+        if os.path.exists(shares_file):
+            import json
+            with open(shares_file, 'r') as f:
+                all_shares = json.load(f) or {}
+                # Filter shares created by this team or user if desired; currently include all
+                # Determine base URL from request headers if possible
+                from urllib.parse import urlparse
+                origin = request.headers.get('Origin') or request.headers.get('Referer')
+                if origin:
+                    parsed = urlparse(origin)
+                    base = f"{parsed.scheme}://{parsed.netloc}"
+                else:
+                    base = request.url_root.rstrip('/')
+
+                for token, entry in all_shares.items():
+                    if not entry.get('revoked'):
+                        public_path = url_for('matches.public_strategy_view', token=token)
+                        # Return path; client will prepend its origin
+                        strategy_shares.append({
+                            'token': token,
+                            'match_id': entry.get('match_id'),
+                            'created_by': entry.get('created_by'),
+                            'created_at': entry.get('created_at'),
+                            'path': public_path
+                        })
+    except Exception:
+        strategy_shares = []
+
     return render_template('graphs/my_shares.html',
                          shares=shares,
+                         strategy_shares=strategy_shares,
                          **get_theme_context())
+
+
+@bp.route('/strategy_share/<token>/revoke', methods=['POST'])
+@analytics_required
+def revoke_strategy_share(token):
+    """Revoke a file-backed strategy share token"""
+    shares_file = os.path.join(current_app.instance_path, 'strategy_shares.json')
+    try:
+        if not os.path.exists(shares_file):
+            flash('Share not found.', 'danger')
+            return redirect(url_for('graphs.my_shares'))
+        import json
+        with open(shares_file, 'r') as f:
+            shares = json.load(f) or {}
+
+        if token not in shares:
+            flash('Share not found.', 'danger')
+            return redirect(url_for('graphs.my_shares'))
+
+        shares[token]['revoked'] = True
+        tmp_path = shares_file + '.tmp'
+        with open(tmp_path, 'w') as f:
+            json.dump(shares, f)
+        os.replace(tmp_path, shares_file)
+        flash('Strategy share revoked.', 'success')
+    except Exception as e:
+        current_app.logger.exception('Error revoking strategy share')
+        flash('Unable to revoke share.', 'danger')
+
+    return redirect(url_for('graphs.my_shares'))
 
 @bp.route('/share/<int:share_id>/delete', methods=['POST'])
 @analytics_required
