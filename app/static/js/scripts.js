@@ -651,85 +651,92 @@ function generateQRCode() {
 function initializeMatchPeriodTabs() {
     const tabs = document.querySelectorAll('.match-period-tab');
     const sections = document.querySelectorAll('.match-period-section');
-    
+
     if (!tabs.length || !sections.length) return;
-    
-    // Helper function to update UI when switching tabs
-    const switchTab = (targetId) => {
-        // Update tab state
+
+    // Ensure sections have a CSS transition for opacity
+    sections.forEach(section => {
+        section.style.transition = 'opacity 0.25s ease-in-out';
+    });
+
+    const activateTab = (tabEl, targetId) => {
+        // Update tab visual and semantic state
         tabs.forEach(t => {
-            const isActive = t.getAttribute('data-target') === targetId;
-            t.classList.toggle('active', isActive);
-            
-            // Add proper tab color based on period type
-            if (isActive) {
-                if (targetId.includes('auto')) {
-                    t.classList.add('auto-tab');
-                } else if (targetId.includes('teleop')) {
-                    t.classList.add('teleop-tab');
-                } else if (targetId.includes('endgame')) {
-                    t.classList.add('endgame-tab');
+            t.classList.toggle('active', t === tabEl);
+            t.classList.remove('auto-tab', 'teleop-tab', 'endgame-tab', 'postmatch-tab');
+            if (t === tabEl) {
+                if (targetId.includes('auto')) t.classList.add('auto-tab');
+                else if (targetId.includes('teleop')) t.classList.add('teleop-tab');
+                else if (targetId.includes('endgame')) t.classList.add('endgame-tab');
+                else if (targetId.includes('post')) t.classList.add('postmatch-tab');
+            }
+        });
+
+        // Show target immediately and hide others with a fade
+        sections.forEach(section => {
+            if (section.id === targetId) {
+                section.classList.remove('d-none');
+                // Force a reflow to ensure transition runs
+                section.style.opacity = '0';
+                requestAnimationFrame(() => { section.style.opacity = '1'; });
+
+                // Scroll into view if needed
+                const rect = section.getBoundingClientRect();
+                if (rect.top < 0 || rect.bottom > window.innerHeight) {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             } else {
-                t.classList.remove('auto-tab', 'teleop-tab', 'endgame-tab');
+                // Fade out then add d-none when transition completes
+                section.style.opacity = '0';
+                const onTransitionEnd = (e) => {
+                    if (e.propertyName === 'opacity' && section.style.opacity === '0') {
+                        section.classList.add('d-none');
+                        section.removeEventListener('transitionend', onTransitionEnd);
+                    }
+                };
+                section.addEventListener('transitionend', onTransitionEnd);
             }
         });
-        
-        // Fade out all sections first
+    };
+
+    // Initialize: show the active tab's section or default to the first tab
+    const initialActive = document.querySelector('.match-period-tab.active') || tabs[0];
+    if (initialActive) {
+        const targetId = initialActive.getAttribute('data-target');
+        // Hide all sections first
         sections.forEach(section => {
             if (section.id !== targetId) {
+                section.classList.add('d-none');
                 section.style.opacity = '0';
-                setTimeout(() => {
-                    section.classList.add('d-none');
-                }, 300);
+            } else {
+                section.classList.remove('d-none');
+                section.style.opacity = '1';
             }
         });
-        
-        // Then fade in the target section after a short delay
-        setTimeout(() => {
-            const targetSection = document.getElementById(targetId);
-            if (targetSection) {
-                targetSection.classList.remove('d-none');
-                setTimeout(() => {
-                    targetSection.style.opacity = '1';
-                }, 10);
-                
-                // Scroll into view if needed
-                const rect = targetSection.getBoundingClientRect();
-                if (rect.top < 0 || rect.bottom > window.innerHeight) {
-                    targetSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            }
-        }, 300);
-    };
-    
-    // Set initial state for sections - making sure they have the transition CSS property
-    sections.forEach(section => {
-        section.style.transition = 'opacity 0.3s ease-in-out';
-        if (!section.classList.contains('active')) {
-            section.style.opacity = '0';
-        } else {
-            section.style.opacity = '1';
-        }
-    });
-    
-    // Add click handlers to tabs
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const targetId = tab.getAttribute('data-target');
-            switchTab(targetId);
-        });
-    });
-    
-    // Set initial active tab if none is active
-    if (!document.querySelector('.match-period-tab.active')) {
-        const firstTab = tabs[0];
-        if (firstTab) {
-            firstTab.classList.add('active');
-            const targetId = firstTab.getAttribute('data-target');
-            switchTab(targetId);
-        }
+        activateTab(initialActive, targetId);
     }
+
+    // Add click and keyboard handlers to tabs
+    tabs.forEach(tab => {
+        // Make tabs keyboard-accessible if they aren't already
+        tab.setAttribute('role', 'button');
+        tab.setAttribute('tabindex', '0');
+
+        tab.addEventListener('click', (e) => {
+            const targetId = tab.getAttribute('data-target');
+            if (!targetId) return;
+            activateTab(tab, targetId);
+        });
+
+        tab.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                const targetId = tab.getAttribute('data-target');
+                if (!targetId) return;
+                activateTab(tab, targetId);
+            }
+        });
+    });
 }
 
 /**

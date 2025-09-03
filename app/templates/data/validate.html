@@ -15,18 +15,33 @@
               This page compares official API alliance scores with your scouting data for each match. Discrepancies are highlighted below.
             </div>
           </div>
-          <form method="get" action="" class="row g-3 align-items-center mb-3">
+          <div class="d-flex align-items-center mb-3">
+            <form method="get" action="" class="row g-3 align-items-center me-3">
             <div class="col-auto">
               <label for="event_id" class="col-form-label fw-bold">Select Event:</label>
             </div>
             <div class="col-auto">
               <select name="event_id" id="event_id" class="form-select" onchange="this.form.submit()">
                 {% for event in events %}
-                  <option value="{{ event.id }}" {% if event.id == selected_event.id %}selected{% endif %}>{{ event.name }}</option>
+                  <option value="{{ event.id }}" {% if selected_event and event.id == selected_event.id %}selected{% endif %}>{{ event.name }}</option>
                 {% endfor %}
               </select>
             </div>
-          </form>
+
+            <div class="col-auto">
+              <label for="tolerance" class="col-form-label fw-bold">Tolerance (± points):</label>
+            </div>
+            <div class="col-auto">
+              <input type="number" min="0" max="999" step="1" name="tolerance" id="tolerance" class="form-control" value="{{ request.args.get('tolerance', 15) }}" onchange="this.form.submit()" />
+            </div>
+            </form>
+
+            <form id="recalc-form" method="post" action="{{ url_for('data.recalculate_metrics') }}" class="d-inline-block" onsubmit="document.getElementById('recalc_tolerance').value = document.getElementById('tolerance').value;">
+              <input type="hidden" name="event_id" value="{{ selected_event.id if selected_event else '' }}" />
+              <input type="hidden" id="recalc_tolerance" name="tolerance" value="{{ request.args.get('tolerance', 15) }}" />
+              <button type="submit" class="btn btn-primary" title="Recalculate metrics for teams in the selected event">Recalculate Metrics</button>
+            </form>
+          </div>
           <div class="table-responsive">
             <table class="table table-bordered table-hover align-middle mt-3 mb-0">
               <thead class="table-light">

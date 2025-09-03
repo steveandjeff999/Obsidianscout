@@ -1,0 +1,406 @@
+/* Dark Mode Force Override - Loaded Last to Ensure Precedence */
+
+/* Force all cards to use dark theme with maximum specificity */
+body.modern-layout.dark-mode .card,
+body.modern-layout.dark-mode .card.shadow-sm,
+body.modern-layout.dark-mode .card.shadow,
+body.modern-layout.dark-mode .card.border,
+body.modern-layout.dark-mode .card.mb-4,
+body.modern-layout.dark-mode .card.h-100,
+body.modern-layout.dark-mode .dashboard-card,
+body.modern-layout.dark-mode .stat-card,
+body.modern-layout.dark-mode .stat-card.card-interactive,
+body.modern-layout.dark-mode .data-card,
+body.modern-layout.dark-mode .team-card,
+body.modern-layout.dark-mode .match-card {
+    background-color: #2d3338 !important;
+    border-color: #444 !important;
+    color: #e6e6e6 !important;
+}
+
+/* Force stat cards specifically */
+body.modern-layout.dark-mode .stat-card,
+body.modern-layout.dark-mode .stat-card.card-interactive {
+    background-color: #2d3338 !important;
+    border-color: #444 !important;
+    color: #e6e6e6 !important;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Force stat card components */
+body.modern-layout.dark-mode .stat-card .stat-icon,
+body.modern-layout.dark-mode .stat-card .stat-icon i {
+    color: #e6e6e6 !important;
+}
+
+body.modern-layout.dark-mode .stat-card .stat-label {
+    color: #b0b0b0 !important;
+}
+
+body.modern-layout.dark-mode .stat-card .stat-value {
+    color: #e6e6e6 !important;
+}
+
+/* Preserve colored stat values but ensure they're visible */
+body.modern-layout.dark-mode .stat-card .stat-value.text-primary {
+    color: #3d8bfd !important;
+}
+
+body.modern-layout.dark-mode .stat-card .stat-value.text-success {
+    color: #198754 !important;
+}
+
+body.modern-layout.dark-mode .stat-card .stat-value.text-danger {
+    color: #dc3545 !important;
+}
+
+body.modern-layout.dark-mode .stat-card .stat-value.text-info {
+    color: #0dcaf0 !important;
+}
+
+body.modern-layout.dark-mode .stat-card .stat-value.text-warning {
+    color: #ffc107 !important;
+}
+
+/* Force card bodies */
+body.modern-layout.dark-mode .card .card-body,
+body.modern-layout.dark-mode .card-body {
+    background-color: #2d3338 !important;
+    color: #e6e6e6 !important;
+}
+
+/* Force card headers */
+body.modern-layout.dark-mode .card .card-header,
+body.modern-layout.dark-mode .card-header {
+    background-color: #252a30 !important;
+    color: #e6e6e6 !important;
+    border-bottom-color: #444 !important;
+}
+
+/* Force nested cards */
+body.modern-layout.dark-mode .row .card,
+body.modern-layout.dark-mode .col-xl-8 .card,
+body.modern-layout.dark-mode .col-xl-4 .card,
+body.modern-layout.dark-mode .col-md-6 .card,
+body.modern-layout.dark-mode .col-md-4 .card,
+body.modern-layout.dark-mode div[class*="col"] .card {
+    background-color: #2d3338 !important;
+    border-color: #444 !important;
+    color: #e6e6e6 !important;
+}
+
+/* Force nested card bodies */
+body.modern-layout.dark-mode .row .card-body,
+body.modern-layout.dark-mode .col-xl-8 .card-body,
+body.modern-layout.dark-mode .col-xl-4 .card-body,
+body.modern-layout.dark-mode .col-md-6 .card-body,
+body.modern-layout.dark-mode .col-md-4 .card-body,
+body.modern-layout.dark-mode div[class*="col"] .card-body {
+    background-color: #2d3338 !important;
+    color: #e6e6e6 !important;
+}
+
+/* Override Bootstrap utility classes */
+body.modern-layout.dark-mode .bg-white,
+body.modern-layout.dark-mode .bg-light {
+    background-color: #2d3338 !important;
+    color: #e6e6e6 !important;
+}
+
+body.modern-layout.dark-mode .text-dark {
+    color: #e6e6e6 !important;
+}
+
+body.modern-layout.dark-mode .text-muted {
+    color: #b0b0b0 !important;
+}
+
+/* Force list groups */
+body.modern-layout.dark-mode .list-group-item {
+    background-color: #2d3338 !important;
+    color: #e6e6e6 !important;
+    border-color: #444 !important;
+}
+
+body.modern-layout.dark-mode .list-group-item-action:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: #e6e6e6 !important;
+}
+
+/* Force list group flush items (commonly used in cards) */
+body.modern-layout.dark-mode .list-group-flush .list-group-item {
+    background-color: #2d3338 !important;
+    color: #e6e6e6 !important;
+    border-color: #444 !important;
+}
+
+body.modern-layout.dark-mode .list-group-flush .list-group-item-action {
+    background-color: #2d3338 !important;
+    color: #e6e6e6 !important;
+}
+
+body.modern-layout.dark-mode .list-group-flush .list-group-item-action:hover,
+body.modern-layout.dark-mode .list-group-flush .list-group-item-action:focus {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: #e6e6e6 !important;
+}
+
+/* Force text within list group items */
+body.modern-layout.dark-mode .list-group-item .fw-bold,
+body.modern-layout.dark-mode .list-group-item .fw-medium {
+    color: #e6e6e6 !important;
+}
+
+body.modern-layout.dark-mode .list-group-item .text-muted,
+body.modern-layout.dark-mode .list-group-item small.text-muted {
+    color: #b0b0b0 !important;
+}
+
+/* Preserve colored icons within list items */
+body.modern-layout.dark-mode .list-group-item .text-primary {
+    color: #3d8bfd !important;
+}
+
+body.modern-layout.dark-mode .list-group-item .text-success {
+    color: #198754 !important;
+}
+
+body.modern-layout.dark-mode .list-group-item .text-danger {
+    color: #dc3545 !important;
+}
+
+body.modern-layout.dark-mode .list-group-item .text-warning {
+    color: #ffc107 !important;
+}
+
+body.modern-layout.dark-mode .list-group-item .text-info {
+    color: #0dcaf0 !important;
+}
+
+/* Force alerts */
+body.modern-layout.dark-mode .alert {
+    background-color: #2d3338 !important;
+    color: #e6e6e6 !important;
+    border-color: #444 !important;
+}
+
+/* Force badges */
+body.modern-layout.dark-mode .badge {
+    background-color: #2d3338 !important;
+    color: #e6e6e6 !important;
+    border: 1px solid #444 !important;
+}
+
+/* Special handling for colored badges to maintain visibility */
+body.modern-layout.dark-mode .badge.bg-primary {
+    background-color: #3d8bfd !important;
+    color: white !important;
+    border-color: #3d8bfd !important;
+}
+
+body.modern-layout.dark-mode .badge.bg-success {
+    background-color: #198754 !important;
+    color: white !important;
+    border-color: #198754 !important;
+}
+
+body.modern-layout.dark-mode .badge.bg-danger {
+    background-color: #dc3545 !important;
+    color: white !important;
+    border-color: #dc3545 !important;
+}
+
+body.modern-layout.dark-mode .badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #000 !important;
+    border-color: #ffc107 !important;
+}
+
+body.modern-layout.dark-mode .badge.bg-info {
+    background-color: #0dcaf0 !important;
+    color: #000 !important;
+    border-color: #0dcaf0 !important;
+}
+
+/* Force gradient headers to remain visible */
+body.modern-layout.dark-mode .card-header.bg-gradient-primary {
+    background: linear-gradient(135deg, #3d8bfd 0%, #0056b3 100%) !important;
+    color: white !important;
+}
+
+body.modern-layout.dark-mode .card-header.bg-gradient-info {
+    background: linear-gradient(135deg, #0dcaf0 0%, #0aa2c0 100%) !important;
+    color: white !important;
+}
+
+/* Force dropdown buttons within gradient headers */
+body.modern-layout.dark-mode .card-header.bg-gradient-primary .btn-light,
+body.modern-layout.dark-mode .card-header.bg-gradient-info .btn-light {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    color: white !important;
+}
+
+body.modern-layout.dark-mode .card-header.bg-gradient-primary .btn-light:hover,
+body.modern-layout.dark-mode .card-header.bg-gradient-info .btn-light:hover {
+    background-color: rgba(255, 255, 255, 0.3) !important;
+    border-color: rgba(255, 255, 255, 0.4) !important;
+    color: white !important;
+}
+
+/* Force dropdown menus */
+body.modern-layout.dark-mode .dropdown-menu {
+    background-color: #2d3338 !important;
+    border-color: #444 !important;
+    color: #e6e6e6 !important;
+}
+
+body.modern-layout.dark-mode .dropdown-item {
+    color: #e6e6e6 !important;
+    background-color: transparent !important;
+}
+
+body.modern-layout.dark-mode .dropdown-item:hover,
+body.modern-layout.dark-mode .dropdown-item:focus {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: #e6e6e6 !important;
+}
+
+body.modern-layout.dark-mode .dropdown-divider {
+    border-color: #444 !important;
+}
+
+/* Override any inline styles that might force white backgrounds */
+body.modern-layout.dark-mode [style*="background-color: white"],
+body.modern-layout.dark-mode [style*="background-color: #fff"],
+body.modern-layout.dark-mode [style*="background-color: #ffffff"],
+body.modern-layout.dark-mode [style*="background: white"],
+body.modern-layout.dark-mode [style*="background: #fff"],
+body.modern-layout.dark-mode [style*="background: #ffffff"] {
+    background-color: #2d3338 !important;
+    background: #2d3338 !important;
+    color: #e6e6e6 !important;
+}
+
+body.modern-layout.dark-mode [style*="color: black"],
+body.modern-layout.dark-mode [style*="color: #000"],
+body.modern-layout.dark-mode [style*="color: #000000"] {
+    color: #e6e6e6 !important;
+}
+
+/* Ultra-high specificity overrides for problematic elements */
+html body.modern-layout.dark-mode .row .col-sm-6 .stat-card,
+html body.modern-layout.dark-mode .row .col-lg-3 .stat-card,
+html body.modern-layout.dark-mode .row .stat-card.card-interactive,
+html body.modern-layout.dark-mode .col-sm-6 .stat-card,
+html body.modern-layout.dark-mode .col-lg-3 .stat-card {
+    background-color: #2d3338 !important;
+    background-image: none !important;
+    background: #2d3338 !important;
+    border-color: #444 !important;
+    color: #e6e6e6 !important;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Ultra-high specificity for list group items */
+html body.modern-layout.dark-mode .card .card-body .list-group-flush .list-group-item,
+html body.modern-layout.dark-mode .card-body .list-group-flush .list-group-item,
+html body.modern-layout.dark-mode .list-group-flush .list-group-item {
+    background-color: #2d3338 !important;
+    background-image: none !important;
+    background: #2d3338 !important;
+    border-color: #444 !important;
+    color: #e6e6e6 !important;
+}
+
+/* Force text colors with maximum specificity */
+html body.modern-layout.dark-mode .stat-card .stat-icon,
+html body.modern-layout.dark-mode .stat-card .stat-icon i {
+    color: #e6e6e6 !important;
+}
+
+html body.modern-layout.dark-mode .stat-card .stat-label {
+    color: #b0b0b0 !important;
+}
+
+html body.modern-layout.dark-mode .stat-card .stat-value {
+    color: #e6e6e6 !important;
+}
+
+html body.modern-layout.dark-mode .list-group-item .fw-bold,
+html body.modern-layout.dark-mode .list-group-item span.fw-bold {
+    color: #e6e6e6 !important;
+}
+
+/* Override any gradient backgrounds on stat cards */
+html body.modern-layout.dark-mode .stat-card,
+html body.modern-layout.dark-mode .stat-card.card-interactive {
+    background: #2d3338 !important;
+    background-image: none !important;
+    background-color: #2d3338 !important;
+    border: 1px solid #444 !important;
+    color: #e6e6e6 !important;
+}
+
+/* Target stat cards in specific column layouts */
+html body.modern-layout.dark-mode .row.mb-4.g-3 .stat-card,
+html body.modern-layout.dark-mode div[class*="col-"] .stat-card {
+    background: #2d3338 !important;
+    background-image: none !important;
+    background-color: #2d3338 !important;
+    border: 1px solid #444 !important;
+    color: #e6e6e6 !important;
+    padding: 20px !important;
+    border-radius: 8px !important;
+}
+
+/* Force hover states to work properly */
+html body.modern-layout.dark-mode .stat-card:hover,
+html body.modern-layout.dark-mode .stat-card.card-interactive:hover {
+    background: #3a4147 !important;
+    background-image: none !important;
+    background-color: #3a4147 !important;
+    transform: translateY(-3px) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Ensure sidebar brand and section labels are white in dark mode */
+body.modern-layout.dark-mode #appSidebar .fw-bold,
+body.modern-layout.dark-mode #appSidebar .sidebar-brand,
+body.modern-layout.dark-mode #appSidebar .section-label,
+html body.modern-layout.dark-mode #appSidebar .section-label {
+    color: #ffffff !important;
+}
+
+/* Ensure sidebar nav links and muted text are visible */
+body.modern-layout.dark-mode #appSidebar .nav-link,
+body.modern-layout.dark-mode #appSidebar .nav-link .nav-text,
+body.modern-layout.dark-mode #appSidebar .nav-link .text-muted {
+    color: #e6e6e6 !important;
+}
+
+/* Make info alerts follow dark mode for readability */
+body.modern-layout.dark-mode .alert.alert-info,
+html body.modern-layout.dark-mode .alert.alert-info {
+    background-color: #0b3a44 !important;
+    border-color: #1f5660 !important;
+    color: #d7f7fb !important;
+}
+
+body.modern-layout.dark-mode .alert.alert-info i,
+html body.modern-layout.dark-mode .alert.alert-info i {
+    color: #9feafc !important;
+}
+
+body.modern-layout.dark-mode .alert.alert-info strong,
+html body.modern-layout.dark-mode .alert.alert-info strong {
+    color: #ffffff !important;
+}
+
+body.modern-layout.dark-mode .alert.alert-info a,
+html body.modern-layout.dark-mode .alert.alert-info a {
+    color: #cdefff !important;
+    text-decoration: underline !important;
+}
+
+

@@ -89,8 +89,8 @@
     right: 20px;
     width: 300px;
     max-height: 400px;
-    background: white;
-    border: 2px solid #0d6efd;
+    background: var(--card-bg, #ffffff);
+    border: 2px solid var(--primary, #0d6efd);
     border-radius: 8px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.15);
     z-index: 1050;
@@ -109,7 +109,7 @@
 
 .live-preview-title {
     font-weight: bold;
-    color: #0d6efd;
+    color: var(--primary, #0d6efd);
 }
 
 .live-preview-close {
