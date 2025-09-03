@@ -651,6 +651,9 @@
                 </div>
             </div>
             <div class="d-flex flex-column gap-2">
+                {% if user_has_role('admin') %}
+                <a class="btn btn-outline-primary btn-sm w-100 text-start {% if request.endpoint == 'auth.admin_settings' %}active{% endif %}" href="{{ url_for('auth.admin_settings') }}"><i class="fas fa-cog me-2"></i>Admin Settings</a>
+                {% endif %}
                 {% if user_has_role('admin') or user_has_role('analytics') %}
                 <a class="btn btn-outline-primary btn-sm w-100 text-start {% if request.endpoint == 'main.config' %}active{% endif %}" href="{{ url_for('main.config') }}"><i class="fas fa-wrench me-2"></i>Game Config</a>
                 {% endif %}
