@@ -204,10 +204,9 @@
                                                     {% set endgame_element_id = none %}
                                                     {% if metric.get('formula') and game_config.get('endgame_period', {}).get('scoring_elements') %}
                                                         {% for endgame_element in game_config.endgame_period.scoring_elements %}
-                                                            {% if endgame_element.id in metric.formula %}
+                                                            {% if endgame_element_id is none and endgame_element.id in metric.formula %}
                                                                 {% set is_endgame_metric = true %}
                                                                 {% set endgame_element_id = endgame_element.id %}
-                                                                {% break %}
                                                             {% endif %}
                                                         {% endfor %}
                                                     {% endif %}
@@ -232,7 +231,7 @@
                                                                 {% else %}
                                                                     <div class="text-muted">{{ endgame_element.get('default', 'None') }}</div>
                                                                 {% endif %}
-                                                                {% break %}
+                                                                
                                                             {% endif %}
                                                         {% endfor %}
                                                     {% else %}
@@ -301,10 +300,9 @@
                                                     {% set endgame_element_id = none %}
                                                     {% if metric.get('formula') and game_config.get('endgame_period', {}).get('scoring_elements') %}
                                                         {% for endgame_element in game_config.endgame_period.scoring_elements %}
-                                                            {% if endgame_element.id in metric.formula %}
+                                                            {% if endgame_element_id is none and endgame_element.id in metric.formula %}
                                                                 {% set is_endgame_metric = true %}
                                                                 {% set endgame_element_id = endgame_element.id %}
-                                                                {% break %}
                                                             {% endif %}
                                                         {% endfor %}
                                                     {% endif %}
@@ -329,7 +327,6 @@
                                                                 {% else %}
                                                                     <div class="text-muted">{{ endgame_element.get('default', 'None') }}</div>
                                                                 {% endif %}
-                                                                {% break %}
                                                             {% endif %}
                                                         {% endfor %}
                                                     {% else %}

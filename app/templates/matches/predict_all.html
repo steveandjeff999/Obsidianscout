@@ -4,48 +4,134 @@
 
 {% block content %}
 <div class="container">
-    <h1 class="mb-4">Predictions for {{ selected_event.name if selected_event else 'Event' }}</h1>
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h1 class="h4 mb-0">Predictions for {{ selected_event.name if selected_event else 'Event' }}</h1>
+
+        <div class="d-flex gap-2 align-items-center">
+            <div class="input-group">
+                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                <input id="prediction-search" type="search" class="form-control" placeholder="Search by match number or team">
+            </div>
+            <div class="btn-group" role="group" aria-label="View toggle">
+                <button id="view-list" class="btn btn-outline-secondary btn-sm active" title="List view"><i class="fas fa-list"></i></button>
+                <button id="view-grid" class="btn btn-outline-secondary btn-sm" title="Grid view"><i class="fas fa-th-large"></i></button>
+            </div>
+        </div>
+    </div>
 
     {% if not predictions %}
         <div class="alert alert-warning">No matches found for this event.</div>
     {% else %}
-        <div class="list-group">
+        <div id="predictions-container" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
             {% for item in predictions %}
-            <div class="list-group-item mb-3">
-                <h4 class="mb-1">{{ item.match.match_type|capitalize }} {{ item.match.match_number }}</h4>
-
-                {% if item.prediction %}
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h5 class="text-danger">Red Alliance - {{ item.prediction.red_alliance.predicted_score }} pts</h5>
-                            <ul>
-                                {% for t in item.prediction.red_alliance.teams %}
-                                    <li>{{ t.team.team_number }} - {{ t.team.team_name or 'Unknown' }}</li>
-                                {% endfor %}
-                            </ul>
+            <div class="col prediction-card" data-match-number="{{ item.match.match_number }}" data-teams="{% for t in (item.prediction.red_alliance.teams if item.prediction and item.prediction.red_alliance else []) %}{{ t.team.team_number }} {% endfor %}{% for t in (item.prediction.blue_alliance.teams if item.prediction and item.prediction.blue_alliance else []) %}{{ t.team.team_number }} {% endfor %}">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong class="me-2">{{ item.match.match_type|capitalize }} {{ item.match.match_number }}</strong>
+                            <small class="text-muted">Set {{ item.match.set_number or '-' }}</small>
                         </div>
-                        <div class="col-md-6">
-                            <h5 class="text-primary">Blue Alliance - {{ item.prediction.blue_alliance.predicted_score }} pts</h5>
-                            <ul>
-                                {% for t in item.prediction.blue_alliance.teams %}
-                                    <li>{{ t.team.team_number }} - {{ t.team.team_name or 'Unknown' }}</li>
-                                {% endfor %}
-                            </ul>
+                        {% if item.prediction and item.prediction.predicted_winner %}
+                            <span class="badge bg-{{ 'danger' if item.prediction.predicted_winner|lower == 'red' else 'primary' }}">{{ item.prediction.predicted_winner|upper }}</span>
+                        {% else %}
+                            <span class="badge bg-secondary">N/A</span>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        {% if item.prediction %}
+                        <div class="row">
+                            <div class="col-6 border-end">
+                                <h6 class="text-danger mb-1">Red <small class="text-muted">{{ item.prediction.red_alliance.predicted_score or '–' }} pts</small></h6>
+                                <ul class="list-unstyled mb-0">
+                                    {% for t in item.prediction.red_alliance.teams %}
+                                        <li class="small py-1"><span class="badge bg-light text-dark me-2">{{ t.team.team_number }}</span> {{ t.team.team_name or 'Unknown' }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            <div class="col-6">
+                                <h6 class="text-primary mb-1">Blue <small class="text-muted">{{ item.prediction.blue_alliance.predicted_score or '–' }} pts</small></h6>
+                                <ul class="list-unstyled mb-0">
+                                    {% for t in item.prediction.blue_alliance.teams %}
+                                        <li class="small py-1"><span class="badge bg-light text-dark me-2">{{ t.team.team_number }}</span> {{ t.team.team_name or 'Unknown' }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <div class="d-flex justify-content-between small text-muted mb-1">
+                                <div>Confidence</div>
+                                <div>{{ (item.prediction.confidence * 100)|round(1) if item.prediction.confidence is not none else 'N/A' }}%</div>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: {{ (item.prediction.confidence * 100) if item.prediction.confidence is not none else 0 }}%;" aria-valuenow="{{ (item.prediction.confidence * 100)|round(0) if item.prediction.confidence is not none else 0 }}" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+                        {% else %}
+                            <div class="alert alert-secondary mb-0">No prediction available for this match.</div>
+                        {% endif %}
+                    </div>
+                    <div class="card-footer text-muted small d-flex justify-content-between">
+                        <div>Match ID: {{ item.match.id }}</div>
+                        <div>
+                            <a href="{{ url_for('matches.predict_print', match_id=item.match.id) }}" class="btn btn-sm btn-outline-secondary">Printable</a>
                         </div>
                     </div>
-
-                    <div class="mt-2">
-                        <strong>Predicted winner:</strong> {{ item.prediction.predicted_winner|upper }} &nbsp;|
-                        <strong>Confidence:</strong> {{ (item.prediction.confidence * 100)|round(1) if item.prediction.confidence is not none else 'N/A' }}%
-                    </div>
-                {% else %}
-                    <div class="alert alert-secondary">No prediction available for this match.</div>
-                {% endif %}
-
+                </div>
             </div>
             {% endfor %}
         </div>
     {% endif %}
 
 </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('prediction-search');
+    const container = document.getElementById('predictions-container');
+    const cards = Array.from(container ? container.querySelectorAll('.prediction-card') : []);
+
+    function normalize(s) {
+        return (s || '').toString().toLowerCase();
+    }
+
+    function filterCards() {
+        const q = normalize(searchInput.value);
+        cards.forEach(card => {
+            const matchNumber = normalize(card.getAttribute('data-match-number'));
+            const teams = normalize(card.getAttribute('data-teams'));
+            const text = card.textContent.toLowerCase();
+
+            const show = !q || matchNumber.includes(q) || teams.includes(q) || text.includes(q);
+            card.style.display = show ? '' : 'none';
+        });
+    }
+
+    let timer = null;
+    if (searchInput) searchInput.addEventListener('input', function() {
+        clearTimeout(timer);
+        timer = setTimeout(filterCards, 150);
+    });
+
+    // View toggle (list vs grid)
+    const btnList = document.getElementById('view-list');
+    const btnGrid = document.getElementById('view-grid');
+    if (btnList && btnGrid) {
+        btnList.addEventListener('click', () => {
+            btnList.classList.add('active'); btnGrid.classList.remove('active');
+            container.classList.remove('row-cols-lg-3');
+            container.classList.remove('row-cols-md-2');
+            container.classList.add('row-cols-1');
+        });
+        btnGrid.addEventListener('click', () => {
+            btnGrid.classList.add('active'); btnList.classList.remove('active');
+            container.classList.add('row-cols-md-2');
+            container.classList.add('row-cols-lg-3');
+        });
+    }
+});
+</script>
 {% endblock %}

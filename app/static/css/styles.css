@@ -133,7 +133,7 @@ body {
 
 /* QR code */
 .qr-container {
-    background-color: white;
+    background-color: var(--card-bg, #ffffff);
     padding: 1.5rem;
     border-radius: var(--border-radius);
     box-shadow: var(--card-shadow);
@@ -149,7 +149,7 @@ body {
 }
 
 .dark-mode .qr-container {
-    background-color: #ffffff;
+    background-color: var(--card-bg) !important;
 }
 
 #qrcode {
@@ -1768,7 +1768,6 @@ body {
     }
     
     /* Add backdrop for mobile dropdowns */
-}
     
     /* Improve dropdown item touch targets on mobile */
     .navbar-actions .dropdown-item {

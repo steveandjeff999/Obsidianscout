@@ -144,6 +144,9 @@
 
             // Setup save button with enhanced functionality
             setupSaveButton();
+            
+            // Setup export JSON button
+            setupExportJsonButton();
 
             // Setup save locally handler (if scripts.js provided it)
             if (typeof setupSaveLocally === 'function') {
@@ -295,6 +298,88 @@
             });
         }
         
+        // Set up Export JSON button handler
+        function setupExportJsonButton() {
+            const exportBtn = document.getElementById('export-json-button');
+            if (!exportBtn) return;
+            
+            exportBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                const form = document.getElementById('scouting-form');
+                if (!form) return;
+                
+                // Visual feedback - change button state
+                const originalText = exportBtn.innerHTML;
+                exportBtn.disabled = true;
+                exportBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Exporting...';
+                
+                try {
+                    // Get the form data
+                    const formData = new FormData(form);
+                    const jsonData = {};
+                    
+                    // Convert form data to JSON object
+                    for (let [key, value] of formData.entries()) {
+                        if (jsonData[key]) {
+                            // Handle multiple values (like checkboxes with same name)
+                            if (Array.isArray(jsonData[key])) {
+                                jsonData[key].push(value);
+                            } else {
+                                jsonData[key] = [jsonData[key], value];
+                            }
+                        } else {
+                            jsonData[key] = value;
+                        }
+                    }
+                    
+                    // Add metadata
+                    const metadata = {
+                        export_timestamp: new Date().toISOString(),
+                        form_type: 'scouting_data',
+                        team_number: jsonData.team_id || 'unknown',
+                        match_number: jsonData.match_id || 'unknown',
+                        scout_name: jsonData.scout_name || 'unknown'
+                    };
+                    
+                    const exportData = {
+                        metadata: metadata,
+                        form_data: jsonData
+                    };
+                    
+                    // Create and download the JSON file
+                    const jsonString = JSON.stringify(exportData, null, 2);
+                    const blob = new Blob([jsonString], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    // Create download link
+                    const a = document.createElement('a');
+                    a.href = url;
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('.')[0];
+                    a.download = `scouting-data-team-${metadata.team_number}-match-${metadata.match_number}-${timestamp}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    // Reset button state
+                    exportBtn.disabled = false;
+                    exportBtn.innerHTML = originalText;
+                    
+                    showToast('Scouting data exported successfully!', 'success');
+                    
+                } catch (error) {
+                    console.error('Error exporting data:', error);
+                    
+                    // Reset button state
+                    exportBtn.disabled = false;
+                    exportBtn.innerHTML = originalText;
+                    
+                    showToast('Error exporting data. Please try again.', 'error');
+                }
+            });
+        }
+        
         // Form validation helper
         function validateForm(form) {
             const requiredFields = form.querySelectorAll('[required]');
@@ -409,6 +494,10 @@
                 formData.append('team_id', teamId);
                 formData.append('match_id', matchId);
                 
+                // Capture scroll/focus state before AJAX request so we can restore after DOM replacement
+                const __savedScrollY = window.scrollY || 0;
+                const __savedActiveId = (document.activeElement && document.activeElement.id) ? document.activeElement.id : null;
+
                 // Make AJAX request
                 fetch('{{ url_for("scouting.scouting_form") }}', {
                     method: 'POST',
@@ -435,7 +524,7 @@
                     if (data.success) {
                         // Update form content
                         formContent.innerHTML = data.html;
-                        
+
                         // Show warning if there was data corruption
                         if (data.warning) {
                             const warningAlert = document.createElement('div');
@@ -447,14 +536,33 @@
                             `;
                             formContent.insertBefore(warningAlert, formContent.firstChild);
                         }
-                        
+
                         // Update subheading
                         document.getElementById('form-subheading').textContent = 
                             `${data.team_number} - ${data.team_name} | ${data.match_type} ${data.match_number}`;
-                        
-                        // Initialize form components AFTER the form is loaded
+
+                        // Initialize form components AFTER the form is loaded and restore previous scroll/focus
                         setTimeout(() => {
                             initializeFormComponents();
+
+                            // Restore scroll position
+                            try {
+                                window.scrollTo(0, __savedScrollY);
+                            } catch (e) {
+                                console.warn('Could not restore scroll position', e);
+                            }
+
+                            // Restore focus to previously focused element if it still exists
+                            if (__savedActiveId) {
+                                try {
+                                    const prev = document.getElementById(__savedActiveId);
+                                    if (prev && typeof prev.focus === 'function') {
+                                        prev.focus({ preventScroll: true });
+                                    }
+                                } catch (e) {
+                                    // ignore
+                                }
+                            }
                         }, 100);
                     } else {
                         formContent.innerHTML = `
@@ -574,6 +682,10 @@
                 return;
             }
             
+            // Capture scroll/focus state before AJAX request so we can restore after DOM replacement
+            const __savedScrollY = window.scrollY || 0;
+            const __savedActiveId = (document.activeElement && document.activeElement.id) ? document.activeElement.id : null;
+
             // Reload the form content via AJAX
             fetch(window.location.pathname, {
                 method: 'POST',
@@ -608,7 +720,20 @@
                         
                         // Reinitialize form components
                         initializeFormComponents();
-                        
+
+                        // Restore scroll position
+                        try {
+                            window.scrollTo(0, __savedScrollY);
+                        } catch (e) { /* ignore */ }
+
+                        // Restore focus to previously focused element if it still exists
+                        if (__savedActiveId) {
+                            try {
+                                const prev = document.getElementById(__savedActiveId);
+                                if (prev && typeof prev.focus === 'function') prev.focus({ preventScroll: true });
+                            } catch (e) { /* ignore */ }
+                        }
+
                         console.log('Form reloaded successfully with new configuration');
                         showConfigUpdateNotification('Form updated with new configuration');
                     }

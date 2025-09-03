@@ -649,6 +649,14 @@ def validate_data():
             'red_score': m.get('red_score', m.get('scoreRedFinal')),
             'blue_score': m.get('blue_score', m.get('scoreBlueFinal'))
         }
+    # Get tolerance from query params (default 15)
+    try:
+        tolerance = int(request.args.get('tolerance', 15))
+        if tolerance < 0:
+            tolerance = 15
+    except Exception:
+        tolerance = 15
+
     # Prepare comparison results
     results = []
     for match in matches:
@@ -667,6 +675,7 @@ def validate_data():
                 red_total += pts
             elif sd.alliance == 'blue':
                 blue_total += pts
+    # Consider data valid if within +/-tolerance points of the official API score
         results.append({
             'match_number': match.match_number,
             'match_type': match.match_type,
@@ -674,8 +683,8 @@ def validate_data():
             'blue_api': api_scores['blue_score'],
             'red_scout': red_total,
             'blue_scout': blue_total,
-            'discrepancy_red': (api_scores['red_score'] is not None and red_total != api_scores['red_score']),
-            'discrepancy_blue': (api_scores['blue_score'] is not None and blue_total != api_scores['blue_score'])
+            'discrepancy_red': (api_scores['red_score'] is not None and abs((red_total or 0) - (api_scores['red_score'] or 0)) > tolerance),
+            'discrepancy_blue': (api_scores['blue_score'] is not None and abs((blue_total or 0) - (api_scores['blue_score'] or 0)) > tolerance)
         })
     # Custom sort order: practice, qualification, semifinals, finals
     match_type_order = {
@@ -702,6 +711,43 @@ def validate_data():
         return (type_key, num_key, str(row['match_number']))
     results = sorted(results, key=match_sort_key)
     return render_template('data/validate.html', results=results, events=events, selected_event=event, **get_theme_context())
+
+
+@bp.route('/recalculate', methods=['POST'])
+@analytics_required
+@login_required
+def recalculate_metrics():
+    """Recalculate team metrics for teams in the selected event (or all teams if no event provided)."""
+    from app.utils.analysis import calculate_team_metrics
+    try:
+        event_id = request.form.get('event_id', type=int) or request.args.get('event_id', type=int)
+        # Determine target teams
+        if event_id:
+            event = Event.query.get(event_id)
+            if not event:
+                flash('Selected event not found.', 'danger')
+                return redirect(url_for('data.validate_data'))
+            teams = Team.query.join(Team.events).filter(Event.id == event.id).all()
+        else:
+            teams = Team.query.all()
+
+        count = 0
+        for team in teams:
+            # calculate_team_metrics is intentionally called for side-effects (warm caches / logging)
+            try:
+                calculate_team_metrics(team.id)
+            except Exception:
+                # don't stop on individual team failures
+                current_app.logger.exception(f"Error recalculating metrics for team {team.id}")
+            count += 1
+
+        flash(f'Recalculated metrics for {count} teams.', 'success')
+    except Exception as e:
+        current_app.logger.exception('Error during metrics recalculation')
+        flash(f'Error recalculating metrics: {str(e)}', 'danger')
+
+    # Preserve event and tolerance query params when redirecting back
+    return redirect(url_for('data.validate_data', event_id=event_id, tolerance=request.form.get('tolerance', request.args.get('tolerance', 15))))
 
 @bp.route('/api/stats')
 @analytics_required

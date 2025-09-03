@@ -29,6 +29,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modal-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-improvements.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/search-enhancements.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- Dynamic Theme CSS Variables -->
@@ -521,505 +522,267 @@
     
     {% block head %}{% endblock %}
 </head>
-<body class="d-flex flex-column h-100">
-    <header class="app-header">
-        <nav class="navbar navbar-expand-lg navbar-light shadow-sm">
-            <div class="container-fluid px-lg-3 px-md-2 px-1" style="max-width: 100%;">
-                <a class="navbar-brand d-flex align-items-center me-auto" href="{% if user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics') %}{{ url_for('scouting.index') }}{% else %}{{ url_for('main.index') }}{% endif %}">
-                    <i class="fas fa-robot brand-icon me-1 me-sm-2"></i>
-                    <span class="brand-text fw-bold">
-                        <span class="obsidian-gradient">Obsidian</span>Scout <span class="d-none d-md-inline">{{ game_config.season }}</span>
-                    </span>
-                </a>
-                
-                <button class="navbar-toggler border-0 ms-auto" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain" 
-                        aria-controls="navbarMain" aria-expanded="false" aria-label="Toggle navigation">
-                    <i class="fas fa-bars"></i>
+<body class="d-flex flex-column h-100 with-sidebar topbar-fixed">
+    <!-- Global Top Bar (search + user) -->
+    <div class="topbar d-flex align-items-center gap-2 px-3 py-2 shadow-sm" role="banner">
+        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+            <button id="sidebarToggle" class="btn btn-outline-primary btn-sm" aria-label="Toggle navigation"><i class="fas fa-bars"></i></button>
+        </div>
+        {% if current_user.is_authenticated %}
+        <div class="top-search d-none d-sm-block">
+            <form method="GET" action="{{ url_for('search.search_page') }}" class="position-relative" role="search" aria-label="Global search">
+                <div class="enhanced-search-container w-100">
+                    <div class="search-input-wrapper">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" class="form-control enhanced-search-input" name="q" placeholder="Search" id="quickSearchInputTop" autocomplete="off" aria-label="Search teams and users" aria-expanded="false" role="combobox">
+                        <button type="button" class="search-clear-btn" id="searchClearBtnTop" aria-label="Clear search" style="display:none;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <button class="search-submit-btn" type="submit" title="Search" aria-label="Submit search">
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                    <div id="searchSuggestionsTop" class="enhanced-search-suggestions" role="listbox" aria-label="Search suggestions"></div>
+                </div>
+            </form>
+        </div>
+        <a href="{{ url_for('search.search_page') }}" class="btn btn-outline-secondary btn-sm d-sm-none" aria-label="Search"><i class="fas fa-search"></i></a>
+        {% endif %}
+        <!-- User dropdown -->
+        <div class="ms-auto d-flex align-items-center flex-shrink-0">
+            {% if current_user.is_authenticated %}
+            <div class="dropdown">
+                <button class="btn btn-outline-primary btn-sm d-flex align-items-center dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-user-circle me-1"></i>
+                    <span class="d-none d-md-inline">{{ current_user.username }}</span>
                 </button>
-                
-                <div class="collapse navbar-collapse" id="navbarMain">
-                    {% if current_user.is_authenticated %}
-                    
+                <ul class="dropdown-menu dropdown-menu-end shadow">
+                    <li><a class="dropdown-item py-2" href="{{ url_for('auth.profile') }}"><i class="fas fa-user-edit me-2 text-primary"></i>Profile</a></li>
+                    {% if user_has_role('admin') or user_has_role('analytics') %}
+                    <li><a class="dropdown-item py-2 {% if request.endpoint == 'main.config' %}active{% endif %}" href="{{ url_for('main.config') }}"><i class="fas fa-wrench me-2 text-primary"></i>Game Configuration</a></li>
+                    {% endif %}
                     {% if user_has_role('superadmin') %}
-                    <!-- Super Admin Navigation -->
-                    <ul class="navbar-nav me-auto mb-2 mb-lg-0 flex-nowrap">
-                        <li class="nav-item">
-                            <a class="nav-link px-3 py-2 {% if request.endpoint == 'auth.manage_users' %}active{% endif %}" 
-                               href="{{ url_for('auth.manage_users') }}">
-                                <i class="fas fa-user-shield nav-icon text-warning"></i> 
-                                <span class="nav-text">Super Admin Console</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link px-3 py-2 {% if request.endpoint == 'auth.notifications_page' %}active{% endif %}" 
-                               href="{{ url_for('auth.notifications_page') }}">
-                                <i class="fas fa-bell nav-icon text-warning"></i>
-                                <span class="nav-text">Notifications</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link px-3 py-2 {% if request.endpoint == 'auth.add_user' %}active{% endif %}" 
-                               href="{{ url_for('auth.add_user') }}">
-                                <i class="fas fa-user-plus nav-icon text-success"></i> 
-                                <span class="nav-text">Add User</span>
-                            </a>
-                        </li>
-                    </ul>
-                    {% else %}
-                    
-                    <ul class="navbar-nav me-auto mb-2 mb-lg-0 flex-nowrap">
-                        {% if not (user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics')) %}
-                        <li class="nav-item">
-                            <a class="nav-link px-2 py-2 {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}">
-                                <i class="fas fa-home nav-icon"></i> 
-                                <span class="nav-text d-none d-lg-inline">Dashboard</span>
-                            </a>
-                        </li>
-                        {% endif %}
-                        
-                        {% if user_has_role('admin') or user_has_role('analytics') %}
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle px-2 py-2 {% if request.endpoint and (request.endpoint.startswith('teams') or request.endpoint.startswith('matches') or request.endpoint.startswith('alliances') or request.endpoint.startswith('graphs') or request.endpoint.startswith('visualization')) %}active{% endif %}" 
-                               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-chart-bar nav-icon"></i> 
-                                <span class="nav-text d-none d-xl-inline">Analytics</span>
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-animated shadow">
-                                <li><h6 class="dropdown-header">Competition</h6></li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('teams') and request.endpoint != 'teams.ranks' %}active{% endif %}" 
-                                       href="{{ url_for('teams.index') }}">
-                                        <i class="fas fa-users nav-icon text-primary me-2"></i> 
-                                        Teams
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint == 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.ranks') }}">
-                                        <i class="fas fa-list-ol nav-icon text-purple me-2"></i>
-                                        Team Rankings
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('matches') %}active{% endif %}" 
-                                       href="{{ url_for('matches.index') }}">
-                                        <i class="fas fa-gamepad nav-icon text-danger me-2"></i> 
-                                        Matches
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('alliances') %}active{% endif %}" 
-                                       href="{{ url_for('alliances.index') }}">
-                                        <i class="fas fa-handshake nav-icon text-success me-2"></i> 
-                                        Alliance Selection
-                                    </a>
-                                </li>
-                                <li><hr class="dropdown-divider my-1"></li>
-                                <li><h6 class="dropdown-header">Analytics & Graphs</h6></li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('graphs') %}active{% endif %}" 
-                                       href="{{ url_for('graphs.index') }}">
-                                        <i class="fas fa-chart-line nav-icon text-primary me-2"></i> 
-                                        Team Performance
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('graphs') and 'side-by-side' in request.endpoint %}active{% endif %}" 
-                                       href="{{ url_for('graphs.side_by_side') }}">
-                                        <i class="fas fa-columns nav-icon text-success me-2"></i> 
-                                        Side-by-Side Comparison
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint == 'matches.predict' %}active{% endif %}" 
-                                       href="{{ url_for('matches.predict') }}">
-                                        <i class="fas fa-chart-line nav-icon text-warning me-2"></i> 
-                                        Match Predictions
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint == 'matches.predict_all' %}active{% endif %}"
-                                       href="{{ url_for('matches.predict_all') }}">
-                                        <i class="fas fa-list nav-icon text-secondary me-2"></i>
-                                        All Match Predictions
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint == 'matches.strategy' %}active{% endif %}" 
-                                       href="{{ url_for('matches.strategy') }}">
-                                        <i class="fas fa-chess nav-icon text-info me-2"></i> 
-                                        Match Strategy
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint == 'matches.strategy_draw' %}active{% endif %}"
-                                       href="{{ url_for('matches.strategy_draw') }}">
-                                        <i class="fas fa-pen-ruler nav-icon text-primary me-2"></i>
-                                        Strategy Drawing
-                                    </a>
-                                </li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint == 'graphs.my_shares' %}active{% endif %}"
-                                       href="{{ url_for('graphs.my_shares') }}">
-                                        <i class="fas fa-share-alt nav-icon text-info me-2"></i>
-                                        My Graph Shares
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint == 'teams.my_ranks_shares' %}active{% endif %}"
-                                       href="{{ url_for('teams.my_ranks_shares') }}">
-                                        <i class="fas fa-trophy nav-icon text-purple me-2"></i>
-                                        My Ranking Shares
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                        {% endif %}
-                        
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle px-2 py-2 {% if request.endpoint and (request.endpoint.startswith('scouting') or request.endpoint.startswith('scouting_alliances')) %}active{% endif %}" 
-                               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-clipboard-list nav-icon"></i> 
-                                <span class="nav-text d-none d-xl-inline">Scouting</span>
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-animated shadow">
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint == 'scouting.index' %}active{% endif %}" 
-                                       href="{{ url_for('scouting.index') }}">
-                                        <i class="fas fa-home nav-icon text-primary"></i> 
-                                        <span>Dashboard</span>
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint == 'scouting.scouting_form' %}active{% endif %}" 
-                                       href="{{ url_for('scouting.scouting_form') }}">
-                                        <i class="fas fa-rocket nav-icon text-success"></i> 
-                                        <span>Start Scouting</span>
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint == 'pit_scouting.index' %}active{% endif %}" 
-                                       href="{{ url_for('pit_scouting.index') }}">
-                                        <i class="fas fa-wrench nav-icon text-primary"></i> 
-                                        <span>Pit Scouting</span>
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('scouting_alliances') %}active{% endif %}" 
-                                       href="{{ url_for('scouting_alliances.dashboard') }}">
-                                        <i class="fas fa-users nav-icon text-info"></i> 
-                                        <span>Scouting Alliances</span>
-                                    </a>
-                                </li>
-                                <li><hr class="dropdown-divider my-1"></li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint == 'scouting.list_data' %}active{% endif %}" 
-                                       href="{{ url_for('scouting.list_data') }}">
-                                        <i class="fas fa-list nav-icon text-info"></i> 
-                                        <span>All Scouting Data</span>
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint == 'scouting.view_text_elements' %}active{% endif %}" 
-                                       href="{{ url_for('scouting.view_text_elements') }}">
-                                        <i class="fas fa-comment-alt nav-icon text-warning"></i> 
-                                        <span>Text Elements</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                        
-                        {% if user_has_role('admin') or user_has_role('analytics') %}
-                        <li class="nav-item">
-                            <a class="nav-link px-2 py-2 {% if request.endpoint and request.endpoint.startswith('data') %}active{% endif %}" 
-                               href="{{ url_for('data.index') }}">
-                                <i class="fas fa-database nav-icon"></i> 
-                                <span class="nav-text d-none d-xl-inline">Data</span>
-                            </a>
-                        </li>
-                        {% endif %}
-                        
-                        <!-- Combined Help & Tutorial dropdown -->
-                        <li class="nav-item dropdown d-lg-none">
-                            <a class="nav-link dropdown-toggle px-2 py-2" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-ellipsis-h nav-icon"></i> 
-                                <span class="nav-text">More</span>
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-animated shadow">
-                                <li><h6 class="dropdown-header">Help & Support</h6></li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint == 'main.help_page' %}active{% endif %}" href="{{ url_for('main.help_page') }}">
-                                        <i class="fas fa-question-circle nav-icon text-info me-2"></i>
-                                        Help & Documentation
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('setup') %}active{% endif %}" href="{{ url_for('setup.index') }}">
-                                        <i class="fas fa-graduation-cap nav-icon text-success me-2"></i>
-                                        Setup & Tutorial
-                                    </a>
-                                </li>
-                                <li><hr class="dropdown-divider my-1"></li>
-                                <li><h6 class="dropdown-header">Community</h6></li>
-                                <li>
-                                    <a class="dropdown-item py-2" href="{{ url_for('main.users_page') }}">
-                                        <i class="fas fa-users nav-icon text-secondary me-2"></i>
-                                        Users
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2" href="{{ url_for('main.chat_page') }}">
-                                        <i class="fas fa-comments nav-icon text-primary me-2"></i>
-                                        Chat
-                                        <span id="chatUnreadBadgeMobile" class="badge rounded-pill bg-danger ms-1" style="display:none; font-size:0.7em;">0</span>
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint == 'main.sponsors' %}active{% endif %}" href="{{ url_for('main.sponsors') }}">
-                                        <i class="fas fa-handshake nav-icon text-warning me-2"></i>
-                                        Sponsors
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                        
-                        <!-- Desktop Help dropdown -->
-                        <li class="nav-item dropdown d-none d-lg-block">
-                            <a class="nav-link dropdown-toggle px-2 py-2 {% if request.endpoint == 'main.help_page' or (request.endpoint and request.endpoint.startswith('setup')) %}active{% endif %}" 
-                               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-question-circle nav-icon"></i>
-                                <span class="nav-text d-none d-xl-inline">Help</span>
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-animated shadow">
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint == 'main.help_page' %}active{% endif %}" href="{{ url_for('main.help_page') }}">
-                                        <i class="fas fa-book nav-icon text-info me-2"></i>
-                                        Documentation
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint and request.endpoint.startswith('setup') %}active{% endif %}" href="{{ url_for('setup.index') }}">
-                                        <i class="fas fa-play-circle nav-icon text-success me-2"></i>
-                                        Getting Started
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                        <li class="nav-item d-none d-lg-block">
-                            <a class="nav-link px-2 py-2" href="{{ url_for('main.users_page') }}">
-                                <i class="fas fa-users nav-icon"></i>
-                                <span class="nav-text d-none d-xl-inline">Users</span>
-                            </a>
-                        </li>
-                        <li class="nav-item position-relative d-none d-lg-block" id="chatNavItem">
-                            <a class="nav-link px-2 py-2" href="{{ url_for('main.chat_page') }}">
-                                <i class="fas fa-comments nav-icon"></i>
-                                <span class="nav-text d-none d-xl-inline">Chat</span>
-                                <span id="chatUnreadBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="display:none; font-size:0.7em;">0</span>
-                            </a>
-                        </li>
-                        <li class="nav-item d-none d-lg-block">
-                            <a class="nav-link px-2 py-2 {% if request.endpoint == 'main.sponsors' %}active{% endif %}" href="{{ url_for('main.sponsors') }}">
-                                <i class="fas fa-handshake nav-icon"></i>
-                                <span class="nav-text d-none d-xl-inline">Sponsors</span>
-                            </a>
-                        </li>
-                    </ul>
+                    <li><a class="dropdown-item py-2" href="{{ url_for('db_admin.database_status') }}"><i class="fas fa-database me-2 text-success"></i>Database Admin</a></li>
                     {% endif %}
-                    {% endif %}
-                    
-                    <div class="d-flex align-items-center navbar-actions">
-                        {% if current_user.is_authenticated %}
-                        <!-- Enhanced Search Component -->
-                        <div class="search-wrapper me-1 me-md-2 d-flex flex-shrink-1">
-                            <!-- Desktop Quick Search Form -->
-                            <form method="GET" action="{{ url_for('search.search_page') }}" class="d-none d-lg-flex w-100 position-relative">
-                                <div class="enhanced-search-container">
-                                    <div class="search-input-wrapper">
-                                        <i class="fas fa-search search-icon"></i>
-                                        <input type="text" class="form-control enhanced-search-input" name="q" 
-                                               placeholder="Search teams, users..." 
-                                               id="quickSearchInput" autocomplete="off"
-                                               aria-label="Search teams and users"
-                                               aria-expanded="false"
-                                               role="combobox">
-                                        <button type="button" class="search-clear-btn" id="searchClearBtn" 
-                                                aria-label="Clear search" style="display: none;">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                        <button class="search-submit-btn" type="submit" title="Search" aria-label="Submit search">
-                                            <i class="fas fa-arrow-right"></i>
-                                        </button>
-                                    </div>
-                                    <!-- Enhanced Search Suggestions Dropdown -->
-                                    <div id="searchSuggestions" class="enhanced-search-suggestions" role="listbox" aria-label="Search suggestions"></div>
-                                </div>
-                            </form>
-                            <!-- Mobile Search Button -->
-                            <a href="{{ url_for('search.search_page') }}" class="btn btn-outline-secondary btn-sm d-lg-none modern-search-mobile" title="Search">
-                                <i class="fas fa-search"></i>
-                            </a>
-                        </div>
-                        
-                        <!-- Combined User & Admin Menu -->
-                        <div class="dropdown me-1 flex-shrink-0">
-                            <button class="btn btn-outline-primary btn-sm d-flex align-items-center dropdown-toggle" 
-                                    type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-user-circle me-1"></i>
-                                <span class="d-none d-md-inline">{{ current_user.username }}</span>
-                                <span class="d-md-none d-none d-sm-inline">User</span>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end shadow">
-                                <li>
-                                    <div class="dropdown-header border-bottom pb-2 mb-2">
-                                        <div class="fw-bold text-primary">
-                                            {{ current_user.username }}
-                                            {% if user_has_role('superadmin') %}
-                                                <span class="badge bg-dark ms-1">
-                                                    <i class="fas fa-user-shield"></i> Super Admin
-                                                </span>
-                                            {% endif %}
-                                        </div>
-                                        <div class="small text-muted">
-                                            {% for role in current_user.roles %}
-                                                {% if role.name == 'superadmin' %}
-                                                    <span class="badge bg-dark me-1">{{ role.name.title() }}</span>
-                                                {% else %}
-                                                    <span class="badge bg-secondary me-1">{{ role.name.title() }}</span>
-                                                {% endif %}
-                                            {% endfor %}
-                                        </div>
-                                        <!-- Alliance Mode Status -->
-                                        <div class="small mt-1" data-alliance-status style="{% if not is_alliance_mode_active %}display: none;{% endif %}">
-                                            <span class="badge bg-success">
-                                                <i class="fas fa-users me-1"></i>Alliance Mode Active
-                                            </span>
-                                            {% if active_alliance_info %}
-                                            <div class="text-muted mt-1" style="font-size: 0.75rem;">
-                                                {{ active_alliance_info.alliance_name }}
-                                            </div>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2" href="{{ url_for('auth.profile') }}">
-                                        <i class="fas fa-user-edit me-2 text-primary"></i> Edit Profile
-                                    </a>
-                                </li>
-                                
-                                <!-- Admin & Analytics Section -->
-                                {% if user_has_role('admin') or user_has_role('analytics') %}
-                                <li><hr class="dropdown-divider my-1"></li>
-                                <li>
-                                    <h6 class="dropdown-header">Settings & Configuration</h6>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2 {% if request.endpoint == 'main.config' %}active{% endif %}" 
-                                       href="{{ url_for('main.config') }}">
-                                        <i class="fas fa-wrench me-2 text-primary"></i> Game Configuration
-                                    </a>
-                                </li>
-                                <li><hr class="dropdown-divider my-1"></li>
-                                <li>
-                                    <div class="px-3 py-2">
-                                        <label for="themeSelect" class="form-label mb-1">Theme</label>
-                                        <select id="themeSelect" name="theme_id" class="form-select form-select-sm">
-                                            {% for theme_id, theme in themes.items() %}
-                                            <option value="{{ theme_id }}" {% if theme_id == current_theme_id %}selected{% endif %}>{{ theme.name }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    <script>
-                                    document.getElementById('themeSelect').addEventListener('change', function(e) {
-                                        e.preventDefault();
-                                        var themeId = this.value;
-                                        fetch('/themes/apply/' + themeId, {
-                                            method: 'POST',
-                                            headers: {
-                                                'X-Requested-With': 'XMLHttpRequest',
-                                                'Content-Type': 'application/json'
-                                            }
-                                        })
-                                        .then(res => res.json())
-                                        .then(data => {
-                                            if (data.success) {
-                                                window.location.reload();
-                                            } else {
-                                                alert(data.message || 'Failed to apply theme.');
-                                            }
-                                        })
-                                        .catch(() => alert('Failed to apply theme.'));
-                                    });
-                                    </script>
-                                </li>
-                                <li>
-                                    <div class="px-3 py-2">
-                                        <div class="form-check form-switch d-flex align-items-center">
-                                            <input class="form-check-input me-2" type="checkbox" id="darkModeToggle">
-                                            <label class="form-check-label d-flex align-items-center" for="darkModeToggle">
-                                                <i class="fas fa-moon me-2 text-primary" id="darkModeIcon"></i> 
-                                                <span id="darkModeLabel">Dark Mode</span>
-                                            </label>
-                                        </div>
-                                    </div>
-                                </li>
-                                {% endif %}
-                                
-                                <!-- Admin Only Section -->
-                                {% if user_has_role('admin') %}
-                                <li><hr class="dropdown-divider my-1"></li>
-                                <li>
-                                    <h6 class="dropdown-header">Administration</h6>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2" href="{{ url_for('auth.admin_settings') }}">
-                                        <i class="fas fa-cogs me-2 text-info"></i> Admin Settings
-                                    </a>
-                                </li>
-                                {% endif %}
-                                
-                                <!-- Super Admin Only Section -->
-                                {% if user_has_role('superadmin') %}
-                                <li><hr class="dropdown-divider my-1"></li>
-                                <li>
-                                    <h6 class="dropdown-header">Super Administration</h6>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2" href="{{ url_for('db_admin.database_status') }}">
-                                        <i class="fas fa-database me-2 text-success"></i> Database Admin
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2" href="{{ url_for('sync.dashboard') }}">
-                                        <i class="fas fa-sync-alt me-2 text-primary"></i> Multi-Server Sync
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2" href="{{ url_for('realtime.dashboard') }}">
-                                        <i class="fas fa-bolt me-2 text-warning"></i> Real-Time Replication
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item py-2" href="{{ url_for('auth.email_settings') }}">
-                                        <i class="fas fa-envelope me-2 text-primary"></i> Email Settings
-                                    </a>
-                                </li>
-                                {% endif %}
-                                <li><hr class="dropdown-divider my-1"></li>
-                                <li>
-                                    <a class="dropdown-item py-2 text-danger" href="{{ url_for('auth.logout') }}">
-                                        <i class="fas fa-sign-out-alt me-2"></i> Logout
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                        {% endif %}
+                    <li><hr class="dropdown-divider my-1"></li>
+                    <li><a class="dropdown-item py-2 text-danger" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                </ul>
+            </div>
+            {% else %}
+            <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-sm">Login</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside id="appSidebar" class="sidebar">
+        <div class="sidebar-header d-flex align-items-center justify-content-between">
+            <a class="brand d-flex align-items-center text-decoration-none" href="{% if user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics') %}{{ url_for('scouting.index') }}{% else %}{{ url_for('main.index') }}{% endif %}">
+                <i class="fas fa-robot brand-icon me-2"></i>
+                <span class="brand-text fw-bold"><span class="obsidian-gradient">Obsidian</span>Scout</span>
+            </a>
+            <button id="sidebarClose" class="btn btn-link text-muted d-lg-none" aria-label="Close sidebar"><i class="fas fa-times"></i></button>
+        </div>
+    {# Removed quick search from sidebar (now in top bar) #}
+        <nav class="sidebar-nav flex-grow-1" aria-label="Main navigation">
+            {% if current_user.is_authenticated %}
+            {% if user_has_role('superadmin') %}
+            <div class="nav-group">
+                <div class="nav-group-title">Super Admin</div>
+                <a class="nav-link {% if request.endpoint == 'auth.manage_users' %}active{% endif %}" href="{{ url_for('auth.manage_users') }}"><i class="fas fa-user-shield"></i><span>Manage Users</span></a>
+                <a class="nav-link {% if request.endpoint == 'auth.notifications_page' %}active{% endif %}" href="{{ url_for('auth.notifications_page') }}"><i class="fas fa-bell"></i><span>Notifications</span></a>
+                <a class="nav-link {% if request.endpoint == 'auth.add_user' %}active{% endif %}" href="{{ url_for('auth.add_user') }}"><i class="fas fa-user-plus"></i><span>Add User</span></a>
+            </div>
+            {% endif %}
+            <div class="nav-group">
+                <div class="nav-group-title">Core</div>
+                {% if not (user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics')) %}
+                <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}"><i class="fas fa-home"></i><span>Dashboard</span></a>
+                {% endif %}
+                <a class="nav-link {% if request.endpoint == 'scouting.index' %}active{% endif %}" href="{{ url_for('scouting.index') }}"><i class="fas fa-clipboard"></i><span>Scouting Dashboard</span></a>
+                <a class="nav-link {% if request.endpoint == 'scouting.scouting_form' %}active{% endif %}" href="{{ url_for('scouting.scouting_form') }}"><i class="fas fa-rocket"></i><span>Start Scouting</span></a>
+                <a class="nav-link {% if request.endpoint == 'pit_scouting.index' %}active{% endif %}" href="{{ url_for('pit_scouting.index') }}"><i class="fas fa-wrench"></i><span>Pit Scouting</span></a>
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('scouting_alliances') %}active{% endif %}" href="{{ url_for('scouting_alliances.dashboard') }}"><i class="fas fa-users"></i><span>Scouting Alliances</span></a>
+                <a class="nav-link {% if request.endpoint == 'scouting.list_data' %}active{% endif %}" href="{{ url_for('scouting.list_data') }}"><i class="fas fa-list"></i><span>All Data</span></a>
+                <a class="nav-link {% if request.endpoint == 'scouting.view_text_elements' %}active{% endif %}" href="{{ url_for('scouting.view_text_elements') }}"><i class="fas fa-comment-alt"></i><span>Text Elements</span></a>
+            </div>
+            {% if user_has_role('admin') or user_has_role('analytics') %}
+            <div class="nav-group">
+                <div class="nav-group-title">Analytics</div>
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('teams') and request.endpoint != 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.index') }}"><i class="fas fa-users"></i><span>Teams</span></a>
+                <a class="nav-link {% if request.endpoint == 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.ranks') }}"><i class="fas fa-list-ol"></i><span>Team Rankings</span></a>
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('matches') %}active{% endif %}" href="{{ url_for('matches.index') }}"><i class="fas fa-gamepad"></i><span>Matches</span></a>
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('alliances') %}active{% endif %}" href="{{ url_for('alliances.index') }}"><i class="fas fa-handshake"></i><span>Alliance Selection</span></a>
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') %}active{% endif %}" href="{{ url_for('graphs.index') }}"><i class="fas fa-chart-line"></i><span>Performance</span></a>
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') and 'side-by-side' in request.endpoint %}active{% endif %}" href="{{ url_for('graphs.side_by_side') }}"><i class="fas fa-columns"></i><span>Comparison</span></a>
+                <a class="nav-link {% if request.endpoint == 'matches.predict' %}active{% endif %}" href="{{ url_for('matches.predict') }}"><i class="fas fa-chart-area"></i><span>Predictions</span></a>
+                <a class="nav-link {% if request.endpoint == 'matches.predict_all' %}active{% endif %}" href="{{ url_for('matches.predict_all') }}"><i class="fas fa-list"></i><span>All Predictions</span></a>
+                <a class="nav-link {% if request.endpoint == 'matches.strategy' %}active{% endif %}" href="{{ url_for('matches.strategy') }}"><i class="fas fa-chess"></i><span>Strategy</span></a>
+                <a class="nav-link {% if request.endpoint == 'matches.strategy_draw' %}active{% endif %}" href="{{ url_for('matches.strategy_draw') }}"><i class="fas fa-pen-ruler"></i><span>Strategy Draw</span></a>
+                <a class="nav-link {% if request.endpoint == 'graphs.my_shares' %}active{% endif %}" href="{{ url_for('graphs.my_shares') }}"><i class="fas fa-share-alt"></i><span>My Graph Shares</span></a>
+                <a class="nav-link {% if request.endpoint == 'teams.my_ranks_shares' %}active{% endif %}" href="{{ url_for('teams.my_ranks_shares') }}"><i class="fas fa-trophy"></i><span>My Ranking Shares</span></a>
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('data') %}active{% endif %}" href="{{ url_for('data.index') }}"><i class="fas fa-database"></i><span>Data</span></a>
+            </div>
+            {% endif %}
+            <div class="nav-group">
+                <div class="nav-group-title">Community</div>
+                <a class="nav-link {% if request.endpoint == 'main.users_page' %}active{% endif %}" href="{{ url_for('main.users_page') }}"><i class="fas fa-users"></i><span>Users</span></a>
+                <a class="nav-link {% if request.endpoint == 'main.chat_page' %}active{% endif %}" href="{{ url_for('main.chat_page') }}"><i class="fas fa-comments"></i><span>Chat <span id="chatUnreadBadge" class="badge bg-danger ms-1" style="display:none;">0</span></span></a>
+                <a class="nav-link {% if request.endpoint == 'main.sponsors' %}active{% endif %}" href="{{ url_for('main.sponsors') }}"><i class="fas fa-handshake"></i><span>Sponsors</span></a>
+            </div>
+            <div class="nav-group">
+                <div class="nav-group-title">Help</div>
+                <a class="nav-link {% if request.endpoint == 'main.help_page' %}active{% endif %}" href="{{ url_for('main.help_page') }}"><i class="fas fa-book"></i><span>Documentation</span></a>
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('setup') %}active{% endif %}" href="{{ url_for('setup.index') }}"><i class="fas fa-graduation-cap"></i><span>Setup & Tutorial</span></a>
+            </div>
+            {% endif %}
+        </nav>
+        {% if current_user.is_authenticated %}
+        <div class="sidebar-footer mt-auto">
+            <div class="user-mini d-flex align-items-center mb-2">
+                <i class="fas fa-user-circle me-2 fs-4"></i>
+                <div class="flex-grow-1">
+                    <div class="fw-semibold small">{{ current_user.username }}</div>
+                    <div class="text-muted tiny">
+                        {% for role in current_user.roles %}
+                            <span class="badge bg-secondary text-uppercase me-1 mb-1">{{ role.name }}</span>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
-        </nav>
-    </header>
+            <div class="d-flex flex-column gap-2">
+                {% if user_has_role('admin') or user_has_role('analytics') %}
+                <a class="btn btn-outline-primary btn-sm w-100 text-start {% if request.endpoint == 'main.config' %}active{% endif %}" href="{{ url_for('main.config') }}"><i class="fas fa-wrench me-2"></i>Game Config</a>
+                {% endif %}
+                <button id="darkModeButton" class="btn btn-outline-secondary btn-sm w-100 text-start" type="button">
+                    <i class="fas fa-moon me-2" id="darkModeIcon"></i><span id="darkModeLabel">Dark Mode</span>
+                </button>
+                {% if user_has_role('superadmin') %}
+                <a class="btn btn-outline-secondary btn-sm w-100 text-start" href="{{ url_for('db_admin.database_status') }}"><i class="fas fa-database me-2"></i>DB Admin</a>
+                {% endif %}
+                <a class="btn btn-outline-danger btn-sm w-100 text-start" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a>
+            </div>
+        </div>
+        {% endif %}
+    </aside>
+
+    <script>
+    // Sidebar toggle logic (mobile overlay + desktop collapse)
+    (function(){
+        const sidebar = document.getElementById('appSidebar');
+        const toggle = document.getElementById('sidebarToggle');
+        const closeBtn = document.getElementById('sidebarClose');
+        const body = document.body;
+        let _scrollPosition = 0;
+
+        // Use an overlay to absorb touch/scroll events when sidebar is open on mobile.
+        // This avoids fixing body position which on some devices can clip fixed children.
+            function lockBodyScroll(){
+                _scrollPosition = window.scrollY || document.documentElement.scrollTop || 0;
+
+                // Prevent background scrolling while sidebar is open
+                document.documentElement.style.overflow = 'hidden';
+                document.body.style.overflow = 'hidden';
+
+                // Add a transparent overlay that captures touch and click events outside the sidebar
+                let overlay = document.getElementById('sidebarBackdropOverlay');
+                if(!overlay){
+                    overlay = document.createElement('div');
+                    overlay.id = 'sidebarBackdropOverlay';
+                    overlay.style.position = 'fixed';
+                    overlay.style.inset = '0';
+                    overlay.style.zIndex = '1035';
+                    overlay.style.background = 'transparent';
+                    overlay.style.touchAction = 'none';
+                    overlay.addEventListener('touchmove', function(e){ e.preventDefault(); }, { passive: false });
+                    overlay.addEventListener('click', function(){ closeSidebar(); });
+                    document.body.appendChild(overlay);
+                }
+
+                // Ensure sidebar can scroll smoothly on iOS
+                if(sidebar) {
+                    sidebar.style['-webkit-overflow-scrolling'] = 'touch';
+                }
+            }
+        function unlockBodyScroll(){
+                const overlay = document.getElementById('sidebarBackdropOverlay');
+                if(overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+
+                document.documentElement.style.overflow = '';
+                document.body.style.overflow = '';
+                // Restore scroll position
+                window.scrollTo(0, _scrollPosition || 0);
+            }
+
+        function openSidebar(){
+            if(window.innerWidth < 992){
+                sidebar.classList.add('open');
+                body.classList.add('sidebar-open');
+                lockBodyScroll();
+            } else {
+                body.classList.remove('sidebar-collapsed');
+            }
+            if(toggle) toggle.setAttribute('aria-expanded','true');
+        }
+
+        function closeSidebar(){
+            if(window.innerWidth < 992){
+                sidebar.classList.remove('open');
+                body.classList.remove('sidebar-open');
+                try { unlockBodyScroll(); } catch(e){}
+            } else {
+                body.classList.add('sidebar-collapsed');
+            }
+            if(toggle) toggle.setAttribute('aria-expanded','false');
+        }
+
+        function toggleSidebar(){
+            if(window.innerWidth < 992){
+                if(sidebar.classList.contains('open')){ closeSidebar(); } else { openSidebar(); }
+            } else {
+                // desktop: toggle collapse state
+                if(body.classList.contains('sidebar-collapsed')){ openSidebar(); } else { closeSidebar(); }
+            }
+        }
+
+        if(toggle){
+            toggle.setAttribute('aria-controls','appSidebar');
+            toggle.setAttribute('aria-expanded','true');
+            toggle.addEventListener('click', (e)=>{ e.preventDefault(); toggleSidebar(); });
+        }
+
+        if(closeBtn){ closeBtn.addEventListener('click', (e)=>{ e.preventDefault(); closeSidebar(); }); }
+
+        // Nav link click (mobile)
+        if (sidebar) {
+            sidebar.querySelectorAll('a.nav-link').forEach(a=>{
+                a.addEventListener('click', ()=>{ if(window.innerWidth < 992) closeSidebar(); });
+            });
+        }
+
+        // Outside click (mobile)
+        document.addEventListener('click', (e)=>{
+            if(window.innerWidth >= 992) return;
+            if(!sidebar.contains(e.target) && !(toggle && toggle.contains(e.target))) closeSidebar();
+        });
+
+        // Esc key
+        document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ if(window.innerWidth < 992 && sidebar.classList.contains('open')) closeSidebar(); }});
+
+        // Initialize desktop state
+        if(window.innerWidth >= 992){ body.classList.remove('sidebar-collapsed'); }
+
+        window.addEventListener('resize', ()=>{
+            if(window.innerWidth >= 992){
+                sidebar.classList.remove('open');
+                body.classList.remove('sidebar-open');
+                try { unlockBodyScroll(); } catch(e){}
+            } else {
+                body.classList.remove('sidebar-collapsed');
+            }
+        });
+    })();
+    </script>
     {# Embedded site-wide notification banner placed directly under the navbar #}
     {% include '_notification_banner.html' %}
 
@@ -1156,65 +919,39 @@
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize dark mode (guarded - some pages omit the toggle element)
-                const darkModeToggle = document.getElementById('darkModeToggle');
-                const body = document.body;
-                if (darkModeToggle) {
-                    // Check for system preference first, then user's localStorage preference
-                    const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                    const storedPreference = localStorage.getItem('darkMode');
-
-                    // Set initial state based on user preference (if set) or system preference
-                    const isDarkMode = storedPreference !== null ? storedPreference === 'true' : prefersDarkMode;
-
-                    // Set initial state
-                    const darkModeIcon = document.getElementById('darkModeIcon');
-                    const darkModeLabel = document.getElementById('darkModeLabel');
-
-                    if (isDarkMode) {
-                        body.classList.add('dark-mode');
-                        try { darkModeToggle.checked = true; } catch(e) {}
-                        if (darkModeIcon) { darkModeIcon.classList.remove('fa-moon'); darkModeIcon.classList.add('fa-sun'); }
-                        if (darkModeLabel) { darkModeLabel.textContent = 'Light Mode'; }
-                    }
-
-                    // Toggle dark mode on change
-                    darkModeToggle.addEventListener('change', function() {
-                        const darkModeIcon = document.getElementById('darkModeIcon');
-                        const darkModeLabel = document.getElementById('darkModeLabel');
-
-                        if (this.checked) {
-                            body.classList.add('dark-mode');
-                            localStorage.setItem('darkMode', 'true');
-                            if (darkModeIcon) { darkModeIcon.classList.remove('fa-moon'); darkModeIcon.classList.add('fa-sun'); }
-                            if (darkModeLabel) { darkModeLabel.textContent = 'Light Mode'; }
-                        } else {
-                            body.classList.remove('dark-mode');
-                            localStorage.setItem('darkMode', 'false');
-                            if (darkModeIcon) { darkModeIcon.classList.remove('fa-sun'); darkModeIcon.classList.add('fa-moon'); }
-                            if (darkModeLabel) { darkModeLabel.textContent = 'Dark Mode'; }
-                        }
-
-                        // Force refresh computedStyle to ensure all dark mode styles are applied
-                        document.documentElement.style.display='none';
-                        document.documentElement.offsetHeight;
-                        document.documentElement.style.display='';
-                    });
-
-                    // Listen for system preference changes
-                    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-                        // Only change if user hasn't set a preference
-                        if (localStorage.getItem('darkMode') === null) {
-                            if (e.matches) {
-                                body.classList.add('dark-mode');
-                                try { darkModeToggle.checked = true; } catch(e) {}
-                            } else {
-                                body.classList.remove('dark-mode');
-                                try { darkModeToggle.checked = false; } catch(e) {}
-                            }
-                        }
-                    });
+            // Dark mode button logic
+            const darkModeBtn = document.getElementById('darkModeButton');
+            const body = document.body;
+            const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const storedPreference = localStorage.getItem('darkMode');
+            const darkModeIcon = document.getElementById('darkModeIcon');
+            const darkModeLabel = document.getElementById('darkModeLabel');
+            const isDarkMode = storedPreference !== null ? storedPreference === 'true' : prefersDarkMode;
+            function applyState(on){
+                if(on){
+                    body.classList.add('dark-mode');
+                    if(darkModeIcon){darkModeIcon.classList.remove('fa-moon');darkModeIcon.classList.add('fa-sun');}
+                    if(darkModeLabel){darkModeLabel.textContent='Light Mode';}
+                } else {
+                    body.classList.remove('dark-mode');
+                    if(darkModeIcon){darkModeIcon.classList.remove('fa-sun');darkModeIcon.classList.add('fa-moon');}
+                    if(darkModeLabel){darkModeLabel.textContent='Dark Mode';}
                 }
+            }
+            applyState(isDarkMode);
+            if(darkModeBtn){
+                darkModeBtn.addEventListener('click', ()=>{
+                    const now = !body.classList.contains('dark-mode');
+                    localStorage.setItem('darkMode', now ? 'true':'false');
+                    applyState(now);
+                });
+            }
+            // System preference changes only if user hasn't chosen
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+                if (localStorage.getItem('darkMode') === null) {
+                    applyState(e.matches);
+                }
+            });
             
             // Initialize toasts
             var toastElList = document.querySelectorAll('.toast');
@@ -2236,8 +1973,8 @@
     // Enhanced Search functionality
     // Global function for hiding suggestions
     window.hideSuggestions = function() {
-        const searchSuggestions = document.getElementById('searchSuggestions');
-        const searchInput = document.getElementById('quickSearchInput');
+    const searchSuggestions = document.getElementById('searchSuggestionsTop') || document.getElementById('searchSuggestions');
+    const searchInput = document.getElementById('quickSearchInputTop') || document.getElementById('quickSearchInput');
         
         if (searchSuggestions) {
             searchSuggestions.classList.remove('show');
@@ -2301,9 +2038,9 @@
             return;
         }
         
-        const searchInput = document.getElementById('quickSearchInput');
-        const searchSuggestions = document.getElementById('searchSuggestions');
-        const searchClearBtn = document.getElementById('searchClearBtn');
+    const searchInput = document.getElementById('quickSearchInputTop') || document.getElementById('quickSearchInput');
+    const searchSuggestions = document.getElementById('searchSuggestionsTop') || document.getElementById('searchSuggestions');
+    const searchClearBtn = document.getElementById('searchClearBtnTop') || document.getElementById('searchClearBtn');
         
         console.log('Search elements found:', {
             searchInput: !!searchInput,
@@ -2312,7 +2049,7 @@
         });
         
         if (!searchInput) {
-            console.warn('quickSearchInput element not found');
+            console.warn('No search input element found');
             return;
         }
         
@@ -2374,7 +2111,7 @@
             clearTimeout(searchTimeout);
             const query = this.value.trim();
             
-            console.log('Input event:', query, 'length:', query.length);
+            console.log('Input event (top/global):', query, 'length:', query.length);
             
             // Show/hide clear button
             if (searchClearBtn) {
