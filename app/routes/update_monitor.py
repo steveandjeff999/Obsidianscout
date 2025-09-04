@@ -31,7 +31,7 @@ def require_superadmin(f):
 
 logger = logging.getLogger(__name__)
 
-update_monitor_bp = Blueprint('update_monitor', __name__)
+update_monitor_bp = Blueprint('update_monitor', __name__, url_prefix='/update_monitor')
 
 # Track active update processes
 active_updates = {}  # server_id: {status, progress, messages, started_at, etc.}

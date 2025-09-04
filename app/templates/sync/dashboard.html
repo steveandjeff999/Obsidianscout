@@ -144,11 +144,9 @@
                                 <i class="fas fa-sync me-1"></i>Sync All Servers
                             </button>
                         </form>
-                        <form method="POST" action="{{ url_for('sync.update_all_servers') }}" style="display: inline;">
-                            <button type="submit" class="btn btn-danger" title="Download latest repo and update all servers">
-                                <i class="fas fa-cloud-download-alt me-1"></i>Update All Servers
-                            </button>
-                        </form>
+                        <button type="button" class="btn btn-danger" onclick="updateAllServersMonitored()" title="Download latest repo and update all servers with monitoring">
+                            <i class="fas fa-cloud-download-alt me-1"></i>Update All Servers
+                        </button>
                         <form method="POST" action="{{ url_for('sync.force_sync') }}" style="display: inline;">
                             <button type="submit" class="btn btn-warning">
                                 <i class="fas fa-sync-alt me-1"></i>Force Full Sync
@@ -204,21 +202,15 @@
                                     {% endif %}
                                     
                                     <div class="btn-group btn-group-sm w-100" role="group">
-                                        <form method="POST" action="{{ url_for('sync.ping_server', server_id=server.id) }}" style="display: inline;">
-                                            <button type="submit" class="btn btn-outline-info btn-sm">
-                                                <i class="fas fa-heartbeat"></i>
-                                            </button>
-                                        </form>
-                                        <form method="POST" action="{{ url_for('sync.sync_server', server_id=server.id) }}" style="display: inline;">
-                                            <button type="submit" class="btn btn-outline-success btn-sm">
-                                                <i class="fas fa-sync"></i>
-                                            </button>
-                                        </form>
-                                        <form method="POST" action="{{ url_for('sync.update_server', server_id=server.id) }}" style="display: inline;">
-                                            <button type="submit" class="btn btn-outline-danger btn-sm" title="Update this server from GitHub">
-                                                <i class="fas fa-cloud-download-alt"></i>
-                                            </button>
-                                        </form>
+                                        <button type="button" class="btn btn-outline-info btn-sm" onclick="pingServer({{ server.id }})" title="Test connection">
+                                            <i class="fas fa-heartbeat"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success btn-sm" onclick="syncServer({{ server.id }})" title="Sync data">
+                                            <i class="fas fa-sync"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="updateServerMonitored({{ server.id }})" title="Update this server from GitHub">
+                                            <i class="fas fa-cloud-download-alt"></i>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -434,6 +426,176 @@ function createToastContainer() {
     container.style.zIndex = '9999';
     document.body.appendChild(container);
     return container;
+}
+
+// New functions for monitored updates
+function updateServerMonitored(serverId) {
+    // Show loading state
+    const button = event.target;
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    button.disabled = true;
+    
+    // Start monitored update
+    fetch(`/update_monitor/api/start_update/${serverId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            zip_url: 'https://github.com/steveandjeff999/Obsidianscout/archive/refs/heads/main.zip',
+            use_waitress: true
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showToast(`Error: ${data.error}`, 'danger');
+        } else {
+            showToast(`✅ Monitored update started for server! Go to Update Dashboard for real-time progress.`, 'success');
+            // Suggest opening the update dashboard
+            setTimeout(() => {
+                if (confirm('Open Update Dashboard to monitor progress in real-time?')) {
+                    window.open('/update_monitor/dashboard', '_blank');
+                }
+            }, 2000);
+        }
+    })
+    .catch(error => {
+        console.error('Update request failed:', error);
+        showToast(`❌ Failed to start update: ${error.message}`, 'danger');
+    })
+    .finally(() => {
+        // Restore button
+        button.innerHTML = originalContent;
+        button.disabled = false;
+    });
+}
+
+function pingServer(serverId) {
+    const button = event.target;
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    button.disabled = true;
+    
+    fetch(`{{ url_for('sync.ping_server', server_id=0) }}`.replace('0', serverId), {
+        method: 'POST'
+    })
+    .then(response => {
+        if (response.ok) {
+            showToast('✅ Server is reachable', 'success');
+        } else {
+            showToast('❌ Server ping failed', 'danger');
+        }
+    })
+    .catch(error => {
+        showToast(`❌ Ping failed: ${error.message}`, 'danger');
+    })
+    .finally(() => {
+        button.innerHTML = originalContent;
+        button.disabled = false;
+        refreshStatus(); // Refresh the status after ping
+    });
+}
+
+function syncServer(serverId) {
+    const button = event.target;
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    button.disabled = true;
+    
+    fetch(`{{ url_for('sync.sync_server', server_id=0) }}`.replace('0', serverId), {
+        method: 'POST'
+    })
+    .then(response => {
+        if (response.ok) {
+            showToast('✅ Sync request sent', 'success');
+        } else {
+            showToast('❌ Sync request failed', 'danger');
+        }
+    })
+    .catch(error => {
+        showToast(`❌ Sync failed: ${error.message}`, 'danger');
+    })
+    .finally(() => {
+        button.innerHTML = originalContent;
+        button.disabled = false;
+        refreshStatus(); // Refresh the status after sync
+    });
+}
+
+function updateAllServersMonitored() {
+    const button = event.target;
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
+    button.disabled = true;
+    
+    // Get all enabled servers
+    const servers = {{ servers | tojsonfilter | safe }};
+    const enabledServers = servers.filter(server => server.sync_enabled);
+    
+    if (enabledServers.length === 0) {
+        showToast('❌ No servers enabled for sync', 'warning');
+        button.innerHTML = originalContent;
+        button.disabled = false;
+        return;
+    }
+    
+    showToast(`🚀 Starting monitored updates for ${enabledServers.length} servers...`, 'info');
+    
+    // Start updates for all servers
+    let completedCount = 0;
+    let errorCount = 0;
+    
+    enabledServers.forEach(server => {
+        fetch(`/update_monitor/api/start_update/${server.id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                zip_url: 'https://github.com/steveandjeff999/Obsidianscout/archive/refs/heads/main.zip',
+                use_waitress: true
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            completedCount++;
+            if (data.error) {
+                errorCount++;
+                console.error(`Update failed for ${server.name}: ${data.error}`);
+            }
+            
+            // Check if all requests completed
+            if (completedCount === enabledServers.length) {
+                const successCount = enabledServers.length - errorCount;
+                showToast(`✅ Batch update started: ${successCount} successful, ${errorCount} failed`, successCount > 0 ? 'success' : 'danger');
+                
+                // Suggest opening the update dashboard
+                setTimeout(() => {
+                    if (confirm(`Monitor ${successCount} server updates in real-time? This will open the Update Dashboard.`)) {
+                        window.open('/update_monitor/dashboard', '_blank');
+                    }
+                }, 2000);
+            }
+        })
+        .catch(error => {
+            completedCount++;
+            errorCount++;
+            console.error(`Update request failed for ${server.name}:`, error);
+            
+            if (completedCount === enabledServers.length) {
+                const successCount = enabledServers.length - errorCount;
+                showToast(`❌ Batch update completed with errors: ${successCount} successful, ${errorCount} failed`, 'warning');
+            }
+        });
+    });
+    
+    // Restore button after a short delay
+    setTimeout(() => {
+        button.innerHTML = originalContent;
+        button.disabled = false;
+    }, 3000);
 }
 
 // Initialize on page load
