@@ -177,11 +177,14 @@
                     <div class="row" id="server-status">
                         {% for server in servers %}
                         <div class="col-md-6 col-lg-4 mb-3">
-                            <div class="card server-card h-100">
+                            <div class="card server-card h-100" id="server-{{ server.id }}">
                                 <div class="card-body">
                                     <div class="d-flex align-items-center mb-2">
                                         <span class="status-indicator status-{{ 'healthy' if server.is_healthy else 'error' }}"></span>
                                         <h6 class="card-title mb-0">{{ server.name }}</h6>
+                                        {% if not server.sync_enabled %}
+                                        <span class="badge bg-secondary ms-2">Disabled</span>
+                                        {% endif %}
                                     </div>
                                     <p class="card-text text-muted mb-2">
                                         <small>{{ server.protocol }}://{{ server.host }}:{{ server.port }}</small>
@@ -536,8 +539,9 @@ function updateAllServersMonitored() {
     
     serverCards.forEach(card => {
         const serverId = card.id.split('-')[1];
-        // Check if the card doesn't have a "disabled" indicator
-        if (!card.querySelector('.text-muted:contains("Disabled")')) {
+        // Check if the card has a "Disabled" badge (indicating sync_enabled=False)
+        const disabledBadge = card.querySelector('.badge.bg-secondary');
+        if (!disabledBadge || !disabledBadge.textContent.includes('Disabled')) {
             enabledServerIds.push(parseInt(serverId));
         }
     });
