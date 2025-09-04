@@ -33,6 +33,93 @@ logger = logging.getLogger(__name__)
 
 update_monitor_bp = Blueprint('update_monitor', __name__, url_prefix='/update_monitor')
 
+
+@update_monitor_bp.route('/api/test_connection/<int:server_id>')
+@require_superadmin
+def test_connection(server_id):
+    """Test connection to a specific server with detailed diagnostics"""
+    try:
+        from app.models import SyncServer
+        server = SyncServer.query.get_or_404(server_id)
+        
+        results = {
+            'server_name': server.name,
+            'base_url': server.base_url,
+            'tests': []
+        }
+        
+        # Test 1: Basic network connectivity
+        try:
+            import socket
+            import urllib.parse
+            
+            parsed = urllib.parse.urlparse(server.base_url)
+            host = parsed.hostname
+            port = parsed.port
+            
+            results['tests'].append({
+                'name': 'Network Connectivity',
+                'status': 'running',
+                'details': f'Testing TCP connection to {host}:{port}'
+            })
+            
+            sock = socket.create_connection((host, port), timeout=10)
+            sock.close()
+            results['tests'][-1]['status'] = 'success'
+            results['tests'][-1]['message'] = 'TCP connection successful'
+            
+        except Exception as e:
+            results['tests'][-1]['status'] = 'failed'
+            results['tests'][-1]['error'] = str(e)
+        
+        # Test 2: HTTP/HTTPS connectivity
+        try:
+            results['tests'].append({
+                'name': 'HTTP Response',
+                'status': 'running',
+                'details': f'Testing HTTP response from {server.base_url}'
+            })
+            
+            import requests
+            resp = requests.get(server.base_url, timeout=10, verify=False, allow_redirects=True)
+            results['tests'][-1]['status'] = 'success'
+            results['tests'][-1]['message'] = f'HTTP {resp.status_code} response received'
+            results['tests'][-1]['response_code'] = resp.status_code
+            
+        except Exception as e:
+            results['tests'][-1]['status'] = 'failed'
+            results['tests'][-1]['error'] = str(e)
+        
+        # Test 3: Sync API ping
+        try:
+            results['tests'].append({
+                'name': 'Sync API Ping',
+                'status': 'running',
+                'details': f'Testing {server.base_url}/api/sync/ping'
+            })
+            
+            ping_url = f"{server.base_url}/api/sync/ping"
+            resp = requests.get(ping_url, timeout=10, verify=False)
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                results['tests'][-1]['status'] = 'success'
+                results['tests'][-1]['message'] = f"Sync API available - Version: {data.get('version', 'Unknown')}"
+                results['tests'][-1]['data'] = data
+            else:
+                results['tests'][-1]['status'] = 'failed'
+                results['tests'][-1]['error'] = f'HTTP {resp.status_code}: {resp.text[:200]}'
+            
+        except Exception as e:
+            results['tests'][-1]['status'] = 'failed'
+            results['tests'][-1]['error'] = str(e)
+        
+        return jsonify(results)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # Track active update processes
 active_updates = {}  # server_id: {status, progress, messages, started_at, etc.}
 
@@ -101,12 +188,25 @@ class UpdateMonitor:
                 self.add_message(f"🔍 Testing connection to {self.server.base_url}...")
                 try:
                     ping_url = f"{self.server.base_url}/api/sync/ping"
-                    resp = requests.get(ping_url, timeout=10, verify=False)
+                    self.add_message(f"📡 Attempting to reach: {ping_url}")
+                    resp = requests.get(ping_url, timeout=15, verify=False)
                     if resp.status_code == 200:
-                        self.add_message("✅ Server is reachable", 'success')
+                        data = resp.json()
+                        self.add_message(f"✅ Server is reachable - Version: {data.get('version', 'Unknown')}", 'success')
                         self.update_status('connected', 15)
+                        self.last_contact = datetime.utcnow()
                     else:
-                        raise Exception(f"Server returned HTTP {resp.status_code}")
+                        raise Exception(f"Server returned HTTP {resp.status_code}: {resp.text[:200]}")
+                except requests.exceptions.ConnectTimeout:
+                    self.add_message(f"❌ Connection timeout - server may be offline or unreachable", 'error')
+                    self.update_status('failed', 100)
+                    self.error = "Connection timeout - check if server is running and accessible"
+                    return
+                except requests.exceptions.ConnectionError as e:
+                    self.add_message(f"❌ Connection error - cannot reach server: {str(e)[:100]}", 'error')
+                    self.update_status('failed', 100)
+                    self.error = f"Connection error: {str(e)[:100]}"
+                    return
                 except Exception as e:
                     self.add_message(f"❌ Connection failed: {e}", 'error')
                     self.update_status('failed', 100)
