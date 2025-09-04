@@ -248,13 +248,13 @@ class UpdateMonitor:
             self.completed_at = datetime.utcnow()
             self.error = "Server didn't come back online"
 
-@update_monitor_bp.route('/monitor')
+@update_monitor_bp.route('/dashboard')
 @login_required
 @require_superadmin
-def update_monitor():
+def dashboard():
     """Display the update monitor dashboard"""
     servers = SyncServer.query.filter_by(sync_enabled=True).all()
-    return render_template('update_monitor/dashboard.html', servers=servers)
+    return render_template('update_dashboard.html', servers=servers)
 
 @update_monitor_bp.route('/api/start_update/<int:server_id>', methods=['POST'])
 @login_required
