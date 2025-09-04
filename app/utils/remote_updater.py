@@ -12,21 +12,19 @@ from __future__ import annotations
 
 import sys
 import os
+import signal
+import argparse
+import shutil
+import subprocess
+import tempfile
+import time
+from pathlib import Path
 
 # Ensure proper encoding for Windows
 if sys.platform == 'win32':
     # Force UTF-8 encoding for stdout/stderr
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
-
-import argparse
-import os
-import shutil
-import signal
-import subprocess
-import tempfile
-import time
-from pathlib import Path
 
 try:
     import requests
@@ -110,36 +108,67 @@ def start_server(run_py_path: Path, port: int) -> int:
     return proc.pid
 
 
-def kill_other_python_processes(keep_pids: list[int]):
-    # Cross-platform process management
+def kill_server_processes(keep_pids: list[int]):
+    """
+    Kill Python processes that are likely running the server.
+    More targeted than killing ALL Python processes.
+    """
     killed = []
+    current_pid = os.getpid()
     
-    # On Windows, we'll use tasklist and taskkill
+    # On Windows, use tasklist and taskkill
     if os.name == 'nt':
         try:
             import subprocess
-            # Get list of python processes
-            result = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq python*', '/FO', 'CSV'], 
+            # Get list of python processes with command lines
+            result = subprocess.run(['wmic', 'process', 'where', 'name="python.exe"', 'get', 'ProcessId,CommandLine', '/format:csv'], 
                                   capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0:
                 lines = result.stdout.strip().split('\n')[1:]  # Skip header
                 for line in lines:
-                    if line.strip():
-                        parts = line.strip('"').split('","')
-                        if len(parts) >= 2:
+                    if line.strip() and ',' in line:
+                        parts = line.split(',')
+                        if len(parts) >= 3:
                             try:
-                                pid = int(parts[1])
-                                if pid not in keep_pids and pid != os.getpid():
-                                    # Try to terminate the process
-                                    subprocess.run(['taskkill', '/PID', str(pid), '/F'], 
-                                                 capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-                                    killed.append(pid)
-                            except (ValueError, subprocess.SubprocessError):
+                                pid = int(parts[1]) if parts[1].isdigit() else None
+                                command_line = parts[2].lower() if len(parts) > 2 else ''
+                                
+                                if pid and pid != current_pid and pid not in keep_pids:
+                                    # Only kill if it looks like a server process
+                                    server_indicators = ['run.py', 'flask', 'waitress', 'gunicorn', 'app.py']
+                                    if any(indicator in command_line for indicator in server_indicators):
+                                        print(f"Killing server process PID {pid}: {command_line[:100]}", flush=True)
+                                        subprocess.run(['taskkill', '/PID', str(pid), '/F'], 
+                                                     capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                                        killed.append(pid)
+                            except (ValueError, subprocess.SubprocessError, IndexError):
                                 continue
-        except Exception:
-            pass  # If Windows process management fails, continue without killing
+        except Exception as e:
+            print(f"Warning: Could not use wmic, falling back to tasklist: {e}", flush=True)
+            # Fallback to simpler method
+            try:
+                result = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq python.exe', '/FO', 'CSV'], 
+                                      capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                if result.returncode == 0:
+                    lines = result.stdout.strip().split('\n')[1:]  # Skip header
+                    for line in lines:
+                        if line.strip():
+                            parts = line.strip('"').split('","')
+                            if len(parts) >= 2:
+                                try:
+                                    pid = int(parts[1])
+                                    if pid not in keep_pids and pid != current_pid:
+                                        # Be more cautious - only kill if we're sure it's not the updater
+                                        print(f"Killing Python process PID {pid}", flush=True)
+                                        subprocess.run(['taskkill', '/PID', str(pid), '/F'], 
+                                                     capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                                        killed.append(pid)
+                                except (ValueError, subprocess.SubprocessError):
+                                    continue
+            except Exception:
+                print("Warning: Could not kill processes on Windows", flush=True)
     else:
-        # Unix/Linux process management (original code)
+        # Unix/Linux process management
         try:
             my_uid = os.getuid()
             proc_dir = Path('/proc')
@@ -147,12 +176,12 @@ def kill_other_python_processes(keep_pids: list[int]):
                 if not p.name.isdigit():
                     continue
                 pid = int(p.name)
-                if pid in keep_pids or pid == os.getpid():
+                if pid in keep_pids or pid == current_pid:
                     continue
                 try:
                     # Read cmdline
                     cmdline = (p / 'cmdline').read_bytes().decode('utf-8', errors='ignore')
-                    if 'python' in cmdline.lower():
+                    if 'python' in cmdline.lower() and any(indicator in cmdline.lower() for indicator in ['run.py', 'flask', 'waitress', 'gunicorn', 'app.py']):
                         # Check ownership
                         try:
                             uid = int((p / 'status').read_text().split('Uid:')[1].strip().split()[0])
@@ -173,6 +202,77 @@ def kill_other_python_processes(keep_pids: list[int]):
                     continue
         except Exception:
             pass  # If Unix process management fails, continue without killing
+    
+    return killed
+
+
+def stop_server_on_port(port: int, keep_pids: list[int]):
+    """
+    Find and stop processes using the specified port.
+    Much safer than killing all Python processes.
+    """
+    killed = []
+    current_pid = os.getpid()
+    
+    if os.name == 'nt':
+        # Windows: use netstat to find processes using the port
+        try:
+            result = subprocess.run(['netstat', '-ano'], capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if f':{port}' in line and 'LISTENING' in line:
+                        parts = line.split()
+                        if len(parts) >= 5:
+                            try:
+                                pid = int(parts[-1])
+                                if pid != current_pid and pid not in keep_pids:
+                                    print(f"Found process using port {port}: PID {pid}", flush=True)
+                                    subprocess.run(['taskkill', '/PID', str(pid), '/F'], 
+                                                 capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                                    killed.append(pid)
+                            except (ValueError, subprocess.SubprocessError):
+                                continue
+        except Exception as e:
+            print(f"Warning: Could not check port usage: {e}", flush=True)
+    else:
+        # Unix/Linux: use lsof or ss
+        try:
+            # Try lsof first
+            result = subprocess.run(['lsof', f'-i:{port}'], capture_output=True, text=True)
+            if result.returncode == 0:
+                for line in result.stdout.split('\n')[1:]:  # Skip header
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        try:
+                            pid = int(parts[1])
+                            if pid != current_pid and pid not in keep_pids:
+                                print(f"Found process using port {port}: PID {pid}", flush=True)
+                                os.kill(pid, signal.SIGTERM)
+                                killed.append(pid)
+                        except (ValueError, ProcessLookupError):
+                            continue
+        except FileNotFoundError:
+            # lsof not available, try ss
+            try:
+                result = subprocess.run(['ss', '-tlnp'], capture_output=True, text=True)
+                if result.returncode == 0:
+                    for line in result.stdout.split('\n'):
+                        if f':{port}' in line:
+                            # Parse ss output to find PID
+                            if 'pid=' in line:
+                                pid_part = line.split('pid=')[1].split(',')[0]
+                                try:
+                                    pid = int(pid_part)
+                                    if pid != current_pid and pid not in keep_pids:
+                                        print(f"Found process using port {port}: PID {pid}", flush=True)
+                                        os.kill(pid, signal.SIGTERM)
+                                        killed.append(pid)
+                                except (ValueError, ProcessLookupError):
+                                    continue
+            except FileNotFoundError:
+                print("Warning: Neither lsof nor ss available for port checking", flush=True)
+        except Exception as e:
+            print(f"Warning: Could not check port usage: {e}", flush=True)
     
     return killed
 
@@ -279,15 +379,17 @@ def main():
         # Run perform_update from update_from_github_file as subprocess to avoid circular imports
         print("Applying update...", flush=True)
         
-        # First, try to kill any running server processes to unlock files
+        # First, try to stop any running server processes more safely
         print("Stopping any running server processes...", flush=True)
         try:
-            killed_before = kill_other_python_processes([os.getpid()])
+            # Instead of killing all processes, try a more targeted approach
+            # Look for processes using the server port
+            killed_before = stop_server_on_port(args.port, [os.getpid()])
             if killed_before:
-                print(f"Stopped processes: {killed_before}", flush=True)
-                time.sleep(2)  # Give time for files to be released
+                print(f"Stopped server processes: {killed_before}", flush=True)
+                time.sleep(3)  # Give more time for files to be released
             else:
-                print("No running server processes found", flush=True)
+                print("No running server found on target port", flush=True)
         except Exception as e:
             print(f"Warning: Could not stop server processes: {e}", flush=True)
         
@@ -356,7 +458,7 @@ def main():
 
         # Kill other python processes
         print("Killing other python processes (best-effort)...", flush=True)
-        killed = kill_other_python_processes([child_pid, os.getpid()])
+        killed = kill_server_processes([child_pid, os.getpid()])
         print(f"Killed PIDs: {killed}", flush=True)
 
         print("Updater finished; exiting.", flush=True)
