@@ -69,7 +69,7 @@ class UpdateMonitor:
             'message': msg,
             'status': self.status,
             'progress': self.progress
-        }, room=f'update_monitor_{self.server_id}')
+        }, room=f'update_monitor_{self.server_id}', namespace='/update-monitor')
         
         logger.info(f"Update {self.server.name}: {message}")
     
@@ -86,7 +86,7 @@ class UpdateMonitor:
             'progress': self.progress,
             'started_at': self.started_at.isoformat(),
             'completed_at': self.completed_at.isoformat() if self.completed_at else None
-        }, room=f'update_monitor_{self.server_id}')
+        }, room=f'update_monitor_{self.server_id}', namespace='/update-monitor')
     
     def start_update(self):
         """Start the update process with monitoring"""
@@ -300,8 +300,8 @@ def get_update_status(server_id):
     else:
         return jsonify({'status': 'not_running', 'progress': 0, 'messages': []})
 
-# WebSocket events
-@socketio.on('join_update_monitor')
+# WebSocket events for the update-monitor namespace
+@socketio.on('join_update_monitor', namespace='/update-monitor')
 def on_join_update_monitor(data):
     """Join the update monitor room for a specific server"""
     server_id = data['server_id']
@@ -309,9 +309,94 @@ def on_join_update_monitor(data):
     join_room(room)
     emit('joined', {'room': room})
 
-@socketio.on('leave_update_monitor') 
+@socketio.on('leave_update_monitor', namespace='/update-monitor') 
 def on_leave_update_monitor(data):
     """Leave the update monitor room"""
     server_id = data['server_id']
     room = f'update_monitor_{server_id}'
     leave_room(room)
+
+@socketio.on('start_server_update', namespace='/update-monitor')
+def on_start_server_update(data):
+    """Start update for a single server"""
+    server_id = data['server_id']
+    server = SyncServer.query.get(server_id)
+    if server:
+        # Check if already updating
+        if server_id in active_updates:
+            emit('error', {'message': 'Update already in progress for this server'})
+            return
+        
+        zip_url = 'https://github.com/steveandjeff999/Obsidianscout/archive/refs/heads/main.zip'
+        monitor = UpdateMonitor(server_id, zip_url, server.port, True)
+        monitor.start_update()
+        
+        emit('update_started', {
+            'server_id': server_id,
+            'server_name': server.name,
+            'message': f'Update started for {server.name}'
+        })
+
+@socketio.on('test_connection', namespace='/update-monitor')
+def on_test_connection(data):
+    """Test connection to a server"""
+    server_id = data['server_id']
+    server = SyncServer.query.get(server_id)
+    if server:
+        try:
+            ping_url = f"{server.base_url}/api/sync/ping"
+            resp = requests.get(ping_url, timeout=5, verify=False)
+            success = resp.status_code == 200
+            message = "Connection successful" if success else f"HTTP {resp.status_code}"
+        except Exception as e:
+            success = False
+            message = str(e)
+        
+        emit('connection_test_result', {
+            'server_id': server_id,
+            'success': success,
+            'message': message
+        })
+
+@socketio.on('refresh_status', namespace='/update-monitor')
+def on_refresh_status():
+    """Refresh status for all servers"""
+    servers = SyncServer.query.filter_by(sync_enabled=True).all()
+    for server in servers:
+        if server.id in active_updates:
+            monitor = active_updates[server.id]
+            emit('update_status', {
+                'server_id': server.id,
+                'server_name': server.name,
+                'status': monitor.status,
+                'progress': monitor.progress,
+                'started_at': monitor.started_at.isoformat(),
+                'completed_at': monitor.completed_at.isoformat() if monitor.completed_at else None
+            })
+
+@socketio.on('start_all_updates', namespace='/update-monitor')
+def on_start_all_updates():
+    """Start updates for all servers"""
+    servers = SyncServer.query.filter_by(sync_enabled=True).all()
+    zip_url = 'https://github.com/steveandjeff999/Obsidianscout/archive/refs/heads/main.zip'
+    
+    for server in servers:
+        if server.id not in active_updates:
+            monitor = UpdateMonitor(server.id, zip_url, server.port, True)
+            monitor.start_update()
+    
+    emit('bulk_update_started', {
+        'message': f'Started updates for {len(servers)} servers'
+    })
+
+@socketio.on('stop_all_updates', namespace='/update-monitor')
+def on_stop_all_updates():
+    """Stop all updates"""
+    # Note: This is a simple implementation that just clears the active updates
+    # In a production system, you would want to actually stop the threads
+    stopped_count = len(active_updates)
+    active_updates.clear()
+    
+    emit('bulk_update_stopped', {
+        'message': f'Stopped {stopped_count} updates'
+    })

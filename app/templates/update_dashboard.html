@@ -277,6 +277,11 @@ function initializeSocket() {
         $('#connectionStatus').removeClass('disconnected').addClass('connected');
         $('#connectionText').text('Connected');
         console.log('Connected to update monitor');
+        
+        // Join rooms for all servers
+        {% for server in servers %}
+        socket.emit('join_update_monitor', {server_id: {{ server.id }}});
+        {% endfor %}
     });
     
     socket.on('disconnect', function() {
@@ -285,16 +290,21 @@ function initializeSocket() {
         console.log('Disconnected from update monitor');
     });
     
-    socket.on('update_progress', function(data) {
-        updateServerProgress(data);
-    });
-    
     socket.on('update_status', function(data) {
         updateServerStatus(data);
     });
     
-    socket.on('update_log', function(data) {
-        addLogEntry(data);
+    socket.on('update_message', function(data) {
+        addLogEntry({
+            server_id: data.server_id,
+            level: data.message.level,
+            message: data.message.message
+        });
+        updateServerProgress({
+            server_id: data.server_id,
+            progress: data.progress,
+            status: data.message.message
+        });
     });
     
     socket.on('update_complete', function(data) {
