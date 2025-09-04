@@ -240,6 +240,14 @@ def perform_update(release: str | Path, is_zip: bool = False, preserve_extra: se
                 skipped.append((name, 'VCS - skipped'))
                 continue
 
+            # CRITICAL: Protect ALL database files from being overwritten
+            # This prevents database corruption during updates
+            if (name.endswith('.db') or name.endswith('.db-wal') or name.endswith('.db-shm') or 
+                name.endswith('.sqlite') or name.endswith('.sqlite3')):
+                _log(f"🔒 Database file protection: Skipping '{name}' to prevent corruption")
+                skipped.append((name, 'DATABASE PROTECTED - skipped to prevent corruption'))
+                continue
+
             # For preserved paths, merge new files/dirs without overwriting existing content.
             if name in preserve:
                 try:

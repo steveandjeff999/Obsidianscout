@@ -619,15 +619,19 @@ def main():
         
         # Check if critical database files are accessible before update
         print("Checking database file accessibility and creating safety copies...", flush=True)
-        db_files_to_check = [
-            repo_root / 'instance' / 'scouting.db',
-            repo_root / 'instance' / 'scouting.db-wal', 
-            repo_root / 'instance' / 'scouting.db-shm',
-            repo_root / 'instance' / 'users.db',
-            repo_root / 'scouting.db',  # Check root directory too
-            repo_root / 'scouting.db-wal',
-            repo_root / 'scouting.db-shm'
-        ]
+        
+        # Find ALL database files in workspace - be comprehensive
+        all_db_files = []
+        for db_pattern in ['*.db', '*.db-wal', '*.db-shm', '*.sqlite', '*.sqlite3']:
+            all_db_files.extend(repo_root.glob(db_pattern))
+            all_db_files.extend((repo_root / 'instance').glob(db_pattern))
+            
+        # Remove duplicates and ensure they exist
+        db_files_to_check = list(set(f for f in all_db_files if f.exists()))
+        
+        print(f"Found {len(db_files_to_check)} database files to protect:", flush=True)
+        for db_file in db_files_to_check:
+            print(f"  - {db_file.relative_to(repo_root)}", flush=True)
         
         # Create safety copies of critical database files
         safety_backup_dir = repo_root / 'temp_db_backup'
@@ -748,6 +752,48 @@ def main():
             
             post_update_db_files = list(repo_root.glob('*.db*')) + list((repo_root / 'instance').glob('*.db*'))
             print(f"Database files after update: {[str(f.relative_to(repo_root)) for f in post_update_db_files if f.exists()]}", flush=True)
+            
+            # CRITICAL: Verify database files were not corrupted or replaced
+            print("=== DATABASE CORRUPTION VERIFICATION ===", flush=True)
+            corrupted_or_missing_dbs = []
+            
+            for original_db, safety_copy in safety_copies:
+                if not original_db.exists():
+                    print(f"❌ CRITICAL: Database file missing after update: {original_db.relative_to(repo_root)}", flush=True)
+                    corrupted_or_missing_dbs.append(original_db)
+                else:
+                    # Check if file size changed dramatically (might indicate corruption/replacement)
+                    try:
+                        original_size = original_db.stat().st_size
+                        safety_size = safety_copy.stat().st_size
+                        
+                        if original_size == 0 and safety_size > 0:
+                            print(f"❌ CRITICAL: Database file appears corrupted (zero size): {original_db.relative_to(repo_root)}", flush=True)
+                            corrupted_or_missing_dbs.append(original_db)
+                        elif original_size < safety_size * 0.5:  # 50% size reduction might indicate corruption
+                            print(f"⚠ WARNING: Database file significantly smaller after update: {original_db.relative_to(repo_root)}", flush=True)
+                            print(f"   Original: {original_size} bytes, Current: {safety_size} bytes", flush=True)
+                        else:
+                            print(f"✓ Database file intact: {original_db.relative_to(repo_root)} ({original_size} bytes)", flush=True)
+                    except Exception as e:
+                        print(f"⚠ Could not verify database integrity: {original_db.relative_to(repo_root)} - {e}", flush=True)
+            
+            # Restore corrupted database files
+            if corrupted_or_missing_dbs:
+                print(f"🚨 RESTORING {len(corrupted_or_missing_dbs)} corrupted/missing database files...", flush=True)
+                for corrupted_db in corrupted_or_missing_dbs:
+                    for original_db, safety_copy in safety_copies:
+                        if original_db == corrupted_db and safety_copy.exists():
+                            try:
+                                corrupted_db.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(safety_copy, corrupted_db)
+                                print(f"✅ Restored database: {corrupted_db.relative_to(repo_root)}", flush=True)
+                            except Exception as e:
+                                print(f"❌ Failed to restore database {corrupted_db.relative_to(repo_root)}: {e}", flush=True)
+            else:
+                print("✅ All database files verified intact - no corruption detected", flush=True)
+                
+            print("=== END DATABASE VERIFICATION ===", flush=True)
             print("=== END POST-UPDATE CHECK ===", flush=True)
             
             # Check for specific update failure patterns in the output
@@ -783,6 +829,14 @@ def main():
                             matching_files = [f for f in app_files if f.endswith(pattern)]
                         for zip_file in matching_files:
                             try:
+                                # CRITICAL: Skip database files to prevent corruption
+                                file_name = zip_file.split('/')[-1] if '/' in zip_file else zip_file.split('\\')[-1] if '\\' in zip_file else zip_file
+                                if (file_name.endswith('.db') or file_name.endswith('.db-wal') or 
+                                    file_name.endswith('.db-shm') or file_name.endswith('.sqlite') or 
+                                    file_name.endswith('.sqlite3')):
+                                    print(f"🔒 Database protection: Skipping {file_name} extraction to prevent corruption", flush=True)
+                                    continue
+                                    
                                 # Determine target path - handle different ZIP structures
                                 target_path = None
                                 
