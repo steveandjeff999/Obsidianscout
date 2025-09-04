@@ -1561,6 +1561,19 @@ class SyncLog(ConcurrentModelMixin, db.Model):
             return min(100, (self.items_synced / self.total_items) * 100)
         return 0
     
+    def _parse_sync_details(self):
+        """Safely parse sync_details JSON, handling malformed data"""
+        if not self.sync_details:
+            return None
+        
+        try:
+            return json.loads(self.sync_details)
+        except (json.JSONDecodeError, TypeError) as e:
+            # Log the error and return a safe default
+            print(f"Warning: Failed to parse sync_details for SyncLog {self.id}: {e}")
+            print(f"Raw sync_details: {repr(self.sync_details)}")
+            return {'error': 'Invalid JSON data', 'raw_data': str(self.sync_details)}
+    
     def to_dict(self):
         """Convert to dictionary for API responses"""
         return {
@@ -1578,7 +1591,7 @@ class SyncLog(ConcurrentModelMixin, db.Model):
             'total_items': self.total_items,
             'bytes_transferred': self.bytes_transferred,
             'error_message': self.error_message,
-            'sync_details': json.loads(self.sync_details) if self.sync_details else None
+            'sync_details': self._parse_sync_details()
         }
 
 
