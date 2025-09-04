@@ -62,7 +62,7 @@ def download_zip(url: str, dest: Path) -> Path:
     
     if urllib is not None:
         try:
-            print("🔄 Retrying download with urllib...", flush=True)
+            print("Retrying download with urllib...", flush=True)
             with urllib.request.urlopen(url, timeout=60) as response:
                 with open(dest, 'wb') as f:
                     while True:
@@ -216,13 +216,13 @@ def main():
     # Change to repo root directory
     original_cwd = Path.cwd()
     os.chdir(repo_root)
-    print(f"📁 Changed working directory to: {repo_root}", flush=True)
+    print(f"Changed working directory to: {repo_root}", flush=True)
     
     # Environment diagnostics
     print(f"Python executable: {sys.executable}", flush=True)
     print(f"Python version: {sys.version}", flush=True)
     if requests is None:
-        print("⚠️  requests module not available - trying to install it...", flush=True)
+        print("Warning: requests module not available - trying to install it...", flush=True)
         try:
             import subprocess
             result = subprocess.run([
@@ -240,10 +240,10 @@ def main():
                     print("ERROR: Failed to import requests after installation", flush=True)
             else:
                 print(f"ERROR: Failed to install requests: {result.stderr}", flush=True)
-                print("🔄 Will use urllib fallback", flush=True)
+                print("Will use urllib fallback", flush=True)
         except Exception as e:
             print(f"ERROR: Error installing requests: {e}", flush=True)
-            print("🔄 Will use urllib fallback", flush=True)
+            print("Will use urllib fallback", flush=True)
     else:
         print("SUCCESS: requests module is available", flush=True)
         
@@ -268,21 +268,29 @@ def main():
             if backup_result.returncode == 0:
                 print("SUCCESS: Sync config backed up successfully", flush=True)
             else:
-                print(f"⚠️  Sync config backup warning: {backup_result.stderr}", flush=True)
+                print(f"Warning: Sync config backup warning: {backup_result.stderr}", flush=True)
         except Exception as e:
-            print(f"⚠️  Could not backup sync config: {e}", flush=True)
+            print(f"Warning: Could not backup sync config: {e}", flush=True)
 
-        # Run perform_update from update_from_github_file
-        sys.path.insert(0, str(repo_root))
-        from update_from_github_file import perform_update
-
+        # Run perform_update from update_from_github_file as subprocess to avoid circular imports
         print("Applying update...", flush=True)
-        # Preserve sync server configuration by ensuring instance folder is preserved
-        rc = perform_update(str(zip_path), is_zip=True, force=True, repo_root=repo_root)
-        print(f"perform_update returned {rc}", flush=True)
-        
-        if rc != 0:
-            print(f"WARNING: Update returned non-zero exit code {rc}", flush=True)
+        try:
+            update_result = subprocess.run([
+                sys.executable, 'update_from_github_file.py', str(zip_path), '--zip', '--force'
+            ], capture_output=True, text=True, cwd=repo_root)
+            
+            print(f"Update output: {update_result.stdout}", flush=True)
+            if update_result.stderr:
+                print(f"Update errors: {update_result.stderr}", flush=True)
+                
+            rc = update_result.returncode
+            print(f"Update process returned {rc}", flush=True)
+            
+            if rc != 0:
+                print(f"WARNING: Update returned non-zero exit code {rc}", flush=True)
+        except Exception as e:
+            print(f"ERROR: Failed to run update: {e}", flush=True)
+            rc = 1
 
         # Verify sync server configuration is preserved
         print("Verifying sync server configuration...", flush=True)
@@ -294,9 +302,9 @@ def main():
                 print("SUCCESS: Sync server configuration verified", flush=True)
                 print(verify_result.stdout, flush=True)
             else:
-                print(f"⚠️  Sync config verification issue: {verify_result.stderr}", flush=True)
+                print(f"Warning: Sync config verification issue: {verify_result.stderr}", flush=True)
         except Exception as e:
-            print(f"⚠️  Could not verify sync config: {e}", flush=True)
+            print(f"Warning: Could not verify sync config: {e}", flush=True)
 
         # Edit run.py
         print(f"Setting USE_WAITRESS={args.use_waitress} in run.py", flush=True)
