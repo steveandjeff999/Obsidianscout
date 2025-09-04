@@ -478,7 +478,7 @@ def main():
             print(f"Warning: Could not stop server processes: {e}", flush=True)
         
         # Check if critical database files are accessible before update
-        print("Checking database file accessibility...", flush=True)
+        print("Checking database file accessibility and creating safety copies...", flush=True)
         db_files_to_check = [
             repo_root / 'instance' / 'scouting.db',
             repo_root / 'instance' / 'scouting.db-wal', 
@@ -489,21 +489,32 @@ def main():
             repo_root / 'scouting.db-shm'
         ]
         
+        # Create safety copies of critical database files
+        safety_backup_dir = repo_root / 'temp_db_backup'
+        safety_backup_dir.mkdir(exist_ok=True)
+        
+        safety_copies = []
         locked_files = []
         for db_file in db_files_to_check:
             if db_file.exists():
                 try:
-                    # Try to open the file to check if it's locked
+                    # Create a safety copy before update
+                    safety_copy = safety_backup_dir / db_file.name
+                    shutil.copy2(db_file, safety_copy)
+                    safety_copies.append((db_file, safety_copy))
+                    print(f"✓ Safety copy created: {db_file.name}", flush=True)
+                    
+                    # Try to open the original file to check if it's locked
                     with open(db_file, 'r+b') as f:
                         pass  # Just check if we can open it
                     print(f"✓ Database file accessible: {db_file.name}", flush=True)
                 except Exception as e:
-                    print(f"⚠ Database file may be locked: {db_file.name} - {e}", flush=True)
+                    print(f"⚠ Database file issue: {db_file.name} - {e}", flush=True)
                     locked_files.append(str(db_file))
         
         if locked_files:
             print(f"Warning: Some database files may be locked: {locked_files}", flush=True)
-            print("Proceeding with update, but database files may not be properly preserved", flush=True)
+            print("Safety copies created - will restore if needed after update", flush=True)
         
         try:
             # Add specific database files to preservation - these might be in root directory
@@ -633,6 +644,27 @@ def main():
                     print("SUCCESS: All critical files restored from backup", flush=True)
             else:
                 print("SUCCESS: All critical files verified after update", flush=True)
+            
+            # Check and restore database files if they were deleted
+            print("=== DATABASE FILE RESTORATION CHECK ===", flush=True)
+            for original_file, safety_copy in safety_copies:
+                if not original_file.exists() and safety_copy.exists():
+                    try:
+                        original_file.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(safety_copy, original_file)
+                        print(f"✓ Restored missing database file: {original_file.name}", flush=True)
+                    except Exception as e:
+                        print(f"✗ Failed to restore database file {original_file.name}: {e}", flush=True)
+                elif original_file.exists():
+                    print(f"✓ Database file preserved: {original_file.name}", flush=True)
+            
+            # Clean up safety copies
+            try:
+                shutil.rmtree(safety_backup_dir)
+                print("✓ Cleaned up safety backup directory", flush=True)
+            except Exception:
+                pass
+            print("=== END DATABASE RESTORATION CHECK ===", flush=True)
             
             if rc != 0:
                 print(f"WARNING: Update returned non-zero exit code {rc}", flush=True)

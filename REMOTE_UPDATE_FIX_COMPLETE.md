@@ -1,5 +1,51 @@
 # Remote Update System Fix - Complete ✅
 
+## Latest Critical Issue: File Deletion During Updates 🔧
+
+**Date: September 4, 2025 - URGENT UPDATE**
+**Issue Reported:** Specific files being deleted during remote updates:
+- `app\assistant\core.py` and `app\assistant\visualizer.py` 
+- Database temporary files (`.db-shm`, `.db-wal`) while main `.db` files preserved
+
+### IMMEDIATE FIXES APPLIED:
+
+#### 1. Enhanced File Protection System
+- **Database Safety Copies**: Automatic backup of all database files before update
+- **Comprehensive Critical File List**: Extended verification to include all essential files
+- **Multi-Level Recovery**: Three-tier file restoration system (backup → emergency → safety copies)
+
+#### 2. Database File Issues Resolution
+```python
+# New protection for SQLite temporary files
+db_preserve_files = ['scouting.db', 'scouting.db-wal', 'scouting.db-shm', 
+                     'users.db', 'users.db-wal', 'users.db-shm', 
+                     'app.db', 'app.db-wal', 'app.db-shm']
+```
+
+#### 3. Assistant File Protection
+- Added `app/assistant/core.py` and `app/assistant/visualizer.py` to critical files
+- Emergency ZIP-level recovery if files missing after update
+- Pre/post update verification with detailed logging
+
+#### 4. Enhanced Update Process
+```bash
+=== PRE-UPDATE FILE CHECK ===
+Assistant files: ['core.py', 'visualizer.py', '__init__.py']
+Database files: ['instance/scouting.db', 'instance/scouting.db-wal', ...]
+
+=== UPDATE PROCESS ===
+Creating safety copies...
+Applying update with enhanced verification...
+
+=== POST-UPDATE RECOVERY ===
+Verifying critical files...
+Restoring any missing files from backup/ZIP...
+```
+
+---
+
+## Previously Resolved Issues
+
 ## Issues Fixed
 
 ### 1. HTTP 500 Error on Remote Updates ✅
