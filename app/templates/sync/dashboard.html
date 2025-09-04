@@ -530,25 +530,33 @@ function updateAllServersMonitored() {
     button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
     button.disabled = true;
     
-    // Get all enabled servers
-    const servers = {{ servers | tojsonfilter | safe }};
-    const enabledServers = servers.filter(server => server.sync_enabled);
+    // Get all server cards that have sync enabled
+    const serverCards = document.querySelectorAll('.card[id^="server-"]');
+    const enabledServerIds = [];
     
-    if (enabledServers.length === 0) {
+    serverCards.forEach(card => {
+        const serverId = card.id.split('-')[1];
+        // Check if the card doesn't have a "disabled" indicator
+        if (!card.querySelector('.text-muted:contains("Disabled")')) {
+            enabledServerIds.push(parseInt(serverId));
+        }
+    });
+    
+    if (enabledServerIds.length === 0) {
         showToast('❌ No servers enabled for sync', 'warning');
         button.innerHTML = originalContent;
         button.disabled = false;
         return;
     }
     
-    showToast(`🚀 Starting monitored updates for ${enabledServers.length} servers...`, 'info');
+    showToast(`🚀 Starting monitored updates for ${enabledServerIds.length} servers...`, 'info');
     
     // Start updates for all servers
     let completedCount = 0;
     let errorCount = 0;
     
-    enabledServers.forEach(server => {
-        fetch(`/update_monitor/api/start_update/${server.id}`, {
+    enabledServerIds.forEach(serverId => {
+        fetch(`/update_monitor/api/start_update/${serverId}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -563,29 +571,31 @@ function updateAllServersMonitored() {
             completedCount++;
             if (data.error) {
                 errorCount++;
-                console.error(`Update failed for ${server.name}: ${data.error}`);
+                console.error(`Update failed for server ${serverId}: ${data.error}`);
             }
             
             // Check if all requests completed
-            if (completedCount === enabledServers.length) {
-                const successCount = enabledServers.length - errorCount;
+            if (completedCount === enabledServerIds.length) {
+                const successCount = enabledServerIds.length - errorCount;
                 showToast(`✅ Batch update started: ${successCount} successful, ${errorCount} failed`, successCount > 0 ? 'success' : 'danger');
                 
                 // Suggest opening the update dashboard
-                setTimeout(() => {
-                    if (confirm(`Monitor ${successCount} server updates in real-time? This will open the Update Dashboard.`)) {
-                        window.open('/update_monitor/dashboard', '_blank');
-                    }
-                }, 2000);
+                if (successCount > 0) {
+                    setTimeout(() => {
+                        if (confirm(`Monitor ${successCount} server updates in real-time? This will open the Update Dashboard.`)) {
+                            window.open('/update_monitor/dashboard', '_blank');
+                        }
+                    }, 2000);
+                }
             }
         })
         .catch(error => {
             completedCount++;
             errorCount++;
-            console.error(`Update request failed for ${server.name}:`, error);
+            console.error(`Update request failed for server ${serverId}:`, error);
             
-            if (completedCount === enabledServers.length) {
-                const successCount = enabledServers.length - errorCount;
+            if (completedCount === enabledServerIds.length) {
+                const successCount = enabledServerIds.length - errorCount;
                 showToast(`❌ Batch update completed with errors: ${successCount} successful, ${errorCount} failed`, 'warning');
             }
         });
