@@ -355,7 +355,7 @@ def create_app(test_config=None):
         setup_change_tracking()
 
     # Import and register blueprints
-    from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, assistant, integrity, pit_scouting, themes, scouting_alliances, setup, search, db_admin, sync_api, sync_management
+    from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, assistant, integrity, pit_scouting, themes, scouting_alliances, setup, search, db_admin, sync_api, sync_management, update_monitor
     
     # Register template filters
     from app.utils import template_filters
@@ -381,6 +381,7 @@ def create_app(test_config=None):
     # Register sync routes and API
     app.register_blueprint(sync_api.sync_api)
     app.register_blueprint(sync_management.sync_routes)
+    app.register_blueprint(update_monitor.update_monitor_bp)
     
     # Register real-time replication API
     from app.routes import realtime_api

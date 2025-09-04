@@ -1,0 +1,551 @@
+{% extends "base.html" %}
+
+{% block title %}Server Update Dashboard{% endblock %}
+
+{% block extra_head %}
+<style>
+    .update-card {
+        margin-bottom: 20px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 15px;
+    }
+    
+    .server-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    
+    .server-status {
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    
+    .status-idle { background-color: #e9ecef; color: #495057; }
+    .status-updating { background-color: #fff3cd; color: #856404; }
+    .status-success { background-color: #d4edda; color: #155724; }
+    .status-error { background-color: #f8d7da; color: #721c24; }
+    
+    .progress-container {
+        margin: 15px 0;
+        display: none;
+    }
+    
+    .progress-container.active {
+        display: block;
+    }
+    
+    .progress-bar-custom {
+        width: 100%;
+        height: 25px;
+        background-color: #e9ecef;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 10px;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        background-color: #007bff;
+        width: 0%;
+        transition: width 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    
+    .status-log {
+        max-height: 200px;
+        overflow-y: auto;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 10px;
+        font-family: monospace;
+        font-size: 12px;
+        margin-top: 10px;
+        display: none;
+    }
+    
+    .status-log.active {
+        display: block;
+    }
+    
+    .log-entry {
+        margin: 2px 0;
+        padding: 2px 5px;
+        border-radius: 3px;
+    }
+    
+    .log-info { background-color: #d1ecf1; color: #0c5460; }
+    .log-success { background-color: #d4edda; color: #155724; }
+    .log-warning { background-color: #fff3cd; color: #856404; }
+    .log-error { background-color: #f8d7da; color: #721c24; }
+    
+    .control-buttons {
+        margin-top: 15px;
+    }
+    
+    .btn-group {
+        margin-right: 10px;
+    }
+    
+    .connection-indicator {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+        z-index: 1000;
+    }
+    
+    .connected {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .disconnected {
+        background-color: #dc3545;
+        color: white;
+    }
+    
+    #globalControls {
+        margin-bottom: 30px;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+    }
+    
+    .summary-stats {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 15px;
+    }
+    
+    .stat-card {
+        background: white;
+        padding: 15px;
+        border-radius: 6px;
+        border: 1px solid #dee2e6;
+        text-align: center;
+        min-width: 120px;
+    }
+    
+    .stat-number {
+        font-size: 24px;
+        font-weight: bold;
+        display: block;
+    }
+    
+    .stat-label {
+        font-size: 12px;
+        color: #6c757d;
+        text-transform: uppercase;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="connection-indicator" id="connectionStatus">
+        <span id="connectionText">Connecting...</span>
+    </div>
+    
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>Server Update Dashboard</h1>
+                <div>
+                    <button class="btn btn-secondary" onclick="toggleAutoRefresh()">
+                        <i class="fas fa-sync-alt"></i> Auto Refresh: <span id="autoRefreshStatus">ON</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="globalControls">
+        <div class="summary-stats">
+            <div class="stat-card">
+                <span class="stat-number" id="totalServers">{{ servers|length }}</span>
+                <span class="stat-label">Total Servers</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="updatingCount">0</span>
+                <span class="stat-label">Updating</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="successCount">0</span>
+                <span class="stat-label">Completed</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="errorCount">0</span>
+                <span class="stat-label">Errors</span>
+            </div>
+        </div>
+        
+        <div class="btn-group" role="group">
+            <button class="btn btn-primary" onclick="updateAllServers()">
+                <i class="fas fa-cloud-download-alt"></i> Update All Servers
+            </button>
+            <button class="btn btn-warning" onclick="stopAllUpdates()">
+                <i class="fas fa-stop"></i> Stop All Updates
+            </button>
+            <button class="btn btn-info" onclick="refreshStatus()">
+                <i class="fas fa-refresh"></i> Refresh Status
+            </button>
+        </div>
+    </div>
+    
+    <div class="row" id="serverContainer">
+        {% for server in servers %}
+        <div class="col-lg-6 col-xl-4">
+            <div class="update-card" id="server-{{ server.id }}">
+                <div class="server-header">
+                    <h5 class="mb-0">{{ server.name }}</h5>
+                    <span class="server-status status-idle" id="status-{{ server.id }}">Idle</span>
+                </div>
+                
+                <div class="server-info">
+                    <small class="text-muted">
+                        <i class="fas fa-server"></i> {{ server.url }}<br>
+                        <i class="fas fa-clock"></i> Last Contact: <span id="lastContact-{{ server.id }}">Never</span>
+                    </small>
+                </div>
+                
+                <div class="progress-container" id="progress-{{ server.id }}">
+                    <div class="progress-bar-custom">
+                        <div class="progress-fill" id="progressBar-{{ server.id }}">0%</div>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <small id="progressText-{{ server.id }}">Ready</small>
+                        <small id="progressTime-{{ server.id }}"></small>
+                    </div>
+                </div>
+                
+                <div class="status-log" id="log-{{ server.id }}">
+                    <!-- Log entries will be added here -->
+                </div>
+                
+                <div class="control-buttons">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-primary" onclick="updateSingleServer({{ server.id }})">
+                            <i class="fas fa-download"></i> Update
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="toggleLog({{ server.id }})">
+                            <i class="fas fa-list"></i> <span id="logToggle-{{ server.id }}">Show</span> Log
+                        </button>
+                        <button class="btn btn-outline-info" onclick="testConnection({{ server.id }})">
+                            <i class="fas fa-plug"></i> Test
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+<script>
+let socket;
+let autoRefresh = true;
+let serverStates = {};
+
+// Initialize when document is ready
+$(document).ready(function() {
+    initializeSocket();
+    initializeServerStates();
+});
+
+function initializeSocket() {
+    socket = io('/update-monitor');
+    
+    socket.on('connect', function() {
+        $('#connectionStatus').removeClass('disconnected').addClass('connected');
+        $('#connectionText').text('Connected');
+        console.log('Connected to update monitor');
+    });
+    
+    socket.on('disconnect', function() {
+        $('#connectionStatus').removeClass('connected').addClass('disconnected');
+        $('#connectionText').text('Disconnected');
+        console.log('Disconnected from update monitor');
+    });
+    
+    socket.on('update_progress', function(data) {
+        updateServerProgress(data);
+    });
+    
+    socket.on('update_status', function(data) {
+        updateServerStatus(data);
+    });
+    
+    socket.on('update_log', function(data) {
+        addLogEntry(data);
+    });
+    
+    socket.on('update_complete', function(data) {
+        handleUpdateComplete(data);
+    });
+    
+    socket.on('connection_test_result', function(data) {
+        handleConnectionTestResult(data);
+    });
+}
+
+function initializeServerStates() {
+    {% for server in servers %}
+    serverStates[{{ server.id }}] = {
+        status: 'idle',
+        progress: 0,
+        startTime: null,
+        logs: []
+    };
+    {% endfor %}
+}
+
+function updateServerProgress(data) {
+    const serverId = data.server_id;
+    const progress = data.progress;
+    const status = data.status;
+    
+    serverStates[serverId].progress = progress;
+    serverStates[serverId].status = status;
+    
+    // Update progress bar
+    const progressBar = document.getElementById(`progressBar-${serverId}`);
+    const progressContainer = document.getElementById(`progress-${serverId}`);
+    
+    if (progress > 0) {
+        progressContainer.classList.add('active');
+        progressBar.style.width = progress + '%';
+        progressBar.textContent = progress + '%';
+    }
+    
+    // Update progress text
+    document.getElementById(`progressText-${serverId}`).textContent = status;
+    
+    // Update time elapsed
+    if (serverStates[serverId].startTime) {
+        const elapsed = Math.round((Date.now() - serverStates[serverId].startTime) / 1000);
+        document.getElementById(`progressTime-${serverId}`).textContent = elapsed + 's';
+    }
+}
+
+function updateServerStatus(data) {
+    const serverId = data.server_id;
+    const status = data.status;
+    const statusElement = document.getElementById(`status-${serverId}`);
+    
+    // Remove all status classes
+    statusElement.classList.remove('status-idle', 'status-updating', 'status-success', 'status-error');
+    
+    // Add appropriate class and update text
+    switch(status) {
+        case 'updating':
+            statusElement.classList.add('status-updating');
+            statusElement.textContent = 'Updating...';
+            serverStates[serverId].startTime = Date.now();
+            break;
+        case 'success':
+            statusElement.classList.add('status-success');
+            statusElement.textContent = 'Success';
+            break;
+        case 'error':
+            statusElement.classList.add('status-error');
+            statusElement.textContent = 'Error';
+            break;
+        default:
+            statusElement.classList.add('status-idle');
+            statusElement.textContent = 'Idle';
+            break;
+    }
+    
+    serverStates[serverId].status = status;
+    updateSummaryStats();
+}
+
+function addLogEntry(data) {
+    const serverId = data.server_id;
+    const level = data.level;
+    const message = data.message;
+    const timestamp = new Date().toLocaleTimeString();
+    
+    const logContainer = document.getElementById(`log-${serverId}`);
+    const logEntry = document.createElement('div');
+    logEntry.className = `log-entry log-${level}`;
+    logEntry.innerHTML = `<strong>${timestamp}:</strong> ${message}`;
+    
+    logContainer.appendChild(logEntry);
+    logContainer.scrollTop = logContainer.scrollHeight;
+    
+    // Store in state
+    serverStates[serverId].logs.push({
+        timestamp: timestamp,
+        level: level,
+        message: message
+    });
+    
+    // Limit log entries to prevent memory issues
+    if (serverStates[serverId].logs.length > 100) {
+        serverStates[serverId].logs.shift();
+        logContainer.removeChild(logContainer.firstChild);
+    }
+}
+
+function handleUpdateComplete(data) {
+    const serverId = data.server_id;
+    const success = data.success;
+    
+    updateServerStatus({
+        server_id: serverId,
+        status: success ? 'success' : 'error'
+    });
+    
+    updateServerProgress({
+        server_id: serverId,
+        progress: 100,
+        status: success ? 'Update completed' : 'Update failed'
+    });
+    
+    // Reset start time
+    serverStates[serverId].startTime = null;
+}
+
+function handleConnectionTestResult(data) {
+    const serverId = data.server_id;
+    const success = data.success;
+    const message = data.message;
+    
+    addLogEntry({
+        server_id: serverId,
+        level: success ? 'success' : 'error',
+        message: 'Connection test: ' + message
+    });
+}
+
+function updateSummaryStats() {
+    let updating = 0;
+    let success = 0;
+    let error = 0;
+    
+    Object.values(serverStates).forEach(state => {
+        switch(state.status) {
+            case 'updating':
+                updating++;
+                break;
+            case 'success':
+                success++;
+                break;
+            case 'error':
+                error++;
+                break;
+        }
+    });
+    
+    document.getElementById('updatingCount').textContent = updating;
+    document.getElementById('successCount').textContent = success;
+    document.getElementById('errorCount').textContent = error;
+}
+
+function updateSingleServer(serverId) {
+    socket.emit('start_server_update', {server_id: serverId});
+    addLogEntry({
+        server_id: serverId,
+        level: 'info',
+        message: 'Update request sent'
+    });
+}
+
+function updateAllServers() {
+    socket.emit('start_all_updates');
+    Object.keys(serverStates).forEach(serverId => {
+        addLogEntry({
+            server_id: parseInt(serverId),
+            level: 'info',
+            message: 'Bulk update request sent'
+        });
+    });
+}
+
+function stopAllUpdates() {
+    socket.emit('stop_all_updates');
+    Object.keys(serverStates).forEach(serverId => {
+        addLogEntry({
+            server_id: parseInt(serverId),
+            level: 'warning',
+            message: 'Stop request sent'
+        });
+    });
+}
+
+function refreshStatus() {
+    socket.emit('refresh_status');
+}
+
+function testConnection(serverId) {
+    socket.emit('test_connection', {server_id: serverId});
+    addLogEntry({
+        server_id: serverId,
+        level: 'info',
+        message: 'Testing connection...'
+    });
+}
+
+function toggleLog(serverId) {
+    const logContainer = document.getElementById(`log-${serverId}`);
+    const toggleButton = document.getElementById(`logToggle-${serverId}`);
+    
+    if (logContainer.classList.contains('active')) {
+        logContainer.classList.remove('active');
+        toggleButton.textContent = 'Show';
+    } else {
+        logContainer.classList.add('active');
+        toggleButton.textContent = 'Hide';
+    }
+}
+
+function toggleAutoRefresh() {
+    autoRefresh = !autoRefresh;
+    document.getElementById('autoRefreshStatus').textContent = autoRefresh ? 'ON' : 'OFF';
+    
+    if (autoRefresh) {
+        startAutoRefresh();
+    } else {
+        stopAutoRefresh();
+    }
+}
+
+let autoRefreshInterval;
+
+function startAutoRefresh() {
+    autoRefreshInterval = setInterval(() => {
+        if (socket && socket.connected) {
+            socket.emit('refresh_status');
+        }
+    }, 30000); // Refresh every 30 seconds
+}
+
+function stopAutoRefresh() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+    }
+}
+
+// Start auto refresh by default
+startAutoRefresh();
+</script>
+{% endblock %}
