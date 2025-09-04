@@ -9,6 +9,7 @@ from app import db
 from app.models import SyncServer, SyncLog, SyncConfig
 from app.utils.multi_server_sync import sync_manager
 import logging
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +248,75 @@ def force_sync():
         logger.error(f"Failed to force full sync: {e}")
         flash(f'Failed to force full sync: {str(e)}', 'error')
     
+    return redirect(url_for('sync.dashboard'))
+
+
+@sync_routes.route('/servers/<int:server_id>/update', methods=['POST'])
+@login_required
+@require_superadmin
+def update_server(server_id):
+    """Trigger remote update on a specific server via its /api/sync/update endpoint."""
+    try:
+        server = SyncServer.query.get_or_404(server_id)
+        # Default to updating from this repository's main branch zip on GitHub
+        zip_url = f"https://github.com/steveandjeff999/Obsidianscout/archive/refs/heads/main.zip"
+        payload = {
+            'zip_url': zip_url,
+            'use_waitress': True,
+            'port': 8080
+        }
+        url = f"{server.base_url}/api/sync/update"
+        try:
+            resp = requests.post(url, json=payload, timeout=10, verify=False)
+            if resp.status_code in (200, 202):
+                flash(f'Update started on server "{server.name}"', 'success')
+            else:
+                flash(f'Failed to start update on {server.name}: HTTP {resp.status_code}', 'error')
+        except Exception as e:
+            flash(f'Failed to contact {server.name}: {e}', 'error')
+
+    except Exception as e:
+        logger.error(f"Failed to trigger update: {e}")
+        flash(f'Failed to trigger update: {e}', 'error')
+
+    return redirect(url_for('sync.manage_servers'))
+
+
+@sync_routes.route('/update-all-servers', methods=['POST'])
+@login_required
+@require_superadmin
+def update_all_servers():
+    """Trigger remote update on all configured sync servers."""
+    try:
+        servers = SyncServer.query.filter_by(sync_enabled=True).all()
+        zip_url = f"https://github.com/steveandjeff999/Obsidianscout/archive/refs/heads/main.zip"
+        payload = {'zip_url': zip_url, 'use_waitress': True, 'port': 8080}
+        successes = 0
+        failures = []
+        for server in servers:
+            url = f"{server.base_url}/api/sync/update"
+            try:
+                resp = requests.post(url, json=payload, timeout=10, verify=False)
+                if resp.status_code in (200, 202):
+                    successes += 1
+                else:
+                    failures.append((server.name, f'HTTP {resp.status_code}'))
+            except Exception as e:
+                failures.append((server.name, str(e)))
+
+        if successes:
+            flash(f'Started update on {successes} servers. {len(failures)} failures.', 'success')
+        else:
+            flash('No updates started (all failed).', 'error')
+
+        if failures:
+            for name, reason in failures:
+                logger.warning(f'Update failed for {name}: {reason}')
+
+    except Exception as e:
+        logger.error(f"Failed to trigger updates: {e}")
+        flash(f'Failed to trigger updates: {e}', 'error')
+
     return redirect(url_for('sync.dashboard'))
 
 
