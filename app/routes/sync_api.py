@@ -711,8 +711,25 @@ def trigger_remote_update():
         logger.info(f"Starting update from {zip_url} on port {port} (waitress: {use_waitress})")
         logger.info(f"Using updater script: {updater}")
 
-        # Spawn detached background process
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
+        # Create a log file for the update process
+        log_file = repo_root / 'instance' / 'update_log.txt'
+        log_file.parent.mkdir(exist_ok=True)
+        
+        # Spawn detached background process with logging
+        with open(log_file, 'w') as f:
+            f.write(f"Update started at {datetime.utcnow()}\n")
+            f.write(f"Command: {' '.join(cmd)}\n")
+            f.write(f"Working directory: {repo_root}\n")
+            f.write("=" * 50 + "\n")
+            f.flush()
+            
+            process = subprocess.Popen(cmd, 
+                                     stdout=f, 
+                                     stderr=subprocess.STDOUT,  # Combine stderr with stdout
+                                     cwd=str(repo_root),
+                                     close_fds=True)
+        
+        logger.info(f"Update process started with PID {process.pid}, logging to {log_file}")
 
         return jsonify({
             'message': 'Update started', 
