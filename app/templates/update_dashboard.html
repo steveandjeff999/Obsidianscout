@@ -271,7 +271,8 @@ $(document).ready(function() {
 });
 
 function initializeSocket() {
-    socket = io('/update-monitor');
+    console.log('Connecting to main SocketIO connection for update monitoring');
+    socket = io();
     
     socket.on('connect', function() {
         $('#connectionStatus').removeClass('disconnected').addClass('connected');
@@ -290,11 +291,21 @@ function initializeSocket() {
         console.log('Disconnected from update monitor');
     });
     
-    socket.on('update_status', function(data) {
+    socket.on('connect_error', function(error) {
+        console.log('Connection error:', error);
+        $('#connectionStatus').removeClass('connected').addClass('disconnected');
+        $('#connectionText').text('Connection Error');
+    });
+    
+    socket.on('update_monitor_joined', function(data) {
+        console.log('Joined update monitor room:', data.room, 'for server:', data.server_id);
+    });
+    
+    socket.on('update_monitor_status', function(data) {
         updateServerStatus(data);
     });
     
-    socket.on('update_message', function(data) {
+    socket.on('update_monitor_message', function(data) {
         addLogEntry({
             server_id: data.server_id,
             level: data.message.level,
@@ -304,6 +315,26 @@ function initializeSocket() {
             server_id: data.server_id,
             progress: data.progress,
             status: data.message.message
+        });
+    });
+    
+    socket.on('update_monitor_connection_test', function(data) {
+        handleConnectionTestResult(data);
+    });
+    
+    socket.on('update_monitor_started', function(data) {
+        addLogEntry({
+            server_id: data.server_id,
+            level: 'success',
+            message: data.message
+        });
+    });
+    
+    socket.on('update_monitor_error', function(data) {
+        addLogEntry({
+            server_id: data.server_id,
+            level: 'error',
+            message: data.message
         });
     });
     
@@ -472,7 +503,7 @@ function updateSummaryStats() {
 }
 
 function updateSingleServer(serverId) {
-    socket.emit('start_server_update', {server_id: serverId});
+    socket.emit('update_monitor_start_server', {server_id: serverId});
     addLogEntry({
         server_id: serverId,
         level: 'info',
@@ -481,7 +512,7 @@ function updateSingleServer(serverId) {
 }
 
 function updateAllServers() {
-    socket.emit('start_all_updates');
+    socket.emit('update_monitor_start_all');
     Object.keys(serverStates).forEach(serverId => {
         addLogEntry({
             server_id: parseInt(serverId),
@@ -492,7 +523,7 @@ function updateAllServers() {
 }
 
 function stopAllUpdates() {
-    socket.emit('stop_all_updates');
+    socket.emit('update_monitor_stop_all');
     Object.keys(serverStates).forEach(serverId => {
         addLogEntry({
             server_id: parseInt(serverId),
@@ -503,11 +534,11 @@ function stopAllUpdates() {
 }
 
 function refreshStatus() {
-    socket.emit('refresh_status');
+    socket.emit('update_monitor_refresh_status');
 }
 
 function testConnection(serverId) {
-    socket.emit('test_connection', {server_id: serverId});
+    socket.emit('update_monitor_test_connection', {server_id: serverId});
     addLogEntry({
         server_id: serverId,
         level: 'info',
