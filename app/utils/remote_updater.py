@@ -78,22 +78,123 @@ def download_zip(url: str, dest: Path) -> Path:
     raise RuntimeError('Neither requests nor urllib are available for downloading')
 
 
-def set_use_waitress_in_run(run_py: Path, use_waitress: bool):
-    # Replace the line that assigns USE_WAITRESS
+def force_kill_file_locks(file_path: Path, max_attempts: int = 3):
+    """
+    Attempt to force release file locks by finding and killing processes using the file
+    """
+    print(f"Attempting to force release locks on: {file_path}", flush=True)
+    
+    if os.name == 'nt':
+        # Windows: use handle.exe or openfiles command to find file locks
+        try:
+            # Try using openfiles command (built into Windows)
+            result = subprocess.run(['openfiles', '/query', '/fo', 'csv'], 
+                                  capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')[1:]  # Skip header
+                for line in lines:
+                    if str(file_path).lower() in line.lower():
+                        # Parse CSV format to get process info
+                        parts = line.strip('"').split('","')
+                        if len(parts) >= 3:
+                            try:
+                                hostname = parts[0]
+                                process_id = parts[1]
+                                open_file = parts[2]
+                                print(f"Found file lock: PID {process_id} has {open_file}", flush=True)
+                                
+                                # Try to kill the process
+                                subprocess.run(['taskkill', '/PID', process_id, '/F'], 
+                                             capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                                print(f"Killed process {process_id} holding file lock", flush=True)
+                            except Exception as e:
+                                print(f"Could not kill process: {e}", flush=True)
+            else:
+                print("openfiles command failed, trying alternative approach", flush=True)
+        except Exception as e:
+            print(f"Could not use openfiles: {e}", flush=True)
+    else:
+        # Linux/Unix: use lsof to find file locks
+        try:
+            result = subprocess.run(['lsof', str(file_path)], capture_output=True, text=True)
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')[1:]  # Skip header
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        try:
+                            pid = int(parts[1])
+                            print(f"Found file lock: PID {pid} has {file_path}", flush=True)
+                            os.kill(pid, signal.SIGTERM)
+                            time.sleep(2)
+                            print(f"Killed process {pid} holding file lock", flush=True)
+                        except (ValueError, ProcessLookupError) as e:
+                            print(f"Could not kill process: {e}", flush=True)
+        except FileNotFoundError:
+            print("lsof not available for file lock detection", flush=True)
+        except Exception as e:
+            print(f"Could not use lsof: {e}", flush=True)
+
+
+def wait_for_file_unlock(file_path: Path, max_attempts: int = 3, wait_seconds: int = 10):
+    """
+    Wait for a file to become unlocked, with retry and force-kill mechanisms
+    """
+    for attempt in range(max_attempts):
+        try:
+            # Test if we can open the file for writing
+            with open(file_path, 'r+b') as f:
+                pass  # File is accessible
+            print(f"✓ File accessible on attempt {attempt + 1}: {file_path}", flush=True)
+            return True
+        except Exception as e:
+            print(f"✗ File locked on attempt {attempt + 1}: {file_path} - {e}", flush=True)
+            
+            if attempt < max_attempts - 1:  # Not the last attempt
+                print(f"Waiting {wait_seconds} seconds before retry...", flush=True)
+                time.sleep(wait_seconds)
+                
+                # On second attempt, try to force kill processes locking the file
+                if attempt == 1:
+                    force_kill_file_locks(file_path)
+                    time.sleep(5)  # Additional wait after killing processes
+    
+    print(f"✗ File remains locked after {max_attempts} attempts: {file_path}", flush=True)
+    return False
+
+
+def set_use_waitress_and_port_in_run(run_py: Path, use_waitress: bool, port: int):
+    """Set both USE_WAITRESS and PORT in run.py"""
     try:
         text = run_py.read_text(encoding='utf-8')
-        new_line = f"USE_WAITRESS = {str(bool(use_waitress))}  # Updated by remote_updater"
+        
+        # Replace USE_WAITRESS
+        new_waitress_line = f"USE_WAITRESS = {str(bool(use_waitress))}  # Updated by remote_updater"
         import re
-        pattern = re.compile(r"^USE_WAITRESS\s*=.*$", re.M)
-        if pattern.search(text):
-            text = pattern.sub(new_line, text)
+        waitress_pattern = re.compile(r"^USE_WAITRESS\s*=.*$", re.M)
+        if waitress_pattern.search(text):
+            text = waitress_pattern.sub(new_waitress_line, text)
         else:
             # Fallback: insert near top
-            text = new_line + '\n' + text
+            text = new_waitress_line + '\n' + text
+        
+        # Replace or add PORT setting
+        new_port_line = f"PORT = {port}  # Updated by remote_updater"
+        port_pattern = re.compile(r"^PORT\s*=.*$", re.M)
+        if port_pattern.search(text):
+            text = port_pattern.sub(new_port_line, text)
+        else:
+            # Add PORT after USE_WAITRESS
+            text = text.replace(new_waitress_line, f"{new_waitress_line}\n{new_port_line}")
+        
         run_py.write_text(text, encoding='utf-8')
+        print(f"✓ Updated run.py: USE_WAITRESS={use_waitress}, PORT={port}", flush=True)
+        
     except UnicodeDecodeError as e:
         print(f"Warning: Could not modify run.py due to encoding error: {e}", flush=True)
-        print("Server will use default USE_WAITRESS setting", flush=True)
+        print("Server will use default settings", flush=True)
+    except Exception as e:
+        print(f"Warning: Could not modify run.py: {e}", flush=True)
 
 
 def start_server(run_py_path: Path, port: int) -> int:
@@ -516,6 +617,25 @@ def main():
             print(f"Warning: Some database files may be locked: {locked_files}", flush=True)
             print("Safety copies created - will restore if needed after update", flush=True)
         
+        # Check for problematic file locks that might prevent update
+        print("Checking for problematic file locks...", flush=True)
+        problematic_files = [
+            repo_root / 'app' / 'instance' / 'update_log.txt',
+            repo_root / 'instance' / 'update_log.txt',
+            repo_root / 'app' / '__init__.py',  # Critical app file
+        ]
+        
+        files_needing_unlock = []
+        for prob_file in problematic_files:
+            if prob_file.exists():
+                if not wait_for_file_unlock(prob_file, max_attempts=1, wait_seconds=5):
+                    files_needing_unlock.append(prob_file)
+        
+        if files_needing_unlock:
+            print(f"Attempting to force unlock critical files: {[str(f) for f in files_needing_unlock]}", flush=True)
+            for locked_file in files_needing_unlock:
+                wait_for_file_unlock(locked_file, max_attempts=3, wait_seconds=10)
+        
         try:
             # Add specific database files to preservation - these might be in root directory
             db_preserve_files = ['scouting.db', 'scouting.db-wal', 'scouting.db-shm', 'users.db', 'users.db-wal', 'users.db-shm', 'app.db', 'app.db-wal', 'app.db-shm', 'database.db', 'database.db-wal', 'database.db-shm']
@@ -542,6 +662,62 @@ def main():
             post_update_db_files = list(repo_root.glob('*.db*')) + list((repo_root / 'instance').glob('*.db*'))
             print(f"Database files after update: {[str(f.relative_to(repo_root)) for f in post_update_db_files if f.exists()]}", flush=True)
             print("=== END POST-UPDATE CHECK ===", flush=True)
+            
+            # Check for specific update failure patterns in the output
+            if "ERROR copying" in update_result.stdout and "app" in update_result.stdout:
+                print("DETECTED: App directory replacement failed due to file locks", flush=True)
+                print("Attempting manual app directory recovery...", flush=True)
+                
+                # Try to manually copy critical app files from the ZIP
+                try:
+                    import zipfile
+                    with zipfile.ZipFile(zip_path, 'r') as zf:
+                        zip_files = zf.namelist()
+                        
+                        # Find the app directory in the ZIP
+                        app_files = [f for f in zip_files if '/app/' in f or '\\app\\' in f]
+                        print(f"Found {len(app_files)} app files in ZIP", flush=True)
+                        
+                        # Extract critical app files manually
+                        critical_app_patterns = [
+                            'assistant/core.py',
+                            'assistant/visualizer.py', 
+                            'assistant/__init__.py',
+                            'routes/sync.py',
+                            'routes/__init__.py',
+                            'utils/sync_utils.py',
+                            'utils/__init__.py',
+                            'models.py',
+                            '__init__.py'
+                        ]
+                        
+                        extracted_count = 0
+                        for pattern in critical_app_patterns:
+                            matching_files = [f for f in app_files if f.endswith(pattern)]
+                            for zip_file in matching_files:
+                                try:
+                                    # Determine target path
+                                    relative_path = zip_file
+                                    if '/Obsidianscout-main/' in zip_file:
+                                        relative_path = zip_file.split('/Obsidianscout-main/')[-1]
+                                    elif '\\Obsidianscout-main\\' in zip_file:
+                                        relative_path = zip_file.split('\\Obsidianscout-main\\')[-1]
+                                    
+                                    target_file = repo_root / relative_path
+                                    target_file.parent.mkdir(parents=True, exist_ok=True)
+                                    
+                                    with zf.open(zip_file) as src:
+                                        target_file.write_bytes(src.read())
+                                    
+                                    print(f"✓ Manually extracted: {relative_path}", flush=True)
+                                    extracted_count += 1
+                                except Exception as e:
+                                    print(f"✗ Failed to extract {zip_file}: {e}", flush=True)
+                        
+                        print(f"Manual extraction complete: {extracted_count} files extracted", flush=True)
+                        
+                except Exception as e:
+                    print(f"Manual app directory recovery failed: {e}", flush=True)
             
             # Verify critical files exist after update - comprehensive list
             print("Verifying critical files after update...", flush=True)
@@ -688,9 +864,9 @@ def main():
         except Exception as e:
             print(f"Warning: Could not verify sync config: {e}", flush=True)
 
-        # Edit run.py
-        print(f"Setting USE_WAITRESS={args.use_waitress} in run.py", flush=True)
-        set_use_waitress_in_run(run_py, args.use_waitress)
+        # Edit run.py to set both USE_WAITRESS and PORT
+        print(f"Setting USE_WAITRESS={args.use_waitress} and PORT={final_port} in run.py", flush=True)
+        set_use_waitress_and_port_in_run(run_py, args.use_waitress, final_port)
 
         # Verify critical files exist before starting server
         print("Verifying critical files exist...", flush=True)
