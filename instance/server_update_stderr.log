@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "C:\Desktop\Obsidianscout\run.py", line 17, in <module>
+    app = create_app()
+  File "C:\Desktop\Obsidianscout\app\__init__.py", line 355, in create_app
+    setup_change_tracking()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Desktop\Obsidianscout\app\utils\change_tracking.py", line 250, in setup_change_tracking
+    print(f"\u2705 Change tracking enabled for {model.__name__}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\steve\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2705' in position 0: character maps to <undefined>
