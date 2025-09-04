@@ -163,8 +163,45 @@ def wait_for_file_unlock(file_path: Path, max_attempts: int = 3, wait_seconds: i
     return False
 
 
+def find_locked_files_in_directory(directory: Path, max_check: int = 100):
+    """
+    Scan directory for locked files that might prevent update
+    """
+    locked_files = []
+    checked_count = 0
+    
+    try:
+        for root, dirs, files in os.walk(directory):
+            if checked_count >= max_check:
+                break
+                
+            for file in files:
+                if checked_count >= max_check:
+                    break
+                    
+                file_path = Path(root) / file
+                try:
+                    # Try to open file for writing to check if locked
+                    with open(file_path, 'r+b') as f:
+                        pass
+                except Exception as e:
+                    if "being used by another process" in str(e) or "Permission denied" in str(e):
+                        locked_files.append(file_path)
+                        print(f"Found locked file: {file_path.relative_to(directory)}", flush=True)
+                
+                checked_count += 1
+        
+        if checked_count >= max_check:
+            print(f"Note: Only checked first {max_check} files for locks", flush=True)
+            
+    except Exception as e:
+        print(f"Error scanning directory for locks: {e}", flush=True)
+    
+    return locked_files
+
+
 def set_use_waitress_and_port_in_run(run_py: Path, use_waitress: bool, port: int):
-    """Set both USE_WAITRESS and PORT in run.py"""
+    """Set USE_WAITRESS in run.py and ensure proper PORT environment handling"""
     try:
         text = run_py.read_text(encoding='utf-8')
         
@@ -178,17 +215,19 @@ def set_use_waitress_and_port_in_run(run_py: Path, use_waitress: bool, port: int
             # Fallback: insert near top
             text = new_waitress_line + '\n' + text
         
-        # Replace or add PORT setting
-        new_port_line = f"PORT = {port}  # Updated by remote_updater"
-        port_pattern = re.compile(r"^PORT\s*=.*$", re.M)
+        # Ensure the PORT environment variable default matches our target port
+        # Look for the line: port = int(os.environ.get('PORT', 8080))
+        port_pattern = re.compile(r"port\s*=\s*int\(os\.environ\.get\(['\"]PORT['\"],\s*\d+\)\)", re.M)
+        new_port_line = f"port = int(os.environ.get('PORT', {port}))"
+        
         if port_pattern.search(text):
             text = port_pattern.sub(new_port_line, text)
+            print(f"✓ Updated port default in run.py to {port}", flush=True)
         else:
-            # Add PORT after USE_WAITRESS
-            text = text.replace(new_waitress_line, f"{new_waitress_line}\n{new_port_line}")
+            print("Warning: Could not find PORT environment line in run.py", flush=True)
         
         run_py.write_text(text, encoding='utf-8')
-        print(f"✓ Updated run.py: USE_WAITRESS={use_waitress}, PORT={port}", flush=True)
+        print(f"✓ Updated run.py: USE_WAITRESS={use_waitress}, PORT default={port}", flush=True)
         
     except UnicodeDecodeError as e:
         print(f"Warning: Could not modify run.py due to encoding error: {e}", flush=True)
@@ -618,23 +657,71 @@ def main():
             print("Safety copies created - will restore if needed after update", flush=True)
         
         # Check for problematic file locks that might prevent update
-        print("Checking for problematic file locks...", flush=True)
-        problematic_files = [
+        print("Comprehensive file lock detection for app directory...", flush=True)
+        app_directory = repo_root / 'app'
+        locked_files_found = []
+        
+        if app_directory.exists():
+            # Scan the app directory for locked files
+            locked_files_found = find_locked_files_in_directory(app_directory, max_check=9900)
+        
+        # Also check specific problematic files
+        additional_files_to_check = [
             repo_root / 'app' / 'instance' / 'update_log.txt',
             repo_root / 'instance' / 'update_log.txt',
-            repo_root / 'app' / '__init__.py',  # Critical app file
+            repo_root / 'run.py',
         ]
         
-        files_needing_unlock = []
-        for prob_file in problematic_files:
-            if prob_file.exists():
-                if not wait_for_file_unlock(prob_file, max_attempts=1, wait_seconds=5):
-                    files_needing_unlock.append(prob_file)
+        for check_file in additional_files_to_check:
+            if check_file.exists() and not wait_for_file_unlock(check_file, max_attempts=1, wait_seconds=2):
+                if check_file not in locked_files_found:
+                    locked_files_found.append(check_file)
         
-        if files_needing_unlock:
-            print(f"Attempting to force unlock critical files: {[str(f) for f in files_needing_unlock]}", flush=True)
-            for locked_file in files_needing_unlock:
-                wait_for_file_unlock(locked_file, max_attempts=3, wait_seconds=10)
+        # If we found locked files, try to unlock them
+        if locked_files_found:
+            print(f"Found {len(locked_files_found)} locked files that may prevent update", flush=True)
+            print("Attempting to unlock files with extended wait times...", flush=True)
+            
+            successfully_unlocked = []
+            still_locked = []
+            
+            for locked_file in locked_files_found:
+                print(f"Unlocking: {locked_file.relative_to(repo_root)}", flush=True)
+                if wait_for_file_unlock(locked_file, max_attempts=3, wait_seconds=10):
+                    successfully_unlocked.append(locked_file)
+                else:
+                    still_locked.append(locked_file)
+            
+            print(f"Lock resolution: {len(successfully_unlocked)} unlocked, {len(still_locked)} still locked", flush=True)
+            
+            # If still locked files, try killing processes
+            if still_locked:
+                print(f"Attempting to kill processes locking {len(still_locked)} files...", flush=True)
+                killed_processes = force_kill_file_locks([str(f) for f in still_locked])
+                if killed_processes:
+                    print(f"🔥 Killed {killed_processes} processes", flush=True)
+                    time.sleep(5)  # Wait after killing processes
+                    
+                    # Try unlocking again after killing processes
+                    final_unlock_attempt = []
+                    for locked_file in still_locked:
+                        if wait_for_file_unlock(locked_file, max_attempts=2, wait_seconds=3):
+                            final_unlock_attempt.append(locked_file)
+                    
+                    if final_unlock_attempt:
+                        print(f"✓ Successfully unlocked {len(final_unlock_attempt)} files after killing processes", flush=True)
+                        # Remove from still_locked list
+                        still_locked = [f for f in still_locked if f not in final_unlock_attempt]
+            
+            if still_locked:
+                print("Files that remain locked:", flush=True)
+                for locked_file in still_locked:
+                    print(f"  ✗ {locked_file.relative_to(repo_root)}", flush=True)
+                print("Update may fail for these files - will attempt recovery", flush=True)
+            else:
+                print("✓ All file locks successfully resolved", flush=True)
+        else:
+            print("✓ No locked files detected in app directory", flush=True)
         
         try:
             # Add specific database files to preservation - these might be in root directory
@@ -694,25 +781,48 @@ def main():
                         extracted_count = 0
                         for pattern in critical_app_patterns:
                             matching_files = [f for f in app_files if f.endswith(pattern)]
-                            for zip_file in matching_files:
-                                try:
-                                    # Determine target path
-                                    relative_path = zip_file
-                                    if '/Obsidianscout-main/' in zip_file:
-                                        relative_path = zip_file.split('/Obsidianscout-main/')[-1]
-                                    elif '\\Obsidianscout-main\\' in zip_file:
-                                        relative_path = zip_file.split('\\Obsidianscout-main\\')[-1]
+                        for zip_file in matching_files:
+                            try:
+                                # Determine target path - handle different ZIP structures
+                                target_path = None
+                                
+                                # Try different path extraction methods
+                                if 'Obsidianscout-main/' in zip_file:
+                                    relative_path = zip_file.split('Obsidianscout-main/')[-1]
+                                    target_path = repo_root / relative_path
+                                elif 'Obsidianscout-main\\' in zip_file:
+                                    relative_path = zip_file.split('Obsidianscout-main\\')[-1]
+                                    target_path = repo_root / relative_path
+                                elif zip_file.startswith('app/') or zip_file.startswith('app\\'):
+                                    target_path = repo_root / zip_file
+                                else:
+                                    # Last resort - try to extract to correct location based on pattern
+                                    if pattern in zip_file:
+                                        # Create the correct path based on pattern
+                                        if 'assistant/' in pattern:
+                                            target_path = repo_root / 'app' / 'assistant' / pattern.split('/')[-1]
+                                        elif 'routes/' in pattern:
+                                            target_path = repo_root / 'app' / 'routes' / pattern.split('/')[-1]
+                                        elif 'utils/' in pattern:
+                                            target_path = repo_root / 'app' / 'utils' / pattern.split('/')[-1]
+                                        else:
+                                            target_path = repo_root / 'app' / pattern
+                                
+                                if target_path:
+                                    # Create target directory
+                                    target_path.parent.mkdir(parents=True, exist_ok=True)
                                     
-                                    target_file = repo_root / relative_path
-                                    target_file.parent.mkdir(parents=True, exist_ok=True)
-                                    
+                                    # Extract file
                                     with zf.open(zip_file) as src:
-                                        target_file.write_bytes(src.read())
+                                        target_path.write_bytes(src.read())
                                     
-                                    print(f"✓ Manually extracted: {relative_path}", flush=True)
+                                    print(f"✓ Manually extracted: {target_path.relative_to(repo_root)}", flush=True)
                                     extracted_count += 1
-                                except Exception as e:
-                                    print(f"✗ Failed to extract {zip_file}: {e}", flush=True)
+                                else:
+                                    print(f"⚠ Could not determine target path for: {zip_file}", flush=True)
+                                    
+                            except Exception as e:
+                                print(f"✗ Failed to extract {zip_file}: {e}", flush=True)
                         
                         print(f"Manual extraction complete: {extracted_count} files extracted", flush=True)
                         
@@ -864,8 +974,8 @@ def main():
         except Exception as e:
             print(f"Warning: Could not verify sync config: {e}", flush=True)
 
-        # Edit run.py to set both USE_WAITRESS and PORT
-        print(f"Setting USE_WAITRESS={args.use_waitress} and PORT={final_port} in run.py", flush=True)
+        # Edit run.py to set USE_WAITRESS and update PORT default
+        print(f"Setting USE_WAITRESS={args.use_waitress} and PORT default={final_port} in run.py", flush=True)
         set_use_waitress_and_port_in_run(run_py, args.use_waitress, final_port)
 
         # Verify critical files exist before starting server
