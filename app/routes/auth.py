@@ -38,20 +38,9 @@ def role_required(*roles):
             if not current_user.is_authenticated:
                 return redirect(url_for('auth.login'))
 
+            # Superadmin: full access to role-restricted endpoints
             if current_user.has_role('superadmin'):
-                allowed_superadmin_routes = [
-                    'auth.manage_users', 'auth.edit_user', 'auth.delete_user', 
-                    'auth.update_user', 'auth.add_user', 'auth.logout', 'auth.profile',
-                    'auth.delete_user_permanently', 'auth.hard_delete_user', 'auth.restore_user'
-                ]
-                # Allow superadmins to manage site notifications without being redirected
-                allowed_superadmin_routes += [
-                    'auth.notifications_page', 'auth.create_notification', 'auth.delete_notification',
-                    'auth.email_settings', 'auth.email_test', 'auth.send_notification_as_email',
-                    'auth.dismiss_notification', 'auth.get_dismissed_notifications'
-                ]
-                if request.endpoint not in allowed_superadmin_routes:
-                    return redirect(url_for('auth.manage_users'))
+                return f(*args, **kwargs)
             
             # Check if user has any of the required roles
             user_roles = current_user.get_role_names()

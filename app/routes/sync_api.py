@@ -13,6 +13,9 @@ from app.models import SyncServer, SyncLog, FileChecksum, SyncConfig
 from app.utils.multi_server_sync import sync_manager
 import tempfile
 import logging
+import subprocess
+import sys
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -648,6 +651,42 @@ def update_sync_config():
         
     except Exception as e:
         logger.error(f"Failed to update sync config: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@sync_api.route('/update', methods=['POST'])
+def trigger_remote_update():
+    """Trigger a remote update on this server.
+
+    Expected JSON: { "zip_url": "https://.../main.zip", "use_waitress": true, "port": 8080 }
+    This endpoint spawns a background process to perform the update asynchronously and
+    returns 202 Accepted.
+    """
+    data = request.get_json() or {}
+    zip_url = data.get('zip_url')
+    use_waitress = bool(data.get('use_waitress', True))
+    port = int(data.get('port', 8080))
+
+    if not zip_url:
+        return jsonify({'error': 'zip_url is required'}), 400
+
+    # Spawn background updater process
+    try:
+        repo_root = Path(__file__).resolve().parent.parent
+        updater = repo_root / 'app' / 'utils' / 'remote_updater.py'
+        if not updater.exists():
+            return jsonify({'error': 'Updater script not found on server'}), 500
+
+        cmd = [sys.executable, str(updater), '--zip-url', zip_url, '--port', str(port)]
+        if use_waitress:
+            cmd.append('--use-waitress')
+
+        # Spawn detached background process
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
+
+        return jsonify({'message': 'Update started', 'zip_url': zip_url}), 202
+    except Exception as e:
+        logger.error(f"Failed to start updater: {e}")
         return jsonify({'error': str(e)}), 500
 
 
