@@ -65,38 +65,69 @@ def start_server(run_py_path: Path, port: int) -> int:
 
 
 def kill_other_python_processes(keep_pids: list[int]):
-    # Try to enumerate /proc to find python processes and terminate them
-    my_uid = os.getuid()
-    proc_dir = Path('/proc')
+    # Cross-platform process management
     killed = []
-    for p in proc_dir.iterdir():
-        if not p.name.isdigit():
-            continue
-        pid = int(p.name)
-        if pid in keep_pids or pid == os.getpid():
-            continue
+    
+    # On Windows, we'll use tasklist and taskkill
+    if os.name == 'nt':
         try:
-            # Read cmdline
-            cmdline = (p / 'cmdline').read_bytes().decode('utf-8', errors='ignore')
-            if 'python' in cmdline.lower():
-                # Check ownership
-                try:
-                    uid = int((p / 'status').read_text().split('Uid:')[1].strip().split()[0])
-                except Exception:
-                    uid = None
-                if uid is not None and uid != my_uid:
+            import subprocess
+            # Get list of python processes
+            result = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq python*', '/FO', 'CSV'], 
+                                  capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')[1:]  # Skip header
+                for line in lines:
+                    if line.strip():
+                        parts = line.strip('"').split('","')
+                        if len(parts) >= 2:
+                            try:
+                                pid = int(parts[1])
+                                if pid not in keep_pids and pid != os.getpid():
+                                    # Try to terminate the process
+                                    subprocess.run(['taskkill', '/PID', str(pid), '/F'], 
+                                                 capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                                    killed.append(pid)
+                            except (ValueError, subprocess.SubprocessError):
+                                continue
+        except Exception:
+            pass  # If Windows process management fails, continue without killing
+    else:
+        # Unix/Linux process management (original code)
+        try:
+            my_uid = os.getuid()
+            proc_dir = Path('/proc')
+            for p in proc_dir.iterdir():
+                if not p.name.isdigit():
+                    continue
+                pid = int(p.name)
+                if pid in keep_pids or pid == os.getpid():
                     continue
                 try:
-                    os.kill(pid, signal.SIGTERM)
-                    killed.append(pid)
+                    # Read cmdline
+                    cmdline = (p / 'cmdline').read_bytes().decode('utf-8', errors='ignore')
+                    if 'python' in cmdline.lower():
+                        # Check ownership
+                        try:
+                            uid = int((p / 'status').read_text().split('Uid:')[1].strip().split()[0])
+                        except Exception:
+                            uid = None
+                        if uid is not None and uid != my_uid:
+                            continue
+                        try:
+                            os.kill(pid, signal.SIGTERM)
+                            killed.append(pid)
+                        except Exception:
+                            try:
+                                os.kill(pid, signal.SIGKILL)
+                                killed.append(pid)
+                            except Exception:
+                                pass
                 except Exception:
-                    try:
-                        os.kill(pid, signal.SIGKILL)
-                        killed.append(pid)
-                    except Exception:
-                        pass
+                    continue
         except Exception:
-            continue
+            pass  # If Unix process management fails, continue without killing
+    
     return killed
 
 
@@ -117,13 +148,44 @@ def main():
         print(f"Downloading update from {args.zip_url} to {zip_path}...", flush=True)
         download_zip(args.zip_url, zip_path)
 
+        # Backup sync server configuration before update
+        print("Backing up sync server configuration...", flush=True)
+        try:
+            backup_result = subprocess.run([
+                sys.executable, 'sync_config_manager.py', '--backup'
+            ], capture_output=True, text=True, cwd=repo_root)
+            if backup_result.returncode == 0:
+                print("✅ Sync config backed up successfully", flush=True)
+            else:
+                print(f"⚠️  Sync config backup warning: {backup_result.stderr}", flush=True)
+        except Exception as e:
+            print(f"⚠️  Could not backup sync config: {e}", flush=True)
+
         # Run perform_update from update_from_github_file
         sys.path.insert(0, str(repo_root))
         from update_from_github_file import perform_update
 
         print("Applying update...", flush=True)
+        # Preserve sync server configuration by ensuring instance folder is preserved
         rc = perform_update(str(zip_path), is_zip=True, force=True, repo_root=repo_root)
         print(f"perform_update returned {rc}", flush=True)
+        
+        if rc != 0:
+            print(f"WARNING: Update returned non-zero exit code {rc}", flush=True)
+
+        # Verify sync server configuration is preserved
+        print("Verifying sync server configuration...", flush=True)
+        try:
+            verify_result = subprocess.run([
+                sys.executable, 'sync_config_manager.py', '--verify'
+            ], capture_output=True, text=True, cwd=repo_root)
+            if verify_result.returncode == 0:
+                print("✅ Sync server configuration verified", flush=True)
+                print(verify_result.stdout, flush=True)
+            else:
+                print(f"⚠️  Sync config verification issue: {verify_result.stderr}", flush=True)
+        except Exception as e:
+            print(f"⚠️  Could not verify sync config: {e}", flush=True)
 
         # Edit run.py
         print(f"Setting USE_WAITRESS={args.use_waitress} in run.py", flush=True)

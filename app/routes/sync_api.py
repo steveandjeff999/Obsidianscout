@@ -681,10 +681,19 @@ def trigger_remote_update():
         if use_waitress:
             cmd.append('--use-waitress')
 
+        # Log the update attempt
+        logger.info(f"Starting update from {zip_url} on port {port} (waitress: {use_waitress})")
+
         # Spawn detached background process
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
 
-        return jsonify({'message': 'Update started', 'zip_url': zip_url}), 202
+        return jsonify({
+            'message': 'Update started', 
+            'zip_url': zip_url,
+            'port': port,
+            'use_waitress': use_waitress,
+            'note': 'Sync server configuration will be preserved during update'
+        }), 202
     except Exception as e:
         logger.error(f"Failed to start updater: {e}")
         return jsonify({'error': str(e)}), 500
