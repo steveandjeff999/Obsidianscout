@@ -64,7 +64,7 @@ class MultiServerSyncManager:
                     self.start_background_workers()
             except Exception as e:
                 # Sync tables don't exist yet - use defaults
-                print(f"⚠️  Sync tables not found (run setup_multi_server_sync.py): {e}")
+                print(f"Warning: Sync tables not found (run setup_multi_server_sync.py): {e}")
                 self.sync_enabled = False
                 self.sync_interval = 30
                 self.file_watch_interval = 5
@@ -844,7 +844,7 @@ class MultiServerSyncManager:
                                 logger.info(f"✅ Hard deleted {table_name} record {record_id} ({record_info})")
                                 applied_count += 1
                             else:
-                                logger.warning(f"⚠️  Record {record_id} in {table_name} not found for hard deletion (may already be deleted)")
+                                logger.warning(f"Warning: Record {record_id} in {table_name} not found for hard deletion (may already be deleted)")
                     
                     elif operation == 'soft_delete':
                         # Handle soft deletion (set is_active = False)
@@ -862,7 +862,7 @@ class MultiServerSyncManager:
                                 logger.info(f"✅ Soft deleted {table_name} record {record_id} ({record_info})")
                                 applied_count += 1
                             else:
-                                logger.warning(f"⚠️  Record {record_id} in {table_name} not found for soft deletion or doesn't support is_active")
+                                logger.warning(f"Warning: Record {record_id} in {table_name} not found for soft deletion or doesn't support is_active")
                     
                     elif operation == 'reactivate':
                         # Handle user reactivation (set is_active = True)
@@ -880,7 +880,7 @@ class MultiServerSyncManager:
                                 logger.info(f"✅ Reactivated {table_name} record {record_id} ({record_info})")
                                 applied_count += 1
                             else:
-                                logger.warning(f"⚠️  Record {record_id} in {table_name} not found for reactivation")
+                                logger.warning(f"Warning: Record {record_id} in {table_name} not found for reactivation")
                     
                     else:
                         logger.warning(f"Unknown operation type: {operation}")
@@ -1012,14 +1012,14 @@ class MultiServerSyncManager:
             
             print("✅ Multi-server sync background workers started")
         except Exception as e:
-            print(f"⚠️  Could not start sync workers: {e}")
+            print(f"Warning: Could not start sync workers: {e}")
             self.running = False
     
     def start_file_monitoring(self):
         """Start monitoring files for changes"""
         # This would start a background thread to monitor file changes
         # For now, just mark as started
-        print("📁 File monitoring started")
+        print("File monitoring started")
     
     def start_periodic_sync(self):
         """Start periodic synchronization"""
