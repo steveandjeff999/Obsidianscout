@@ -673,9 +673,35 @@ def trigger_remote_update():
     # Spawn background updater process
     try:
         repo_root = Path(__file__).resolve().parent.parent
-        updater = repo_root / 'app' / 'utils' / 'remote_updater.py'
-        if not updater.exists():
-            return jsonify({'error': 'Updater script not found on server'}), 500
+        
+        # Try multiple possible locations for the updater script
+        possible_updater_paths = [
+            repo_root / 'app' / 'utils' / 'remote_updater.py',  # New location
+            repo_root / 'remote_updater.py',  # Fallback: root directory
+            repo_root / 'simple_remote_updater.py',  # Simple fallback updater
+            repo_root / 'utils' / 'remote_updater.py'  # Alternative location
+        ]
+        
+        updater = None
+        for path in possible_updater_paths:
+            if path.exists():
+                updater = path
+                break
+        
+        if not updater:
+            # List available files for debugging
+            available_files = []
+            try:
+                for p in repo_root.rglob('*updater*.py'):
+                    available_files.append(str(p.relative_to(repo_root)))
+            except:
+                pass
+            
+            error_msg = f'Updater script not found. Searched: {[str(p.relative_to(repo_root)) for p in possible_updater_paths]}'
+            if available_files:
+                error_msg += f'. Available files: {available_files}'
+            
+            return jsonify({'error': error_msg}), 500
 
         cmd = [sys.executable, str(updater), '--zip-url', zip_url, '--port', str(port)]
         if use_waitress:
@@ -683,6 +709,7 @@ def trigger_remote_update():
 
         # Log the update attempt
         logger.info(f"Starting update from {zip_url} on port {port} (waitress: {use_waitress})")
+        logger.info(f"Using updater script: {updater}")
 
         # Spawn detached background process
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
