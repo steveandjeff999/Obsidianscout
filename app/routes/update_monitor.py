@@ -63,13 +63,13 @@ class UpdateMonitor:
         self.messages.append(msg)
         
         # Emit to WebSocket clients
-        socketio.emit('update_message', {
+        socketio.emit('update_monitor_message', {
             'server_id': self.server_id,
             'server_name': self.server.name,
             'message': msg,
             'status': self.status,
             'progress': self.progress
-        }, room=f'update_monitor_{self.server_id}', namespace='/update-monitor')
+        }, room=f'update_monitor_{self.server_id}')
         
         logger.info(f"Update {self.server.name}: {message}")
     
@@ -79,14 +79,14 @@ class UpdateMonitor:
         if progress is not None:
             self.progress = progress
             
-        socketio.emit('update_status', {
+        socketio.emit('update_monitor_status', {
             'server_id': self.server_id,
             'server_name': self.server.name,
             'status': self.status,
             'progress': self.progress,
             'started_at': self.started_at.isoformat(),
             'completed_at': self.completed_at.isoformat() if self.completed_at else None
-        }, room=f'update_monitor_{self.server_id}', namespace='/update-monitor')
+        }, room=f'update_monitor_{self.server_id}')
     
     def start_update(self):
         """Start the update process with monitoring"""
@@ -300,23 +300,24 @@ def get_update_status(server_id):
     else:
         return jsonify({'status': 'not_running', 'progress': 0, 'messages': []})
 
-# WebSocket events for the update-monitor namespace
-@socketio.on('join_update_monitor', namespace='/update-monitor')
+# WebSocket events (using main namespace for simplicity)
+@socketio.on('join_update_monitor')
 def on_join_update_monitor(data):
     """Join the update monitor room for a specific server"""
     server_id = data['server_id']
     room = f'update_monitor_{server_id}'
     join_room(room)
-    emit('joined', {'room': room})
+    logger.info(f"User joined update monitor room for server {server_id}")
+    emit('update_monitor_joined', {'room': room, 'server_id': server_id})
 
-@socketio.on('leave_update_monitor', namespace='/update-monitor') 
+@socketio.on('leave_update_monitor') 
 def on_leave_update_monitor(data):
     """Leave the update monitor room"""
     server_id = data['server_id']
     room = f'update_monitor_{server_id}'
     leave_room(room)
 
-@socketio.on('start_server_update', namespace='/update-monitor')
+@socketio.on('update_monitor_start_server')
 def on_start_server_update(data):
     """Start update for a single server"""
     server_id = data['server_id']
@@ -324,23 +325,24 @@ def on_start_server_update(data):
     if server:
         # Check if already updating
         if server_id in active_updates:
-            emit('error', {'message': 'Update already in progress for this server'})
+            emit('update_monitor_error', {'message': 'Update already in progress for this server', 'server_id': server_id})
             return
         
         zip_url = 'https://github.com/steveandjeff999/Obsidianscout/archive/refs/heads/main.zip'
         monitor = UpdateMonitor(server_id, zip_url, server.port, True)
         monitor.start_update()
         
-        emit('update_started', {
+        emit('update_monitor_started', {
             'server_id': server_id,
             'server_name': server.name,
             'message': f'Update started for {server.name}'
         })
 
-@socketio.on('test_connection', namespace='/update-monitor')
+@socketio.on('update_monitor_test_connection')
 def on_test_connection(data):
     """Test connection to a server"""
     server_id = data['server_id']
+    logger.info(f"Testing connection to server {server_id}")
     server = SyncServer.query.get(server_id)
     if server:
         try:
@@ -352,20 +354,21 @@ def on_test_connection(data):
             success = False
             message = str(e)
         
-        emit('connection_test_result', {
+        logger.info(f"Connection test result for server {server_id}: {message}")
+        emit('update_monitor_connection_test', {
             'server_id': server_id,
             'success': success,
             'message': message
         })
 
-@socketio.on('refresh_status', namespace='/update-monitor')
+@socketio.on('update_monitor_refresh_status')
 def on_refresh_status():
     """Refresh status for all servers"""
     servers = SyncServer.query.filter_by(sync_enabled=True).all()
     for server in servers:
         if server.id in active_updates:
             monitor = active_updates[server.id]
-            emit('update_status', {
+            emit('update_monitor_status', {
                 'server_id': server.id,
                 'server_name': server.name,
                 'status': monitor.status,
@@ -374,22 +377,24 @@ def on_refresh_status():
                 'completed_at': monitor.completed_at.isoformat() if monitor.completed_at else None
             })
 
-@socketio.on('start_all_updates', namespace='/update-monitor')
+@socketio.on('update_monitor_start_all')
 def on_start_all_updates():
     """Start updates for all servers"""
     servers = SyncServer.query.filter_by(sync_enabled=True).all()
     zip_url = 'https://github.com/steveandjeff999/Obsidianscout/archive/refs/heads/main.zip'
     
+    started_count = 0
     for server in servers:
         if server.id not in active_updates:
             monitor = UpdateMonitor(server.id, zip_url, server.port, True)
             monitor.start_update()
+            started_count += 1
     
-    emit('bulk_update_started', {
-        'message': f'Started updates for {len(servers)} servers'
+    emit('update_monitor_bulk_started', {
+        'message': f'Started updates for {started_count} servers'
     })
 
-@socketio.on('stop_all_updates', namespace='/update-monitor')
+@socketio.on('update_monitor_stop_all')
 def on_stop_all_updates():
     """Stop all updates"""
     # Note: This is a simple implementation that just clears the active updates
@@ -397,6 +402,6 @@ def on_stop_all_updates():
     stopped_count = len(active_updates)
     active_updates.clear()
     
-    emit('bulk_update_stopped', {
+    emit('update_monitor_bulk_stopped', {
         'message': f'Stopped {stopped_count} updates'
     })
