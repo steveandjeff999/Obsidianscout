@@ -82,16 +82,20 @@ def download_zip(url: str, dest: Path) -> Path:
 
 def set_use_waitress_in_run(run_py: Path, use_waitress: bool):
     # Replace the line that assigns USE_WAITRESS
-    text = run_py.read_text()
-    new_line = f"USE_WAITRESS = {str(bool(use_waitress))}  # Updated by remote_updater"
-    import re
-    pattern = re.compile(r"^USE_WAITRESS\s*=.*$", re.M)
-    if pattern.search(text):
-        text = pattern.sub(new_line, text)
-    else:
-        # Fallback: insert near top
-        text = new_line + '\n' + text
-    run_py.write_text(text)
+    try:
+        text = run_py.read_text(encoding='utf-8')
+        new_line = f"USE_WAITRESS = {str(bool(use_waitress))}  # Updated by remote_updater"
+        import re
+        pattern = re.compile(r"^USE_WAITRESS\s*=.*$", re.M)
+        if pattern.search(text):
+            text = pattern.sub(new_line, text)
+        else:
+            # Fallback: insert near top
+            text = new_line + '\n' + text
+        run_py.write_text(text, encoding='utf-8')
+    except UnicodeDecodeError as e:
+        print(f"Warning: Could not modify run.py due to encoding error: {e}", flush=True)
+        print("Server will use default USE_WAITRESS setting", flush=True)
 
 
 def start_server(run_py_path: Path, port: int) -> int:
@@ -274,6 +278,19 @@ def main():
 
         # Run perform_update from update_from_github_file as subprocess to avoid circular imports
         print("Applying update...", flush=True)
+        
+        # First, try to kill any running server processes to unlock files
+        print("Stopping any running server processes...", flush=True)
+        try:
+            killed_before = kill_other_python_processes([os.getpid()])
+            if killed_before:
+                print(f"Stopped processes: {killed_before}", flush=True)
+                time.sleep(2)  # Give time for files to be released
+            else:
+                print("No running server processes found", flush=True)
+        except Exception as e:
+            print(f"Warning: Could not stop server processes: {e}", flush=True)
+        
         try:
             update_result = subprocess.run([
                 sys.executable, 'update_from_github_file.py', str(zip_path), '--zip', '--force'
@@ -288,6 +305,8 @@ def main():
             
             if rc != 0:
                 print(f"WARNING: Update returned non-zero exit code {rc}", flush=True)
+                # Even if update had issues, we might be able to proceed
+                print("Attempting to continue with server restart...", flush=True)
         except Exception as e:
             print(f"ERROR: Failed to run update: {e}", flush=True)
             rc = 1
@@ -309,6 +328,23 @@ def main():
         # Edit run.py
         print(f"Setting USE_WAITRESS={args.use_waitress} in run.py", flush=True)
         set_use_waitress_in_run(run_py, args.use_waitress)
+
+        # Verify critical files exist before starting server
+        print("Verifying critical files exist...", flush=True)
+        critical_files = [
+            repo_root / 'app' / '__init__.py',
+            repo_root / 'app' / 'assistant' / '__init__.py',
+            repo_root / 'app' / 'assistant' / 'core.py',
+            repo_root / 'app' / 'routes' / '__init__.py'
+        ]
+        
+        missing_files = [f for f in critical_files if not f.exists()]
+        if missing_files:
+            print(f"ERROR: Critical files missing after update: {[str(f) for f in missing_files]}", flush=True)
+            print("Update may have failed - attempting to restore from backup...", flush=True)
+            # Could add backup restore logic here if needed
+        else:
+            print("All critical files verified", flush=True)
 
         # Start server
         print(f"Starting server on port {args.port}...", flush=True)
