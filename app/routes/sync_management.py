@@ -263,7 +263,7 @@ def update_server(server_id):
         payload = {
             'zip_url': zip_url,
             'use_waitress': True,
-            'port': 8080
+            'port': server.port  # Use the server's actual port
         }
         url = f"{server.base_url}/api/sync/update"
         try:
@@ -272,6 +272,7 @@ def update_server(server_id):
                 flash(f'Update started on server "{server.name}"', 'success')
             else:
                 flash(f'Failed to start update on {server.name}: HTTP {resp.status_code}', 'error')
+                logger.error(f"Update failed for {server.name} ({server.base_url}): HTTP {resp.status_code} - {resp.text if resp.text else 'No response body'}")
         except Exception as e:
             flash(f'Failed to contact {server.name}: {e}', 'error')
 
@@ -290,10 +291,10 @@ def update_all_servers():
     try:
         servers = SyncServer.query.filter_by(sync_enabled=True).all()
         zip_url = f"https://github.com/steveandjeff999/Obsidianscout/archive/refs/heads/main.zip"
-        payload = {'zip_url': zip_url, 'use_waitress': True, 'port': 8080}
         successes = 0
         failures = []
         for server in servers:
+            payload = {'zip_url': zip_url, 'use_waitress': True, 'port': server.port}  # Use each server's actual port
             url = f"{server.base_url}/api/sync/update"
             try:
                 resp = requests.post(url, json=payload, timeout=10, verify=False)
@@ -301,8 +302,10 @@ def update_all_servers():
                     successes += 1
                 else:
                     failures.append((server.name, f'HTTP {resp.status_code}'))
+                    logger.error(f"Update failed for {server.name} ({server.base_url}): HTTP {resp.status_code} - {resp.text if resp.text else 'No response body'}")
             except Exception as e:
                 failures.append((server.name, str(e)))
+                logger.error(f"Update failed for {server.name} ({server.base_url}): {str(e)}")
 
         if successes:
             flash(f'Started update on {successes} servers. {len(failures)} failures.', 'success')
