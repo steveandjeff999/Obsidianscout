@@ -60,5 +60,19 @@
     "text": "Statistics for Oklahoma Regional:",
     "timestamp": "2025-08-26T02:21:14.045820",
     "owner": "Seth Herod"
+  },
+  {
+    "sender": "superadmin",
+    "recipient": "assistant",
+    "text": "hi",
+    "timestamp": "2025-09-04T22:26:17.861239",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "superadmin",
+    "text": "Hello superadmin, how can I help you?",
+    "timestamp": "2025-09-04T22:26:17.865572",
+    "owner": "superadmin"
   }
 ]
