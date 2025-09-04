@@ -277,6 +277,65 @@ def stop_server_on_port(port: int, keep_pids: list[int]):
     return killed
 
 
+def detect_original_server_port():
+    """
+    Try to detect what port the original server was using.
+    This helps restore the same port after update.
+    """
+    detected_ports = []
+    
+    if os.name == 'nt':
+        # Windows: check what ports have Python processes listening
+        try:
+            result = subprocess.run(['netstat', '-ano'], capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if 'LISTENING' in line and ':' in line:
+                        parts = line.split()
+                        if len(parts) >= 5:
+                            try:
+                                # Extract port from address like "0.0.0.0:8081"
+                                addr_part = parts[1]
+                                if ':' in addr_part:
+                                    port = int(addr_part.split(':')[-1])
+                                    pid = int(parts[-1])
+                                    # Check if it's a Python process
+                                    proc_result = subprocess.run(['tasklist', '/FI', f'PID eq {pid}', '/FO', 'CSV'], 
+                                                               capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                                    if 'python' in proc_result.stdout.lower():
+                                        detected_ports.append(port)
+                            except (ValueError, IndexError):
+                                continue
+        except Exception:
+            pass
+    else:
+        # Unix/Linux: use lsof or ss
+        try:
+            result = subprocess.run(['lsof', '-i', '-P', '-n'], capture_output=True, text=True)
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if 'python' in line.lower() and 'LISTEN' in line:
+                        parts = line.split()
+                        for part in parts:
+                            if ':' in part and part.count(':') == 1:
+                                try:
+                                    port = int(part.split(':')[-1])
+                                    detected_ports.append(port)
+                                except ValueError:
+                                    continue
+        except FileNotFoundError:
+            pass
+    
+    # Return most common web server ports if found
+    common_ports = [8080, 8081, 5000, 8000, 80, 443]
+    for port in common_ports:
+        if port in detected_ports:
+            return port
+    
+    # Return first detected port if any
+    return detected_ports[0] if detected_ports else None
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--zip-url', dest='zip_url', required=True)
@@ -284,10 +343,21 @@ def main():
     parser.add_argument('--port', dest='port', type=int, default=8080)
     args = parser.parse_args()
 
+    # Try to detect the original server port before stopping it
+    print("Detecting original server port...", flush=True)
+    original_port = detect_original_server_port()
+    if original_port:
+        print(f"Detected original server running on port {original_port}", flush=True)
+        # Use detected port instead of command line argument if available
+        final_port = original_port
+    else:
+        print("Could not detect original port, using provided port", flush=True)
+        final_port = args.port
+
     print("Starting remote updater...", flush=True)
     print(f"Download URL: {args.zip_url}", flush=True)
     print(f"Use Waitress: {args.use_waitress}", flush=True)
-    print(f"Port: {args.port}", flush=True)
+    print(f"Target Port: {final_port} (original: {original_port}, provided: {args.port})", flush=True)
 
     # Find the correct repo root
     script_path = Path(__file__).resolve()
@@ -377,25 +447,71 @@ def main():
             print(f"Warning: Could not backup sync config: {e}", flush=True)
 
         # Run perform_update from update_from_github_file as subprocess to avoid circular imports
-        print("Applying update...", flush=True)
+        print("Applying update with detailed logging...", flush=True)
+        
+        # Log what files exist before update
+        print("=== PRE-UPDATE FILE CHECK ===", flush=True)
+        pre_update_assistant_files = list((repo_root / 'app' / 'assistant').glob('*.py'))
+        print(f"Assistant Python files before update: {[f.name for f in pre_update_assistant_files]}", flush=True)
+        
+        pre_update_db_files = list(repo_root.glob('*.db*')) + list((repo_root / 'instance').glob('*.db*'))
+        print(f"Database files before update: {[str(f.relative_to(repo_root)) for f in pre_update_db_files if f.exists()]}", flush=True)
+        print("=== END PRE-UPDATE CHECK ===", flush=True)
         
         # First, try to stop any running server processes more safely
         print("Stopping any running server processes...", flush=True)
         try:
             # Instead of killing all processes, try a more targeted approach
             # Look for processes using the server port
-            killed_before = stop_server_on_port(args.port, [os.getpid()])
+            killed_before = stop_server_on_port(final_port, [os.getpid()])
             if killed_before:
                 print(f"Stopped server processes: {killed_before}", flush=True)
-                time.sleep(3)  # Give more time for files to be released
+                time.sleep(5)  # Give more time for database files to be released
             else:
                 print("No running server found on target port", flush=True)
+            
+            # Additional wait for database file locks to be released
+            print("Waiting for database files to be released...", flush=True)
+            time.sleep(3)
+            
         except Exception as e:
             print(f"Warning: Could not stop server processes: {e}", flush=True)
         
+        # Check if critical database files are accessible before update
+        print("Checking database file accessibility...", flush=True)
+        db_files_to_check = [
+            repo_root / 'instance' / 'scouting.db',
+            repo_root / 'instance' / 'scouting.db-wal', 
+            repo_root / 'instance' / 'scouting.db-shm',
+            repo_root / 'instance' / 'users.db',
+            repo_root / 'scouting.db',  # Check root directory too
+            repo_root / 'scouting.db-wal',
+            repo_root / 'scouting.db-shm'
+        ]
+        
+        locked_files = []
+        for db_file in db_files_to_check:
+            if db_file.exists():
+                try:
+                    # Try to open the file to check if it's locked
+                    with open(db_file, 'r+b') as f:
+                        pass  # Just check if we can open it
+                    print(f"✓ Database file accessible: {db_file.name}", flush=True)
+                except Exception as e:
+                    print(f"⚠ Database file may be locked: {db_file.name} - {e}", flush=True)
+                    locked_files.append(str(db_file))
+        
+        if locked_files:
+            print(f"Warning: Some database files may be locked: {locked_files}", flush=True)
+            print("Proceeding with update, but database files may not be properly preserved", flush=True)
+        
         try:
+            # Add specific database files to preservation - these might be in root directory
+            db_preserve_files = ['scouting.db', 'scouting.db-wal', 'scouting.db-shm', 'users.db', 'users.db-wal', 'users.db-shm', 'app.db', 'app.db-wal', 'app.db-shm', 'database.db', 'database.db-wal', 'database.db-shm']
+            preserve_arg = ','.join(['instance', 'uploads', 'config', 'migrations', 'translations', 'ssl', '.env', 'app_config.json', '.venv', 'venv', 'env'] + db_preserve_files)
+            
             update_result = subprocess.run([
-                sys.executable, 'update_from_github_file.py', str(zip_path), '--zip', '--force'
+                sys.executable, 'update_from_github_file.py', str(zip_path), '--zip', '--force', '--preserve', preserve_arg
             ], capture_output=True, text=True, cwd=repo_root)
             
             print(f"Update output: {update_result.stdout}", flush=True)
@@ -404,6 +520,119 @@ def main():
                 
             rc = update_result.returncode
             print(f"Update process returned {rc}", flush=True)
+            
+            # Log what files exist after update
+            print("=== POST-UPDATE FILE CHECK ===", flush=True)
+            post_update_assistant_files = []
+            if (repo_root / 'app' / 'assistant').exists():
+                post_update_assistant_files = list((repo_root / 'app' / 'assistant').glob('*.py'))
+            print(f"Assistant Python files after update: {[f.name for f in post_update_assistant_files]}", flush=True)
+            
+            post_update_db_files = list(repo_root.glob('*.db*')) + list((repo_root / 'instance').glob('*.db*'))
+            print(f"Database files after update: {[str(f.relative_to(repo_root)) for f in post_update_db_files if f.exists()]}", flush=True)
+            print("=== END POST-UPDATE CHECK ===", flush=True)
+            
+            # Verify critical files exist after update - comprehensive list
+            print("Verifying critical files after update...", flush=True)
+            critical_files = [
+                repo_root / 'app' / '__init__.py',
+                repo_root / 'app' / 'models.py',
+                repo_root / 'app' / 'assistant' / '__init__.py',
+                repo_root / 'app' / 'assistant' / 'core.py',
+                repo_root / 'app' / 'assistant' / 'visualizer.py',
+                repo_root / 'app' / 'routes' / '__init__.py',
+                repo_root / 'app' / 'routes' / 'assistant.py',
+                repo_root / 'app' / 'routes' / 'main.py',
+                repo_root / 'app' / 'routes' / 'sync.py',
+                repo_root / 'app' / 'utils' / '__init__.py',
+                repo_root / 'app' / 'utils' / 'sync_utils.py',
+                repo_root / 'run.py',
+                repo_root / 'requirements.txt'
+            ]
+            
+            missing_files = [str(f.relative_to(repo_root)) for f in critical_files if not f.exists()]
+            if missing_files:
+                print(f"ERROR: Critical files missing after update: {missing_files}", flush=True)
+                print("Attempting comprehensive recovery from backup...", flush=True)
+                
+                # Find the most recent backup directory
+                backup_dirs = list(repo_root.glob('backups/update_backup_*'))
+                if backup_dirs:
+                    latest_backup = max(backup_dirs, key=lambda p: p.stat().st_mtime)
+                    print(f"Found backup directory: {latest_backup}", flush=True)
+                    
+                    recovery_success = []
+                    recovery_failed = []
+                    
+                    # Try to restore missing files from backup
+                    for missing in missing_files:
+                        missing_path = Path(missing)
+                        backup_file = latest_backup / missing_path.name  # Try direct file name first
+                        target_file = repo_root / missing
+                        
+                        # If direct file name not found, try full path restoration
+                        if not backup_file.exists():
+                            # Look for the file in subdirectories of backup
+                            possible_backups = list(latest_backup.rglob(missing_path.name))
+                            if possible_backups:
+                                backup_file = possible_backups[0]  # Use first match
+                        
+                        if backup_file.exists():
+                            try:
+                                target_file.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(backup_file, target_file)
+                                print(f"✓ Restored {missing} from backup", flush=True)
+                                recovery_success.append(missing)
+                            except Exception as e:
+                                print(f"✗ Failed to restore {missing}: {e}", flush=True)
+                                recovery_failed.append(missing)
+                        else:
+                            print(f"✗ Backup not found for {missing}", flush=True)
+                            recovery_failed.append(missing)
+                    
+                    print(f"Recovery summary: {len(recovery_success)} restored, {len(recovery_failed)} failed", flush=True)
+                else:
+                    print("No backup directory found for recovery", flush=True)
+                
+                # Re-verify after recovery attempt
+                still_missing = [str(f.relative_to(repo_root)) for f in critical_files if not f.exists()]
+                if still_missing:
+                    print(f"CRITICAL: Still missing after recovery: {still_missing}", flush=True)
+                    print("Server startup will likely fail. Manual intervention may be required.", flush=True)
+                    
+                    # Try one more recovery approach - look for these files in the ZIP directly
+                    print("Attempting emergency recovery from original ZIP...", flush=True)
+                    try:
+                        import zipfile
+                        with zipfile.ZipFile(zip_path, 'r') as zf:
+                            zip_files = zf.namelist()
+                            
+                            for missing in still_missing:
+                                # Look for the file in the ZIP
+                                matching_files = [f for f in zip_files if f.endswith(missing) or missing in f]
+                                if matching_files:
+                                    zip_file = matching_files[0]
+                                    target_file = repo_root / missing
+                                    try:
+                                        target_file.parent.mkdir(parents=True, exist_ok=True)
+                                        with zf.open(zip_file) as src:
+                                            target_file.write_bytes(src.read())
+                                        print(f"✓ Emergency restored {missing} from ZIP", flush=True)
+                                    except Exception as e:
+                                        print(f"✗ Emergency recovery failed for {missing}: {e}", flush=True)
+                    except Exception as e:
+                        print(f"Emergency recovery from ZIP failed: {e}", flush=True)
+                    
+                    # Final verification
+                    final_missing = [str(f.relative_to(repo_root)) for f in critical_files if not f.exists()]
+                    if not final_missing:
+                        print("SUCCESS: Emergency recovery completed, all critical files restored", flush=True)
+                    else:
+                        print(f"FINAL CRITICAL ERROR: Unable to restore: {final_missing}", flush=True)
+                else:
+                    print("SUCCESS: All critical files restored from backup", flush=True)
+            else:
+                print("SUCCESS: All critical files verified after update", flush=True)
             
             if rc != 0:
                 print(f"WARNING: Update returned non-zero exit code {rc}", flush=True)
@@ -449,8 +678,8 @@ def main():
             print("All critical files verified", flush=True)
 
         # Start server
-        print(f"Starting server on port {args.port}...", flush=True)
-        child_pid = start_server(run_py, args.port)
+        print(f"Starting server on port {final_port}...", flush=True)
+        child_pid = start_server(run_py, final_port)
         print(f"Started server pid={child_pid}", flush=True)
 
         # Give server time to start
