@@ -24,18 +24,51 @@ try:
 except Exception:
     requests = None
 
+try:
+    import urllib.request
+    import urllib.error
+except Exception:
+    urllib = None
+
 
 def download_zip(url: str, dest: Path) -> Path:
-    if requests is None:
-        raise RuntimeError('requests is required to download the ZIP')
-
-    r = requests.get(url, stream=True, timeout=60)
-    r.raise_for_status()
-    with open(dest, 'wb') as f:
-        for chunk in r.iter_content(1024 * 64):
-            if chunk:
-                f.write(chunk)
-    return dest
+    """Download ZIP using requests if available, otherwise fallback to urllib"""
+    print(f"Downloading update from {url} to {dest}...", flush=True)
+    
+    if requests is not None:
+        try:
+            r = requests.get(url, stream=True, timeout=60)
+            r.raise_for_status()
+            with open(dest, 'wb') as f:
+                for chunk in r.iter_content(1024 * 64):
+                    if chunk:
+                        f.write(chunk)
+            print("✅ Download completed using requests", flush=True)
+            return dest
+        except Exception as e:
+            print(f"❌ Requests download failed: {e}", flush=True)
+            if urllib is None:
+                raise RuntimeError(f'Download failed with requests: {e}')
+            # Fall through to urllib
+    
+    if urllib is not None:
+        try:
+            print("🔄 Retrying download with urllib...", flush=True)
+            with urllib.request.urlopen(url, timeout=60) as response:
+                with open(dest, 'wb') as f:
+                    while True:
+                        chunk = response.read(1024 * 64)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+            print("✅ Download completed using urllib", flush=True)
+            return dest
+        except urllib.error.URLError as e:
+            raise RuntimeError(f'Download failed with urllib: {e}')
+        except Exception as e:
+            raise RuntimeError(f'Download failed: {e}')
+    
+    raise RuntimeError('Neither requests nor urllib are available for downloading')
 
 
 def set_use_waitress_in_run(run_py: Path, use_waitress: bool):
@@ -138,8 +171,77 @@ def main():
     parser.add_argument('--port', dest='port', type=int, default=8080)
     args = parser.parse_args()
 
-    repo_root = Path(__file__).resolve().parent.parent
+    print("🚀 Starting remote updater...", flush=True)
+    print(f"📥 Download URL: {args.zip_url}", flush=True)
+    print(f"🔧 Use Waitress: {args.use_waitress}", flush=True)
+    print(f"🌐 Port: {args.port}", flush=True)
+
+    # Find the correct repo root
+    script_path = Path(__file__).resolve()
+    print(f"📄 Script path: {script_path}", flush=True)
+    
+    # Try different possible repo root locations
+    possible_roots = [
+        script_path.parent.parent,  # Normal: app/utils/remote_updater.py -> repo_root
+        Path.cwd(),  # Current working directory
+        script_path.parent.parent.parent,  # In case we're deeper
+    ]
+    
+    repo_root = None
+    for candidate in possible_roots:
+        run_py_path = candidate / 'run.py'
+        print(f"🔍 Checking for run.py at: {run_py_path}", flush=True)
+        if run_py_path.exists():
+            repo_root = candidate
+            print(f"✅ Found repo root: {repo_root}", flush=True)
+            break
+    
+    if repo_root is None:
+        print("❌ Could not find repo root (run.py not found)", flush=True)
+        print(f"Current working directory: {Path.cwd()}", flush=True)
+        print(f"Script directory: {script_path.parent}", flush=True)
+        sys.exit(1)
+        
     run_py = repo_root / 'run.py'
+    
+    # Change to repo root directory
+    original_cwd = Path.cwd()
+    os.chdir(repo_root)
+    print(f"📁 Changed working directory to: {repo_root}", flush=True)
+    
+    # Environment diagnostics
+    print(f"🐍 Python executable: {sys.executable}", flush=True)
+    print(f"🐍 Python version: {sys.version}", flush=True)
+    if requests is None:
+        print("⚠️  requests module not available - trying to install it...", flush=True)
+        try:
+            import subprocess
+            result = subprocess.run([
+                sys.executable, '-m', 'pip', 'install', 'requests'
+            ], capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                print("✅ Successfully installed requests", flush=True)
+                # Try to import again
+                try:
+                    import requests as new_requests
+                    globals()['requests'] = new_requests
+                    print("✅ requests module is now available", flush=True)
+                except ImportError:
+                    print("❌ Failed to import requests after installation", flush=True)
+            else:
+                print(f"❌ Failed to install requests: {result.stderr}", flush=True)
+                print("🔄 Will use urllib fallback", flush=True)
+        except Exception as e:
+            print(f"❌ Error installing requests: {e}", flush=True)
+            print("🔄 Will use urllib fallback", flush=True)
+    else:
+        print("✅ requests module is available", flush=True)
+        
+    if urllib is None:
+        print("❌ urllib not available either", flush=True)
+    else:
+        print("✅ urllib is available as fallback", flush=True)
 
     # Download zip
     tmpdir = Path(tempfile.mkdtemp(prefix='obs_remote_update_'))
