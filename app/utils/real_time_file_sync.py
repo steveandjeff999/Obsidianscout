@@ -471,10 +471,14 @@ class RealTimeFileEventHandler(FileSystemEventHandler):
                         
                         # Log successful sync
                         sync_log = SyncLog(
-                            operation=f'file_{event_type}',
-                            details=f'File: {file_path}',
-                            success=True,
-                            sync_server_id=server.id
+                            server_id=server.id,
+                            sync_type=f'file_{event_type}',
+                            direction='push',
+                            status='completed',
+                            items_synced=1,
+                            total_items=1,
+                            sync_details=f'File: {file_path}',
+                            completed_at=datetime.utcnow()
                         )
                         db.session.add(sync_log)
                         
@@ -489,10 +493,15 @@ class RealTimeFileEventHandler(FileSystemEventHandler):
                         
                         # Log failed sync
                         sync_log = SyncLog(
-                            operation=f'file_{event_type}',
-                            details=f'File: {file_path}, Error: {error_msg}',
-                            success=False,
-                            sync_server_id=server.id
+                            server_id=server.id,
+                            sync_type=f'file_{event_type}',
+                            direction='push',
+                            status='failed',
+                            error_message=error_msg,
+                            items_synced=0,
+                            total_items=1,
+                            sync_details=f'File: {file_path}',
+                            completed_at=datetime.utcnow()
                         )
                         db.session.add(sync_log)
                 
@@ -507,10 +516,15 @@ class RealTimeFileEventHandler(FileSystemEventHandler):
                     
                     # Log exception
                     sync_log = SyncLog(
-                        operation=f'file_{event_type}',
-                        details=f'File: {file_path}, Exception: {error_msg}',
-                        success=False,
-                        sync_server_id=server.id
+                        server_id=server.id,
+                        sync_type=f'file_{event_type}',
+                        direction='push',
+                        status='failed',
+                        error_message=error_msg,
+                        items_synced=0,
+                        total_items=1,
+                        sync_details=f'File: {file_path}',
+                        completed_at=datetime.utcnow()
                     )
                     db.session.add(sync_log)
             
