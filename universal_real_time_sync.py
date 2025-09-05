@@ -48,7 +48,11 @@ class UniversalSyncManager:
     def initialize(self, app=None):
         """Initialize universal sync system"""
         if app:
-            _sync_state['app_context'] = app._get_current_object()
+            try:
+                _sync_state['app_context'] = app._get_current_object()
+            except AttributeError:
+                # Flask version doesn't have _get_current_object, use app directly
+                _sync_state['app_context'] = app
             
         print("🌍 Initializing Universal Real-Time Sync System...")
         
@@ -76,21 +80,56 @@ class UniversalSyncManager:
         """Automatically discover ALL SQLAlchemy models"""
         try:
             # Import all models to ensure they're registered
-            from app.models import db
+            from app import db
+            
+            # Import all known models explicitly to ensure registration
+            from app.models import (
+                User, Role, ScoutingTeamSettings, Team, Event, Match, 
+                StrategyShare, ScoutingData, TeamListEntry, AllianceSelection,
+                SyncServer, SyncLog, DatabaseChange, FileChecksum, SyncConfig
+            )
             
             # Get all model classes from SQLAlchemy registry
-            for model_class in db.Model.registry._class_registry.values():
-                if (hasattr(model_class, '__tablename__') and 
-                    hasattr(model_class, 'query') and
-                    hasattr(model_class, 'id')):  # Basic model requirements
-                    
-                    self.db_models.append(model_class)
-                    print(f"📊 Discovered model: {model_class.__name__}")
+            models_found = False
+            try:
+                # Try new SQLAlchemy 2.x style
+                for model_class in db.Model.registry.mappers:
+                    model_class = model_class.class_
+                    if (hasattr(model_class, '__tablename__') and 
+                        hasattr(model_class, 'query')):
+                        self.db_models.append(model_class)
+                        print(f"📊 Discovered model: {model_class.__name__}")
+                        models_found = True
+            except AttributeError:
+                # Fall back to SQLAlchemy 1.x style
+                try:
+                    registry = db.Model.registry._class_registry
+                    for model_class in registry.values():
+                        if (hasattr(model_class, '__tablename__') and 
+                            hasattr(model_class, 'query') and
+                            not isinstance(model_class, str)):
+                            self.db_models.append(model_class)
+                            print(f"📊 Discovered model: {model_class.__name__}")
+                            models_found = True
+                except:
+                    pass
+            
+            if not models_found:
+                # Manual fallback
+                known_models = [
+                    User, Role, ScoutingTeamSettings, Team, Event, Match,
+                    StrategyShare, ScoutingData, TeamListEntry, AllianceSelection,
+                    SyncServer, SyncLog, DatabaseChange, FileChecksum, SyncConfig
+                ]
+                
+                for model in known_models:
+                    self.db_models.append(model)
+                    print(f"📊 Added model: {model.__name__}")
                     
         except Exception as e:
             print(f"⚠️ Error discovering models: {e}")
             
-            # Fallback: manually import known models
+            # Final fallback: manually import known models
             try:
                 from app.models import (
                     User, Role, ScoutingTeamSettings, Team, Event, Match, 
