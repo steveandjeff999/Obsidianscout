@@ -540,8 +540,45 @@ def delete_file():
         if not os.path.exists(target_path):
             return jsonify({'error': 'File not found'}), 404
         
-        # Delete the file
-        os.remove(target_path)
+        # Delete the file with improved error handling
+        def safe_delete_file(file_path):
+            """Safely delete a file with permission handling"""
+            import stat
+            import time
+            
+            strategies = [
+                # Strategy 1: Simple deletion
+                lambda: os.remove(file_path),
+                
+                # Strategy 2: Change permissions then delete
+                lambda: (os.chmod(file_path, stat.S_IWRITE), os.remove(file_path))[1],
+                
+                # Strategy 3: Wait and retry (in case file is locked)
+                lambda: (time.sleep(0.5), os.remove(file_path))[1]
+            ]
+            
+            last_error = None
+            for i, strategy in enumerate(strategies, 1):
+                try:
+                    strategy()
+                    return True, f"Deleted successfully (method {i})"
+                except PermissionError as e:
+                    last_error = f"Permission denied: {e}"
+                    if i < len(strategies):
+                        continue
+                except Exception as e:
+                    last_error = str(e)
+                    if i < len(strategies):
+                        continue
+            
+            return False, last_error
+        
+        # Attempt safe deletion
+        success, message = safe_delete_file(target_path)
+        
+        if not success:
+            logger.error(f"Failed to delete file {file_path}: {message}")
+            return jsonify({'error': f'Could not delete file: {message}'}), 500
         
         # Remove from file checksum tracking
         try:
