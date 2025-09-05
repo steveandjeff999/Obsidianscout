@@ -976,6 +976,181 @@ def universal_sync_receive():
         return jsonify({'error': str(e)}), 500
 
 
+@sync_api.route('/fast_receive', methods=['POST'])
+def fast_sync_receive():
+    """
+    Fast sync receiver for essential database changes only
+    Lightweight endpoint that processes changes quickly without overwhelming the database
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        changes = data.get('changes', [])
+        batch_size = data.get('batch_size', len(changes))
+        
+        if not changes:
+            return jsonify({'error': 'No changes provided'}), 400
+        
+        # Process changes with database locking protection
+        success_count = 0
+        error_count = 0
+        
+        from app.utils.change_tracking import disable_change_tracking, enable_change_tracking
+        
+        # Temporarily disable change tracking to prevent loops
+        disable_change_tracking()
+        
+        try:
+            for change in changes:
+                try:
+                    result = _process_fast_change(change)
+                    if result.get('status') == 'success':
+                        success_count += 1
+                    else:
+                        error_count += 1
+                except Exception as e:
+                    logger.error(f"Fast sync change error: {e}")
+                    error_count += 1
+        finally:
+            enable_change_tracking()
+        
+        response = {
+            'status': 'processed',
+            'batch_size': batch_size,
+            'successful': success_count,
+            'errors': error_count,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        
+        if success_count > 0:
+            logger.info(f"Fast sync: processed {success_count}/{len(changes)} changes")
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Fast sync receive error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+def _process_fast_change(change):
+    """Process a single fast sync change efficiently"""
+    try:
+        table_name = change.get('table')
+        operation = change.get('operation')
+        record_id = change.get('id')
+        data = change.get('data', {})
+        
+        # Get model class efficiently
+        model_class = _get_fast_model_class(table_name)
+        if not model_class:
+            return {'status': 'skipped', 'reason': f'Unknown table: {table_name}'}
+        
+        # Apply change based on operation
+        if operation == 'insert':
+            return _fast_insert(model_class, data)
+        elif operation in ['update', 'soft_delete']:
+            return _fast_update(model_class, record_id, data)
+        elif operation == 'delete':
+            return _fast_delete(model_class, record_id)
+        else:
+            return {'status': 'skipped', 'reason': f'Unknown operation: {operation}'}
+            
+    except Exception as e:
+        return {'status': 'error', 'error': str(e)}
+
+
+def _get_fast_model_class(table_name):
+    """Get model class quickly (only essential models)"""
+    # Only handle essential models for performance
+    model_map = {
+        'user': None,
+        'scouting_data': None,
+        'team': None,
+        'match': None,
+        'event': None
+    }
+    
+    if table_name not in model_map:
+        return None  # Skip non-essential tables
+    
+    try:
+        from app.models import User, ScoutingData, Team, Match, Event
+        
+        fast_map = {
+            'user': User,
+            'scouting_data': ScoutingData,
+            'team': Team,
+            'match': Match,
+            'event': Event
+        }
+        
+        return fast_map.get(table_name)
+    except Exception:
+        return None
+
+
+def _fast_insert(model_class, data):
+    """Fast insert with minimal overhead"""
+    try:
+        # Create instance with minimal data
+        instance = model_class()
+        
+        # Only set essential fields to reduce processing
+        essential_fields = ['username', 'team_number', 'match_id', 'name', 'is_active']
+        for key, value in data.items():
+            if key in essential_fields and hasattr(instance, key):
+                setattr(instance, key, value)
+        
+        # Use a single transaction
+        db.session.add(instance)
+        db.session.commit()
+        
+        return {'status': 'success', 'operation': 'insert'}
+        
+    except Exception as e:
+        db.session.rollback()
+        return {'status': 'error', 'error': str(e)}
+
+
+def _fast_update(model_class, record_id, data):
+    """Fast update with minimal overhead"""
+    try:
+        instance = model_class.query.get(record_id)
+        if not instance:
+            # Record doesn't exist, skip instead of creating
+            return {'status': 'skipped', 'reason': 'record not found'}
+        
+        # Update only essential fields
+        essential_fields = ['username', 'team_number', 'match_id', 'name', 'is_active']
+        for key, value in data.items():
+            if key in essential_fields and hasattr(instance, key):
+                setattr(instance, key, value)
+        
+        db.session.commit()
+        return {'status': 'success', 'operation': 'update'}
+        
+    except Exception as e:
+        db.session.rollback()
+        return {'status': 'error', 'error': str(e)}
+
+
+def _fast_delete(model_class, record_id):
+    """Fast delete with minimal overhead"""
+    try:
+        instance = model_class.query.get(record_id)
+        if instance:
+            db.session.delete(instance)
+            db.session.commit()
+        
+        return {'status': 'success', 'operation': 'delete'}
+        
+    except Exception as e:
+        db.session.rollback()
+        return {'status': 'error', 'error': str(e)}
+
+
 def _process_universal_change(change, source_server):
     """Process a single universal sync change"""
     change_type = change.get('type')

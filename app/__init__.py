@@ -254,9 +254,13 @@ def create_app(test_config=None):
         SQLALCHEMY_ENGINE_OPTIONS={
             'pool_pre_ping': True,
             'pool_recycle': 3600,
+            'pool_size': 1,              # SQLite only supports one writer
+            'pool_timeout': 30,          # Match busy_timeout
+            'max_overflow': 0,           # No overflow for SQLite
             'connect_args': {
                 'timeout': 30,
                 'check_same_thread': False,
+                'isolation_level': None   # Autocommit mode for better performance
             }
         },
         UPLOAD_FOLDER=os.path.join(app.instance_path, 'uploads'),
@@ -309,6 +313,24 @@ def create_app(test_config=None):
     db.init_app(app)
     migrate.init_app(app, db)
     
+    # Apply SQLite performance optimizations
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+    
+    @event.listens_for(Engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        """Apply SQLite performance optimizations"""
+        if 'sqlite' in str(dbapi_connection):
+            cursor = dbapi_connection.cursor()
+            # Performance optimizations for SQLite
+            cursor.execute("PRAGMA journal_mode = WAL")      # Write-Ahead Logging
+            cursor.execute("PRAGMA synchronous = NORMAL")    # Balance performance/safety
+            cursor.execute("PRAGMA cache_size = -64000")     # 64MB cache
+            cursor.execute("PRAGMA busy_timeout = 30000")    # 30 second timeout
+            cursor.execute("PRAGMA temp_store = MEMORY")     # Memory for temp data
+            cursor.execute("PRAGMA foreign_keys = ON")       # Enable FK constraints
+            cursor.close()
+    
     # Load AI configuration from file if it exists
     try:
         ai_config_path = os.path.join(app.instance_path, 'ai_config.json')
@@ -349,14 +371,14 @@ def create_app(test_config=None):
     from app.utils.multi_server_sync import sync_manager
     sync_manager.init_app(app)
     
-    # Initialize Universal Real-Time Sync System
-    from universal_real_time_sync import initialize_universal_sync
+    # Initialize Fast Sync System (replaces heavy universal sync)
+    from fast_sync_system import initialize_fast_sync
     with app.app_context():
         try:
-            initialize_universal_sync(app)
-            print("🌍 Universal Real-Time Sync System activated")
+            initialize_fast_sync(app)
+            print("🚀 Fast Sync System activated")
         except Exception as e:
-            print(f"⚠️ Universal sync initialization failed, falling back to basic sync: {e}")
+            print(f"⚠️ Fast sync initialization failed, falling back to basic sync: {e}")
             # Fallback to original system
             from app.utils.change_tracking import setup_change_tracking
             setup_change_tracking()
