@@ -349,10 +349,17 @@ def create_app(test_config=None):
     from app.utils.multi_server_sync import sync_manager
     sync_manager.init_app(app)
     
-    # Initialize database change tracking for sync
-    from app.utils.change_tracking import setup_change_tracking
+    # Initialize Universal Real-Time Sync System
+    from universal_real_time_sync import initialize_universal_sync
     with app.app_context():
-        setup_change_tracking()
+        try:
+            initialize_universal_sync(app)
+            print("🌍 Universal Real-Time Sync System activated")
+        except Exception as e:
+            print(f"⚠️ Universal sync initialization failed, falling back to basic sync: {e}")
+            # Fallback to original system
+            from app.utils.change_tracking import setup_change_tracking
+            setup_change_tracking()
 
     # Import and register blueprints
     from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, assistant, integrity, pit_scouting, themes, scouting_alliances, setup, search, db_admin, sync_api, sync_management, update_monitor

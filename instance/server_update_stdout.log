@@ -1,0 +1,22 @@
+Loaded integrity configuration
+Loaded 394 file checksums
+File monitoring started
+Warning: Could not start sync workers: 'charmap' codec can't encode character '\U0001f504' in position 0: character maps to <undefined>
+Change tracking enabled for User
+Change tracking enabled for ScoutingData
+Change tracking enabled for Match
+Change tracking enabled for Team
+Change tracking enabled for Event
+Warning: Database tables may already exist or per-table create failed: <Flask 'app'>
+Starting FRC Scouting Platform...
+Database health check passed: 8 users, 4 roles
+Database is healthy and ready.
+SuperAdmin account already exists.
+Started periodic alliance sync thread (30-second intervals)
+Started periodic multi-server sync thread (1-minute intervals)
+Started periodic API data sync thread (3-minute intervals)
+Started security maintenance thread (1-hour intervals)
+Started multi-server sync services
+Started real-time file synchronization
+Note: For SSL/HTTPS support, configure a reverse proxy (nginx, Apache, etc.)
+      Waitress serves HTTP only, which is recommended for production behind a proxy

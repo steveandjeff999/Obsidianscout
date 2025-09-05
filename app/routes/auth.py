@@ -7,7 +7,7 @@ except ImportError:
     from urllib.parse import urlparse as url_parse
 from functools import wraps
 from app import db
-from app.models import User, Role
+from app.models import User, Role, DatabaseChange
 from sqlalchemy import or_, func
 from datetime import datetime
 from app.utils.system_check import SystemCheck
@@ -622,6 +622,24 @@ def add_user():
                 user.roles.append(role)
         
         db.session.add(user)
+        db.session.flush()  # ensure ID
+        # Manual change tracking fallback
+        try:
+            DatabaseChange.log_change(
+                table_name='user',
+                record_id=user.id,
+                operation='insert',
+                new_data={
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'scouting_team_number': user.scouting_team_number,
+                    'is_active': user.is_active
+                },
+                server_id='local'
+            )
+        except Exception as e:
+            current_app.logger.error(f"Manual insert change tracking failed: {e}")
         db.session.commit()
         
         flash(f'User {username} created successfully', 'success')
@@ -669,6 +687,23 @@ def update_user(user_id):
             user.roles.append(role)
 
     db.session.commit()
+    # Manual update change tracking fallback
+    try:
+        DatabaseChange.log_change(
+            table_name='user',
+            record_id=user.id,
+            operation='update',
+            new_data={
+                'id': user.id,
+                'username': user.username,
+                'scouting_team_number': user.scouting_team_number,
+                'is_active': user.is_active
+            },
+            server_id='local'
+        )
+        db.session.commit()
+    except Exception as e:
+        current_app.logger.error(f"Manual update change tracking failed: {e}")
     current_app.logger.info(f"User {user.username} updated successfully. New active status: {user.is_active}")
     flash(f'User {user.username} updated successfully.', 'success')
     return redirect(url_for('auth.manage_users'))
@@ -797,6 +832,22 @@ def delete_user(user_id):
         user.last_login = datetime.utcnow()  # Use as modification timestamp
     
     db.session.commit()
+    # Manual soft delete change tracking fallback
+    try:
+        DatabaseChange.log_change(
+            table_name='user',
+            record_id=user.id,
+            operation='soft_delete',
+            new_data={
+                'id': user.id,
+                'username': user.username,
+                'is_active': user.is_active
+            },
+            server_id='local'
+        )
+        db.session.commit()
+    except Exception as e:
+        current_app.logger.error(f"Manual soft delete change tracking failed: {e}")
     
     current_app.logger.info(f"Soft delete completed for user: {username}")
     flash(f'User {username} deactivated successfully', 'success')
@@ -832,9 +883,28 @@ def hard_delete_user(user_id):
         return redirect(url_for('auth.manage_users'))
     
     username = user.username
+    user_id = user.id  # Store ID before deletion
     current_app.logger.info(f"Proceeding with hard delete of user: {username}")
     
-    # Hard delete - this will trigger the after_delete event and track the change
+    # Manual hard delete change tracking BEFORE deletion
+    try:
+        DatabaseChange.log_change(
+            table_name='user',
+            record_id=user_id,
+            operation='delete',
+            old_data={
+                'id': user_id, 
+                'username': username,
+                'scouting_team_number': user.scouting_team_number,
+                'is_active': user.is_active
+            },
+            server_id='local'
+        )
+        current_app.logger.info(f"✅ Logged hard delete change for user {username}")
+    except Exception as e:
+        current_app.logger.error(f"❌ Manual hard delete change tracking failed: {e}")
+    
+    # Hard delete - this will trigger the after_delete event
     db.session.delete(user)
     db.session.commit()
     
@@ -867,6 +937,18 @@ def restore_user(user_id):
         user.updated_at = datetime.utcnow()
     
     db.session.commit()
+    # Manual restore change tracking fallback
+    try:
+        DatabaseChange.log_change(
+            table_name='user',
+            record_id=user.id,
+            operation='reactivate',
+            new_data={'id': user.id, 'username': user.username, 'is_active': user.is_active},
+            server_id='local'
+        )
+        db.session.commit()
+    except Exception as e:
+        current_app.logger.error(f"Manual restore change tracking failed: {e}")
     
     current_app.logger.info(f"Restore completed for user: {username}")
     flash(f'User {username} restored successfully', 'success')
