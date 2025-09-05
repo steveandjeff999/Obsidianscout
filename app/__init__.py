@@ -8,6 +8,7 @@ import json
 from datetime import datetime
 from app.utils.config_manager import ConfigManager, get_current_game_config, load_game_config
 import threading
+import threading
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -367,21 +368,19 @@ def create_app(test_config=None):
     # Initialize ConfigManager
     config_manager.init_app(app)
     
-    # Initialize multi-server sync manager
-    from app.utils.multi_server_sync import sync_manager
-    sync_manager.init_app(app)
+    # Initialize multi-server sync manager - DISABLED to prevent database locking
+    # from app.utils.multi_server_sync import sync_manager
+    # sync_manager.init_app(app)
     
-    # Initialize Fast Sync System (replaces heavy universal sync)
+    # Initialize Fast Sync System (lightweight replacement)
     from fast_sync_system import initialize_fast_sync
     with app.app_context():
         try:
             initialize_fast_sync(app)
             print("🚀 Fast Sync System activated")
         except Exception as e:
-            print(f"⚠️ Fast sync initialization failed, falling back to basic sync: {e}")
-            # Fallback to original system
-            from app.utils.change_tracking import setup_change_tracking
-            setup_change_tracking()
+            print(f"⚠️ Fast sync initialization failed: {e}")
+            # No fallback - keep it simple
 
     # Import and register blueprints
     from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, assistant, integrity, pit_scouting, themes, scouting_alliances, setup, search, db_admin, sync_api, sync_management, update_monitor
