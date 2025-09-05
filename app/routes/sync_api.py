@@ -932,7 +932,8 @@ def get_file_checksums():
 def universal_sync_receive():
     """
     Universal sync receiver for ALL database and file changes
-    Handles real-time sync from the Universal Real-Time Sync System
+    Handles any database table without knowing field names
+    AND handles all instance folder file synchronization
     """
     try:
         data = request.get_json()
@@ -940,20 +941,30 @@ def universal_sync_receive():
             return jsonify({'error': 'No data provided'}), 400
         
         changes = data.get('changes', [])
+        sync_type = data.get('type', 'unknown')
         source_server = data.get('source_server', 'unknown')
         
         if not changes:
             return jsonify({'error': 'No changes provided'}), 400
         
-        # Process each change
-        results = []
-        for change in changes:
-            try:
-                result = _process_universal_change(change, source_server)
+        logger.info(f"🌐 Universal sync: Received {len(changes)} {sync_type} changes")
+        
+        # Process changes based on type
+        if sync_type == 'database_batch':
+            results = _process_universal_database_batch(changes)
+        elif sync_type == 'file_batch':
+            results = _process_universal_file_batch(changes)
+        else:
+            # Handle mixed or individual changes
+            results = []
+            for change in changes:
+                if change.get('type') == 'database':
+                    result = _process_universal_database_change(change)
+                elif change.get('type') == 'file':
+                    result = _process_universal_file_change(change)
+                else:
+                    result = {'status': 'error', 'error': f'Unknown change type: {change.get("type")}'}
                 results.append(result)
-            except Exception as e:
-                logger.error(f"Error processing change: {e}")
-                results.append({'status': 'error', 'error': str(e)})
         
         # Count results
         success_count = sum(1 for r in results if r.get('status') == 'success')
@@ -961,19 +972,245 @@ def universal_sync_receive():
         
         response = {
             'status': 'processed',
+            'sync_type': sync_type,
             'total_changes': len(changes),
             'successful': success_count,
             'errors': error_count,
-            'source_server': source_server,
             'timestamp': datetime.utcnow().isoformat()
         }
         
-        logger.info(f"Universal sync: processed {success_count}/{len(changes)} changes from {source_server}")
+        if success_count > 0:
+            logger.info(f"✅ Universal sync: {success_count}/{len(changes)} changes processed successfully")
+        
         return jsonify(response)
         
     except Exception as e:
         logger.error(f"Universal sync receive error: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+def _process_universal_database_batch(changes):
+    """Process a batch of universal database changes efficiently"""
+    results = []
+    
+    try:
+        # Disable change tracking to prevent loops
+        from app.utils.change_tracking import disable_change_tracking, enable_change_tracking
+        disable_change_tracking()
+        
+        try:
+            # Process changes in a single transaction for performance
+            for change in changes:
+                result = _process_universal_database_change(change)
+                results.append(result)
+            
+            # Commit all changes at once
+            db.session.commit()
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Database batch processing error: {e}")
+            # Mark all as failed
+            results = [{'status': 'error', 'error': str(e)} for _ in changes]
+            
+        finally:
+            enable_change_tracking()
+    
+    except Exception as e:
+        logger.error(f"Universal database batch error: {e}")
+        results = [{'status': 'error', 'error': str(e)} for _ in changes]
+    
+    return results
+
+
+def _process_universal_file_batch(changes):
+    """Process a batch of universal file changes"""
+    results = []
+    
+    for change in changes:
+        result = _process_universal_file_change(change)
+        results.append(result)
+    
+    return results
+
+
+def _process_universal_database_change(change):
+    """Process a single universal database change without knowing the model"""
+    try:
+        table_name = change.get('table')
+        operation = change.get('operation')
+        record_id = change.get('id')
+        data = change.get('data', {})
+        
+        if not table_name:
+            return {'status': 'error', 'error': 'Missing table name'}
+        
+        # Get the table dynamically using SQLAlchemy
+        from sqlalchemy import MetaData, Table
+        from sqlalchemy.orm import sessionmaker
+        
+        # Use reflection to get the table structure
+        metadata = MetaData()
+        
+        try:
+            # Reflect the table structure from the database
+            table = Table(table_name, metadata, autoload_with=db.engine)
+            
+            # Apply the change based on operation
+            if operation == 'insert':
+                return _universal_insert(table, data)
+            elif operation in ['update', 'soft_delete']:
+                return _universal_update(table, record_id, data)
+            elif operation == 'delete':
+                return _universal_delete(table, record_id)
+            else:
+                return {'status': 'error', 'error': f'Unknown operation: {operation}'}
+                
+        except Exception as e:
+            logger.warning(f"Could not reflect table {table_name}: {e}")
+            return {'status': 'skipped', 'reason': f'Table not accessible: {table_name}'}
+            
+    except Exception as e:
+        return {'status': 'error', 'error': str(e)}
+
+
+def _universal_insert(table, data):
+    """Insert data into any table universally"""
+    try:
+        # Filter data to only include columns that exist in the table
+        filtered_data = {}
+        for column in table.columns:
+            if column.name in data and data[column.name] is not None:
+                value = data[column.name]
+                
+                # Handle datetime strings
+                if isinstance(value, str) and column.name.endswith(('_at', '_time', 'timestamp')):
+                    try:
+                        from datetime import datetime
+                        value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                    except:
+                        pass
+                
+                filtered_data[column.name] = value
+        
+        if filtered_data:
+            # Execute the insert
+            insert_stmt = table.insert().values(**filtered_data)
+            db.session.execute(insert_stmt)
+            return {'status': 'success', 'operation': 'insert', 'table': table.name}
+        else:
+            return {'status': 'skipped', 'reason': 'No valid data for insert'}
+            
+    except Exception as e:
+        logger.error(f"Universal insert error for {table.name}: {e}")
+        return {'status': 'error', 'error': str(e)}
+
+
+def _universal_update(table, record_id, data):
+    """Update data in any table universally"""
+    try:
+        if not record_id:
+            return {'status': 'error', 'error': 'Missing record ID for update'}
+        
+        # Filter data to only include columns that exist in the table
+        filtered_data = {}
+        for column in table.columns:
+            if column.name in data and column.name != 'id':  # Don't update ID
+                value = data[column.name]
+                
+                # Handle datetime strings
+                if isinstance(value, str) and column.name.endswith(('_at', '_time', 'timestamp')):
+                    try:
+                        from datetime import datetime
+                        value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                    except:
+                        pass
+                
+                filtered_data[column.name] = value
+        
+        if filtered_data:
+            # Execute the update
+            from sqlalchemy import and_
+            update_stmt = table.update().where(table.c.id == record_id).values(**filtered_data)
+            result = db.session.execute(update_stmt)
+            
+            if result.rowcount > 0:
+                return {'status': 'success', 'operation': 'update', 'table': table.name}
+            else:
+                # Record doesn't exist, try to insert it
+                return _universal_insert(table, data)
+        else:
+            return {'status': 'skipped', 'reason': 'No valid data for update'}
+            
+    except Exception as e:
+        logger.error(f"Universal update error for {table.name}: {e}")
+        return {'status': 'error', 'error': str(e)}
+
+
+def _universal_delete(table, record_id):
+    """Delete data from any table universally"""
+    try:
+        if not record_id:
+            return {'status': 'error', 'error': 'Missing record ID for delete'}
+        
+        # Execute the delete
+        delete_stmt = table.delete().where(table.c.id == record_id)
+        result = db.session.execute(delete_stmt)
+        
+        return {'status': 'success', 'operation': 'delete', 'table': table.name, 'rows_affected': result.rowcount}
+        
+    except Exception as e:
+        logger.error(f"Universal delete error for {table.name}: {e}")
+        return {'status': 'error', 'error': str(e)}
+
+
+def _process_universal_file_change(change):
+    """Process a universal file change for instance folder"""
+    try:
+        file_path = change.get('path')
+        content = change.get('content')
+        file_hash = change.get('hash')
+        is_binary = change.get('is_binary', False)
+        
+        if not file_path or content is None:
+            return {'status': 'error', 'error': 'Missing file path or content'}
+        
+        # Construct full path in instance folder
+        instance_path = Path(current_app.instance_path)
+        full_path = instance_path / file_path
+        
+        # Security check - ensure path is within instance folder
+        try:
+            full_path.resolve().relative_to(instance_path.resolve())
+        except ValueError:
+            return {'status': 'error', 'error': 'Invalid file path - outside instance folder'}
+        
+        # Create directory if needed
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Write file content
+        if is_binary:
+            import base64
+            binary_content = base64.b64decode(content)
+            with open(full_path, 'wb') as f:
+                f.write(binary_content)
+        else:
+            with open(full_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+        
+        # Verify hash if provided
+        if file_hash:
+            with open(full_path, 'rb') as f:
+                actual_hash = hashlib.sha256(f.read()).hexdigest()
+                if actual_hash != file_hash:
+                    logger.warning(f"File hash mismatch for {file_path}")
+        
+        logger.info(f"📄 File synced: {file_path}")
+        return {'status': 'success', 'file': str(file_path)}
+        
+    except Exception as e:
+        logger.error(f"Universal file sync error: {e}")
+        return {'status': 'error', 'error': str(e)}
 
 
 @sync_api.route('/fast_receive', methods=['POST'])
@@ -1062,77 +1299,85 @@ def _process_fast_change(change):
 
 
 def _get_fast_model_class(table_name):
-    """Get model class quickly (only essential models)"""
-    # Only handle essential models for performance
-    model_map = {
-        'user': None,
-        'scouting_data': None,
-        'team': None,
-        'match': None,
-        'event': None
-    }
-    
-    if table_name not in model_map:
-        return None  # Skip non-essential tables
-    
+    """Get model class quickly (comprehensive data types for complete sync)"""
     try:
-        from app.models import User, ScoutingData, Team, Match, Event
+        from app.models import User, ScoutingData, Team, Match, Event, ScoutingTeamSettings, SyncConfig
         
-        fast_map = {
+        # Handle all comprehensive data types that user requested
+        comprehensive_map = {
             'user': User,
             'scouting_data': ScoutingData,
             'team': Team,
             'match': Match,
-            'event': Event
+            'event': Event,
+            'scouting_team_settings': ScoutingTeamSettings,
+            'sync_config': SyncConfig
         }
         
-        return fast_map.get(table_name)
-    except Exception:
+        return comprehensive_map.get(table_name)
+    except Exception as e:
+        logger.error(f"Error getting fast model class for {table_name}: {e}")
         return None
 
 
 def _fast_insert(model_class, data):
-    """Fast insert with minimal overhead"""
+    """Fast insert with comprehensive field support"""
     try:
-        # Create instance with minimal data
+        # Create instance with comprehensive data
         instance = model_class()
         
-        # Only set essential fields to reduce processing
-        essential_fields = ['username', 'team_number', 'match_id', 'name', 'is_active']
+        # Handle all important fields for complete sync coverage
         for key, value in data.items():
-            if key in essential_fields and hasattr(instance, key):
+            if hasattr(instance, key):
+                # Handle datetime fields properly
+                if isinstance(value, str) and key.endswith(('_at', '_time', 'timestamp')):
+                    try:
+                        from datetime import datetime
+                        value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                    except:
+                        pass
+                
                 setattr(instance, key, value)
         
         # Use a single transaction
         db.session.add(instance)
         db.session.commit()
         
-        return {'status': 'success', 'operation': 'insert'}
+        return {'status': 'success', 'operation': 'insert', 'table': instance.__tablename__}
         
     except Exception as e:
         db.session.rollback()
+        logger.error(f"Fast insert error for {model_class.__name__}: {e}")
         return {'status': 'error', 'error': str(e)}
 
 
 def _fast_update(model_class, record_id, data):
-    """Fast update with minimal overhead"""
+    """Fast update with comprehensive field support"""
     try:
         instance = model_class.query.get(record_id)
         if not instance:
-            # Record doesn't exist, skip instead of creating
-            return {'status': 'skipped', 'reason': 'record not found'}
+            # Record doesn't exist, try to create it
+            return _fast_insert(model_class, data)
         
-        # Update only essential fields
-        essential_fields = ['username', 'team_number', 'match_id', 'name', 'is_active']
+        # Update all provided fields for complete sync
         for key, value in data.items():
-            if key in essential_fields and hasattr(instance, key):
+            if hasattr(instance, key):
+                # Handle datetime fields properly
+                if isinstance(value, str) and key.endswith(('_at', '_time', 'timestamp')):
+                    try:
+                        from datetime import datetime
+                        value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                    except:
+                        pass
+                
                 setattr(instance, key, value)
         
         db.session.commit()
-        return {'status': 'success', 'operation': 'update'}
+        return {'status': 'success', 'operation': 'update', 'table': instance.__tablename__}
         
     except Exception as e:
         db.session.rollback()
+        logger.error(f"Fast update error for {model_class.__name__}: {e}")
         return {'status': 'error', 'error': str(e)}
 
 

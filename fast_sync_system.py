@@ -23,33 +23,84 @@ fast_sync_queue = queue.Queue(maxsize=100)  # Limit queue size to prevent memory
 sync_worker_running = False
 
 class FastSyncSystem:
-    """Lightweight sync system focused on performance"""
+    """Enhanced sync system for complete data synchronization"""
     
     def __init__(self):
-        self.essential_models = [User, ScoutingData, Team, Match, Event]  # Only essential models
+        # ALL critical models that need to sync
+        self.essential_models = [
+            User,                    # Users (as requested)
+            ScoutingData,           # Scouting data (critical)
+            Team,                   # Team info (critical)  
+            Match,                  # Match data (critical)
+            Event                   # Event info (critical)
+        ]
+        
+        # Additional models for complete sync
+        self.config_models = []
         self.sync_servers = []
         self.worker_thread = None
-        self.batch_size = 10  # Process changes in small batches
-        self.batch_delay = 1.0  # Wait 1 second between batches
-    
+        self.batch_size = 15      # Increased for more data
+        self.batch_delay = 0.5    # Faster processing
+        
     def initialize(self, app):
-        """Initialize fast sync system"""
+        """Initialize enhanced fast sync system"""
         with app.app_context():
-            print("🚀 Initializing Fast Sync System...")
+            print("🚀 Initializing Enhanced Fast Sync System...")
             
-            # Only track essential models to reduce overhead
+            # Import additional models for config sync
+            self._import_config_models()
+            
+            # Track all essential models
             self._setup_essential_tracking()
             
-            # Start lightweight worker
+            # Track config models
+            self._setup_config_tracking()
+            
+            # Start enhanced worker
             self._start_fast_worker()
             
             # Load sync servers
             self._load_servers()
             
-            print(f"✅ Fast sync initialized:")
-            print(f"   - Essential models: {len(self.essential_models)}")
+            total_models = len(self.essential_models) + len(self.config_models)
+            print(f"✅ Enhanced fast sync initialized:")
+            print(f"   - Core models: {len(self.essential_models)}")
+            print(f"   - Config models: {len(self.config_models)}")
+            print(f"   - Total tracked: {total_models}")
             print(f"   - Sync servers: {len(self.sync_servers)}")
-            print(f"   - Queue limit: {fast_sync_queue.maxsize}")
+    
+    def _import_config_models(self):
+        """Import and add configuration-related models"""
+        try:
+            from app.models import ScoutingTeamSettings, SyncConfig
+            
+            # Add config models (MUST set self.config_models)
+            self.config_models = [
+                ScoutingTeamSettings,    # Team settings/configs (as requested)
+                SyncConfig              # Sync configurations
+            ]
+            
+            print(f"📋 Config models loaded: {[m.__name__ for m in self.config_models]}")
+            print(f"🔍 Debug - config_models length: {len(self.config_models)}")
+            
+        except ImportError as e:
+            print(f"⚠️ Could not import some config models: {e}")
+            self.config_models = []  # Ensure it's at least an empty list
+        except Exception as e:
+            print(f"⚠️ Error importing config models: {e}")
+            self.config_models = []
+    
+    def _setup_config_tracking(self):
+        """Set up tracking for config models"""
+        print(f"🔍 Debug - Setting up tracking for {len(self.config_models)} config models")
+        for model_class in self.config_models:
+            try:
+                self._track_model(model_class)
+                print(f"⚙️ Config tracking: {model_class.__name__}")
+                print(f"   - Sync servers: {len(self.sync_servers)}")
+                print(f"   - Queue limit: {fast_sync_queue.maxsize}")
+            except Exception as e:
+                print(f"⚠️ Failed to track config {model_class.__name__}: {e}")
     
     def _setup_essential_tracking(self):
         """Set up tracking only for essential models"""
@@ -114,26 +165,96 @@ class FastSyncSystem:
             print(f"❌ Error queuing change: {e}")
     
     def _extract_minimal_data(self, target):
-        """Extract only essential data from model (lightweight)"""
+        """Extract comprehensive data from model for complete sync"""
         if not target:
             return {}
             
         try:
-            # Only extract commonly needed fields to reduce overhead
-            essential_fields = ['id', 'username', 'team_number', 'match_id', 'is_active', 'name']
             data = {}
             
-            for field in essential_fields:
-                if hasattr(target, field):
-                    value = getattr(target, field)
+            # Get all columns from the model
+            from sqlalchemy import inspect
+            mapper = inspect(target.__class__)
+            
+            for column in mapper.columns:
+                try:
+                    value = getattr(target, column.name, None)
                     if isinstance(value, datetime):
                         value = value.isoformat()
-                    data[field] = value
+                    elif value is not None and not isinstance(value, (str, int, float, bool, list, dict)):
+                        value = str(value)
+                    data[column.name] = value
+                except Exception as e:
+                    print(f"⚠️ Error extracting {column.name}: {e}")
+                    data[column.name] = None
             
+            # Add model-specific important data
+            model_name = target.__class__.__name__
+            
+            if model_name == 'User':
+                # Ensure all user data is captured
+                try:
+                    data['role_names'] = [role.name for role in target.roles] if hasattr(target, 'roles') else []
+                except:
+                    data['role_names'] = []
+            
+            elif model_name == 'ScoutingData':
+                # Ensure scouting data JSON is captured
+                try:
+                    if hasattr(target, 'data_json') and target.data_json:
+                        data['data_json'] = target.data_json
+                    if hasattr(target, 'team') and target.team:
+                        data['team_number'] = target.team.team_number
+                except:
+                    pass
+            
+            elif model_name == 'Team':
+                # Ensure team info is complete
+                try:
+                    if hasattr(target, 'team_number'):
+                        data['team_number'] = target.team_number
+                    if hasattr(target, 'name'):
+                        data['name'] = target.name
+                except:
+                    pass
+            
+            elif model_name == 'Match':
+                # Ensure match info is complete
+                try:
+                    if hasattr(target, 'match_number'):
+                        data['match_number'] = target.match_number
+                    if hasattr(target, 'competition_level'):
+                        data['competition_level'] = target.competition_level
+                    if hasattr(target, 'event_id'):
+                        data['event_id'] = target.event_id
+                except:
+                    pass
+            
+            elif model_name == 'Event':
+                # Ensure event info is complete
+                try:
+                    if hasattr(target, 'name'):
+                        data['name'] = target.name
+                    if hasattr(target, 'event_key'):
+                        data['event_key'] = target.event_key
+                except:
+                    pass
+            
+            elif model_name in ['ScoutingTeamSettings', 'SyncConfig']:
+                # Config models - capture all fields
+                try:
+                    for attr in ['key', 'value', 'scouting_team_number', 'account_creation_locked']:
+                        if hasattr(target, attr):
+                            data[attr] = getattr(target, attr, None)
+                except:
+                    pass
+            
+            print(f"📊 Extracted {len(data)} fields from {model_name}")
             return data
+            
         except Exception as e:
-            print(f"⚠️ Data extraction error: {e}")
-            return {}
+            print(f"⚠️ Data extraction error for {target.__class__.__name__}: {e}")
+            return {'id': getattr(target, 'id', 'unknown'), 'error': str(e)}
     
     def _start_fast_worker(self):
         """Start lightweight sync worker"""
