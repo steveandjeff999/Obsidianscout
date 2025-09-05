@@ -203,9 +203,10 @@ def reset_password(token):
 @bp.route('/change-password', methods=['GET', 'POST'])
 @login_required
 def change_password():
-    """Force password change for users who must change password"""
-    if not current_user.must_change_password:
-        # If user doesn't need to change password, redirect appropriately
+    """Force password change for users who must change password, or allow voluntary changes"""
+    # Allow superadmins to change password anytime, or users who must change password
+    if not current_user.must_change_password and not current_user.has_role('superadmin'):
+        # If user doesn't need to change password and isn't superadmin, redirect appropriately
         if current_user.has_role('scout') and not current_user.has_role('admin') and not current_user.has_role('analytics'):
             return redirect(url_for('scouting.index'))
         else:

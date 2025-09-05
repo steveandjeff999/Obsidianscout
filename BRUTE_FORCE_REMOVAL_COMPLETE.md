@@ -26,9 +26,6 @@
 - ❌ Removed hourly brute force protection cleanup
 - ❌ Removed brute_force_protection imports
 - ❌ Removed cleanup_old_attempts() calls
-- ❌ Removed failed_login_cleanup_worker() function entirely
-- ❌ Removed 10-minute failed login cleanup thread
-- ❌ Removed all brute force related print messages
 
 #### 5. **Remote Update Cleanup** (`app/utils/remote_updater.py`)
 - ❌ Removed post-update failed login cleanup
