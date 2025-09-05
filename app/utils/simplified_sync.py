@@ -159,8 +159,18 @@ class SimplifiedSyncManager:
         try:
             url = f"{server.protocol}://{server.host}:{server.port}/api/sync/ping"
             response = requests.get(url, timeout=5, verify=False)
-            return response.status_code == 200
-        except:
+            if response.status_code == 200:
+                # Update server health status
+                server.update_ping(success=True)
+                db.session.commit()
+                return True
+            else:
+                server.update_ping(success=False, error_message=f"HTTP {response.status_code}")
+                db.session.commit()
+                return False
+        except Exception as e:
+            server.update_ping(success=False, error_message=str(e))
+            db.session.commit()
             return False
     
     def _perform_atomic_sync(self, server: SyncServer, sync_log: SyncLog) -> Dict:

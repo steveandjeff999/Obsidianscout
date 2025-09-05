@@ -477,7 +477,7 @@ class RealTimeFileEventHandler(FileSystemEventHandler):
                             status='completed',
                             items_synced=1,
                             total_items=1,
-                            sync_details=f'File: {file_path}',
+                            sync_details=json.dumps({'file_path': file_path, 'event_type': event_type}),
                             completed_at=datetime.utcnow()
                         )
                         db.session.add(sync_log)
@@ -500,7 +500,7 @@ class RealTimeFileEventHandler(FileSystemEventHandler):
                             error_message=error_msg,
                             items_synced=0,
                             total_items=1,
-                            sync_details=f'File: {file_path}',
+                            sync_details=json.dumps({'file_path': file_path, 'event_type': event_type, 'error': error_msg}),
                             completed_at=datetime.utcnow()
                         )
                         db.session.add(sync_log)
@@ -523,7 +523,7 @@ class RealTimeFileEventHandler(FileSystemEventHandler):
                         error_message=error_msg,
                         items_synced=0,
                         total_items=1,
-                        sync_details=f'File: {file_path}',
+                        sync_details=json.dumps({'file_path': file_path, 'event_type': event_type, 'exception': error_msg}),
                         completed_at=datetime.utcnow()
                     )
                     db.session.add(sync_log)

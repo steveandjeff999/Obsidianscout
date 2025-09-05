@@ -58,9 +58,16 @@ def get_changes():
             logger.info(f"🔄 Catch-up mode: Getting changes since {since_time} for server {requesting_server_id}")
             # Get more changes for catch-up operations
             changes = DatabaseChange.query.filter(
-            DatabaseChange.timestamp > since_time,
-            DatabaseChange.sync_status == 'pending'
-        ).order_by(DatabaseChange.timestamp.asc()).all()
+                DatabaseChange.timestamp > since_time,
+                DatabaseChange.sync_status == 'pending'
+            ).order_by(DatabaseChange.timestamp.asc()).all()
+        else:
+            logger.info(f"📤 Normal mode: Getting changes since {since_time} for server {requesting_server_id}")
+            # Get normal batch of changes
+            changes = DatabaseChange.query.filter(
+                DatabaseChange.timestamp > since_time,
+                DatabaseChange.sync_status == 'pending'
+            ).order_by(DatabaseChange.timestamp.asc()).limit(100).all()
         
         change_data = [change.to_dict() for change in changes]
         
