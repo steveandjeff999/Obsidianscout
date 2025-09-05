@@ -60,32 +60,6 @@ def analytics_required(f):
     """Decorator to require admin or analytics role"""
     return role_required('admin', 'analytics')(f)
 
-@bp.route('/lockout')
-def lockout():
-    """Display lockout page with current status"""
-    username = request.args.get('username')
-    
-    if not username:
-        # No username provided, redirect to login
-        return redirect(url_for('auth.login'))
-    
-    # Import brute force protection
-    from app.utils.brute_force_protection import is_login_blocked, get_login_status
-    
-    # Check if user is actually blocked
-    if not is_login_blocked(username):
-        # Not blocked anymore, redirect to login
-        flash('Account lockout has expired. You may now try logging in again.', 'info')
-        return redirect(url_for('auth.login'))
-    
-    # Get lockout status information
-    lockout_info = get_login_status(username)
-    
-    return render_template('auth/lockout.html', 
-                         lockout_info=lockout_info, 
-                         username=username,
-                         **get_theme_context())
-
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
@@ -97,55 +71,25 @@ def login():
         team_number = request.form.get('team_number')
         remember_me = bool(request.form.get('remember_me'))
 
-        # Import brute force protection
-        from app.utils.brute_force_protection import is_login_blocked, record_login_attempt, get_login_status
-        
-        # Check if this IP/username is currently blocked
-        if is_login_blocked(username):
-            # Redirect to lockout page instead of showing flash message
-            return redirect(url_for('auth.lockout', username=username))
-
         if not team_number:
             flash('Team number is required.', 'error')
-            # Record failed attempt (missing team number)
-            record_login_attempt(username=username, team_number=None, success=False)
             return redirect(url_for('auth.login'))
         
         try:
             team_number = int(team_number)
         except ValueError:
             flash('Team number must be a valid number.', 'error')
-            record_login_attempt(username=username, team_number=team_number, success=False)
             return redirect(url_for('auth.login'))
         
         user = User.query.filter_by(username=username, scouting_team_number=team_number).first()
         
         if user is None or not user.check_password(password):
             flash('Invalid username, password, or team number.', 'error')
-            # Record failed login attempt
-            record_login_attempt(username=username, team_number=team_number, success=False)
-            
-            # Show remaining attempts warning
-            status = get_login_status(username)
-            remaining = status['remaining_attempts']
-            if remaining <= 3 and remaining > 0:
-                flash(f'Warning: Only {remaining} login attempts remaining before temporary lockout.', 'warning')
-            
             return redirect(url_for('auth.login'))
         
         if not user.is_active:
             flash('Your account has been deactivated. Please contact an administrator.', 'error')
-            # Record failed attempt (deactivated account)
-            record_login_attempt(username=username, team_number=team_number, success=False)
             return redirect(url_for('auth.login'))
-        
-        # Final check: Even with correct credentials, prevent login if account is locked due to brute force
-        if is_login_blocked(username):
-            # Redirect to lockout page instead of flash message
-            return redirect(url_for('auth.lockout', username=username))
-        
-        # Successful login - record it and clear failed attempts
-        record_login_attempt(username=username, team_number=team_number, success=True)
         
         # Update last login time
         user.last_login = datetime.utcnow()

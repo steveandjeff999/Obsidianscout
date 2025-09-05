@@ -32,24 +32,6 @@ def check_first_run():
     restart_flag = os.path.join(os.path.dirname(__file__), '.restart_flag')
     if os.path.exists(restart_flag):
         print("Restart flag detected - server was restarted after update")
-        # Clear failed login attempts after restart/update to prevent login issues
-        try:
-            from app.models import LoginAttempt, db
-            from datetime import datetime, timedelta
-            
-            # Clear failed login attempts older than 1 minute to prevent post-update login blocks
-            cutoff_time = datetime.utcnow() - timedelta(minutes=1)
-            deleted_count = LoginAttempt.query.filter(
-                LoginAttempt.success == False,
-                LoginAttempt.attempt_time < cutoff_time
-            ).delete()
-            
-            if deleted_count > 0:
-                db.session.commit()
-                print(f"Post-restart cleanup: Cleared {deleted_count} old failed login attempts")
-        except Exception as e:
-            print(f"Warning: Could not clear failed login attempts after restart: {e}")
-        
         try:
             os.remove(restart_flag)
         except:
@@ -98,6 +80,25 @@ if __name__ == '__main__':
             print(f"Database initialization error: {e}")
             print("Attempting to initialize database...")
             initialize_database()
+        
+        # Clear old failed login attempts on startup (especially important after updates)
+        try:
+            from app.models import LoginAttempt, db
+            from datetime import datetime, timedelta
+            
+            # Clear failed login attempts older than 5 minutes on startup
+            startup_cutoff = datetime.utcnow() - timedelta(minutes=5)
+            startup_deleted = LoginAttempt.query.filter(
+                LoginAttempt.success == False,
+                LoginAttempt.attempt_time < startup_cutoff
+            ).delete()
+            
+            if startup_deleted > 0:
+                db.session.commit()
+                print(f"Startup cleanup: Cleared {startup_deleted} old failed login attempts")
+            
+        except Exception as e:
+            print(f"Warning: Could not perform startup failed login cleanup: {e}")
         
         # Clear old failed login attempts on startup (especially important after updates)
         try:
@@ -294,11 +295,8 @@ if __name__ == '__main__':
                 
                 with app.app_context():
                     try:
-                        # Clean up old login attempts (brute force protection)
-                        from app.utils.brute_force_protection import brute_force_protection
-                        deleted_count = brute_force_protection.cleanup_old_attempts()
-                        if deleted_count > 0:
-                            print(f"Cleaned up {deleted_count} old login attempts")
+                        # Security maintenance tasks can be added here if needed
+                        print("Security maintenance completed")
                         
                     except Exception as e:
                         print(f"Error in security maintenance: {str(e)}")
@@ -306,49 +304,6 @@ if __name__ == '__main__':
             except Exception as e:
                 print(f"Error in security maintenance worker: {str(e)}")
                 time.sleep(3600)  # Continue after error
-    
-    # Start failed login cleanup worker
-    def failed_login_cleanup_worker():
-        """Background thread for clearing failed login attempts every 10 minutes"""
-        while True:
-            try:
-                time.sleep(600)  # Wait 10 minutes (600 seconds)
-                print("Starting failed login cleanup...")
-                
-                with app.app_context():
-                    try:
-                        from app.models import LoginAttempt, db
-                        from datetime import datetime, timedelta
-                        
-                        # Clear failed login attempts older than 10 minutes
-                        cutoff_time = datetime.utcnow() - timedelta(minutes=10)
-                        
-                        # Count before deleting for logging
-                        count_query = LoginAttempt.query.filter(
-                            LoginAttempt.success == False,
-                            LoginAttempt.attempt_time < cutoff_time
-                        )
-                        count_to_delete = count_query.count()
-                        
-                        if count_to_delete > 0:
-                            deleted_count = count_query.delete()
-                            db.session.commit()
-                            print(f"Cleared {deleted_count} old failed login attempts (preventing legitimate user lockouts)")
-                        
-                        # Also provide statistics every hour
-                        current_minute = datetime.utcnow().minute
-                        if current_minute < 10:  # First run of each hour
-                            total_failed = LoginAttempt.query.filter_by(success=False).count()
-                            total_successful = LoginAttempt.query.filter_by(success=True).count()
-                            print(f"Login stats - Failed: {total_failed}, Successful: {total_successful}")
-                        
-                    except Exception as e:
-                        print(f"Error in failed login cleanup: {str(e)}")
-                        db.session.rollback()
-                        
-            except Exception as e:
-                print(f"Error in failed login cleanup worker: {str(e)}")
-                time.sleep(600)  # Continue after error
     
     # Start the periodic sync threads as daemon threads
     alliance_sync_thread = threading.Thread(target=periodic_sync_worker, daemon=True)
@@ -362,15 +317,6 @@ if __name__ == '__main__':
     security_maintenance_thread = threading.Thread(target=security_maintenance_worker, daemon=True)
     security_maintenance_thread.start()
     print("Started security maintenance thread (1-hour intervals)")
-    print("   - Automatic cleanup of old login attempts")
-    print("   - Brute force protection maintenance")
-    
-    failed_login_cleanup_thread = threading.Thread(target=failed_login_cleanup_worker, daemon=True)
-    failed_login_cleanup_thread.start()
-    print("Started failed login cleanup thread (10-minute intervals)")
-    print("   - Automatically clears old failed login attempts")
-    print("   - Prevents legitimate users from being blocked by brute force protection")
-    print("   - Maintains security while improving user experience")
     
     # Start multi-server sync services
     try:
