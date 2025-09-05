@@ -27,6 +27,7 @@ def create_restart_flag():
         print(f"📁 Flag file: {restart_flag}")
         print("🔄 The server will restart on the next request.")
         print("💡 You may need to refresh your browser or make a new request.")
+        print("🧹 Failed login attempts will be cleared on restart.")
         
         return True
         
