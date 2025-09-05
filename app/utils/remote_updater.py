@@ -1086,6 +1086,65 @@ def main():
         except Exception as e:
             print(f"Warning: Could not create restart flag: {e}", flush=True)
 
+        # Execute batch files after update
+        print("Looking for batch files to execute after update...", flush=True)
+        try:
+            bat_files = list(repo_root.glob('*.bat'))
+            if bat_files:
+                print(f"Found batch files: {[f.name for f in bat_files]}", flush=True)
+                
+                # Look for specific batch files in priority order
+                priority_bats = ['run_production.bat', 'start_server.bat', 'run.bat']
+                selected_bat = None
+                
+                for priority_bat in priority_bats:
+                    for bat_file in bat_files:
+                        if bat_file.name.lower() == priority_bat.lower():
+                            selected_bat = bat_file
+                            break
+                    if selected_bat:
+                        break
+                
+                # If no priority bat found, use the first available
+                if not selected_bat and bat_files:
+                    selected_bat = bat_files[0]
+                
+                if selected_bat:
+                    print(f"Auto-running batch file after update: {selected_bat.name}", flush=True)
+                    try:
+                        # Run the batch file in detached mode so updater can exit
+                        if sys.platform == 'win32':
+                            # Use CREATE_NEW_PROCESS_GROUP and CREATE_BREAKAWAY_FROM_JOB on Windows
+                            subprocess.Popen([str(selected_bat)], 
+                                           cwd=str(repo_root),
+                                           creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | 
+                                                        getattr(subprocess, 'CREATE_BREAKAWAY_FROM_JOB', 0),
+                                           stdout=subprocess.DEVNULL,
+                                           stderr=subprocess.DEVNULL,
+                                           stdin=subprocess.DEVNULL)
+                        else:
+                            # Use shell=True and nohup-equivalent on Unix-like systems
+                            subprocess.Popen([str(selected_bat)], 
+                                           cwd=str(repo_root),
+                                           start_new_session=True,
+                                           stdout=subprocess.DEVNULL,
+                                           stderr=subprocess.DEVNULL,
+                                           stdin=subprocess.DEVNULL)
+                        
+                        print(f"✅ Successfully launched {selected_bat.name} in background", flush=True)
+                        # Give the batch file a moment to start
+                        time.sleep(2)
+                        
+                    except Exception as e:
+                        print(f"❌ Failed to run batch file {selected_bat.name}: {e}", flush=True)
+                else:
+                    print("No suitable batch file found to execute", flush=True)
+            else:
+                print("No batch files found in repository root", flush=True)
+                
+        except Exception as e:
+            print(f"Warning: Error while looking for batch files: {e}", flush=True)
+
         # Kill other python processes
         print("Killing other python processes (best-effort)...", flush=True)
         killed = kill_server_processes([child_pid, os.getpid()])

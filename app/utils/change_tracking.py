@@ -247,7 +247,7 @@ def setup_change_tracking():
     
     for model in models_to_track:
         track_model_changes(model)
-        print(f"✅ Change tracking enabled for {model.__name__}")
+        print(f"Change tracking enabled for {model.__name__}")
 
 
 def disable_change_tracking():

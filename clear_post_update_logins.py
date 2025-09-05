@@ -21,7 +21,7 @@ def clear_post_update_failed_logins():
         app = create_app()
         
         with app.app_context():
-            print("🧹 POST-UPDATE LOGIN CLEANUP")
+            print("POST-UPDATE LOGIN CLEANUP")
             print("=" * 50)
             
             # Clear all failed login attempts (aggressive cleanup after updates)
@@ -34,17 +34,17 @@ def clear_post_update_failed_logins():
                 deleted_count = LoginAttempt.query.filter_by(success=False).delete()
                 db.session.commit()
                 
-                print(f"✅ Cleared {deleted_count} failed login attempts")
-                print("✅ All users can now login without brute force blocks")
+                print(f"Cleared {deleted_count} failed login attempts")
+                print("All users can now login without brute force blocks")
             else:
-                print("✅ No failed login attempts found - system clean")
+                print("No failed login attempts found - system clean")
             
             # Show remaining stats
             successful_attempts = LoginAttempt.query.filter_by(success=True).count()
-            print(f"ℹ️ Remaining successful login records: {successful_attempts}")
+            print(f"Remaining successful login records: {successful_attempts}")
             
     except Exception as e:
-        print(f"❌ Error during post-update cleanup: {e}")
+        print(f"Error during post-update cleanup: {e}")
         import traceback
         traceback.print_exc()
 

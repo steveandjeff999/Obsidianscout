@@ -137,7 +137,7 @@ if __name__ == '__main__':
                     must_change_password=False,
                     is_active=True
                 )
-                superadmin_user.set_password('password')
+                superadmin_user.set_password('password') 
                 superadmin_user.roles.append(superadmin_role)
                 db.session.add(superadmin_user)
                 db.session.commit()
@@ -146,7 +146,7 @@ if __name__ == '__main__':
                 print("   Username: superadmin")
                 print("   Password: password")
                 print("   Team Number: 0")
-                print("   Must Change Password: True (change on first login)")
+                print("   Must Change Password: True")
             else:
                 print("SuperAdmin account already exists.")
         except Exception as e:
