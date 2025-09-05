@@ -12,38 +12,56 @@ from flask import current_app
 change_tracking_queue = queue.Queue()
 change_tracking_worker = None
 change_tracking_running = False
+# Store a reference to the Flask application so background thread has context
+_tracked_app = None
 
 def start_change_tracking_worker():
-    """Start the background worker for change tracking"""
-    global change_tracking_worker, change_tracking_running
-    
+    """Start the background worker for change tracking with proper app context"""
+    global change_tracking_worker, change_tracking_running, _tracked_app
+
     if change_tracking_running:
         return
-    
+
+    # Capture current app object if inside an application context
+    try:
+        if _tracked_app is None and current_app:
+            _tracked_app = current_app._get_current_object()
+    except Exception:
+        pass
+
     change_tracking_running = True
-    
+
     def _worker():
         """Background worker that processes change tracking queue"""
         while change_tracking_running:
             try:
-                # Get operation from queue (wait up to 1 second)
                 operation = change_tracking_queue.get(timeout=1)
-                
-                # Process the change tracking operation
-                _process_change_tracking(operation)
-                
+
+                # Ensure we have an application context for DB operations
+                if _tracked_app is not None:
+                    with _tracked_app.app_context():
+                        _process_change_tracking(operation)
+                else:
+                    # Fallback: create a fresh app (heavier but keeps system functional)
+                    try:
+                        from app import create_app
+                        app = create_app()
+                        with app.app_context():
+                            _process_change_tracking(operation)
+                    except Exception as inner_e:
+                        print(f"❌ Failed to create app context in worker: {inner_e}")
+
                 change_tracking_queue.task_done()
-                
             except queue.Empty:
                 continue
             except Exception as e:
                 print(f"❌ Error in change tracking worker: {e}")
                 try:
                     change_tracking_queue.task_done()
-                except:
+                except Exception:
                     pass
                 continue
-    
+
     change_tracking_worker = threading.Thread(target=_worker, daemon=True)
     change_tracking_worker.start()
 
@@ -52,18 +70,20 @@ def _process_change_tracking(operation):
     try:
         # Import here to avoid circular imports
         from app import db
-        
-        # Create change record using raw SQL to avoid session conflicts
+
+        # Normalize operation casing before insert
+        op = operation.get('operation')
+        if op:
+            operation['operation'] = op.lower()
+
         change_sql = text("""
             INSERT INTO database_changes (table_name, record_id, operation, change_data, old_data, timestamp, sync_status, created_by_server)
             VALUES (:table_name, :record_id, :operation, :change_data, :old_data, :timestamp, :sync_status, :created_by_server)
         """)
-        
-        # Use a new connection to avoid conflicts
+
         with db.engine.connect() as conn:
             conn.execute(change_sql, operation)
             conn.commit()
-            
     except Exception as e:
         print(f"❌ Error processing change tracking: {e}")
 
@@ -106,7 +126,7 @@ def track_model_changes(model_class):
             operation = {
                 'table_name': target.__tablename__,
                 'record_id': str(target.id) if hasattr(target, 'id') else None,
-                'operation': 'INSERT',
+                'operation': 'insert',  # normalized lowercase
                 'change_data': json.dumps(record_data),
                 'old_data': None,
                 'timestamp': datetime.utcnow(),
@@ -165,7 +185,7 @@ def track_model_changes(model_class):
             operation = {
                 'table_name': target.__tablename__,
                 'record_id': str(target.id) if hasattr(target, 'id') else None,
-                'operation': operation_type,
+                'operation': operation_type.lower(),  # normalize
                 'change_data': json.dumps(new_data),
                 'old_data': None,
                 'timestamp': datetime.utcnow(),
@@ -203,7 +223,7 @@ def track_model_changes(model_class):
             operation = {
                 'table_name': target.__tablename__,
                 'record_id': str(target.id) if hasattr(target, 'id') else None,
-                'operation': 'delete',
+                'operation': 'delete',  # already lowercase
                 'change_data': None,
                 'old_data': json.dumps(record_data),
                 'timestamp': datetime.utcnow(),
@@ -268,5 +288,6 @@ def enable_change_tracking():
 
 def stop_change_tracking_worker():
     """Stop the background worker for change tracking"""
-    global change_tracking_running
+    global change_tracking_running, change_tracking_worker
     change_tracking_running = False
+    # Do not join thread here (daemon) to avoid blocking shutdown

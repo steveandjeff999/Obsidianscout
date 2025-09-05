@@ -928,6 +928,246 @@ def get_file_checksums():
         return jsonify({'error': str(e)}), 500
 
 
+@sync_api.route('/universal_receive', methods=['POST'])
+def universal_sync_receive():
+    """
+    Universal sync receiver for ALL database and file changes
+    Handles real-time sync from the Universal Real-Time Sync System
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        changes = data.get('changes', [])
+        source_server = data.get('source_server', 'unknown')
+        
+        if not changes:
+            return jsonify({'error': 'No changes provided'}), 400
+        
+        # Process each change
+        results = []
+        for change in changes:
+            try:
+                result = _process_universal_change(change, source_server)
+                results.append(result)
+            except Exception as e:
+                logger.error(f"Error processing change: {e}")
+                results.append({'status': 'error', 'error': str(e)})
+        
+        # Count results
+        success_count = sum(1 for r in results if r.get('status') == 'success')
+        error_count = len(results) - success_count
+        
+        response = {
+            'status': 'processed',
+            'total_changes': len(changes),
+            'successful': success_count,
+            'errors': error_count,
+            'source_server': source_server,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        
+        logger.info(f"Universal sync: processed {success_count}/{len(changes)} changes from {source_server}")
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Universal sync receive error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+def _process_universal_change(change, source_server):
+    """Process a single universal sync change"""
+    change_type = change.get('type')
+    
+    if change_type == 'database':
+        return _process_database_change(change, source_server)
+    elif change_type == 'file':
+        return _process_file_change(change, source_server)
+    else:
+        return {'status': 'error', 'error': f'Unknown change type: {change_type}'}
+
+
+def _process_database_change(change, source_server):
+    """Process a database change from universal sync"""
+    try:
+        from app.utils.change_tracking import disable_change_tracking, enable_change_tracking
+        
+        # Temporarily disable change tracking to avoid loops
+        disable_change_tracking()
+        
+        try:
+            table_name = change.get('table_name')
+            operation = change.get('operation')
+            record_id = change.get('record_id')
+            new_data = change.get('new_data')
+            old_data = change.get('old_data')
+            
+            # Get the model class
+            model_class = _get_model_class(table_name)
+            if not model_class:
+                return {'status': 'error', 'error': f'Unknown table: {table_name}'}
+            
+            # Apply the change based on operation
+            if operation == 'insert':
+                return _apply_insert(model_class, new_data)
+            elif operation == 'update' or operation == 'soft_delete' or operation == 'restore':
+                return _apply_update(model_class, record_id, new_data)
+            elif operation == 'delete':
+                return _apply_delete(model_class, record_id, old_data)
+            else:
+                return {'status': 'error', 'error': f'Unknown operation: {operation}'}
+                
+        finally:
+            enable_change_tracking()
+            
+    except Exception as e:
+        logger.error(f"Error processing database change: {e}")
+        return {'status': 'error', 'error': str(e)}
+
+
+def _process_file_change(change, source_server):
+    """Process a file change from universal sync"""
+    try:
+        file_path = change.get('file_path')
+        content = change.get('content')
+        file_hash = change.get('file_hash')
+        
+        if not file_path or content is None:
+            return {'status': 'error', 'error': 'Missing file path or content'}
+        
+        # Convert relative path to absolute
+        if not os.path.isabs(file_path):
+            app_root = Path(current_app.root_path).parent
+            full_path = app_root / file_path
+        else:
+            full_path = Path(file_path)
+        
+        # Ensure directory exists
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Check if it's base64 encoded (binary file)
+        try:
+            import base64
+            # Try to decode as base64
+            binary_content = base64.b64decode(content)
+            # Write as binary
+            with open(full_path, 'wb') as f:
+                f.write(binary_content)
+        except:
+            # Write as text
+            with open(full_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+        
+        # Verify hash if provided
+        if file_hash:
+            actual_hash = hashlib.sha256(open(full_path, 'rb').read()).hexdigest()
+            if actual_hash != file_hash:
+                logger.warning(f"File hash mismatch for {file_path}: expected {file_hash}, got {actual_hash}")
+        
+        logger.info(f"File synced: {file_path}")
+        return {'status': 'success', 'file': str(file_path)}
+        
+    except Exception as e:
+        logger.error(f"Error processing file change: {e}")
+        return {'status': 'error', 'error': str(e)}
+
+
+def _get_model_class(table_name):
+    """Get model class by table name"""
+    try:
+        from app.models import (
+            User, Role, ScoutingTeamSettings, Team, Event, Match,
+            StrategyShare, ScoutingData, TeamListEntry, AllianceSelection,
+            SyncServer, SyncLog, DatabaseChange, FileChecksum, SyncConfig
+        )
+        
+        model_map = {}
+        for model in [User, Role, ScoutingTeamSettings, Team, Event, Match,
+                     StrategyShare, ScoutingData, TeamListEntry, AllianceSelection,
+                     SyncServer, SyncLog, DatabaseChange, FileChecksum, SyncConfig]:
+            if hasattr(model, '__tablename__'):
+                model_map[model.__tablename__] = model
+        
+        return model_map.get(table_name)
+    except Exception as e:
+        logger.error(f"Error getting model class for {table_name}: {e}")
+        return None
+
+
+def _apply_insert(model_class, data):
+    """Apply an insert operation"""
+    try:
+        # Create new instance
+        instance = model_class()
+        
+        # Set attributes from data
+        for key, value in data.items():
+            if hasattr(instance, key):
+                # Handle datetime fields
+                if isinstance(value, str) and key.endswith(('_at', '_time', 'timestamp')):
+                    try:
+                        value = datetime.fromisoformat(value)
+                    except:
+                        pass
+                setattr(instance, key, value)
+        
+        db.session.add(instance)
+        db.session.commit()
+        
+        return {'status': 'success', 'operation': 'insert', 'id': getattr(instance, 'id', None)}
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Insert error: {e}")
+        return {'status': 'error', 'error': str(e)}
+
+
+def _apply_update(model_class, record_id, data):
+    """Apply an update operation"""
+    try:
+        # Find existing record
+        instance = model_class.query.get(record_id)
+        if not instance:
+            # Record doesn't exist, create it
+            return _apply_insert(model_class, data)
+        
+        # Update attributes from data
+        for key, value in data.items():
+            if hasattr(instance, key):
+                # Handle datetime fields
+                if isinstance(value, str) and key.endswith(('_at', '_time', 'timestamp')):
+                    try:
+                        value = datetime.fromisoformat(value)
+                    except:
+                        pass
+                setattr(instance, key, value)
+        
+        db.session.commit()
+        
+        return {'status': 'success', 'operation': 'update', 'id': record_id}
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Update error: {e}")
+        return {'status': 'error', 'error': str(e)}
+
+
+def _apply_delete(model_class, record_id, old_data):
+    """Apply a delete operation"""
+    try:
+        # Find and delete record
+        instance = model_class.query.get(record_id)
+        if instance:
+            db.session.delete(instance)
+            db.session.commit()
+            return {'status': 'success', 'operation': 'delete', 'id': record_id}
+        else:
+            return {'status': 'success', 'operation': 'delete', 'id': record_id, 'note': 'already deleted'}
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Delete error: {e}")
+        return {'status': 'error', 'error': str(e)}
+
+
 # Error handlers
 @sync_api.errorhandler(404)
 def not_found(error):
