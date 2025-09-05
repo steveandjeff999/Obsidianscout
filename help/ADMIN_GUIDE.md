@@ -1,4 +1,4 @@
-# Admin Guide 1
+# Admin Guide
 
 This guide covers the main administrative features available in ObsidianScout.
 
