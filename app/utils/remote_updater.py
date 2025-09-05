@@ -1056,6 +1056,35 @@ def main():
 
         # Give server time to start
         time.sleep(5)
+        
+        # Clear failed login attempts after update to prevent login issues
+        print("Clearing old failed login attempts after update...", flush=True)
+        try:
+            # Add a restart flag to signal the new server instance to clear failed attempts
+            restart_flag_path = repo_root / '.restart_flag'
+            with open(restart_flag_path, 'w') as f:
+                f.write(f"Server restarted after update at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            print("Created restart flag for post-update cleanup", flush=True)
+            
+            # Also run the post-update cleanup script directly
+            cleanup_script = repo_root / 'clear_post_update_logins.py'
+            if cleanup_script.exists():
+                try:
+                    result = subprocess.run([sys.executable, str(cleanup_script)], 
+                                          capture_output=True, text=True, timeout=30)
+                    if result.returncode == 0:
+                        print("✅ Post-update login cleanup completed successfully", flush=True)
+                        if result.stdout:
+                            print(f"Cleanup output: {result.stdout.strip()}", flush=True)
+                    else:
+                        print(f"Warning: Cleanup script failed: {result.stderr}", flush=True)
+                except subprocess.TimeoutExpired:
+                    print("Warning: Cleanup script timed out", flush=True)
+                except Exception as e:
+                    print(f"Warning: Could not run cleanup script: {e}", flush=True)
+            
+        except Exception as e:
+            print(f"Warning: Could not create restart flag: {e}", flush=True)
 
         # Kill other python processes
         print("Killing other python processes (best-effort)...", flush=True)

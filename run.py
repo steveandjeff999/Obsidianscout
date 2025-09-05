@@ -32,6 +32,24 @@ def check_first_run():
     restart_flag = os.path.join(os.path.dirname(__file__), '.restart_flag')
     if os.path.exists(restart_flag):
         print("Restart flag detected - server was restarted after update")
+        # Clear failed login attempts after restart/update to prevent login issues
+        try:
+            from app.models import LoginAttempt, db
+            from datetime import datetime, timedelta
+            
+            # Clear failed login attempts older than 1 minute to prevent post-update login blocks
+            cutoff_time = datetime.utcnow() - timedelta(minutes=1)
+            deleted_count = LoginAttempt.query.filter(
+                LoginAttempt.success == False,
+                LoginAttempt.attempt_time < cutoff_time
+            ).delete()
+            
+            if deleted_count > 0:
+                db.session.commit()
+                print(f"Post-restart cleanup: Cleared {deleted_count} old failed login attempts")
+        except Exception as e:
+            print(f"Warning: Could not clear failed login attempts after restart: {e}")
+        
         try:
             os.remove(restart_flag)
         except:
@@ -81,6 +99,25 @@ if __name__ == '__main__':
             print("Attempting to initialize database...")
             initialize_database()
         
+        # Clear old failed login attempts on startup (especially important after updates)
+        try:
+            from app.models import LoginAttempt, db
+            from datetime import datetime, timedelta
+            
+            # Clear failed login attempts older than 5 minutes on startup
+            startup_cutoff = datetime.utcnow() - timedelta(minutes=5)
+            startup_deleted = LoginAttempt.query.filter(
+                LoginAttempt.success == False,
+                LoginAttempt.attempt_time < startup_cutoff
+            ).delete()
+            
+            if startup_deleted > 0:
+                db.session.commit()
+                print(f"Startup cleanup: Cleared {startup_deleted} old failed login attempts")
+            
+        except Exception as e:
+            print(f"Warning: Could not perform startup failed login cleanup: {e}")
+        
         # Auto-create superadmin if it doesn't exist
         try:
             superadmin_user = User.query.filter_by(username='superadmin').first()
@@ -97,7 +134,7 @@ if __name__ == '__main__':
                 superadmin_user = User(
                     username='superadmin',
                     scouting_team_number=0,
-                    must_change_password=True,
+                    must_change_password=False,
                     is_active=True
                 )
                 superadmin_user.set_password('password')
@@ -109,7 +146,7 @@ if __name__ == '__main__':
                 print("   Username: superadmin")
                 print("   Password: password")
                 print("   Team Number: 0")
-                print("   Must Change Password: True")
+                print("   Must Change Password: True (change on first login)")
             else:
                 print("SuperAdmin account already exists.")
         except Exception as e:
