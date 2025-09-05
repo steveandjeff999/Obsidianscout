@@ -37,6 +37,15 @@
                             <input class="form-control" type="email" id="email" name="email" value="{{ user.email or '' }}" placeholder="you@example.com">
                             <div class="form-text">Leave blank to remove email.</div>
                         </div>
+                        
+                        <div class="mb-3">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Save Changes
+                            </button>
+                            <a href="{{ url_for('auth.change_password') }}" class="btn btn-warning ms-2">
+                                <i class="fas fa-key me-2"></i>Change Password
+                            </a>
+                        </div>
                         </form>
                         
                         <div class="mb-3">

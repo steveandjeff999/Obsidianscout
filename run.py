@@ -168,6 +168,51 @@ if __name__ == '__main__':
                 print(f"Error in periodic sync worker: {str(e)}")
                 time.sleep(30)  # Continue after error
 
+    # Start periodic multi-server sync thread
+    def multi_server_sync_worker():
+        """Background thread for periodic multi-server synchronization"""
+        while True:
+            try:
+                time.sleep(60)  # Wait 1 minute for multi-server sync
+                print("Starting periodic multi-server sync...")
+                
+                # Import here to avoid circular imports
+                with app.app_context():
+                    try:
+                        from app.utils.simplified_sync import simplified_sync_manager
+                        from app.models import SyncServer
+                        
+                        # Get all enabled sync servers
+                        servers = SyncServer.query.filter_by(sync_enabled=True).all()
+                        if servers:
+                            print(f"Auto-syncing with {len(servers)} servers...")
+                            successful_syncs = 0
+                            
+                            for server in servers:
+                                try:
+                                    result = simplified_sync_manager.perform_bidirectional_sync(server.id)
+                                    if result['success']:
+                                        successful_syncs += 1
+                                        print(f"✅ Auto-sync successful with {server.name}")
+                                    else:
+                                        print(f"❌ Auto-sync failed with {server.name}")
+                                except Exception as e:
+                                    print(f"❌ Auto-sync error with {server.name}: {str(e)}")
+                            
+                            print(f"Auto-sync completed: {successful_syncs}/{len(servers)} servers synced")
+                        else:
+                            # Only print this occasionally to avoid spam
+                            import random
+                            if random.randint(1, 10) == 1:  # Print 10% of the time
+                                print("No sync servers configured for auto-sync")
+                        
+                    except Exception as e:
+                        print(f"Error in multi-server sync: {str(e)}")
+                        
+            except Exception as e:
+                print(f"Error in multi-server sync worker: {str(e)}")
+                time.sleep(60)  # Continue after error
+
     # Start periodic API data sync thread
     def api_data_sync_worker():
         """Background thread for periodic API data synchronization"""
@@ -309,6 +354,10 @@ if __name__ == '__main__':
     alliance_sync_thread = threading.Thread(target=periodic_sync_worker, daemon=True)
     alliance_sync_thread.start()
     print("Started periodic alliance sync thread (30-second intervals)")
+    
+    multi_server_sync_thread = threading.Thread(target=multi_server_sync_worker, daemon=True)
+    multi_server_sync_thread.start()
+    print("Started periodic multi-server sync thread (1-minute intervals)")
     
     api_sync_thread = threading.Thread(target=api_data_sync_worker, daemon=True)
     api_sync_thread.start()
