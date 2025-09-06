@@ -96,6 +96,26 @@ class FallbackSyncManager:
         """Ping a server - Universal Sync System handles connectivity"""
         return True
     
+    def upload_file_to_server(self, server, file_path, event_type='update'):
+        """Fallback file upload - Universal Sync handles this automatically"""
+        try:
+            # Universal sync handles file sync automatically
+            logger.info(f"File sync handled by Universal Sync System: {file_path}")
+            return True
+        except Exception as e:
+            logger.warning(f"Universal file sync fallback: {e}")
+            return False
+    
+    def delete_file_on_server(self, server, file_path):
+        """Fallback file delete - Universal Sync handles this automatically"""
+        try:
+            # Universal sync handles file deletion automatically
+            logger.info(f"File deletion handled by Universal Sync System: {file_path}")
+            return True
+        except Exception as e:
+            logger.warning(f"Universal file deletion fallback: {e}")
+            return False
+    
     def sync_all_servers(self):
         """Sync with all servers"""
         servers = self.get_sync_servers()
