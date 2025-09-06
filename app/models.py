@@ -45,6 +45,9 @@ class User(UserMixin, ConcurrentModelMixin, db.Model):
         self.password_hash = generate_password_hash(password)
     
     def check_password(self, password):
+        # Handle case where password_hash is None (user created on another server)
+        if self.password_hash is None:
+            return False
         return check_password_hash(self.password_hash, password)
     
     def has_role(self, role_name):
