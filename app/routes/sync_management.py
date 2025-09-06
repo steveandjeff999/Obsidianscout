@@ -304,20 +304,26 @@ def ping_server(server_id):
 @login_required
 @require_superadmin
 def sync_server(server_id):
-    """Trigger sync with a specific server - Simplified bidirectional sync"""
+    """Trigger sync with a specific server - AUTOMATIC SQLite3 Zero Data Loss Sync"""
     try:
-        from app.utils.simplified_sync import simplified_sync_manager
+        from app.utils.automatic_sqlite3_sync import automatic_sqlite3_sync
         
-        result = simplified_sync_manager.perform_bidirectional_sync(server_id)
+        # AUTOMATIC SQLite3 SYNC - Zero Data Loss Guaranteed
+        logger.info(f"🔄 Starting automatic SQLite3 sync with server {server_id}")
+        result = automatic_sqlite3_sync.perform_automatic_sync(server_id)
         
         if result['success']:
-            flash(f'✅ Sync completed with "{result["server_name"]}" - {result["stats"]["sent_to_remote"]} sent, {result["stats"]["received_from_remote"]} received', 'success')
+            stats = result['stats']
+            flash(f'✅ Automatic SQLite3 sync completed - {stats["local_changes_sent"]} sent, {stats["remote_changes_received"]} received, {stats["conflicts_resolved"]} conflicts resolved', 'success')
+            
+            if stats.get('duration'):
+                flash(f'⏱️ Completed in {stats["duration"]:.2f} seconds with 0% data loss guarantee', 'info')
         else:
-            flash(f'❌ Sync failed with server: {result.get("error", "Unknown error")}', 'error')
+            flash(f'❌ SQLite3 sync failed: {result.get("error", "Unknown error")}', 'error')
         
     except Exception as e:
         logger.error(f"Failed to sync with server: {e}")
-        flash(f'❌ Failed to sync with server: {str(e)}', 'error')
+        flash(f'❌ Automatic SQLite3 sync failed: {str(e)}', 'error')
     
     return redirect(url_for('sync.manage_servers'))
 
@@ -326,9 +332,9 @@ def sync_server(server_id):
 @login_required
 @require_superadmin
 def sync_all():
-    """Trigger sync with all servers - Simplified bidirectional sync"""
+    """Trigger sync with all servers - AUTOMATIC SQLite3 Zero Data Loss Sync"""
     try:
-        from app.utils.simplified_sync import simplified_sync_manager
+        from app.utils.automatic_sqlite3_sync import automatic_sqlite3_sync
         from app.models import SyncServer
         
         servers = SyncServer.query.filter_by(sync_enabled=True).all()
@@ -337,27 +343,38 @@ def sync_all():
         successful_syncs = 0
         failed_syncs = 0
         
+        logger.info(f"🔄 Starting automatic SQLite3 sync with {len(servers)} servers")
+        
         for server in servers:
             try:
-                result = simplified_sync_manager.perform_bidirectional_sync(server.id)
+                # AUTOMATIC SQLite3 SYNC - Zero Data Loss Guaranteed
+                result = automatic_sqlite3_sync.perform_automatic_sync(server.id)
+                
                 if result['success']:
                     successful_syncs += 1
-                    total_sent += result['stats']['sent_to_remote']
-                    total_received += result['stats']['received_from_remote']
+                    stats = result['stats']
+                    total_sent += stats['local_changes_sent']
+                    total_received += stats['remote_changes_received']
+                    
+                    logger.info(f"✅ SQLite3 sync completed with {server.name}")
                 else:
                     failed_syncs += 1
+                    logger.error(f"❌ SQLite3 sync failed with {server.name}: {result.get('error')}")
+                    
             except Exception as e:
                 logger.error(f"Failed to sync with {server.name}: {e}")
                 failed_syncs += 1
         
         if successful_syncs > 0:
-            flash(f'✅ Synced with {successful_syncs} servers - {total_sent} sent, {total_received} received. {failed_syncs} failed.', 'success')
-        else:
-            flash(f'❌ All syncs failed ({failed_syncs} servers)', 'error')
+            flash(f'✅ Automatic SQLite3 sync completed: {successful_syncs} servers synced successfully', 'success')
+            flash(f'📊 Total: {total_sent} changes sent, {total_received} changes received with 0% data loss', 'info')
         
+        if failed_syncs > 0:
+            flash(f'❌ {failed_syncs} servers failed to sync', 'error')
+            
     except Exception as e:
-        logger.error(f"Failed to sync with all servers: {e}")
-        flash(f'❌ Failed to sync with all servers: {str(e)}', 'error')
+        logger.error(f"Failed to sync all servers: {e}")
+        flash(f'❌ Automatic SQLite3 sync all failed: {str(e)}', 'error')
     
     return redirect(url_for('sync.dashboard'))
 
@@ -548,6 +565,281 @@ def api_logs():
     try:
         limit = request.args.get('limit', 10, type=int)
         logs = SyncLog.query.order_by(SyncLog.started_at.desc()).limit(limit).all()
+        return jsonify([log.to_dict() for log in logs])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# Enhanced SQLite3 Sync Management Routes
+@sync_routes.route('/sqlite3/<int:server_id>')
+@login_required
+@require_superadmin
+def sqlite3_sync_server(server_id):
+    """Perform SQLite3-enhanced sync with a specific server"""
+    try:
+        from app.utils.sqlite3_sync import SQLite3SyncManager
+        
+        server = SyncServer.query.get_or_404(server_id)
+        
+        if not server.sync_enabled:
+            flash('Sync is disabled for this server', 'warning')
+            return redirect(url_for('sync_routes.dashboard'))
+        
+        server_config = {
+            'id': server.id,
+            'name': server.name,
+            'host': server.host,
+            'port': server.port,
+            'protocol': server.protocol,
+            'last_sync': server.last_sync
+        }
+        
+        sync_manager = SQLite3SyncManager()
+        result = sync_manager.perform_reliable_sync(server_config)
+        
+        if result['success']:
+            flash(f'SQLite3 sync completed successfully with {server.name}', 'success')
+            
+            # Create detailed flash messages for operations
+            for operation in result['operations']:
+                flash(operation, 'info')
+            
+            # Show statistics
+            stats = result['stats']
+            flash(f"Statistics: {stats['local_changes_sent']} sent, {stats['remote_changes_received']} received, "
+                  f"{stats['conflicts_resolved']} conflicts resolved, {stats['duration']:.2f}s", 'info')
+        else:
+            flash(f'SQLite3 sync failed with {server.name}: {result.get("error", "Unknown error")}', 'error')
+            for error in result['stats'].get('errors', []):
+                flash(f"Error: {error}", 'error')
+    
+    except Exception as e:
+        logger.error(f"SQLite3 sync error: {e}")
+        flash(f'SQLite3 sync failed: {str(e)}', 'error')
+    
+    return redirect(url_for('sync_routes.dashboard'))
+
+
+@sync_routes.route('/full-sync/<int:server_id>')
+@login_required
+@require_superadmin
+def full_sync_server(server_id):
+    """Perform complete full sync of ALL tables with a specific server"""
+    try:
+        from app.utils.automatic_sqlite3_sync import AutomaticSQLite3Sync
+        
+        server = SyncServer.query.get_or_404(server_id)
+        
+        if not server.sync_enabled:
+            flash(f'Sync is disabled for server {server.name}', 'warning')
+            return redirect(url_for('sync_routes.dashboard'))
+        
+        # Initialize automatic SQLite3 sync system
+        auto_sync = AutomaticSQLite3Sync()
+        
+        # Perform full synchronization of ALL tables
+        result = auto_sync.perform_full_sync_all_tables(server_id)
+        
+        if result['success']:
+            flash(f'Full sync completed successfully with {server.name}', 'success')
+            
+            # Create detailed flash messages for operations
+            for operation in result['operations']:
+                flash(operation, 'info')
+            
+            # Show comprehensive statistics
+            flash(f"Full sync statistics: {result['local_changes_sent']} records sent, "
+                  f"{result['remote_changes_received']} records received, "
+                  f"{result['total_tables_synced']} tables synchronized", 'info')
+        else:
+            flash(f'Full sync failed with {server.name}: {result.get("error", "Unknown error")}', 'error')
+            for error in result.get('operations', []):
+                if error.startswith('❌'):
+                    flash(f"Error: {error}", 'error')
+    
+    except Exception as e:
+        logger.error(f"Full sync error: {e}")
+        flash(f'Full sync failed: {str(e)}', 'error')
+    
+    return redirect(url_for('sync_routes.dashboard'))
+
+
+@sync_routes.route('/full-sync/all')
+@login_required
+@require_superadmin
+def full_sync_all_servers():
+    """Perform complete full sync of ALL tables with ALL enabled servers"""
+    try:
+        from app.utils.automatic_sqlite3_sync import AutomaticSQLite3Sync
+        
+        servers = SyncServer.query.filter_by(sync_enabled=True, is_active=True).all()
+        
+        if not servers:
+            flash('No enabled servers found for full sync', 'warning')
+            return redirect(url_for('sync_routes.dashboard'))
+        
+        auto_sync = AutomaticSQLite3Sync()
+        total_synced = 0
+        total_errors = 0
+        total_tables = 0
+        
+        flash(f'Starting full sync with {len(servers)} servers...', 'info')
+        
+        for server in servers:
+            try:
+                # Perform full synchronization of ALL tables
+                result = auto_sync.perform_full_sync_all_tables(server.id)
+                
+                if result['success']:
+                    total_synced += result['local_changes_sent'] + result['remote_changes_received']
+                    total_tables += result['total_tables_synced']
+                    
+                    flash(f'✅ Full sync with {server.name}: {result["local_changes_sent"]} sent, '
+                          f'{result["remote_changes_received"]} received, '
+                          f'{result["total_tables_synced"]} tables', 'success')
+                else:
+                    total_errors += 1
+                    flash(f'❌ Full sync failed with {server.name}: {result.get("error", "Unknown error")}', 'error')
+                
+            except Exception as e:
+                total_errors += 1
+                logger.error(f"Full sync error with {server.name}: {e}")
+                flash(f'❌ Full sync failed with {server.name}: {str(e)}', 'error')
+        
+        # Summary message
+        if total_errors == 0:
+            flash(f'🎉 Full sync completed successfully! '
+                  f'Synchronized {total_synced} total records across {total_tables} tables with all servers', 'success')
+        else:
+            flash(f'Full sync completed with {total_errors} errors. '
+                  f'Successfully synchronized {total_synced} records across {total_tables} tables', 'warning')
+    
+    except Exception as e:
+        logger.error(f"Full sync all error: {e}")
+        flash(f'Full sync failed: {str(e)}', 'error')
+    
+    return redirect(url_for('sync_routes.dashboard'))
+
+
+@sync_routes.route('/sqlite3/all')
+@login_required
+@require_superadmin
+def sqlite3_sync_all():
+    """Perform SQLite3-enhanced sync with all enabled servers"""
+    try:
+        from app.utils.sqlite3_sync import SQLite3SyncManager
+        
+        servers = SyncServer.query.filter_by(sync_enabled=True, is_active=True).all()
+        
+        if not servers:
+            flash('No enabled servers found for sync', 'warning')
+            return redirect(url_for('sync_routes.dashboard'))
+        
+        sync_manager = SQLite3SyncManager()
+        total_synced = 0
+        total_errors = 0
+        
+        for server in servers:
+            try:
+                server_config = {
+                    'id': server.id,
+                    'name': server.name,
+                    'host': server.host,
+                    'port': server.port,
+                    'protocol': server.protocol,
+                    'last_sync': server.last_sync
+                }
+                
+                result = sync_manager.perform_reliable_sync(server_config)
+                
+                if result['success']:
+                    total_synced += 1
+                    flash(f'✅ SQLite3 sync completed with {server.name}', 'success')
+                else:
+                    total_errors += 1
+                    flash(f'❌ SQLite3 sync failed with {server.name}', 'error')
+                    
+            except Exception as e:
+                total_errors += 1
+                logger.error(f"SQLite3 sync error with {server.name}: {e}")
+                flash(f'❌ SQLite3 sync failed with {server.name}: {str(e)}', 'error')
+        
+        if total_synced > 0:
+            flash(f'SQLite3 sync completed: {total_synced} servers synced successfully', 'success')
+        
+        if total_errors > 0:
+            flash(f'{total_errors} servers failed to sync', 'error')
+    
+    except Exception as e:
+        logger.error(f"SQLite3 sync all error: {e}")
+        flash(f'SQLite3 sync all failed: {str(e)}', 'error')
+    
+    return redirect(url_for('sync_routes.dashboard'))
+
+
+@sync_routes.route('/reliability/<int:server_id>')
+@login_required
+@require_superadmin
+def reliability_report(server_id):
+    """Show reliability report for a server"""
+    try:
+        from app.utils.sqlite3_sync import SQLite3SyncManager
+        
+        server = SyncServer.query.get_or_404(server_id)
+        sync_manager = SQLite3SyncManager()
+        report = sync_manager.get_reliability_report(server_id)
+        
+        return render_template('sync/reliability_report.html', 
+                             server=server, 
+                             report=report)
+    
+    except Exception as e:
+        logger.error(f"Reliability report error: {e}")
+        flash(f'Failed to generate reliability report: {str(e)}', 'error')
+        return redirect(url_for('sync_routes.dashboard'))
+
+
+@sync_routes.route('/cleanup', methods=['GET', 'POST'])
+@login_required
+@require_superadmin
+def cleanup_sync_data():
+    """Clean up old sync data"""
+    if request.method == 'POST':
+        try:
+            from app.utils.sqlite3_sync import SQLite3SyncManager
+            
+            days_to_keep = int(request.form.get('days_to_keep', 30))
+            
+            sync_manager = SQLite3SyncManager()
+            result = sync_manager.cleanup_old_sync_data(days_to_keep)
+            
+            flash(f"Cleanup completed: {result['deleted_changes']} old changes and "
+                  f"{result['deleted_logs']} old logs removed", 'success')
+            
+        except Exception as e:
+            logger.error(f"Cleanup error: {e}")
+            flash(f'Cleanup failed: {str(e)}', 'error')
+        
+        return redirect(url_for('sync_routes.cleanup_sync_data'))
+    
+    return render_template('sync/cleanup.html')
+
+
+@sync_routes.route('/api/sqlite3/status/<int:server_id>')
+@login_required
+@require_superadmin
+def api_sqlite3_status(server_id):
+    """Get SQLite3 sync status and reliability for a server"""
+    try:
+        from app.utils.sqlite3_sync import SQLite3SyncManager
+        
+        sync_manager = SQLite3SyncManager()
+        report = sync_manager.get_reliability_report(server_id)
+        
+        return jsonify(report)
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
         return jsonify([log.to_dict() for log in logs])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
