@@ -18,10 +18,14 @@ class FallbackSyncManager:
     def __init__(self):
         self.server_id = "universal-sync"
     
-    def get_sync_servers(self):
+    def get_sync_servers(self, active_only=True):
+        """Get sync servers with optional active_only filter"""
         from flask import current_app
         with current_app.app_context():
-            return SyncServer.query.filter_by(is_active=True).all()
+            if active_only:
+                return SyncServer.query.filter_by(is_active=True).all()
+            else:
+                return SyncServer.query.all()
     
     def get_sync_status(self):
         return {
@@ -29,6 +33,60 @@ class FallbackSyncManager:
             'message': 'Universal Sync System active',
             'type': 'universal'
         }
+    
+    def upload_file_to_server(self, server, file_path, event_type):
+        """Fallback file upload - Universal Sync handles this automatically"""
+        try:
+            # Universal sync handles file sync automatically
+            logger.info(f"File sync handled by Universal Sync System: {file_path}")
+            return True
+        except Exception as e:
+            logger.warning(f"Universal file sync fallback: {e}")
+            return False
+    
+    def sync_with_server(self, server, sync_type='full'):
+        """Fallback sync - Universal Sync System handles this automatically"""
+        return True
+    
+    def add_sync_server(self, name, host, port=5000, protocol='https'):
+        """Add a new sync server"""
+        server = SyncServer(name=name, host=host, port=port, protocol=protocol, is_active=True)
+        db.session.add(server)
+        db.session.commit()
+        return server
+    
+    def remove_sync_server(self, server_id):
+        """Remove a sync server"""
+        server = SyncServer.query.get(server_id)
+        if server:
+            db.session.delete(server)
+            db.session.commit()
+            return True
+        return False
+    
+    def ping_server(self, server):
+        """Ping a server"""
+        try:
+            import requests
+            url = f"{server.protocol}://{server.host}:{server.port}/api/sync/ping"
+            response = requests.get(url, timeout=10, verify=False)
+            success = response.status_code == 200
+            
+            server.ping_success = success
+            server.last_ping = datetime.utcnow()
+            if not success:
+                server.last_error = f"HTTP {response.status_code}"
+            else:
+                server.last_error = None
+            db.session.commit()
+            
+            return success
+        except Exception as e:
+            server.ping_success = False
+            server.last_ping = datetime.utcnow()
+            server.last_error = str(e)
+            db.session.commit()
+            return False
 
 sync_manager = FallbackSyncManager()
 
