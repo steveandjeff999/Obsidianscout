@@ -57,3 +57,4 @@ fuzzywuzzy
 waitress==3.0.1
 eventlet
 Flask-Mail>=0.9.1
+

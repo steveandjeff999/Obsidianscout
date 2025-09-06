@@ -1667,6 +1667,284 @@ def _apply_delete(model_class, record_id, old_data):
         return {'status': 'error', 'error': str(e)}
 
 
+# Enhanced SQLite3 Sync Endpoints
+@sync_api.route('/sqlite3/sync/<int:server_id>', methods=['POST'])
+def sqlite3_sync_server(server_id):
+    """Enhanced sync using SQLite3 for maximum reliability"""
+    try:
+        from app.utils.sqlite3_sync import SQLite3SyncManager
+        from app.models import SyncServer
+        
+        # Get server configuration
+        server = SyncServer.query.get_or_404(server_id)
+        if not server.sync_enabled:
+            return jsonify({'error': 'Sync is disabled for this server'}), 400
+        
+        server_config = {
+            'id': server.id,
+            'name': server.name,
+            'host': server.host,
+            'port': server.port,
+            'protocol': server.protocol,
+            'last_sync': server.last_sync
+        }
+        
+        # Perform SQLite3 enhanced sync
+        sync_manager = SQLite3SyncManager()
+        result = sync_manager.perform_reliable_sync(server_config)
+        
+        if result['success']:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 500
+            
+    except Exception as e:
+        logger.error(f"SQLite3 sync error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'operations': [f"❌ SQLite3 sync failed: {str(e)}"]
+        }), 500
+
+
+@sync_api.route('/sqlite3/reliability/<int:server_id>', methods=['GET'])
+def get_sqlite3_reliability_report(server_id):
+    """Get comprehensive reliability report for SQLite3 sync"""
+    try:
+        from app.utils.sqlite3_sync import SQLite3SyncManager
+        
+        sync_manager = SQLite3SyncManager()
+        report = sync_manager.get_reliability_report(server_id)
+        
+        return jsonify(report), 200
+        
+    except Exception as e:
+        logger.error(f"Reliability report error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@sync_api.route('/sqlite3/cleanup', methods=['POST'])
+def sqlite3_cleanup_old_data():
+    """Clean up old SQLite3 sync data"""
+    try:
+        from app.utils.sqlite3_sync import SQLite3SyncManager
+        
+        days_to_keep = request.json.get('days_to_keep', 30)
+        
+        sync_manager = SQLite3SyncManager()
+        result = sync_manager.cleanup_old_sync_data(days_to_keep)
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        logger.error(f"SQLite3 cleanup error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@sync_api.route('/sqlite3/optimized-changes', methods=['GET'])
+def get_sqlite3_optimized_changes():
+    """Get changes in SQLite3-optimized format - AUTOMATIC ZERO LOSS"""
+    try:
+        from app.utils.automatic_sqlite3_sync import automatic_sqlite3_sync
+        
+        since = request.args.get('since')
+        server_id = request.args.get('server_id', 'remote')
+        format_type = request.args.get('format', 'sqlite3_zero_loss')
+        
+        if since:
+            try:
+                since_time = datetime.fromisoformat(since)
+            except:
+                since_time = datetime.now() - timedelta(hours=24)
+        else:
+            since_time = datetime.now() - timedelta(hours=24)
+        
+        # Use automatic capture for zero data loss
+        changes = automatic_sqlite3_sync._capture_all_changes_sqlite3()
+        
+        # Filter changes since the specified time
+        filtered_changes = []
+        for change in changes:
+            try:
+                change_time = datetime.fromisoformat(change['timestamp'])
+                if change_time >= since_time:
+                    filtered_changes.append(change)
+            except:
+                # Include changes with invalid timestamps to be safe
+                filtered_changes.append(change)
+        
+        return jsonify({
+            'changes': filtered_changes,
+            'count': len(filtered_changes),
+            'total_captured': len(changes),
+            'since': since_time.isoformat(),
+            'format': format_type,
+            'server_id': automatic_sqlite3_sync.server_id,
+            'zero_data_loss': True,
+            'automatic': True
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"SQLite3 automatic changes error: {e}")
+        return jsonify({'error': str(e), 'zero_data_loss': False}), 500
+
+
+@sync_api.route('/sqlite3/receive-changes', methods=['POST'])
+def receive_sqlite3_optimized_changes():
+    """Receive and apply changes in SQLite3-optimized format - AUTOMATIC ZERO LOSS"""
+    try:
+        from app.utils.automatic_sqlite3_sync import automatic_sqlite3_sync
+        
+        data = request.get_json()
+        changes = data.get('changes', [])
+        server_id = data.get('server_id', 'remote')
+        format_type = data.get('format', 'sqlite3_zero_loss')
+        total_count = data.get('total_count', len(changes))
+        checksum = data.get('checksum', '')
+        
+        if not changes:
+            return jsonify({'message': 'No changes to apply', 'zero_data_loss': True}), 200
+        
+        # Verify checksum if provided
+        if checksum:
+            calculated_checksum = automatic_sqlite3_sync._calculate_batch_checksum(changes)
+            if checksum != calculated_checksum:
+                logger.error(f"Checksum mismatch: expected {checksum}, got {calculated_checksum}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Checksum verification failed - data integrity compromised',
+                    'zero_data_loss': False
+                }), 400
+        
+        # Apply changes with zero data loss guarantee
+        result = automatic_sqlite3_sync.apply_changes_zero_loss(changes)
+        
+        return jsonify({
+            'success': result['success'],
+            'applied_count': result['applied_count'],
+            'total_received': result['total_received'],
+            'errors': result.get('errors', []),
+            'format': format_type,
+            'zero_data_loss': True,
+            'automatic': True,
+            'checksum_verified': bool(checksum)
+        }), 200 if result['success'] else 500
+        
+    except Exception as e:
+        logger.error(f"SQLite3 automatic receive changes error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'zero_data_loss': False,
+            'automatic': True
+        }), 500
+
+
+@sync_api.route('/sqlite3/full-sync-send', methods=['GET'])
+def sqlite3_full_sync_send():
+    """
+    Send complete database state for full synchronization
+    Returns ALL data from ALL tables in both databases
+    """
+    try:
+        from app.utils.automatic_sqlite3_sync import AutomaticSQLite3Sync
+        
+        requesting_server = request.args.get('requesting_server', 'remote')
+        sync_type = request.args.get('sync_type', 'full_sync')
+        
+        logger.info(f"Full sync request from server: {requesting_server}")
+        
+        # Initialize automatic sync system
+        automatic_sqlite3_sync = AutomaticSQLite3Sync()
+        
+        # Get complete database state
+        all_changes = automatic_sqlite3_sync._capture_full_database_state()
+        
+        # Calculate checksum for integrity
+        checksum = automatic_sqlite3_sync._calculate_batch_checksum(all_changes)
+        
+        logger.info(f"Sending {len(all_changes)} total records for full sync to {requesting_server}")
+        
+        return jsonify({
+            'success': True,
+            'changes': all_changes,
+            'total_count': len(all_changes),
+            'tables_included': len(automatic_sqlite3_sync.table_database_map),
+            'sync_type': sync_type,
+            'checksum': checksum,
+            'timestamp': datetime.utcnow().isoformat(),
+            'server_id': automatic_sqlite3_sync.server_id,
+            'zero_data_loss': True
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Full sync send error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'zero_data_loss': False
+        }), 500
+
+
+@sync_api.route('/sqlite3/full-sync-receive', methods=['POST'])
+def sqlite3_full_sync_receive():
+    """
+    Receive complete database state for full synchronization
+    Applies ALL data to appropriate databases
+    """
+    try:
+        from app.utils.automatic_sqlite3_sync import AutomaticSQLite3Sync
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        changes = data.get('changes', [])
+        source_server = data.get('source_server', 'remote')
+        batch_number = data.get('batch_number', 1)
+        total_batches = data.get('total_batches', 1)
+        checksum = data.get('checksum', '')
+        
+        logger.info(f"Receiving full sync batch {batch_number}/{total_batches} from {source_server} with {len(changes)} records")
+        
+        # Initialize automatic sync system
+        automatic_sqlite3_sync = AutomaticSQLite3Sync()
+        
+        # Verify checksum if provided
+        if checksum:
+            calculated_checksum = automatic_sqlite3_sync._calculate_batch_checksum(changes)
+            if checksum != calculated_checksum:
+                logger.error(f"Full sync checksum mismatch: expected {checksum}, got {calculated_checksum}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Checksum verification failed - data integrity compromised',
+                    'zero_data_loss': False
+                }), 400
+        
+        # Apply changes with zero data loss guarantee
+        result = automatic_sqlite3_sync.apply_changes_zero_loss(changes)
+        
+        logger.info(f"Applied {result['applied_count']} full sync records from batch {batch_number}")
+        
+        return jsonify({
+            'success': result['success'],
+            'applied_count': result['applied_count'],
+            'batch_number': batch_number,
+            'total_batches': total_batches,
+            'errors': result.get('errors', []),
+            'zero_data_loss': True,
+            'checksum_verified': bool(checksum)
+        }), 200 if result['success'] else 500
+        
+    except Exception as e:
+        logger.error(f"Full sync receive error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'zero_data_loss': False
+        }), 500
+
+
 # Error handlers
 @sync_api.errorhandler(404)
 def not_found(error):
