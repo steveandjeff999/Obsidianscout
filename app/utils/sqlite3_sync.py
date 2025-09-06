@@ -14,6 +14,7 @@ import hashlib
 import time
 from contextlib import contextmanager
 from threading import Lock
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,10 @@ class SQLite3SyncManager:
         self.db_path = db_path
         self.connection_timeout = 30
         self.sync_lock = Lock()
+
+        # Automatically include users DB if present so user/role joins are synced
+        users_db = 'instance/users.db'
+        self.extra_db_paths = [users_db] if os.path.exists(users_db) else []
         self._ensure_sync_tables()
     
     def _ensure_sync_tables(self):
@@ -307,8 +312,81 @@ class SQLite3SyncManager:
                     change_data['data'] = {}
                 
                 changes.append(change_data)
-        
+
+        # Additionally capture important tables from any extra DBs (e.g. users.db)
+        try:
+            for extra_db in getattr(self, 'extra_db_paths', []) or []:
+                try:
+                    changes += self._capture_direct_table_changes(extra_db, since_time, tables_to_include=['user', 'role', 'user_roles'])
+                except Exception as e:
+                    logger.warning(f"Failed to capture direct changes from {extra_db}: {e}")
+        except Exception:
+            # defensive; nothing to do
+            pass
+
         return changes
+
+    def _capture_direct_table_changes(self, db_path: str, since_time: Optional[datetime], tables_to_include: Optional[List[str]] = None) -> List[Dict]:
+        """Capture recent (or all) rows directly from a secondary DB for specified tables.
+        This is used for user/role join tables that may not be tracked in the primary database_changes table.
+        """
+        out_changes: List[Dict] = []
+        if not os.path.exists(db_path):
+            return out_changes
+
+        with sqlite3.connect(db_path, timeout=self.connection_timeout) as conn:
+            cursor = conn.cursor()
+
+            # Determine which tables to inspect
+            if not tables_to_include:
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+                tables = [r[0] for r in cursor.fetchall()]
+            else:
+                tables = tables_to_include
+
+            for table_name in tables:
+                try:
+                    # Skip if table doesn't exist
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+                    if cursor.fetchone() is None:
+                        continue
+
+                    # Get table schema and columns
+                    cursor.execute(f"PRAGMA table_info({table_name})")
+                    cols_info = cursor.fetchall()
+                    columns = [col[1] for col in cols_info]
+
+                    # Choose timestamp column if present
+                    ts_field = None
+                    if 'updated_at' in columns:
+                        ts_field = 'updated_at'
+                    elif 'created_at' in columns:
+                        ts_field = 'created_at'
+
+                    if ts_field and since_time:
+                        query = f"SELECT * FROM {table_name} WHERE {ts_field} > ? ORDER BY {ts_field}"
+                        cursor.execute(query, (since_time.isoformat(),))
+                    else:
+                        # No timestamp available - fetch all rows (careful for large tables)
+                        cursor.execute(f"SELECT * FROM {table_name} LIMIT 10000")
+
+                    rows = cursor.fetchall()
+                    for row in rows:
+                        row_dict = dict(zip(columns, row))
+                        change = {
+                            'table': table_name,
+                            'record_id': str(row_dict.get('id', '')),
+                            'operation': 'upsert',
+                            'data': row_dict,
+                            'timestamp': datetime.now().isoformat(),
+                            'change_hash': hashlib.md5(json.dumps(row_dict, sort_keys=True, default=str).encode()).hexdigest()
+                        }
+                        out_changes.append(change)
+                except Exception as e:
+                    logger.warning(f"Error capturing direct table {table_name} from {db_path}: {e}")
+                    continue
+
+        return out_changes
     
     def _apply_changes_sqlite3(self, changes: List[Dict]) -> int:
         """Apply remote changes using atomic SQLite3 transactions"""
