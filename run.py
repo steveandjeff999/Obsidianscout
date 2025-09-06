@@ -367,13 +367,15 @@ if __name__ == '__main__':
     security_maintenance_thread.start()
     print("Started security maintenance thread (1-hour intervals)")
     
-    # Start multi-server sync services
-    try:
-        from app.utils.multi_server_sync import sync_manager
-        sync_manager.start_sync_services()
-        print("Started multi-server sync services")
-    except Exception as e:
-        print(f"Warning: Could not start sync services: {e}")
+    # Multi-server sync services DISABLED - replaced with Universal Sync System
+    # The Universal Sync System is automatically started in app/__init__.py
+    # try:
+    #     from app.utils.multi_server_sync import sync_manager
+    #     sync_manager.start_sync_services()
+    #     print("Started multi-server sync services")
+    # except Exception as e:
+    #     print(f"Warning: Could not start sync services: {e}")
+    print("📌 Multi-server sync services disabled - Universal Sync System active instead")
     
     # Start real-time file sync
     try:

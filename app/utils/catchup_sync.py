@@ -11,11 +11,15 @@ import threading
 import requests
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Union, Tuple
+from typing import List, Dict, Any, Optional, Union, Tuple, TYPE_CHECKING
 from flask import current_app
 from sqlalchemy import text, desc
 from app import db
 import logging
+
+# Import models for type hints only (avoids circular imports)
+if TYPE_CHECKING:
+    from app.models import SyncServer, SyncLog, DatabaseChange
 
 logger = logging.getLogger(__name__)
 
@@ -810,8 +814,8 @@ class CatchupSyncManager:
     def _get_server_id(self):
         """Get the current server ID"""
         try:
-            from app.utils.multi_server_sync import sync_manager
-            return getattr(sync_manager, 'server_id', 'unknown')
+            # Use Universal Sync System server ID
+            return 'universal-sync-server'
         except:
             return 'unknown'
     
