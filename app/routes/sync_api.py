@@ -48,9 +48,17 @@ class FallbackSyncManager:
         """Fallback sync - Universal Sync System handles this automatically"""
         return True
     
-    def add_sync_server(self, name, host, port=5000, protocol='https'):
+    def add_sync_server(self, name, host, port=5000, protocol='https', user_id=None):
         """Add a new sync server"""
-        server = SyncServer(name=name, host=host, port=port, protocol=protocol, is_active=True)
+        server = SyncServer(
+            name=name, 
+            host=host, 
+            port=port, 
+            protocol=protocol, 
+            is_active=True,
+            sync_enabled=True
+        )
+        # Note: user_id parameter accepted but not stored as SyncServer model doesn't have user_id field
         db.session.add(server)
         db.session.commit()
         return server
