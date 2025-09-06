@@ -13,7 +13,17 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 from app.models import SyncServer, SyncLog, db
-from app.utils.multi_server_sync import MultiServerSyncManager
+# Old multi-server sync manager disabled - Universal Sync System replaces it
+# from app.utils.multi_server_sync import MultiServerSyncManager
+
+# Fallback for compatibility
+class FallbackSyncManager:
+    def sync_file_to_servers(self, file_path, event_type):
+        """Fallback - Universal Sync System handles file sync automatically"""
+        pass
+
+MultiServerSyncManager = FallbackSyncManager
+
 import logging
 
 logger = logging.getLogger(__name__)

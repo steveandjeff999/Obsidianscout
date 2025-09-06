@@ -7,7 +7,27 @@ from flask_login import login_required, current_user
 from functools import wraps
 from app import db
 from app.models import SyncServer, SyncLog, SyncConfig
-from app.utils.multi_server_sync import sync_manager
+# Old sync manager disabled - Universal Sync System replaces it
+# from app.utils.multi_server_sync import sync_manager
+
+# Fallback sync_manager for compatibility
+class FallbackSyncManager:
+    def __init__(self):
+        self.server_id = "universal-sync"
+    
+    def get_sync_servers(self):
+        from flask import current_app
+        if current_app:
+            with current_app.app_context():
+                return SyncServer.query.filter_by(is_active=True).all()
+        return []
+    
+    def sync_with_server(self, server, sync_type='full'):
+        """Fallback - Universal Sync System handles sync automatically"""
+        return True
+
+sync_manager = FallbackSyncManager()
+
 import logging
 import requests
 

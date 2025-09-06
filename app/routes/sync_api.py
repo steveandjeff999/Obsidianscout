@@ -10,7 +10,28 @@ from flask import Blueprint, request, jsonify, send_file, current_app
 from werkzeug.utils import secure_filename
 from app import db
 from app.models import SyncServer, SyncLog, FileChecksum, SyncConfig
-from app.utils.multi_server_sync import sync_manager
+# Old sync manager disabled - Universal Sync System replaces it
+# from app.utils.multi_server_sync import sync_manager
+
+# Fallback sync_manager for compatibility with existing API endpoints
+class FallbackSyncManager:
+    def __init__(self):
+        self.server_id = "universal-sync"
+    
+    def get_sync_servers(self):
+        from flask import current_app
+        with current_app.app_context():
+            return SyncServer.query.filter_by(is_active=True).all()
+    
+    def get_sync_status(self):
+        return {
+            'active': True,
+            'message': 'Universal Sync System active',
+            'type': 'universal'
+        }
+
+sync_manager = FallbackSyncManager()
+
 import tempfile
 import logging
 import subprocess

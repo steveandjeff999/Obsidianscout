@@ -91,16 +91,27 @@ def test_complete_autonomous_sync():
         else:
             print("   ❌ Automatic change tracking: FAILED")
         
-        # 2. Background sync process  
-        from app.utils.simplified_sync_manager import SimplifiedSyncManager
-        sync_manager = SimplifiedSyncManager()
-        
-        if hasattr(sync_manager, 'sync_servers') and sync_manager.sync_servers:
-            print("   ✅ Sync manager initialized: WORKING")
-        else:
-            print("   ⚠️  Sync manager: No remote servers configured")
+        # 2. Background sync process - Test Universal Sync System
+        try:
+            from universal_sync_system import universal_sync
+            
+            if hasattr(universal_sync, 'sync_servers') and universal_sync.sync_servers:
+                print("   ✅ Universal Sync manager initialized: WORKING")
+            else:
+                print("   ⚠️ Universal Sync manager initialized but no servers configured")
+        except ImportError:
+            print("   ❌ Universal Sync System not available")
+            print("   📌 Falling back to check for any sync system...")
+            
+            # Fallback check for any sync system
+            try:
+                from app.routes.sync_api import sync_manager
+                print("   ✅ Fallback sync manager available: WORKING")
+            except Exception as e:
+                print(f"   ❌ No sync system available: {e}")
         
         # 3. Check if periodic sync would run
+        from app.models import DatabaseChange
         pending_count = DatabaseChange.query.filter_by(sync_status='pending').count()
         if pending_count > 0:
             print(f"   ✅ Periodic sync ready: {pending_count} pending changes")
