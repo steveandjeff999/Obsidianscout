@@ -297,7 +297,7 @@ class RealTimeFileEventHandler(FileSystemEventHandler):
             return self.sync_manager.delete_file_on_server(server, failed_sync.file_path)
         else:
             if os.path.exists(failed_sync.file_path):
-                return self.sync_manager.upload_file_to_server(server, failed_sync.file_path)
+                return self.sync_manager.upload_file_to_server(server, failed_sync.file_path, failed_sync.event_type)
             else:
                 logger.info(f"File {failed_sync.file_path} no longer exists, marking retry as successful")
                 return True
@@ -480,7 +480,7 @@ class RealTimeFileEventHandler(FileSystemEventHandler):
                         success = self.sync_manager.delete_file_on_server(server, file_path)
                     else:
                         if os.path.exists(file_path):
-                            success = self.sync_manager.upload_file_to_server(server, file_path)
+                            success = self.sync_manager.upload_file_to_server(server, file_path, event_type)
                         else:
                             logger.warning(f"File {file_path} no longer exists, skipping sync to {server.name}")
                             continue
@@ -595,15 +595,14 @@ def setup_real_time_file_sync(app, base_dir=None):
         if base_dir is None:
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         
-        # Watch the instance directory and templates directory
+        # ONLY watch the instance directory - not templates or static
         instance_dir = os.path.join(base_dir, 'instance')
-        templates_dir = os.path.join(base_dir, 'app', 'templates')
-        static_dir = os.path.join(base_dir, 'app', 'static')
         
         directories_to_watch = []
-        for directory in [instance_dir, templates_dir, static_dir]:
-            if os.path.exists(directory):
-                directories_to_watch.append(directory)
+        if os.path.exists(instance_dir):
+            directories_to_watch.append(instance_dir)
+        else:
+            logger.warning(f"Instance directory not found: {instance_dir}")
         
         if not directories_to_watch:
             logger.warning("No directories found to watch for file sync")
