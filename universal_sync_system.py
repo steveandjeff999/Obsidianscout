@@ -326,25 +326,35 @@ class UniversalSyncSystem:
             logger.error(f"Error queuing file change: {e}")
     
     def _load_sync_servers(self):
-        """Load sync servers from database"""
+        """Load sync servers from database with proper connection handling"""
         try:
             from app.models import SyncServer
-            servers = SyncServer.query.filter_by(is_active=True).all()
-            self.sync_servers = []
+            from app import db
             
-            for server in servers:
-                server_config = {
-                    'id': server.id,
-                    'name': server.name,
-                    'host': server.host,
-                    'port': server.port,
-                    'protocol': server.protocol,
-                    'url': f"{server.protocol}://{server.host}:{server.port}"
-                }
-                self.sync_servers.append(server_config)
+            # Use a dedicated session to avoid connection pool conflicts
+            from sqlalchemy.orm import sessionmaker
+            Session = sessionmaker(bind=db.engine)
+            session = Session()
             
-            logger.info(f"Loaded {len(self.sync_servers)} sync servers")
-            
+            try:
+                servers = session.query(SyncServer).filter_by(is_active=True).all()
+                self.sync_servers = []
+                
+                for server in servers:
+                    server_config = {
+                        'id': server.id,
+                        'name': server.name,
+                        'host': server.host,
+                        'port': server.port,
+                        'protocol': server.protocol,
+                        'url': f"{server.protocol}://{server.host}:{server.port}"
+                    }
+                    self.sync_servers.append(server_config)
+                
+                logger.info(f"Loaded {len(self.sync_servers)} sync servers")
+            finally:
+                session.close()
+                
         except Exception as e:
             logger.error(f"Error loading sync servers: {e}")
             self.sync_servers = []

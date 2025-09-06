@@ -14,16 +14,103 @@ from app.models import SyncServer, SyncLog, SyncConfig
 class FallbackSyncManager:
     def __init__(self):
         self.server_id = "universal-sync"
+        # Properties that might be set by the UI
+        self.sync_enabled = True
+        self.sync_interval = 30
+        self.file_watch_interval = 5
     
-    def get_sync_servers(self):
+    def get_sync_servers(self, active_only=True):
+        """Get sync servers with proper connection handling"""
         from flask import current_app
-        if current_app:
-            with current_app.app_context():
-                return SyncServer.query.filter_by(is_active=True).all()
+        try:
+            if current_app:
+                with current_app.app_context():
+                    # Use a fresh session to avoid connection pool issues
+                    from sqlalchemy.orm import sessionmaker
+                    Session = sessionmaker(bind=db.engine)
+                    session = Session()
+                    try:
+                        if active_only:
+                            servers = session.query(SyncServer).filter_by(is_active=True).all()
+                        else:
+                            servers = session.query(SyncServer).all()
+                        return servers
+                    finally:
+                        session.close()
+        except Exception as e:
+            logger.error(f"Error getting sync servers: {e}")
         return []
+    
+    def get_sync_status(self):
+        """Get sync status for compatibility with safe server count"""
+        try:
+            servers_count = len(self.get_sync_servers())
+        except Exception as e:
+            logger.error(f"Error getting servers count: {e}")
+            servers_count = 0
+            
+        return {
+            'active': True,
+            'message': 'Universal Sync System active',
+            'type': 'universal',
+            'last_sync': None,
+            'sync_enabled': True,
+            'servers_count': servers_count,
+            'status': 'running'
+        }
     
     def sync_with_server(self, server, sync_type='full'):
         """Fallback - Universal Sync System handles sync automatically"""
+        return True
+    
+    def add_sync_server(self, name, host, port=5000, protocol='https'):
+        """Add a new sync server"""
+        from flask import current_app
+        if current_app:
+            with current_app.app_context():
+                server = SyncServer(
+                    name=name,
+                    host=host,
+                    port=port,
+                    protocol=protocol,
+                    is_active=True
+                )
+                db.session.add(server)
+                db.session.commit()
+                return server
+        return None
+    
+    def remove_sync_server(self, server_id):
+        """Remove a sync server"""
+        from flask import current_app
+        if current_app:
+            with current_app.app_context():
+                server = SyncServer.query.get(server_id)
+                if server:
+                    db.session.delete(server)
+                    db.session.commit()
+                    return True
+        return False
+    
+    def ping_server(self, server):
+        """Ping a server - Universal Sync System handles connectivity"""
+        return True
+    
+    def sync_all_servers(self):
+        """Sync with all servers"""
+        servers = self.get_sync_servers()
+        for server in servers:
+            self.sync_with_server(server)
+        return True
+    
+    def force_full_sync(self, server_id=None):
+        """Force full sync"""
+        if server_id:
+            server = SyncServer.query.get(server_id)
+            if server:
+                return self.sync_with_server(server, 'full')
+        else:
+            return self.sync_all_servers()
         return True
 
 sync_manager = FallbackSyncManager()

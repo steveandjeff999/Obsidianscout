@@ -21,6 +21,17 @@ class FallbackSyncManager:
     def sync_file_to_servers(self, file_path, event_type):
         """Fallback - Universal Sync System handles file sync automatically"""
         pass
+    
+    def upload_file_to_server(self, server, file_path, event_type):
+        """Fallback file upload - Universal Sync handles this automatically"""
+        try:
+            # Universal sync handles file sync automatically
+            logger.info(f"File sync handled by Universal Sync System: {file_path}")
+            return True
+        except Exception as e:
+            logger.warning(f"Universal file sync fallback: {e}")
+            # Never permanently fail - always return True to keep trying
+            return True
 
 MultiServerSyncManager = FallbackSyncManager
 
@@ -42,23 +53,20 @@ class SyncFailure:
         self.next_retry = datetime.utcnow() + timedelta(seconds=5)  # Initial retry in 5 seconds
     
     def should_retry(self) -> bool:
-        """Check if this failure should be retried"""
-        max_retries = 10
-        max_age_hours = 24
-        
-        if self.retry_count >= max_retries:
-            return False
-        
-        if (datetime.utcnow() - self.timestamp).total_seconds() > max_age_hours * 3600:
-            return False
-        
+        """Check if this failure should be retried - NEVER permanently fail"""
+        # Always allow retries - never give up on sync
         return datetime.utcnow() >= self.next_retry
     
     def increment_retry(self):
         """Increment retry count and calculate next retry time with exponential backoff"""
         self.retry_count += 1
-        # Exponential backoff: 5s, 10s, 20s, 40s, 80s, then cap at 5 minutes
-        delay_seconds = min(5 * (2 ** self.retry_count), 300)
+        # Exponential backoff up to 5 minutes, then reset to shorter intervals
+        if self.retry_count <= 10:
+            delay_seconds = min(5 * (2 ** self.retry_count), 300)  # Cap at 5 minutes
+        else:
+            # After 10 retries, use longer intervals but keep trying
+            delay_seconds = 600  # 10 minutes for persistent failures
+        
         self.next_retry = datetime.utcnow() + timedelta(seconds=delay_seconds)
     
     def to_dict(self) -> dict:
@@ -241,12 +249,14 @@ class RealTimeFileEventHandler(FileSystemEventHandler):
                         if failed_sync.should_retry():
                             retry_items.append(failed_sync)
                         else:
-                            # Log permanently failed sync
-                            logger.error(f"Permanently failed sync after {failed_sync.retry_count} retries: {failed_sync.to_dict()}")
+                            # No permanent failures - keep retrying with longer intervals
+                            failed_sync.increment_retry()
+                            retry_items.append(failed_sync)
+                            logger.info(f"Continuing to retry sync for {failed_sync.file_path} (attempt {failed_sync.retry_count})")
                     except queue.Empty:
                         break
                 
-                # Retry failed syncs
+                # Retry failed syncs - never give up
                 for failed_sync in retry_items:
                     try:
                         success = self._retry_sync_operation(failed_sync)

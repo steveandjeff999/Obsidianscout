@@ -254,14 +254,14 @@ def create_app(test_config=None):
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SQLALCHEMY_ENGINE_OPTIONS={
             'pool_pre_ping': True,
-            'pool_recycle': 3600,
-            'pool_size': 1,              # SQLite only supports one writer
-            'pool_timeout': 30,          # Match busy_timeout
-            'max_overflow': 0,           # No overflow for SQLite
+            'pool_recycle': 1800,        # Reduced to 30 minutes
+            'pool_size': 5,              # Increased for sync workers (SQLite WAL mode supports multiple readers)
+            'pool_timeout': 60,          # Increased timeout
+            'max_overflow': 10,          # Allow overflow connections for background processes
             'connect_args': {
-                'timeout': 30,
                 'check_same_thread': False,
-                'isolation_level': None   # Autocommit mode for better performance
+                'timeout': 60,           # SQLite connection timeout
+                'isolation_level': None  # Autocommit mode for better performance
             }
         },
         UPLOAD_FOLDER=os.path.join(app.instance_path, 'uploads'),
