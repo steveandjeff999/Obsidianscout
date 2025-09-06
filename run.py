@@ -375,16 +375,31 @@ if __name__ == '__main__':
     #     print("Started multi-server sync services")
     # except Exception as e:
     #     print(f"Warning: Could not start sync services: {e}")
-    print("📌 Multi-server sync services disabled - Universal Sync System active instead")
+    
+    # Initialize Universal Sync System
+    try:
+        from universal_sync_system import UniversalSyncSystem
+        universal_sync = UniversalSyncSystem()
+        with app.app_context():
+            universal_sync.initialize(app)
+            universal_sync.start_workers()
+        print("✅ Universal Sync System initialized")
+        app.universal_sync = universal_sync
+    except Exception as e:
+        print(f"Warning: Could not start Universal Sync System: {e}")
+        import traceback
+        traceback.print_exc()
     
     # Start real-time file sync
     try:
         from app.utils.real_time_file_sync import setup_real_time_file_sync
         with app.app_context():
             setup_real_time_file_sync(app)
-        print("Started real-time file synchronization")
+        print("✅ Real-time file synchronization started successfully")
     except Exception as e:
         print(f"Warning: Could not start real-time file sync: {e}")
+        import traceback
+        traceback.print_exc()
     
     # Configure SocketIO based on server choice
     if USE_WAITRESS:
