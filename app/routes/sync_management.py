@@ -585,7 +585,7 @@ def sqlite3_sync_server(server_id):
         
         if not server.sync_enabled:
             flash('Sync is disabled for this server', 'warning')
-            return redirect(url_for('sync_routes.dashboard'))
+            return redirect(url_for('sync.dashboard'))
         
         server_config = {
             'id': server.id,
@@ -619,7 +619,7 @@ def sqlite3_sync_server(server_id):
         logger.error(f"SQLite3 sync error: {e}")
         flash(f'SQLite3 sync failed: {str(e)}', 'error')
     
-    return redirect(url_for('sync_routes.dashboard'))
+    return redirect(url_for('sync.dashboard'))
 
 
 @sync_routes.route('/full-sync/<int:server_id>')
@@ -634,7 +634,7 @@ def full_sync_server(server_id):
         
         if not server.sync_enabled:
             flash(f'Sync is disabled for server {server.name}', 'warning')
-            return redirect(url_for('sync_routes.dashboard'))
+            return redirect(url_for('sync.dashboard'))
         
         # Initialize automatic SQLite3 sync system
         auto_sync = AutomaticSQLite3Sync()
@@ -663,7 +663,7 @@ def full_sync_server(server_id):
         logger.error(f"Full sync error: {e}")
         flash(f'Full sync failed: {str(e)}', 'error')
     
-    return redirect(url_for('sync_routes.dashboard'))
+    return redirect(url_for('sync.dashboard'))
 
 
 @sync_routes.route('/full-sync/all')
@@ -678,7 +678,7 @@ def full_sync_all_servers():
         
         if not servers:
             flash('No enabled servers found for full sync', 'warning')
-            return redirect(url_for('sync_routes.dashboard'))
+            return redirect(url_for('sync.dashboard'))
         
         auto_sync = AutomaticSQLite3Sync()
         total_synced = 0
@@ -720,7 +720,7 @@ def full_sync_all_servers():
         logger.error(f"Full sync all error: {e}")
         flash(f'Full sync failed: {str(e)}', 'error')
     
-    return redirect(url_for('sync_routes.dashboard'))
+    return redirect(url_for('sync.dashboard'))
 
 
 @sync_routes.route('/sqlite3/all')
@@ -735,7 +735,7 @@ def sqlite3_sync_all():
         
         if not servers:
             flash('No enabled servers found for sync', 'warning')
-            return redirect(url_for('sync_routes.dashboard'))
+            return redirect(url_for('sync.dashboard'))
         
         sync_manager = SQLite3SyncManager()
         total_synced = 0
@@ -776,7 +776,7 @@ def sqlite3_sync_all():
         logger.error(f"SQLite3 sync all error: {e}")
         flash(f'SQLite3 sync all failed: {str(e)}', 'error')
     
-    return redirect(url_for('sync_routes.dashboard'))
+    return redirect(url_for('sync.dashboard'))
 
 
 @sync_routes.route('/reliability/<int:server_id>')
@@ -798,7 +798,7 @@ def reliability_report(server_id):
     except Exception as e:
         logger.error(f"Reliability report error: {e}")
         flash(f'Failed to generate reliability report: {str(e)}', 'error')
-        return redirect(url_for('sync_routes.dashboard'))
+        return redirect(url_for('sync.dashboard'))
 
 
 @sync_routes.route('/cleanup', methods=['GET', 'POST'])
@@ -822,7 +822,7 @@ def cleanup_sync_data():
             logger.error(f"Cleanup error: {e}")
             flash(f'Cleanup failed: {str(e)}', 'error')
         
-        return redirect(url_for('sync_routes.cleanup_sync_data'))
+        return redirect(url_for('sync.cleanup_sync_data'))
     
     return render_template('sync/cleanup.html')
 
