@@ -563,8 +563,6 @@
                     {% endif %}
                     {% if user_has_role('superadmin') %}
                     <li><a class="dropdown-item py-2" href="{{ url_for('db_admin.database_status') }}"><i class="fas fa-database me-2 text-success"></i>Database Admin</a></li>
-                    <li><a class="dropdown-item py-2" href="{{ url_for('auth.email_settings') }}"><i class="fas fa-envelope me-2 text-info"></i>Email Settings</a></li>
-                    <li><a class="dropdown-item py-2" href="{{ url_for('sync.dashboard') }}"><i class="fas fa-cloud me-2 text-primary"></i>Server Sync</a></li>
                     {% endif %}
                     <li><hr class="dropdown-divider my-1"></li>
                     <li><a class="dropdown-item py-2 text-danger" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
@@ -592,10 +590,7 @@
             <div class="nav-group">
                 <div class="nav-group-title">Super Admin</div>
                 <a class="nav-link {% if request.endpoint == 'auth.manage_users' %}active{% endif %}" href="{{ url_for('auth.manage_users') }}"><i class="fas fa-user-shield"></i><span>Manage Users</span></a>
-                <a class="nav-link {% if request.endpoint == 'auth.notifications_page' %}active{% endif %}" href="{{ url_for('auth.notifications_page') }}"><i class="fas fa-bell"></i><span>Notifications</span></a>
                 <a class="nav-link {% if request.endpoint == 'auth.add_user' %}active{% endif %}" href="{{ url_for('auth.add_user') }}"><i class="fas fa-user-plus"></i><span>Add User</span></a>
-                <a class="nav-link {% if request.endpoint == 'auth.email_settings' %}active{% endif %}" href="{{ url_for('auth.email_settings') }}"><i class="fas fa-envelope"></i><span>Email Settings</span></a>
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('sync') %}active{% endif %}" href="{{ url_for('sync.dashboard') }}"><i class="fas fa-cloud"></i><span>Server Sync</span></a>
             </div>
             {% endif %}
             <div class="nav-group">

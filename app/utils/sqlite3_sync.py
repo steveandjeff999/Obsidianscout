@@ -373,6 +373,26 @@ class SQLite3SyncManager:
                     rows = cursor.fetchall()
                     for row in rows:
                         row_dict = dict(zip(columns, row))
+                        # Enrich join rows with user/role names to allow cross-server mapping by natural key
+                        if table_name == 'user_roles':
+                            try:
+                                # Attempt to resolve username and role name
+                                uid = row_dict.get('user_id')
+                                rid = row_dict.get('role_id')
+                                if uid:
+                                    cursor.execute('SELECT username FROM user WHERE id = ?', (uid,))
+                                    r = cursor.fetchone()
+                                    if r:
+                                        row_dict['user_username'] = r[0]
+                                if rid:
+                                    cursor.execute('SELECT name FROM role WHERE id = ?', (rid,))
+                                    r2 = cursor.fetchone()
+                                    if r2:
+                                        row_dict['role_name'] = r2[0]
+                            except Exception:
+                                # best-effort only
+                                pass
+
                         change = {
                             'table': table_name,
                             'record_id': str(row_dict.get('id', '')),
@@ -408,6 +428,9 @@ class SQLite3SyncManager:
                         
                         logger.debug(f"Applying SQLite3 change: {operation} on {table_name} ID {record_id}")
                         
+                        # Apply dependent tables first: roles and users before join tables
+                        # We'll gather and apply in a deterministic priority order at the database-level
+                        # (actual per-batch ordering handled below)
                         if operation in ['upsert', 'insert', 'update']:
                             self._apply_upsert_sqlite3(cursor, table_name, record_id, data)
                         elif operation == 'soft_delete':
@@ -424,9 +447,48 @@ class SQLite3SyncManager:
                         # Continue with other changes rather than failing entire batch
                         continue
                 
-                # Commit transaction
-                conn.commit()
-                logger.info(f"Successfully applied {applied_count} changes via SQLite3")
+                # If we detect many changes, apply with priority ordering to ensure referential integrity
+                # Group by table and sort by priority: role(1), user(2), others(3), user_roles(4)
+                try:
+                    table_priority = {'role': 1, 'user': 2, 'user_roles': 4}
+                    def prio(c):
+                        return table_priority.get(c.get('table'), 3)
+
+                    ordered_changes = sorted(changes, key=prio)
+
+                    # Re-apply ordered changes in a fresh transaction
+                    conn.rollback()
+                    conn.execute('BEGIN IMMEDIATE')
+                    applied_count = 0
+                    for change in ordered_changes:
+                        try:
+                            table_name = change.get('table')
+                            operation = change.get('operation', 'upsert')
+                            data = change.get('data', {})
+                            record_id = change.get('record_id')
+
+                            if operation in ['upsert', 'insert', 'update']:
+                                self._apply_upsert_sqlite3(cursor, table_name, record_id, data)
+                            elif operation == 'soft_delete':
+                                self._apply_soft_delete_sqlite3(cursor, table_name, record_id)
+                            elif operation == 'delete':
+                                self._apply_hard_delete_sqlite3(cursor, table_name, record_id)
+                            elif operation == 'reactivate':
+                                self._apply_reactivate_sqlite3(cursor, table_name, record_id)
+
+                            applied_count += 1
+                        except Exception as e:
+                            logger.error(f"Error applying ordered change {change}: {e}")
+                            continue
+
+                    conn.commit()
+                    logger.info(f"Successfully applied {applied_count} changes via SQLite3 (ordered)")
+                    applied_count_result = applied_count
+                except Exception as e:
+                    conn.rollback()
+                    logger.error(f"Transaction rollback during ordered change application: {e}")
+                    raise
+                # applied_count_result already set above
                 
             except Exception as e:
                 conn.rollback()
@@ -465,6 +527,40 @@ class SQLite3SyncManager:
         
         query = f"INSERT OR REPLACE INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
         cursor.execute(query, values)
+
+        # Special handling: if this is user_roles and referenced ids don't exist, try to map by natural keys
+        if table_name == 'user_roles':
+            try:
+                uid = filtered_data.get('user_id') or (record_id if 'id' in filtered_data else None)
+                rid = filtered_data.get('role_id')
+                # If user id not present locally, try to find by username
+                if uid:
+                    cursor.execute('SELECT id FROM user WHERE id = ?', (uid,))
+                    if not cursor.fetchone():
+                        uname = filtered_data.get('user_username')
+                        if uname:
+                            cursor.execute('SELECT id FROM user WHERE username = ? LIMIT 1', (uname,))
+                            urow = cursor.fetchone()
+                            if urow:
+                                uid = urow[0]
+                # If role id not present, try lookup by role_name
+                if rid:
+                    cursor.execute('SELECT id FROM role WHERE id = ?', (rid,))
+                    if not cursor.fetchone():
+                        rname = filtered_data.get('role_name')
+                        if rname:
+                            cursor.execute('SELECT id FROM role WHERE name = ? LIMIT 1', (rname,))
+                            rrow = cursor.fetchone()
+                            if rrow:
+                                rid = rrow[0]
+
+                # If we found remapped ids, ensure join row exists
+                if uid and rid:
+                    cursor.execute('SELECT COUNT(*) FROM user_roles WHERE user_id = ? AND role_id = ?', (uid, rid))
+                    if cursor.fetchone()[0] == 0:
+                        cursor.execute('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)', (uid, rid))
+            except Exception as e:
+                logger.warning(f"user_roles post-insert mapping/verification failed: {e}")
     
     def _apply_soft_delete_sqlite3(self, cursor: sqlite3.Cursor, table_name: str, record_id: str):
         """Apply soft delete using SQLite3"""

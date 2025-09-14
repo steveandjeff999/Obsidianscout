@@ -74,5 +74,165 @@
     "text": "Hello superadmin, how can I help you?",
     "timestamp": "2025-09-04T22:26:17.865572",
     "owner": "superadmin"
+  },
+  {
+    "sender": "superadmin",
+    "recipient": "assistant",
+    "text": "hi",
+    "timestamp": "2025-09-07T01:49:41.813928",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "superadmin",
+    "text": "Hello superadmin, how can I help you?",
+    "timestamp": "2025-09-07T01:49:41.817132",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "superadmin",
+    "recipient": "0",
+    "text": "hello",
+    "timestamp": "2025-09-07T01:49:54.724896"
+  },
+  {
+    "sender": "superadmin",
+    "recipient": "assistant",
+    "text": "hi",
+    "timestamp": "2025-09-07T01:50:05.748466",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "superadmin",
+    "text": "Hello superadmin, how can I help you?",
+    "timestamp": "2025-09-07T01:50:05.750131",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "superadmin",
+    "recipient": "assistant",
+    "text": "tell me about team 5454",
+    "timestamp": "2025-09-07T01:50:20.594659",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "superadmin",
+    "text": "Hello superadmin, how can I help you?",
+    "timestamp": "2025-09-07T01:50:20.596928",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "superadmin",
+    "recipient": "assistant",
+    "text": "what is 1 +1",
+    "timestamp": "2025-09-07T02:06:35.933230",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "superadmin",
+    "text": "Team 1 not found in the database.",
+    "timestamp": "2025-09-07T02:06:35.949397",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "superadmin",
+    "recipient": "assistant",
+    "text": "battel of midway",
+    "timestamp": "2025-09-07T02:06:59.077552",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "superadmin",
+    "text": "I don't have enough information to answer that question. Try asking about specific teams, matches, or scouting data. You can also try more specific questions like 'stats for team 5454' or 'best auto scoring teams'.",
+    "timestamp": "2025-09-07T02:08:00.152057",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "superadmin",
+    "recipient": "assistant",
+    "text": "tell me about steve jobs",
+    "timestamp": "2025-09-07T02:08:17.805397",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "superadmin",
+    "text": "I don't have enough information to answer that question. Try asking about specific teams, matches, or scouting data. You can also try more specific questions like 'stats for team 5454' or 'best auto scoring teams'.",
+    "timestamp": "2025-09-07T02:08:17.835753",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "superadmin",
+    "recipient": "assistant",
+    "text": "stratagy tips",
+    "timestamp": "2025-09-07T02:43:58.392407",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "superadmin",
+    "text": "I can help with FRC strategic analysis and competitive insights. Try asking about:\n\n• **Team Performance** - \"Tell me about team [number]\" or \"Stats for team [number]\"\n• **Strategic Questions** - \"What are key factors for winning?\" or \"Alliance selection strategy\"\n• **Technical Analysis** - \"Best autonomous teams\" or \"Robot design strategies\"\n• **Competition Prep** - \"How to prepare for elimination matches\"\n\nFor specific information, mention team numbers, performance metrics, or strategic topics you're interested in.",
+    "timestamp": "2025-09-07T02:44:13.499377",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "superadmin",
+    "recipient": "assistant",
+    "text": "should i scout teams who are genrealy better or worse",
+    "timestamp": "2025-09-07T02:44:44.086598",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "superadmin",
+    "text": "I can help with FRC strategic analysis and competitive insights. Try asking about:\n\n• **Team Performance** - \"Tell me about team [number]\" or \"Stats for team [number]\"\n• **Strategic Questions** - \"What are key factors for winning?\" or \"Alliance selection strategy\"\n• **Technical Analysis** - \"Best autonomous teams\" or \"Robot design strategies\"\n• **Competition Prep** - \"How to prepare for elimination matches\"\n\nFor specific information, mention team numbers, performance metrics, or strategic topics you're interested in.",
+    "timestamp": "2025-09-07T02:44:44.120050",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "superadmin",
+    "recipient": "assistant",
+    "text": "hi",
+    "timestamp": "2025-09-07T02:44:51.785607",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "superadmin",
+    "text": "I'm not sure how to answer that question. Try asking about team stats, match results, or say 'help' for more options.",
+    "timestamp": "2025-09-07T02:44:51.822351",
+    "owner": "superadmin"
+  },
+  {
+    "sender": "0",
+    "recipient": "assistant",
+    "text": "hello tell ma about the end of the world",
+    "timestamp": "2025-09-11T13:32:37.075058",
+    "owner": "0"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "0",
+    "text": "Hello! I'm your FRC strategic assistant, here to help with competitive robotics analysis and strategy.\n\nI can provide insights on:\n• **Team Performance** - Statistics, capabilities, and strategic analysis\n• **Competition Strategy** - Match planning, alliance selection, and tactical approaches  \n• **Robot Design** - Strategic considerations for competitive advantage\n• **Scouting Analysis** - Key metrics and performance indicators\n\nWhat would you like to know about FRC strategy or team performance?",
+    "timestamp": "2025-09-11T13:32:45.075913",
+    "owner": "0"
+  },
+  {
+    "sender": "0",
+    "recipient": "assistant",
+    "text": "will the world blow up",
+    "timestamp": "2025-09-11T13:32:58.870241",
+    "owner": "0"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "0",
+    "text": "I can help with FRC strategic analysis and competitive insights. Try asking about:\n\n• **Team Performance** - \"Tell me about team [number]\" or \"Stats for team [number]\"\n• **Strategic Questions** - \"What are key factors for winning?\" or \"Alliance selection strategy\"\n• **Technical Analysis** - \"Best autonomous teams\" or \"Robot design strategies\"\n• **Competition Prep** - \"How to prepare for elimination matches\"\n\nFor specific information, mention team numbers, performance metrics, or strategic topics you're interested in.",
+    "timestamp": "2025-09-11T13:32:58.937974",
+    "owner": "0"
   }
 ]

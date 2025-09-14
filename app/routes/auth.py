@@ -406,32 +406,6 @@ def inject_notifications():
     return {'site_notifications': current}
 
 
-@bp.route('/notifications', methods=['GET'])
-@role_required('superadmin')
-def notifications_page():
-    notifs = notif_util.load_notifications()
-    return render_template('auth/notifications.html', notifications=notifs, **get_theme_context())
-
-
-@bp.route('/notifications/create', methods=['POST'])
-@role_required('superadmin')
-def create_notification():
-    data = request.form or request.get_json() or {}
-    message = data.get('message') or ''
-    level = data.get('level') or 'info'
-    audience = data.get('audience') or 'site'
-    teams = data.get('teams') or []
-    users = data.get('users') or []
-    if isinstance(teams, str) and teams:
-        teams = [t.strip() for t in teams.split(',') if t.strip()]
-    # Normalize users: allow comma-separated string or list
-    if isinstance(users, str) and users:
-        users = [u.strip() for u in users.split(',') if u.strip()]
-    notif = notif_util.add_notification(message=message, level=level, audience=audience, teams=teams, users=users)
-    flash('Notification created', 'success')
-    return redirect(url_for('auth.notifications_page'))
-
-
 @bp.route('/notifications/suggestions', methods=['GET'])
 @login_required
 def notification_suggestions():
@@ -471,14 +445,6 @@ def notification_suggestions():
     return jsonify({'results': results})
 
 
-@bp.route('/notifications/delete/<notif_id>', methods=['POST'])
-@role_required('superadmin')
-def delete_notification(notif_id):
-    notif_util.remove_notification(notif_id)
-    flash('Notification removed', 'info')
-    return redirect(url_for('auth.notifications_page'))
-
-
 @bp.route('/notifications/dismiss', methods=['POST'])
 @login_required
 def dismiss_notification():
@@ -497,51 +463,6 @@ def get_dismissed_notifications():
     dismissed = notif_util.get_dismissed_for_user(current_user.username)
     return jsonify({'dismissed': dismissed})
 
-
-@bp.route('/notifications/send-email/<notif_id>', methods=['POST'])
-@role_required('superadmin')
-def send_notification_as_email(notif_id):
-    notifs = notif_util.load_notifications()
-    notif = next((n for n in notifs if str(n.get('id')) == str(notif_id)), None)
-    if not notif:
-        flash('Notification not found', 'error')
-        return redirect(url_for('auth.notifications_page'))
-
-    # Resolve recipients based on audience
-    recipients = []
-    if notif.get('audience') == 'site':
-        # all users with emails
-        recipients = [u.email for u in User.query.filter(User.email != None).all() if u.email]
-    elif notif.get('audience') == 'teams':
-        teams = notif.get('teams') or []
-        for t in teams:
-            try:
-                tn = int(t)
-            except Exception:
-                continue
-            recipients += [u.email for u in User.query.filter_by(scouting_team_number=tn).filter(User.email != None).all() if u.email]
-    elif notif.get('audience') == 'users':
-        users = notif.get('users') or []
-        for uname in users:
-            u = User.query.filter_by(username=uname).first()
-            if u and u.email:
-                recipients.append(u.email)
-
-    # Deduplicate and limit (safety)
-    recipients = list({r for r in recipients if r})
-    if not recipients:
-        flash('No recipients with email addresses found', 'warning')
-        return redirect(url_for('auth.notifications_page'))
-
-    cfg = emailer_util.load_email_config()
-    subject = f"[{notif.get('level','info').upper()}] Site Notification"
-    body = notif.get('message', '')
-    ok, msg = emailer_util.send_email(to=recipients, subject=subject, body=body)
-    if ok:
-        flash('Notification sent as email', 'success')
-    else:
-        flash('Failed to send email: ' + str(msg), 'error')
-    return redirect(url_for('auth.notifications_page'))
 
 @bp.route('/users')
 @admin_required
@@ -1045,80 +966,6 @@ def admin_settings():
     return render_template('auth/admin_settings.html', 
                           account_creation_locked=account_creation_locked,
                           **get_theme_context())
-
-
-@bp.route('/admin/email-settings', methods=['GET', 'POST'])
-@role_required('superadmin')
-def email_settings():
-    cfg = emailer_util.load_email_config()
-    if request.method == 'POST':
-        # Save email config
-        cfg['host'] = request.form.get('host')
-        cfg['port'] = request.form.get('port')
-        cfg['username'] = request.form.get('username')
-        cfg['password'] = request.form.get('password')
-        cfg['use_tls'] = 'use_tls' in request.form
-        cfg['use_ssl'] = 'use_ssl' in request.form
-        df = request.form.get('default_from')
-        cfg['default_from'] = df if df and df.strip() else None
-
-        # If the user requested validation only, perform validation and show result without saving
-        validate_only = 'validate_only' in request.form
-        ok, valmsg = emailer_util.validate_smtp(cfg)
-        if validate_only:
-            if ok:
-                flash('SMTP validation succeeded', 'success')
-            else:
-                flash('SMTP validation failed: ' + str(valmsg), 'error')
-            return redirect(url_for('auth.email_settings'))
-
-        # Save email config to disk
-        emailer_util.save_email_config(cfg)
-        # Apply to current app config so Flask-Mail picks it up immediately
-        try:
-            current_app.config['MAIL_SERVER'] = cfg.get('host')
-            try:
-                current_app.config['MAIL_PORT'] = int(cfg.get('port') or 0)
-            except Exception:
-                current_app.config['MAIL_PORT'] = cfg.get('port')
-            current_app.config['MAIL_USERNAME'] = cfg.get('username')
-            current_app.config['MAIL_PASSWORD'] = cfg.get('password')
-            current_app.config['MAIL_USE_TLS'] = bool(cfg.get('use_tls'))
-            current_app.config['MAIL_USE_SSL'] = bool(cfg.get('use_ssl'))
-            current_app.config['MAIL_DEFAULT_SENDER'] = cfg.get('default_from') or cfg.get('username')
-            # If a Mail instance was previously created, remove it so it will be recreated with new settings
-            if hasattr(current_app, 'extensions') and 'flask-mail' in current_app.extensions:
-                try:
-                    del current_app.extensions['flask-mail']
-                except Exception:
-                    pass
-        except Exception:
-            # Non-fatal; settings still saved to file
-            pass
-        if ok:
-            flash('Email configuration saved and validated', 'success')
-        else:
-            # Save succeeded but validation failed; surface the error so admin can take action
-            flash('Email configuration saved but validation failed: ' + str(valmsg), 'warning')
-        return redirect(url_for('auth.email_settings'))
-    return render_template('auth/email_settings.html', config=cfg, **get_theme_context())
-
-
-@bp.route('/admin/email-test', methods=['POST'])
-@role_required('superadmin')
-def email_test():
-    to = request.form.get('to')
-    subject = request.form.get('subject') or 'Test Email from ObsidianScout'
-    body = request.form.get('body') or 'This is a test email.'
-    # Pass default_from as sender if configured
-    cfg = emailer_util.load_email_config()
-    from_addr = cfg.get('default_from') or cfg.get('username')
-    ok, msg = emailer_util.send_email(to=to, subject=subject, body=body, from_addr=from_addr)
-    if ok:
-        flash('Test email sent', 'success')
-    else:
-        flash('Failed to send email: ' + str(msg), 'error')
-    return redirect(url_for('auth.email_settings'))
 
 
 @bp.route('/admin/account-lock-status', methods=['GET'])

@@ -147,12 +147,13 @@ if __name__ == '__main__':
                 print("   Username: superadmin")
                 print("   Password: password")
                 print("   Team Number: 0")
-                print("   Must Change Password: True")
+                print("   Must Change Password: False")
             else:
                 print("SuperAdmin account already exists.")
         except Exception as e:
             print(f"Error creating superadmin account: {e}")
             db.session.rollback()
+        
     
     # Start periodic alliance sync thread
     def periodic_sync_worker():
@@ -168,50 +169,7 @@ if __name__ == '__main__':
                 print(f"Error in periodic sync worker: {str(e)}")
                 time.sleep(30)  # Continue after error
 
-    # Start periodic multi-server sync thread
-    def multi_server_sync_worker():
-        """Background thread for periodic multi-server synchronization"""
-        while True:
-            try:
-                time.sleep(60)  # Wait 1 minute for multi-server sync
-                print("Starting periodic multi-server sync...")
-                
-                # Import here to avoid circular imports
-                with app.app_context():
-                    try:
-                        from app.utils.simplified_sync import simplified_sync_manager
-                        from app.models import SyncServer
-                        
-                        # Get all enabled sync servers
-                        servers = SyncServer.query.filter_by(sync_enabled=True).all()
-                        if servers:
-                            print(f"Auto-syncing with {len(servers)} servers...")
-                            successful_syncs = 0
-                            
-                            for server in servers:
-                                try:
-                                    result = simplified_sync_manager.perform_bidirectional_sync(server.id)
-                                    if result['success']:
-                                        successful_syncs += 1
-                                        print(f"✅ Auto-sync successful with {server.name}")
-                                    else:
-                                        print(f"❌ Auto-sync failed with {server.name}")
-                                except Exception as e:
-                                    print(f"❌ Auto-sync error with {server.name}: {str(e)}")
-                            
-                            print(f"Auto-sync completed: {successful_syncs}/{len(servers)} servers synced")
-                        else:
-                            # Only print this occasionally to avoid spam
-                            import random
-                            if random.randint(1, 10) == 1:  # Print 10% of the time
-                                print("No sync servers configured for auto-sync")
-                        
-                    except Exception as e:
-                        print(f"Error in multi-server sync: {str(e)}")
-                        
-            except Exception as e:
-                print(f"Error in multi-server sync worker: {str(e)}")
-                time.sleep(60)  # Continue after error
+    # Multi-server sync functionality removed - keeping only normal user features
 
     # Start periodic API data sync thread
     def api_data_sync_worker():
@@ -355,10 +313,6 @@ if __name__ == '__main__':
     alliance_sync_thread.start()
     print("Started periodic alliance sync thread (30-second intervals)")
     
-    multi_server_sync_thread = threading.Thread(target=multi_server_sync_worker, daemon=True)
-    multi_server_sync_thread.start()
-    print("Started periodic multi-server sync thread (1-minute intervals)")
-    
     api_sync_thread = threading.Thread(target=api_data_sync_worker, daemon=True)
     api_sync_thread.start()
     print("Started periodic API data sync thread (3-minute intervals)")
@@ -367,39 +321,9 @@ if __name__ == '__main__':
     security_maintenance_thread.start()
     print("Started security maintenance thread (1-hour intervals)")
     
-    # Multi-server sync services DISABLED - replaced with Universal Sync System
-    # The Universal Sync System is automatically started in app/__init__.py
-    # try:
-    #     from app.utils.multi_server_sync import sync_manager
-    #     sync_manager.start_sync_services()
-    #     print("Started multi-server sync services")
-    # except Exception as e:
-    #     print(f"Warning: Could not start sync services: {e}")
+    # Multi-server sync services removed - keeping only normal user functionality
     
-    # Initialize Universal Sync System
-    try:
-        from universal_sync_system import UniversalSyncSystem
-        universal_sync = UniversalSyncSystem()
-        with app.app_context():
-            universal_sync.initialize(app)
-            universal_sync.start_workers()
-        print("✅ Universal Sync System initialized")
-        app.universal_sync = universal_sync
-    except Exception as e:
-        print(f"Warning: Could not start Universal Sync System: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    # Start real-time file sync
-    try:
-        from app.utils.real_time_file_sync import setup_real_time_file_sync
-        with app.app_context():
-            setup_real_time_file_sync(app)
-        print("✅ Real-time file synchronization started successfully")
-    except Exception as e:
-        print(f"Warning: Could not start real-time file sync: {e}")
-        import traceback
-        traceback.print_exc()
+    # Real-time file synchronization removed - keeping only normal user features
     
     # Configure SocketIO based on server choice
     if USE_WAITRESS:
