@@ -447,10 +447,34 @@
                                     <div class="row">
                                         <div class="col-12">
                                             <strong class="small">Teams:</strong>
-                                            <div class="small text-muted" style="max-height: 100px; overflow-y: auto;">
-                                                {% for team_num in selected_team_numbers %}
-                                                Team {{ team_num }}{% if not loop.last %}, {% endif %}
-                                                {% endfor %}
+                                            <div class="small text-muted">
+                                                {% set total_selected = selected_team_numbers|length %}
+                                                {% if total_selected <= 10 %}
+                                                    <div style="max-height: 100px; overflow-y: auto;">
+                                                        {% for team_num in selected_team_numbers %}
+                                                            Team {{ team_num }}{% if not loop.last %}, {% endif %}
+                                                        {% endfor %}
+                                                    </div>
+                                                {% else %}
+                                                    {# Show first 10 inline and a toggle to view the full list #}
+                                                    <div>
+                                                        {% for team_num in selected_team_numbers[:10] %}
+                                                            Team {{ team_num }}{% if not loop.last %}, {% endif %}
+                                                        {% endfor %}
+                                                        <span class="text-muted">... +{{ total_selected - 10 }} more</span>
+                                                        <button class="btn btn-sm btn-outline-secondary ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#fullSelectedTeams" aria-expanded="false" aria-controls="fullSelectedTeams">
+                                                            View all
+                                                        </button>
+                                                    </div>
+
+                                                    <div class="collapse mt-2" id="fullSelectedTeams">
+                                                        <div class="card card-body p-2" style="max-height: 200px; overflow-y: auto;">
+                                                            {% for team_num in selected_team_numbers %}
+                                                                Team {{ team_num }}{% if not loop.last %}, {% endif %}
+                                                            {% endfor %}
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
                                             </div>
                                         </div>
                                         <div class="col-12 mt-2">
@@ -509,7 +533,8 @@
                 allowClear: true,
                 closeOnSelect: false,
                 width: '100%',
-                dropdownParent: $('#team-selection-form').parent(), // Ensure dropdown is contained within the form's parent
+                // Append dropdown to body to avoid clipping by parent containers (more reliable on mobile)
+                dropdownParent: $(document.body),
                 dropdownCssClass: 'select2-dropdown-large', // Custom class for styling the dropdown
                 selectionCssClass: 'select2-selection-large', // Custom class for the selection area
                 templateResult: function(team) {
@@ -551,14 +576,22 @@
             width: '100%'
         });
         
-        // Initialize Select2 for graph types selection
-        $('#graph_types').select2({
-            theme: 'bootstrap-5',
-            placeholder: 'Select graph types...',
-            allowClear: true,
-            closeOnSelect: false,
-            width: '100%'
-        });
+        // Initialize Select2 for graph types selection (use dropdownParent to avoid clipping on mobile)
+        function initializeGraphTypes() {
+            $('#graph_types').select2({
+                theme: 'bootstrap-5',
+                placeholder: 'Select graph types...',
+                allowClear: true,
+                closeOnSelect: false,
+                width: '100%',
+                // Ensure dropdown is appended to a container that won't clip it on small screens
+                // Append dropdown to body to avoid clipping by parent containers (more reliable on mobile)
+                dropdownParent: $(document.body),
+                dropdownCssClass: 'select2-dropdown-large',
+                selectionCssClass: 'select2-selection-large'
+            });
+        }
+        initializeGraphTypes();
         
         // Initialize team select
         initializeTeamSelect();
@@ -788,6 +821,11 @@
             if ($('#teams').hasClass('select2-hidden-accessible')) {
                 $('#teams').select2('destroy');
                 initializeTeamSelect();
+            }
+
+            if ($('#graph_types').hasClass('select2-hidden-accessible')) {
+                $('#graph_types').select2('destroy');
+                initializeGraphTypes();
             }
         });
         

@@ -566,7 +566,13 @@ class AutomaticSQLite3Sync:
                     cursor = conn.cursor()
                     conn.execute('BEGIN IMMEDIATE')
                     
-                    for change in db_changes:
+                    # Ensure dependent tables are applied in safe order: roles/users first, join tables afterwards
+                    table_priority = {'role': 1, 'user': 2, 'user_roles': 4}
+                    # default priority 3 for everything else
+                    def priority(ch):
+                        return table_priority.get(ch.get('table'), 3)
+
+                    for change in sorted(db_changes, key=priority):
                         try:
                             table_name = change.get('table', '')
                             record_id = change.get('record_id', '')

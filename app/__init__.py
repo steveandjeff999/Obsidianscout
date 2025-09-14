@@ -372,24 +372,10 @@ def create_app(test_config=None):
     # from app.utils.multi_server_sync import sync_manager
     # sync_manager.init_app(app)
     
-    # Initialize Universal Sync System (replaces fast sync - syncs ALL data and files)
-    from universal_sync_system import initialize_universal_sync
-    with app.app_context():
-        try:
-            initialize_universal_sync(app)
-            print("🌐 Universal Sync System activated - syncs ALL data and files!")
-        except Exception as e:
-            print(f"⚠️ Universal sync initialization failed: {e}")
-            # Fallback to fast sync if universal sync fails
-            try:
-                from fast_sync_system import initialize_fast_sync
-                initialize_fast_sync(app)
-                print("🚀 Fast Sync System activated (fallback)")
-            except Exception as e2:
-                print(f"⚠️ Fast sync fallback also failed: {e2}")
+    # Universal sync system removed - keeping only normal user features
 
     # Import and register blueprints
-    from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, assistant, integrity, pit_scouting, themes, scouting_alliances, setup, search, db_admin, sync_api, sync_management, update_monitor
+    from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, assistant, integrity, pit_scouting, themes, scouting_alliances, setup, search, db_admin, sync_api, update_monitor
     
     # Register template filters
     from app.utils import template_filters
@@ -412,18 +398,13 @@ def create_app(test_config=None):
     app.register_blueprint(search.bp)
     app.register_blueprint(db_admin.db_admin_bp)
     
-    # Register sync routes and API
+    # Register sync API (keeping normal sync API, removing superadmin management)
     app.register_blueprint(sync_api.sync_api)
-    app.register_blueprint(sync_management.sync_routes)
     app.register_blueprint(update_monitor.update_monitor_bp)
     
-    # Register real-time replication API
+    # Register real-time API (keeping normal realtime functionality, removing superadmin management)
     from app.routes import realtime_api
     app.register_blueprint(realtime_api.realtime_api)
-    
-    # Register real-time replication management routes
-    from app.routes import realtime_management
-    app.register_blueprint(realtime_management.realtime_routes)
     
     # Register API test blueprint (admin only)
     from app.routes import api_test
