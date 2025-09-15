@@ -57,8 +57,9 @@ def index():
     # Calculate team metrics for sorting
     team_metrics = {}
     for team in all_teams:
-        # Get metrics for the team - function only takes team_id
-        metrics = calculate_team_metrics(team.id)
+        # Get metrics for the team - function returns {team_number, match_count, metrics}
+        analytics_result = calculate_team_metrics(team.id)
+        metrics = analytics_result.get('metrics', {})
         team_metrics[team.team_number] = metrics
     
     # Create team-event mapping for client-side filtering
@@ -139,6 +140,15 @@ def index():
             # Get key metrics from game config (needed for both branches)
             key_metrics = game_config.get('data_analysis', {}).get('key_metrics', [])
             
+            # Add dynamic period-based metrics if key_metrics is empty or missing
+            if not key_metrics:
+                key_metrics = [
+                    {'id': 'auto_points', 'name': 'Auto Points', 'formula': 'auto_points', 'auto_generated': True},
+                    {'id': 'teleop_points', 'name': 'Teleop Points', 'formula': 'teleop_points', 'auto_generated': True},
+                    {'id': 'endgame_points', 'name': 'Endgame Points', 'formula': 'endgame_points', 'auto_generated': True},
+                    {'id': 'total_points', 'name': 'Total Points', 'formula': 'total_points', 'auto_generated': True}
+                ]
+            
             # If we have scouting data, process it
             if scouting_data:
                 # Calculate metrics for each team's matches
@@ -157,8 +167,25 @@ def index():
                         if ('formula' in metric or metric.get('auto_generated', False)) and metric['id'] not in excluded_metrics:
                             try:
                                 metric_id = metric['id']
-                                formula = metric.get('formula', metric_id)  # Use metric_id for auto_generated
-                                value = data.calculate_metric(formula)
+                                
+                                # Handle dynamic period-based metrics
+                                if metric.get('auto_generated', False) and metric_id in ['auto_points', 'teleop_points', 'endgame_points', 'total_points']:
+                                    if metric_id == 'auto_points':
+                                        value = data._calculate_auto_points_dynamic(data.data, game_config)
+                                    elif metric_id == 'teleop_points':
+                                        value = data._calculate_teleop_points_dynamic(data.data, game_config)
+                                    elif metric_id == 'endgame_points':
+                                        value = data._calculate_endgame_points_dynamic(data.data, game_config)
+                                    elif metric_id == 'total_points':
+                                        auto_pts = data._calculate_auto_points_dynamic(data.data, game_config)
+                                        teleop_pts = data._calculate_teleop_points_dynamic(data.data, game_config)
+                                        endgame_pts = data._calculate_endgame_points_dynamic(data.data, game_config)
+                                        value = auto_pts + teleop_pts + endgame_pts
+                                else:
+                                    # Handle legacy metrics with formulas
+                                    formula = metric.get('formula', metric_id)  # Use metric_id for auto_generated
+                                    value = data.calculate_metric(formula)
+                                    
                                 match_metrics[metric_id] = {
                                     'match_number': match.match_number,
                                     'metric_id': metric_id,
@@ -166,6 +193,7 @@ def index():
                                     'value': value
                                 }
                             except Exception as e:
+                                print(f"Error calculating metric {metric_id}: {e}")
                                 match_metrics[metric_id] = {
                                     'match_number': match.match_number,
                                     'metric_id': metric_id,
@@ -2266,7 +2294,8 @@ def graphs_data():
     # Calculate team metrics
     team_metrics = {}
     for team in all_teams:
-        metrics = calculate_team_metrics(team.id)
+        analytics_result = calculate_team_metrics(team.id)
+        metrics = analytics_result.get('metrics', {})
         team_metrics[team.team_number] = metrics
     
     # Prepare teams data for JSON
@@ -2314,7 +2343,13 @@ def side_by_side():
         else:
             teams = Team.query.order_by(Team.team_number).all()
         
-        metrics = game_config['data_analysis']['key_metrics']
+        # Use legacy key_metrics if available, otherwise use dynamic metrics
+        metrics = game_config.get('data_analysis', {}).get('key_metrics', [
+            {'id': 'auto_points', 'name': 'Auto Points'},
+            {'id': 'teleop_points', 'name': 'Teleop Points'},
+            {'id': 'endgame_points', 'name': 'Endgame Points'},
+            {'id': 'total_points', 'name': 'Total Points'}
+        ])
         return render_template('graphs/side_by_side_form.html', teams=teams, metrics=metrics, **get_theme_context())
     
     # Get game configuration
@@ -2323,82 +2358,109 @@ def side_by_side():
     # Get teams
     teams = Team.query.filter(Team.team_number.in_(team_numbers)).all()
     
+    # Define available metrics (use legacy if available, otherwise use dynamic)
+    key_metrics_from_config = game_config.get('data_analysis', {}).get('key_metrics', [])
+    
+    available_metrics = key_metrics_from_config if key_metrics_from_config else [
+        {'id': 'auto_points', 'name': 'Auto Points'},
+        {'id': 'teleop_points', 'name': 'Teleop Points'},
+        {'id': 'endgame_points', 'name': 'Endgame Points'},
+        {'id': 'total_points', 'name': 'Total Points'}
+    ]
+    
     # Calculate detailed metrics for each team
     teams_data = []
     
     for team in teams:
-        scouting_data = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=current_user.scouting_team_number).all()
+        # Use the updated calculate_team_metrics function which handles dynamic metrics
+        team_analytics = calculate_team_metrics(team.id)
+        team_metrics = team_analytics.get('metrics', {})
+        
+        # Get individual match data for match-by-match display
+        from app.utils.team_isolation import filter_scouting_data_by_scouting_team, get_current_scouting_team_number
+        from app.utils.config_manager import get_current_game_config
+        
+        # Get scouting data for this team (same logic as in calculate_team_metrics)
+        scouting_team_number = get_current_scouting_team_number()
+        if scouting_team_number is not None:
+            scouting_data = filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team.id).all()
+        else:
+            scouting_data = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=None).all()
         
         team_info = {
             'team': team,
             'metrics': {},
-            'match_count': len(scouting_data),
-            'has_data': len(scouting_data) > 0
+            'match_count': team_analytics.get('match_count', 0),
+            'has_data': bool(team_analytics.get('match_count', 0) > 0)
         }
         
-        if scouting_data:
-            # Calculate each metric
-            for metric in game_config['data_analysis']['key_metrics']:
-                metric_id = metric['id']
-                match_values = []
+        # Process metrics to match the expected template structure
+        for metric in available_metrics:
+            metric_id = metric['id']
+            metric_data = team_metrics.get(metric_id, {})
+            
+            # Extract values from the metric data structure
+            if isinstance(metric_data, dict):
+                metric_value = metric_data.get('avg', 0)
+                min_value = metric_data.get('min', 0)
+                max_value = metric_data.get('max', 0)
+            else:
+                # Fallback for simple numeric values
+                metric_value = metric_data if isinstance(metric_data, (int, float)) else 0
+                min_value = metric_value
+                max_value = metric_value
+            
+            # Calculate individual match values for this metric
+            match_values = []
+            game_config = get_current_game_config()
+            
+            for data in scouting_data:
+                match_number = data.match.match_number if data.match else f"#{data.id}"
                 
-                for data in scouting_data:
-                    try:
-                        value = data.calculate_metric(metric_id)
-                        match_values.append({
-                            'match': data.match.match_number,
-                            'value': value
-                        })
-                    except Exception as e:
-                        print(f"Error calculating metric {metric_id} for team {team.team_number}: {e}")
-                
-                if match_values:
-                    values = [x['value'] for x in match_values]
-                    
-                    # Calculate aggregate based on metric configuration
-                    if metric.get('aggregate') == 'average':
-                        aggregate_value = sum(values) / len(values)
-                    elif metric.get('aggregate') == 'percentage':
-                        aggregate_value = (sum(values) / len(values)) * 100
-                    else:
-                        aggregate_value = sum(values)
-                    
-                    team_info['metrics'][metric_id] = {
-                        'config': metric,
-                        'aggregate': aggregate_value,
-                        'match_data': values,
-                        'match_values': match_values,
-                        'min': min(values),
-                        'max': max(values),
-                        'avg': sum(values) / len(values)
-                    }
+                # Calculate metric value for this match based on metric type
+                if metric_id == 'auto_points':
+                    match_value = data._calculate_auto_points_dynamic(data.data, game_config)
+                elif metric_id == 'teleop_points':
+                    match_value = data._calculate_teleop_points_dynamic(data.data, game_config)
+                elif metric_id == 'endgame_points':
+                    match_value = data._calculate_endgame_points_dynamic(data.data, game_config)
+                elif metric_id == 'total_points':
+                    auto_pts = data._calculate_auto_points_dynamic(data.data, game_config)
+                    teleop_pts = data._calculate_teleop_points_dynamic(data.data, game_config)
+                    endgame_pts = data._calculate_endgame_points_dynamic(data.data, game_config)
+                    match_value = auto_pts + teleop_pts + endgame_pts
                 else:
-                    team_info['metrics'][metric_id] = {
-                        'config': metric,
-                        'aggregate': 0,
-                        'match_data': [],
-                        'match_values': [],
-                        'min': 0,
-                        'max': 0,
-                        'avg': 0
-                    }
-        else:
-            # No data for this team
-            for metric in game_config['data_analysis']['key_metrics']:
-                team_info['metrics'][metric['id']] = {
-                    'config': metric,
-                    'aggregate': 0,
-                    'match_data': [],
-                    'match_values': [],
-                    'min': 0,
-                    'max': 0,
-                    'avg': 0
-                }
+                    # For any legacy metrics, try to get value from data JSON
+                    match_value = data.data.get(metric_id, 0)
+                
+                match_values.append({
+                    'match': match_number,
+                    'value': match_value
+                })
+            
+            # Create structure expected by template
+            team_info['metrics'][metric_id] = {
+                'config': metric,
+                'aggregate': metric_value,
+                'match_data': scouting_data,  # Keep raw scouting data
+                'match_values': match_values,  # Individual match values
+                'min': min_value,
+                'max': max_value,
+                'avg': metric_value
+            }
         
         teams_data.append(team_info)
     
+    # Debug: Log match values for troubleshooting
+    for team_data in teams_data:
+        print(f"DEBUG: Team {team_data['team'].team_number} match values:")
+        for metric_id, metric_info in team_data['metrics'].items():
+            match_values = metric_info.get('match_values', [])
+            print(f"  {metric_id}: {len(match_values)} matches - {match_values}")
+    
     return render_template('graphs/side_by_side.html',
                          teams_data=teams_data,
+                         available_metrics=available_metrics,
                          game_config=game_config,
                          **get_theme_context())
 

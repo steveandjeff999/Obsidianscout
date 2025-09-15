@@ -182,7 +182,8 @@ def get_recommendations(event_id):
         for team in all_teams:
             if team.id not in picked_teams:
                 try:
-                    metrics = calculate_team_metrics(team.id)
+                    analytics_result = calculate_team_metrics(team.id)
+                    metrics = analytics_result.get('metrics', {})
                     if metrics:
                         team_data = {
                             'team': team,

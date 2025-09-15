@@ -6,7 +6,7 @@ from app.utils.config_manager import get_current_game_config
 from app.utils.team_isolation import filter_scouting_data_by_scouting_team, get_current_scouting_team_number
 
 def calculate_team_metrics(team_id):
-    """Calculate key performance metrics for a team based on their scouting data"""
+    """Calculate key performance metrics for a team based on their scouting data using dynamic period calculations"""
     # Get the team object to log the team number
     team = Team.query.get(team_id)
     team_number = team.team_number if team else team_id
@@ -20,7 +20,11 @@ def calculate_team_metrics(team_id):
     
     if not scouting_data:
         print(f"    No scouting data found for team {team_number} (ID: {team_id})")
-        return {}
+        return {
+            'team_number': team_number,
+            'match_count': 0,
+            'metrics': {}
+        }
     else:
         print(f"    Found {len(scouting_data)} scouting records for team {team_number}")
         
@@ -30,151 +34,108 @@ def calculate_team_metrics(team_id):
     # Get game configuration
     game_config = get_current_game_config()
     
-    # Find metric IDs from game config
-    component_metric_ids = []
-    total_metric_id = None
-    metric_info = {}
+    # Calculate dynamic period-based metrics
+    auto_values = []
+    teleop_values = []
+    endgame_values = []
+    total_values = []
     
-    # Identify metrics from game config
-    if 'data_analysis' in game_config and 'key_metrics' in game_config['data_analysis']:
-        for metric in game_config['data_analysis']['key_metrics']:
-            metric_id = metric.get('id')
-            metric_info[metric_id] = metric
-            
-            # Check if this is a component metric or the total metric
-            if metric.get('is_total_component'):
-                component_metric_ids.append(metric_id)
-            elif 'total' in metric_id.lower() or 'tot' == metric_id.lower():
-                total_metric_id = metric_id
-    
-    # If no component metrics defined, use default IDs
-    if not component_metric_ids:
-        component_metric_ids = ["apt", "tpt", "ept"]
-        print(f"    WARNING: No component metrics defined in config, using defaults: {component_metric_ids}")
-    else:
-        print(f"    Using component metrics from config: {component_metric_ids}")
-    
-    # If no total metric defined, use default ID
-    if not total_metric_id:
-        total_metric_id = "tot"
-        print(f"    WARNING: No total metric defined in config, using default: {total_metric_id}")
-    else:
-        print(f"    Using total metric from config: {total_metric_id}")
-    
-    # Prepare metric collection arrays
-    metric_values = {metric_id: [] for metric_id in component_metric_ids}
-    metric_values[total_metric_id] = []
-    
-    # Track raw endgame positions for capability calculation
-    endgame_positions = []
-    
-    # Calculate individual match metrics for the team
-    print(f"    Calculating metrics across {len(scouting_data)} matches:")
+    print(f"    Calculating dynamic metrics across {len(scouting_data)} matches:")
     for idx, data in enumerate(scouting_data):
         match_info = f"Match {data.match.match_number}" if data.match else f"Record #{idx+1}"
         
-        # Calculate point values for this match
-        for metric_id in component_metric_ids:
-            metric_value = data.calculate_metric(metric_id)
-            metric_values[metric_id].append(metric_value)
-            
-        # Calculate total points
-        total_pts = data.calculate_metric(total_metric_id)
-        metric_values[total_metric_id].append(total_pts)
+        # Calculate points for each period using dynamic methods
+        auto_pts = data._calculate_auto_points_dynamic(data.data, game_config)
+        teleop_pts = data._calculate_teleop_points_dynamic(data.data, game_config)
+        endgame_pts = data._calculate_endgame_points_dynamic(data.data, game_config)
+        total_pts = auto_pts + teleop_pts + endgame_pts
         
-        print(f"      {match_info}: {total_metric_id}={total_pts}, components={[f'{id}={metric_values[id][-1]}' for id in component_metric_ids]}")
+        auto_values.append(auto_pts)
+        teleop_values.append(teleop_pts)
+        endgame_values.append(endgame_pts)
+        total_values.append(total_pts)
         
-        # Capture raw endgame position data - find endgame position field ID dynamically
-        endgame_field_id = None
-        for element in game_config.get('endgame_period', {}).get('scoring_elements', []):
-            if element.get('type') == 'select' and 'position' in element.get('name', '').lower():
-                endgame_field_id = element.get('id')
-                break
-        
-        if endgame_field_id and endgame_field_id in data.data:
-            endgame_positions.append(data.data[endgame_field_id])
+        print(f"      {match_info}: total={total_pts} (auto={auto_pts}, teleop={teleop_pts}, endgame={endgame_pts})")
     
-    # Calculate average point values
-    for metric_id, values in metric_values.items():
+    # Calculate statistics for each metric
+    def calculate_stats(values, metric_name):
         if values:
-            # Store with both the dynamic ID and a standardized key for backward compatibility
-            metrics[metric_id] = statistics.mean(values)
-            # Also store a measure of variability for simulation
-            try:
-                metrics[f"{metric_id}_std"] = statistics.stdev(values) if len(values) > 1 else 0.0
-            except Exception:
-                metrics[f"{metric_id}_std"] = 0.0
-            
-            # Create standardized keys for the frontend
-            if metric_id in component_metric_ids:
-                # Map component metric IDs to standard keys
-                if metric_id == component_metric_ids[0]:
-                    metrics['auto_points'] = metrics[metric_id]
-                elif metric_id == component_metric_ids[1] if len(component_metric_ids) > 1 else None:
-                    metrics['teleop_points'] = metrics[metric_id]
-                elif metric_id == component_metric_ids[2] if len(component_metric_ids) > 2 else None:
-                    metrics['endgame_points'] = metrics[metric_id]
-            
-            # Map total metric ID to standard key
-            if metric_id == total_metric_id:
-                metrics['total_points'] = metrics[metric_id]
-                # Map std as well
-                metrics['total_points_std'] = metrics.get(f"{metric_id}_std", 0.0)
+            avg = statistics.mean(values)
+            std = statistics.stdev(values) if len(values) > 1 else 0.0
+            metrics[metric_name] = avg
+            metrics[f"{metric_name}_std"] = std
+            return avg, std
+        return 0, 0
     
-    # Custom calculation for endgame capability - find highest position the team has reached
+    # Store dynamic period metrics
+    auto_avg, auto_std = calculate_stats(auto_values, 'auto_points')
+    teleop_avg, teleop_std = calculate_stats(teleop_values, 'teleop_points')
+    endgame_avg, endgame_std = calculate_stats(endgame_values, 'endgame_points')
+    total_avg, total_std = calculate_stats(total_values, 'total_points')
+    
+    print(f"    Final averages: auto={auto_avg:.1f}, teleop={teleop_avg:.1f}, endgame={endgame_avg:.1f}, total={total_avg:.1f}")
+    
+    # Calculate endgame capability - find highest position this team has demonstrated
+    endgame_positions = []
+    endgame_field_id = None
+    
+    # Find endgame position field dynamically from config
+    for element in game_config.get('endgame_period', {}).get('scoring_elements', []):
+        if element.get('type') == 'select' and 'position' in element.get('name', '').lower():
+            endgame_field_id = element.get('id')
+            break
+    
+    if endgame_field_id:
+        for data in scouting_data:
+            if endgame_field_id in data.data:
+                endgame_positions.append(data.data[endgame_field_id])
+    
+    # Calculate endgame capability from positions
     if endgame_positions:
-        # Find endgame position element in config to get point values - use dynamic field ID
         position_points = {}
-        endgame_element = None
         for element in game_config.get('endgame_period', {}).get('scoring_elements', []):
             if element.get('type') == 'select' and 'position' in element.get('name', '').lower():
                 position_points = element.get('points', {})
-                endgame_element = element
                 break
         
-        # Set default values
         highest_position = "None"
         highest_points = 0
         
-        # Find the highest value position this team has demonstrated
         if position_points:
             for position in endgame_positions:
                 if position in position_points and position_points[position] > highest_points:
                     highest_points = position_points[position]
                     highest_position = position
-            
-        # Store both the position name and the point value
+        
         metrics['endgame_capability'] = highest_points
         metrics['endgame_position_name'] = highest_position
     
-    # Calculate other key metrics defined in the game configuration
+    # Add backwards compatibility - if key_metrics exist in config, calculate them too
     if 'data_analysis' in game_config and 'key_metrics' in game_config['data_analysis']:
-        for metric_config in game_config['data_analysis']['key_metrics']:
-            metric_id = metric_config.get('id')
-            formula = metric_config.get('formula')
+        print("    Also calculating legacy key_metrics from config for backwards compatibility")
+        for metric in game_config['data_analysis']['key_metrics']:
+            metric_id = metric.get('id')
+            metric_formula = metric.get('formula')
             
-            # Skip metrics we've already calculated
-            if metric_id in metrics:
-                continue
-                
-            # Skip if no formula defined
-            if not formula:
+            # Skip if we already calculated this metric dynamically
+            if metric_id in ['auto_points', 'teleop_points', 'endgame_points', 'total_points']:
                 continue
             
-            # Calculate this metric for each scouting record
-            metric_values = []
+            # Calculate legacy metric
+            values = []
             for data in scouting_data:
-                try:
-                    value = data.calculate_metric(formula)
-                    metric_values.append(value)
-                except Exception as e:
-                    print(f"Error calculating {metric_id} for team {team_id}: {str(e)}")
+                value = data.calculate_metric(metric_formula)
+                values.append(value)
             
-            # Calculate average if we have values
-            if metric_values:
-                metrics[metric_id] = statistics.mean(metric_values)
+            if values:
+                metrics[metric_id] = statistics.mean(values)
+                metrics[f"{metric_id}_std"] = statistics.stdev(values) if len(values) > 1 else 0.0
     
-    return metrics
+    return {
+        'team_number': team_number,
+        'match_count': len(scouting_data),
+        'metrics': metrics
+    }
 
 
 def _simulate_match_outcomes(red_alliance_teams, blue_alliance_teams, total_metric_id, n_simulations=2000, seed=None):
@@ -328,7 +289,8 @@ def predict_match_outcome(match_id):
     print("\nRED ALLIANCE METRICS:")
     for team in red_teams:
         print(f"  Calculating metrics for red team {team.team_number} (ID: {team.id})")
-        metrics = calculate_team_metrics(team.id)
+        analytics_result = calculate_team_metrics(team.id)
+        metrics = analytics_result.get('metrics', {})
         
         if metrics:
             print(f"  Team {team.team_number} has metrics: {list(metrics.keys())}")
@@ -346,7 +308,8 @@ def predict_match_outcome(match_id):
     print("\nBLUE ALLIANCE METRICS:")
     for team in blue_teams:
         print(f"  Calculating metrics for blue team {team.team_number} (ID: {team.id})")
-        metrics = calculate_team_metrics(team.id)
+        analytics_result = calculate_team_metrics(team.id)
+        metrics = analytics_result.get('metrics', {})
         
         if metrics:
             print(f"  Team {team.team_number} has metrics: {list(metrics.keys())}")
@@ -533,7 +496,8 @@ def generate_match_strategy_analysis(match_id):
     # Calculate detailed metrics for each team
     red_alliance_data = []
     for team in red_teams:
-        team_metrics = calculate_team_metrics(team.id)
+        analytics_result = calculate_team_metrics(team.id)
+        team_metrics = analytics_result.get('metrics', {})
         team_data = {
             'team': team,
             'metrics': team_metrics,
@@ -543,7 +507,8 @@ def generate_match_strategy_analysis(match_id):
     
     blue_alliance_data = []
     for team in blue_teams:
-        team_metrics = calculate_team_metrics(team.id)
+        analytics_result = calculate_team_metrics(team.id)
+        team_metrics = analytics_result.get('metrics', {})
         team_data = {
             'team': team,
             'metrics': team_metrics,

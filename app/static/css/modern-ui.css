@@ -1,0 +1,562 @@
+/* Modern UI overrides - mobile-first, responsive, dark-mode aware */
+:root {
+    --ui-bg: var(--bs-body-bg, #ffffff);
+    --ui-foreground: var(--bs-body-color, #222);
+    --ui-card-bg: var(--card-bg, #ffffff);
+    --ui-border: var(--bs-border-color, #e9ecef);
+    --ui-muted: var(--bs-secondary, #6c757d);
+    --ui-radius: 10px;
+    --ui-accent: var(--bs-primary, #1976d2);
+    --ui-accent-rgb: 25,118,210;
+    --ui-surface: var(--ui-card-bg);
+}
+
+/* Mobile first layout adjustments */
+body.with-sidebar {
+    padding-top: 56px; /* give topbar space on small screens */
+}
+
+.topbar {
+    background: linear-gradient(90deg, rgba(0,0,0,0.02), rgba(0,0,0,0));
+    backdrop-filter: blur(4px);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+}
+
+main.flex-shrink-0.py-4 { 
+    padding-top: 72px; /* ensure content not hidden under fixed topbar */
+}
+
+/* Typography */
+body {
+    font-family: 'Roboto', 'Montserrat', system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial;
+    color: var(--ui-foreground);
+    background: var(--ui-bg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+h1, .page-title { font-family: 'Montserrat', sans-serif; font-weight: 600; letter-spacing: -0.4px; }
+h1 { font-size: 1.6rem; }
+h2 { font-size: 1.4rem; }
+h3 { font-size: 1.15rem; }
+p, label, .small, .text-muted { color: var(--ui-muted); }
+
+/* Smooth theme transitions */
+html, body, .card, .sidebar, .topbar, .modal-content {
+    transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+/* Sidebar modern look */
+.sidebar {
+    background: var(--ui-card-bg);
+    border-right: 1px solid var(--ui-border);
+    min-width: 0;
+}
+.sidebar .brand-text { font-size: 1.05rem; }
+.sidebar .nav-link { padding: 0.6rem 0.9rem; border-radius: 8px; margin: 0.15rem 0; }
+.sidebar .nav-link.active { background: rgba(var(--bs-primary-rgb),0.12); }
+
+/* Collapsed sidebar state for desktop */
+body.sidebar-collapsed .sidebar { width: 72px; }
+body.sidebar-collapsed .sidebar .nav-link span { display: none; }
+body.sidebar-collapsed main.container { margin-left: 92px; }
+
+/* Buttons and inputs */
+.btn { border-radius: 8px; }
+.form-control, .form-select { border-radius: 8px; }
+
+/* Cards & modals */
+.card { border-radius: var(--ui-radius); box-shadow: 0 6px 22px rgba(16,24,40,0.04); }
+.modal-content { border-radius: 12px; }
+
+/* Card header styles */
+.card-header { background: transparent; border-bottom: 1px solid var(--ui-border); padding: 0.85rem 1rem; font-weight: 600; }
+.card-body { padding: 1rem; }
+
+/* Responsive utilities */
+@media (min-width: 992px) {
+    .sidebar { width: 260px; position: fixed; height: 100vh; overflow-y: auto; }
+    main.container { margin-left: 280px; }
+}
+
+@media (max-width: 991px) {
+    .sidebar { position: fixed; left: -100%; top: 0; bottom: 0; width: 80%; max-width: 380px; transition: left 0.28s ease; z-index: 1040; }
+    body.sidebar-open .sidebar { left: 0; }
+    main.container { margin-left: 0; }
+}
+
+/* Dark mode handling */
+body.dark-mode {
+    --ui-bg: #0b0f12;
+    --ui-foreground: #e6eef8;
+    --ui-card-bg: #0f1720;
+    --ui-border: rgba(255,255,255,0.06);
+    --ui-muted: rgba(255,255,255,0.6);
+}
+
+body.dark-mode .topbar { background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0)); }
+body.dark-mode .card { box-shadow: none; border: 1px solid var(--ui-border); }
+body.dark-mode .sidebar { background: var(--ui-card-bg); color: var(--ui-foreground); }
+body.dark-mode .nav-link { color: var(--ui-foreground); }
+
+/* Dark mode subtle gradient accent */
+body.dark-mode .topbar { background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0)); }
+body.dark-mode .btn-primary { background: linear-gradient(90deg, rgba(var(--ui-accent-rgb),0.95), rgba(var(--ui-accent-rgb),0.8)); border: none; }
+
+/* Improve form sizes for touch */
+input[type="text"], .form-control, .btn { min-height: 42px; }
+
+/* Improve table responsiveness */
+.table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Table visuals */
+.table thead th { background: linear-gradient(90deg, rgba(0,0,0,0.02), rgba(0,0,0,0)); border-bottom: 1px solid var(--ui-border); }
+.table tbody tr:hover { background: rgba(var(--ui-accent-rgb), 0.03); }
+body.dark-mode .table thead th { background: rgba(255,255,255,0.03); }
+
+/* Buttons */
+.btn-primary {
+    background: linear-gradient(90deg, rgba(var(--ui-accent-rgb),1), rgba(var(--ui-accent-rgb),0.9));
+    border: none;
+    color: white;
+    box-shadow: 0 6px 18px rgba(var(--ui-accent-rgb), 0.06);
+}
+.btn-primary:hover { transform: translateY(-1px); filter: brightness(1.03); }
+.btn-outline-primary { border-radius: 10px; }
+
+/* Form focus */
+.form-control:focus, .form-select:focus {
+    box-shadow: 0 0 0 0.15rem rgba(var(--ui-accent-rgb), 0.12) !important;
+    border-color: rgba(var(--ui-accent-rgb), 0.8) !important;
+}
+
+/* Toasts & Alerts */
+.toast { border-radius: 12px; box-shadow: 0 10px 30px rgba(2,6,23,0.08); }
+.alert { border-radius: 12px; }
+
+/* Chart container responsiveness */
+.chart-container { width: 100%; height: auto; }
+.chart-container canvas { width: 100% !important; height: auto !important; }
+
+/* Search adjustments for mobile */
+.top-search .enhanced-search-container { max-width: 420px; }
+@media (max-width: 576px) {
+    .top-search { display: none; }
+}
+
+/* Helper utilities */
+.muted-ghost { color: var(--ui-muted); }
+.card-compact .card-body { padding: 0.6rem; }
+
+/* Accessibility improvements */
+.sr-only-focusable:focus { position: static; width: auto; height: auto; margin: 0; clip: auto; }
+
+/* --- Additional Modern Styling --- */
+
+/* Glassmorphism accents for topbar and key cards */
+.topbar {
+    background: linear-gradient(90deg, rgba(255,255,255,0.5), rgba(255,255,255,0.25));
+    background-blend-mode: overlay;
+    box-shadow: 0 6px 20px rgba(2,6,23,0.06);
+}
+body.dark-mode .topbar { background: linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)); }
+
+/* Floating Action Button (FAB) */
+.fab {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1070;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(var(--ui-accent-rgb),1), rgba(var(--ui-accent-rgb),0.85));
+    color: white;
+    box-shadow: 0 12px 30px rgba(25,118,210,0.18);
+}
+
+/* Subtle entrance animations */
+.fade-up { transform: translateY(8px); opacity: 0; transition: opacity 260ms ease, transform 260ms ease; }
+.fade-up.in-view { transform: translateY(0); opacity: 1; }
+
+/* Dashboard hero cards */
+.dashboard-hero { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.dashboard-card { padding: 1rem; border-radius: 14px; background: linear-gradient(180deg, rgba(255,255,255,0.8), rgba(255,255,255,0.6)); box-shadow: 0 8px 24px rgba(2,6,23,0.06); }
+body.dark-mode .dashboard-card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border: 1px solid rgba(255,255,255,0.03); }
+
+/* Compact table mode for mobile */
+@media (max-width: 768px) {
+    .table thead { display: none; }
+    .table tbody td { display: block; width: 100%; box-sizing: border-box; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--ui-border); }
+    .table tbody tr { margin-bottom: 0.5rem; display: block; background: var(--ui-surface); border-radius: 8px; box-shadow: 0 6px 14px rgba(2,6,23,0.04); }
+}
+
+/* Pills and badges */
+.pill { display: inline-flex; align-items: center; padding: 0.35rem 0.7rem; border-radius: 999px; background: rgba(0,0,0,0.03); color: var(--ui-foreground); font-weight: 600; }
+.badge-status { padding: 0.3rem 0.5rem; border-radius: 8px; font-weight: 700; }
+
+/* Tiny utility helpers */
+.gap-1-5 { gap: 1.5rem; }
+.stack { display: flex; flex-direction: column; gap: 0.5rem; }
+
+/* Notifications stack */
+.notification-stack { position: fixed; top: 80px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+
+/* Input with icons */
+.input-icon { position: relative; }
+.input-icon input { padding-left: 44px; }
+.input-icon .icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--ui-muted); }
+
+/* Responsive grid helpers */
+.col-responsive { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); display: grid; gap: 12px; }
+
+/* Tiny nav improvements */
+.nav-link { display: flex; align-items: center; gap: 10px; }
+.nav-link i { width: 20px; text-align: center; }
+
+/* Focus-visible for keyboard users */
+:focus-visible { outline: 3px solid rgba(var(--ui-accent-rgb),0.18); outline-offset: 3px; }
+
+/* Chart card */
+.card-chart { padding: 0.75rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.card-chart .chart-header { display:flex; align-items:center; justify-content:space-between; }
+
+/* Tiny form helpers */
+.form-row { display:flex; gap:0.75rem; }
+.form-row .form-control { flex:1; }
+
+/* Make tooltips more modern */
+.tooltip-inner { background: rgba(2,6,23,0.9); color: #fff; border-radius: 8px; padding: 8px 10px; }
+
+/* --- Sidebar: modernized styling --- */
+.sidebar {
+    background: linear-gradient(180deg, var(--ui-surface), color-mix(in srgb, var(--ui-surface) 85%, transparent));
+    border-right: 1px solid var(--ui-border);
+    padding: 0.75rem;
+    transition: width 220ms ease, left 260ms ease, background-color 180ms ease, transform 220ms ease;
+    color: var(--ui-foreground);
+}
+
+.sidebar .sidebar-header { padding: 0.6rem 0.6rem; margin-bottom: 0.35rem; display:flex; align-items:center; gap:0.5rem; }
+.sidebar .brand { display:flex; align-items:center; gap:0.5rem; text-decoration:none; }
+.sidebar .brand .brand-icon { font-size: 1.4rem; color: var(--ui-accent); }
+.sidebar .brand-text { font-size: 1rem; font-weight:700; color: var(--ui-foreground); }
+
+.sidebar .nav-group { margin-top: 0.5rem; margin-bottom: 0.75rem; }
+.sidebar .nav-group-title { font-size: 0.75rem; font-weight:700; text-transform:uppercase; color: var(--ui-muted); padding: 0.35rem 0.6rem; }
+
+.sidebar .nav-link { padding: 0.6rem 0.6rem; margin: 0.18rem 0; border-radius: 10px; color: inherit; }
+.sidebar .nav-link i { font-size: 0.95rem; color: var(--ui-accent); }
+.sidebar .nav-link span { display:inline-block; vertical-align:middle; }
+
+.sidebar .nav-link:hover { background: linear-gradient(90deg, rgba(var(--ui-accent-rgb),0.06), rgba(var(--ui-accent-rgb),0.03)); transform: translateX(4px); }
+.sidebar .nav-link:active { transform: translateX(2px); }
+
+.sidebar .nav-link.active {
+    background: linear-gradient(90deg, rgba(var(--ui-accent-rgb),0.14), rgba(var(--ui-accent-rgb),0.08));
+    box-shadow: 0 6px 18px rgba(var(--ui-accent-rgb),0.06);
+}
+
+/* Right aligned small badges inside sidebar links */
+.sidebar .nav-link .badge { margin-left: auto; font-size: 0.7rem; }
+
+.sidebar-footer { padding: 0.65rem; border-top: 1px solid var(--ui-border); background: transparent; }
+.sidebar .user-mini { padding: 0.35rem 0.6rem; border-radius: 8px; background: transparent; }
+
+/* Improve scrollbar for sidebar */
+.sidebar::-webkit-scrollbar { width: 10px; }
+.sidebar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.08); border-radius: 8px; }
+body.dark-mode .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); }
+
+/* Mobile and overlay behavior */
+@media (max-width: 991px) {
+    .sidebar { box-shadow: 0 18px 50px rgba(2,6,23,0.12); }
+    body.sidebar-open .sidebar { transform: translateX(0); }
+}
+
+/* Collapsed desktop state */
+body.sidebar-collapsed .sidebar { width: 72px !important; padding-left: 8px; padding-right: 8px; }
+body.sidebar-collapsed .sidebar .brand-text { display: none; }
+body.sidebar-collapsed .sidebar .nav-group-title { display: none; }
+body.sidebar-collapsed .sidebar .nav-link { justify-content: center; padding-left: 6px; padding-right: 6px; }
+
+/* Dark mode specifics for sidebar */
+body.dark-mode .sidebar { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-right-color: rgba(255,255,255,0.04); }
+body.dark-mode .sidebar .nav-link:hover { background: linear-gradient(90deg, rgba(var(--ui-accent-rgb),0.08), rgba(var(--ui-accent-rgb),0.04)); }
+
+/* --- Navbar & User Dropdown Improvements --- */
+.topbar { padding: 0.45rem 1rem; align-items: center; }
+.topbar .btn { margin: 0 0.25rem; }
+.topbar .brand { display: none; } /* brand is in sidebar */
+
+/* Make the user dropdown more modern */
+.dropdown-menu { border-radius: 12px; min-width: 220px; padding: 0.35rem; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); background: linear-gradient(180deg, rgba(255,255,255,0.65), rgba(255,255,255,0.5)); box-shadow: 0 12px 36px rgba(2,6,23,0.12); border: 1px solid rgba(2,6,23,0.06); }
+/* Semi-transparent variant for topbar-like glass effect */
+.topbar .dropdown-menu, .dropdown-menu.navbar-glass {
+    background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.32));
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(2,6,23,0.06);
+    box-shadow: 0 12px 36px rgba(2,6,23,0.12);
+}
+body.dark-mode .topbar .dropdown-menu, body.dark-mode .dropdown-menu.navbar-glass {
+    background: linear-gradient(180deg, rgba(12,16,20,0.58), rgba(12,16,20,0.40));
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+}
+
+.dropdown-menu .dropdown-item { padding: 0.6rem 0.9rem; border-radius: 8px; margin: 0.15rem; color: inherit; }
+.dropdown-menu .dropdown-item:hover { background: rgba(var(--ui-accent-rgb),0.06); color: inherit; }
+
+/* User header inside dropdown */
+.dropdown-user-header { display:flex; align-items:center; gap:0.6rem; padding: 0.6rem 0.8rem; border-radius: 8px; margin-bottom: 0.25rem; background: linear-gradient(90deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)); }
+body.dark-mode .dropdown-user-header { background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); }
+.dropdown-user-header .user-name { font-weight:700; }
+.dropdown-user-header .user-roles { font-size:0.75rem; color: var(--ui-muted); }
+
+/* Make the dropdown caret and toggles cleaner */
+.dropdown-toggle::after {
+    /* Ensure dropdown caret is rendered as the classic CSS triangle (not a text glyph)
+       This overrides any conflicting font-based content and keeps caret color in sync */
+    content: "" !important;
+    display: inline-block;
+    margin-left: 0.35rem;
+    vertical-align: 0.15em;
+    width: 0;
+    height: 0;
+    border-left: 0.35em solid transparent;
+    border-right: 0.35em solid transparent;
+    border-top: 0.35em solid currentColor;
+}
+
+/* Mobile: compact topbar controls */
+@media (max-width:576px) {
+    .topbar { padding: 0.35rem; }
+    .topbar .dropdown-toggle > span { display: none; }
+}
+
+
+
+/* Floating action for mobile search */
+.modern-search-mobile { display: inline-flex !important; align-items: center; justify-content: center; padding: 0.5rem 0.65rem; }
+
+/* Utility tweaks for icons and badges */
+.brand-icon { font-size: 1.25rem; }
+.badge { border-radius: 8px; }
+
+/* Accessibility: focus outlines */
+:focus { outline: 3px solid rgba(25,118,210,0.18); outline-offset: 2px; }
+
+/* Small helper to ensure modals are full width on small screens */
+@media (max-width: 576px) {
+    .modal-dialog { max-width: 95%; margin: 1.25rem auto; }
+}
+
+/* Topbar surface variables for consistent glass look across light/dark */
+:root {
+    --topbar-surface-light: linear-gradient(90deg, rgba(255,255,255,0.6), rgba(255,255,255,0.32));
+    --topbar-surface-dark: linear-gradient(90deg, rgba(10,14,18,0.62), rgba(10,14,18,0.42));
+    --topbar-blur: 10px;
+    --topbar-border-light: rgba(2,6,23,0.06);
+    --topbar-border-dark: rgba(255,255,255,0.06);
+}
+
+/* Apply topbar surface to both topbar and any dropdowns portalled as navbar-glass */
+.topbar {
+    background: var(--topbar-surface-light) !important;
+    -webkit-backdrop-filter: blur(var(--topbar-blur));
+    backdrop-filter: blur(var(--topbar-blur));
+    border-bottom: 1px solid var(--topbar-border-light);
+}
+
+.topbar .dropdown-menu, .dropdown-menu.navbar-glass {
+    background: var(--topbar-surface-light) !important;
+    -webkit-backdrop-filter: blur(var(--topbar-blur));
+    backdrop-filter: blur(var(--topbar-blur));
+    border: 1px solid var(--topbar-border-light) !important;
+    box-shadow: 0 12px 36px rgba(2,6,23,0.12);
+}
+
+body.dark-mode {
+    --topbar-surface-light: var(--topbar-surface-dark);
+}
+
+body.dark-mode .topbar {
+    background: var(--topbar-surface-dark) !important;
+    border-bottom: 1px solid var(--topbar-border-dark);
+}
+
+body.dark-mode .topbar .dropdown-menu, body.dark-mode .dropdown-menu.navbar-glass {
+    background: var(--topbar-surface-dark) !important;
+    -webkit-backdrop-filter: blur(calc(var(--topbar-blur) - 2px));
+    backdrop-filter: blur(calc(var(--topbar-blur) - 2px));
+    border: 1px solid var(--topbar-border-dark) !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+}
+
+/* Defensive overrides: make sure no other stylesheet inserts a text glyph caret into dropdown toggles */
+.dropdown-toggle::before,
+.dropdown-toggle::after {
+    /* If any other stylesheet attempted to set content to a glyph, clear it here first */
+    content: none !important;
+}
+
+
+/* ==========================
+   Major site-wide modern UI
+   ========================== */
+
+/* Container tuning: slightly wider on large screens, more breathing room */
+.container {
+    max-width: 1180px;
+    padding-left: 18px;
+    padding-right: 18px;
+}
+
+/* Consistent page padding and comfortable line-length for readability */
+main.container { padding-top: 22px; padding-bottom: 34px; }
+
+/* Utility spacing helpers */
+.space-sm { padding: 0.5rem !important; }
+.space-md { padding: 1rem !important; }
+.space-lg { padding: 1.6rem !important; }
+
+/* Card variants */
+.card-ghost { background: transparent; border: 1px dashed rgba(0,0,0,0.04); }
+.card-elevated { box-shadow: 0 12px 40px rgba(2,6,23,0.08); border: 1px solid rgba(2,6,23,0.04); }
+
+/* Form control modern styling */
+.form-control, .form-select, .input-group-text {
+    border-radius: 12px; border: 1px solid var(--ui-border); padding: 0.6rem 0.75rem; background: var(--ui-surface);
+}
+.form-control::placeholder { color: rgba(0,0,0,0.35); }
+label.small { font-weight:600; color:var(--ui-foreground); }
+
+/* Form help text */
+.form-text { color: var(--ui-muted); font-size:0.85rem; }
+
+/* Button system: primary/secondary/ghost */
+.btn-ghost { background: transparent; border: 1px solid transparent; color: var(--ui-foreground); }
+.btn-secondary { background: linear-gradient(180deg, rgba(0,0,0,0.04), rgba(0,0,0,0.02)); border: 1px solid var(--ui-border); color: var(--ui-foreground); }
+.btn-ghost:hover { background: rgba(0,0,0,0.03); }
+
+/* Forms: grouped controls */
+.form-group-inline { display:flex; gap:0.5rem; align-items:center; }
+
+/* Tables: modern header and zebra rows */
+.table thead th { background: transparent; color: var(--ui-foreground); font-weight:700; }
+.table tbody tr:nth-child(odd) { background: transparent; }
+.table tbody tr:hover { background: rgba(var(--ui-accent-rgb),0.03); }
+.table td, .table th { vertical-align: middle; padding: 0.6rem 0.75rem; }
+
+/* Responsive tables: keep header visible on scroll when possible */
+.table-responsive { position: relative; }
+
+/* Tooling for smaller screens */
+@media (max-width: 768px) {
+    .page-title { font-size: 1.25rem; }
+    .container { padding-left: 12px; padding-right: 12px; }
+}
+
+/* Accessibility and focus */
+:focus-visible { outline: 3px solid rgba(var(--ui-accent-rgb),0.18); outline-offset: 3px; }
+.sr-focus { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+
+/* Motion reduction */
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+}
+
+/* Small helpers for cards and headings */
+.section-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 12px; }
+.section-heading h2 { margin:0; font-size:1.05rem; }
+
+/* Toast improvements */
+.toast { border-left: 4px solid rgba(var(--ui-accent-rgb),0.9); }
+
+/* Modern pagination */
+.pagination .page-link { border-radius: 8px; padding: 0.45rem 0.7rem; margin: 0 2px; }
+
+/* Make forms more touch-friendly */
+.form-control, .btn { min-height: 44px; }
+
+/* Small utility: center helper */
+.center { display:flex; align-items:center; justify-content:center; }
+
+/* Subtle link style */
+a { color: var(--ui-accent); }
+a:hover { text-decoration: underline; }
+
+/* Ensure modals look modern */
+.modal-content { border-radius: 12px; overflow: hidden; }
+
+/* Improve file upload previews and badges */
+.file-preview { border:1px dashed var(--ui-border); padding: 8px; border-radius: 10px; }
+
+/* Ensure dropdowns have a high enough z-index in complex pages */
+.dropdown-menu { z-index: 2147483000 !important; }
+
+/* Helpful form validation colors */
+.is-valid { border-color: rgba(40,167,69,0.5) !important; box-shadow: 0 0 0 0.12rem rgba(40,167,69,0.08) !important; }
+.is-invalid { border-color: rgba(220,53,69,0.6) !important; box-shadow: 0 0 0 0.12rem rgba(220,53,69,0.06) !important; }
+
+/* Final polish for the main hero area */
+.hero { padding: 1.6rem; border-radius: 14px; background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.4)); box-shadow: 0 18px 44px rgba(2,6,23,0.06); }
+body.dark-mode .hero { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border: 1px solid rgba(255,255,255,0.03); }
+/* Fix: prevent select caret SVG from tiling across the input (restores select text visibility)
+   This ensures a single caret is shown at the right and leaves room for the selected text. */
+.form-select,
+select.form-select,
+select {
+    background-repeat: no-repeat !important;
+    background-position: right 0.75rem center !important;
+    background-size: 1.25em auto !important;
+    padding-right: 2.6rem !important; /* give space for caret */
+    /* Force a readable select text color across themes and prevent accidental transparency */
+    color: var(--ui-foreground) !important;
+}
+
+/* Remove default browser expand icon where supported so our single-caret background is used */
+.form-select::-ms-expand {
+    display: none;
+}
+
+/* Vendor appearance reset to keep consistent visuals across browsers */
+.form-select {
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+}
+
+/* Dark-mode selects should also not tile and respect the same sizing */
+body.dark-mode .form-select,
+body.dark-mode select {
+    background-repeat: no-repeat !important;
+    background-position: right 0.75rem center !important;
+    background-size: 1.25em auto !important;
+    color: var(--ui-foreground) !important;
+}
+
+/* If a select uses an empty "placeholder" option (value=""), try to give that placeholder a muted color
+   Note: styling options is limited across browsers, but this helps where supported and ensures the select
+   itself uses a muted color when invalid (common pattern when placeholder has empty value). */
+select:invalid {
+    color: var(--ui-muted) !important;
+}
+option[value=""] { color: var(--ui-muted); }
+
+/* Small tweak: ensure select text doesn't get overlapped on very small inputs */
+@media (max-width: 420px) {
+    .form-select, select { padding-right: 3.2rem !important; }
+}
+
+

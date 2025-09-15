@@ -3,6 +3,9 @@
 {% block title %}Scouting Form{% endblock %}
 
 {% block heading %}Scouting Form{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/scouting_form.css') }}">
+{% endblock %}
 {% block subheading %}
 <div id="form-subheading" class="text-muted mb-4">Select team and match below</div>
 {% endblock %}
@@ -16,7 +19,7 @@
                 <h5 class="mb-0">Select Team and Match</h5>
             </div>
             <div class="card-body">
-                <form id="team-match-form">
+                <form id="team-match-form" aria-label="Team and Match selection">
                     <div class="row">
                         <div class="col-md-6 mb-2">
                             <label for="team-selector" class="form-label">Select Team</label>
@@ -31,7 +34,7 @@
                         </div>
                         <div class="col-md-6 mb-2">
                             <label for="match-selector" class="form-label">Select Match</label>
-                            <select class="form-select" id="match-selector" name="match_id" required>
+                            <select class="form-select" id="match-selector" name="match_id" required aria-required="true">
                                 <option value="">-- Select Match --</option>
                                 {% for match_option in matches %}
                                 <option value="{{ match_option.id }}" data-match-type="{{ match_option.match_type }}" {% if match and match.id == match_option.id %}selected{% endif %}>

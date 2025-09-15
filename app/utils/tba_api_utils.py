@@ -45,6 +45,56 @@ def get_tba_api_key():
     if isinstance(api_key, str):
         api_key = api_key.strip()
 
+    # As a final fallback, check the loaded game config (useful when running
+    # outside a user session or when keys are stored in the game config files)
+    try:
+        game_config = current_app.config.get('GAME_CONFIG', {})
+        tba_settings = game_config.get('tba_api_settings', {})
+        cfg_key = tba_settings.get('auth_key')
+        if cfg_key and isinstance(cfg_key, str):
+            return cfg_key.strip()
+    except Exception:
+        pass
+
+    # Basic placeholder detection: many default configs use phrases like
+    # "your TBA api key here" or similar. Avoid sending obviously placeholder
+    # tokens to remote services which will generate confusing 401s.
+    try:
+        if isinstance(api_key, str):
+            low = api_key.lower()
+            if any(x in low for x in ('your ', 'your_', 'example', 'replace', 'todo')) or len(api_key.strip()) < 10:
+                print("TBA API key looks like a placeholder; ignoring and returning None")
+                api_key = None
+    except Exception:
+        pass
+
+    # If we still don't have a key, try scanning team-specific instance configs
+    # for any valid-looking TBA API key and use the first one found. This helps
+    # when running without an authenticated user but the repository contains
+    # team configs (common during local testing).
+    if not api_key:
+        try:
+            base = os.getcwd()
+            configs_dir = os.path.join(base, 'instance', 'configs')
+            if os.path.isdir(configs_dir):
+                for team_folder in os.listdir(configs_dir):
+                    cfg_path = os.path.join(configs_dir, team_folder, 'game_config.json')
+                    if os.path.exists(cfg_path):
+                        try:
+                            with open(cfg_path, 'r', encoding='utf-8') as f:
+                                data = json.load(f)
+                            tba_settings = data.get('tba_api_settings', {})
+                            k = tba_settings.get('auth_key')
+                            if k and isinstance(k, str):
+                                lk = k.strip().lower()
+                                if not any(x in lk for x in ('your ', 'your_', 'example', 'replace', 'todo')) and len(k.strip()) >= 10:
+                                    print(f"Found TBA key in team config {team_folder}; using it as fallback")
+                                    return k.strip()
+                        except Exception:
+                            continue
+        except Exception:
+            pass
+
     return api_key
 
 def get_tba_api_headers():

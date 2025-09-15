@@ -30,6 +30,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-improvements.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/search-enhancements.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-ui.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- Dynamic Theme CSS Variables -->
@@ -557,6 +558,24 @@
                     <span class="d-none d-md-inline">{{ current_user.username }}</span>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end shadow">
+                    <li>
+                        <div class="dropdown-user-header d-flex align-items-center px-3 py-2">
+                            <div class="me-2">
+                                <i class="fas fa-user-circle fa-2x"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="user-name fw-semibold">{{ current_user.username or 'User' }}</div>
+                                <div class="user-roles text-muted small">
+                                    {% for role in current_user.roles %}
+                                        <span class="badge bg-secondary text-uppercase me-1">{{ role.name }}</span>
+                                    {% else %}
+                                        <span class="text-muted">No roles</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                    <li><hr class="dropdown-divider my-1"></li>
                     <li><a class="dropdown-item py-2" href="{{ url_for('auth.profile') }}"><i class="fas fa-user-edit me-2 text-primary"></i>Profile</a></li>
                     {% if user_has_role('admin') or user_has_role('analytics') %}
                     <li><a class="dropdown-item py-2 {% if request.endpoint == 'main.config' %}active{% endif %}" href="{{ url_for('main.config') }}"><i class="fas fa-wrench me-2 text-primary"></i>Game Configuration</a></li>
@@ -716,34 +735,53 @@
                 window.scrollTo(0, _scrollPosition || 0);
             }
 
+        // Sidebar open/close with localStorage persistence for desktop
+        const SIDEBAR_STORAGE_KEY = 'obsidian_sidebar_collapsed';
+
+        function isDesktop() { return window.innerWidth >= 992; }
+
+        function setSidebarCollapsed(collapsed) {
+            if (collapsed) {
+                document.body.classList.add('sidebar-collapsed');
+            } else {
+                document.body.classList.remove('sidebar-collapsed');
+            }
+            try { localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? '1' : '0'); } catch(e){}
+        }
+
+        function getStoredSidebarCollapsed() {
+            try { return localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1'; } catch(e){ return null; }
+        }
+
         function openSidebar(){
-            if(window.innerWidth < 992){
+            if(!isDesktop()){
                 sidebar.classList.add('open');
                 body.classList.add('sidebar-open');
                 lockBodyScroll();
             } else {
-                body.classList.remove('sidebar-collapsed');
+                setSidebarCollapsed(false);
             }
             if(toggle) toggle.setAttribute('aria-expanded','true');
         }
 
         function closeSidebar(){
-            if(window.innerWidth < 992){
+            if(!isDesktop()){
                 sidebar.classList.remove('open');
                 body.classList.remove('sidebar-open');
                 try { unlockBodyScroll(); } catch(e){}
             } else {
-                body.classList.add('sidebar-collapsed');
+                setSidebarCollapsed(true);
             }
             if(toggle) toggle.setAttribute('aria-expanded','false');
         }
 
         function toggleSidebar(){
-            if(window.innerWidth < 992){
+            if(!isDesktop()){
                 if(sidebar.classList.contains('open')){ closeSidebar(); } else { openSidebar(); }
             } else {
                 // desktop: toggle collapse state
-                if(body.classList.contains('sidebar-collapsed')){ openSidebar(); } else { closeSidebar(); }
+                const collapsed = document.body.classList.contains('sidebar-collapsed');
+                setSidebarCollapsed(!collapsed);
             }
         }
 
@@ -752,6 +790,18 @@
             toggle.setAttribute('aria-expanded','true');
             toggle.addEventListener('click', (e)=>{ e.preventDefault(); toggleSidebar(); });
         }
+
+        // Apply stored state on load (desktop only)
+        (function applyStoredSidebarState(){
+            const stored = getStoredSidebarCollapsed();
+            if (stored === null) return; // no preference stored
+            if (isDesktop()) {
+                setSidebarCollapsed(stored);
+            } else {
+                // if mobile, ensure collapsed flag is reflected but don't force open/close overlay
+                if (stored) document.body.classList.add('sidebar-collapsed');
+            }
+        })();
 
         if(closeBtn){ closeBtn.addEventListener('click', (e)=>{ e.preventDefault(); closeSidebar(); }); }
 
@@ -771,8 +821,22 @@
         // Esc key
         document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ if(window.innerWidth < 992 && sidebar.classList.contains('open')) closeSidebar(); }});
 
-        // Initialize desktop state
-        if(window.innerWidth >= 992){ body.classList.remove('sidebar-collapsed'); }
+        // Initialize desktop state: respect stored preference if present
+        if (window.innerWidth >= 992) {
+            try {
+                const stored = getStoredSidebarCollapsed();
+                if (stored === null) {
+                    // No preference stored: default to expanded
+                    body.classList.remove('sidebar-collapsed');
+                } else {
+                    // Apply stored preference
+                    setSidebarCollapsed(stored);
+                }
+            } catch (e) {
+                // Fallback: ensure sidebar is expanded
+                body.classList.remove('sidebar-collapsed');
+            }
+        }
 
         window.addEventListener('resize', ()=>{
             if(window.innerWidth >= 992){
@@ -782,6 +846,41 @@
             } else {
                 body.classList.remove('sidebar-collapsed');
             }
+        });
+
+        // Re-apply stored sidebar state when resizing across breakpoint
+        let lastWasDesktop = window.innerWidth >= 992;
+        window.addEventListener('resize', function() {
+            const nowDesktop = window.innerWidth >= 992;
+            if (nowDesktop !== lastWasDesktop) {
+                // crossed breakpoint
+                const stored = getStoredSidebarCollapsed();
+                if (stored !== null) {
+                    if (nowDesktop) setSidebarCollapsed(stored);
+                    else document.body.classList.remove('sidebar-collapsed');
+                }
+            }
+            lastWasDesktop = nowDesktop;
+        });
+
+        // Avoid repositioning fixed dropdowns while page scrolls; only reposition if user opens a dropdown or resizes
+        let lastScrollY = window.scrollY;
+        window.addEventListener('scroll', function() {
+            // If any topbar dropdown menu is positioned fixed, don't adjust its position on scroll
+            const fixedMenus = document.querySelectorAll('.topbar .dropdown-menu');
+            let hasFixed = false;
+            fixedMenus.forEach(menu => {
+                if (getComputedStyle(menu).position === 'fixed' && menu.classList.contains('show')) hasFixed = true;
+            });
+            if (hasFixed) {
+                // nothing to do while scrolling
+                lastScrollY = window.scrollY;
+                return;
+            }
+
+            // If no fixed menus, allow repositioning logic for dropdowns that rely on normal flow
+            // (for example on desktop navbar dropdowns not positioned fixed)
+            lastScrollY = window.scrollY;
         });
     })();
     </script>
@@ -1767,10 +1866,38 @@
         
         // Initialize dropdown positioning fix
         initDropdownPositioning();
+
+        // Mobile: ensure touch devices reliably open dropdown toggles
+        (function ensureTouchDropdowns(){
+            if (!('ontouchstart' in window)) return; // only for touch devices
+            document.querySelectorAll('.dropdown-toggle').forEach(btn => {
+                // Avoid attaching multiple times
+                if (btn.__touchHandlerAttached) return;
+                btn.__touchHandlerAttached = true;
+
+                btn.addEventListener('touchend', function(e){
+                    // If bootstrap dropdown exists, toggle explicitly — this avoids issues when clicks are swallowed by overlays
+                    try {
+                        if (window.bootstrap && window.bootstrap.Dropdown) {
+                            const inst = window.bootstrap.Dropdown.getOrCreateInstance(btn);
+                            // If menu not shown, show it; otherwise let Bootstrap handle hide on outside tap
+                            const menu = btn.closest('.dropdown')?.querySelector('.dropdown-menu');
+                            if (menu && !menu.classList.contains('show')) {
+                                inst.show();
+                                e.preventDefault();
+                            }
+                        }
+                    } catch (err) {
+                        // Fallback to click to let browser/Bootstrap handle it
+                        try { btn.click(); } catch(e){}
+                    }
+                }, { passive: false });
+            });
+        })();
         
-        // Global fallback for any dropdown that opens in the navbar
+        // Global fallback for any dropdown that opens in the navbar/topbar
         document.addEventListener('show.bs.dropdown', function(event) {
-            const dropdown = event.target.closest('.navbar .dropdown');
+            const dropdown = event.target.closest('.navbar .dropdown, .topbar .dropdown');
             if (dropdown && window.innerWidth >= 992) {
                 const toggle = dropdown.querySelector('.dropdown-toggle');
                 const menu = dropdown.querySelector('.dropdown-menu');
@@ -1781,10 +1908,10 @@
                 }
             }
         });
-        
+
         // Also catch the shown event as a final fallback
         document.addEventListener('shown.bs.dropdown', function(event) {
-            const dropdown = event.target.closest('.navbar .dropdown');
+            const dropdown = event.target.closest('.navbar .dropdown, .topbar .dropdown');
             if (dropdown && window.innerWidth >= 992) {
                 const toggle = dropdown.querySelector('.dropdown-toggle');
                 const menu = dropdown.querySelector('.dropdown-menu');
@@ -1793,18 +1920,121 @@
                 }
             }
         });
+
+        // Portal topbar dropdowns to body so they stay fixed during page scroll (desktop only)
+        document.addEventListener('shown.bs.dropdown', function(event) {
+            try {
+                const dropdown = event.target.closest('.topbar .dropdown');
+                if (!dropdown) return;
+                // Only portal dropdowns on desktop where we handle fixed positioning.
+                if (window.innerWidth < 992) return;
+                const menu = dropdown.querySelector('.dropdown-menu');
+                const toggle = dropdown.querySelector('.dropdown-toggle');
+                if (!menu || !toggle) return;
+
+                // If already portalled, just reposition
+                if (menu.__portalPlaceholder) {
+                    positionFixedDropdown(toggle, menu);
+                    return;
+                }
+
+                // Create placeholder in original location
+                const placeholder = document.createComment('dropdown-portal-placeholder');
+                menu.parentNode.insertBefore(placeholder, menu);
+                // Move menu to body and mark as navbar-glass so it matches topbar surface
+                menu.classList.add('navbar-glass');
+                document.body.appendChild(menu);
+                // Mark placeholder for restoration
+                menu.__portalPlaceholder = placeholder;
+
+                // Make it fixed and position it
+                menu.style.position = 'fixed';
+                menu.style.zIndex = '1060';
+                menu.style.willChange = 'transform, top, left';
+                positionFixedDropdown(toggle, menu);
+
+                // Destroy Popper instance if Bootstrap created one so it won't overwrite our fixed positioning on scroll
+                try {
+                    if (window.bootstrap && window.bootstrap.Dropdown) {
+                        const bsInstance = window.bootstrap.Dropdown.getInstance(toggle);
+                        if (bsInstance && bsInstance._popper) {
+                            try { bsInstance._popper.destroy(); } catch(e){}
+                            try { bsInstance._popper = null; } catch(e){}
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+
+                // Remove any Popper-applied transform/inset so the menu remains where we placed it
+                try {
+                    menu.style.removeProperty('transform');
+                    menu.style.removeProperty('inset');
+                    menu.style.removeProperty('right');
+                } catch (e) {}
+            } catch (e) {
+                // ignore portal errors
+                console.warn('Dropdown portal error', e);
+            }
+        });
+
+        // Restore portalled dropdowns when they hide
+        document.addEventListener('hide.bs.dropdown', function(event) {
+            try {
+                const dropdown = event.target.closest('.topbar .dropdown');
+                if (!dropdown) return;
+                // The menu might already be in the dropdown or on body
+                const menu = dropdown.querySelector('.dropdown-menu') || document.querySelector('.dropdown-menu[aria-expanded="true"]');
+                if (!menu) return;
+                const placeholder = menu.__portalPlaceholder;
+                if (!placeholder) return;
+
+                // Restore into original parent before the placeholder
+                if (placeholder.parentNode) {
+                    placeholder.parentNode.insertBefore(menu, placeholder);
+                    placeholder.parentNode.removeChild(placeholder);
+                } else {
+                    // Fallback: append back to dropdown
+                    dropdown.appendChild(menu);
+                }
+
+                // Remove glass class when restoring
+                menu.classList.remove('navbar-glass');
+
+                // Clean up styles
+                menu.style.position = '';
+                menu.style.left = '';
+                menu.style.top = '';
+                menu.style.right = '';
+                menu.style.bottom = '';
+                menu.style.zIndex = '';
+                menu.style.willChange = '';
+                // Reinitialize Popper/Dropdown for normal future behavior
+                try {
+                    if (window.bootstrap && window.bootstrap.Dropdown) {
+                        // If there's an existing instance, dispose then re-create
+                        const existing = window.bootstrap.Dropdown.getInstance(toggle);
+                        if (existing && typeof existing.dispose === 'function') existing.dispose();
+                        window.bootstrap.Dropdown.getOrCreateInstance(toggle);
+                    }
+                } catch (e) { /* ignore */ }
+
+                delete menu.__portalPlaceholder;
+            } catch (e) {
+                console.warn('Dropdown portal restore error', e);
+            }
+        });
     });
     
     // Fix dropdown positioning for navbar dropdowns
     function initDropdownPositioning() {
         // Only apply to desktop navbar dropdowns
         function handleDropdownPositioning() {
-            if (window.innerWidth >= 992) {
-                const navbarDropdowns = document.querySelectorAll('.navbar .dropdown');
-                
-                navbarDropdowns.forEach(dropdown => {
-                    const toggle = dropdown.querySelector('.dropdown-toggle');
-                    const menu = dropdown.querySelector('.dropdown-menu');
+        if (window.innerWidth >= 992) {
+            // Include both .navbar and topbar dropdowns so topbar menus are positioned fixed
+            const navbarDropdowns = document.querySelectorAll('.navbar .dropdown, .topbar .dropdown');
+
+            navbarDropdowns.forEach(dropdown => {
+                const toggle = dropdown.querySelector('.dropdown-toggle');
+                const menu = dropdown.querySelector('.dropdown-menu');
                     
                     if (toggle && menu) {
                         // Remove any existing event listeners to prevent duplicates
@@ -1840,7 +2070,7 @@
                 });
             } else {
                 // Reset any fixed positioning for mobile
-                const navbarDropdowns = document.querySelectorAll('.navbar .dropdown-menu');
+                const navbarDropdowns = document.querySelectorAll('.navbar .dropdown-menu, .topbar .dropdown-menu');
                 navbarDropdowns.forEach(menu => {
                     menu.style.position = '';
                     menu.style.left = '';

@@ -100,6 +100,12 @@
                                 </label>
                                 <select name="metric" id="metric" class="form-select">
                                     <option value="">Default (Total Points)</option>
+                                    <!-- Dynamic period-based metrics -->
+                                    <option value="auto_points" {% if selected_metric == 'auto_points' %}selected{% endif %}>Auto Points</option>
+                                    <option value="teleop_points" {% if selected_metric == 'teleop_points' %}selected{% endif %}>Teleop Points</option>
+                                    <option value="endgame_points" {% if selected_metric == 'endgame_points' %}selected{% endif %}>Endgame Points</option>
+                                    <option value="total_points" {% if selected_metric == 'total_points' %}selected{% endif %}>Total Points</option>
+                                    <!-- Legacy key_metrics if they exist -->
                                     {% for metric in game_config.get('data_analysis', {}).get('key_metrics', []) %}
                                     {% if ('formula' in metric or metric.get('auto_generated', False)) and metric.id not in ['coral', 'algae', 'accuracy', 'matches_scouted', 'defence', 'caa', 'dr', 'ecp', 'tot'] %}
                                     <option value="{{ metric.id }}" {% if metric.id == selected_metric %}selected{% endif %}>
@@ -278,53 +284,7 @@
 <!-- Additional Graph Features -->
 <div class="row">
     <div class="col-md-12 mb-4">
-        <div class="card">
-            <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i> Advanced Analysis Tools</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    {% if not viewer_disabled %}
-                    <div class="col-md-3 mb-3">
-                        <div class="card h-100">
-                            <div class="card-body text-center">
-                                <h5 class="card-title"><i class="fas fa-columns text-primary mb-3"></i><br>Side-by-Side Comparison</h5>
-                                <p class="card-text">Compare 2-6 teams with detailed metrics and performance data</p>
-                                <a href="{{ url_for('graphs.side_by_side') }}" class="btn btn-primary">Compare Teams</a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="card h-100">
-                            <div class="card-body text-center">
-                                <h5 class="card-title"><i class="fas fa-chart-bar text-success mb-3"></i><br>Multi-Metric Analysis</h5>
-                                <p class="card-text">Generate bar, line, and box plots for all configured metrics</p>
-                                <a href="{{ url_for('graphs.index') }}" class="btn btn-success">Analyze</a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="card h-100">
-                            <div class="card-body text-center">
-                                <h5 class="card-title"><i class="fas fa-share-alt text-info mb-3"></i><br>My Shared Graphs</h5>
-                                <p class="card-text">View and manage your shared graph links</p>
-                                <a href="{{ url_for('graphs.my_shares') }}" class="btn btn-info">View Shares</a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="card h-100">
-                            <div class="card-body text-center">
-                                <h5 class="card-title"><i class="fas fa-trophy text-warning mb-3"></i><br>Points Analysis</h5>
-                                <p class="card-text">Compare total points and team rankings</p>
-                                <a href="{{ url_for('graphs.index') }}?metric=points" class="btn btn-warning">View Rankings</a>
-                            </div>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
+        <!-- Advanced Analysis Tools card removed -->
     </div>
 </div>
 
@@ -447,34 +407,10 @@
                                     <div class="row">
                                         <div class="col-12">
                                             <strong class="small">Teams:</strong>
-                                            <div class="small text-muted">
-                                                {% set total_selected = selected_team_numbers|length %}
-                                                {% if total_selected <= 10 %}
-                                                    <div style="max-height: 100px; overflow-y: auto;">
-                                                        {% for team_num in selected_team_numbers %}
-                                                            Team {{ team_num }}{% if not loop.last %}, {% endif %}
-                                                        {% endfor %}
-                                                    </div>
-                                                {% else %}
-                                                    {# Show first 10 inline and a toggle to view the full list #}
-                                                    <div>
-                                                        {% for team_num in selected_team_numbers[:10] %}
-                                                            Team {{ team_num }}{% if not loop.last %}, {% endif %}
-                                                        {% endfor %}
-                                                        <span class="text-muted">... +{{ total_selected - 10 }} more</span>
-                                                        <button class="btn btn-sm btn-outline-secondary ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#fullSelectedTeams" aria-expanded="false" aria-controls="fullSelectedTeams">
-                                                            View all
-                                                        </button>
-                                                    </div>
-
-                                                    <div class="collapse mt-2" id="fullSelectedTeams">
-                                                        <div class="card card-body p-2" style="max-height: 200px; overflow-y: auto;">
-                                                            {% for team_num in selected_team_numbers %}
-                                                                Team {{ team_num }}{% if not loop.last %}, {% endif %}
-                                                            {% endfor %}
-                                                        </div>
-                                                    </div>
-                                                {% endif %}
+                                            <div class="small text-muted" style="max-height: 100px; overflow-y: auto;">
+                                                {% for team_num in selected_team_numbers %}
+                                                Team {{ team_num }}{% if not loop.last %}, {% endif %}
+                                                {% endfor %}
                                             </div>
                                         </div>
                                         <div class="col-12 mt-2">

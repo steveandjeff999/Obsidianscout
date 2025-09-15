@@ -22,6 +22,8 @@
             <div class="card-body">
                 <form method="POST" action="{{ url_for('main.save_config') }}" id="config-form">
                     <input type="hidden" name="simple_edit" value="true">
+                    <!-- Serialized fallback payload for robust server parsing -->
+                    <input type="hidden" name="simple_payload" id="simple_payload" value="">
                     
                     <!-- Navigation Tabs -->
                     <ul class="nav nav-tabs" id="configTabs" role="tablist">
@@ -919,8 +921,72 @@ document.addEventListener('DOMContentLoaded', function() {
         container.insertAdjacentHTML('beforeend', template);
     });
     
+    // Build a serialized payload that mirrors the form state so the server can use it
+    function buildSimplePayload() {
+        const payload = {};
+        // Basic settings
+        payload.game_name = document.getElementById('game_name').value;
+        payload.season = parseInt(document.getElementById('season').value) || null;
+        payload.version = document.getElementById('version').value;
+        payload.alliance_size = parseInt(document.getElementById('alliance_size').value) || null;
+        payload.scouting_stations = parseInt(document.getElementById('scouting_stations').value) || null;
+        payload.current_event_code = document.getElementById('current_event_code').value;
+        // Match types
+        payload.match_types = [];
+        ['practice','qualification','playoff'].forEach(t => {
+            const el = document.getElementById('match_type_' + t);
+            if (el && el.checked) payload.match_types.push(t.charAt(0).toUpperCase() + t.slice(1));
+        });
+        // Periods
+        ['auto','teleop','endgame'].forEach(period => {
+            payload[period] = [];
+            const container = document.getElementById(period + '-elements');
+            if (!container) return;
+            container.querySelectorAll('.scoring-element').forEach(se => {
+                const elObj = {};
+                const idInput = se.querySelector(`input[name^="${period}_element_id_"]`);
+                const nameInput = se.querySelector(`input[name^="${period}_element_name_"]`);
+                const typeSelect = se.querySelector(`select[name^="${period}_element_type_"]`);
+                const defaultInput = se.querySelector(`input[name^="${period}_element_default_"]`);
+                const gpInput = se.querySelector(`input[name^="${period}_element_game_piece_"]`);
+                const pointsInput = se.querySelector(`input[name^="${period}_element_points_"]`);
+                if (!idInput || !nameInput || !typeSelect) return;
+                elObj.id = idInput.value;
+                elObj.perm_id = elObj.id;
+                elObj.name = nameInput.value;
+                elObj.type = typeSelect.value;
+                elObj.default = defaultInput ? defaultInput.value : "";
+                if (gpInput) elObj.game_piece_id = gpInput.value;
+                if (pointsInput && elObj.type !== 'select') elObj.points = parseFloat(pointsInput.value) || 0;
+                if (elObj.type === 'select') {
+                    elObj.options = [];
+                    elObj.points = {};
+                    const rows = se.querySelectorAll('.option-points-table tbody tr');
+                    rows.forEach(r => {
+                        const val = r.querySelector('.option-value-input') ? r.querySelector('.option-value-input').value : '';
+                        const ptsEl = r.querySelector('.option-points-input');
+                        const pts = ptsEl ? parseFloat(ptsEl.value) || 0 : 0;
+                        if (val) {
+                            elObj.options.push(val);
+                            elObj.points[val] = pts;
+                        }
+                    });
+                }
+                payload[period].push(elObj);
+            });
+        });
+        return payload;
+    }
+
     // Validation for options on form submit
     document.getElementById('config-form').addEventListener('submit', function(e) {
+        // Always build and attach the serialized payload before submitting
+        try {
+            const p = buildSimplePayload();
+            document.getElementById('simple_payload').value = JSON.stringify(p);
+        } catch (err) {
+            console.error('Failed to build payload', err);
+        }
         let valid = true;
         let errorMsg = '';
         // For each select element's options table

@@ -1,0 +1,39 @@
+/* Modernized scouting form styles */
+:root{
+    --scout-accent: #5b3bff;
+    --scout-success: #2dd4bf;
+}
+
+.alliance-indicator{border-radius:12px}
+.alliance-icon{width:48px;height:48px;display:flex;align-items:center;justify-content:center}
+.alliance-details h4{font-size:1.05rem}
+
+.form-section{margin-bottom:1.25rem}
+.form-section .form-section-header{margin-bottom:.75rem}
+.form-section .form-section-title{font-weight:600}
+
+.points-display .card{border-radius:10px}
+.points-value{letter-spacing:.5px}
+
+.match-period-tabs{display:flex;gap:.5rem}
+.match-period-tab{flex:1;padding:.6rem .8rem;border-radius:.5rem;background:#f8f9fa;cursor:pointer;text-align:center;user-select:none}
+.match-period-tab.active{background:var(--scout-accent);color:#fff;box-shadow:0 6px 18px rgba(91,59,255,.12)}
+
+.counter-container{display:flex;gap:.5rem;align-items:center}
+.btn-counter{width:48px;height:48px;padding:0;border-radius:8px}
+.counter-input{max-width:88px;text-align:center}
+
+.rating-star{color:#e9ecef;cursor:pointer}
+.rating-star.active{color:#f6c84c;text-shadow:0 1px 0 rgba(0,0,0,.15)}
+
+.save-indicator{transition:opacity .25s ease}
+.form-saved{outline:5px solid rgba(45,212,191,.08);transition:outline .25s ease}
+
+/* Responsive tweaks */
+@media (max-width:575px){
+    .match-period-tabs{flex-direction:column}
+    .points-display .card .fs-1{font-size:1.6rem}
+}
+
+/* Accessibility focus styles */
+button:focus, input:focus, select:focus, textarea:focus{box-shadow:0 0 0 4px rgba(91,59,255,.12);outline:none}
