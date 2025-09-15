@@ -280,7 +280,7 @@
         background-color: rgba(var(--bs-light-rgb), 0.5);
         border-radius: 8px;
         min-width: auto;
-        z-index: auto !important; /* Reset z-index for mobile */
+        z-index: 1065 !important; /* Keep above other elements but within flow */
         left: auto !important;
         top: auto !important;
         right: auto !important;
@@ -292,6 +292,20 @@
         margin: 1px 4px;
         padding: 10px 16px;
         font-size: 1rem;
+    }
+}
+
+/* Additional mobile safety: ensure navbar-actions dropdowns are not fixed and will appear within flow */
+@media (max-width: 991.98px) {
+    .navbar-actions .dropdown-menu,
+    .navbar .dropdown-menu,
+    .topbar .dropdown-menu,
+    .dropdown-menu.navbar-glass {
+        position: static !important;
+        z-index: 1065 !important;
+        width: auto !important;
+        max-width: 100% !important;
+        box-shadow: none !important;
     }
 }
 

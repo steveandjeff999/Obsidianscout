@@ -186,7 +186,8 @@ class Assistant:
             entries = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=current_user.scouting_team_number).all()
             if not entries:
                 return {"text": f"No scouting data available for Team {team_number}."}
-            stats = calculate_team_metrics(team.id)
+            analytics_result = calculate_team_metrics(team.id)
+            stats = analytics_result.get('metrics', {})
             # Build HTML table of averages with display names
             from flask import current_app
             game_config = get_current_game_config()
@@ -317,8 +318,10 @@ setTimeout(function() {{
                 return {"text": f"Team {team2} not found in the database."}
             
             # Calculate stats for both teams
-            team1_stats = calculate_team_metrics(team1_obj.id)
-            team2_stats = calculate_team_metrics(team2_obj.id)
+            team1_analytics = calculate_team_metrics(team1_obj.id)
+            team1_stats = team1_analytics.get('metrics', {})
+            team2_analytics = calculate_team_metrics(team2_obj.id)
+            team2_stats = team2_analytics.get('metrics', {})
             
             return {
                 "text": f"Comparison between Team {team1} and Team {team2}:",
@@ -695,7 +698,8 @@ setTimeout(function() {{
                 if last_entities.get('team'):
                     team = Team.query.filter_by(team_number=last_entities['team']['number']).first()
                     if team:
-                        stats = calculate_team_metrics(team.id)
+                        analytics_result = calculate_team_metrics(team.id)
+                        stats = analytics_result.get('metrics', {})
                         metric_value = stats.get(metric.lower() + "_points", "N/A")
                         return {
                             "text": f"{metric.title()} performance for Team {team.team_number}: {metric_value}",

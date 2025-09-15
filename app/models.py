@@ -498,6 +498,20 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
             
         points = 0
         
+        # Helper function to safely convert to numeric value
+        def safe_numeric(value, default=0):
+            try:
+                if isinstance(value, (int, float)):
+                    return value
+                elif isinstance(value, str):
+                    return float(value) if '.' in value else int(value)
+                elif isinstance(value, bool):
+                    return 1 if value else 0
+                else:
+                    return default
+            except (ValueError, TypeError):
+                return default
+        
         # Add points from auto period scoring elements with direct point values
         for element in game_config.get('auto_period', {}).get('scoring_elements', []):
             element_id = element.get('id')
@@ -512,12 +526,26 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
                         points += element.get('points', 0)
                 elif element.get('type') == 'counter':
                     # For counter elements, multiply by points
-                    points += local_dict.get(element_id, 0) * element.get('points', 0)
+                    count = safe_numeric(local_dict.get(element_id, 0))
+                    points += count * element.get('points', 0)
                 elif element.get('type') == 'select':
                     # For select elements with point values per option
                     selected = local_dict.get(element_id)
                     if isinstance(element.get('points'), dict) and selected in element.get('points'):
                         points += element.get('points').get(selected, 0)
+                elif element.get('type') == 'multiple_choice':
+                    # For multiple choice elements, find the selected option and get its points
+                    selected = local_dict.get(element_id)
+                    if selected:
+                        for option in element.get('options', []):
+                            if isinstance(option, dict):
+                                if option.get('name') == selected:
+                                    points += safe_numeric(option.get('points', 0))
+                                    break
+                            elif option == selected:
+                                # Fallback for simple string options
+                                points += element.get('points', 0)
+                                break
             
             # Handle game pieces - only if this element doesn't already have direct points
             elif element.get('game_piece_id'):
@@ -525,7 +553,8 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
                 for game_piece in game_config.get('game_pieces', []):
                     if game_piece.get('id') == game_piece_id:
                         # Add points for this game piece
-                        points += local_dict.get(element_id, 0) * game_piece.get('auto_points', 0)
+                        count = safe_numeric(local_dict.get(element_id, 0))
+                        points += count * game_piece.get('auto_points', 0)
                         break
         
         return int(points)
@@ -536,6 +565,20 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
             game_config = get_current_game_config()
             
         points = 0
+        
+        # Helper function to safely convert to numeric value
+        def safe_numeric(value, default=0):
+            try:
+                if isinstance(value, (int, float)):
+                    return value
+                elif isinstance(value, str):
+                    return float(value) if '.' in value else int(value)
+                elif isinstance(value, bool):
+                    return 1 if value else 0
+                else:
+                    return default
+            except (ValueError, TypeError):
+                return default
         
         # Add points from teleop period scoring elements
         for element in game_config.get('teleop_period', {}).get('scoring_elements', []):
@@ -551,12 +594,26 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
                         points += element.get('points', 0)
                 elif element.get('type') == 'counter':
                     # For counter elements, multiply by points
-                    points += local_dict.get(element_id, 0) * element.get('points', 0)
+                    count = safe_numeric(local_dict.get(element_id, 0))
+                    points += count * element.get('points', 0)
                 elif element.get('type') == 'select':
                     # For select elements with point values per option
                     selected = local_dict.get(element_id)
                     if isinstance(element.get('points'), dict) and selected in element.get('points'):
                         points += element.get('points').get(selected, 0)
+                elif element.get('type') == 'multiple_choice':
+                    # For multiple choice elements, find the selected option and get its points
+                    selected = local_dict.get(element_id)
+                    if selected:
+                        for option in element.get('options', []):
+                            if isinstance(option, dict):
+                                if option.get('name') == selected:
+                                    points += safe_numeric(option.get('points', 0))
+                                    break
+                            elif option == selected:
+                                # Fallback for simple string options
+                                points += element.get('points', 0)
+                                break
             
             # Handle game pieces - only if this element doesn't already have direct points
             elif element.get('game_piece_id'):
@@ -565,10 +622,12 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
                     if game_piece.get('id') == game_piece_id:
                         # Check if this is a bonus scoring element
                         if element.get('bonus'):
-                            points += local_dict.get(element_id, 0) * game_piece.get('bonus_points', 0)
+                            count = safe_numeric(local_dict.get(element_id, 0))
+                            points += count * game_piece.get('bonus_points', 0)
                         else:
                             # Normal teleop scoring
-                            points += local_dict.get(element_id, 0) * game_piece.get('teleop_points', 0)
+                            count = safe_numeric(local_dict.get(element_id, 0))
+                            points += count * game_piece.get('teleop_points', 0)
                         break
         
         return int(points)
@@ -579,6 +638,20 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
             game_config = get_current_game_config()
             
         points = 0
+        
+        # Helper function to safely convert to numeric value
+        def safe_numeric(value, default=0):
+            try:
+                if isinstance(value, (int, float)):
+                    return value
+                elif isinstance(value, str):
+                    return float(value) if '.' in value else int(value)
+                elif isinstance(value, bool):
+                    return 1 if value else 0
+                else:
+                    return default
+            except (ValueError, TypeError):
+                return default
         
         # Add points from endgame period scoring elements
         for element in game_config.get('endgame_period', {}).get('scoring_elements', []):
@@ -592,12 +665,26 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
                     points += element.get('points', 0)
             elif element.get('type') == 'counter' and element.get('points'):
                 # For counter elements, multiply by points
-                points += local_dict.get(element_id, 0) * element.get('points', 0)
+                count = safe_numeric(local_dict.get(element_id, 0))
+                points += count * element.get('points', 0)
             elif element.get('type') == 'select' and isinstance(element.get('points'), dict):
                 # For select elements with point values per option
                 selected = local_dict.get(element_id)
                 if selected in element.get('points', {}):
                     points += element.get('points', {}).get(selected, 0)
+            elif element.get('type') == 'multiple_choice':
+                # For multiple choice elements, find the selected option and get its points
+                selected = local_dict.get(element_id)
+                if selected:
+                    for option in element.get('options', []):
+                        if isinstance(option, dict):
+                            if option.get('name') == selected:
+                                points += safe_numeric(option.get('points', 0))
+                                break
+                        elif option == selected:
+                            # Fallback for simple string options
+                            points += element.get('points', 0)
+                            break
         
         return int(points)
     

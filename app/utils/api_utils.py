@@ -14,6 +14,85 @@ class ApiError(Exception):
     """Exception for API errors"""
     pass
 
+
+def _mask(val):
+    if not val:
+        return None
+    s = str(val)
+    if len(s) <= 6:
+        return '*' * len(s)
+    return s[:3] + '...' + s[-3:]
+
+
+def inspect_api_key_locations():
+    """Return a short diagnostic string showing where API keys were found (masked).
+
+    This helps users see which config or env var provided the key that's being
+    used and where to look to fix invalid tokens.
+    """
+    base = os.getcwd()
+    info = {'tba': [], 'first': []}
+
+    # env and app config
+    tba_env = os.environ.get('TBA_API_KEY')
+    if tba_env:
+        info['tba'].append(('env:TBA_API_KEY', _mask(tba_env)))
+    first_env = os.environ.get('FRC_API_KEY')
+    if first_env:
+        info['first'].append(('env:FRC_API_KEY', _mask(first_env)))
+
+    tba_app = current_app.config.get('TBA_API_KEY')
+    if tba_app:
+        info['tba'].append(('app:TBA_API_KEY', _mask(tba_app)))
+    first_app = current_app.config.get('API_KEY')
+    if first_app:
+        info['first'].append(('app:API_KEY', _mask(first_app)))
+
+    # game config (global)
+    try:
+        game_config = current_app.config.get('GAME_CONFIG', {})
+        tba_settings = game_config.get('tba_api_settings', {})
+        if isinstance(tba_settings, dict) and tba_settings.get('auth_key'):
+            info['tba'].append(('game_config:tba_api_settings.auth_key', _mask(tba_settings.get('auth_key'))))
+        api_settings = game_config.get('api_settings', {})
+        if isinstance(api_settings, dict) and api_settings.get('auth_token'):
+            info['first'].append(('game_config:api_settings.auth_token', _mask(api_settings.get('auth_token'))))
+    except Exception:
+        pass
+
+    # scan instance/team configs for first/second matching keys (show up to 3)
+    try:
+        configs_dir = os.path.join(base, 'instance', 'configs')
+        if os.path.isdir(configs_dir):
+            for team_folder in os.listdir(configs_dir):
+                cfg_path = os.path.join(configs_dir, team_folder, 'game_config.json')
+                if os.path.exists(cfg_path):
+                    try:
+                        with open(cfg_path, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                        t = data.get('tba_api_settings', {})
+                        a = data.get('api_settings', {})
+                        if isinstance(t, dict) and t.get('auth_key'):
+                            info['tba'].append((f'instance:{team_folder}:tba_api_settings.auth_key', _mask(t.get('auth_key'))))
+                        if isinstance(a, dict) and a.get('auth_token'):
+                            info['first'].append((f'instance:{team_folder}:api_settings.auth_token', _mask(a.get('auth_token'))))
+                    except Exception:
+                        continue
+    except Exception:
+        pass
+
+    parts = []
+    for key in ('tba', 'first'):
+        entries = info.get(key, [])
+        if entries:
+            parts.append(f"{key.upper()} keys found:")
+            for src, masked in entries[:5]:
+                parts.append(f"  - {src}: {masked}")
+        else:
+            parts.append(f"{key.upper()} keys found: none")
+
+    return '\n'.join(parts)
+
 def get_preferred_api_source():
     """Get preferred API source from config"""
     game_config = get_current_game_config()
@@ -47,6 +126,57 @@ def get_api_key():
     api_key = current_app.config.get('API_KEY')
     if isinstance(api_key, str):
         api_key = api_key.strip()
+
+    # As a final fallback, check the loaded game config (GAME_CONFIG).
+    # This is where team-specific instance configs store api_settings.auth_token
+    try:
+        game_config = current_app.config.get('GAME_CONFIG', {})
+        api_settings = game_config.get('api_settings', {})
+        cfg_token = api_settings.get('auth_token')
+        if cfg_token and isinstance(cfg_token, str):
+            return cfg_token.strip()
+    except Exception:
+        pass
+
+    # Basic placeholder detection: many default configs use phrases like
+    # "your FIRST api auth token here". Avoid sending obviously placeholder
+    # tokens to remote services which will generate confusing 401s.
+    try:
+        if isinstance(api_key, str):
+            token = api_key.strip()
+            low = token.lower()
+            if any(x in low for x in ('your ', 'your_', 'example', 'replace', 'todo')) or len(token) < 10:
+                print("FIRST API key looks like a placeholder; ignoring and returning None")
+                api_key = None
+            else:
+                return token
+    except Exception:
+        pass
+
+    # If we still don't have a key, scan instance/configs/* for a valid-looking
+    # api_settings.auth_token and return the first one found.
+    if not api_key:
+        try:
+            base = os.getcwd()
+            configs_dir = os.path.join(base, 'instance', 'configs')
+            if os.path.isdir(configs_dir):
+                for team_folder in os.listdir(configs_dir):
+                    cfg_path = os.path.join(configs_dir, team_folder, 'game_config.json')
+                    if os.path.exists(cfg_path):
+                        try:
+                            with open(cfg_path, 'r', encoding='utf-8') as f:
+                                data = json.load(f)
+                            api_settings = data.get('api_settings', {})
+                            k = api_settings.get('auth_token')
+                            if k and isinstance(k, str):
+                                lk = k.strip().lower()
+                                if not any(x in lk for x in ('your ', 'your_', 'example', 'replace', 'todo')) and len(k.strip()) >= 10:
+                                    print(f"Found FIRST API token in team config {team_folder}; using it as fallback")
+                                    return k.strip()
+                        except Exception:
+                            continue
+        except Exception:
+            pass
 
     return api_key
 
@@ -492,40 +622,41 @@ def get_teams_dual_api(event_code):
     
     except (ApiError, TBAApiError) as e:
         print(f"Primary API ({preferred_source}) failed: {str(e)}")
-        
+
         # Try fallback API
         fallback_source = 'first' if preferred_source == 'tba' else 'tba'
         print(f"Trying fallback API: {fallback_source}")
-        
+
         try:
             if fallback_source == 'tba':
                 game_config = get_current_game_config()
                 season = game_config.get('season', 2026)
                 tba_event_key = construct_tba_event_key(event_code, season)
-                
+
                 tba_teams = get_tba_teams_at_event(tba_event_key)
-                
+
                 teams_db_format = []
                 for tba_team in tba_teams:
                     team_data = tba_team_to_db_format(tba_team)
                     if team_data and team_data.get('team_number'):
                         teams_db_format.append(team_data)
-                
+
                 return teams_db_format
             else:
                 api_teams = get_teams(event_code)
-                
+
                 teams_db_format = []
                 for api_team in api_teams:
                     team_data = api_to_db_team_conversion(api_team)
                     if team_data and team_data.get('team_number'):
                         teams_db_format.append(team_data)
-                
+
                 return teams_db_format
-        
         except (ApiError, TBAApiError) as fallback_error:
             print(f"Fallback API ({fallback_source}) also failed: {str(fallback_error)}")
-            raise ApiError(f"Both APIs failed. Primary ({preferred_source}): {str(e)}, Fallback ({fallback_source}): {str(fallback_error)}")
+            # Add diagnostic info about where API keys were discovered
+            diag = inspect_api_key_locations()
+            raise ApiError(f"Both APIs failed. Primary ({preferred_source}): {str(e)}, Fallback ({fallback_source}): {str(fallback_error)}\n\n{diag}")
 
 def get_matches_dual_api(event_code):
     """Get matches from either FIRST API or TBA API based on configuration"""
@@ -566,40 +697,40 @@ def get_matches_dual_api(event_code):
     
     except (ApiError, TBAApiError) as e:
         print(f"Primary API ({preferred_source}) failed: {str(e)}")
-        
+
         # Try fallback API
         fallback_source = 'first' if preferred_source == 'tba' else 'tba'
         print(f"Trying fallback API: {fallback_source}")
-        
+
         try:
             if fallback_source == 'tba':
                 game_config = get_current_game_config()
                 season = game_config.get('season', 2026)
                 tba_event_key = construct_tba_event_key(event_code, season)
-                
+
                 tba_matches = get_tba_event_matches(tba_event_key)
-                
+
                 matches_db_format = []
                 for tba_match in tba_matches:
                     match_data = tba_match_to_db_format(tba_match, None)
                     if match_data:
                         matches_db_format.append(match_data)
-                
+
                 return matches_db_format
             else:
                 api_matches = get_matches(event_code)
-                
+
                 matches_db_format = []
                 for api_match in api_matches:
                     match_data = api_to_db_match_conversion(api_match, None)
                     if match_data:
                         matches_db_format.append(match_data)
-                
+
                 return matches_db_format
-        
         except (ApiError, TBAApiError) as fallback_error:
             print(f"Fallback API ({fallback_source}) also failed: {str(fallback_error)}")
-            raise ApiError(f"Both APIs failed. Primary ({preferred_source}): {str(e)}, Fallback ({fallback_source}): {str(fallback_error)}")
+            diag = inspect_api_key_locations()
+            raise ApiError(f"Both APIs failed. Primary ({preferred_source}): {str(e)}, Fallback ({fallback_source}): {str(fallback_error)}\n\n{diag}")
 
 def get_event_details_dual_api(event_code):
     """Get event details from either FIRST API or TBA API based on configuration"""
@@ -628,26 +759,26 @@ def get_event_details_dual_api(event_code):
     
     except (ApiError, TBAApiError) as e:
         print(f"Primary API ({preferred_source}) failed: {str(e)}")
-        
+
         # Try fallback API
         fallback_source = 'first' if preferred_source == 'tba' else 'tba'
         print(f"Trying fallback API: {fallback_source}")
-        
+
         try:
             if fallback_source == 'tba':
                 game_config = get_current_game_config()
                 season = game_config.get('season', 2026)
                 tba_event_key = construct_tba_event_key(event_code, season)
-                
+
                 tba_event = get_tba_event_details(tba_event_key)
-                
+
                 if tba_event:
                     return tba_event_to_db_format(tba_event)
                 else:
                     return None
             else:
                 return get_event_details(event_code)
-        
         except (ApiError, TBAApiError) as fallback_error:
             print(f"Fallback API ({fallback_source}) also failed: {str(fallback_error)}")
-            raise ApiError(f"Both APIs failed. Primary ({preferred_source}): {str(e)}, Fallback ({fallback_source}): {str(fallback_error)}")
+            diag = inspect_api_key_locations()
+            raise ApiError(f"Both APIs failed. Primary ({preferred_source}): {str(e)}, Fallback ({fallback_source}): {str(fallback_error)}\n\n{diag}")

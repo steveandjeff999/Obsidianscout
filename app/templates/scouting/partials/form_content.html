@@ -95,18 +95,18 @@
     </div>
 
     <!-- Match Period Navigation -->
-    <div class="match-period-tabs mb-4">
-        <div class="tab match-period-tab auto-tab active" data-target="auto-section">
-            <i class="fas fa-rocket me-2"></i> Auto Period
+    <div class="match-period-tabs mb-4" role="tablist" aria-label="Match periods">
+        <div class="tab match-period-tab auto-tab active" data-target="auto-section" role="tab" tabindex="0" aria-selected="true">
+            <i class="fas fa-rocket me-2" aria-hidden="true"></i> <span>Auto Period</span>
         </div>
-        <div class="tab match-period-tab teleop-tab" data-target="teleop-section">
-            <i class="fas fa-gamepad me-2"></i> Teleop
+        <div class="tab match-period-tab teleop-tab" data-target="teleop-section" role="tab" tabindex="0" aria-selected="false">
+            <i class="fas fa-gamepad me-2" aria-hidden="true"></i> <span>Teleop</span>
         </div>
-        <div class="tab match-period-tab endgame-tab" data-target="endgame-section">
-            <i class="fas fa-flag-checkered me-2"></i> Endgame
+        <div class="tab match-period-tab endgame-tab" data-target="endgame-section" role="tab" tabindex="0" aria-selected="false">
+            <i class="fas fa-flag-checkered me-2" aria-hidden="true"></i> <span>Endgame</span>
         </div>
-        <div class="tab match-period-tab" data-target="post-match-section">
-            <i class="fas fa-clipboard-check me-2"></i> Post-Match
+        <div class="tab match-period-tab" data-target="post-match-section" role="tab" tabindex="0" aria-selected="false">
+            <i class="fas fa-clipboard-check me-2" aria-hidden="true"></i> <span>Post-Match</span>
         </div>
     </div>
     
@@ -141,29 +141,43 @@
                                 {% if element.description %}
                                 <small class="text-muted d-block mb-2">{{ element.description }}</small>
                                 {% endif %}
-                                <div class="counter-container">
-                                    <button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}">
-                                        <i class="fas fa-minus"></i>
+                                <div class="counter-container" role="group" aria-label="{{ element.name }} counter">
+                                    <button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}" aria-label="Decrease {{ element.name }}">
+                                        <i class="fas fa-minus" aria-hidden="true"></i>
                                     </button>
                                     <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" 
-                                            value="{{ form_data.get(element.id, element.default) }}" min="0">
-                                    <button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}">
-                                        <i class="fas fa-plus"></i>
+                                            value="{{ form_data.get(element.id, element.default) }}" min="0" aria-label="{{ element.name }} value">
+                                    <button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}" aria-label="Increase {{ element.name }}">
+                                        <i class="fas fa-plus" aria-hidden="true"></i>
                                     </button>
                                 </div>
-                            {% elif element.type == 'select' %}
+                            {% elif element.type == 'select' or element.type == 'multiple_choice' %}
                                 <label for="{{ element.id }}" class="form-label fw-medium">{{ element.name }}</label>
                                 {% if element.description %}
                                 <small class="text-muted d-block mb-2">{{ element.description }}</small>
                                 {% endif %}
                                 <select class="form-select form-select-lg" id="{{ element.id }}" name="{{ element.id }}">
-                                    {% for option in element.options %}
-                                        {% if option is string %}
-                                            <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
-                                        {% else %}
-                                            <option value="{{ option.value }}" {% if form_data.get(element.id) == option.value %}selected{% endif %}>{{ option.label if option.label else option.value }}</option>
-                                        {% endif %}
-                                    {% endfor %}
+                                    {% if element.type == 'multiple_choice' %}
+                                        <option value="">-- Select --</option>
+                                        {% for option in element.options %}
+                                            {% if option is mapping %}
+                                                {% set option_value = option.name %}
+                                                {% set current_value = form_data.get(element.id, element.default) %}
+                                                <option value="{{ option_value }}" {% if current_value == option_value %}selected{% endif %}>{{ option.name }}</option>
+                                            {% else %}
+                                                {% set current_value = form_data.get(element.id, element.default) %}
+                                                <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>{{ option }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        {% for option in element.options %}
+                                            {% if option is string %}
+                                                <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
+                                            {% else %}
+                                                <option value="{{ option.value }}" {% if form_data.get(element.id) == option.value %}selected{% endif %}>{{ option.label if option.label else option.value }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
                                 </select>
                             {% endif %}
                         </div>
@@ -214,19 +228,33 @@
                                         <i class="fas fa-plus"></i>
                                     </button>
                                 </div>
-                            {% elif element.type == 'select' %}
+                            {% elif element.type == 'select' or element.type == 'multiple_choice' %}
                                 <label for="{{ element.id }}" class="form-label fw-medium">{{ element.name }}</label>
                                 {% if element.description %}
                                 <small class="text-muted d-block mb-2">{{ element.description }}</small>
                                 {% endif %}
                                 <select class="form-select form-select-lg" id="{{ element.id }}" name="{{ element.id }}">
-                                    {% for option in element.options %}
-                                        {% if option is string %}
-                                            <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
-                                        {% else %}
-                                            <option value="{{ option.value }}" {% if form_data.get(element.id) == option.value %}selected{% endif %}>{{ option.label if option.label else option.value }}</option>
-                                        {% endif %}
-                                    {% endfor %}
+                                    {% if element.type == 'multiple_choice' %}
+                                        <option value="">-- Select --</option>
+                                        {% for option in element.options %}
+                                            {% if option is mapping %}
+                                                {% set option_value = option.name %}
+                                                {% set current_value = form_data.get(element.id, element.default) %}
+                                                <option value="{{ option_value }}" {% if current_value == option_value %}selected{% endif %}>{{ option.name }}</option>
+                                            {% else %}
+                                                {% set current_value = form_data.get(element.id, element.default) %}
+                                                <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>{{ option }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        {% for option in element.options %}
+                                            {% if option is string %}
+                                                <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
+                                            {% else %}
+                                                <option value="{{ option.value }}" {% if form_data.get(element.id) == option.value %}selected{% endif %}>{{ option.label if option.label else option.value }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
                                 </select>
                             {% endif %}
                         </div>
@@ -277,19 +305,33 @@
                                         <i class="fas fa-plus"></i>
                                     </button>
                                 </div>
-                            {% elif element.type == 'select' %}
+                            {% elif element.type == 'select' or element.type == 'multiple_choice' %}
                                 <label for="{{ element.id }}" class="form-label fw-medium">{{ element.name }}</label>
                                 {% if element.description %}
                                 <small class="text-muted d-block mb-2">{{ element.description }}</small>
                                 {% endif %}
                                 <select class="form-select form-select-lg" id="{{ element.id }}" name="{{ element.id }}">
-                                    {% for option in element.options %}
-                                        {% if option is string %}
-                                            <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
-                                        {% else %}
-                                            <option value="{{ option.value }}" {% if form_data.get(element.id) == option.value %}selected{% endif %}>{{ option.label if option.label else option.value }}</option>
-                                        {% endif %}
-                                    {% endfor %}
+                                    {% if element.type == 'multiple_choice' %}
+                                        <option value="">-- Select --</option>
+                                        {% for option in element.options %}
+                                            {% if option is mapping %}
+                                                {% set option_value = option.name %}
+                                                {% set current_value = form_data.get(element.id, element.default) %}
+                                                <option value="{{ option_value }}" {% if current_value == option_value %}selected{% endif %}>{{ option.name }}</option>
+                                            {% else %}
+                                                {% set current_value = form_data.get(element.id, element.default) %}
+                                                <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>{{ option }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        {% for option in element.options %}
+                                            {% if option is string %}
+                                                <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
+                                            {% else %}
+                                                <option value="{{ option.value }}" {% if form_data.get(element.id) == option.value %}selected{% endif %}>{{ option.label if option.label else option.value }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
                                 </select>
                             {% endif %}
                         </div>
@@ -321,7 +363,7 @@
                                         <div class="rating-container mb-2">
                                             {% for i in range(1, element.max + 1) %}
                                                 <i class="rating-star fas fa-star {% if (form_data.get(element.id, element.default)|int) >= i %}active{% endif %}" 
-                                                    data-value="{{ i }}" data-rating-id="{{ element.id }}"></i>
+                                                    data-value="{{ i }}" data-rating-id="{{ element.id }}" role="button" tabindex="0" aria-label="Rate {{ i }}"></i>
                                             {% endfor %}
                                         </div>
                                         <input type="hidden" name="{{ element.id }}" id="{{ element.id }}" value="{{ form_data.get(element.id, element.default) }}">

@@ -939,6 +939,8 @@ function calculatePoints(formula, data) {
 function calculatePeriodPoints(period, data) {
     let points = 0;
     
+    console.log(`Calculating points for period: ${period}`, data);
+    
     // Use the global GAME_CONFIG that was passed via the script tag in base.html
     if (!window.GAME_CONFIG) {
         console.error('Game configuration not found');
@@ -948,14 +950,23 @@ function calculatePeriodPoints(period, data) {
     try {
         // Get scoring elements for the period
         const periodConfig = window.GAME_CONFIG[`${period}_period`];
+        console.log(`Period config for ${period}:`, periodConfig);
+        
         if (!periodConfig || !periodConfig.scoring_elements) return 0;
         
         // Calculate points for each scoring element
         periodConfig.scoring_elements.forEach(element => {
             const elementId = element.id;
+            console.log(`Processing element ${elementId} (${element.type}):`, element);
             
             // Skip if element is not in the form data
-            if (!(elementId in data)) return;
+            if (!(elementId in data)) {
+                console.log(`Element ${elementId} not found in form data`);
+                return;
+            }
+            
+            const elementValue = data[elementId];
+            console.log(`Element ${elementId} value:`, elementValue);
             
             // Handle different element types
             if (element.type === 'boolean' && element.points) {
@@ -971,6 +982,38 @@ function calculatePeriodPoints(period, data) {
                 const selectedValue = data[elementId];
                 if (typeof element.points === 'object' && selectedValue in element.points) {
                     points += element.points[selectedValue];
+                }
+            } else if (element.type === 'multiple_choice' && element.options) {
+                // Multiple choice elements with individual option points
+                const selectedValue = data[elementId];
+                console.log(`Multiple choice element ${elementId}:`, {
+                    selectedValue: selectedValue,
+                    options: element.options,
+                    elementData: element
+                });
+                
+                if (selectedValue !== undefined && selectedValue !== null && selectedValue !== "") {
+                    // Find the option that matches the selected value
+                    const selectedOption = element.options.find(option => {
+                        if (typeof option === 'object' && option.name !== undefined) {
+                            // Compare both as strings to handle type mismatches
+                            return String(option.name) === String(selectedValue);
+                        }
+                        return String(option) === String(selectedValue);
+                    });
+                    
+                    console.log(`Found selected option for ${elementId}:`, selectedOption);
+                    
+                    // Add points if option has points defined
+                    if (selectedOption && typeof selectedOption === 'object' && selectedOption.points) {
+                        const pointsToAdd = selectedOption.points;
+                        points += pointsToAdd;
+                        console.log(`Adding ${pointsToAdd} points for ${elementId}, total now: ${points}`);
+                    } else {
+                        console.log(`No points to add for ${elementId}, selectedOption:`, selectedOption);
+                    }
+                } else {
+                    console.log(`No selected value for multiple choice ${elementId}`);
                 }
             } else if (element.game_piece_id) {
                 // Game piece elements without direct points
@@ -989,6 +1032,7 @@ function calculatePeriodPoints(period, data) {
             }
         });
         
+        console.log(`Total points calculated for ${period}: ${points}`);
         return points;
     } catch (error) {
         console.error(`Error calculating ${period} points:`, error);

@@ -136,8 +136,131 @@ def edit_config():
 def simple_edit_config():
     """Simple form-based configuration editor"""
     game_config = copy.deepcopy(get_current_game_config())
+    
+    # Ensure all required sections exist with proper defaults
+    game_config = ensure_complete_config_structure(game_config)
+    
     default_configs = get_available_default_configs()
-    return render_template('config_simple_edit.html', game_config=game_config, default_configs=default_configs, **get_theme_context())
+    return render_template('config_simple_edit_simplified.html', game_config=game_config, default_configs=default_configs, **get_theme_context())
+
+def ensure_complete_config_structure(config):
+    """Ensures the configuration has all required sections with proper defaults"""
+    
+    # Check if this is a completely empty/new config
+    is_new_config = not config.get('game_name') and not any(
+        config.get(period, {}).get('scoring_elements', []) 
+        for period in ['auto_period', 'teleop_period', 'endgame_period']
+    )
+    
+    # Default complete structure
+    default_structure = {
+        'game_name': config.get('game_name', ''),
+        'season': config.get('season', 2024),
+        'version': config.get('version', '1.0.0'),
+        'alliance_size': config.get('alliance_size', 3),
+        'scouting_stations': config.get('scouting_stations', 6),
+        'current_event_code': config.get('current_event_code', ''),
+        'match_types': config.get('match_types', ['Qualification']),
+        'preferred_api_source': config.get('preferred_api_source', 'first'),
+        'auto_period': {
+            'duration_seconds': config.get('auto_period', {}).get('duration_seconds', 15),
+            'scoring_elements': config.get('auto_period', {}).get('scoring_elements', [])
+        },
+        'teleop_period': {
+            'duration_seconds': config.get('teleop_period', {}).get('duration_seconds', 135),
+            'scoring_elements': config.get('teleop_period', {}).get('scoring_elements', [])
+        },
+        'endgame_period': {
+            'duration_seconds': config.get('endgame_period', {}).get('duration_seconds', 30),
+            'scoring_elements': config.get('endgame_period', {}).get('scoring_elements', [])
+        },
+        'game_pieces': config.get('game_pieces', []),
+        'post_match': {
+            'rating_elements': config.get('post_match', {}).get('rating_elements', []),
+            'text_elements': config.get('post_match', {}).get('text_elements', [])
+        },
+        'api_settings': {
+            'username': config.get('api_settings', {}).get('username', ''),
+            'auth_token': config.get('api_settings', {}).get('auth_token', ''),
+            'base_url': config.get('api_settings', {}).get('base_url', 'https://frc-api.firstinspires.org')
+        },
+        'tba_api_settings': {
+            'auth_key': config.get('tba_api_settings', {}).get('auth_key', ''),
+            'base_url': config.get('tba_api_settings', {}).get('base_url', 'https://www.thebluealliance.com/api/v3')
+        }
+    }
+    
+    # Only add data_analysis section if it already exists in the config (backwards compatibility)
+    if 'data_analysis' in config:
+        default_structure['data_analysis'] = {
+            'key_metrics': config.get('data_analysis', {}).get('key_metrics', [])
+        }
+    
+    # For completely new configs, add some helpful starter elements
+    if is_new_config:
+        default_structure['auto_period']['scoring_elements'] = [
+            {
+                'id': 'auto_speaker_notes',
+                'perm_id': 'auto_speaker_notes',
+                'name': 'Speaker Notes Scored',
+                'type': 'counter',
+                'default': 0,
+                'points': 5
+            }
+        ]
+        default_structure['teleop_period']['scoring_elements'] = [
+            {
+                'id': 'teleop_speaker_notes',
+                'perm_id': 'teleop_speaker_notes',
+                'name': 'Speaker Notes Scored',
+                'type': 'counter',
+                'default': 0,
+                'points': 2
+            },
+            {
+                'id': 'teleop_amp_notes',
+                'perm_id': 'teleop_amp_notes', 
+                'name': 'Amp Notes Scored',
+                'type': 'counter',
+                'default': 0,
+                'points': 1
+            }
+        ]
+        default_structure['endgame_period']['scoring_elements'] = [
+            {
+                'id': 'endgame_climb',
+                'perm_id': 'endgame_climb',
+                'name': 'Climb Success',
+                'type': 'boolean',
+                'default': False,
+                'points': 3
+            }
+        ]
+        default_structure['post_match']['rating_elements'] = [
+            {
+                'id': 'defense_rating',
+                'name': 'Defense Rating',
+                'type': 'rating',
+                'min': 1,
+                'max': 5,
+                'default': 3
+            }
+        ]
+        default_structure['post_match']['text_elements'] = [
+            {
+                'id': 'general_comments',
+                'name': 'General Comments',
+                'type': 'text',
+                'multiline': True
+            }
+        ]
+    
+    # Preserve any additional fields that might exist in the original config
+    for key, value in config.items():
+        if key not in default_structure:
+            default_structure[key] = value
+    
+    return default_structure
 
 @bp.route('/config/reset', methods=['POST'])
 def reset_config():
@@ -200,8 +323,43 @@ def save_config():
 def save_simple_config():
     """Save configuration from the simple editor"""
     try:
-        # Get current config as base
+        # --- DEBUG: dump incoming form keys for diagnosis ---
+        try:
+            debug_path = os.path.join(current_app.instance_path, 'config_save_debug.log')
+            with open(debug_path, 'a', encoding='utf-8') as dbg:
+                dbg.write(f"--- Save attempt at {datetime.utcnow().isoformat()} by {getattr(current_user, 'username', 'unknown')} ---\n")
+                dbg.write("Form keys:\n")
+                for k in request.form.keys():
+                    dbg.write(f"  {k}\n")
+                dbg.write("\n")
+        except Exception:
+            # Best-effort logging; don't block save on logging errors
+            pass
+
+        # Get current config as base and ensure it has complete structure
         updated_config = copy.deepcopy(get_current_game_config())
+        updated_config = ensure_complete_config_structure(updated_config)
+            
+        # Keep an original snapshot so we can preserve existing data if the submitted form is incomplete
+        original_config = copy.deepcopy(updated_config)
+
+        # If the client provided a serialized simple_payload JSON, prefer it (more reliable)
+        simple_payload = None
+        try:
+            payload_raw = request.form.get('simple_payload')
+            if payload_raw:
+                simple_payload = json.loads(payload_raw)
+        except Exception:
+            simple_payload = None
+        # DEBUG: record whether we got a payload
+        try:
+            debug_path = os.path.join(current_app.instance_path, 'config_save_debug.log')
+            with open(debug_path, 'a', encoding='utf-8') as dbg:
+                dbg.write(f"simple_payload_present: {bool(simple_payload)}\n")
+                if simple_payload:
+                    dbg.write(f"simple_payload_keys: {list(simple_payload.keys())}\n")
+        except Exception:
+            pass
         
         # Update basic settings
         updated_config['game_name'] = request.form.get('game_name', '')
@@ -227,65 +385,232 @@ def save_simple_config():
         for period in ['auto', 'teleop', 'endgame']:
             period_key = f'{period}_period'
             elements = []
-            
-            # Find all elements for this period
-            element_indices = set()
-            for key in request.form.keys():
-                if key.startswith(f'{period}_element_id_'):
-                    index = key.split('_')[-1]
-                    element_indices.add(int(index))
-            
-            for index in sorted(element_indices):
-                element_id = request.form.get(f'{period}_element_id_{index}')
-                element_name = request.form.get(f'{period}_element_name_{index}')
-                element_type = request.form.get(f'{period}_element_type_{index}')
-                
-                if element_id and element_name and element_type:
-                    element = {
-                        'id': element_id,
-                        'perm_id': element_id,
-                        'name': element_name,
-                        'type': element_type,
-                        'default': parse_default_value(request.form.get(f'{period}_element_default_{index}', '0'), element_type)
-                    }
-                    
-                    # Add points if provided (for non-select types)
-                    points = request.form.get(f'{period}_element_points_{index}')
-                    if points and element_type != 'select':
-                        try:
-                            element['points'] = float(points)
-                        except ValueError:
-                            element['points'] = 0
-                    
-                    # Add game piece ID if provided
-                    game_piece_id = request.form.get(f'{period}_element_game_piece_{index}')
-                    if game_piece_id:
-                        element['game_piece_id'] = game_piece_id
-                    
-                    # Handle select options with per-option points
-                    if element_type == 'select':
-                        options = []
-                        points_dict = {}
-                        option_idx = 0
-                        while True:
-                            opt_val = request.form.get(f'{period}_element_option_value_{index}_{option_idx}')
-                            opt_label = request.form.get(f'{period}_element_option_label_{index}_{option_idx}')
-                            opt_points = request.form.get(f'{period}_element_option_points_{index}_{option_idx}')
-                            if opt_val is None:
-                                break
-                            options.append(opt_val)
+
+            # If client provided a serialized payload, use it to construct elements reliably
+            if simple_payload and isinstance(simple_payload.get(period), list):
+                for el in simple_payload.get(period, []):
+                    try:
+                        element = {
+                            'id': el.get('id'),
+                            'perm_id': el.get('perm_id') or el.get('id'),
+                            'name': el.get('name'),
+                            'type': el.get('type'),
+                            'default': parse_default_value(el.get('default', ''), el.get('type'))
+                        }
+                        if element['type'] != 'select' and element['type'] != 'multiple_choice' and 'points' in el:
                             try:
-                                points_dict[opt_val] = float(opt_points) if opt_points is not None else 0
+                                element['points'] = float(el.get('points'))
+                            except Exception:
+                                element['points'] = 0
+                        if el.get('game_piece_id'):
+                            element['game_piece_id'] = el.get('game_piece_id')
+                        if element['type'] == 'select':
+                            opts = el.get('options') or []
+                            pts = el.get('points') or {}
+                            # sanitize
+                            element['options'] = [str(o) for o in opts if o is not None]
+                            element['points'] = {str(k): float(v) if isinstance(v, (int, float)) or (isinstance(v, str) and v.replace('.', '', 1).isdigit()) else 0 for k, v in (pts.items() if isinstance(pts, dict) else [])}
+                        elif element['type'] == 'multiple_choice':
+                            opts = el.get('options') or []
+                            element['options'] = []
+                            # Handle the new multiple choice format with individual point values
+                            for opt in opts:
+                                if isinstance(opt, dict) and 'name' in opt:
+                                    element['options'].append({
+                                        'name': str(opt['name']),
+                                        'points': float(opt.get('points', 0))
+                                    })
+                                elif isinstance(opt, str):
+                                    # Fallback for simple string options
+                                    element['options'].append({
+                                        'name': str(opt),
+                                        'points': float(el.get('points', 0))
+                                    })
+                        elements.append(element)
+                    except Exception:
+                        # skip malformed element
+                        pass
+            else:
+                # Fallback: parse flattened form fields (legacy)
+                # Find all elements for this period
+                element_indices = set()
+                for key in request.form.keys():
+                    if key.startswith(f'{period}_element_id_'):
+                        index = key.split('_')[-1]
+                        try:
+                            element_indices.add(int(index))
+                        except Exception:
+                            pass
+
+                for index in sorted(element_indices):
+                    element_id = request.form.get(f'{period}_element_id_{index}')
+                    element_name = request.form.get(f'{period}_element_name_{index}')
+                    element_type = request.form.get(f'{period}_element_type_{index}')
+
+                    if element_id and element_name and element_type:
+                        element = {
+                            'id': element_id,
+                            'perm_id': element_id,
+                            'name': element_name,
+                            'type': element_type,
+                            'default': parse_default_value(request.form.get(f'{period}_element_default_{index}', '0'), element_type)
+                        }
+
+                        # Add points if provided (for non-select and non-multiple-choice types)
+                        points = request.form.get(f'{period}_element_points_{index}')
+                        if points and element_type not in ['select', 'multiple_choice']:
+                            try:
+                                element['points'] = float(points)
                             except ValueError:
-                                points_dict[opt_val] = 0
-                            option_idx += 1
-                        if options:
-                            element['options'] = options
-                            element['points'] = points_dict
-                    
-                    elements.append(element)
+                                element['points'] = 0
+
+                        # Add game piece ID if provided
+                        game_piece_id = request.form.get(f'{period}_element_game_piece_{index}')
+                        if game_piece_id:
+                            element['game_piece_id'] = game_piece_id
+
+                        # Handle select options with per-option points
+                        if element_type == 'select':
+                            options = []
+                            points_dict = {}
+                            # Collect option indices present in the submitted form for this element.
+                            prefixes = [
+                                f'{period}_element_option_value_{index}_',
+                                f'{period}_element_option_label_{index}_',
+                                f'{period}_element_option_points_{index}_'
+                            ]
+                            option_indices = set()
+                            for k in request.form.keys():
+                                for p in prefixes:
+                                    if k.startswith(p):
+                                        try:
+                                            idx = int(k[len(p):])
+                                            option_indices.add(idx)
+                                        except Exception:
+                                            pass
+
+                            for opt_idx in sorted(option_indices):
+                                opt_val = request.form.get(f'{period}_element_option_value_{index}_{opt_idx}')
+                                opt_points = request.form.get(f'{period}_element_option_points_{index}_{opt_idx}')
+                                if opt_val is None:
+                                    continue
+                                options.append(opt_val)
+                                try:
+                                    points_dict[opt_val] = float(opt_points) if opt_points is not None else 0
+                                except ValueError:
+                                    points_dict[opt_val] = 0
+
+                            if options:
+                                element['options'] = options
+                                element['points'] = points_dict
+                            else:
+                                # Preserve previously-saved options/points for this element if present.
+                                try:
+                                    prev_elements = original_config.get(period_key, {}).get('scoring_elements', [])
+                                    for prev in prev_elements:
+                                        if prev.get('id') == element.get('id') or prev.get('perm_id') == element.get('id'):
+                                            if prev.get('options'):
+                                                element['options'] = prev.get('options')
+                                            if prev.get('points') and isinstance(prev.get('points'), dict):
+                                                element['points'] = prev.get('points')
+                                            break
+                                except Exception:
+                                    pass
+                        
+                        # Handle multiple choice options with individual point values (fallback)
+                        elif element_type == 'multiple_choice':
+                            options = []
+                            # Collect option indices present in the submitted form for this element
+                            option_indices = set()
+                            for k in request.form.keys():
+                                if k.startswith(f'{period}_element_option_name_{index}_'):
+                                    try:
+                                        idx = int(k.split('_')[-1])
+                                        option_indices.add(idx)
+                                    except Exception:
+                                        pass
+
+                            for opt_idx in sorted(option_indices):
+                                opt_name = request.form.get(f'{period}_element_option_name_{index}_{opt_idx}')
+                                opt_points = request.form.get(f'{period}_element_option_points_{index}_{opt_idx}')
+                                if opt_name and opt_name.strip():
+                                    try:
+                                        options.append({
+                                            'name': opt_name.strip(),
+                                            'points': float(opt_points) if opt_points is not None else 0
+                                        })
+                                    except ValueError:
+                                        options.append({
+                                            'name': opt_name.strip(),
+                                            'points': 0
+                                        })
+
+                            if options:
+                                element['options'] = options
+                                element['default'] = options[0]['name'] if options else ''
+                            else:
+                                # Preserve previously-saved options for this element if present
+                                try:
+                                    prev_elements = original_config.get(period_key, {}).get('scoring_elements', [])
+                                    for prev in prev_elements:
+                                        if prev.get('id') == element.get('id') or prev.get('perm_id') == element.get('id'):
+                                            if prev.get('options'):
+                                                element['options'] = prev.get('options')
+                                            if prev.get('default'):
+                                                element['default'] = prev.get('default')
+                                            break
+                                except Exception:
+                                    pass
+                        
+                        elements.append(element)
             
-            updated_config[period_key]['scoring_elements'] = elements
+            # Merge with original elements to preserve fields that may be missing from the submitted form
+            try:
+                prev_elements = { (e.get('id'), e.get('perm_id')): e for e in original_config.get(period_key, {}).get('scoring_elements', []) }
+                merged = []
+                for el in elements:
+                    merged_el = el.copy()
+                    # Try matching by id or perm_id
+                    match = None
+                    for key in prev_elements:
+                        prev = prev_elements[key]
+                        if prev.get('id') == el.get('id') or prev.get('perm_id') == el.get('id') or prev.get('id') == el.get('perm_id'):
+                            match = prev
+                            break
+                    if match:
+                        # Preserve options and points if they are missing in the new element
+                        if merged_el.get('type') == 'select':
+                            if 'options' not in merged_el or not merged_el.get('options'):
+                                if match.get('options'):
+                                    merged_el['options'] = match.get('options')
+                            if 'points' not in merged_el or not merged_el.get('points'):
+                                if match.get('points'):
+                                    merged_el['points'] = match.get('points')
+                    merged.append(merged_el)
+                # Debug: log previous and merged elements
+                try:
+                    debug_path = os.path.join(current_app.instance_path, 'config_save_debug.log')
+                    with open(debug_path, 'a', encoding='utf-8') as dbg:
+                        dbg.write(f"Previous {period_key} scoring_elements:\n")
+                        dbg.write(json.dumps(original_config.get(period_key, {}).get('scoring_elements', []), indent=2))
+                        dbg.write("\nMerged parsed elements:\n")
+                        dbg.write(json.dumps(merged, indent=2))
+                        dbg.write("\n---\n")
+                except Exception:
+                    pass
+                updated_config[period_key]['scoring_elements'] = merged
+            except Exception:
+                updated_config[period_key]['scoring_elements'] = elements
+
+        # --- DEBUG: log parsed endgame elements ---
+        try:
+            debug_path = os.path.join(current_app.instance_path, 'config_save_debug.log')
+            with open(debug_path, 'a', encoding='utf-8') as dbg:
+                dbg.write("Parsed endgame scoring_elements:\n")
+                dbg.write(json.dumps(updated_config.get('endgame_period', {}).get('scoring_elements', []), indent=2))
+                dbg.write("\n\n")
+        except Exception:
+            pass
         
         # Update game pieces
         game_pieces = []

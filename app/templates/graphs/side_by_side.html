@@ -77,28 +77,34 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for metric in game_config['data_analysis']['key_metrics'] %}
+                            {% for metric in available_metrics[:4] %}
                             <tr>
                                 <td class="fw-bold">
-                                    {{ metric.name }}
-                                    {% if metric.get('aggregate') %}
-                                    <br><small class="text-muted">({{ metric.aggregate }})</small>
+                                    {% if metric is string %}
+                                        {{ metric.replace('_', ' ').title() }}
+                                    {% else %}
+                                        {{ metric.get('name', metric.get('id', '')) }}
+                                        {% if metric.get('aggregate') %}
+                                        <br><small class="text-muted">({{ metric.aggregate }})</small>
+                                        {% endif %}
                                     {% endif %}
                                 </td>
                                 {% for team_data in teams_data %}
                                 <td class="text-center">
-                                    {% set metric_data = team_data.metrics[metric.id] %}
-                                    {% if team_data.has_data and metric_data.match_data %}
+                                    {% set metric_id = metric if metric is string else metric.get('id') %}
+                                    {% set metric_data = team_data.metrics.get(metric_id, {}) %}
+                                    {% if team_data.has_data and metric_data and 'avg' in metric_data %}
                                     <div class="metric-value">
-                                        <span class="h5 text-primary">{{ "%.2f"|format(metric_data.aggregate) }}</span>
+                                        <span class="h5 text-primary">{{ "%.2f"|format(metric_data.get('avg', 0)) }}</span>
                                         <br>
                                         <small class="text-muted">
+                                            {% if 'min' in metric_data and 'max' in metric_data %}
                                             Min: {{ "%.1f"|format(metric_data.min) }} | 
-                                            Max: {{ "%.1f"|format(metric_data.max) }} | 
-                                            Avg: {{ "%.1f"|format(metric_data.avg) }}
+                                            Max: {{ "%.1f"|format(metric_data.max) }}
+                                            {% endif %}
                                         </small>
                                         <br>
-                                        <small class="text-success">{{ metric_data.match_data|length }} matches</small>
+                                        <small class="text-success">{{ team_data.match_count }} matches</small>
                                     </div>
                                     {% else %}
                                     <div class="metric-value">
@@ -154,7 +160,11 @@
                                     <!-- Match History -->
                                     <div class="match-history">
                                         <h6 class="mb-2">Recent Matches</h6>
-                                        {% set recent_matches = team_data.metrics[game_config['data_analysis']['key_metrics'][0]['id']].match_values[-5:] %}
+                                        {% set first_metric_id = 'total_points' %}
+                                        {% if game_config.get('data_analysis', {}).get('key_metrics', []) %}
+                                            {% set first_metric_id = game_config['data_analysis']['key_metrics'][0]['id'] %}
+                                        {% endif %}
+                                        {% set recent_matches = team_data.metrics.get(first_metric_id, {}).get('match_values', [])[-5:] %}
                                         {% if recent_matches %}
                                         <div class="row">
                                             {% for match in recent_matches %}
@@ -199,7 +209,11 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-3">
-                        <a href="{{ url_for('graphs.index') }}?teams={{ teams_data|map(attribute='team.team_number')|join('&teams=') }}&metric={{ game_config['data_analysis']['key_metrics'][0]['id'] }}" class="btn btn-outline-primary w-100">
+                        {% set default_metric = 'total_points' %}
+                        {% if game_config.get('data_analysis', {}).get('key_metrics', []) %}
+                            {% set default_metric = game_config['data_analysis']['key_metrics'][0]['id'] %}
+                        {% endif %}
+                        <a href="{{ url_for('graphs.index') }}?teams={{ teams_data|map(attribute='team.team_number')|join('&teams=') }}&metric={{ default_metric }}" class="btn btn-outline-primary w-100">
                             <i class="fas fa-chart-bar me-2"></i> Chart Comparison
                         </a>
                     </div>
