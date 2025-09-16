@@ -1040,11 +1040,39 @@
                 }
             }
             applyState(isDarkMode);
+            
+            // Synchronize with theme system if available
+            {% if current_theme_id %}
+            const currentThemeId = '{{ current_theme_id }}';
+            if (currentThemeId === 'dark' && !body.classList.contains('dark-mode')) {
+                // Theme system says dark, but sidebar is light - sync to dark
+                localStorage.setItem('darkMode', 'true');
+                applyState(true);
+            } else if (currentThemeId === 'light' && body.classList.contains('dark-mode')) {
+                // Theme system says light, but sidebar is dark - sync to light
+                localStorage.setItem('darkMode', 'false');
+                applyState(false);
+            }
+            {% endif %}
+            
             if(darkModeBtn){
                 darkModeBtn.addEventListener('click', ()=>{
                     const now = !body.classList.contains('dark-mode');
                     localStorage.setItem('darkMode', now ? 'true':'false');
                     applyState(now);
+                    
+                    // Also sync with theme system by calling the toggle endpoint
+                    const targetTheme = now ? 'dark' : 'light';
+                    fetch('/themes/apply/' + targetTheme, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    }).catch(err => {
+                        console.log('Theme sync failed:', err);
+                        // Non-critical, sidebar still works
+                    });
                 });
             }
             // System preference changes only if user hasn't chosen

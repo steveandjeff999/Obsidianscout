@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+
+{% block title %}Theme Settings{% endblock %}
+
+{% block heading %}Theme Settings{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-palette me-2"></i>Choose Your Theme</h5>
+            </div>
+            <div class="card-body text-center">
+                <p class="text-muted">Select your preferred theme for this device. Your choice will be saved and applied only to this device within your team.</p>
+                
+                <div class="row g-3">
+                    <!-- Light Theme -->
+                    <div class="col-6">
+                        <div class="card theme-preview {% if current_theme_id == 'light' %}border-primary{% endif %}" style="cursor: pointer;" onclick="applyTheme('light')">
+                            <div class="card-body p-3">
+                                <div class="theme-preview-colors mb-2">
+                                    <div class="row g-1">
+                                        <div class="col-3"><div class="theme-color-box" style="background: #ffffff; border: 1px solid #dee2e6;"></div></div>
+                                        <div class="col-3"><div class="theme-color-box" style="background: #0d6efd;"></div></div>
+                                        <div class="col-3"><div class="theme-color-box" style="background: #198754;"></div></div>
+                                        <div class="col-3"><div class="theme-color-box" style="background: #dc3545;"></div></div>
+                                    </div>
+                                </div>
+                                <h6 class="card-title mb-1">Light Mode</h6>
+                                <small class="text-muted">Bright and clean</small>
+                                {% if current_theme_id == 'light' %}
+                                <div class="mt-2">
+                                    <span class="badge bg-primary">
+                                        <i class="fas fa-check me-1"></i>Active
+                                    </span>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Dark Theme -->
+                    <div class="col-6">
+                        <div class="card theme-preview {% if current_theme_id == 'dark' %}border-primary{% endif %}" style="cursor: pointer;" onclick="applyTheme('dark')">
+                            <div class="card-body p-3">
+                                <div class="theme-preview-colors mb-2">
+                                    <div class="row g-1">
+                                        <div class="col-3"><div class="theme-color-box" style="background: #0b0f12;"></div></div>
+                                        <div class="col-3"><div class="theme-color-box" style="background: #6ea8fe;"></div></div>
+                                        <div class="col-3"><div class="theme-color-box" style="background: #75b798;"></div></div>
+                                        <div class="col-3"><div class="theme-color-box" style="background: #ea868f;"></div></div>
+                                    </div>
+                                </div>
+                                <h6 class="card-title mb-1">Dark Mode</h6>
+                                <small class="text-muted">Easy on the eyes</small>
+                                {% if current_theme_id == 'dark' %}
+                                <div class="mt-2">
+                                    <span class="badge bg-primary">
+                                        <i class="fas fa-check me-1"></i>Active
+                                    </span>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <button type="button" class="btn btn-outline-primary" onclick="toggleTheme()">
+                        <i class="fas fa-exchange-alt me-2"></i>Toggle Theme
+                    </button>
+                </div>
+                
+                <div class="alert alert-info mt-3" role="alert">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Team-specific:</strong> Your theme choice is shared with your team members but saved per-device.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.theme-color-box {
+    width: 100%;
+    height: 20px;
+    border-radius: 2px;
+}
+
+.theme-preview {
+    transition: all 0.2s ease;
+}
+
+.theme-preview:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+</style>
+
+<script>
+function applyTheme(themeId) {
+    fetch(`/themes/apply/${themeId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Also synchronize the sidebar dark mode
+            syncDarkModeClass(themeId);
+            // Reload page to apply new theme
+            window.location.reload();
+        } else {
+            alert('Error applying theme: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error applying theme');
+    });
+}
+
+function toggleTheme() {
+    fetch('/themes/toggle', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Also synchronize the sidebar dark mode
+            syncDarkModeClass(data.theme);
+            // Reload page to apply new theme
+            window.location.reload();
+        } else {
+            alert('Error toggling theme: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error toggling theme');
+    });
+}
+
+function syncDarkModeClass(themeId) {
+    // Synchronize the body's dark-mode class with theme selection
+    const body = document.body;
+    if (themeId === 'dark') {
+        body.classList.add('dark-mode');
+        // Update localStorage to keep sidebar in sync
+        localStorage.setItem('darkMode', 'true');
+    } else {
+        body.classList.remove('dark-mode');
+        // Update localStorage to keep sidebar in sync
+        localStorage.setItem('darkMode', 'false');
+    }
+}
+
+// On page load, synchronize the dark mode class with current theme
+document.addEventListener('DOMContentLoaded', function() {
+    const currentThemeId = '{{ current_theme_id }}';
+    syncDarkModeClass(currentThemeId);
+});
+</script>
+{% endblock %}
