@@ -554,7 +554,14 @@ def create_app(test_config=None):
     def inject_theme_data():
         try:
             from app.utils.theme_manager import ThemeManager
-            theme_manager = ThemeManager()
+            from flask_login import current_user
+            
+            # Get team number from current user
+            team_number = None
+            if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
+                team_number = getattr(current_user, 'scouting_team_number', None)
+            
+            theme_manager = ThemeManager(team_number=team_number)
             theme = theme_manager.get_current_theme()
             return dict(
                 current_theme=theme,
