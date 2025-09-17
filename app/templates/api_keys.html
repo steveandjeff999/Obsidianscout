@@ -1,0 +1,1352 @@
+{% extends "base.html" %}
+
+{% block title %}🔑 API Key Management{% endblock %}
+
+{% block extra_head %}
+<style>
+.api-key-card {
+    border: 1px solid #e3e6f0;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    background: #ffffff;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    transition: all 0.3s ease;
+}
+
+.api-key-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.25rem 2rem 0 rgba(58, 59, 69, 0.2);
+}
+
+.card {
+    border-radius: 15px;
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0.5rem 2rem 0 rgba(58, 59, 69, 0.2) !important;
+}
+
+.card-header {
+    border-radius: 15px 15px 0 0 !important;
+    background: linear-gradient(45deg, #f8f9fc, #e3e6f0) !important;
+    border-bottom: 2px solid #e3e6f0 !important;
+}
+
+.bg-gradient {
+    background: linear-gradient(45deg, #4e73df, #224abe) !important;
+    color: white;
+}
+
+.btn {
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0.25rem 1rem rgba(0,0,0,0.15);
+}
+
+.form-control, .form-select {
+    border-radius: 8px;
+    border: 2px solid #e3e6f0;
+    padding: 12px 16px;
+    transition: all 0.2s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #4e73df;
+    box-shadow: 0 0 0 0.2rem rgba(78, 115, 223, 0.15);
+    transform: translateY(-1px);
+}
+
+.alert {
+    border-radius: 12px;
+    border: none;
+    padding: 16px 20px;
+}
+
+.badge {
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.85em;
+}
+
+.text-muted {
+    opacity: 0.8;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.gradient-bg {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.glass-effect {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+</style>
+
+.api-key-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.25rem 2rem 0 rgba(58, 59, 69, 0.2);
+}
+
+.api-key-card.inactive {
+    background: #f8f9fa;
+    opacity: 0.7;
+    border-color: #dee2e6;
+}
+
+.api-key-prefix {
+    font-family: 'Courier New', monospace;
+    background: #e9ecef;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.api-key-full {
+    font-family: 'Courier New', monospace;
+    background: #fff3cd;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #ffeaa7;
+    font-size: 0.9em;
+    word-break: break-all;
+}
+
+.usage-stats {
+    display: flex;
+    gap: 15px;
+    margin: 10px 0;
+}
+
+.usage-stat {
+    text-align: center;
+    padding: 10px;
+    background: #fff;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    min-width: 80px;
+}
+
+.usage-stat .number {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #007bff;
+}
+
+.usage-stat .label {
+    font-size: 0.8em;
+    color: #666;
+    text-transform: uppercase;
+}
+
+.permission-badge {
+    display: inline-block;
+    background: #007bff;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    margin: 2px;
+}
+
+.permission-badge.disabled {
+    background: #6c757d;
+}
+
+.btn-copy {
+    margin-left: 10px;
+    padding: 5px 10px;
+    font-size: 0.8em;
+}
+
+.alert-warning-key {
+    background-color: #fff3cd;
+    border-color: #ffeaa7;
+    color: #856404;
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.create-key-form {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 12px;
+    margin-bottom: 30px;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+}
+
+.create-key-form h3 {
+    color: white;
+    margin-bottom: 20px;
+}
+
+.create-key-form .form-col label {
+    color: #f8f9fa;
+    font-weight: 600;
+}
+
+.create-key-form .form-col input, 
+.create-key-form .form-col textarea, 
+.create-key-form .form-col select {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #495057;
+}
+
+.create-key-form .form-col input:focus, 
+.create-key-form .form-col textarea:focus, 
+.create-key-form .form-col select:focus {
+    background: rgba(255, 255, 255, 1);
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.25);
+}
+
+.form-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.form-col {
+    flex: 1;
+}
+
+.form-col label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    display: block;
+}
+
+.form-col input, .form-col textarea, .form-col select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+}
+
+.form-col textarea {
+    resize: vertical;
+    height: 80px;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(0,0,0,.3);
+    border-radius: 50%;
+    border-top-color: #007bff;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1050;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 15% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    border-radius: 8px;
+    width: 80%;
+    max-width: 500px;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover,
+.close:focus {
+    color: #000;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Breadcrumb Navigation -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('auth.admin_settings') }}">Admin Settings</a></li>
+            <li class="breadcrumb-item active" aria-current="page">API Keys</li>
+        </ol>
+    </nav>
+    
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1><i class="fas fa-key me-2"></i>API Key Management</h1>
+                    <p class="text-muted">Manage API keys for Team {{ current_user.scouting_team_number }}. Maximum 5 keys per team.</p>
+                </div>
+                <div>
+                    <button class="btn btn-outline-secondary btn-sm" id="debug-toggle-btn">
+                        <i class="fas fa-bug"></i> Debug
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Alert Messages -->
+            <div id="alert-container"></div>
+            
+            <!-- Debug Section (can be removed in production) -->
+            <div class="alert alert-info" id="debug-info" style="display: none;">
+                <strong><i class="fas fa-bug me-2"></i>Debug Info:</strong>
+                <br><strong>Current User:</strong> {{ current_user.username }}
+                <br><strong>Team:</strong> {{ current_user.scouting_team_number }}
+                <br><strong>Roles:</strong> {{ current_user.get_role_names() | join(', ') }}
+                <br><strong>API Keys Endpoint:</strong> <code>/api/keys/</code>
+            </div>
+            
+            <!-- Create New API Key Form -->
+            <div class="create-key-form">
+                <h3>Create New API Key</h3>
+                <form id="create-key-form" onsubmit="return false;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <div class="form-row">
+                        <div class="form-col">
+                            <label for="key-name">Name *</label>
+                            <input type="text" id="key-name" name="name" required 
+                                   placeholder="e.g., Mobile App, Dashboard Integration" maxlength="100">
+                        </div>
+                        <div class="form-col">
+                            <label for="rate-limit">Rate Limit (requests/hour)</label>
+                            <select id="rate-limit" name="rate_limit_per_hour">
+                                <option value="100">100 requests/hour</option>
+                                <option value="500">500 requests/hour</option>
+                                <option value="1000" selected>1000 requests/hour</option>
+                                <option value="2000">2000 requests/hour</option>
+                                <option value="5000">5000 requests/hour</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-col">
+                            <label for="description">Description (optional)</label>
+                            <textarea id="description" name="description" 
+                                    placeholder="Brief description of what this key will be used for"></textarea>
+                        </div>
+                        <div class="form-col">
+                            <label for="expires-days">Expiration (optional)</label>
+                            <select id="expires-days" name="expires_days">
+                                <option value="">Never expires</option>
+                                <option value="30">30 days</option>
+                                <option value="90">90 days</option>
+                                <option value="180">180 days</option>
+                                <option value="365">1 year</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" id="create-key-btn">
+                        <span class="btn-text">Create API Key</span>
+                        <span class="loading-spinner" style="display: none;"></span>
+                    </button>
+                </form>
+            </div>
+            
+            <!-- API Keys List -->
+            <div id="api-keys-container">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3><i class="fas fa-list me-2"></i>Your API Keys <span id="key-count-badge" class="badge badge-secondary">0</span></h3>
+                    <button class="btn btn-outline-primary btn-sm" id="refresh-keys-btn">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div id="api-keys-list">
+                    <div class="text-center p-4">
+                        <span class="loading-spinner"></span>
+                        <p class="mt-2">Loading API keys...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New API Key Modal -->
+<div id="new-key-modal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h3>New API Key Created</h3>
+        <div class="alert-warning-key">
+            <strong>Important:</strong> This is the only time you'll see the full API key. 
+            Copy it now and store it securely.
+        </div>
+        <div class="api-key-full" id="new-api-key-display"></div>
+        <button type="button" class="btn btn-primary btn-copy" onclick="copyToClipboard('new-api-key-display')">
+            Copy to Clipboard
+        </button>
+        <div class="mt-3">
+            <h5>Key Details:</h5>
+            <div id="new-key-details"></div>
+        </div>
+        <div class="mt-3">
+            <button type="button" class="btn btn-secondary" id="close-new-key-modal">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Usage Details Modal -->
+<div id="usage-modal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+        <span class="close">&times;</span>
+        <h3>API Key Usage Details</h3>
+        <div id="usage-details-content">
+            <!-- Usage details will be loaded here -->
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+console.log('API Keys script loading...');
+
+let apiKeys = [];
+
+// Define all global functions immediately
+console.log('Defining global functions...');
+
+// Define all functions both as regular functions AND window properties
+async function loadApiKeys() {
+    console.log('loadApiKeys called');
+    try {
+        const response = await fetch('/api/keys/', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            apiKeys = data.api_keys;
+            renderApiKeys();
+            updateKeyCountBadge(data.active_count);
+        } else {
+            showAlert('error', data.error || 'Failed to load API keys');
+        }
+    } catch (error) {
+        console.error('Error loading API keys:', error);
+        showAlert('error', `Failed to load API keys: ${error.message}`);
+        
+        // Show fallback message in the API keys list
+        const container = document.getElementById('api-keys-list');
+        if (container) {
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    <strong>Error loading API keys:</strong> ${error.message}<br>
+                    <small>Check the browser console for more details.</small>
+                </div>
+            `;
+        }
+    }
+}
+
+function toggleDebugInfo() {
+    console.log('toggleDebugInfo called');
+    const debugInfo = document.getElementById('debug-info');
+    if (debugInfo) {
+        if (debugInfo.style.display === 'none') {
+            debugInfo.style.display = 'block';
+        } else {
+            debugInfo.style.display = 'none';
+        }
+    } else {
+        console.error('debug-info element not found');
+    }
+}
+
+async function testApiConnection() {
+    console.log('testApiConnection called');
+    try {
+        showAlert('info', 'Testing API connection...');
+        
+        const response = await fetch('/api/keys/test', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showAlert('success', `API connection successful! Team: ${data.team_number}, Keys: ${data.api_key_count}/${data.max_keys}`);
+        } else {
+            showAlert('error', `API test failed: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('API test error:', error);
+        showAlert('error', `API connection failed: ${error.message}`);
+    }
+}
+
+// Also assign to window for onclick compatibility
+window.loadApiKeys = loadApiKeys;
+window.toggleDebugInfo = toggleDebugInfo;
+window.testApiConnection = testApiConnection;
+
+function copyToClipboard(elementId) {
+    console.log('copyToClipboard called for:', elementId);
+    const element = document.getElementById(elementId);
+    if (!element) {
+        console.error('Element not found:', elementId);
+        return;
+    }
+    
+    const text = element.textContent || element.innerText;
+    
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => {
+            showAlert('success', 'Copied to clipboard!');
+        }).catch(err => {
+            console.error('Clipboard error:', err);
+            fallbackCopy(text);
+        });
+    } else {
+        fallbackCopy(text);
+    }
+    
+    function fallbackCopy(text) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showAlert('success', 'Copied to clipboard!');
+    }
+}
+
+function closeNewKeyModal() {
+    console.log('closeNewKeyModal called');
+    const modal = document.getElementById('new-key-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+async function viewUsage(keyId) {
+    console.log('viewUsage called for key:', keyId);
+    const modal = document.getElementById('usage-modal');
+    const content = document.getElementById('usage-details-content');
+    
+    if (!modal || !content) {
+        console.error('Usage modal elements not found');
+        return;
+    }
+    
+    content.innerHTML = '<div class="text-center"><div class="loading-spinner"></div><p>Loading usage data...</p></div>';
+    modal.style.display = 'block';
+    
+    try {
+        const response = await fetch(`/api/keys/${keyId}/usage`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const stats = data.summary;
+            content.innerHTML = `
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <div class="usage-stat">
+                            <div class="number">${stats.total_requests}</div>
+                            <div class="label">Total Requests</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="usage-stat">
+                            <div class="number">${stats.successful_requests}</div>
+                            <div class="label">Successful</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="usage-stat">
+                            <div class="number">${stats.failed_requests}</div>
+                            <div class="label">Failed</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="usage-stat">
+                            <div class="number">${stats.success_rate.toFixed(1)}%</div>
+                            <div class="label">Success Rate</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h5>Daily Usage (Last ${data.period_days} days)</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Requests</th>
+                                <th>Successful</th>
+                                <th>Failed</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${Object.entries(data.daily_stats).sort().reverse().map(([date, stats]) => `
+                                <tr>
+                                    <td>${date}</td>
+                                    <td>${stats.requests}</td>
+                                    <td>${stats.successful}</td>
+                                    <td>${stats.failed}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } else {
+            content.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+        }
+    } catch (error) {
+        console.error('Error loading usage data:', error);
+        content.innerHTML = '<div class="alert alert-danger">Failed to load usage data</div>';
+    }
+}
+
+async function deleteKey(keyId) {
+    console.log('deleteKey called for key:', keyId);
+    if (!confirm('Are you sure you want to deactivate this API key? This action cannot be undone and will immediately stop all requests using this key.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/keys/${keyId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showAlert('success', 'API key deactivated successfully');
+            await loadApiKeys();
+        } else {
+            showAlert('error', result.error || 'Failed to deactivate API key');
+        }
+    } catch (error) {
+        console.error('Error deleting API key:', error);
+        showAlert('error', 'Failed to deactivate API key');
+    }
+}
+
+function editKey(keyId) {
+    console.log('editKey called for key:', keyId);
+    showAlert('info', 'Edit functionality coming soon. You can deactivate and create a new key for now.');
+}
+
+// Assign functions to window for compatibility
+window.copyToClipboard = copyToClipboard;
+window.closeNewKeyModal = closeNewKeyModal;
+window.viewUsage = viewUsage;
+window.deleteKey = deleteKey;
+window.editKey = editKey;
+
+// Test function for debugging
+function testFormSubmission() {
+    console.log('Test form submission called');
+    showAlert('info', 'Test button clicked! Form submission system is working.');
+    
+    // Test the form elements
+    const form = document.getElementById('create-key-form');
+    const nameInput = document.getElementById('key-name');
+    
+    console.log('Form elements check:', {
+        form: !!form,
+        nameInput: !!nameInput,
+        nameValue: nameInput?.value
+    });
+    
+    // Test API endpoint availability
+    testApiEndpoint();
+    
+    if (form && nameInput && nameInput.value.trim()) {
+        showAlert('success', `Form data found: Name = "${nameInput.value}"`);
+    } else {
+        showAlert('warning', 'Please fill in the API key name first');
+    }
+}
+
+// Test if the API endpoint is available
+async function testApiEndpoint() {
+    console.log('Testing API endpoint availability...');
+    
+    try {
+        // Try the test endpoint first
+        const testResponse = await fetch('/api/keys/test', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        
+        console.log('Test endpoint response:', testResponse);
+        
+        if (testResponse.ok) {
+            const data = await testResponse.json();
+            console.log('Test endpoint data:', data);
+            showAlert('success', `API endpoint is working! Team: ${data.team_number}`);
+        } else {
+            console.error('Test endpoint failed:', testResponse.status, testResponse.statusText);
+            showAlert('error', `API test endpoint failed: ${testResponse.status} ${testResponse.statusText}`);
+        }
+    } catch (error) {
+        console.error('API endpoint test error:', error);
+        showAlert('error', `API endpoint test failed: ${error.message}`);
+    }
+}
+
+// Also assign to window for compatibility
+window.testFormSubmission = testFormSubmission;
+
+window.copyToClipboard = function(elementId) {
+    console.log('copyToClipboard called for:', elementId);
+    const element = document.getElementById(elementId);
+    if (!element) {
+        console.error('Element not found:', elementId);
+        return;
+    }
+    
+    const text = element.textContent || element.innerText;
+    
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => {
+            showAlert('success', 'Copied to clipboard!');
+        }).catch(err => {
+            console.error('Clipboard error:', err);
+            fallbackCopy(text);
+        });
+    } else {
+        fallbackCopy(text);
+    }
+    
+    function fallbackCopy(text) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showAlert('success', 'Copied to clipboard!');
+    }
+};
+
+window.closeNewKeyModal = function() {
+    console.log('closeNewKeyModal called');
+    const modal = document.getElementById('new-key-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+};
+
+window.viewUsage = async function(keyId) {
+    console.log('viewUsage called for key:', keyId);
+    const modal = document.getElementById('usage-modal');
+    const content = document.getElementById('usage-details-content');
+    
+    if (!modal || !content) {
+        console.error('Usage modal elements not found');
+        return;
+    }
+    
+    content.innerHTML = '<div class="text-center"><div class="loading-spinner"></div><p>Loading usage data...</p></div>';
+    modal.style.display = 'block';
+    
+    try {
+        const response = await fetch(`/api/keys/${keyId}/usage`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const stats = data.summary;
+            content.innerHTML = `
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <div class="usage-stat">
+                            <div class="number">${stats.total_requests}</div>
+                            <div class="label">Total Requests</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="usage-stat">
+                            <div class="number">${stats.successful_requests}</div>
+                            <div class="label">Successful</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="usage-stat">
+                            <div class="number">${stats.failed_requests}</div>
+                            <div class="label">Failed</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="usage-stat">
+                            <div class="number">${stats.success_rate.toFixed(1)}%</div>
+                            <div class="label">Success Rate</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h5>Daily Usage (Last ${data.period_days} days)</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Requests</th>
+                                <th>Successful</th>
+                                <th>Failed</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${Object.entries(data.daily_stats).sort().reverse().map(([date, stats]) => `
+                                <tr>
+                                    <td>${date}</td>
+                                    <td>${stats.requests}</td>
+                                    <td>${stats.successful}</td>
+                                    <td>${stats.failed}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } else {
+            content.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+        }
+    } catch (error) {
+        console.error('Error loading usage data:', error);
+        content.innerHTML = '<div class="alert alert-danger">Failed to load usage data</div>';
+    }
+};
+
+window.deleteKey = async function(keyId) {
+    console.log('deleteKey called for key:', keyId);
+    if (!confirm('Are you sure you want to deactivate this API key? This action cannot be undone and will immediately stop all requests using this key.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/keys/${keyId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showAlert('success', 'API key deactivated successfully');
+            await loadApiKeys();
+        } else {
+            showAlert('error', result.error || 'Failed to deactivate API key');
+        }
+    } catch (error) {
+        console.error('Error deleting API key:', error);
+        showAlert('error', 'Failed to deactivate API key');
+    }
+};
+
+window.editKey = function(keyId) {
+    console.log('editKey called for key:', keyId);
+    showAlert('info', 'Edit functionality coming soon. You can deactivate and create a new key for now.');
+};
+
+console.log('Global functions defined. Checking:', {
+    loadApiKeys: typeof window.loadApiKeys,
+    toggleDebugInfo: typeof window.toggleDebugInfo,
+    testApiConnection: typeof window.testApiConnection
+});
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀🔑 API KEYS PAGE LOADED - YOU ARE ON THE CORRECT PAGE! 🔑🚀');
+    console.log('🚀🔑 API KEYS PAGE LOADED - YOU ARE ON THE CORRECT PAGE! 🔑🚀');
+    console.log('🚀🔑 API KEYS PAGE LOADED - YOU ARE ON THE CORRECT PAGE! 🔑🚀');
+    
+    // Test showAlert immediately
+    setTimeout(() => {
+        console.log('🧪 Testing showAlert function...');
+        showAlert('success', '🔑 API KEYS PAGE: JavaScript is working!');
+    }, 500);
+    
+    loadApiKeys();
+    setupEventListeners();
+});
+
+function setupEventListeners() {
+    console.log('Setting up event listeners...');
+    
+    // Create key form
+    const form = document.getElementById('create-key-form');
+    if (form) {
+        form.addEventListener('submit', function(event) {
+            console.log('🔥 FORM SUBMIT EVENT FIRED!');
+            alert('Form submit detected! Check console for details.');
+            event.preventDefault();
+            handleCreateKey(event);
+        });
+        console.log('✅ Form event listener added successfully');
+    } else {
+        console.error('❌ Create key form not found!');
+    }
+    
+    // Debug toggle button
+    const debugBtn = document.getElementById('debug-toggle-btn');
+    if (debugBtn) {
+        debugBtn.addEventListener('click', function() {
+            console.log('Debug button clicked');
+            toggleDebugInfo();
+        });
+        console.log('Debug button event listener added');
+    }
+    
+    // Test API button
+    const testBtn = document.getElementById('test-api-btn');
+    if (testBtn) {
+        testBtn.addEventListener('click', function() {
+            console.log('Test API button clicked');
+            testApiConnection();
+        });
+        console.log('Test API button event listener added');
+    }
+    
+    // Refresh keys button
+    const refreshBtn = document.getElementById('refresh-keys-btn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function() {
+            console.log('Refresh button clicked');
+            loadApiKeys();
+        });
+        console.log('Refresh button event listener added');
+    }
+    
+    // Test form button
+    const testFormBtn = document.getElementById('test-form-btn');
+    if (testFormBtn) {
+        testFormBtn.addEventListener('click', function() {
+            console.log('🔥 TEST FORM BUTTON CLICKED - EVENT FIRING!');
+            alert('Test Form button clicked! Check console for details.');
+            testFormSubmission();
+        });
+        console.log('✅ Test form button event listener added successfully');
+    } else {
+        console.error('❌ Test form button not found!');
+    }
+    
+    // Test API button
+    const testApiBtn = document.getElementById('test-api-btn');
+    if (testApiBtn) {
+        testApiBtn.addEventListener('click', function() {
+            console.log('🔥 TEST API BUTTON CLICKED - EVENT FIRING!');
+            alert('Test API button clicked! Check console for details.');
+            testApiEndpoint();
+        });
+        console.log('✅ Test API button event listener added successfully');
+    } else {
+        console.error('❌ Test API button not found!');
+    }
+    
+    // Modal close buttons
+    document.querySelectorAll('.close').forEach(closeBtn => {
+        closeBtn.addEventListener('click', function() {
+            this.closest('.modal').style.display = 'none';
+        });
+    });
+    
+    // New key modal close button
+    const closeNewKeyBtn = document.getElementById('close-new-key-modal');
+    if (closeNewKeyBtn) {
+        closeNewKeyBtn.addEventListener('click', closeNewKeyModal);
+        console.log('Close new key modal button event listener added');
+    }
+    
+    // Click outside modal to close
+    window.addEventListener('click', function(event) {
+        if (event.target.classList.contains('modal')) {
+            event.target.style.display = 'none';
+        }
+    });
+    
+    console.log('All event listeners set up');
+}
+
+async function loadApiKeys() {
+    // This function is now defined globally above as window.loadApiKeys
+    return window.loadApiKeys();
+}
+
+function renderApiKeys() {
+    const container = document.getElementById('api-keys-list');
+    
+    if (apiKeys.length === 0) {
+        container.innerHTML = `
+            <div class="text-center p-4 text-muted">
+                <p>No API keys created yet. Create your first API key above.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = apiKeys.map(key => `
+        <div class="api-key-card ${!key.is_active ? 'inactive' : ''}">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <h5>${escapeHtml(key.name)}</h5>
+                    <p class="text-muted mb-2">${key.description ? escapeHtml(key.description) : 'No description'}</p>
+                    <p class="mb-2">
+                        <strong>Key:</strong> <span class="api-key-prefix">${escapeHtml(key.key_prefix)}...</span>
+                        <button class="btn btn-sm btn-outline-primary btn-copy" 
+                                data-action="copy" data-target="key-prefix-${key.id}">Copy Prefix</button>
+                        <span id="key-prefix-${key.id}" style="display: none;">${escapeHtml(key.key_prefix)}</span>
+                    </p>
+                    
+                    <div class="usage-stats">
+                        <div class="usage-stat">
+                            <div class="number">${key.total_requests || 0}</div>
+                            <div class="label">Total</div>
+                        </div>
+                        <div class="usage-stat">
+                            <div class="number">${key.successful_requests || 0}</div>
+                            <div class="label">Success</div>
+                        </div>
+                        <div class="usage-stat">
+                            <div class="number">${key.failed_requests || 0}</div>
+                            <div class="label">Failed</div>
+                        </div>
+                        <div class="usage-stat">
+                            <div class="number">${key.rate_limit_per_hour}</div>
+                            <div class="label">Rate Limit/hr</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-2">
+                        <strong>Permissions:</strong><br>
+                        ${Object.entries(key.permissions || {}).map(([perm, enabled]) => 
+                            `<span class="permission-badge ${enabled ? '' : 'disabled'}">${perm.replace(/_/g, ' ')}</span>`
+                        ).join('')}
+                    </div>
+                    
+                    <small class="text-muted">
+                        Created: ${new Date(key.created_at).toLocaleDateString()} by ${escapeHtml(key.created_by)}
+                        ${key.last_used_at ? `<br>Last used: ${new Date(key.last_used_at).toLocaleDateString()}` : '<br>Never used'}
+                        ${key.expires_at ? `<br>Expires: ${new Date(key.expires_at).toLocaleDateString()}` : ''}
+                    </small>
+                </div>
+                
+                <div class="btn-group-vertical ml-3">
+                    <button class="btn btn-sm btn-info" data-action="viewUsage" data-key-id="${key.id}">
+                        View Usage
+                    </button>
+                    <button class="btn btn-sm btn-warning" data-action="editKey" data-key-id="${key.id}" 
+                            ${!key.is_active ? 'disabled' : ''}>
+                        Edit
+                    </button>
+                    <button class="btn btn-sm btn-danger" data-action="deleteKey" data-key-id="${key.id}" 
+                            ${!key.is_active ? 'disabled' : ''}>
+                        ${key.is_active ? 'Deactivate' : 'Inactive'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    // Add event delegation for all API key actions
+    setupApiKeyEventListeners();
+}
+
+function setupApiKeyEventListeners() {
+    const container = document.getElementById('api-keys-list');
+    if (!container) return;
+    
+    // Remove existing event listeners
+    container.removeEventListener('click', handleApiKeyActions);
+    
+    // Add event delegation
+    container.addEventListener('click', handleApiKeyActions);
+}
+
+function handleApiKeyActions(event) {
+    const target = event.target;
+    const action = target.getAttribute('data-action');
+    
+    if (!action) return;
+    
+    const keyId = target.getAttribute('data-key-id');
+    const targetId = target.getAttribute('data-target');
+    
+    switch (action) {
+        case 'copy':
+            if (targetId) {
+                copyToClipboard(targetId);
+            }
+            break;
+        case 'viewUsage':
+            if (keyId) {
+                viewUsage(parseInt(keyId));
+            }
+            break;
+        case 'editKey':
+            if (keyId) {
+                editKey(parseInt(keyId));
+            }
+            break;
+        case 'deleteKey':
+            if (keyId) {
+                deleteKey(parseInt(keyId));
+            }
+            break;
+    }
+}
+
+async function handleCreateKey(event) {
+    console.log('handleCreateKey called', event);
+    event.preventDefault();
+    
+    const form = event.target;
+    console.log('Form:', form);
+    
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+    console.log('Form data:', data);
+    
+    // Validate required field
+    if (!data.name || data.name.trim().length < 3) {
+        showAlert('error', 'API key name is required and must be at least 3 characters');
+        return;
+    }
+    
+    // Convert empty strings to null for optional fields
+    if (!data.description) delete data.description;
+    if (!data.expires_days) delete data.expires_days;
+    else data.expires_days = parseInt(data.expires_days);
+    
+    data.rate_limit_per_hour = parseInt(data.rate_limit_per_hour);
+    
+    console.log('Processed data:', data);
+    
+    const createBtn = document.getElementById('create-key-btn');
+    const btnText = createBtn?.querySelector('.btn-text');
+    const spinner = createBtn?.querySelector('.loading-spinner');
+    
+    console.log('Button elements:', { createBtn, btnText, spinner });
+    
+    // Show loading state
+    if (createBtn) {
+        createBtn.disabled = true;
+        if (btnText) btnText.style.display = 'none';
+        if (spinner) spinner.style.display = 'inline-block';
+    }
+    
+    showAlert('info', 'Creating API key...');
+    
+    try {
+        console.log('Sending request to /api/keys/');
+        
+        // Get CSRF token
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value;
+        console.log('CSRF token:', csrfToken);
+        
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        };
+        
+        if (csrfToken) {
+            headers['X-CSRFToken'] = csrfToken;
+        }
+        
+        const response = await fetch('/api/keys/', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(data)
+        });
+        
+        console.log('Response:', response);
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => null);
+            console.error('Error response:', errorData);
+            throw new Error(errorData?.error || `HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log('Success result:', result);
+        
+        if (result.success) {
+            // Show the new API key in modal
+            showNewKeyModal(result.api_key);
+            
+            // Reset form
+            form.reset();
+            
+            // Reload the keys list
+            await loadApiKeys();
+            
+            showAlert('success', 'API key created successfully!');
+        } else {
+            showAlert('error', result.error || 'Failed to create API key');
+        }
+    } catch (error) {
+        console.error('Error creating API key:', error);
+        showAlert('error', `Failed to create API key: ${error.message}`);
+    } finally {
+        // Reset button state
+        if (createBtn) {
+            createBtn.disabled = false;
+            if (btnText) btnText.style.display = 'inline';
+            if (spinner) spinner.style.display = 'none';
+        }
+    }
+}
+
+function showNewKeyModal(apiKey) {
+    const modal = document.getElementById('new-key-modal');
+    const keyDisplay = document.getElementById('new-api-key-display');
+    const keyDetails = document.getElementById('new-key-details');
+    
+    keyDisplay.textContent = apiKey.key;
+    
+    keyDetails.innerHTML = `
+        <p><strong>Name:</strong> ${escapeHtml(apiKey.name)}</p>
+        <p><strong>Key Prefix:</strong> ${escapeHtml(apiKey.key_prefix)}...</p>
+        <p><strong>Rate Limit:</strong> ${apiKey.rate_limit_per_hour} requests/hour</p>
+        ${apiKey.expires_at ? `<p><strong>Expires:</strong> ${new Date(apiKey.expires_at).toLocaleDateString()}</p>` : ''}
+    `;
+    
+    modal.style.display = 'block';
+}
+
+// Removed duplicate functions - now all defined above
+
+function updateKeyCountBadge(count) {
+    const badge = document.getElementById('key-count-badge');
+    badge.textContent = `${count}/5`;
+    badge.className = `badge ${count >= 5 ? 'badge-warning' : 'badge-secondary'}`;
+}
+
+function showAlert(type, message) {
+    console.log('🚨 showAlert called:', { type, message });
+    const container = document.getElementById('alert-container');
+    console.log('Alert container found:', !!container);
+    
+    const alertClass = type === 'error' ? 'alert-danger' : `alert-${type}`;
+    
+    const alert = document.createElement('div');
+    alert.className = `alert ${alertClass} alert-dismissible fade show`;
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="close" data-dismiss="alert">
+            <span>&times;</span>
+        </button>
+    `;
+    
+    if (container) {
+        container.appendChild(alert);
+        console.log('✅ Alert added to container');
+    } else {
+        console.error('❌ Alert container not found!');
+    }
+    
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        if (alert.parentNode) {
+            alert.remove();
+        }
+    }, 5000);
+    
+    // Manual dismiss
+    alert.querySelector('.close').addEventListener('click', () => {
+        alert.remove();
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Final check to ensure functions are available
+setTimeout(function() {
+    console.log('Final function availability check:', {
+        loadApiKeys: typeof window.loadApiKeys,
+        toggleDebugInfo: typeof window.toggleDebugInfo,
+        testApiConnection: typeof window.testApiConnection,
+        copyToClipboard: typeof window.copyToClipboard,
+        viewUsage: typeof window.viewUsage,
+        deleteKey: typeof window.deleteKey,
+        editKey: typeof window.editKey
+    });
+}, 100);
+
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/api-keys-debug.js') }}"></script>
+{% endblock %}

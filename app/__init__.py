@@ -375,7 +375,7 @@ def create_app(test_config=None):
     # Universal sync system removed - keeping only normal user features
 
     # Import and register blueprints
-    from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, assistant, integrity, pit_scouting, themes, scouting_alliances, setup, search, db_admin, sync_api, update_monitor
+    from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, assistant, integrity, pit_scouting, scouting_alliances, setup, search, db_admin, sync_api, update_monitor
     
     # Register template filters
     from app.utils import template_filters
@@ -410,8 +410,7 @@ def create_app(test_config=None):
     from app.routes import api_test
     app.register_blueprint(api_test.bp)
     
-    # Register themes blueprint
-    app.register_blueprint(themes.bp)
+    # Note: themes blueprint removed - theme selection is handled via client-side dark/light toggle
 
     # Expose site notifications to templates (file-backed, no DB migrations)
     try:
@@ -552,26 +551,12 @@ def create_app(test_config=None):
     # Add a context processor to make theme data available in all templates
     @app.context_processor
     def inject_theme_data():
+        # Keep minimal theme context needed for templates. We no longer provide full theme management server-side.
         try:
-            from app.utils.theme_manager import ThemeManager
-            from flask_login import current_user
-            
-            # Get team number from current user
-            team_number = None
-            if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
-                team_number = getattr(current_user, 'scouting_team_number', None)
-            
-            theme_manager = ThemeManager(team_number=team_number)
-            theme = theme_manager.get_current_theme()
-            return dict(
-                current_theme=theme,
-                current_theme_id=theme_manager.current_theme,
-                theme_css_variables=theme_manager.get_theme_css_variables(),
-                themes=theme_manager.get_available_themes()  # Ensure 'themes' is always available
-            )
-        except Exception as e:
-            app.logger.error(f"Error loading theme data: {e}")
-            return dict(current_theme={}, current_theme_id='default', theme_css_variables='', themes={})
+            # Provide basic values so templates that reference these keys won't error.
+            return dict(current_theme={}, current_theme_id='light', theme_css_variables='', themes={})
+        except Exception:
+            return dict(current_theme={}, current_theme_id='light', theme_css_variables='', themes={})
     
     # Initialize real-time replication system
     try:
@@ -607,5 +592,13 @@ def create_app(test_config=None):
         app.logger.info("✅ Catch-up scheduler started")
     except Exception as e:
         app.logger.error(f"❌ Failed to initialize catch-up sync: {e}")
+    
+    # Initialize API key system
+    try:
+        from app.utils.api_init import init_api_system
+        init_api_system(app)
+        app.logger.info("✅ API key system initialized")
+    except Exception as e:
+        app.logger.error(f"❌ Failed to initialize API key system: {e}")
 
     return app

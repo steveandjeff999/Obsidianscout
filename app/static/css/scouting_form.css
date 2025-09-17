@@ -19,7 +19,7 @@
 .match-period-tab{flex:1;padding:.6rem .8rem;border-radius:.5rem;background:#f8f9fa;cursor:pointer;text-align:center;user-select:none}
 .match-period-tab.active{background:var(--scout-accent);color:#fff;box-shadow:0 6px 18px rgba(91,59,255,.12)}
 
-.counter-container{display:flex;gap:.5rem;align-items:center}
+.counter-container{display:flex;gap:.5rem;align-items:center;flex-wrap:nowrap}
 .btn-counter{width:48px;height:48px;padding:0;border-radius:8px}
 .counter-input{max-width:88px;text-align:center}
 

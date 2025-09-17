@@ -612,6 +612,11 @@
                 <a class="nav-link {% if request.endpoint == 'auth.add_user' %}active{% endif %}" href="{{ url_for('auth.add_user') }}"><i class="fas fa-user-plus"></i><span>Add User</span></a>
             </div>
             {% endif %}
+            {% if user_has_role('admin') %}
+            <div class="nav-group">
+                <div class="nav-group-title">Administration</div>
+            </div>
+            {% endif %}
             <div class="nav-group">
                 <div class="nav-group-title">Core</div>
                 {% if not (user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics')) %}
@@ -1041,19 +1046,7 @@
             }
             applyState(isDarkMode);
             
-            // Synchronize with theme system if available
-            {% if current_theme_id %}
-            const currentThemeId = '{{ current_theme_id }}';
-            if (currentThemeId === 'dark' && !body.classList.contains('dark-mode')) {
-                // Theme system says dark, but sidebar is light - sync to dark
-                localStorage.setItem('darkMode', 'true');
-                applyState(true);
-            } else if (currentThemeId === 'light' && body.classList.contains('dark-mode')) {
-                // Theme system says light, but sidebar is dark - sync to light
-                localStorage.setItem('darkMode', 'false');
-                applyState(false);
-            }
-            {% endif %}
+            // Server-side theme management was removed; rely on client preference (localStorage) only.
             
             if(darkModeBtn){
                 darkModeBtn.addEventListener('click', ()=>{
@@ -1061,18 +1054,7 @@
                     localStorage.setItem('darkMode', now ? 'true':'false');
                     applyState(now);
                     
-                    // Also sync with theme system by calling the toggle endpoint
-                    const targetTheme = now ? 'dark' : 'light';
-                    fetch('/themes/apply/' + targetTheme, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        }
-                    }).catch(err => {
-                        console.log('Theme sync failed:', err);
-                        // Non-critical, sidebar still works
-                    });
+                    // Persist only locally; no server-side theme endpoints are available.
                 });
             }
             // System preference changes only if user hasn't chosen

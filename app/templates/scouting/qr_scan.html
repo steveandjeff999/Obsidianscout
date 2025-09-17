@@ -147,6 +147,59 @@
             opacity: 1;
         }
     }
+
+    /* Scale UI widget (bottom-right) */
+    .scale-ui-widget {
+        position: fixed;
+        right: 12px;
+        padding: 8px 12px;
+        background: #fff;
+        border: 1px solid rgba(0,0,0,0.12);
+        border-radius: 8px;
+        box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+        z-index: 1050;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .scale-ui-widget .scale-label { color: #6c757d; }
+    .scale-ui-widget input[type="range"] { width: 140px; }
+
+    /* Match period tabs */
+    .match-period-tabs { display: flex; gap: 8px; }
+    .match-period-tab {
+        padding: 10px 14px;
+        border-radius: 6px;
+        background: transparent;
+        border: 1px solid transparent;
+        color: #333;
+        cursor: pointer;
+    }
+    .match-period-tab:hover { background: rgba(0,0,0,0.03); }
+    .match-period-tab.active {
+        background: #fff;
+        border-color: rgba(0,0,0,0.08);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.06);
+    }
+
+    /* Dark mode styles: use prefers-color-scheme and a manual body.dark-mode hook */
+    @media (prefers-color-scheme: dark) {
+        .scale-ui-widget { background: #121212; border-color: rgba(255,255,255,0.06); box-shadow: 0 6px 18px rgba(0,0,0,0.6); }
+        .scale-ui-widget .scale-label { color: #bfc7cf; }
+        .scale-ui-widget input[type="range"]::-webkit-slider-thumb { background: #90caf9; }
+
+        .match-period-tab { color: #e6eef6; }
+        .match-period-tab:hover { background: rgba(255,255,255,0.03); }
+        .match-period-tab.active { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.06); box-shadow: none; }
+    }
+
+    body.dark-mode .scale-ui-widget {
+        background: #121212; border-color: rgba(255,255,255,0.06); box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+    }
+    body.dark-mode .scale-ui-widget .scale-label { color: #bfc7cf; }
+    body.dark-mode .match-period-tab { color: #e6eef6; }
+    body.dark-mode .match-period-tab.active { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.06); }
 </style>
 {% endblock %}
 
@@ -157,7 +210,7 @@
             <div class="alert alert-info d-flex align-items-center mb-4">
                 <i class="fas fa-info-circle me-2"></i>
                 <div>
-                    Point your camera at a QR code to scan scouting data. You can also upload a QR code image.
+                    Point your camera at a QR code to scan scouting data. The scanner works with both light mode (black on white) and dark mode (white on black) QR codes. You can also upload a QR code image.
                 </div>
             </div>
             
@@ -236,7 +289,7 @@
                     <h5 class="mb-0"><i class="fas fa-image me-2"></i> Upload QR Code Image</h5>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted mb-3">If camera scanning isn't working, you can upload an image of a QR code instead.</p>
+                    <p class="text-muted mb-3">If camera scanning isn't working, you can upload an image of a QR code instead. The scanner supports both light mode and dark mode QR codes.</p>
                     
                     <div class="file-upload-container">
                         <input type="file" id="file-upload" accept="image/*">
@@ -571,27 +624,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Get the image data from the canvas
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 
-                // Enhanced settings for detailed QR codes
-                const qrCodeOptions = {
-                    inversionAttempts: "attemptBoth", // Try both black-on-white and white-on-black
-                    dontInvert: false,                // Allow inversion
-                    canOverwriteImage: true,          // Allow image modification for better detection
-                    greyScaleWeights: {               // Adjust grayscale weights for better detection
-                        red: 0.2126,
-                        green: 0.7152, 
-                        blue: 0.0722
-                    }
-                };
-                
-                // Scan for QR code with enhanced settings
-                let qrCode = jsQR(imageData.data, imageData.width, imageData.height, qrCodeOptions);
-                
-                // If initial scan failed, try with image processing
-                if (!qrCode) {
-                    // Apply image processing to improve QR detection
-                    const processedImageData = improveImageForQRDetection(imageData);
-                    qrCode = jsQR(processedImageData.data, processedImageData.width, processedImageData.height, qrCodeOptions);
-                }
+                // Use the enhanced multiple processing approach
+                const qrCode = tryMultipleQRProcessingMethods(imageData);
                 
                 if (qrCode) {
                     // QR code found
@@ -633,33 +667,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Get image data for QR code scanning
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     
-                    // Enhanced settings for detailed QR codes
-                    const qrCodeOptions = {
-                        inversionAttempts: "attemptBoth", // Try both black-on-white and white-on-black
-                        dontInvert: false,                // Allow inversion
-                        canOverwriteImage: true,          // Allow image modification for better detection
-                        greyScaleWeights: {               // Adjust grayscale weights for better detection
-                            red: 0.2126,
-                            green: 0.7152, 
-                            blue: 0.0722
-                        }
-                    };
-                    
-                    // Try scanning with original image
-                    let qrCode = jsQR(imageData.data, imageData.width, imageData.height, qrCodeOptions);
-                    
-                    // If no QR code found, try with processed image
-                    if (!qrCode) {
-                        // Try different image processing techniques
-                        const processedImageData = improveImageForQRDetection(imageData);
-                        qrCode = jsQR(processedImageData.data, processedImageData.width, processedImageData.height, qrCodeOptions);
-                    }
+                    // Use the enhanced multiple processing approach
+                    const qrCode = tryMultipleQRProcessingMethods(imageData);
                     
                     if (qrCode) {
                         // QR code found
                         handleQrCode(qrCode.data);
                     } else {
-                        updateFeedback('No QR code found in the image.', 'error');
+                        updateFeedback('No QR code found in the image. Try adjusting lighting or image quality.', 'error');
                     }
                 } catch (error) {
                     console.error('Error processing image:', error);
@@ -681,7 +696,7 @@ document.addEventListener('DOMContentLoaded', function() {
         reader.readAsDataURL(file);
     }
     
-    // Image processing function to improve QR detection, especially for screen-displayed QR codes
+    // Enhanced image processing function to improve QR detection for both light and dark mode QR codes
     function improveImageForQRDetection(imageData) {
         // Create a copy of the image data to avoid modifying the original
         const canvas = document.createElement('canvas');
@@ -694,56 +709,175 @@ document.addEventListener('DOMContentLoaded', function() {
         const enhancedData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = enhancedData.data;
         
-        // Calculate average brightness
-        let total = 0;
-        for (let i = 0; i < data.length; i += 4) {
-            total += (data[i] + data[i + 1] + data[i + 2]) / 3;
-        }
-        const avgBrightness = total / (data.length / 4);
+        // Analyze image characteristics for better processing decisions
+        let brightPixels = 0;
+        let darkPixels = 0;
+        let totalBrightness = 0;
+        const pixelCount = data.length / 4;
         
-        // Apply adaptive processing based on image characteristics
-        const threshold = avgBrightness * 0.9;
-        const contrastFactor = 1.5; // Enhance contrast
-
-        // Process every pixel with different techniques
+        // First pass: analyze image characteristics
         for (let i = 0; i < data.length; i += 4) {
-            // Get original pixel values
-            const r = data[i];
-            const g = data[i + 1];
-            const b = data[i + 2];
+            const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            totalBrightness += brightness;
             
-            // Try different approaches to handle screen artifacts
-            
-            // Method 1: Adaptive thresholding - good for glare
-            const brightness = (r + g + b) / 3;
-            const newVal = brightness < threshold ? 0 : 255;
-            
-            // Method 2: Reduce moiré patterns by selective blurring
-            const isEdge = Math.abs(brightness - avgBrightness) > 30;
-            
-            // Method 3: Contrast enhancement to handle screen dimness
-            const enhancedR = Math.max(0, Math.min(255, (r - avgBrightness) * contrastFactor + avgBrightness));
-            const enhancedG = Math.max(0, Math.min(255, (g - avgBrightness) * contrastFactor + avgBrightness));
-            const enhancedB = Math.max(0, Math.min(255, (b - avgBrightness) * contrastFactor + avgBrightness));
-            
-            // Choose the best method based on image characteristics (simplified approach)
-            if (avgBrightness > 200) {
-                // For very bright images (strong glare), use threshold
-                data[i] = data[i + 1] = data[i + 2] = newVal;
-            } else if (isEdge) {
-                // For potential moiré areas, use the enhanced values
-                data[i] = enhancedR;
-                data[i + 1] = enhancedG;
-                data[i + 2] = enhancedB;
+            if (brightness > 128) {
+                brightPixels++;
             } else {
-                // Default to contrast enhancement
-                data[i] = enhancedR;
-                data[i + 1] = enhancedG;
-                data[i + 2] = enhancedB;
+                darkPixels++;
             }
         }
         
+        const avgBrightness = totalBrightness / pixelCount;
+        const isDarkMode = darkPixels > brightPixels && avgBrightness < 100;
+        const isLightMode = brightPixels > darkPixels && avgBrightness > 150;
+        
+        console.log(`QR Detection Analysis: avgBrightness=${avgBrightness.toFixed(1)}, darkPixels=${darkPixels}, brightPixels=${brightPixels}, isDarkMode=${isDarkMode}, isLightMode=${isLightMode}`);
+        
+        // Second pass: process pixels based on detected mode
+        for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const brightness = (r + g + b) / 3;
+            
+            let newR, newG, newB;
+            
+            if (isDarkMode) {
+                // Dark mode QR code: white pattern on dark background
+                // Apply aggressive contrast and possibly invert
+                const contrastFactor = 2.0;
+                const threshold = avgBrightness + 30; // More sensitive threshold for dark mode
+                
+                if (brightness > threshold) {
+                    // This should be a white part of the QR code
+                    newR = newG = newB = 255;
+                } else {
+                    // This should be a black part of the QR code
+                    newR = newG = newB = 0;
+                }
+            } else if (isLightMode) {
+                // Light mode QR code: black pattern on white background
+                const threshold = avgBrightness - 30;
+                
+                if (brightness < threshold) {
+                    // This should be a black part of the QR code
+                    newR = newG = newB = 0;
+                } else {
+                    // This should be a white part of the QR code
+                    newR = newG = newB = 255;
+                }
+            } else {
+                // Mixed or unclear mode - apply adaptive enhancement
+                const contrastFactor = 1.8;
+                const threshold = avgBrightness;
+                
+                // Enhance contrast around the average
+                if (brightness < threshold) {
+                    const factor = Math.pow((threshold - brightness) / threshold, 0.5);
+                    newR = newG = newB = Math.max(0, brightness - (brightness * factor * contrastFactor));
+                } else {
+                    const factor = Math.pow((brightness - threshold) / (255 - threshold), 0.5);
+                    newR = newG = newB = Math.min(255, brightness + ((255 - brightness) * factor * contrastFactor));
+                }
+            }
+            
+            // Apply the calculated values
+            data[i] = Math.max(0, Math.min(255, newR));
+            data[i + 1] = Math.max(0, Math.min(255, newG));
+            data[i + 2] = Math.max(0, Math.min(255, newB));
+            // Alpha channel remains unchanged
+        }
+        
         return enhancedData;
+    }
+    
+    // Additional processing function specifically for dark mode QR codes
+    function createInvertedImage(imageData) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = imageData.width;
+        canvas.height = imageData.height;
+        
+        const invertedData = ctx.createImageData(imageData.width, imageData.height);
+        const originalData = imageData.data;
+        const data = invertedData.data;
+        
+        // Invert all pixels
+        for (let i = 0; i < originalData.length; i += 4) {
+            data[i] = 255 - originalData[i];         // Red
+            data[i + 1] = 255 - originalData[i + 1]; // Green
+            data[i + 2] = 255 - originalData[i + 2]; // Blue
+            data[i + 3] = originalData[i + 3];       // Alpha (unchanged)
+        }
+        
+        return invertedData;
+    }
+    
+    // Function to try multiple processing approaches
+    function tryMultipleQRProcessingMethods(imageData) {
+        const processingMethods = [
+            { name: "Original", func: () => imageData },
+            { name: "Enhanced Processing", func: () => improveImageForQRDetection(imageData) },
+            { name: "Color Inversion", func: () => createInvertedImage(imageData) },
+            { name: "Enhanced + Inverted", func: () => createInvertedImage(improveImageForQRDetection(imageData)) },
+            { name: "High Contrast Binary", func: () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = imageData.width;
+                canvas.height = imageData.height;
+                
+                const binaryData = ctx.createImageData(imageData.width, imageData.height);
+                const originalData = imageData.data;
+                const data = binaryData.data;
+                
+                // Calculate overall brightness for adaptive threshold
+                let totalBrightness = 0;
+                for (let i = 0; i < originalData.length; i += 4) {
+                    totalBrightness += (originalData[i] + originalData[i + 1] + originalData[i + 2]) / 3;
+                }
+                const avgBrightness = totalBrightness / (originalData.length / 4);
+                const threshold = avgBrightness;
+                
+                // Convert to pure black and white
+                for (let i = 0; i < originalData.length; i += 4) {
+                    const brightness = (originalData[i] + originalData[i + 1] + originalData[i + 2]) / 3;
+                    const value = brightness > threshold ? 255 : 0;
+                    data[i] = data[i + 1] = data[i + 2] = value;
+                    data[i + 3] = originalData[i + 3];
+                }
+                
+                return binaryData;
+            }}
+        ];
+        
+        const qrCodeOptions = {
+            inversionAttempts: "attemptBoth",
+            dontInvert: false,
+            canOverwriteImage: true,
+            greyScaleWeights: {
+                red: 0.2126,
+                green: 0.7152,
+                blue: 0.0722
+            }
+        };
+        
+        // Try each processing method
+        for (let i = 0; i < processingMethods.length; i++) {
+            try {
+                const method = processingMethods[i];
+                const processedImageData = method.func();
+                const qrCode = jsQR(processedImageData.data, processedImageData.width, processedImageData.height, qrCodeOptions);
+                
+                if (qrCode) {
+                    console.log(`QR code detected using: ${method.name}`);
+                    return qrCode;
+                }
+            } catch (error) {
+                console.log(`Processing method "${processingMethods[i].name}" failed:`, error);
+            }
+        }
+        
+        return null;
     }
     
     // Handle the QR code data
