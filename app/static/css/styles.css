@@ -149,7 +149,8 @@ body {
 }
 
 .dark-mode .qr-container {
-    background-color: var(--card-bg) !important;
+    background-color: white !important;
+    color: black !important;
 }
 
 #qrcode {
@@ -1361,6 +1362,101 @@ body {
     background-color: var(--primary) !important;
     color: white !important;
     border-color: var(--card-border) !important;
+}
+
+/* Ensure match-period tabs follow dark mode and cannot be overridden by earlier rules */
+.dark-mode .match-period-tabs {
+    border-bottom-color: var(--card-border) !important;
+}
+.dark-mode .match-period-tab {
+    background-color: transparent !important;
+    color: var(--text-main) !important;
+    border-color: transparent !important;
+}
+.dark-mode .match-period-tab:hover {
+    background-color: rgba(255,255,255,0.03) !important;
+}
+.dark-mode .match-period-tab.active {
+    /* Use the scout accent color for active tab in dark mode to keep contrast */
+    background-color: var(--scout-accent) !important;
+    color: #fff !important;
+    box-shadow: 0 6px 18px rgba(91,59,255,.12) !important;
+    border-color: transparent !important;
+}
+
+/* Stronger enforcement for the scale UI widget to avoid white surfaces in dark mode */
+.dark-mode .scale-ui-widget,
+.dark-mode .scale-ui-widget * {
+    background-color: #171717 !important;
+    color: var(--text-main) !important;
+    border-color: rgba(255,255,255,0.06) !important;
+}
+.dark-mode .scale-ui-widget { box-shadow: 0 6px 18px rgba(0,0,0,0.6) !important; }
+
+/* Toast / Notification dark-mode improvements */
+.dark-mode .toast-container, .dark-mode .toast {
+    color: var(--text-main) !important;
+}
+
+.dark-mode .toast {
+    background-color: var(--card-bg) !important;
+    border: 1px solid var(--card-border) !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6) !important;
+}
+
+.dark-mode .toast .toast-header {
+    background-color: var(--card-header) !important;
+    border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+    color: var(--text-main) !important;
+}
+
+.dark-mode .toast .toast-header .me-auto,
+.dark-mode .toast .toast-header strong {
+    color: var(--text-main) !important;
+}
+
+.dark-mode .toast .toast-body {
+    background-color: transparent !important;
+    color: var(--text-main) !important;
+}
+
+/* Ensure close button is visible in dark mode */
+.dark-mode .toast .btn-close {
+    filter: brightness(2) !important;
+    opacity: 0.9 !important;
+}
+
+/* Also support prefers-color-scheme for browsers that don't apply .dark-mode */
+@media (prefers-color-scheme: dark) {
+    .toast-container, .toast { color: #e6e6e6; }
+    .toast { background-color: #2d3338; border: 1px solid #444; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
+    .toast .toast-header { background-color: #252a30; color: #e6e6e6; }
+    .toast .toast-body { background-color: transparent; color: #e6e6e6; }
+    .toast .btn-close { filter: brightness(2); }
+}
+
+/* Restore old light-mode toast look when NOT using dark-mode */
+body:not(.dark-mode) .toast {
+    background-color: #f8f9fa !important; /* pale body */
+    border: 1px solid rgba(0,0,0,0.08) !important;
+    color: #212529 !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.08) !important;
+}
+
+body:not(.dark-mode) .toast .toast-header {
+    background-color: #198754 !important; /* green header similar to screenshot */
+    color: #fff !important;
+    border-bottom: 1px solid rgba(0,0,0,0.04) !important;
+}
+
+body:not(.dark-mode) .toast .toast-body {
+    background-color: transparent !important;
+    color: #212529 !important;
+}
+
+body:not(.dark-mode) .toast .btn-close {
+    filter: none !important;
+    opacity: 0.8 !important;
 }
 
 /* Fix for any progress bars */

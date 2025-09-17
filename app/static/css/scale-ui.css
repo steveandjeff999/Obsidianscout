@@ -1,0 +1,189 @@
+/* Small widget to provide a visible slider for adjusting UI scale.
+   It manipulates root font-size (html) via JS for broad scaling while
+   remaining mobile-friendly. */
+
+:root {
+    --ui-scale: 1;
+}
+
+/* Slider container */
+.scale-ui-widget {
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    z-index: 2000;
+    background: rgba(255,255,255,0.95);
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 8px;
+    padding: 8px 10px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    min-width: 180px;
+}
+
+.scale-ui-widget .scale-icon {
+    font-size: 1.05rem;
+    color: var(--bs-primary);
+}
+
+.scale-ui-widget .scale-label {
+    font-size: 0.85rem;
+    color: var(--bs-secondary);
+    white-space: nowrap;
+}
+
+.scale-ui-widget input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    background: linear-gradient(90deg, var(--bs-primary) 0%, var(--bs-secondary-bg) 100%);
+    border-radius: 4px;
+    outline: none;
+    width: 100px;
+}
+
+.scale-ui-widget input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--bs-primary);
+    border: 2px solid #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+/* Make sure the widget is not intrusive on small screens */
+@media (max-width: 520px) {
+    .scale-ui-widget { right: 8px; bottom: 8px; padding: 6px; min-width: 140px; }
+    .scale-ui-widget .scale-label { display: none; }
+    .scale-ui-widget input[type="range"] { width: 84px; }
+}
+
+/* When scaled, increase root-level CSS variable for any components that reference it */
+html[data-ui-scale] {
+    font-size: calc(16px * var(--ui-scale));
+}
+
+/* A small hint class to enlarge clickable controls when scale is high */
+.scale-lg .btn, .scale-lg .form-control, .scale-lg .nav-link {
+    transform-origin: left top;
+}
+
+/* Elements targeted for scaling (closest .card to .counter-container) */
+.scale-target-card {
+    /* Keep transforms isolated to avoid reflow; use translateZ for GPU accel */
+    transform-origin: left top;
+    will-change: transform;
+    /* Ensure scaled card doesn't clip shadows/children */
+    overflow: visible !important;
+}
+
+/* Ensure counter controls keep their inline layout when visually scaled */
+.counter-container {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+}
+
+.counter-container .btn-counter, .counter-container .counter-input {
+    transform-origin: left center !important;
+}
+
+/* When a scaled card is larger, add small padding so it doesn't overlap neighbors */
+.scale-lg .scale-target-card {
+    margin-bottom: 0.5rem;
+}
+
+/* Responsive card grid: each column is at least 400px wide, auto-fit as many as will fit */
+.scale-card-grid {
+    /* Minimum column width is driven by --scale-card-min which is updated by JS
+       so we can dynamically pack more/fewer cards depending on UI scale. */
+    --scale-card-min: 400px; /* fallback value */
+    /* number of columns will be written by JS into --scale-card-columns
+       If not present, grid falls back to a single column. */
+     /* If JS does not set a specific column count yet, let the grid auto-fit
+         using the min column width. When JS sets --scale-card-columns it will
+         override this behavior and create that exact number of columns. */
+     display: grid;
+     grid-template-columns: var(--scale-card-columns, repeat(auto-fit, minmax(var(--scale-card-min, 400px), 1fr)));
+    gap: 1rem;
+    align-items: start;
+    transition: grid-template-columns 180ms ease, gap 180ms ease;
+}
+
+.scale-card-grid > .card {
+    width: 100%;
+}
+
+/* When we move Bootstrap column elements into the grid, they may carry
+   responsive width classes (eg. col-md-6) that will interfere with the
+   grid's layout. `.scale-card-col` marks those moved columns; reset their
+   box-model so the grid controls sizing. */
+.scale-card-grid .scale-card-col {
+    box-sizing: border-box;
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: none !important;
+}
+
+/* Ensure any .col-* classes inside the grid do not apply floats or widths */
+.scale-card-grid [class*="col-"] {
+    float: none !important;
+    display: block !important;
+    width: 100% !important;
+}
+
+/* If we mark an existing row as a grid-parent, use grid layout in-place
+   without moving DOM nodes. */
+.scale-card-grid-parent {
+    display: grid !important;
+    grid-template-columns: repeat(var(--scale-card-columns, 1), 1fr) !important;
+    gap: 0.75rem !important;  /* Reduced from 1rem for tighter mobile fit */
+    align-items: start;
+}
+
+.scale-card-grid-parent > .scale-card-col {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+/* Override Bootstrap column classes inside the grid parent */
+.scale-card-grid-parent > [class*="col-"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: none !important;
+}
+
+/* Make cards more compact on mobile */
+@media (max-width: 500px) {
+    .scale-card-grid-parent {
+        gap: 0.25rem !important;  /* Very tight spacing on small screens */
+    }
+    
+    .scale-card-grid-parent .card {
+        font-size: 0.85rem;  /* Smaller text on mobile */
+    }
+    
+    .scale-card-grid-parent .card-header {
+        padding: 0.375rem !important;  /* Very tight padding */
+        font-size: 0.8rem !important;
+    }
+    
+    .scale-card-grid-parent .card-body {
+        padding: 0.5rem !important;  /* Very tight padding */
+    }
+    
+    /* Make counter buttons more compact */
+    .scale-card-grid-parent .counter-container .btn {
+        padding: 0.25rem 0.5rem !important;
+        font-size: 0.8rem !important;
+    }
+    
+    .scale-card-grid-parent .counter-container .counter-input {
+        font-size: 0.9rem !important;
+        padding: 0.25rem !important;
+        min-width: 2.5rem !important;
+    }
+}

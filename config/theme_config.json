@@ -1,5 +1,5 @@
 {
-  "current_theme": "light",
+  "current_theme": "dark",
   "themes": {
     "light": {
       "name": "Light Mode",
@@ -54,7 +54,7 @@
         "warning": "#ffda6a",
         "info": "#6edff6",
         "light": "#343a40",
-        "dark": "#f8f9fa",
+        "dark": "#e6eef8",
         "red-alliance": "#ea868f",
         "red-alliance-bg": "#2c0b0e",
         "blue-alliance": "#6ea8fe",
@@ -62,13 +62,13 @@
         "auto-color": "#fd7e14",
         "teleop-color": "#6ea8fe",
         "endgame-color": "#75b798",
-        "navbar-bg": "#212529",
-        "card-bg": "#2b3035",
-        "card-border": "#495057",
-        "card-header": "#343a40",
-        "text-main": "#f8f9fa",
-        "text-muted": "#adb5bd",
-        "background": "#1a1d20"
+        "navbar-bg": "#0f1720",
+        "card-bg": "#0f1720",
+        "card-border": "rgba(255,255,255,0.06)",
+        "card-header": "#0f1720",
+        "text-main": "#e6eef8",
+        "text-muted": "rgba(255,255,255,0.6)",
+        "background": "#0b0f12"
       },
       "typography": {
         "font-family-base": "'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif",
