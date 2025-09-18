@@ -89,10 +89,11 @@
                                     <i class="fas fa-chart-line me-2"></i>
                                     <strong>Ranking Type:</strong> Team Performance
                                 </div>
-                                {% if team_rankings|length > 0 %}
+                                {% set teams_with_data = team_rankings|selectattr('num_entries')|list %}
+                                {% if teams_with_data|length > 0 %}
                                 <div>
                                     <i class="fas fa-star me-2"></i>
-                                    <strong>Top Score:</strong> {{ team_rankings[0].avg_points|round(2) }} pts
+                                    <strong>Top Score:</strong> {{ teams_with_data[0].avg_points|round(2) }} pts
                                 </div>
                                 {% endif %}
                             </div>
@@ -155,10 +156,18 @@
                                         </td>
                                         <td>{{ entry.team.team_name or 'N/A' }}</td>
                                         <td>
-                                            <strong class="text-success">{{ entry.avg_points|round(2) }}</strong>
+                                            {% if entry.num_entries and entry.num_entries > 0 %}
+                                                <strong class="text-success">{{ entry.avg_points|round(2) }}</strong>
+                                            {% else %}
+                                                <span class="text-muted">No data</span>
+                                            {% endif %}
                                         </td>
                                         <td>
-                                            <span class="badge bg-info">{{ entry.num_entries }} match{{ 'es' if entry.num_entries != 1 else '' }}</span>
+                                            {% if entry.num_entries and entry.num_entries > 0 %}
+                                                <span class="badge bg-info">{{ entry.num_entries }} match{{ 'es' if entry.num_entries != 1 else '' }}</span>
+                                            {% else %}
+                                                <span class="text-muted">No data</span>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -189,19 +198,19 @@
                             </div>
                             <div class="col-md-3">
                                 <div class="h-100 d-flex flex-column justify-content-center">
-                                    <h4 class="text-success mb-1">{{ team_rankings[0].avg_points|round(1) if team_rankings else 0 }}</h4>
+                                    <h4 class="text-success mb-1">{{ teams_with_data[0].avg_points|round(1) if teams_with_data else 0 }}</h4>
                                     <small class="text-muted">Highest Average</small>
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="h-100 d-flex flex-column justify-content-center">
-                                    <h4 class="text-warning mb-1">{{ team_rankings[-1].avg_points|round(1) if team_rankings else 0 }}</h4>
+                                    <h4 class="text-warning mb-1">{{ teams_with_data[-1].avg_points|round(1) if teams_with_data else 0 }}</h4>
                                     <small class="text-muted">Lowest Average</small>
                                 </div>
                             </div>
                             <div class="col-md-3">
                                 <div class="h-100 d-flex flex-column justify-content-center">
-                                    <h4 class="text-info mb-1">{{ ((team_rankings|sum(attribute='avg_points')) / team_rankings|length)|round(1) if team_rankings else 0 }}</h4>
+                                    <h4 class="text-info mb-1">{{ ((teams_with_data|sum(attribute='avg_points')) / teams_with_data|length)|round(1) if teams_with_data else 0 }}</h4>
                                     <small class="text-muted">Overall Average</small>
                                 </div>
                             </div>

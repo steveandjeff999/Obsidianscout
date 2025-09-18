@@ -65,12 +65,15 @@ def api_info():
 @bp.route('/teams', methods=['GET'])
 @team_data_access_required
 def get_teams():
-    """Get all teams data with optional filtering"""
+    """Get teams data filtered by API key's scouting team"""
     try:
-        team_number = get_current_api_team()
+        # Get API key's registered team number for filtering
+        api_team_number = get_current_api_team()
+        if api_team_number is None:
+            return jsonify({'error': 'API key not associated with a scouting team'}), 403
         
-        # Start with all teams (no team isolation)
-        teams_query = Team.query
+        # Start with teams filtered by API key's scouting team
+        teams_query = Team.query.filter(Team.scouting_team_number == api_team_number)
         
         # Add filters
         event_id = request.args.get('event_id', type=int)
@@ -80,10 +83,6 @@ def get_teams():
         team_number_filter = request.args.get('team_number', type=int)
         if team_number_filter:
             teams_query = teams_query.filter(Team.team_number == team_number_filter)
-        
-        scouting_team_number = request.args.get('scouting_team_number', type=int)
-        if scouting_team_number:
-            teams_query = teams_query.filter(Team.scouting_team_number == scouting_team_number)
         
         # Add pagination
         limit = request.args.get('limit', 100, type=int)
@@ -114,7 +113,7 @@ def get_teams():
             'total_count': total_count,
             'limit': limit,
             'offset': offset,
-            'requesting_team': team_number
+            'requesting_team': api_team_number
         })
         
     except Exception as e:
@@ -125,16 +124,21 @@ def get_teams():
 @bp.route('/teams/<int:team_id>', methods=['GET'])
 @team_data_access_required
 def get_team_details(team_id):
-    """Get detailed information about a specific team"""
+    """Get detailed information about a specific team (filtered by API key's scouting team)"""
     try:
-        # Get team without team isolation (access all teams)
-        team = Team.query.filter(Team.id == team_id).first()
+        # Get API key's registered team number for filtering
+        api_team_number = get_current_api_team()
+        if api_team_number is None:
+            return jsonify({'error': 'API key not associated with a scouting team'}), 403
+        
+        # Get team with team isolation
+        team = Team.query.filter(Team.id == team_id, Team.scouting_team_number == api_team_number).first()
         
         if not team:
-            return jsonify({'error': 'Team not found'}), 404
+            return jsonify({'error': 'Team not found or not accessible to your API key\'s scouting team'}), 404
         
-        # Get team's scouting data (all scouting data for this team)
-        scouting_data = ScoutingData.query.filter(ScoutingData.team_id == team_id).all()
+        # Get team's scouting data (filtered by API key's scouting team)
+        scouting_data = ScoutingData.query.filter(ScoutingData.team_id == team_id, ScoutingData.scouting_team_number == api_team_number).all()
         
         team_data = {
             'id': team.id,
@@ -181,10 +185,15 @@ def get_team_details(team_id):
 @bp.route('/events', methods=['GET'])
 @team_data_access_required
 def get_events():
-    """Get all events data with optional filtering"""
+    """Get events that have teams associated with API key's scouting team"""
     try:
-        # Start with all events (no team isolation)
-        events_query = Event.query
+        # Get API key's registered team number for filtering
+        api_team_number = get_current_api_team()
+        if api_team_number is None:
+            return jsonify({'error': 'API key not associated with a scouting team'}), 403
+        
+        # Start with events that have teams belonging to the API key's scouting team
+        events_query = Event.query.join(Event.teams).filter(Team.scouting_team_number == api_team_number).distinct()
         
         # Add filters
         event_code = request.args.get('code')
@@ -235,9 +244,21 @@ def get_events():
 @bp.route('/events/<int:event_id>', methods=['GET'])
 @team_data_access_required
 def get_event_details(event_id):
-    """Get detailed information about a specific event"""
+    """Get detailed information about a specific event (only if it has teams from API key's scouting team)"""
     try:
-        event = Event.query.filter(Event.id == event_id).first()
+        # Get API key's registered team number for filtering
+        api_team_number = get_current_api_team()
+        if api_team_number is None:
+            return jsonify({'error': 'API key not associated with a scouting team'}), 403
+        
+        # Get event only if it has teams belonging to the API key's scouting team
+        event = Event.query.join(Event.teams).filter(
+            Event.id == event_id,
+            Team.scouting_team_number == api_team_number
+        ).first()
+        
+        if not event:
+            return jsonify({'error': 'Event not found or not accessible to your API key\'s scouting team'}), 404
         
         if not event:
             return jsonify({'error': 'Event not found'}), 404
@@ -287,10 +308,17 @@ def get_event_details(event_id):
 @bp.route('/matches', methods=['GET'])
 @scouting_data_read_required
 def get_matches():
-    """Get all matches data with optional filtering"""
+    """Get matches filtered by events that have teams from API key's scouting team"""
     try:
-        # Start with all matches (no team isolation)
-        matches_query = Match.query
+        # Get API key's registered team number for filtering
+        api_team_number = get_current_api_team()
+        if api_team_number is None:
+            return jsonify({'error': 'API key not associated with a scouting team'}), 403
+        
+        # Start with matches from events that have teams belonging to the API key's scouting team
+        matches_query = Match.query.join(Match.event).join(Event.teams).filter(
+            Team.scouting_team_number == api_team_number
+        ).distinct()
         
         # Add filters
         event_id = request.args.get('event_id', type=int)
@@ -358,15 +386,27 @@ def get_matches():
 @bp.route('/matches/<int:match_id>', methods=['GET'])
 @scouting_data_read_required
 def get_match_details(match_id):
-    """Get detailed information about a specific match"""
+    """Get detailed information about a specific match (only if from events with API key's teams)"""
     try:
-        match = Match.query.filter(Match.id == match_id).first()
+        # Get API key's registered team number for filtering
+        api_team_number = get_current_api_team()
+        if api_team_number is None:
+            return jsonify({'error': 'API key not associated with a scouting team'}), 403
+        
+        # Get match only if it's from an event that has teams belonging to the API key's scouting team
+        match = Match.query.join(Match.event).join(Event.teams).filter(
+            Match.id == match_id,
+            Team.scouting_team_number == api_team_number
+        ).first()
         
         if not match:
-            return jsonify({'error': 'Match not found'}), 404
+            return jsonify({'error': 'Match not found or not accessible to your API key\'s scouting team'}), 404
         
-        # Get scouting data for this match
-        scouting_data = ScoutingData.query.filter(ScoutingData.match_id == match_id).all()
+        # Get scouting data for this match (filtered by API key's scouting team)
+        scouting_data = ScoutingData.query.filter(
+            ScoutingData.match_id == match_id,
+            ScoutingData.scouting_team_number == api_team_number
+        ).all()
         
         match_data = {
             'id': match.id,
@@ -407,10 +447,15 @@ def get_match_details(match_id):
 @bp.route('/scouting-data', methods=['GET'])
 @scouting_data_read_required
 def get_scouting_data():
-    """Get all scouting data with optional filtering"""
+    """Get scouting data filtered by API key's scouting team"""
     try:
-        # Start with all scouting data (no team isolation)
-        scouting_query = ScoutingData.query
+        # Get API key's registered team number for filtering
+        api_team_number = get_current_api_team()
+        if api_team_number is None:
+            return jsonify({'error': 'API key not associated with a scouting team'}), 403
+        
+        # Start with scouting data filtered by API key's scouting team
+        scouting_query = ScoutingData.query.filter(ScoutingData.scouting_team_number == api_team_number)
         
         # Add filters
         team_id = request.args.get('team_id', type=int)
@@ -420,10 +465,6 @@ def get_scouting_data():
         match_id = request.args.get('match_id', type=int)
         if match_id:
             scouting_query = scouting_query.filter(ScoutingData.match_id == match_id)
-        
-        scouting_team_number = request.args.get('scouting_team_number', type=int)
-        if scouting_team_number:
-            scouting_query = scouting_query.filter(ScoutingData.scouting_team_number == scouting_team_number)
         
         scout = request.args.get('scout')
         if scout:
@@ -524,7 +565,7 @@ def create_scouting_data():
 @bp.route('/analytics/team-performance', methods=['GET'])
 @analytics_access_required
 def get_team_performance():
-    """Get team performance analytics for any team"""
+    """Get team performance analytics for teams in API key's registered scouting team scope"""
     try:
         team_id = request.args.get('team_id', type=int)
         team_number = request.args.get('team_number', type=int)
@@ -533,17 +574,22 @@ def get_team_performance():
         if not team_id and not team_number:
             return jsonify({'error': 'team_id or team_number parameter is required'}), 400
         
-        # Find team by ID or number (no team isolation)
+        # Get API key's registered team number for filtering
+        api_team_number = get_current_api_team()
+        if api_team_number is None:
+            return jsonify({'error': 'API key not associated with a scouting team'}), 403
+        
+        # Find team by ID or number (filtered by API key's scouting team)
         if team_id:
-            team = Team.query.filter(Team.id == team_id).first()
+            team = Team.query.filter(Team.id == team_id, Team.scouting_team_number == api_team_number).first()
         else:
-            team = Team.query.filter(Team.team_number == team_number).first()
+            team = Team.query.filter(Team.team_number == team_number, Team.scouting_team_number == api_team_number).first()
         
         if not team:
-            return jsonify({'error': 'Team not found'}), 404
+            return jsonify({'error': 'Team not found or not accessible to your API key\'s scouting team'}), 404
         
-        # Get scouting data for analytics (all data for this team)
-        scouting_query = ScoutingData.query.filter(ScoutingData.team_id == team.id)
+        # Get scouting data for analytics (filtered by API key's scouting team)
+        scouting_query = ScoutingData.query.filter(ScoutingData.team_id == team.id, ScoutingData.scouting_team_number == api_team_number)
         
         if event_id:
             scouting_query = scouting_query.join(ScoutingData.match).filter(Match.event_id == event_id)

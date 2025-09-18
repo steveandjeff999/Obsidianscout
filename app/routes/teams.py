@@ -11,7 +11,7 @@ from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_current_game_config, get_effective_game_config
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_events_by_scouting_team, 
-    assign_scouting_team_to_model, get_event_by_code
+    assign_scouting_team_to_model, get_event_by_code, filter_scouting_data_by_scouting_team
 )
 
 def get_theme_context():
@@ -36,7 +36,21 @@ def index():
     event_id = request.args.get('event_id', type=int)
     
     # Get all events for the dropdown (filtered by current scouting team)
-    events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
+    events_query = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name)
+    events_all = events_query.all()
+    # Deduplicate by event.code case-insensitively (prefer earlier items from ordering)
+    seen_codes = set()
+    events = []
+    for ev in events_all:
+        code = (ev.code or '').strip().lower()
+        if code == '':
+            # keep events with empty code as-is
+            events.append(ev)
+            continue
+        if code in seen_codes:
+            continue
+        seen_codes.add(code)
+        events.append(ev)
     
     if event_id:
         # If a specific event ID is requested, use that (filtered by scouting team)
@@ -289,7 +303,19 @@ def edit(team_number):
     team = Team.query.filter_by(team_number=team_number).first_or_404()
     
     # Get all events for the form
-    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+    events_query = Event.query.order_by(Event.year.desc(), Event.name)
+    events_all = events_query.all()
+    seen_codes = set()
+    events = []
+    for ev in events_all:
+        code = (ev.code or '').strip().lower()
+        if code == '':
+            events.append(ev)
+            continue
+        if code in seen_codes:
+            continue
+        seen_codes.add(code)
+        events.append(ev)
     
     if request.method == 'POST':
         # new_team_number = request.form.get('team_number', type=int)
@@ -350,13 +376,35 @@ def delete(team_number):
 @bp.route('/<int:team_number>/view')
 def view(team_number):
     """View team details"""
-    team = Team.query.filter_by(team_number=team_number).first_or_404()
+    from app.utils.team_isolation import get_current_scouting_team_number
     
-    # Get scouting data for this team
-    scouting_data = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=current_user.scouting_team_number).order_by(ScoutingData.match_id).all()
+    # Find the team entry that belongs to the current scouting team or has scouting data
+    current_scouting_team = get_current_scouting_team_number()
+    
+    # First, try to find a team with the number that has scouting data for current scouting team
+    team = None
+    if current_scouting_team is not None:
+        # Look for team with scouting data from current scouting team
+        team = db.session.query(Team).join(ScoutingData).filter(
+            Team.team_number == team_number,
+            ScoutingData.scouting_team_number == current_scouting_team
+        ).first()
+    
+    # Fallback to any team with that number if no team found with scouting data
+    if team is None:
+        team = Team.query.filter_by(team_number=team_number).first_or_404()
+    
+    # Get scouting data for this specific team
+    from app.utils.team_isolation import filter_scouting_data_by_scouting_team
+    scouting_data = filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team.id).order_by(ScoutingData.match_id).all()
     
     # Get game configuration for metrics calculation
     game_config = get_current_game_config()
+    
+    # Fallback: If game config is empty, try to load config for the current scouting team
+    if not game_config and current_scouting_team is not None:
+        from app.utils.config_manager import load_game_config
+        game_config = load_game_config(team_number=current_scouting_team)
     
     # Calculate key metrics for this team if we have scouting data
     metrics = {}
@@ -383,10 +431,16 @@ def view(team_number):
     # If no component metrics defined in config, use default IDs
     if not component_metric_ids:
         component_metric_ids = ["apt", "tpt", "ept"]
+        # Add default metric info for fallback metrics
+        metric_info["apt"] = {"id": "apt", "name": "Auto Points", "formula": "apt"}
+        metric_info["tpt"] = {"id": "tpt", "name": "Teleop Points", "formula": "tpt"}
+        metric_info["ept"] = {"id": "ept", "name": "Endgame Points", "formula": "ept"}
     
     # If no total metric defined, use default ID
     if not total_metric_id:
         total_metric_id = "tot"
+        # Add default metric info for total metric
+        metric_info["tot"] = {"id": "tot", "name": "Total Points", "formula": "tot"}
     
     if scouting_data:
         # Initialize metric arrays
@@ -502,19 +556,33 @@ def ranks():
     # Calculate average total points for each team
     team_rankings = []
     for team in teams:
-        scouting_data = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=current_user.scouting_team_number).all()
+        # Use isolation helper so users see their team's and unassigned entries
+        scouting_data = filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team.id).all()
         if scouting_data:
-            total_points = [data.calculate_metric(total_metric_id) for data in scouting_data]
-            avg_points = sum(total_points) / len(total_points) if total_points else 0
+            # Calculate metric for each scouting entry then filter out matches with 0 points
+            total_points_raw = [data.calculate_metric(total_metric_id) for data in scouting_data]
+            # Keep only entries that have a non-zero numeric value
+            scored_points = [p for p in total_points_raw if p is not None and p != 0]
+            # If we have non-zero scored points, average those
+            if len(scored_points) > 0:
+                avg_points = sum(scored_points) / len(scored_points)
+                num_entries = len(scored_points)
+            else:
+                # There are scouting entries but none have non-zero points.
+                # Treat this as having data (avg 0) rather than 'no data' so teams with entries are shown.
+                avg_points = 0
+                num_entries = len(total_points_raw)
         else:
-            avg_points = 0
+            # No scouting entries at all -> truly no data
+            avg_points = None
+            num_entries = 0
         team_rankings.append({
             'team': team,
             'avg_points': avg_points,
-            'num_entries': len(scouting_data)
+            'num_entries': num_entries
         })
-    # Sort by average points descending
-    team_rankings.sort(key=lambda x: x['avg_points'], reverse=True)
+    # Sort so teams with data come first (by descending avg_points), then teams with no data
+    team_rankings.sort(key=lambda x: (x['avg_points'] is None, -(x['avg_points'] or 0)))
     return render_template('teams/ranks.html',
         team_rankings=team_rankings,
         events=events,
@@ -601,21 +669,27 @@ def view_shared_ranks(share_id):
     for team in teams:
         # Get all scouting data for this team (without team isolation for shared view)
         scouting_data = ScoutingData.query.filter_by(team_id=team.id).all()
-        
         if scouting_data:
-            total_points = [data.calculate_metric(total_metric_id) for data in scouting_data]
-            avg_points = sum(total_points) / len(total_points) if total_points else 0
+            total_points_raw = [data.calculate_metric(total_metric_id) for data in scouting_data]
+            scored_points = [p for p in total_points_raw if p is not None and p != 0]
+            if len(scored_points) > 0:
+                avg_points = sum(scored_points) / len(scored_points)
+                num_entries = len(scored_points)
+            else:
+                avg_points = 0
+                num_entries = len(total_points_raw)
         else:
-            avg_points = 0
-        
+            avg_points = None
+            num_entries = 0
+
         team_rankings.append({
             'team': team,
             'avg_points': avg_points,
-            'num_entries': len(scouting_data)
+            'num_entries': num_entries
         })
     
-    # Sort by average points descending
-    team_rankings.sort(key=lambda x: x['avg_points'], reverse=True)
+    # Sort so teams with data come first (by descending avg_points), then teams with no data
+    team_rankings.sort(key=lambda x: (x['avg_points'] is None, -(x['avg_points'] or 0)))
     
     return render_template('teams/shared_ranks.html',
                          shared_ranks=shared_ranks,

@@ -117,7 +117,7 @@
                     {% for metric_key, metric_value in component_metrics.items() %}
                     <div class="col-md-6 col-xl-{{ 12 // (component_metrics|length + 1) }} mb-2 mb-xl-0">
                         <div class="points-display" data-formula="auto_generated" data-metric-id="{{ metric_key }}">
-                            <div class="fs-5 text-center">{{ metric_info[metric_key].name }}</div>
+                            <div class="fs-5 text-center">{{ metric_info.get(metric_key, {}).get('name', metric_key.upper()) }}</div>
                             <div class="fs-3 text-center fw-bold text-{{ colors[loop.index0 % colors|length] }} points-value">{{ "%.1f"|format(metric_value) }}</div>
                         </div>
                     </div>

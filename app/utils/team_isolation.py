@@ -5,6 +5,7 @@ Provides helper functions to filter database queries by scouting team.
 
 from flask_login import current_user
 from app.models import Team, Event, Match, ScoutingData, AllianceSelection, DoNotPickEntry, AvoidEntry, PitScoutingData, User
+from sqlalchemy import or_
 
 
 def get_current_scouting_team_number():
@@ -58,8 +59,14 @@ def filter_scouting_data_by_scouting_team(query=None):
     if query is None:
         query = ScoutingData.query
     
+    # If the current user has a scouting team assigned, show both their
+    # team's data and any unassigned (NULL) scouting entries. This lets
+    # users see data that was created before a scouting team was set.
     if scouting_team_number is not None:
-        return query.filter(ScoutingData.scouting_team_number == scouting_team_number)
+        return query.filter(or_(ScoutingData.scouting_team_number == scouting_team_number,
+                                ScoutingData.scouting_team_number.is_(None)))
+
+    # If the current user has no scouting team, only show unassigned data
     return query.filter(ScoutingData.scouting_team_number.is_(None))  # Show unassigned data if no team set
 
 

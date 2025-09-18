@@ -417,6 +417,9 @@
                                 input.checked = false;
                             } else if (input.tagName === 'SELECT') {
                                 input.selectedIndex = 0;
+                            } else if (input.type === 'number' || input.classList.contains('counter-input')) {
+                                // Reset numeric counters to 0 (not empty). Empty/null breaks arithmetic with +/- handlers.
+                                try { input.value = 0; } catch (e) { input.value = '0'; }
                             } else {
                                 input.value = '';
                             }

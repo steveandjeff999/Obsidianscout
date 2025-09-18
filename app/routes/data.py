@@ -1,7 +1,11 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
 from app.routes.auth import analytics_required
-from app.models import Team, Match, Event, ScoutingData, StrategyDrawing, PitScoutingData, AllianceSelection, DoNotPickEntry, AvoidEntry
+from app.models import (
+    Team, Match, Event, ScoutingData, StrategyDrawing, PitScoutingData,
+    AllianceSelection, DoNotPickEntry, AvoidEntry,
+    TeamListEntry, StrategyShare, SharedGraph, SharedTeamRanks, team_event
+)
 from app import db
 import pandas as pd
 import json
@@ -16,6 +20,8 @@ from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
     filter_events_by_scouting_team, get_event_by_code
 )
+from flask import jsonify
+from app.utils.api_auth import team_data_access_required
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -393,6 +399,57 @@ def import_qr():
     success = request.args.get('success', False)
     return render_template('data/import_qr.html', success=success, **get_theme_context())
 
+
+# Provide JSON access to events under /data/events to match API behavior
+@bp.route('/events', methods=['GET'])
+@team_data_access_required
+def data_events():
+    """Return events as JSON similar to /api/v1/events so clients can access via /data/events"""
+    try:
+        events_query = Event.query
+
+        # Optional filters
+        event_code = request.args.get('code')
+        if event_code:
+            events_query = events_query.filter(Event.code.ilike(f'%{event_code}%'))
+
+        location = request.args.get('location')
+        if location:
+            events_query = events_query.filter(Event.location.ilike(f'%{location}%'))
+
+        limit = request.args.get('limit', 100, type=int)
+        if limit > 1000:
+            limit = 1000
+        offset = request.args.get('offset', 0, type=int)
+
+        events = events_query.offset(offset).limit(limit).all()
+        total_count = events_query.count()
+
+        events_data = []
+        for event in events:
+            events_data.append({
+                'id': event.id,
+                'name': event.name,
+                'code': event.code,
+                'location': event.location,
+                'start_date': event.start_date.isoformat() if event.start_date else None,
+                'end_date': event.end_date.isoformat() if event.end_date else None,
+                'team_count': len(event.teams)
+            })
+
+        return jsonify({
+            'success': True,
+            'events': events_data,
+            'count': len(events_data),
+            'total_count': total_count,
+            'limit': limit,
+            'offset': offset
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error getting events via /data/events: {str(e)}")
+        return jsonify({'error': 'Failed to retrieve events'}), 500
+
 @bp.route('/export/excel')
 def export_excel():
     """Export all scouting data to Excel"""
@@ -466,11 +523,17 @@ def manage_entries():
     else:
         teams = []  # No teams if no current event is set
         matches = []  # No matches if no current event is set
+    # Always provide events list filtered by scouting team so the template can show Events tab
+    try:
+        events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
+    except Exception:
+        events = []
 
     return render_template('data/manage/index.html', 
                          scouting_entries=scouting_entries, 
                          teams=teams,
                          matches=matches,
+                         events=events,
                          **get_theme_context())
 
 @bp.route('/edit/<int:entry_id>', methods=['GET', 'POST'])
@@ -549,26 +612,59 @@ def wipe_database():
             flash("Error: No scouting team number found for current user.", "danger")
             return redirect(url_for('data.index'))
         
-        # Count records before deletion for reporting
+        # Count records before deletion for reporting (scoped where appropriate)
         scouting_data_count = ScoutingData.query.filter_by(scouting_team_number=scouting_team_number).count()
         pit_data_count = PitScoutingData.query.filter_by(scouting_team_number=scouting_team_number).count()
         strategy_count = StrategyDrawing.query.filter_by(scouting_team_number=scouting_team_number).count()
         alliance_count = AllianceSelection.query.filter_by(scouting_team_number=scouting_team_number).count()
         dnp_count = DoNotPickEntry.query.filter_by(scouting_team_number=scouting_team_number).count()
         avoid_count = AvoidEntry.query.filter_by(scouting_team_number=scouting_team_number).count()
-        match_count = Match.query.filter_by(scouting_team_number=scouting_team_number).count()
-        event_count = Event.query.filter_by(scouting_team_number=scouting_team_number).count()
         team_count = Team.query.filter_by(scouting_team_number=scouting_team_number).count()
-        
-        # Delete all data for this scouting team (in order to respect foreign key constraints)
+
+        # Gather events owned by this scouting team and their ids
+        events = Event.query.filter_by(scouting_team_number=scouting_team_number).all()
+        event_ids = [e.id for e in events]
+        event_count = len(event_ids)
+
+        # Delete in an order that respects foreign keys. Events are referenced by many
+        # tables (association table team_event, matches, team list entries, alliance selections, etc.).
+        if event_ids:
+            # 1) Remove association rows in team_event linking teams to these events
+            try:
+                db.session.execute(team_event.delete().where(team_event.c.event_id.in_(event_ids)))
+            except Exception:
+                # Some DB backends or SQLAlchemy versions may not support this; ignore non-fatal errors
+                pass
+
+            # 2) Delete objects that reference matches for these events (scoped by match.event_id)
+            StrategyShare.query.filter(StrategyShare.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
+            ScoutingData.query.filter(ScoutingData.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
+            StrategyDrawing.query.filter(StrategyDrawing.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
+
+            # 3) Delete matches belonging to these events
+            Match.query.filter(Match.event_id.in_(event_ids)).delete(synchronize_session=False)
+
+            # 4) Delete event-scoped records
+            TeamListEntry.query.filter(TeamListEntry.event_id.in_(event_ids)).delete(synchronize_session=False)
+            AllianceSelection.query.filter(AllianceSelection.event_id.in_(event_ids)).delete(synchronize_session=False)
+            PitScoutingData.query.filter(PitScoutingData.event_id.in_(event_ids)).delete(synchronize_session=False)
+
+            # 5) Nullify references in shared objects rather than deleting other teams' shares
+            SharedGraph.query.filter(SharedGraph.event_id.in_(event_ids)).update({SharedGraph.event_id: None}, synchronize_session=False)
+            SharedTeamRanks.query.filter(SharedTeamRanks.event_id.in_(event_ids)).update({SharedTeamRanks.event_id: None}, synchronize_session=False)
+
+            # 6) Finally delete the events themselves
+            Event.query.filter(Event.id.in_(event_ids)).delete(synchronize_session=False)
+
+        # Delete per-team scoped objects (these are safe to delete by scouting_team_number)
         ScoutingData.query.filter_by(scouting_team_number=scouting_team_number).delete()
         PitScoutingData.query.filter_by(scouting_team_number=scouting_team_number).delete()
         StrategyDrawing.query.filter_by(scouting_team_number=scouting_team_number).delete()
         AllianceSelection.query.filter_by(scouting_team_number=scouting_team_number).delete()
         DoNotPickEntry.query.filter_by(scouting_team_number=scouting_team_number).delete()
         AvoidEntry.query.filter_by(scouting_team_number=scouting_team_number).delete()
-        Match.query.filter_by(scouting_team_number=scouting_team_number).delete()
-        Event.query.filter_by(scouting_team_number=scouting_team_number).delete()
+
+        # Delete teams owned by this scouting team
         Team.query.filter_by(scouting_team_number=scouting_team_number).delete()
 
         db.session.commit()
@@ -584,6 +680,11 @@ def wipe_database():
                     except Exception:
                         pass
         
+        # Compute match count: matches that belonged to deleted events plus matches scoped to this scouting team
+        matches_from_events_count = Match.query.filter(Match.event_id.in_(event_ids)).count() if event_ids else 0
+        matches_scoped_count = Match.query.filter_by(scouting_team_number=scouting_team_number).count()
+        match_count = max(matches_from_events_count, matches_scoped_count)
+
         # Build success message with deletion counts
         deleted_items = []
         if team_count > 0:
