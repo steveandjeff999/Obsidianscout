@@ -1,4 +1,4 @@
-from app.models import ScoutingData, Team, Match
+from app.models import ScoutingData, Team, Match, TeamAllianceStatus
 import statistics
 from flask import current_app
 import random
@@ -11,13 +11,38 @@ def calculate_team_metrics(team_id):
     team = Team.query.get(team_id)
     team_number = team.team_number if team else team_id
     
-    # Get all scouting data for this team (filtered by current scouting team)
-    scouting_team_number = get_current_scouting_team_number()
-    if scouting_team_number is not None:
-        scouting_data = filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team_id).all()
-    else:
-        scouting_data = ScoutingData.query.filter_by(team_id=team_id, scouting_team_number=None).all()
+    # Get all scouting data for this team.
+    # If the team is currently in alliance-mode, use scouting data shared by alliance members.
+    # Otherwise, respect the normal scouting team isolation rules.
+    def _get_scouting_data_for_team(team_obj):
+        """Return a list of ScoutingData objects to use for analytics for the given Team object or id."""
+        # Accept either Team instance or team id
+        if isinstance(team_obj, int):
+            team_obj = Team.query.get(team_obj)
+        if not team_obj:
+            return []
+
+        # Check if alliance mode is active for this team_number
+        try:
+            if TeamAllianceStatus.is_alliance_mode_active_for_team(team_obj.team_number):
+                alliance = TeamAllianceStatus.get_active_alliance_for_team(team_obj.team_number)
+                if alliance:
+                    member_numbers = alliance.get_member_team_numbers()
+                    # Use scouting entries contributed by alliance members for this team
+                    return ScoutingData.query.filter(ScoutingData.team_id == team_obj.id,
+                                                     ScoutingData.scouting_team_number.in_(member_numbers)).all()
+        except Exception:
+            # Fall back to normal isolation if alliance lookup fails
+            pass
+
+        # Default behavior: respect current user's scouting team isolation
+        scouting_team_number = get_current_scouting_team_number()
+        if scouting_team_number is not None:
+            return filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team_obj.id).all()
+        return ScoutingData.query.filter_by(team_id=team_obj.id, scouting_team_number=None).all()
     
+    scouting_data = _get_scouting_data_for_team(team)
+
     if not scouting_data:
         print(f"    No scouting data found for team {team_number} (ID: {team_id})")
         return {
@@ -498,10 +523,29 @@ def generate_match_strategy_analysis(match_id):
     for team in red_teams:
         analytics_result = calculate_team_metrics(team.id)
         team_metrics = analytics_result.get('metrics', {})
+        # Use alliance-aware scouting data retrieval (mirror calculate_team_metrics behavior)
+        try:
+            if TeamAllianceStatus.is_alliance_mode_active_for_team(team.team_number):
+                alliance = TeamAllianceStatus.get_active_alliance_for_team(team.team_number)
+                if alliance:
+                    member_numbers = alliance.get_member_team_numbers()
+                    scouting_records = ScoutingData.query.filter(ScoutingData.team_id == team.id,
+                                                                 ScoutingData.scouting_team_number.in_(member_numbers)).all()
+                else:
+                    scouting_records = ScoutingData.query.filter_by(team_id=team.id).all()
+            else:
+                scouting_team_number = get_current_scouting_team_number()
+                if scouting_team_number is not None:
+                    scouting_records = filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team.id).all()
+                else:
+                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=None).all()
+        except Exception:
+            scouting_records = ScoutingData.query.filter_by(team_id=team.id).all()
+
         team_data = {
             'team': team,
             'metrics': team_metrics,
-            'scouting_data': ScoutingData.query.filter_by(team_id=team.id).all()
+            'scouting_data': scouting_records
         }
         red_alliance_data.append(team_data)
     
@@ -509,10 +553,28 @@ def generate_match_strategy_analysis(match_id):
     for team in blue_teams:
         analytics_result = calculate_team_metrics(team.id)
         team_metrics = analytics_result.get('metrics', {})
+        try:
+            if TeamAllianceStatus.is_alliance_mode_active_for_team(team.team_number):
+                alliance = TeamAllianceStatus.get_active_alliance_for_team(team.team_number)
+                if alliance:
+                    member_numbers = alliance.get_member_team_numbers()
+                    scouting_records = ScoutingData.query.filter(ScoutingData.team_id == team.id,
+                                                                 ScoutingData.scouting_team_number.in_(member_numbers)).all()
+                else:
+                    scouting_records = ScoutingData.query.filter_by(team_id=team.id).all()
+            else:
+                scouting_team_number = get_current_scouting_team_number()
+                if scouting_team_number is not None:
+                    scouting_records = filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team.id).all()
+                else:
+                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=None).all()
+        except Exception:
+            scouting_records = ScoutingData.query.filter_by(team_id=team.id).all()
+
         team_data = {
             'team': team,
             'metrics': team_metrics,
-            'scouting_data': ScoutingData.query.filter_by(team_id=team.id).all()
+            'scouting_data': scouting_records
         }
         blue_alliance_data.append(team_data)
     

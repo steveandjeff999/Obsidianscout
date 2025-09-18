@@ -99,7 +99,7 @@
                                     <i class="fas fa-chart-line me-2 text-success"></i>Select Metric
                                 </label>
                                 <select name="metric" id="metric" class="form-select">
-                                    <option value="">Default (Total Points)</option>
+                                    <option value="points" {% if selected_metric == 'points' %}selected{% endif %}>Default (Total Points)</option>
                                     <!-- Dynamic period-based metrics -->
                                     <option value="auto_points" {% if selected_metric == 'auto_points' %}selected{% endif %}>Auto Points</option>
                                     <option value="teleop_points" {% if selected_metric == 'teleop_points' %}selected{% endif %}>Teleop Points</option>

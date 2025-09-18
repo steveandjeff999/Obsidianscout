@@ -50,36 +50,55 @@ def index():
     current_scouting_team = get_current_scouting_team_number()
     
     if current_event:
+        # Only include teams/events visible to the current scouting team
         current_event_teams = list(filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all())
-        other_teams = Team.query.filter(~Team.id.in_([t.id for t in current_event_teams])).order_by(Team.team_number).all()
+        other_teams = filter_teams_by_scouting_team().filter(~Team.id.in_([t.id for t in current_event_teams])).order_by(Team.team_number).all()
         all_teams_raw = current_event_teams + other_teams
     else:
-        all_teams_raw = Team.query.order_by(Team.team_number).all()
+        # No current event: only show teams visible to the current scouting team
+        all_teams_raw = filter_teams_by_scouting_team().order_by(Team.team_number).all()
     
-    # Deduplicate teams by team_number, preferring ones with scouting data for current scouting team
+    # Deduplicate teams by team_number.
+    # Preference order when duplicate team_number found:
+    # 1) prefer a team record with a non-empty, non-numeric team_name
+    # 2) if both/neither have a good name, prefer the one with scouting data for current_scouting_team
     teams_by_number = {}
     for team in all_teams_raw:
         team_number = team.team_number
-        
+
         if team_number not in teams_by_number:
             teams_by_number[team_number] = team
         else:
-            # If we already have a team with this number, prefer the one with scouting data
             existing_team = teams_by_number[team_number]
-            
-            # Check if current team has scouting data for our scouting team
+
+            # Helper to determine if a name is meaningful (non-empty and not purely numeric)
+            def _has_meaningful_name(t):
+                try:
+                    name = (t.team_name or '').strip()
+                except Exception:
+                    name = ''
+                return bool(name) and not name.isdigit()
+
+            team_has_name = _has_meaningful_name(team)
+            existing_has_name = _has_meaningful_name(existing_team)
+
+            # If one has a meaningful name and the other doesn't, prefer the named one
+            if team_has_name and not existing_has_name:
+                teams_by_number[team_number] = team
+                continue
+            if existing_has_name and not team_has_name:
+                continue
+
+            # Otherwise, fall back to preferring records with scouting data for current_scouting_team
             has_data = ScoutingData.query.filter_by(
-                team_id=team.id, 
+                team_id=team.id,
                 scouting_team_number=current_scouting_team
             ).first() is not None
-            
-            # Check if existing team has scouting data for our scouting team  
             existing_has_data = ScoutingData.query.filter_by(
                 team_id=existing_team.id,
-                scouting_team_number=current_scouting_team  
+                scouting_team_number=current_scouting_team
             ).first() is not None
-            
-            # Prefer team with scouting data, or keep existing if both/neither have data
+
             if has_data and not existing_has_data:
                 teams_by_number[team_number] = team
     
@@ -121,8 +140,9 @@ def index():
     selected_graph_types = request.args.getlist('graph_types')
     selected_data_view = request.args.get('data_view', 'averages')
     
-    # Default to points if no metric selected or if metric is empty
-    if not selected_metric or selected_metric.strip() == '':
+    # Normalize metric selection: treat empty/default, legacy ids and explicit total_points
+    # as the canonical 'points' metric so the default behaves like Total Points.
+    if not selected_metric or selected_metric.strip() == '' or selected_metric in ('total_points', 'tot'):
         selected_metric = 'points'
     
     # If points is selected but not available in dropdown, we'll still process it
@@ -143,8 +163,8 @@ def index():
     
     # Only create graphs if teams are selected
     if selected_team_numbers:
-        # Get scouting data for selected teams
-        teams = Team.query.filter(Team.team_number.in_(selected_team_numbers)).all()
+        # Get scouting data for selected teams (respect team isolation)
+        teams = filter_teams_by_scouting_team().filter(Team.team_number.in_(selected_team_numbers)).all()
         print(f"Found {len(teams)} teams")
         
         if selected_event_id:
@@ -2318,10 +2338,10 @@ def graphs_data():
     
     if current_event:
         current_event_teams = list(filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all())
-        other_teams = Team.query.filter(~Team.id.in_([t.id for t in current_event_teams])).order_by(Team.team_number).all()
+        other_teams = filter_teams_by_scouting_team().filter(~Team.id.in_([t.id for t in current_event_teams])).order_by(Team.team_number).all()
         all_teams_raw = current_event_teams + other_teams
     else:
-        all_teams_raw = Team.query.order_by(Team.team_number).all()
+        all_teams_raw = filter_teams_by_scouting_team().order_by(Team.team_number).all()
     
     # Deduplicate teams by team_number, preferring ones with scouting data for current scouting team
     from app.utils.team_isolation import get_current_scouting_team_number
@@ -2408,7 +2428,8 @@ def side_by_side():
         if current_event:
             teams_raw = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
         else:
-            teams_raw = Team.query.order_by(Team.team_number).all()
+            # Only include teams visible to the current scouting team
+            teams_raw = filter_teams_by_scouting_team().order_by(Team.team_number).all()
         
         # Deduplicate teams by team_number, preferring ones with scouting data for current scouting team
         from app.utils.team_isolation import get_current_scouting_team_number
@@ -2455,8 +2476,8 @@ def side_by_side():
     # Get game configuration
     game_config = get_effective_game_config()
     
-    # Get teams
-    teams = Team.query.filter(Team.team_number.in_(team_numbers)).all()
+    # Get teams (respect team isolation)
+    teams = filter_teams_by_scouting_team().filter(Team.team_number.in_(team_numbers)).all()
     
     # Define available metrics (use legacy if available, otherwise use dynamic)
     key_metrics_from_config = game_config.get('data_analysis', {}).get('key_metrics', [])
