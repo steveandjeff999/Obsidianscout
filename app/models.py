@@ -1156,6 +1156,8 @@ class ScoutingAllianceEvent(db.Model):
     event_name = db.Column(db.String(100))
     is_active = db.Column(db.Boolean, default=True)
     added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Team number that added this event (nullable for older records)
+    added_by = db.Column(db.Integer, nullable=True)
     
     def __repr__(self):
         return f'<AllianceEvent {self.event_code} for Alliance {self.alliance_id}>'

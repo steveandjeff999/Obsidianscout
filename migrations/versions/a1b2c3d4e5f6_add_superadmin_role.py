@@ -17,15 +17,19 @@ depends_on = None
 
 
 def upgrade():
-    op.bulk_insert(
-        sa.table('role',
-            sa.column('name', sa.String),
-            sa.column('description', sa.String)
-        ),
-        [
-            {'name': 'superadmin', 'description': 'User with access to all teams and administrative functions.'}
-        ]
-    )
+    # Only insert the superadmin role if the role table exists in the users DB bind
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if 'role' in inspector.get_table_names():
+        op.bulk_insert(
+            sa.table('role',
+                sa.column('name', sa.String),
+                sa.column('description', sa.String)
+            ),
+            [
+                {'name': 'superadmin', 'description': 'User with access to all teams and administrative functions.'}
+            ]
+        )
 
 
 def downgrade():
