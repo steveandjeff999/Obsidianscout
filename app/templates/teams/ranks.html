@@ -77,8 +77,20 @@
                                 <td>{{ loop.index }}</td>
                                 <td>{{ entry.team.team_number }}</td>
                                 <td>{{ entry.team.team_name }}</td>
-                                <td>{{ entry.avg_points|round(2) }}</td>
-                                <td>{{ entry.num_entries }}</td>
+                                <td>
+                                    {% if entry.num_entries and entry.num_entries > 0 %}
+                                        {{ entry.avg_points|round(2) }}
+                                    {% else %}
+                                        <span class="text-muted">No data</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if entry.num_entries and entry.num_entries > 0 %}
+                                        {{ entry.num_entries }}
+                                    {% else %}
+                                        <span class="text-muted">No data</span>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <a href="{{ url_for('teams.view', team_number=entry.team.team_number) }}" class="btn btn-sm btn-primary">
                                         <i class="fas fa-eye me-1"></i> View

@@ -1163,6 +1163,83 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', function() {
+            // Global safeguard: prevent anchors with href="#" from changing the hash/scroll
+            // Many templates use href="#" for buttons; on some mobile browsers tapping these
+            // will jump the page to the top. Intercept and prevent default for those anchors.
+            document.body.addEventListener('click', function(e) {
+                try {
+                    const target = e.target.closest && e.target.closest('a[href="#"]');
+                    if (target) {
+                        e.preventDefault();
+                        // If the anchor is used as a control, trigger a click on the first
+                        // non-anchor interactive element inside it so existing handlers still run.
+                        const innerBtn = target.querySelector('button, [role="button"], input[type="button"], input[type="submit"]');
+                        if (innerBtn) innerBtn.click();
+                    }
+                } catch (err) {
+                    // swallow errors to avoid breaking pages
+                    console.warn('href="#" click safeguard error', err);
+                }
+            }, { passive: false });
+
+            // Prevent focus() calls from scrolling the page in browsers that don't support
+            // the preventScroll option reliably. We wrap focus to provide preventScroll when possible.
+            (function(){
+                try {
+                    const origFocus = HTMLElement.prototype.focus;
+                    HTMLElement.prototype.focus = function(options){
+                        if (typeof options === 'object' && options && options.preventScroll) {
+                            // browser supports options, call through
+                            return origFocus.call(this, options);
+                        }
+                        // Try to call with preventScroll option first
+                        try {
+                            return origFocus.call(this, { preventScroll: true });
+                        } catch(e) {
+                            // Fallback to original focus without scrolling
+                            try { return origFocus.call(this); } catch(e2) { /* ignore */ }
+                        }
+                    };
+                } catch (e) { /* ignore if prototype can't be modified */ }
+            })();
+
+            // Page-scoped defensive guard: prevent immediate scroll-to-top calls
+            // caused by third-party code right after a user click inside the scouting form.
+            // This is intentionally scoped to the scouting form page to avoid global side-effects.
+            try {
+                if (window.location.pathname && window.location.pathname.includes('/scouting/form')) {
+                    let _ignoreNextScrollToTop = false;
+
+                    // When user clicks inside the form content, set a short-lived flag
+                    // that causes scrollTo(0,0) calls to be ignored for a brief moment.
+                    document.body.addEventListener('click', function(ev) {
+                        try {
+                            if (ev.target && (ev.target.closest && (ev.target.closest('#form-content') || ev.target.closest('#scouting-form')))) {
+                                _ignoreNextScrollToTop = true;
+                                window.setTimeout(function(){ _ignoreNextScrollToTop = false; }, 120);
+                            }
+                        } catch (e) { /* ignore */ }
+                    }, true);
+
+                    // Wrap window.scrollTo to ignore immediate scroll-to-top calls when flag is set
+                    try {
+                        const _origScrollTo = window.scrollTo.bind(window);
+                        window.scrollTo = function(x, y) {
+                            try {
+                                // Normalize signature: scrollTo(options) or scrollTo(x,y)
+                                if (_ignoreNextScrollToTop) {
+                                    if (arguments.length === 1 && typeof x === 'object') {
+                                        if (x && (x.top === 0 || x.y === 0)) return;
+                                    } else if (arguments.length >= 2) {
+                                        if (x === 0 && y === 0) return;
+                                    }
+                                }
+                            } catch (e) { /* ignore */ }
+                            return _origScrollTo.apply(window, arguments);
+                        };
+                    } catch (e) { /* ignore if binding fails */ }
+                }
+            } catch (e) { /* ignore overall errors */ }
         // Open modal on button click
 
 

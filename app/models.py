@@ -318,6 +318,11 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
         data = self.data
         game_config = get_current_game_config()
         
+        # Fallback: If game config is empty, try to load config for the scouting team
+        if not game_config and hasattr(self, 'scouting_team_number') and self.scouting_team_number:
+            from app.utils.config_manager import load_game_config
+            game_config = load_game_config(team_number=self.scouting_team_number)
+        
         # Check if this is a metric ID (not a formula)
         metric_config = None
         for metric in game_config.get('data_analysis', {}).get('key_metrics', []):
@@ -325,6 +330,13 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
                 metric_config = metric
                 formula = metric.get('formula')
                 break
+        
+        # Check for standard metric IDs even if not in key_metrics
+        standard_metric_ids = ['tot', 'apt', 'tpt', 'ept']
+        if not metric_config and formula_or_id in standard_metric_ids:
+            # Create a dummy metric config for standard metrics
+            metric_config = {'id': formula_or_id, 'formula': formula_or_id}
+            formula = formula_or_id
         
         # If we found a metric ID, use its formula
         if metric_config:
@@ -461,10 +473,21 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
         if metric_id == 'tot':
             # Calculate total points dynamically based on components marked with is_total_component=true
             total_points = 0
-            for metric in game_config.get('data_analysis', {}).get('key_metrics', []):
-                if metric.get('is_total_component'):
-                    total_points += self.calculate_metric(metric['id'])
-            return total_points
+            key_metrics = game_config.get('data_analysis', {}).get('key_metrics', [])
+            
+            # If we have key metrics with total components, use them
+            if key_metrics:
+                for metric in key_metrics:
+                    if metric.get('is_total_component'):
+                        total_points += self.calculate_metric(metric['id'])
+                if total_points > 0:  # Only return if we found component metrics
+                    return total_points
+            
+            # Fallback: Calculate total points using dynamic period calculations
+            auto_pts = self._calculate_auto_points_dynamic(local_dict, game_config)
+            teleop_pts = self._calculate_teleop_points_dynamic(local_dict, game_config)
+            endgame_pts = self._calculate_endgame_points_dynamic(local_dict, game_config)
+            return auto_pts + teleop_pts + endgame_pts
         
         # Check if this metric uses auto-generated formula
         metric_config = None
@@ -487,6 +510,15 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
                 return self._calculate_gamepieces_per_match_dynamic(local_dict, game_config)
             elif metric_id == 'scoring_frequency':
                 return self._calculate_scoring_frequency_dynamic(local_dict, game_config)
+        
+        # Fallback for common metric IDs when no key_metrics are defined
+        elif not game_config.get('data_analysis', {}).get('key_metrics', []):
+            if metric_id == 'apt':  # auto points
+                return self._calculate_auto_points_dynamic(local_dict, game_config)
+            elif metric_id == 'tpt':  # teleop points
+                return self._calculate_teleop_points_dynamic(local_dict, game_config)
+            elif metric_id == 'ept':  # endgame points
+                return self._calculate_endgame_points_dynamic(local_dict, game_config)
         
         # If not auto-generated or no special handling needed, use the formula directly
         return self._evaluate_formula(formula, local_dict)

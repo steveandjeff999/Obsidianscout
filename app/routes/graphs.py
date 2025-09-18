@@ -45,12 +45,46 @@ def index():
     
     # Get all teams and events for selection dropdowns
     # For graphs, we want to show all teams but prioritize current event teams
+    from app.utils.team_isolation import get_current_scouting_team_number
+    
+    current_scouting_team = get_current_scouting_team_number()
+    
     if current_event:
         current_event_teams = list(filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all())
         other_teams = Team.query.filter(~Team.id.in_([t.id for t in current_event_teams])).order_by(Team.team_number).all()
-        all_teams = current_event_teams + other_teams
+        all_teams_raw = current_event_teams + other_teams
     else:
-        all_teams = Team.query.order_by(Team.team_number).all()
+        all_teams_raw = Team.query.order_by(Team.team_number).all()
+    
+    # Deduplicate teams by team_number, preferring ones with scouting data for current scouting team
+    teams_by_number = {}
+    for team in all_teams_raw:
+        team_number = team.team_number
+        
+        if team_number not in teams_by_number:
+            teams_by_number[team_number] = team
+        else:
+            # If we already have a team with this number, prefer the one with scouting data
+            existing_team = teams_by_number[team_number]
+            
+            # Check if current team has scouting data for our scouting team
+            has_data = ScoutingData.query.filter_by(
+                team_id=team.id, 
+                scouting_team_number=current_scouting_team
+            ).first() is not None
+            
+            # Check if existing team has scouting data for our scouting team  
+            existing_has_data = ScoutingData.query.filter_by(
+                team_id=existing_team.id,
+                scouting_team_number=current_scouting_team  
+            ).first() is not None
+            
+            # Prefer team with scouting data, or keep existing if both/neither have data
+            if has_data and not existing_has_data:
+                teams_by_number[team_number] = team
+    
+    # Convert back to list, sorted by team number
+    all_teams = sorted(teams_by_number.values(), key=lambda t: t.team_number)
     
     all_events = filter_events_by_scouting_team().all()
     
@@ -2285,9 +2319,42 @@ def graphs_data():
     if current_event:
         current_event_teams = list(filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all())
         other_teams = Team.query.filter(~Team.id.in_([t.id for t in current_event_teams])).order_by(Team.team_number).all()
-        all_teams = current_event_teams + other_teams
+        all_teams_raw = current_event_teams + other_teams
     else:
-        all_teams = Team.query.order_by(Team.team_number).all()
+        all_teams_raw = Team.query.order_by(Team.team_number).all()
+    
+    # Deduplicate teams by team_number, preferring ones with scouting data for current scouting team
+    from app.utils.team_isolation import get_current_scouting_team_number
+    current_scouting_team = get_current_scouting_team_number()
+    
+    teams_by_number = {}
+    for team in all_teams_raw:
+        team_number = team.team_number
+        
+        if team_number not in teams_by_number:
+            teams_by_number[team_number] = team
+        else:
+            # If we already have a team with this number, prefer the one with scouting data
+            existing_team = teams_by_number[team_number]
+            
+            # Check if current team has scouting data for our scouting team
+            has_data = ScoutingData.query.filter_by(
+                team_id=team.id, 
+                scouting_team_number=current_scouting_team
+            ).first() is not None
+            
+            # Check if existing team has scouting data for our scouting team  
+            existing_has_data = ScoutingData.query.filter_by(
+                team_id=existing_team.id,
+                scouting_team_number=current_scouting_team  
+            ).first() is not None
+            
+            # Prefer team with scouting data, or keep existing if both/neither have data
+            if has_data and not existing_has_data:
+                teams_by_number[team_number] = team
+    
+    # Convert back to list, sorted by team number
+    all_teams = sorted(teams_by_number.values(), key=lambda t: t.team_number)
     
     all_events = filter_events_by_scouting_team().all()
     
@@ -2339,9 +2406,42 @@ def side_by_side():
         
         # Get teams filtered by the current event if available, otherwise show all teams
         if current_event:
-            teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+            teams_raw = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
         else:
-            teams = Team.query.order_by(Team.team_number).all()
+            teams_raw = Team.query.order_by(Team.team_number).all()
+        
+        # Deduplicate teams by team_number, preferring ones with scouting data for current scouting team
+        from app.utils.team_isolation import get_current_scouting_team_number
+        current_scouting_team = get_current_scouting_team_number()
+        
+        teams_by_number = {}
+        for team in teams_raw:
+            team_number = team.team_number
+            
+            if team_number not in teams_by_number:
+                teams_by_number[team_number] = team
+            else:
+                # If we already have a team with this number, prefer the one with scouting data
+                existing_team = teams_by_number[team_number]
+                
+                # Check if current team has scouting data for our scouting team
+                has_data = ScoutingData.query.filter_by(
+                    team_id=team.id, 
+                    scouting_team_number=current_scouting_team
+                ).first() is not None
+                
+                # Check if existing team has scouting data for our scouting team  
+                existing_has_data = ScoutingData.query.filter_by(
+                    team_id=existing_team.id,
+                    scouting_team_number=current_scouting_team  
+                ).first() is not None
+                
+                # Prefer team with scouting data, or keep existing if both/neither have data
+                if has_data and not existing_has_data:
+                    teams_by_number[team_number] = team
+        
+        # Convert back to list, sorted by team number
+        teams = sorted(teams_by_number.values(), key=lambda t: t.team_number)
         
         # Use legacy key_metrics if available, otherwise use dynamic metrics
         metrics = game_config.get('data_analysis', {}).get('key_metrics', [
@@ -2370,54 +2470,48 @@ def side_by_side():
     
     # Calculate detailed metrics for each team
     teams_data = []
-    
-    for team in teams:
-        # Use the updated calculate_team_metrics function which handles dynamic metrics
-        team_analytics = calculate_team_metrics(team.id)
-        team_metrics = team_analytics.get('metrics', {})
-        
-        # Get individual match data for match-by-match display
-        from app.utils.team_isolation import filter_scouting_data_by_scouting_team, get_current_scouting_team_number
-        from app.utils.config_manager import get_current_game_config
-        
-        # Get scouting data for this team (same logic as in calculate_team_metrics)
-        scouting_team_number = get_current_scouting_team_number()
+
+    # Group Team records by team_number so multiple Team rows for the same team_number
+    # (e.g., from different events) are combined into a single entry.
+    teams_by_number = {}
+    for t in teams:
+        teams_by_number.setdefault(t.team_number, []).append(t)
+
+    # Prepare helper imports once
+    from app.utils.team_isolation import filter_scouting_data_by_scouting_team, get_current_scouting_team_number
+    from app.utils.config_manager import get_current_game_config
+
+    scouting_team_number = get_current_scouting_team_number()
+    game_config = get_current_game_config()
+
+    for team_number, team_group in teams_by_number.items():
+        # Use first Team object as representative (for team_name, id display, etc.)
+        rep_team = team_group[0]
+        team_ids = [t.id for t in team_group]
+
+        # Fetch scouting data across all team ids, honoring team isolation if enabled
         if scouting_team_number is not None:
-            scouting_data = filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team.id).all()
+            scouting_q = filter_scouting_data_by_scouting_team()
+            scouting_data = scouting_q.filter(ScoutingData.team_id.in_(team_ids)).all()
         else:
-            scouting_data = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=None).all()
-        
+            scouting_data = ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids), ScoutingData.scouting_team_number == None).all()
+
+        # Build team_info container
         team_info = {
-            'team': team,
+            'team': rep_team,
             'metrics': {},
-            'match_count': team_analytics.get('match_count', 0),
-            'has_data': bool(team_analytics.get('match_count', 0) > 0)
+            'match_count': len(scouting_data),
+            'has_data': len(scouting_data) > 0
         }
-        
-        # Process metrics to match the expected template structure
+
+        # For each available metric, compute per-match values and aggregates from combined data
         for metric in available_metrics:
             metric_id = metric['id']
-            metric_data = team_metrics.get(metric_id, {})
-            
-            # Extract values from the metric data structure
-            if isinstance(metric_data, dict):
-                metric_value = metric_data.get('avg', 0)
-                min_value = metric_data.get('min', 0)
-                max_value = metric_data.get('max', 0)
-            else:
-                # Fallback for simple numeric values
-                metric_value = metric_data if isinstance(metric_data, (int, float)) else 0
-                min_value = metric_value
-                max_value = metric_value
-            
-            # Calculate individual match values for this metric
             match_values = []
-            game_config = get_current_game_config()
-            
+
             for data in scouting_data:
                 match_number = data.match.match_number if data.match else f"#{data.id}"
-                
-                # Calculate metric value for this match based on metric type
+
                 if metric_id == 'auto_points':
                     match_value = data._calculate_auto_points_dynamic(data.data, game_config)
                 elif metric_id == 'teleop_points':
@@ -2430,25 +2524,31 @@ def side_by_side():
                     endgame_pts = data._calculate_endgame_points_dynamic(data.data, game_config)
                     match_value = auto_pts + teleop_pts + endgame_pts
                 else:
-                    # For any legacy metrics, try to get value from data JSON
                     match_value = data.data.get(metric_id, 0)
-                
-                match_values.append({
-                    'match': match_number,
-                    'value': match_value
-                })
-            
-            # Create structure expected by template
+
+                match_values.append({'match': match_number, 'value': match_value})
+
+            # Derive aggregates from match_values
+            values = [mv['value'] for mv in match_values if isinstance(mv.get('value'), (int, float))]
+            if values:
+                avg_val = sum(values) / len(values)
+                min_val = min(values)
+                max_val = max(values)
+            else:
+                avg_val = 0
+                min_val = 0
+                max_val = 0
+
             team_info['metrics'][metric_id] = {
                 'config': metric,
-                'aggregate': metric_value,
-                'match_data': scouting_data,  # Keep raw scouting data
-                'match_values': match_values,  # Individual match values
-                'min': min_value,
-                'max': max_value,
-                'avg': metric_value
+                'aggregate': avg_val,
+                'match_data': scouting_data,
+                'match_values': match_values,
+                'min': min_val,
+                'max': max_val,
+                'avg': avg_val
             }
-        
+
         teams_data.append(team_info)
     
     # Debug: Log match values for troubleshooting
