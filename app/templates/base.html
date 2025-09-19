@@ -2068,11 +2068,14 @@
             try {
                 const dropdown = event.target.closest('.topbar .dropdown');
                 if (!dropdown) return;
-                // The menu might already be in the dropdown or on body
-                const menu = dropdown.querySelector('.dropdown-menu') || document.querySelector('.dropdown-menu[aria-expanded="true"]');
+                // The menu might already be in the dropdown or on body. Prefer any portalled menu (navbar-glass) first.
+                const menu = document.querySelector('.dropdown-menu.navbar-glass') || dropdown.querySelector('.dropdown-menu') || document.querySelector('.dropdown-menu[aria-expanded="true"]');
                 if (!menu) return;
                 const placeholder = menu.__portalPlaceholder;
                 if (!placeholder) return;
+
+                // Grab the toggle so we can re-create Popper/Dropdown instances later
+                const toggle = dropdown.querySelector('.dropdown-toggle');
 
                 // Restore into original parent before the placeholder
                 if (placeholder.parentNode) {
@@ -2094,13 +2097,41 @@
                 menu.style.bottom = '';
                 menu.style.zIndex = '';
                 menu.style.willChange = '';
-                // Reinitialize Popper/Dropdown for normal future behavior
+                // Reinitialize Popper/Dropdown for normal future behavior (if toggle exists)
                 try {
-                    if (window.bootstrap && window.bootstrap.Dropdown) {
+                    if (toggle && window.bootstrap && window.bootstrap.Dropdown) {
                         // If there's an existing instance, dispose then re-create
                         const existing = window.bootstrap.Dropdown.getInstance(toggle);
                         if (existing && typeof existing.dispose === 'function') existing.dispose();
                         window.bootstrap.Dropdown.getOrCreateInstance(toggle);
+                    }
+                } catch (e) { /* ignore */ }
+
+                // Normalize ARIA and classes so toggle and menu remain in a consistent hidden state
+                try {
+                    if (toggle) {
+                        toggle.setAttribute('aria-expanded', 'false');
+                        toggle.classList.remove('show');
+                    }
+                    if (menu) {
+                        // Remove visibility classes and any Popper styles that might keep it visible
+                        menu.classList.remove('show');
+                        menu.style.removeProperty('transform');
+                        menu.style.removeProperty('inset');
+                        menu.removeAttribute('data-popper-placement');
+
+                        // Clear any sizing/overflow we may have set while positioning
+                        menu.style.removeProperty('max-height');
+                        menu.style.removeProperty('maxWidth');
+                        menu.style.removeProperty('overflow');
+                        menu.style.removeProperty('overflow-y');
+
+                        // Ensure it's not forcing display or opacity
+                        menu.style.display = '';
+                        try { menu.style.opacity = ''; } catch(e){}
+
+                        // mark as just hidden to avoid immediate re-open from stray click events
+                        try { menu.__justHidden = Date.now(); } catch(e){}
                     }
                 } catch (e) { /* ignore */ }
 
@@ -2135,6 +2166,17 @@
                         dropdown.addEventListener('shown.bs.dropdown', handleDropdownShown);
                         
                         function handleDropdownClick(e) {
+                            // If the menu was just hidden (restored) very recently, ignore this click to
+                            // avoid a double-toggle situation caused by reparenting and Popper timing.
+                            try {
+                                const now = Date.now();
+                                if (menu && menu.__justHidden && (now - menu.__justHidden) < 400) {
+                                    // Clear the flag and bail
+                                    delete menu.__justHidden;
+                                    return;
+                                }
+                            } catch (e) {}
+
                             setTimeout(() => {
                                 if (menu.classList.contains('show')) {
                                     positionFixedDropdown(toggle, menu);

@@ -23,10 +23,15 @@
                     <div class="row">
                         <div class="col-md-6 mb-2">
                             <label for="team-selector" class="form-label">Select Team</label>
-                            <select class="form-select" id="team-selector" name="team_id" required>
+                            <!-- Search input for teams -->
+                            <div class="input-group mb-1">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                <input type="search" id="team-search" class="form-control form-control-sm" placeholder="Search teams by number or name" aria-label="Search teams">
+                            </div>
+                            <select class="form-select" id="team-selector" name="team_id" required aria-label="Team selector">
                                 <option value="">-- Select Team --</option>
                                 {% for team_option in teams %}
-                                <option value="{{ team_option.id }}" {% if team and team.id == team_option.id %}selected{% endif %}>
+                                <option value="{{ team_option.id }}" data-team-number="{{ team_option.team_number }}" data-team-name="{{ team_option.team_name }}" {% if team and team.id == team_option.id %}selected{% endif %}>
                                     {{ team_option.team_number }} - {{ team_option.team_name }}
                                 </option>
                                 {% endfor %}
@@ -34,10 +39,15 @@
                         </div>
                         <div class="col-md-6 mb-2">
                             <label for="match-selector" class="form-label">Select Match</label>
-                            <select class="form-select" id="match-selector" name="match_id" required aria-required="true">
+                            <!-- Search input for matches -->
+                            <div class="input-group mb-1">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                <input type="search" id="match-search" class="form-control form-control-sm" placeholder="Search matches by type or number" aria-label="Search matches">
+                            </div>
+                            <select class="form-select" id="match-selector" name="match_id" required aria-required="true" aria-label="Match selector">
                                 <option value="">-- Select Match --</option>
                                 {% for match_option in matches %}
-                                <option value="{{ match_option.id }}" data-match-type="{{ match_option.match_type }}" {% if match and match.id == match_option.id %}selected{% endif %}>
+                                <option value="{{ match_option.id }}" data-match-type="{{ match_option.match_type }}" data-match-number="{{ match_option.match_number }}" {% if match and match.id == match_option.id %}selected{% endif %}>
                                     {{ match_option.match_type }} {{ match_option.match_number }}
                                 </option>
                                 {% endfor %}
@@ -438,6 +448,193 @@
         const teamMatchForm = document.getElementById('team-match-form');
         
         if (teamSelector && matchSelector && teamMatchForm) {
+            // New: search inputs for filtering options
+            const teamSearch = document.getElementById('team-search');
+            const matchSearch = document.getElementById('match-search');
+
+            // Helper to normalize strings for comparison
+            function normalizeString(s) {
+                return (s || '').toString().toLowerCase().trim();
+            }
+
+            // Filter team options by team number or name
+            function filterTeamOptions() {
+                const query = normalizeString(teamSearch.value);
+                const options = Array.from(teamSelector.querySelectorAll('option'));
+
+                // Keep the empty placeholder visible
+                options.forEach(opt => {
+                    if (!opt.value) return; // placeholder
+
+                    const teamNumber = normalizeString(opt.getAttribute('data-team-number'));
+                    const teamName = normalizeString(opt.getAttribute('data-team-name'));
+                    const text = normalizeString(opt.textContent || opt.innerText);
+                    const match = !query || teamNumber.includes(query) || teamName.includes(query) || text.includes(query);
+
+                    opt.hidden = !match;
+                    opt.style.display = match ? '' : 'none';
+                });
+
+                // If the currently selected option is hidden by filter, reset selection to placeholder
+                const current = teamSelector.options[teamSelector.selectedIndex];
+                if (current && current.hidden) {
+                    teamSelector.value = '';
+                }
+
+                // Auto-select if there's exactly one visible non-placeholder option
+                const visibleOptions = options.filter(opt => opt.value && !opt.hidden);
+                if (visibleOptions.length === 1) {
+                    const only = visibleOptions[0];
+
+                    // For teams: prefer exact team number match OR if query-empty but only one option
+                    const teamNumberAttr = normalizeString(only.getAttribute('data-team-number'));
+                    const exactNumberMatch = query && teamNumberAttr === query;
+
+                    if (exactNumberMatch || query === '' || query.length > 0 && exactNumberMatch) {
+                        // Programmatically select and dispatch change
+                        teamSelector.value = only.value;
+                        teamSelector.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+            }
+
+            // Filter match options by match type or number, with shorthand parsing
+            function filterMatchOptions() {
+                const raw = normalizeString(matchSearch.value);
+                const options = Array.from(matchSelector.querySelectorAll('option'));
+
+                // Parse query into alpha and numeric parts (e.g., 'sf1' -> letters: 'sf', number: '1')
+                function parseMatchQuery(q) {
+                    if (!q) return { letters: '', number: '' };
+                    // remove extra spaces
+                    const compact = q.replace(/\s+/g, '');
+                    const numMatch = compact.match(/(\d+)/);
+                    const number = numMatch ? numMatch[1] : '';
+                    const letters = compact.replace(/\d+/g, '');
+                    return { letters: letters, number: number };
+                }
+
+                const q = parseMatchQuery(raw);
+
+                // Aliases for canonical match type words
+                const aliases = {
+                    qualification: ['q','qu','qual','qualification','qualif','qualifcation','qualifc'],
+                    practice: ['p','pr','practice','prac','pract','pm','pm1'],
+                    quarter: ['qf','quarter','quarterfinal','quarterfinals','quarter-final','quarter-finals','quarterfinals','qtr'],
+                    semi: ['sf','sem','semi','semifinal','semifinals','sf1','smf','smf1','semifinalmatch'],
+                    final: ['f','fin','final','finals','f1'],
+                    playoff: ['playoff','po','playoffs','pm','pm1']
+                };
+
+                // Determine which canonical types the letters token maps to
+                function candidateTypesFromLetters(letters) {
+                    if (!letters) return [];
+                    const res = [];
+                    for (const [canon, arr] of Object.entries(aliases)) {
+                        for (const a of arr) {
+                            if (letters === a || letters.startsWith(a) || a.startsWith(letters)) {
+                                res.push(canon);
+                                break;
+                            }
+                        }
+                    }
+                    return res;
+                }
+
+                const candidateTypes = candidateTypesFromLetters(q.letters);
+
+                // We'll compute a score for each option and use that to determine visibility and best match
+                const scored = [];
+                options.forEach(opt => {
+                    if (!opt.value) return; // placeholder
+
+                    const matchType = normalizeString(opt.getAttribute('data-match-type') || '');
+                    const matchNumber = normalizeString(opt.getAttribute('data-match-number') || '');
+                    const text = normalizeString(opt.textContent || opt.innerText || '');
+
+                    let score = 0;
+
+                    // Strong boost for exact number match
+                    if (q.number && matchNumber === q.number) score += 60;
+
+                    // Good boost if text contains the number
+                    if (q.number && text.includes(q.number)) score += 20;
+
+                    // Letters/type matching via canonical candidates
+                    if (q.letters && candidateTypes.length > 0) {
+                        for (const ct of candidateTypes) {
+                            if (matchType.includes(ct)) score += 40;
+                            if (text.includes(ct)) score += 25;
+                            if (ct.startsWith(q.letters) || q.letters.startsWith(ct)) score += 10;
+                        }
+                    }
+
+                    // Loose letter match against the displayed text
+                    if (q.letters && text.includes(q.letters)) score += 10;
+
+                    // Small boosts for startsWith matches
+                    if (raw && text.startsWith(raw)) score += 8;
+                    if (raw && matchType.startsWith(raw)) score += 6;
+
+                    // If no query, give minimal score so everything remains visible
+                    if (!q.letters && !q.number) score += 1;
+
+                    // Record
+                    scored.push({ opt, score, matchType, matchNumber, text });
+                });
+
+                // Decide visibility: show items with score > 0 (or all if query empty)
+                scored.forEach(s => {
+                    const visible = s.score > 0;
+                    s.opt.hidden = !visible;
+                    s.opt.style.display = visible ? '' : 'none';
+                });
+
+                // Find best-scoring candidate
+                scored.sort((a, b) => b.score - a.score);
+                const best = scored[0];
+                const second = scored[1];
+
+                // Selection logic: choose best if it's reasonably strong and unambiguous
+                if (best && best.score > 0) {
+                    const threshold = 40; // minimum score to consider auto-select
+                    const gap = (second ? best.score - second.score : best.score);
+
+                    if (best.score >= threshold && gap >= 20) {
+                        // auto-select best candidate
+                        matchSelector.value = best.opt.value;
+                        matchSelector.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+
+                const current = matchSelector.options[matchSelector.selectedIndex];
+                if (current && current.hidden) {
+                    matchSelector.value = '';
+                }
+
+                // Auto-select if there's exactly one visible non-placeholder match option
+                const visibleMatchOptions = options.filter(opt => opt.value && !opt.hidden);
+                if (visibleMatchOptions.length === 1) {
+                    const only = visibleMatchOptions[0];
+                    matchSelector.value = only.value;
+                    matchSelector.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+
+            // Attach input listeners with debounce to avoid overfiring
+            function debounce(func, wait) {
+                let timeout;
+                return function(...args) {
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => func.apply(this, args), wait);
+                };
+            }
+
+            if (teamSearch) teamSearch.addEventListener('input', debounce(filterTeamOptions, 150));
+            if (matchSearch) matchSearch.addEventListener('input', debounce(filterMatchOptions, 150));
+
+            // Ensure filters run on initial load (e.g., when localStorage preselects values)
+            try { filterTeamOptions(); filterMatchOptions(); } catch (e) { /* ignore */ }
             // Style match type dropdown options
             const matchOptions = matchSelector.querySelectorAll('option');
             matchOptions.forEach(option => {
