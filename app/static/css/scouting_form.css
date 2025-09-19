@@ -37,3 +37,10 @@
 
 /* Accessibility focus styles */
 button:focus, input:focus, select:focus, textarea:focus{box-shadow:0 0 0 4px rgba(91,59,255,.12);outline:none}
+
+/* Search inputs for team and match selectors */
+.input-group .form-control-sm{height:36px}
+#team-search, #match-search{font-size:.9rem}
+.input-group-text i{width:16px;text-align:center}
+
+.form-select option[hidden]{display:none}

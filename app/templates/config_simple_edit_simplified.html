@@ -218,8 +218,10 @@
                                                                                        value="{{ option.points if option is mapping and option.points is defined else 0 }}" 
                                                                                        placeholder="Points" step="0.1">
                                                                             </div>
-                                                                            <div class="col-1">
-                                                                                <button type="button" class="btn btn-sm btn-outline-danger remove-option" title="Remove Option">×</button>
+                                                                            <div class="col-1 d-flex flex-column align-items-end">
+                                                                                <button type="button" class="btn btn-sm btn-outline-secondary move-up mb-1" title="Move up" aria-label="Move option up">↑</button>
+                                                                                <button type="button" class="btn btn-sm btn-outline-secondary move-down mb-1" title="Move down" aria-label="Move option down">↓</button>
+                                                                                <button type="button" class="btn btn-sm btn-outline-danger remove-option" title="Remove Option" aria-label="Remove option">×</button>
                                                                             </div>
                                                                         </div>
                                                                         {% endfor %}
@@ -307,8 +309,10 @@
                                                                                        value="{{ option.points if option is mapping and option.points is defined else 0 }}" 
                                                                                        placeholder="Points" step="0.1">
                                                                             </div>
-                                                                            <div class="col-1">
-                                                                                <button type="button" class="btn btn-sm btn-outline-danger remove-option" title="Remove Option">×</button>
+                                                                            <div class="col-1 d-flex flex-column align-items-end">
+                                                                                <button type="button" class="btn btn-sm btn-outline-secondary move-up mb-1" title="Move up" aria-label="Move option up">↑</button>
+                                                                                <button type="button" class="btn btn-sm btn-outline-secondary move-down mb-1" title="Move down" aria-label="Move option down">↓</button>
+                                                                                <button type="button" class="btn btn-sm btn-outline-danger remove-option" title="Remove Option" aria-label="Remove option">×</button>
                                                                             </div>
                                                                         </div>
                                                                         {% endfor %}
@@ -396,8 +400,10 @@
                                                                                        value="{{ option.points if option is mapping and option.points is defined else 0 }}" 
                                                                                        placeholder="Points" step="0.1">
                                                                             </div>
-                                                                            <div class="col-1">
-                                                                                <button type="button" class="btn btn-sm btn-outline-danger remove-option" title="Remove Option">×</button>
+                                                                            <div class="col-1 d-flex flex-column align-items-end">
+                                                                                <button type="button" class="btn btn-sm btn-outline-secondary move-up mb-1" title="Move up" aria-label="Move option up">↑</button>
+                                                                                <button type="button" class="btn btn-sm btn-outline-secondary move-down mb-1" title="Move down" aria-label="Move option down">↓</button>
+                                                                                <button type="button" class="btn btn-sm btn-outline-danger remove-option" title="Remove Option" aria-label="Remove option">×</button>
                                                                             </div>
                                                                         </div>
                                                                         {% endfor %}
@@ -714,8 +720,10 @@ function addMultipleChoiceOption(buttonElement) {
                        name="${period}_element_option_points_${elementIndex}_${existingOptions}" 
                        value="0" placeholder="Points" step="0.1">
             </div>
-            <div class="col-1">
-                <button type="button" class="btn btn-sm btn-outline-danger remove-option" title="Remove Option">×</button>
+            <div class="col-1 d-flex flex-column align-items-end">
+                <button type="button" class="btn btn-sm btn-outline-secondary move-up mb-1" title="Move up" aria-label="Move option up">↑</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary move-down mb-1" title="Move down" aria-label="Move option down">↓</button>
+                <button type="button" class="btn btn-sm btn-outline-danger remove-option" title="Remove Option" aria-label="Remove option">×</button>
             </div>
         </div>
     `;
@@ -787,6 +795,22 @@ document.addEventListener('DOMContentLoaded', function() {
             e.target.closest('.text-item').remove();
         } else if (e.target.classList.contains('remove-option')) {
             e.target.closest('.multiple-choice-option').remove();
+        } else if (e.target.classList.contains('move-up')) {
+            // Move the option row up
+            const row = e.target.closest('.multiple-choice-option');
+            if (!row) return;
+            const prev = row.previousElementSibling;
+            if (prev && prev.classList && prev.classList.contains('multiple-choice-option')) {
+                prev.parentNode.insertBefore(row, prev);
+            }
+        } else if (e.target.classList.contains('move-down')) {
+            // Move the option row down
+            const row = e.target.closest('.multiple-choice-option');
+            if (!row) return;
+            const next = row.nextElementSibling;
+            if (next && next.classList && next.classList.contains('multiple-choice-option')) {
+                next.parentNode.insertBefore(next, row);
+            }
         } else if (e.target.classList.contains('add-option')) {
             addMultipleChoiceOption(e.target);
         }
@@ -918,9 +942,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         element.options = [];
                         
                         optionElements.forEach((optionElement, optionIndex) => {
-                            const nameInput = optionElement.querySelector(`input[name$="_${optionIndex}"]`);
-                            const pointsInput = optionElement.querySelector(`input[name*="_option_points_"]`);
-                            
+                            // Prefer selecting by DOM structure so order matches visual order after reordering
+                            const nameInput = optionElement.querySelector('input[type="text"]');
+                            const pointsInput = optionElement.querySelector('input[type="number"]');
+
                             if (nameInput && nameInput.value.trim()) {
                                 element.options.push({
                                     name: nameInput.value.trim(),

@@ -139,6 +139,22 @@
                                     Choose how to display the data - averages for comparison or individual matches for trends.
                                 </div>
                             </div>
+
+                            <!-- Sort Selection -->
+                            <div class="mb-3">
+                                <label for="sort" class="form-label fw-semibold">
+                                    <i class="fas fa-sort me-2 text-secondary"></i>Sort Teams (left → right)
+                                </label>
+                                <select name="sort" id="sort" class="form-select">
+                                    <option value="points_desc" {% if selected_sort == 'points_desc' %}selected{% endif %}>Points: High → Low (default)</option>
+                                    <option value="points_asc" {% if selected_sort == 'points_asc' %}selected{% endif %}>Points: Low → High</option>
+                                    <option value="team_asc" {% if selected_sort == 'team_asc' %}selected{% endif %}>Team #: Low → High</option>
+                                    <option value="team_desc" {% if selected_sort == 'team_desc' %}selected{% endif %}>Team #: High → Low</option>
+                                </select>
+                                <div class="form-text">
+                                    Choose how teams are ordered on the X axis for team-level charts.
+                                </div>
+                            </div>
                             
                             <!-- Graph Type Selection -->
                             <div class="mb-3">
@@ -315,6 +331,7 @@
                     <input type="hidden" name="event_id" value="{{ selected_event_id }}">
                     {% endif %}
                     <input type="hidden" name="metric" value="{{ selected_metric }}">
+                    <input type="hidden" name="sort" value="{{ request.args.get('sort','points_desc') }}">
                     {% for graph_type in selected_graph_types %}
                     <input type="hidden" name="graph_types" value="{{ graph_type }}">
                     {% endfor %}

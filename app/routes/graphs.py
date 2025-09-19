@@ -139,6 +139,9 @@ def index():
     selected_metric = request.args.get('metric', '')
     selected_graph_types = request.args.getlist('graph_types')
     selected_data_view = request.args.get('data_view', 'averages')
+    # New sort parameter: controls x-axis ordering for team-level charts
+    # Supported values: 'points_desc' (default), 'points_asc', 'team_asc', 'team_desc'
+    selected_sort = request.args.get('sort', 'points_desc')
     
     # Normalize metric selection: treat empty/default, legacy ids and explicit total_points
     # as the canonical 'points' metric so the default behaves like Total Points.
@@ -303,7 +306,18 @@ def index():
                     team_match_points[team_number] = []
                 
                 if points_data:
-                    points_data = sorted(points_data, key=lambda x: x['points'], reverse=True)
+                    # Apply sorting based on selected_sort
+                    if selected_sort == 'points_desc':
+                        points_data = sorted(points_data, key=lambda x: x['points'], reverse=True)
+                    elif selected_sort == 'points_asc':
+                        points_data = sorted(points_data, key=lambda x: x['points'], reverse=False)
+                    elif selected_sort == 'team_asc':
+                        points_data = sorted(points_data, key=lambda x: int(str(x['team']).split(' - ')[0]))
+                    elif selected_sort == 'team_desc':
+                        points_data = sorted(points_data, key=lambda x: int(str(x['team']).split(' - ')[0]), reverse=True)
+                    else:
+                        # fallback
+                        points_data = sorted(points_data, key=lambda x: x['points'], reverse=True)
                 
                 if selected_data_view == 'averages':
                     # points_data is already prepared above
@@ -1480,7 +1494,13 @@ def index():
                             for team_number, values in team_match_values.items():
                                 avg = np.mean(values) if values else 0
                                 avg_data.append({'team': team_number, 'avg': avg})
-                            avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=True)
+                            # Sort avg_data according to selected_sort
+                            if selected_sort == 'points_desc' or selected_sort == 'team_desc':
+                                avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=True)
+                            elif selected_sort == 'points_asc' or selected_sort == 'team_asc':
+                                avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=False)
+                            else:
+                                avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=True)
                             fig_bar = go.Figure()
                             fig_bar.add_trace(go.Bar(
                                 x=[str(d['team']) for d in avg_data],
@@ -1557,7 +1577,12 @@ def index():
                             for team_number, values in team_match_values.items():
                                 avg = np.mean(values) if values else 0
                                 avg_data.append({'team': team_number, 'avg': avg})
-                            avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=True)
+                            if selected_sort == 'points_desc' or selected_sort == 'team_desc':
+                                avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=True)
+                            elif selected_sort == 'points_asc' or selected_sort == 'team_asc':
+                                avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=False)
+                            else:
+                                avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=True)
                             
                             fig_line = go.Figure()
                             fig_line.add_trace(go.Scatter(
@@ -1965,7 +1990,11 @@ def index():
                         for team_number, values in team_match_values.items():
                             avg = np.mean(values) if values else 0
                             avg_data.append({'team': team_number, 'avg': avg})
-                        avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=True)[:8]  # Top 8 teams
+                        # Respect selected_sort when choosing top teams for waterfall
+                        if selected_sort == 'points_asc' or selected_sort == 'team_asc':
+                            avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=False)[:8]
+                        else:
+                            avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=True)[:8]  # Top 8 teams
                         
                         if avg_data:
                             waterfall_data = []
@@ -2312,6 +2341,7 @@ def index():
                           selected_metric=selected_metric,
                           selected_graph_types=selected_graph_types,
                           selected_data_view=selected_data_view,
+                          selected_sort=selected_sort,
                           team_event_mapping=team_event_mapping,
                           team_metrics=team_metrics,
                           **get_theme_context())
@@ -2329,6 +2359,7 @@ def graphs_data():
     selected_metric = request.args.get('metric', 'points')
     selected_graph_types = request.args.getlist('graph_types') or ['bar', 'line']
     selected_data_view = request.args.get('data_view', 'averages')
+    selected_sort = request.args.get('sort', 'points_desc')
     
     # Get teams and events data
     current_event_code = game_config.get('current_event_code')
@@ -2402,6 +2433,7 @@ def graphs_data():
         'success': True,
         'game_config': game_config,
         'teams': all_teams_data,
+        'selected_sort': selected_sort,
         'events': [{'id': e.id, 'name': e.name, 'code': e.code} for e in all_events],
         'current_event': {'id': current_event.id, 'name': current_event.name, 'code': current_event.code} if current_event else None,
         'team_metrics': team_metrics,
