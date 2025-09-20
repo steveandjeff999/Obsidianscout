@@ -1,0 +1,771 @@
+/* Mobile Chat Enhancements */
+
+/* Prevent unwanted mobile scroll behaviors */
+@media (max-width: 768px) {
+    /* Global body settings for scroll stability - IMMEDIATE PREVENTION */
+    html, body {
+        /* Prevent iOS momentum scrolling issues */
+        -webkit-overflow-scrolling: touch;
+        /* Ensure consistent scrolling behavior - NO smooth scrolling */
+        scroll-behavior: auto !important;
+        /* Prevent scroll restoration that might jump to top */
+        overscroll-behavior: contain;
+        -ms-scroll-chaining: contain;
+        /* Force hardware acceleration */
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+        
+        /* CRITICAL: Prevent any automatic scroll adjustments */
+        scroll-padding: 0 !important;
+        scroll-margin: 0 !important;
+        /* Lock scroll anchoring to prevent jumps */
+        overflow-anchor: none !important;
+    }
+    
+    /* Prevent ALL scroll-related CSS animations and transitions */
+    *, *::before, *::after {
+        scroll-behavior: auto !important;
+        scroll-margin: 0 !important;
+        scroll-padding: 0 !important;
+        /* Disable any transition that might cause visual jumps */
+        transition: none !important;
+        animation: none !important;
+    }
+    
+    /* Chat page specific body override when inputs are focused */
+    body.chat-input-focused {
+        /* Temporarily disable smooth scrolling */
+        scroll-behavior: auto !important;
+        /* Lock position */
+        overflow-anchor: none;
+        /* Prevent any layout shifts */
+        contain: layout style !important;
+    }
+
+    /* Prevent mobile browsers from jumping to top on tap */
+    body {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Enhanced scroll prevention for chat page elements */
+    .container, .card-body, .tab-content, .tab-pane {
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        /* Prevent default touch behaviors that might cause scrolling */
+        touch-action: manipulation;
+        -ms-touch-action: manipulation;
+    }
+
+    /* Specifically target chat input fields to prevent scroll jumps on focus */
+    .chat-input, #dmChatInput, #assistantChatInput, #groupChatInput {
+        /* Prevent iOS zoom and scroll on focus */
+        font-size: 16px !important; /* iOS won't zoom if font-size >= 16px */
+        transform: translateZ(0) !important; /* Force hardware acceleration */
+        -webkit-transform: translateZ(0) !important;
+        
+        /* Additional mobile input stability */
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        appearance: none !important;
+        
+        /* Prevent focus from scrolling page */
+        scroll-margin: 0 !important;
+        scroll-margin-top: 0 !important;
+        scroll-margin-bottom: 0 !important;
+        scroll-padding: 0 !important;
+        
+        /* Position and sizing constraints */
+        position: relative !important;
+        top: auto !important;
+        left: auto !important;
+        
+        /* Prevent viewport changes */
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        
+        /* Additional iOS-specific fixes */
+        -webkit-user-select: text !important;
+        user-select: text !important;
+        -webkit-touch-callout: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+    }
+    
+    /* Target the containing input groups */
+    .input-group:has(#dmChatInput),
+    .input-group:has(#assistantChatInput), 
+    .input-group:has(#groupChatInput) {
+        scroll-margin: 0 !important;
+        contain: layout style !important;
+        transform: translateZ(0) !important;
+        -webkit-transform: translateZ(0) !important;
+        position: relative !important;
+    }
+
+    /* Prevent Bootstrap tabs from causing scroll jumps */
+    .nav-tabs .nav-link {
+        position: relative;
+        z-index: 1;
+    }
+
+    /* Override Bootstrap's focus behavior on tabs */
+    .nav-tabs .nav-link:focus {
+        scroll-margin-top: 0 !important;
+        scroll-behavior: unset !important;
+    }
+
+    /* Stabilize card layouts on mobile */
+    .card {
+        /* Prevent layout shifts that might trigger scrolls */
+        contain: layout style;
+        transform: translateZ(0); /* Force hardware acceleration */
+        -webkit-transform: translateZ(0);
+    }
+
+    /* Enhanced input group stability */
+    .input-group {
+        /* Prevent input group layout changes from scrolling page */
+        contain: layout;
+        will-change: auto; /* Remove will-change if set elsewhere */
+    }
+
+    /* Allow text selection in message content */
+    .message-text {
+        -webkit-user-select: text !important;
+        -khtml-user-select: text !important;
+        -moz-user-select: text !important;
+        -ms-user-select: text !important;
+        user-select: text !important;
+    }
+
+    /* Ensure interactive elements work properly */
+    button, input, select, textarea, .btn, [role="button"] {
+        -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        touch-action: manipulation;
+        -ms-touch-action: manipulation;
+        
+        /* Additional focus stability for inputs */
+        scroll-margin: 0;
+    }
+
+    /* Specific input field enhancements to prevent iOS viewport changes */
+    input[type="text"], textarea {
+        font-size: 16px !important; /* Prevents iOS zoom */
+        line-height: 1.2;
+        
+        /* Prevent focus from causing layout changes */
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+        
+        /* Prevent scroll on focus */
+        scroll-margin-top: 0 !important;
+        scroll-margin-bottom: 0 !important;
+    }
+    
+    /* Override form control focus behaviors */
+    .form-control:focus {
+        /* Prevent Bootstrap's focus from scrolling */
+        scroll-margin-top: 0 !important;
+        scroll-behavior: auto !important;
+        
+        /* Maintain visual feedback without scrolling */
+        outline: none;
+        border-color: var(--bs-primary);
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    }
+
+    /* Tab buttons specific styling */
+    .nav-tabs .nav-link {
+        -webkit-tap-highlight-color: rgba(13, 110, 253, 0.1);
+        touch-action: manipulation;
+        -ms-touch-action: manipulation;
+    }
+}
+
+/* Mobile Context Menu Improvements */
+
+/* Scrollbox used by chat containers to keep card height fixed */
+.chat-scrollbox {
+    box-sizing: border-box;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent the card from growing beyond a reasonable size on larger screens */
+@media (min-width: 769px) {
+    .chat-scrollbox {
+        max-height: 520px; /* allow more height on desktop */
+    }
+}
+.context-menu {
+    position: fixed !important; /* Use fixed instead of absolute for better mobile positioning */
+    background: var(--bs-body-bg, white);
+    border: 2px solid var(--bs-border-color, #dee2e6);
+    border-radius: 12px; /* More rounded for mobile */
+    box-shadow: 0 12px 48px rgba(0,0,0,0.25);
+    z-index: 1055 !important; /* Higher z-index than Bootstrap modals */
+    min-width: 200px;
+    max-width: 320px;
+    padding: 8px 0;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transform-origin: top left;
+    animation: contextMenuShow 0.2s ease-out;
+    /* Ensure it's always visible */
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+}
+
+@keyframes contextMenuShow {
+    0% {
+        opacity: 0;
+        transform: scale(0.95) translateY(-5px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.context-menu-item {
+    padding: 12px 20px; /* Larger touch targets */
+    cursor: pointer;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    font-size: 16px; /* Larger text for mobile */
+    color: var(--bs-body-color, #212529);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: background-color 0.15s ease;
+    border-radius: 0;
+    min-height: 48px; /* Accessibility guideline for touch targets */
+}
+
+.context-menu-item:hover,
+.context-menu-item:focus,
+.context-menu-item:active {
+    background-color: var(--bs-primary-bg-subtle, rgba(13, 110, 253, 0.1));
+    color: var(--bs-primary, #0d6efd);
+}
+
+.context-menu-item:disabled {
+    color: var(--bs-secondary, #6c757d);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.context-menu-item:disabled:hover {
+    background-color: transparent;
+    color: var(--bs-secondary, #6c757d);
+}
+
+.context-menu-item i {
+    width: 18px;
+    text-align: center;
+    font-size: 16px;
+}
+
+/* Emoji reactions in context menu */
+.context-menu-item.reaction-item {
+    font-size: 18px;
+}
+
+.context-menu-item.reaction-item .emoji {
+    font-size: 22px;
+    margin-right: 8px;
+}
+
+/* Message styling improvements for mobile */
+.chat-message {
+    position: relative;
+    cursor: pointer;
+    padding: 8px 12px;
+    margin: 4px 0;
+    border-radius: 8px;
+    transition: background-color 0.2s ease;
+    min-height: 40px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.chat-message:hover {
+    background-color: var(--bs-secondary-bg, rgba(108, 117, 125, 0.1));
+}
+
+.chat-message:active {
+    background-color: var(--bs-primary-bg-subtle, rgba(13, 110, 253, 0.15));
+}
+
+/* Message reactions styling */
+.message-reactions {
+    font-size: 0.9em;
+    color: var(--bs-secondary, #6c757d);
+    margin: 4px 0 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.reaction-item {
+    background: var(--bs-light, #f8f9fa);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 16px;
+    padding: 2px 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.reaction-item:hover {
+    background: var(--bs-primary-bg-subtle, rgba(13, 110, 253, 0.1));
+    border-color: var(--bs-primary, #0d6efd);
+    transform: translateY(-1px);
+}
+
+.reaction-item:active {
+    transform: translateY(0);
+}
+
+.reaction-tooltip {
+    position: absolute;
+    background: var(--bs-dark, #212529);
+    color: var(--bs-light, #f8f9fa);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 1000;
+    transform: translateX(-50%);
+    margin-top: 5px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.reaction-tooltip.show {
+    opacity: 1;
+}
+
+.reaction-tooltip::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 4px solid var(--bs-dark, #212529);
+}
+
+/* Message editing state */
+.message-editing {
+    background-color: var(--bs-warning-bg-subtle, #fff3cd);
+    border: 1px solid var(--bs-warning-border-subtle, #ffecb5);
+}
+
+.edit-input {
+    width: 100%;
+    border: 1px solid var(--bs-border-color, #ced4da);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: inherit;
+    background: var(--bs-body-bg, white);
+    color: var(--bs-body-color, #212529);
+    min-height: 38px;
+}
+
+.edit-input:focus {
+    outline: none;
+    border-color: var(--bs-primary, #0d6efd);
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.edit-actions {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+}
+
+.edit-actions button {
+    padding: 4px 12px;
+    font-size: 14px;
+    border-radius: 6px;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    min-height: 32px;
+}
+
+.edit-actions .btn-primary {
+    background: var(--bs-primary, #0d6efd);
+    border-color: var(--bs-primary, #0d6efd);
+    color: white;
+}
+
+.edit-actions .btn-secondary {
+    background: var(--bs-secondary, #6c757d);
+    border-color: var(--bs-secondary, #6c757d);
+    color: white;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .context-menu {
+        max-width: calc(100vw - 40px);
+        min-width: 180px;
+    }
+    
+    .context-menu-item {
+        padding: 14px 18px;
+        font-size: 16px;
+        min-height: 50px;
+    }
+    
+    .chat-message {
+        padding: 10px;
+        margin: 6px 0;
+    }
+    
+    .message-reactions {
+        margin-top: 8px;
+    }
+    
+    .reaction-item {
+        min-height: 32px;
+        padding: 4px 10px;
+        font-size: 15px;
+    }
+}
+
+/* Context menu backdrop */
+.context-menu-backdrop {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.2);
+    z-index: 1045 !important;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    cursor: pointer;
+}
+
+/* Dark mode support */
+[data-bs-theme="dark"] .context-menu,
+.dark-mode .context-menu {
+    background: var(--bs-dark, #212529);
+    border-color: var(--bs-border-color, #495057);
+    color: var(--bs-light, #f8f9fa);
+}
+
+[data-bs-theme="dark"] .context-menu-item,
+.dark-mode .context-menu-item {
+    color: var(--bs-light, #f8f9fa);
+}
+
+[data-bs-theme="dark"] .context-menu-item:hover,
+[data-bs-theme="dark"] .context-menu-item:focus,
+[data-bs-theme="dark"] .context-menu-item:active,
+.dark-mode .context-menu-item:hover,
+.dark-mode .context-menu-item:focus,
+.dark-mode .context-menu-item:active {
+    background-color: var(--bs-primary-bg-subtle, rgba(13, 110, 253, 0.2));
+    color: var(--bs-primary, #6ea8fe);
+}
+
+[data-bs-theme="dark"] .chat-message:hover,
+.dark-mode .chat-message:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-bs-theme="dark"] .reaction-item,
+.dark-mode .reaction-item {
+    background: var(--bs-dark, #495057);
+    border-color: var(--bs-border-color, #6c757d);
+    color: var(--bs-light, #f8f9fa);
+}
+
+[data-bs-theme="dark"] .reaction-item:hover,
+.dark-mode .reaction-item:hover {
+    background: var(--bs-primary-bg-subtle, rgba(108, 117, 125, 0.3));
+    border-color: var(--bs-primary, #6ea8fe);
+}
+
+[data-bs-theme="dark"] .edit-input,
+.dark-mode .edit-input {
+    background: var(--bs-dark, #495057);
+    border-color: var(--bs-border-color, #6c757d);
+    color: var(--bs-light, #f8f9fa);
+}
+
+[data-bs-theme="dark"] .message-editing,
+.dark-mode .message-editing {
+    background-color: rgba(255, 193, 7, 0.2);
+    border-color: rgba(255, 193, 7, 0.3);
+}
+
+/* Loading states */
+.context-menu-loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.context-menu-loading .context-menu-item {
+    cursor: wait;
+}
+
+/* Touch feedback */
+.context-menu-item:active {
+    transform: scale(0.98);
+}
+
+.reaction-item:active {
+    transform: scale(0.95);
+}
+
+/* Accessibility improvements */
+.context-menu-item:focus {
+    outline: 2px solid var(--bs-primary, #0d6efd);
+    outline-offset: -2px;
+}
+
+.reaction-item:focus {
+    outline: 2px solid var(--bs-primary, #0d6efd);
+    outline-offset: -1px;
+}
+
+/* Prevent text selection during long press */
+.chat-message {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* But allow text selection in message content for copying */
+.chat-message .message-text {
+    -webkit-user-select: text;
+    -khtml-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+}
+
+/* Prevent mobile browsers from interpreting taps as gestures that change scroll
+   position or create a focus that jumps the page. Apply to individual chat
+   messages so long-press and taps behave predictably. */
+.chat-message {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation; /* allow taps but prevent default double-tap zoom/pinch behaviors */
+    -ms-touch-action: manipulation;
+    
+    /* Additional mobile stability */
+    contain: layout style;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+/* Enhanced mobile viewport stability */
+@media (max-width: 768px) {
+    /* Prevent iOS zoom and viewport shifts */
+    input, textarea, select {
+        font-size: 16px !important; /* Minimum font size to prevent iOS zoom */
+        line-height: 1.2;
+        
+        /* Prevent focus from triggering layout changes */
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+    }
+    
+    /* Stabilize Bootstrap components */
+    .nav-tabs, .tab-content, .tab-pane {
+        contain: layout style;
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+    }
+    
+    /* Force stable positioning for cards */
+    .card {
+        contain: layout;
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+    }
+    
+    /* Prevent input groups from causing viewport changes */
+    .input-group {
+        contain: layout;
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+    }
+    
+    /* Stabilize containers */
+    .container, .container-fluid {
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+        
+        /* Prevent any container-level scroll behavior */
+        scroll-behavior: auto !important;
+    }
+    
+    /* Global scroll prevention for mobile chat page */
+    body {
+        /* Override any smooth scroll behavior */
+        scroll-behavior: auto !important;
+        /* Prevent scroll restoration */
+        overscroll-behavior: contain;
+        -ms-scroll-chaining: contain;
+    }
+    
+    /* Prevent all interactive elements from triggering scroll */
+    button, .btn, input, select, textarea, .dropdown-toggle, .nav-link,
+    a[href], [role="button"], [tabindex] {
+        scroll-behavior: auto !important;
+        scroll-margin: 0 !important;
+        scroll-padding: 0 !important;
+        
+        /* Force hardware acceleration */
+        transform: translateZ(0) !important;
+        -webkit-transform: translateZ(0) !important;
+        
+        /* Prevent layout shifts */
+        contain: layout !important;
+        
+        /* Ensure relative positioning */
+        position: relative !important;
+        
+        /* CRITICAL: Remove ALL transitions and animations that could cause flashing */
+        transition: none !important;
+        animation: none !important;
+        
+        /* Prevent any focus-related movements */
+        outline-offset: 0 !important;
+    }
+    
+    /* Specific anti-flash rules for chat inputs */
+    #dmChatInput, #assistantChatInput, #groupChatInput {
+        /* Lock position completely */
+        position: relative !important;
+        top: 0 !important;
+        left: 0 !important;
+        
+        /* No movement on focus */
+        transform: translateZ(0) translate3d(0,0,0) !important;
+        -webkit-transform: translateZ(0) translate3d(0,0,0) !important;
+        
+        /* Remove all transitions */
+        transition: none !important;
+        animation: none !important;
+        
+        /* Prevent browser zoom/focus behavior */
+        zoom: 1 !important;
+        -webkit-text-size-adjust: 100% !important;
+        text-size-adjust: 100% !important;
+    }
+    
+    /* Chat buttons - prevent any movement */
+    #dmSendBtn, #assistantSendBtn, #groupSendBtn, #assistantClearBtn,
+    #joinGroupBtn, #leaveGroupBtn, #addUserToGroupBtn {
+        transform: translateZ(0) translate3d(0,0,0) !important;
+        -webkit-transform: translateZ(0) translate3d(0,0,0) !important;
+        transition: none !important;
+        animation: none !important;
+        position: relative !important;
+    }
+    
+    /* Prevent any hover/active states that might cause movement */
+    #dmSendBtn:hover, #assistantSendBtn:hover, #groupSendBtn:hover, #assistantClearBtn:hover,
+    #joinGroupBtn:hover, #leaveGroupBtn:hover, #addUserToGroupBtn:hover,
+    #dmSendBtn:active, #assistantSendBtn:active, #groupSendBtn:active, #assistantClearBtn:active,
+    #joinGroupBtn:active, #leaveGroupBtn:active, #addUserToGroupBtn:active,
+    #dmSendBtn:focus, #assistantSendBtn:focus, #groupSendBtn:focus, #assistantClearBtn:focus,
+    #joinGroupBtn:focus, #leaveGroupBtn:focus, #addUserToGroupBtn:focus {
+        transform: translateZ(0) translate3d(0,0,0) !important;
+        -webkit-transform: translateZ(0) translate3d(0,0,0) !important;
+        transition: none !important;
+        animation: none !important;
+    }
+    
+    /* Bootstrap modal and dropdown overrides */
+    .modal, .modal-dialog, .modal-content,
+    .dropdown, .dropdown-menu {
+        scroll-behavior: auto !important;
+        transform: translateZ(0) !important;
+        -webkit-transform: translateZ(0) !important;
+    }
+    
+    /* Enhanced button stability */
+    button, .btn {
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+        -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+        
+        /* Prevent buttons from causing scroll jumps */
+        scroll-margin: 0 !important;
+        scroll-margin-top: 0 !important;
+        scroll-margin-bottom: 0 !important;
+        
+        /* Additional stability */
+        position: relative !important;
+        contain: layout !important;
+        
+        /* Prevent focus from scrolling */
+        scroll-behavior: auto !important;
+    }
+    
+    /* Specific chat buttons */
+    #dmSendBtn, #assistantSendBtn, #groupSendBtn,
+    #assistantClearBtn, #joinGroupBtn, #leaveGroupBtn, #addUserToGroupBtn {
+        scroll-margin: 0 !important;
+        transform: translateZ(0) !important;
+        -webkit-transform: translateZ(0) !important;
+        contain: layout style !important;
+        position: relative !important;
+    }
+    
+    /* Dropdown stability */
+    .dropdown, .dropdown-menu, .dropdown-toggle {
+        transform: translateZ(0) !important;
+        -webkit-transform: translateZ(0) !important;
+        contain: layout !important;
+        scroll-margin: 0 !important;
+    }
+    
+    /* Select elements stability */
+    select, .form-select {
+        font-size: 16px !important;
+        transform: translateZ(0) !important;
+        -webkit-transform: translateZ(0) !important;
+        scroll-margin: 0 !important;
+        contain: layout !important;
+    }
+}

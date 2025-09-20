@@ -197,7 +197,7 @@ def system_check():
     }
     
     # Check for required directories
-    directories = ['instance', 'config', 'uploads', 'instance/chat', 'instance/configs']
+    directories = ['instance', 'config', 'uploads', 'instance/chat', 'instance/chat/users', 'instance/configs']
     directory_status = {dir_name: os.path.exists(dir_name) for dir_name in directories}
     
     # Count users by role

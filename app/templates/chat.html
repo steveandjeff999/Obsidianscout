@@ -4,69 +4,1603 @@
 
 {% block content %}
 <div class="container mt-4">
-  <h1 class="mb-4">Chat</h1>
-  <ul class="nav nav-tabs" id="chatTab" role="tablist" style="margin-bottom: 1rem;">
-    <li class="nav-item" role="presentation">
-      <button class="nav-link active" id="dm-tab" data-bs-toggle="tab" data-bs-target="#dmTabPane" type="button" role="tab">DMs</button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link" id="assistant-tab" data-bs-toggle="tab" data-bs-target="#assistantTabPane" type="button" role="tab">Assistant</button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link" id="group-tab" data-bs-toggle="tab" data-bs-target="#groupTabPane" type="button" role="tab">Groups</button>
-    </li>
-  </ul>
-  <div class="tab-content" id="chatTabContent">
-    <div class="tab-pane fade show active" id="dmTabPane" role="tabpanel">
-      <div class="mb-2">
-        <label for="dmUserSelect" class="form-label mb-1">Chat with:</label>
-        <select id="dmUserSelect" class="form-select form-select-sm d-inline-block" style="width: 200px; display: inline-block;"></select>
-      </div>
-      <div id="dmChatContainer" style="max-height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fff;"></div>
-      <div class="input-group mt-3">
-        <input type="text" class="form-control" id="dmChatInput" placeholder="Type a message...">
-        <button class="btn btn-primary" id="dmSendBtn">Send</button>
-      </div>
+    <h1 class="mb-4">Chat</h1>
+
+    <!-- YPP Reminder Card -->
+    <div class="card mb-3 border-warning">
+        <div class="card-body d-flex align-items-start gap-3">
+            <div class="fs-3 text-warning"><i class="fas fa-exclamation-circle"></i></div>
+            <div>
+                <h5 class="card-title mb-1">Youth Protection Program (YPP)</h5>
+                <p class="card-text mb-0">When chatting on this platform, always follow the FIRST Youth Protection Program guidelines. Read the guide here: <a href="https://www.firstinspires.org/sites/default/files/uploads/about/FIRST-YPP-ProgramGuide.pdf" target="_blank" rel="noopener">FIRST YPP Program Guide (PDF)</a>.</p>
+            </div>
+        </div>
     </div>
-    <div class="tab-pane fade" id="assistantTabPane" role="tabpanel">
-      <div id="assistantChatContainer" style="max-height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fff;"></div>
-      <div class="input-group mt-3">
-        <input type="text" class="form-control" id="assistantChatInput" placeholder="Ask the assistant...">
-        <button class="btn btn-primary" id="assistantSendBtn">Send</button>
-        <button class="btn btn-danger ms-2" id="assistantClearBtn" type="button">Clear History</button>
-      </div>
+
+    <ul class="nav nav-tabs" id="chatTab" role="tablist" style="margin-bottom: 1rem;">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="dm-tab" data-bs-toggle="tab" data-bs-target="#dmTabPane" type="button" role="tab" aria-controls="dmTabPane" aria-selected="true">DMs</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="assistant-tab" data-bs-toggle="tab" data-bs-target="#assistantTabPane" type="button" role="tab" aria-controls="assistantTabPane" aria-selected="false">Assistant</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="group-tab" data-bs-toggle="tab" data-bs-target="#groupTabPane" type="button" role="tab" aria-controls="groupTabPane" aria-selected="false">Groups</button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="chatTabContent">
+        <!-- DM Tab -->
+        <div class="tab-pane fade show active" id="dmTabPane" role="tabpanel">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">Conversations</div>
+                        <div class="card-body d-flex flex-column">
+                            <label for="dmUserSelect" class="form-label mb-1">Chat with:</label>
+                            <select id="dmUserSelect" class="form-select form-select-sm mb-2" style="width: 100%;"></select>
+                            <div class="text-muted small mb-2">Select a user to open or continue a conversation.</div>
+                            <div class="flex-grow-1 overflow-auto" style="min-height: 180px;">
+                                <!-- Placeholder for recent conversations if needed -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-5 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">Messages</div>
+                        <div class="card-body d-flex flex-column p-3">
+                            <div id="dmChatContainer" class="flex-grow-1 bg-light p-2 rounded chat-scrollbox" style="min-height: 300px; max-height: 420px; overflow-y: auto; -webkit-overflow-scrolling: touch;"></div>
+                            <div class="mt-3">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="dmChatInput" placeholder="Type a message...">
+                                    <button class="btn btn-primary" id="dmSendBtn">Send</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                
+            </div>
+        </div>
+
+        <!-- Assistant Tab -->
+        <div class="tab-pane fade" id="assistantTabPane" role="tabpanel">
+            <div class="row">
+                
+
+                <div class="col-md-5 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">Assistant Chat</div>
+                        <div class="card-body d-flex flex-column p-3">
+                            <div id="assistantChatContainer" class="flex-grow-1 bg-light p-2 rounded chat-scrollbox" style="min-height: 300px; max-height: 420px; overflow-y: auto; -webkit-overflow-scrolling: touch;"></div>
+                            <div class="mt-3">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="assistantChatInput" placeholder="Ask the assistant...">
+                                    <button class="btn btn-primary" id="assistantSendBtn">Send</button>
+                                    <button class="btn btn-danger ms-2" id="assistantClearBtn" type="button">Clear History</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">Tips</div>
+                        <div class="card-body">
+                            <p class="small text-muted">Keep questions concise and include context for best results.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Group Tab -->
+        <div class="tab-pane fade" id="groupTabPane" role="tabpanel">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">Groups</div>
+                        <div class="card-body d-flex flex-column">
+                            <div class="mb-2">
+                                <input type="text" id="groupNameInput" class="form-control form-control-sm mb-2" placeholder="Group name">
+                                <button class="btn btn-outline-primary btn-sm mb-2" id="joinGroupBtn">Join/Create Group</button>
+                                <select id="currentGroupSelect" class="form-select form-select-sm mb-2"></select>
+                                <button class="btn btn-outline-danger btn-sm mb-2" id="leaveGroupBtn">Leave Group</button>
+                            </div>
+                            <div class="mt-auto">
+                                <label for="groupUserSelect" class="form-label mb-1">Add user:</label>
+                                <select id="groupUserSelect" class="form-select form-select-sm mb-2"></select>
+                                <button class="btn btn-success btn-sm" id="addUserToGroupBtn">Add to Group</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-5 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">Group Messages</div>
+                        <div class="card-body d-flex flex-column p-3">
+                            <div id="groupChatContainer" class="flex-grow-1 bg-light p-2 rounded chat-scrollbox" style="min-height: 300px; max-height: 420px; overflow-y: auto; -webkit-overflow-scrolling: touch;"></div>
+                            <div class="mt-3">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="groupChatInput" placeholder="Type a group message...">
+                                    <button class="btn btn-primary" id="groupSendBtn">Send</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header">Members</div>
+                        <div class="card-body">
+                            <strong>Group Members:</strong>
+                            <div id="groupMembersList" class="mt-2"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="tab-pane fade" id="groupTabPane" role="tabpanel">
-      <div class="mb-2">
-        <input type="text" id="groupNameInput" class="form-control form-control-sm d-inline-block" style="width: 200px; display: inline-block;" placeholder="Group name">
-        <button class="btn btn-outline-primary btn-sm" id="joinGroupBtn">Join/Create Group</button>
-        <select id="currentGroupSelect" class="form-select form-select-sm d-inline-block" style="width: 200px; display: inline-block;"></select>
-        <button class="btn btn-outline-danger btn-sm" id="leaveGroupBtn">Leave Group</button>
-        <label for="groupUserSelect" class="form-label mb-1 ms-3">Add user:</label>
-        <select id="groupUserSelect" class="form-select form-select-sm d-inline-block" style="width: 200px; display: inline-block;"></select>
-        <button class="btn btn-success btn-sm" id="addUserToGroupBtn">Add to Group</button>
-      </div>
-      <div class="mb-2">
-        <strong>Group Members:</strong> <span id="groupMembersList"></span>
-      </div>
-      <div id="groupChatContainer" style="max-height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fff;"></div>
-      <div class="input-group mt-3">
-        <input type="text" class="form-control" id="groupChatInput" placeholder="Type a group message...">
-        <button class="btn btn-primary" id="groupSendBtn">Send</button>
-      </div>
-    </div>
-  </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+    // Mobile scroll-to-top prevention system
+    (function() {
+        // Enhanced mobile detection
+        const isMobile = () => {
+            return window.innerWidth <= 768 || 
+                   /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                   ('ontouchstart' in window) ||
+                   (navigator.maxTouchPoints > 0);
+        };
+        
+        // Store initial scroll position to restore if needed
+        let initialScrollY = 0;
+        
+        // 1. Enhanced focus() call prevention
+        const originalFocus = HTMLElement.prototype.focus;
+        HTMLElement.prototype.focus = function(options) {
+            if (isMobile()) {
+                // Store scroll position before focus
+                initialScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                
+                // Always use preventScroll on mobile
+                const result = originalFocus.call(this, { preventScroll: true });
+                
+                // Double-check scroll position hasn't changed after a short delay
+                setTimeout(() => {
+                    const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                    if (Math.abs(currentScrollY - initialScrollY) > 10) {
+                        window.scrollTo(0, initialScrollY);
+                    }
+                }, 50);
+                
+                return result;
+            }
+            return originalFocus.call(this, options);
+        };
+
+        // 2. Enhanced input focus event handling
+        document.addEventListener('focusin', function(e) {
+            if (isMobile() && e.target.matches('input, textarea')) {
+                // Store current scroll position
+                const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                initialScrollY = currentScrollY;
+                
+                // Prevent any automatic scrolling behavior
+                e.target.style.scrollMargin = '0';
+                e.target.style.scrollMarginTop = '0';
+                e.target.style.scrollMarginBottom = '0';
+                
+                // Force maintain scroll position
+                setTimeout(() => {
+                    const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                    if (Math.abs(newScrollY - currentScrollY) > 5) {
+                        window.scrollTo(0, currentScrollY);
+                    }
+                }, 10);
+            }
+        }, true);
+
+        // 3. Enhanced hash change prevention
+        let preventNextHashChange = false;
+        const originalReplaceState = history.replaceState;
+        const originalPushState = history.pushState;
+        
+        // Override history methods to prevent unwanted hash changes
+        history.replaceState = function() {
+            try {
+                return originalReplaceState.apply(history, arguments);
+            } catch (e) {
+                console.warn('replaceState blocked:', e);
+            }
+        };
+        
+        window.addEventListener('hashchange', function(e) {
+            if (preventNextHashChange || (isMobile() && window.location.hash === '')) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                
+                // Restore the previous hash if there was one
+                if (e.oldURL && e.oldURL.includes('#')) {
+                    const oldHash = e.oldURL.split('#')[1] || '';
+                    if (oldHash) {
+                        history.replaceState(null, '', '#' + oldHash);
+                    }
+                }
+                preventNextHashChange = false;
+                return false;
+            }
+        }, true);
+
+        // 4. Enhanced Bootstrap tab and click handling
+        document.addEventListener('click', function(e) {
+            const target = e.target;
+            
+            // Handle Bootstrap tab clicks specially
+            if (target.matches('[data-bs-toggle="tab"]') || target.closest('[data-bs-toggle="tab"]')) {
+                const tabElement = target.closest('[data-bs-toggle="tab"]') || target;
+                
+                if (isMobile()) {
+                    // Prevent hash change for mobile
+                    preventNextHashChange = true;
+                    
+                    // Store current scroll position
+                    const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                    
+                    // Allow the tab switch to happen
+                    setTimeout(() => {
+                        // Restore scroll position if it changed
+                        const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                        if (Math.abs(newScrollY - currentScrollY) > 10) {
+                            window.scrollTo(0, currentScrollY);
+                        }
+                        preventNextHashChange = false;
+                    }, 100);
+                }
+                return;
+            }
+            
+            // Allow clicks on genuinely interactive elements
+            if (target.matches('button, input, select, textarea, a[href]:not([href="#"]), [role="button"], [tabindex]') || 
+                target.closest('button, input, select, textarea, a[href]:not([href="#"]), [role="button"], [tabindex]')) {
+                return; // Let these proceed normally
+            }
+
+            // For other elements that might cause navigation, prevent unwanted effects
+            if (target.closest('.container, .card-body, .tab-pane, .tab-content')) {
+                if (isMobile()) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }
+        }, true); // Use capture phase
+
+        // 5. Enhanced touch event handling
+        let touchStartY = 0;
+        let touchStartTime = 0;
+        let touchStartScrollY = 0;
+        
+        document.addEventListener('touchstart', function(e) {
+            touchStartY = e.touches[0].clientY;
+            touchStartTime = Date.now();
+            touchStartScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+        }, { passive: true });
+
+        document.addEventListener('touchend', function(e) {
+            if (!isMobile()) return;
+            
+            const touchEndY = e.changedTouches[0].clientY;
+            const touchDuration = Date.now() - touchStartTime;
+            const touchDistance = Math.abs(touchEndY - touchStartY);
+            
+            // If this was a tap (short duration, small distance)
+            if (touchDuration < 300 && touchDistance < 10) {
+                const target = e.target;
+                
+                // Don't interfere with interactive elements
+                if (!target.matches('button, input, select, textarea, a[href]:not([href="#"]), [role="button"], [tabindex]') && 
+                    !target.closest('button, input, select, textarea, a[href]:not([href="#"]), [role="button"], [tabindex]')) {
+                    
+                    // Check if scroll position changed during this touch
+                    const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                    if (Math.abs(currentScrollY - touchStartScrollY) > 5) {
+                        // Restore original scroll position
+                        setTimeout(() => {
+                            window.scrollTo(0, touchStartScrollY);
+                        }, 10);
+                    }
+                    
+                    // Prevent any default behavior that might cause scrolling
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }
+        }, { passive: false });
+        
+        // 6. Input-specific handling to prevent viewport shifts
+        document.addEventListener('input', function(e) {
+            if (isMobile() && e.target.matches('input, textarea')) {
+                // Maintain scroll position during input
+                const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                if (Math.abs(currentScrollY - initialScrollY) > 20) {
+                    setTimeout(() => {
+                        window.scrollTo(0, initialScrollY);
+                    }, 50);
+                }
+            }
+        }, { passive: true });
+        
+        // 7. Specific chat input field handling
+        const chatInputIds = ['dmChatInput', 'assistantChatInput', 'groupChatInput'];
+        
+        chatInputIds.forEach(inputId => {
+            const input = document.getElementById(inputId);
+            if (input) {
+                // Override focus behavior
+                const originalInputFocus = input.focus;
+                input.focus = function(options) {
+                    if (isMobile()) {
+                        const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                        
+                        // Call original focus with preventScroll
+                        const result = originalInputFocus.call(this, { preventScroll: true });
+                        
+                        // Force maintain scroll position
+                        setTimeout(() => {
+                            const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                            if (Math.abs(newScrollY - scrollY) > 5) {
+                                window.scrollTo(0, scrollY);
+                            }
+                        }, 10);
+                        
+                        setTimeout(() => {
+                            const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                            if (Math.abs(newScrollY - scrollY) > 5) {
+                                window.scrollTo(0, scrollY);
+                            }
+                        }, 100);
+                        
+                        setTimeout(() => {
+                            const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                            if (Math.abs(newScrollY - scrollY) > 5) {
+                                window.scrollTo(0, scrollY);
+                            }
+                        }, 300);
+                        
+                        return result;
+                    }
+                    return originalInputFocus.call(this, options);
+                };
+                
+                // Enhanced focus event listener
+                input.addEventListener('focus', function(e) {
+                    if (isMobile()) {
+                        const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                        
+                        // Set styles to prevent viewport changes
+                        this.style.setProperty('scroll-margin', '0', 'important');
+                        this.style.setProperty('scroll-margin-top', '0', 'important');
+                        this.style.setProperty('scroll-margin-bottom', '0', 'important');
+                        this.style.setProperty('transform', 'translateZ(0)', 'important');
+                        
+                        // Multiple checks to maintain position
+                        const checkAndRestore = () => {
+                            const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                            if (Math.abs(newScrollY - scrollY) > 3) {
+                                window.scrollTo(0, scrollY);
+                            }
+                        };
+                        
+                        setTimeout(checkAndRestore, 10);
+                        setTimeout(checkAndRestore, 50);
+                        setTimeout(checkAndRestore, 150);
+                        setTimeout(checkAndRestore, 300);
+                    }
+                }, true);
+                
+                // Handle clicks on input
+                input.addEventListener('click', function(e) {
+                    if (isMobile()) {
+                        const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                        
+                        setTimeout(() => {
+                            const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                            if (Math.abs(newScrollY - scrollY) > 5) {
+                                window.scrollTo(0, scrollY);
+                            }
+                        }, 50);
+                    }
+                });
+                
+                // Handle touchstart on input
+                input.addEventListener('touchstart', function(e) {
+                    if (isMobile()) {
+                        const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                        
+                        setTimeout(() => {
+                            const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                            if (Math.abs(newScrollY - scrollY) > 5) {
+                                window.scrollTo(0, scrollY);
+                            }
+                        }, 50);
+                    }
+                }, { passive: true });
+            }
+        });
+        
+        // Body position lock for interaction (prevents any visual movement)
+        let bodyLocked = false;
+        let lockedScrollY = 0;
+        let originalBodyStyle = {};
+        
+        const lockBody = () => {
+            if (bodyLocked) return;
+            
+            lockedScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+            
+            // Store original styles
+            originalBodyStyle = {
+                position: document.body.style.position,
+                top: document.body.style.top,
+                left: document.body.style.left,
+                width: document.body.style.width,
+                height: document.body.style.height,
+                overflow: document.body.style.overflow
+            };
+            
+            // Lock the body completely
+            document.body.style.position = 'fixed';
+            document.body.style.top = `-${lockedScrollY}px`;
+            document.body.style.left = '0';
+            document.body.style.width = '100%';
+            document.body.style.height = '100%';
+            document.body.style.overflow = 'hidden';
+            
+            bodyLocked = true;
+        };
+        
+        const unlockBody = () => {
+            if (!bodyLocked) return;
+            
+            // Restore original styles
+            Object.keys(originalBodyStyle).forEach(key => {
+                document.body.style[key] = originalBodyStyle[key];
+            });
+            
+            // Restore scroll position
+            window.scrollTo(0, lockedScrollY);
+            
+            bodyLocked = false;
+        };
+        
+        // Lock body during critical interactions
+        document.addEventListener('touchstart', function(e) {
+            if (e.target.matches('button, .btn, input, select, .dropdown-toggle') ||
+                e.target.closest('button, .btn, input, select, .dropdown-toggle')) {
+                lockBody();
+            }
+        }, true);
+        
+        document.addEventListener('touchend', function(e) {
+            if (bodyLocked) {
+                setTimeout(unlockBody, 10);
+            }
+        }, true);
+        
+        // Also lock on click for non-touch devices
+        document.addEventListener('mousedown', function(e) {
+            if (e.target.matches('button, .btn, input, select, .dropdown-toggle') ||
+                e.target.closest('button, .btn, input, select, .dropdown-toggle')) {
+                lockBody();
+            }
+        }, true);
+        
+        document.addEventListener('mouseup', function(e) {
+            if (bodyLocked) {
+                setTimeout(unlockBody, 10);
+            }
+        }, true);
+        
+        // Lock during focus events
+        document.addEventListener('focusin', function(e) {
+            if (e.target.matches('input, textarea, select')) {
+                lockBody();
+                setTimeout(unlockBody, 100);
+            }
+        }, true);
+        
+    })();
+
+    // Context menu system
+    let contextMenu = null;
+    let longPressTimer = null;
+    let longPressTriggered = false;
+
+    function showContextMenu(event, messageElement) {
+        event.preventDefault();
+        hideContextMenu();
+        
+        console.log('Showing context menu for:', messageElement);
+        
+        const messageId = messageElement.getAttribute('data-message-id');
+        const sender = messageElement.getAttribute('data-sender');
+        const isOwnMessage = sender === currentUsername;
+        
+        if (!messageId) {
+            console.log('No message ID found, skipping');
+            return; // Skip messages without IDs
+        }
+        
+        console.log('Creating context menu with messageId:', messageId, 'isOwnMessage:', isOwnMessage);
+        
+        contextMenu = document.createElement('div');
+        contextMenu.className = 'context-menu';
+        
+        // Add a header for debugging
+        const header = document.createElement('div');
+        header.style.cssText = 'padding: 8px 16px; font-weight: bold; border-bottom: 1px solid #eee; font-size: 14px;';
+        header.textContent = 'Message Actions';
+        contextMenu.appendChild(header);
+        
+        // Edit option (only for own messages)
+        if (isOwnMessage) {
+            const editBtn = document.createElement('button');
+            editBtn.className = 'context-menu-item';
+            editBtn.innerHTML = '<i class="fas fa-edit"></i> Edit Message';
+            editBtn.onclick = () => editMessage(messageElement);
+            contextMenu.appendChild(editBtn);
+            
+            // Delete option (only for own messages)
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'context-menu-item';
+            deleteBtn.innerHTML = '<i class="fas fa-trash"></i> Delete Message';
+            deleteBtn.onclick = () => deleteMessage(messageElement);
+            contextMenu.appendChild(deleteBtn);
+            
+            // Add separator if we have more options
+            const separator = document.createElement('div');
+            separator.style.borderTop = '1px solid var(--bs-border-color, #dee2e6)';
+            separator.style.margin = '4px 0';
+            contextMenu.appendChild(separator);
+        }
+        
+        // React options with better styling
+        const reactions = ['👍', '👎', '❤️', '😄', '😮', '😢', '🔥', '🎉'];
+        reactions.forEach(emoji => {
+            const reactBtn = document.createElement('button');
+            reactBtn.className = 'context-menu-item reaction-item';
+            reactBtn.innerHTML = `<span class="emoji">${emoji}</span> ${getEmojiName(emoji)}`;
+            reactBtn.onclick = () => reactToMessage(messageElement, emoji);
+            contextMenu.appendChild(reactBtn);
+        });
+        
+        console.log('Context menu created with', contextMenu.children.length, 'items');
+        
+        // Position the menu
+        const x = event.pageX || (event.touches && event.touches[0].pageX) || event.clientX;
+        const y = event.pageY || (event.touches && event.touches[0].pageY) || event.clientY;
+        
+        console.log('Positioning menu at:', x, y);
+        
+        // Add backdrop for mobile first (lower z-index)
+        let backdrop = null;
+        if (window.innerWidth <= 768) {
+            console.log('Adding mobile backdrop');
+            backdrop = document.createElement('div');
+            backdrop.className = 'context-menu-backdrop';
+            backdrop.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.2);
+                z-index: 1045;
+                backdrop-filter: blur(2px);
+                -webkit-backdrop-filter: blur(2px);
+            `;
+            backdrop.onclick = hideContextMenu;
+            document.body.appendChild(backdrop);
+        }
+        
+        // Add context menu after backdrop (higher z-index)
+        document.body.appendChild(contextMenu);
+        console.log('Context menu added to DOM');
+        
+        // Get computed position after adding to DOM
+        const rect = contextMenu.getBoundingClientRect();
+        let finalX = x;
+        let finalY = y;
+        
+        console.log('Menu rect:', rect);
+        
+        // Improve positioning logic to prevent off-screen issues
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const padding = 20; // Minimum padding from screen edges
+        
+        // Adjust horizontal position
+        if (finalX + rect.width > viewportWidth - padding) {
+            finalX = Math.max(padding, viewportWidth - rect.width - padding);
+        }
+        if (finalX < padding) {
+            finalX = padding;
+        }
+        
+        // Adjust vertical position  
+        if (finalY + rect.height > viewportHeight - padding) {
+            finalY = Math.max(padding, viewportHeight - rect.height - padding);
+        }
+        if (finalY < padding) {
+            finalY = padding;
+        }
+        
+        console.log('Final position:', finalX, finalY);
+        
+        contextMenu.style.left = finalX + 'px';
+        contextMenu.style.top = finalY + 'px';
+        contextMenu.style.zIndex = '1055';
+        
+        if (backdrop) {
+            contextMenu.setAttribute('data-backdrop', 'true');
+        }
+        
+        console.log('Context menu should now be visible');
+    }
+
+    function getEmojiName(emoji) {
+        const names = {
+            '👍': 'Thumbs Up',
+            '👎': 'Thumbs Down', 
+            '❤️': 'Heart',
+            '😄': 'Laughing',
+            '😮': 'Surprised',
+            '😢': 'Sad',
+            '🔥': 'Fire',
+            '🎉': 'Party'
+        };
+        return names[emoji] || 'React';
+    }
+
+    function hideContextMenu() {
+        console.log('Hiding context menu');
+        if (contextMenu) {
+            // Remove backdrop if it exists
+            const backdrop = document.querySelector('.context-menu-backdrop');
+            if (backdrop) {
+                console.log('Removing backdrop');
+                backdrop.remove();
+            }
+            console.log('Removing context menu');
+            contextMenu.remove();
+            contextMenu = null;
+        }
+    }
+
+    // Hide context menu when clicking elsewhere
+    document.addEventListener('click', hideContextMenu);
+    document.addEventListener('scroll', hideContextMenu);
+
+    // Message action functions
+    function editMessage(messageElement) {
+        hideContextMenu();
+        const messageId = messageElement.getAttribute('data-message-id');
+        const textElement = messageElement.querySelector('.message-text');
+        if (!textElement) return;
+        
+        const currentText = textElement.textContent;
+        messageElement.classList.add('message-editing');
+        
+        textElement.innerHTML = `
+            <input type="text" class="edit-input" value="${currentText.replace(/"/g, '&quot;')}" />
+            <div class="edit-actions">
+                <button class="btn btn-sm btn-primary save-edit">Save</button>
+                <button class="btn btn-sm btn-secondary cancel-edit">Cancel</button>
+            </div>
+        `;
+        
+        const input = textElement.querySelector('.edit-input');
+        const saveBtn = textElement.querySelector('.save-edit');
+        const cancelBtn = textElement.querySelector('.cancel-edit');
+        
+        input.focus();
+        
+        saveBtn.onclick = async () => {
+            const newText = input.value.trim();
+            if (!newText || newText === currentText) {
+                cancelEdit();
+                return;
+            }
+            
+            try {
+                const response = await fetch('/chat/edit-message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message_id: messageId, text: newText })
+                });
+                
+                if (response.ok) {
+                    textElement.innerHTML = newText + ' <span class="text-muted ms-1">(edited)</span>';
+                    messageElement.classList.remove('message-editing');
+                } else {
+                    alert('Failed to edit message');
+                    cancelEdit();
+                }
+            } catch (e) {
+                console.error('Error editing message:', e);
+                alert('Failed to edit message');
+                cancelEdit();
+            }
+        };
+        
+        cancelBtn.onclick = cancelEdit;
+        input.onkeypress = (e) => {
+            if (e.key === 'Enter') saveBtn.click();
+            if (e.key === 'Escape') cancelEdit();
+        };
+        
+        function cancelEdit() {
+            textElement.innerHTML = currentText;
+            messageElement.classList.remove('message-editing');
+        }
+    }
+
+    function deleteMessage(messageElement) {
+        hideContextMenu();
+        if (!confirm('Delete this message?')) return;
+        
+        const messageId = messageElement.getAttribute('data-message-id');
+        
+        fetch('/chat/delete-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message_id: messageId })
+        }).then(response => {
+            if (response.ok) {
+                messageElement.style.opacity = '0.5';
+                messageElement.querySelector('.message-text').innerHTML = '<em>Message deleted</em>';
+            } else {
+                alert('Failed to delete message');
+            }
+        }).catch(e => {
+            console.error('Error deleting message:', e);
+            alert('Failed to delete message');
+        });
+    }
+
+    function reactToMessage(messageElement, emoji) {
+        hideContextMenu();
+        const messageId = messageElement.getAttribute('data-message-id');
+        
+        fetch('/chat/react-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message_id: messageId, emoji: emoji })
+        }).then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update reactions display
+                updateReactionsDisplay(messageElement, data.reactions);
+            } else {
+                alert('Failed to add reaction');
+            }
+        }).catch(e => {
+            console.error('Error adding reaction:', e);
+            alert('Failed to add reaction');
+        });
+    }
+
+    function updateReactionsDisplay(messageElement, reactions) {
+        let reactionsEl = messageElement.querySelector('.message-reactions');
+        if (!reactionsEl) {
+            reactionsEl = document.createElement('div');
+            reactionsEl.className = 'message-reactions';
+            const textElement = messageElement.querySelector('.message-text');
+            textElement.parentNode.insertBefore(reactionsEl, textElement.nextSibling);
+        }
+        
+        if (reactions && reactions.length > 0) {
+            reactionsEl.innerHTML = '';
+            reactions.forEach(r => {
+                const reactionItem = document.createElement('span');
+                reactionItem.className = 'reaction-item';
+                reactionItem.innerHTML = `${r.emoji} ${r.count}`;
+                reactionItem.setAttribute('data-reaction-emoji', r.emoji);
+                reactionItem.setAttribute('data-reaction-users', JSON.stringify(r.users || []));
+                
+                // Add click handler for mobile
+                reactionItem.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    showReactionDetails(reactionItem, r);
+                };
+                
+                // Add hover handler for desktop
+                let hoverTimeout;
+                reactionItem.onmouseenter = (e) => {
+                    clearTimeout(hoverTimeout);
+                    hoverTimeout = setTimeout(() => {
+                        showReactionTooltip(reactionItem, r);
+                    }, 500);
+                };
+                
+                reactionItem.onmouseleave = () => {
+                    clearTimeout(hoverTimeout);
+                    hideReactionTooltip();
+                };
+                
+                reactionsEl.appendChild(reactionItem);
+            });
+            reactionsEl.style.display = '';
+        } else {
+            reactionsEl.style.display = 'none';
+        }
+    }
+
+    function showReactionDetails(reactionElement, reactionData) {
+        // Handle if reactionData is a string (from onclick attribute)
+        if (typeof reactionData === 'string') {
+            try {
+                reactionData = JSON.parse(reactionData);
+            } catch (e) {
+                console.error('Failed to parse reaction data:', e);
+                return;
+            }
+        }
+        
+        // Also try to get users from the data attribute if not in reactionData
+        if (!reactionData.users) {
+            const usersAttr = reactionElement.getAttribute('data-reaction-users');
+            if (usersAttr) {
+                try {
+                    reactionData.users = JSON.parse(usersAttr);
+                } catch (e) {
+                    console.warn('Failed to parse users from data attribute:', e);
+                }
+            }
+        }
+        
+        const users = reactionData.users || [];
+        if (users.length === 0) return;
+        
+        // For mobile, show a simple alert or modal
+        if (window.innerWidth <= 768) {
+            const userList = users.join(', ');
+            alert(`${reactionData.emoji} - Reacted by: ${userList}`);
+        } else {
+            showReactionTooltip(reactionElement, reactionData);
+        }
+    }
+
+    let currentTooltip = null;
+
+    function showReactionTooltip(reactionElement, reactionData) {
+        hideReactionTooltip();
+        
+        const users = reactionData.users || [];
+        if (users.length === 0) return;
+        
+        currentTooltip = document.createElement('div');
+        currentTooltip.className = 'reaction-tooltip show';
+        
+        const userList = users.join(', ');
+        currentTooltip.textContent = `Reacted by: ${userList}`;
+        
+        document.body.appendChild(currentTooltip);
+        
+        // Position tooltip
+        const rect = reactionElement.getBoundingClientRect();
+        const tooltipRect = currentTooltip.getBoundingClientRect();
+        
+        let left = rect.left + (rect.width / 2);
+        let top = rect.bottom + 5;
+        
+        // Adjust if tooltip goes off screen
+        if (left + (tooltipRect.width / 2) > window.innerWidth - 10) {
+            left = window.innerWidth - (tooltipRect.width / 2) - 10;
+        }
+        if (left - (tooltipRect.width / 2) < 10) {
+            left = (tooltipRect.width / 2) + 10;
+        }
+        
+        currentTooltip.style.left = left + 'px';
+        currentTooltip.style.top = top + 'px';
+        
+        // Auto-hide after delay
+        setTimeout(() => {
+            hideReactionTooltip();
+        }, 3000);
+    }
+
+    function hideReactionTooltip() {
+        if (currentTooltip) {
+            currentTooltip.remove();
+            currentTooltip = null;
+        }
+    }
+
+    // Event delegation for message interaction
+    function setupMessageEventListeners() {
+        document.addEventListener('contextmenu', function(e) {
+            const messageElement = e.target.closest('.chat-message');
+            if (messageElement) {
+                // Prevent the browser default context menu and stop propagation so
+                // mobile/desktop browsers don't trigger other handlers that may
+                // cause a scroll-to-top or hash change.
+                try { e.preventDefault(); } catch (err) {}
+                try { e.stopPropagation(); } catch (err) {}
+                showContextMenu(e, messageElement);
+            }
+        });
+
+        // Touch events for mobile long press
+        document.addEventListener('touchstart', function(e) {
+            const messageElement = e.target.closest('.chat-message');
+            if (messageElement) {
+                longPressTriggered = false;
+                // Stop propagation to avoid other handlers (for example anchors)
+                // receiving the touch and causing a hash change or scroll-to-top.
+                e.stopPropagation();
+                
+                // Prevent any potential scroll jumps from touch start
+                const startY = window.scrollY || document.documentElement.scrollTop || 0;
+                
+                // Add visual feedback during long press
+                messageElement.style.backgroundColor = 'rgba(0,0,0,0.1)';
+                
+                longPressTimer = setTimeout(() => {
+                    longPressTriggered = true;
+                    // Remove visual feedback
+                    messageElement.style.backgroundColor = '';
+                    // Use the actual touch coordinates to show the menu
+                    const touch = e.touches[0];
+                    const syntheticEvent = {
+                        preventDefault: () => { 
+                            try { e.preventDefault(); } catch (err) {}
+                        },
+                        stopPropagation: () => {
+                            try { e.stopPropagation(); } catch (err) {}
+                        },
+                        pageX: touch.pageX,
+                        pageY: touch.pageY,
+                        touches: e.touches,
+                        clientX: touch.clientX,
+                        clientY: touch.clientY
+                    };
+                    console.log('Long press detected, showing context menu at:', touch.pageX, touch.pageY);
+                    showContextMenu(syntheticEvent, messageElement);
+                    // Haptic feedback if available
+                    if (navigator.vibrate) {
+                        navigator.vibrate([50]);
+                    }
+                    
+                    // Ensure scroll position hasn't changed
+                    const currentY = window.scrollY || document.documentElement.scrollTop || 0;
+                    if (Math.abs(currentY - startY) > 5) {
+                        window.scrollTo(0, startY);
+                    }
+                }, 500); // 500ms long press
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchend', function(e) {
+            const messageElement = e.target.closest('.chat-message');
+            if (messageElement) {
+                messageElement.style.backgroundColor = '';
+                
+                // Prevent default behavior that might cause scroll
+                if (!longPressTriggered) {
+                    // This was just a tap, not a long press
+                    // Check if it was on a non-interactive part of the message
+                    const target = e.target;
+                    const isInteractive = target.matches('button, input, textarea, select, a[href]:not([href="#"]), [role="button"], .reaction-item') ||
+                                        target.closest('button, input, textarea, select, a[href]:not([href="#"]), [role="button"], .reaction-item');
+                    
+                    if (!isInteractive) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                }
+            }
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+        }, { passive: false });
+
+        // Capture-phase touchend: prevent non-interactive taps inside messages
+        // from triggering ancestor handlers (some mobile browsers fire handlers
+        // on touchend that cause hash changes or scrolls). Use capture so we
+        // can stop propagation before bubble-phase handlers run.
+        document.addEventListener('touchend', function(e) {
+            try {
+                const messageElement = e.target.closest && e.target.closest('.chat-message');
+                if (!messageElement) return;
+
+                const interactiveSelector = 'a[href]:not([href="#"]), button, input, textarea, select, [role="button"], .reaction-item, .context-menu-item';
+                const interactive = e.target.closest(interactiveSelector);
+                if (interactive) return; // allow interactive children
+
+                // Prevent any default actions and stop propagation to ancestors
+                // that might change the hash or call scrollTo.
+                try { e.preventDefault(); } catch (err) {}
+                try { e.stopPropagation(); } catch (err) {}
+
+                // Reinforce suppression flag in case a delayed handler runs soon
+                try {
+                    window.__suppressImmediateScrollToTop = true;
+                    window.setTimeout(() => { window.__suppressImmediateScrollToTop = false; }, 600);
+                } catch (err) {}
+            } catch (err) {
+                console.warn('Error in touchend capture handler', err);
+            }
+    }, { capture: true, passive: false });
+
+        document.addEventListener('touchmove', function(e) {
+            const messageElement = e.target.closest('.chat-message');
+            if (messageElement) {
+                messageElement.style.backgroundColor = '';
+            }
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+        }, { passive: false });
+
+        // Prevent context menu on regular clicks for messages that had long press
+        document.addEventListener('click', function(e) {
+            const messageElement = e.target.closest('.chat-message');
+            if (messageElement && longPressTriggered) {
+                e.preventDefault();
+                e.stopPropagation();
+                longPressTriggered = false;
+                return false;
+            }
+            
+            // Additional safeguard: prevent clicks on non-interactive areas from scrolling
+            if (messageElement) {
+                const target = e.target;
+                const isInteractive = target.matches('button, input, textarea, select, a[href]:not([href="#"]), [role="button"], .reaction-item') ||
+                                    target.closest('button, input, textarea, select, a[href]:not([href="#"]), [role="button"], .reaction-item');
+                
+                if (!isInteractive) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                }
+            }
+        });
+
+        // Capturing click handler: intercept taps inside chat messages before they
+        // bubble to ancestor handlers (for example anchors with href="#" in the
+        // navbar or other templates) which can cause mobile browsers to jump to top.
+        // Allow clicks on interactive elements (links, buttons, inputs) to proceed.
+        document.addEventListener('click', function(e) {
+            try {
+                const messageElement = e.target.closest('.chat-message');
+                if (!messageElement) return; // not inside a message
+
+                // Elements that should be allowed to act normally
+                const interactiveSelector = 'a[href]:not([href="#"]), button, input, textarea, select, [role="button"], .reaction-item, .context-menu-item';
+                const interactive = e.target.closest(interactiveSelector);
+                if (interactive) return; // let the interactive element handle it
+
+                // Prevent default navigation / hash change and stop propagation so
+                // ancestor handlers (like the base href="#" safeguard) do not run
+                e.preventDefault();
+                e.stopPropagation();
+                // Set a short-lived flag so global scroll wrappers can ignore
+                // immediate scroll-to-top calls that some mobile browsers trigger
+                // right after tap events. Increase timeout to cover delayed handlers.
+                try {
+                    window.__suppressImmediateScrollToTop = true;
+                    window.setTimeout(() => { window.__suppressImmediateScrollToTop = false; }, 600);
+                } catch (err) { /* ignore */ }
+            } catch (err) {
+                // swallow to avoid breaking other handlers
+                console.warn('Error in message click capture handler', err);
+            }
+        }, true); // use capture phase
+    }
+
+    // ---------- Read tracking & autoscroll helpers ----------
+    function storageKeyFor(scope, id) {
+        if (scope === 'assistant') return 'chat:lastRead:assistant';
+        return `chat:lastRead:${scope}:${id}`;
+    }
+
+    function updateLastReadKey(key, messageId) {
+        try {
+            if (messageId) localStorage.setItem(key, messageId);
+        } catch (e) { /* ignore */ }
+    }
+
+    function isNearBottom(container, threshold = 120) {
+        return (container.scrollHeight - container.scrollTop - container.clientHeight) <= threshold;
+    }
+
+    function setupReadTracking(container, scope, idForScope) {
+        if (!container) return;
+        // Ensure touch-friendly scrolling
+        container.style.overflowY = 'auto';
+        container.style['-webkit-overflow-scrolling'] = 'touch';
+
+        // Disconnect any previous observer on the container
+        if (container._readObserver) {
+            try { container._readObserver.disconnect(); } catch (e) {}
+        }
+
+        const key = scope === 'assistant' ? storageKeyFor('assistant') : storageKeyFor(scope, idForScope);
+
+        const obs = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const msgEl = entry.target;
+                    const mid = msgEl.getAttribute('data-message-id');
+                    if (mid) updateLastReadKey(key, mid);
+                }
+            });
+        }, {
+            root: container,
+            threshold: 0.6
+        });
+
+        // Observe existing messages
+        container.querySelectorAll('.chat-message').forEach(m => obs.observe(m));
+        container._readObserver = obs;
+
+        // When new messages are appended, observe them automatically
+        const mo = new MutationObserver(muts => {
+            muts.forEach(m => {
+                m.addedNodes && m.addedNodes.forEach(node => {
+                    if (node.nodeType === 1 && node.classList.contains('chat-message')) {
+                        try { obs.observe(node); } catch (e) {}
+                    }
+                });
+            });
+        });
+        mo.observe(container, { childList: true });
+        container._readMutation = mo;
+    }
+
+    function generateReactionsHTML(reactions) {
+        if (!reactions || reactions.length === 0) return '';
+        
+        const reactionsHtml = reactions.map(r => {
+            const users = r.users || [];
+            const count = r.count !== undefined ? r.count : (users.length || 1);
+            const emoji = r.emoji || '👍';
+            const usersJson = JSON.stringify(users);
+            const reactionData = JSON.stringify({ ...r, count, users });
+            return `<span class="reaction-item" data-reaction-emoji="${emoji}" data-reaction-users='${usersJson}' onclick="showReactionDetails(this, ${reactionData.replace(/"/g, '&quot;')})">${emoji} ${count}</span>`;
+        }).join(' ');
+        
+        return `<div class="message-reactions">${reactionsHtml}</div>`;
+    }
+
+    function groupReactionsClientSide(reactions) {
+        if (!reactions || reactions.length === 0) return [];
+        
+        const emojiGroups = {};
+        for (const reaction of reactions) {
+            const emoji = reaction.emoji;
+            const user = reaction.user;
+            if (emoji) {
+                if (!emojiGroups[emoji]) {
+                    emojiGroups[emoji] = { count: 0, users: [] };
+                }
+                emojiGroups[emoji].count += 1;
+                if (user && !emojiGroups[emoji].users.includes(user)) {
+                    emojiGroups[emoji].users.push(user);
+                }
+            }
+        }
+        
+        return Object.keys(emojiGroups).map(emoji => ({
+            emoji: emoji,
+            count: emojiGroups[emoji].count,
+            users: emojiGroups[emoji].users
+        }));
+    }
+
+    // Setup event listeners
+    setupMessageEventListeners();
+
+    // Socket listeners for real-time updates
+    // Helper to run socket setup when socket is available (some scripts run before socket initialization)
+    function whenSocketReady(cb) {
+        try {
+            if (window.socket) return cb(window.socket);
+            const iv = setInterval(function() {
+                if (window.socket) {
+                    clearInterval(iv);
+                    try { cb(window.socket); } catch (e) { console.error('whenSocketReady cb error', e); }
+                }
+            }, 50);
+            // give up after a few seconds to avoid infinite interval
+            setTimeout(function() { clearInterval(iv); }, 5000);
+        } catch (e) { console.error('whenSocketReady error', e); }
+    }
+
+    whenSocketReady(function(socket) {
+        socket.on('message_updated', function(data) {
+            const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
+            if (messageElement) {
+                const textElement = messageElement.querySelector('.message-text');
+                if (textElement) {
+                    textElement.innerHTML = data.text + ' <span class="text-muted ms-1">(edited)</span>';
+                }
+                updateReactionsDisplay(messageElement, data.reactions);
+            }
+        });
+
+        socket.on('message_deleted', function(data) {
+            const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
+            if (messageElement) {
+                messageElement.style.opacity = '0.5';
+                const textElement = messageElement.querySelector('.message-text');
+                if (textElement) {
+                    textElement.innerHTML = '<em>Message deleted</em>';
+                }
+            }
+        });
+    });
+
+</script>
+<script>
 document.addEventListener('DOMContentLoaded', function() {
   (async function() {
-    // Socket.IO setup
-    if (!window.socket) {
-        window.socket = io();
-    }
+    // Socket.IO setup - defensive early init to avoid 'socket is not defined' when other scripts
+    // reference `socket` before it is created. If Socket.IO library isn't loaded yet, leave
+    // creation to other init code but create a placeholder to avoid ReferenceError.
+    try {
+        if (!window.socket) {
+            if (typeof io === 'function') {
+                window.socket = io();
+            } else {
+                // Create a minimal stub that queues calls until real socket attaches.
+                window.socket = (function() {
+                    const q = [];
+                    const stub = {
+                        _isStub: true,
+                        emit: function() { q.push({ type: 'emit', args: Array.from(arguments) }); },
+                        on: function() { q.push({ type: 'on', args: Array.from(arguments) }); },
+                        off: function() { q.push({ type: 'off', args: Array.from(arguments) }); },
+                        _flushTo: function(realSocket) {
+                            try {
+                                q.forEach(entry => {
+                                    if (entry.type === 'emit' && typeof realSocket.emit === 'function') realSocket.emit.apply(realSocket, entry.args);
+                                    if (entry.type === 'on' && typeof realSocket.on === 'function') realSocket.on.apply(realSocket, entry.args);
+                                    if (entry.type === 'off' && typeof realSocket.off === 'function') realSocket.off.apply(realSocket, entry.args);
+                                });
+                            } catch (e) { console.warn('Error flushing stub socket queue', e); }
+                        }
+                    };
+                    return stub;
+                })();
+        
+        // 8. Global scroll lock for mobile input focus
+        if (isMobile()) {
+            let scrollLockActive = false;
+            let lockedScrollY = 0;
+            
+            // Function to lock scroll at current position
+            const lockScroll = () => {
+                lockedScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                scrollLockActive = true;
+                
+                // Override scrollTo while lock is active
+                const originalScrollTo = window.scrollTo;
+                window.scrollTo = function(x, y) {
+                    if (!scrollLockActive) {
+                        return originalScrollTo.call(this, x, y);
+                    }
+                    // Ignore scroll commands while locked
+                    return;
+                };
+                
+                // Listen for any scroll attempts and reset position
+                const scrollHandler = () => {
+                    if (scrollLockActive) {
+                        const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                        if (Math.abs(currentScrollY - lockedScrollY) > 2) {
+                            originalScrollTo.call(window, 0, lockedScrollY);
+                        }
+                    }
+                };
+                
+                window.addEventListener('scroll', scrollHandler, { passive: false });
+                
+                // Restore scroll function after delay
+                setTimeout(() => {
+                    scrollLockActive = false;
+                    window.scrollTo = originalScrollTo;
+                    window.removeEventListener('scroll', scrollHandler);
+                }, 500);
+            };
+            
+            // Apply scroll lock to chat inputs
+            document.addEventListener('focusin', (e) => {
+                if (e.target && (e.target.id === 'dmChatInput' || 
+                    e.target.id === 'assistantChatInput' || 
+                    e.target.id === 'groupChatInput')) {
+                    
+                    // Add class to body for CSS-based fixes
+                    document.body.classList.add('chat-input-focused');
+                    
+                    lockScroll();
+                }
+            }, true);
+            
+            // Remove class when focus leaves chat inputs
+            document.addEventListener('focusout', (e) => {
+                if (e.target && (e.target.id === 'dmChatInput' || 
+                    e.target.id === 'assistantChatInput' || 
+                    e.target.id === 'groupChatInput')) {
+                    
+                    setTimeout(() => {
+                        document.body.classList.remove('chat-input-focused');
+                    }, 200);
+                }
+            }, true);
+        }
+        
+        // 9. Ultra-aggressive input focus override (last resort)
+        if (isMobile()) {
+            // Wait for DOM to be ready, then override input behaviors
+            document.addEventListener('DOMContentLoaded', function() {
+                const chatInputs = ['dmChatInput', 'assistantChatInput', 'groupChatInput'];
+                
+                chatInputs.forEach(inputId => {
+                    const input = document.getElementById(inputId);
+                    if (input) {
+                        // Store original focus method
+                        const originalFocus = input.focus.bind(input);
+                        
+                        // Replace focus method completely
+                        input.focus = function(options) {
+                            const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                            
+                            // Temporarily lock body scroll
+                            const originalOverflow = document.body.style.overflow;
+                            const originalPosition = document.body.style.position;
+                            const originalTop = document.body.style.top;
+                            
+                            document.body.style.overflow = 'hidden';
+                            document.body.style.position = 'fixed';
+                            document.body.style.top = `-${scrollY}px`;
+                            document.body.style.width = '100%';
+                            
+                            // Call original focus
+                            setTimeout(() => {
+                                originalFocus.call(this, { preventScroll: true });
+                                
+                                // Restore body after focus
+                                setTimeout(() => {
+                                    document.body.style.overflow = originalOverflow;
+                                    document.body.style.position = originalPosition;
+                                    document.body.style.top = originalTop;
+                                    document.body.style.width = '';
+                                    window.scrollTo(0, scrollY);
+                                }, 50);
+                            }, 10);
+                        };
+                        
+                        // Also prevent click from scrolling
+                        input.addEventListener('click', function(e) {
+                            const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                            
+                            setTimeout(() => {
+                                const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                                if (Math.abs(newScrollY - scrollY) > 5) {
+                                    window.scrollTo(0, scrollY);
+                                }
+                            }, 10);
+                            
+                            setTimeout(() => {
+                                const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                                if (Math.abs(newScrollY - scrollY) > 5) {
+                                    window.scrollTo(0, scrollY);
+                                }
+                            }, 100);
+                        });
+                    }
+                });
+            });
+        }
+        
+        // 10. Comprehensive button and dropdown protection
+        if (isMobile()) {
+            // List of all interactive elements that might cause scroll
+            const interactiveSelectors = [
+                'button', '.btn', 'select', '.dropdown-toggle', '.nav-link',
+                '#dmSendBtn', '#assistantSendBtn', '#groupSendBtn', '#assistantClearBtn',
+                '#joinGroupBtn', '#leaveGroupBtn', '#addUserToGroupBtn',
+                '#dmUserSelect', '#currentGroupSelect', '#groupUserSelect'
+            ];
+            
+            // Function to protect an element from causing scroll
+            const protectElement = (element) => {
+                if (!element) return;
+                
+                // Add click event listener to prevent scroll
+                element.addEventListener('click', function(e) {
+                    const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                    
+                    // Multiple restoration attempts
+                    const restoreScroll = () => {
+                        const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                        if (Math.abs(newScrollY - scrollY) > 3) {
+                            window.scrollTo(0, scrollY);
+                        }
+                    };
+                    
+                    setTimeout(restoreScroll, 10);
+                    setTimeout(restoreScroll, 50);
+                    setTimeout(restoreScroll, 150);
+                    setTimeout(restoreScroll, 300);
+                    setTimeout(restoreScroll, 500);
+                }, true);
+                
+                // Add focus event listener
+                element.addEventListener('focus', function(e) {
+                    const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                    
+                    setTimeout(() => {
+                        const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                        if (Math.abs(newScrollY - scrollY) > 3) {
+                            window.scrollTo(0, scrollY);
+                        }
+                    }, 10);
+                }, true);
+                
+                // Add touchstart event listener for mobile
+                element.addEventListener('touchstart', function(e) {
+                    const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                    
+                    setTimeout(() => {
+                        const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                        if (Math.abs(newScrollY - scrollY) > 3) {
+                            window.scrollTo(0, scrollY);
+                        }
+                    }, 10);
+                }, { passive: true });
+            };
+            
+            // Protect elements on DOM ready and when they're added
+            const protectElements = () => {
+                interactiveSelectors.forEach(selector => {
+                    if (selector.startsWith('#')) {
+                        // Single element by ID
+                        const element = document.querySelector(selector);
+                        if (element) protectElement(element);
+                    } else {
+                        // Multiple elements by selector
+                        const elements = document.querySelectorAll(selector);
+                        elements.forEach(protectElement);
+                    }
+                });
+            };
+            
+            // Initial protection
+            document.addEventListener('DOMContentLoaded', protectElements);
+            
+            // Re-protect when new elements are added (for dynamic content)
+            const observer = new MutationObserver(function(mutations) {
+                let needsProtection = false;
+                mutations.forEach(function(mutation) {
+                    if (mutation.addedNodes.length > 0) {
+                        needsProtection = true;
+                    }
+                });
+                
+                if (needsProtection) {
+                    setTimeout(protectElements, 50);
+                }
+            });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        }
+        
+        // 11. Immediate scroll prevention for mobile (no flashing)
+        if (isMobile()) {
+            // Override window.scrollTo immediately to prevent ANY scrolling
+            const originalScrollTo = window.scrollTo;
+            let allowScroll = false;
+            let currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+            
+            // Track current position
+            window.addEventListener('scroll', function() {
+                if (allowScroll) {
+                    currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                }
+            }, { passive: true });
+            
+            // Override scrollTo to prevent unwanted scrolling
+            window.scrollTo = function(x, y) {
+                // If arguments are passed as object
+                if (typeof x === 'object' && x !== null) {
+                    y = x.top || x.y || 0;
+                    x = x.left || x.x || 0;
+                }
+                
+                // Block scroll to top unless explicitly allowed
+                if (y === 0 && currentScrollY > 30 && !allowScroll) {
+                    console.log('Blocked scroll-to-top, staying at:', currentScrollY);
+                    return; // Block the scroll completely
+                }
+                
+                // Allow other scroll operations
+                allowScroll = true;
+                const result = originalScrollTo.call(this, x, y);
+                setTimeout(() => { allowScroll = false; }, 100);
+                return result;
+            };
+            
+            // Prevent default behaviors that cause scrolling
+            const preventScrollingBehavior = function(e) {
+                // Get current position BEFORE any potential scroll
+                const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                
+                // For buttons and interactive elements, prevent default if it would cause scroll
+                if (e.target.matches('button, .btn, select, .dropdown-toggle, input[type="submit"], input[type="button"]') ||
+                    e.target.closest('button, .btn, select, .dropdown-toggle, input[type="submit"], input[type="button"]')) {
+                    
+                    // Check if this element has href="#" which would cause scroll to top
+                    const element = e.target.closest('a[href="#"]');
+                    if (element) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                    }
+                    
+                    // For Bootstrap elements, prevent hash changes
+                    const bootstrapElement = e.target.closest('[data-bs-toggle]');
+                    if (bootstrapElement) {
+                        const href = bootstrapElement.getAttribute('href');
+                        if (href === '#' || !href) {
+                            e.preventDefault();
+                        }
+                    }
+                }
+            };
+            
+            // Add the preventing handler in capture phase (before any other handlers)
+            document.addEventListener('click', preventScrollingBehavior, true);
+            document.addEventListener('touchstart', preventScrollingBehavior, true);
+            
+            // Additional prevention for focus events
+            document.addEventListener('focus', function(e) {
+                if (e.target.matches('input, textarea, select, button')) {
+                    // Ensure scroll position doesn't change
+                    const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                    
+                    // Temporarily lock the position
+                    allowScroll = true;
+                    setTimeout(() => {
+                        const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                        if (newScrollY !== scrollY) {
+                            originalScrollTo.call(window, 0, scrollY);
+                        }
+                        allowScroll = false;
+                    }, 1);
+                }
+            }, true);
+        }
+            }
+        }
+    } catch (e) { console.warn('Socket init guard error', e); }
     const socket = window.socket;
     let currentGroup = null;
     let groupMembers = [];
@@ -101,6 +1635,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Restore state on page load ---
     await loadChatState();
 
+    // Mark unread as read when user views the chat page
+    try {
+        fetch('/chat/reset-unread', { method: 'POST' }).then(r => {
+            if (!r.ok) console.warn('Failed to reset unread on view');
+        }).catch(e => console.warn('Error resetting unread on view', e));
+    } catch (e) {
+        console.warn('Error sending reset unread request', e);
+    }
+
     // Populate DM and group user selects
     fetch('/assistant/chat-users').then(r => r.json()).then(data => {
         const dmUserSelect = document.getElementById('dmUserSelect');
@@ -121,6 +1664,35 @@ document.addEventListener('DOMContentLoaded', function() {
         // --- DM tab auto-select logic from URL ---
         const params = new URLSearchParams(window.location.search);
         const dmParam = params.get('dm');
+        // If opened with focus param from unread link, attempt to focus that conversation
+        const focusParam = params.get('focus');
+        if (focusParam) {
+            try {
+                const focus = JSON.parse(decodeURIComponent(focusParam));
+                if (focus && focus.type === 'dm' && focus.id) {
+                    if (Array.from(dmUserSelect.options).some(opt => opt.value === focus.id)) {
+                        dmUserSelect.value = focus.id;
+                        const dmTab = document.getElementById('dm-tab');
+                        if (dmTab) dmTab.click();
+                    }
+                } else if (focus && focus.type === 'group' && focus.id) {
+                    // if group exists in select, select it and open group tab
+                    const gSelect = document.getElementById('currentGroupSelect');
+                    if (gSelect && Array.from(gSelect.options).some(opt => opt.value === focus.id)) {
+                        gSelect.value = focus.id;
+                        const groupTab = document.getElementById('group-tab');
+                        if (groupTab) groupTab.click();
+                        currentGroup = focus.id;
+                        loadGroupHistory();
+                    } else {
+                        // If group not in select yet, set currentGroup and try to load later when groups populated
+                        currentGroup = focus.id;
+                    }
+                }
+            } catch (e) {
+                console.warn('Invalid focus param', e);
+            }
+        }
         if (dmParam && Array.from(dmUserSelect.options).some(opt => opt.value === dmParam)) {
             dmUserSelect.value = dmParam;
             // Switch to DM tab
@@ -164,7 +1736,9 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(rejoinGroupsOnLoad, 500);
 
     // --- Assistant Chat History ---
-    function loadAssistantHistory() {
+    function loadAssistantHistory(options) {
+        options = options || {};
+        const preferLastRead = options.preferLastRead !== false; // default true
         const assistantChatContainer = document.getElementById('assistantChatContainer');
         assistantChatContainer.innerHTML = '';
         fetch('/assistant/history')
@@ -172,16 +1746,47 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 (data.history || []).forEach(msg => {
                     const div = document.createElement('div');
-                    div.className = 'mb-2';
-                    div.innerHTML = `<strong>${msg.sender === 'assistant' ? 'Assistant' : 'You'}:</strong> <span>${msg.text}</span>`;
+                    div.className = 'mb-2 chat-message';
+                    div.setAttribute('data-message-id', msg.id || '');
+                    div.setAttribute('data-sender', msg.sender);
+                    div.innerHTML = `
+                        <strong>${msg.sender === 'assistant' ? 'Assistant' : 'You'}:</strong> 
+                        <span class="message-text">${msg.text}</span>
+                        ${msg.edited ? '<span class="text-muted ms-1">(edited)</span>' : ''}
+                    `;
+                    if (msg.reactions && msg.reactions.length > 0) {
+                        const groupedReactions = groupReactionsClientSide(msg.reactions);
+                        div.innerHTML += generateReactionsHTML(groupedReactions);
+                    }
                     assistantChatContainer.appendChild(div);
                 });
-                assistantChatContainer.scrollTop = assistantChatContainer.scrollHeight;
+                // Setup read-tracking for assistant container
+                setupReadTracking(assistantChatContainer, 'assistant');
+
+                // Auto-scroll logic: try to restore last-read position for assistant chat
+                try {
+                    const key = storageKeyFor('assistant');
+                    const lastRead = localStorage.getItem(key);
+                    if (preferLastRead && lastRead) {
+                        const el = assistantChatContainer.querySelector(`[data-message-id="${lastRead}"]`);
+                        if (el) {
+                            const next = el.nextElementSibling || el;
+                            next.scrollIntoView({ block: 'center' });
+                        } else {
+                            assistantChatContainer.scrollTop = assistantChatContainer.scrollHeight;
+                        }
+                    } else {
+                        // Either no stored lastRead or the caller asked to prefer bottom
+                        assistantChatContainer.scrollTop = assistantChatContainer.scrollHeight;
+                    }
+                } catch (e) { console.warn('assistant scroll restore failed', e); }
             });
     }
 
     // --- DM Chat History ---
-    function loadDmHistory() {
+    function loadDmHistory(options) {
+        options = options || {};
+        const preferLastRead = options.preferLastRead !== false; // default true
         const dmUserSelect = document.getElementById('dmUserSelect');
         const dmChatContainer = document.getElementById('dmChatContainer');
         dmChatContainer.innerHTML = '';
@@ -192,11 +1797,37 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 (data.history || []).forEach(msg => {
                     const div = document.createElement('div');
-                    div.className = 'mb-2';
-                    div.innerHTML = `<strong>${msg.sender === currentUsername ? 'You' : msg.sender}:</strong> <span>${msg.text}</span>`;
+                    div.className = 'mb-2 chat-message';
+                    div.setAttribute('data-message-id', msg.id || '');
+                    div.setAttribute('data-sender', msg.sender);
+                    div.innerHTML = `
+                        <strong>${msg.sender === currentUsername ? 'You' : msg.sender}:</strong> 
+                        <span class="message-text">${msg.text}</span>
+                        ${msg.edited ? '<span class="text-muted ms-1">(edited)</span>' : ''}
+                    `;
+                    if (msg.reactions && msg.reactions.length > 0) {
+                        const groupedReactions = groupReactionsClientSide(msg.reactions);
+                        div.innerHTML += generateReactionsHTML(groupedReactions);
+                    }
                     dmChatContainer.appendChild(div);
                 });
-                dmChatContainer.scrollTop = dmChatContainer.scrollHeight;
+                // Setup read-tracking for this DM and restore last-read
+                setupReadTracking(dmChatContainer, 'dm', recipient);
+                try {
+                    const key = storageKeyFor('dm', recipient);
+                    const lastRead = localStorage.getItem(key);
+                    if (preferLastRead && lastRead) {
+                        const el = dmChatContainer.querySelector(`[data-message-id="${lastRead}"]`);
+                        if (el) {
+                            const next = el.nextElementSibling || el;
+                            next.scrollIntoView({ block: 'center' });
+                        } else {
+                            dmChatContainer.scrollTop = dmChatContainer.scrollHeight;
+                        }
+                    } else {
+                        dmChatContainer.scrollTop = dmChatContainer.scrollHeight;
+                    }
+                } catch (e) { console.warn('dm scroll restore failed', e); }
             });
     }
 
@@ -213,15 +1844,36 @@ document.addEventListener('DOMContentLoaded', function() {
             // Append the message to the DM chat container
             const dmChatContainer = document.getElementById('dmChatContainer');
             const div = document.createElement('div');
-            div.className = 'mb-2';
-            div.innerHTML = `<strong>${msg.sender === currentUsername ? 'You' : msg.sender}:</strong> <span>${msg.text}</span>`;
+            div.className = 'mb-2 chat-message';
+            div.setAttribute('data-message-id', msg.id || '');
+            div.setAttribute('data-sender', msg.sender);
+            div.innerHTML = `
+                <strong>${msg.sender === currentUsername ? 'You' : msg.sender}:</strong> 
+                <span class="message-text">${msg.text}</span>
+            `;
+            if (msg.reactions && msg.reactions.length > 0) {
+                const groupedReactions = groupReactionsClientSide(msg.reactions);
+                div.innerHTML += generateReactionsHTML(groupedReactions);
+            }
             dmChatContainer.appendChild(div);
-            dmChatContainer.scrollTop = dmChatContainer.scrollHeight;
+            // Ensure new message is observed for read-tracking
+            try { if (dmChatContainer._readObserver) dmChatContainer._readObserver.observe(div); } catch (e) {}
+
+            // Auto-scroll only if user is near bottom
+            if (isNearBottom(dmChatContainer)) {
+                dmChatContainer.scrollTop = dmChatContainer.scrollHeight;
+                // update last-read to this message
+                try { localStorage.setItem(storageKeyFor('dm', dmUserSelect.value), msg.id); } catch (e) {}
+            } else {
+                // leave it; an unread marker could be shown (left as future improvement)
+            }
         }
     });
 
     // --- Group Chat History ---
-    function loadGroupHistory() {
+    function loadGroupHistory(options) {
+        options = options || {};
+        const preferLastRead = options.preferLastRead !== false; // default true
         const groupChatContainer = document.getElementById('groupChatContainer');
         groupChatContainer.innerHTML = '';
         if (!currentGroup) return;
@@ -230,11 +1882,37 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 (data.history || []).forEach(msg => {
                     const div = document.createElement('div');
-                    div.className = 'mb-2';
-                    div.innerHTML = `<strong>${msg.sender}:</strong> <span>${msg.text}</span>`;
+                    div.className = 'mb-2 chat-message';
+                    div.setAttribute('data-message-id', msg.id || '');
+                    div.setAttribute('data-sender', msg.sender);
+                    div.innerHTML = `
+                        <strong>${msg.sender}:</strong> 
+                        <span class="message-text">${msg.text}</span>
+                        ${msg.edited ? '<span class="text-muted ms-1">(edited)</span>' : ''}
+                    `;
+                    if (msg.reactions && msg.reactions.length > 0) {
+                        const groupedReactions = groupReactionsClientSide(msg.reactions);
+                        div.innerHTML += generateReactionsHTML(groupedReactions);
+                    }
                     groupChatContainer.appendChild(div);
                 });
-                groupChatContainer.scrollTop = groupChatContainer.scrollHeight;
+                // Setup read-tracking for this group and restore last-read
+                setupReadTracking(groupChatContainer, 'group', currentGroup);
+                try {
+                    const key = storageKeyFor('group', currentGroup);
+                    const lastRead = localStorage.getItem(key);
+                    if (preferLastRead && lastRead) {
+                        const el = groupChatContainer.querySelector(`[data-message-id="${lastRead}"]`);
+                        if (el) {
+                            const next = el.nextElementSibling || el;
+                            next.scrollIntoView({ block: 'center' });
+                        } else {
+                            groupChatContainer.scrollTop = groupChatContainer.scrollHeight;
+                        }
+                    } else {
+                        groupChatContainer.scrollTop = groupChatContainer.scrollHeight;
+                    }
+                } catch (e) { console.warn('group scroll restore failed', e); }
             });
     }
 
@@ -321,19 +1999,41 @@ document.addEventListener('DOMContentLoaded', function() {
         groupSendBtn.addEventListener('click', function() {
             const text = groupChatInput.value.trim();
             if (text && currentGroup && groupMembers.includes(currentUsername)) {
-                socket.emit('group_chat_message', { group: currentGroup, text, sender: currentUsername });
-                groupChatInput.value = '';
-                loadGroupHistory(); // Reload group history after sending
+                groupSendBtn.disabled = true;
+                try {
+                    socket.emit('group_chat_message', { group: currentGroup, text, sender: currentUsername });
+                    groupChatInput.value = '';
+                    // give the server a moment to persist/broadcast
+                    // Force preferLastRead:false so the user sees the newest message after sending
+                    setTimeout(() => loadGroupHistory({ preferLastRead: false }), 150);
+                } finally {
+                    groupSendBtn.disabled = false;
+                }
             }
         });
     }
     socket.on('group_chat_message', function(msg) {
         if (msg.group === currentGroup && groupMembers.includes(currentUsername)) {
             const div = document.createElement('div');
-            div.className = 'mb-2';
-            div.innerHTML = `<strong>${msg.sender}:</strong> <span>${msg.text}</span> <span class="text-muted" style="font-size:0.8em;">${new Date(msg.timestamp).toLocaleTimeString()}</span>`;
+            div.className = 'mb-2 chat-message';
+            div.setAttribute('data-message-id', msg.id || '');
+            div.setAttribute('data-sender', msg.sender);
+            div.innerHTML = `
+                <strong>${msg.sender}:</strong> 
+                <span class="message-text">${msg.text}</span> 
+                <span class="text-muted" style="font-size:0.8em;">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+            `;
+            if (msg.reactions && msg.reactions.length > 0) {
+                const groupedReactions = groupReactionsClientSide(msg.reactions);
+                div.innerHTML += generateReactionsHTML(groupedReactions);
+            }
             groupChatContainer.appendChild(div);
-            groupChatContainer.scrollTop = groupChatContainer.scrollHeight;
+            try { if (groupChatContainer._readObserver) groupChatContainer._readObserver.observe(div); } catch (e) {}
+
+            if (isNearBottom(groupChatContainer)) {
+                groupChatContainer.scrollTop = groupChatContainer.scrollHeight;
+                try { localStorage.setItem(storageKeyFor('group', currentGroup), msg.id); } catch (e) {}
+            }
         }
     });
     // Assistant tab logic: send message to /assistant/ask and display response
@@ -347,8 +2047,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!question) return;
             // Show user message
             const userDiv = document.createElement('div');
-            userDiv.className = 'mb-2';
-            userDiv.innerHTML = `<strong>You:</strong> <span>${question}</span>`;
+            userDiv.className = 'mb-2 chat-message';
+            userDiv.setAttribute('data-sender', currentUsername);
+            userDiv.innerHTML = `<strong>You:</strong> <span class="message-text">${question}</span>`;
             assistantChatContainer.appendChild(userDiv);
             assistantChatInput.value = '';
             assistantChatContainer.scrollTop = assistantChatContainer.scrollHeight;
@@ -360,10 +2061,15 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             const data = await response.json();
             const botDiv = document.createElement('div');
-            botDiv.className = 'mb-2';
-            botDiv.innerHTML = `<strong>Assistant:</strong> <span>${data.text || data.message || 'No response.'}</span>`;
+            botDiv.className = 'mb-2 chat-message';
+            botDiv.setAttribute('data-sender', 'assistant');
+            botDiv.innerHTML = `<strong>Assistant:</strong> <span class="message-text">${data.text || data.message || 'No response.'}</span>`;
             assistantChatContainer.appendChild(botDiv);
-            assistantChatContainer.scrollTop = assistantChatContainer.scrollHeight;
+            try { if (assistantChatContainer._readObserver) assistantChatContainer._readObserver.observe(botDiv); } catch (e) {}
+            if (isNearBottom(assistantChatContainer)) {
+                assistantChatContainer.scrollTop = assistantChatContainer.scrollHeight;
+                try { localStorage.setItem(storageKeyFor('assistant'), data.id || ''); } catch (e) {}
+            }
         });
         assistantChatInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') assistantSendBtn.click();
@@ -375,11 +2081,12 @@ document.addEventListener('DOMContentLoaded', function() {
             assistantChatContainer.innerHTML = '';
             const resp = await fetch('/assistant/clear-assistant-history', { method: 'POST' });
             const data = await resp.json();
-            if (data.success) {
-                // Add a small delay to ensure backend writes are complete
-                setTimeout(() => {
-                    loadAssistantHistory();
-                }, 200);
+                if (data.success) {
+                    // Add a small delay to ensure backend writes are complete
+                    // After clearing, prefer showing the latest (bottom)
+                    setTimeout(() => {
+                        loadAssistantHistory({ preferLastRead: false });
+                    }, 200);
             } else {
                 alert('Failed to clear assistant history.');
             }
@@ -395,21 +2102,29 @@ document.addEventListener('DOMContentLoaded', function() {
             const recipient = dmUserSelect ? dmUserSelect.value : null;
             const message = dmChatInput.value.trim();
             if (!recipient || !message) return;
-            // Show user message
-            const userDiv = document.createElement('div');
-            userDiv.className = 'mb-2';
-            userDiv.innerHTML = `<strong>You:</strong> <span>${message}</span>`;
-            dmChatContainer.appendChild(userDiv);
-            dmChatInput.value = '';
-            dmChatContainer.scrollTop = dmChatContainer.scrollHeight;
-            // Send to backend
-            const response = await fetch('/chat/dm', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ recipient, message })
-            });
-            // No need to append any bot/assistant message to DM chat
-            loadDmHistory(); // Reload DM history after sending
+                // Disable the send button while the request is in-flight to avoid duplicates
+                dmSendBtn.disabled = true;
+                try {
+                    const response = await fetch('/chat/dm', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ recipient, message })
+                    });
+                    if (!response.ok) {
+                        console.warn('Failed to send DM', response.status);
+                    }
+                    // Clear the input and reload authoritative history from the server.
+                    // We avoid appending the message locally here to prevent duplication
+                    // when loadDmHistory re-renders the full history.
+                    dmChatInput.value = '';
+                    // Give the server/socket a small moment to broadcast, then reload
+                    // Force preferLastRead:false so the user sees the newest message after sending
+                    setTimeout(() => loadDmHistory({ preferLastRead: false }), 150);
+                } catch (e) {
+                    console.error('Error sending DM', e);
+                } finally {
+                    dmSendBtn.disabled = false;
+                }
         });
         dmChatInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {

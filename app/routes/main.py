@@ -772,6 +772,7 @@ def chat_page():
 @login_required
 def dm_history():
     from flask_login import current_user
+    from app import load_user_chat_history
     username = current_user.username
     other_user = request.args.get('user')
     
@@ -779,15 +780,9 @@ def dm_history():
     if not validate_user_in_same_team(other_user):
         return jsonify({'history': []})  # Return empty history for users from different teams
     
-    history = load_chat_history()
-    filtered = []
-    for msg in history:
-        if (
-            (msg.get('sender') == username and msg.get('recipient') == other_user) or
-            (msg.get('sender') == other_user and msg.get('recipient') == username)
-        ):
-            filtered.append(msg)
-    return jsonify({'history': filtered})
+    team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+    history = load_user_chat_history(username, other_user, team_number)
+    return jsonify({'history': history})
 
 @bp.route('/chat/group-history')
 @login_required
@@ -811,12 +806,14 @@ def send_dm():
         return {'success': False, 'message': 'Cannot send message to user from different scouting team.'}, 403
     
     from app import save_chat_message
-    import datetime
+    import uuid
     message = {
+        'id': str(uuid.uuid4()),
         'sender': sender,
         'recipient': recipient,
         'text': text,
-        'timestamp': datetime.datetime.utcnow().isoformat()
+        'timestamp': datetime.utcnow().isoformat(),
+        'reactions': []
     }
     save_chat_message(message)
     # Emit real-time DM event to both sender and recipient
@@ -824,6 +821,211 @@ def send_dm():
     socketio.emit('dm_message', message, room=sender)
     socketio.emit('dm_message', message, room=recipient)
     return {'success': True, 'message': 'Message sent.'}
+
+@bp.route('/chat/edit-message', methods=['POST'])
+@login_required
+def edit_message():
+    from flask_login import current_user
+    import json
+    data = request.get_json()
+    message_id = data.get('message_id')
+    new_text = data.get('text')
+    
+    if not message_id or not new_text:
+        return {'success': False, 'message': 'Message ID and text required.'}, 400
+    
+    from app import find_message_in_user_files
+    team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+    username = current_user.username
+    
+    # Find the message across all possible files
+    message_info = find_message_in_user_files(message_id, username, team_number)
+    
+    if not message_info:
+        return {'success': False, 'message': 'Message not found.'}, 404
+    
+    message = message_info['message']
+    
+    # Check if user owns this message (only user messages can be edited, not assistant responses)
+    if message.get('sender') != username:
+        return {'success': False, 'message': 'Cannot edit other users messages.'}, 403
+    
+    if message.get('sender') == 'assistant':
+        return {'success': False, 'message': 'Cannot edit assistant messages.'}, 403
+    
+    # Update the message
+    history = message_info['history']
+    history[message_info['index']]['text'] = new_text
+    history[message_info['index']]['edited'] = True
+    history[message_info['index']]['edited_timestamp'] = datetime.utcnow().isoformat()
+    
+    # Save the updated history
+    message_info['save_func'](history)
+    
+    # Emit socket event for real-time updates
+    from app import socketio
+    emit_data = {
+        'message_id': message_id, 
+        'text': new_text, 
+        'reactions': message.get('reactions', [])
+    }
+    
+    message_type = message_info['file_type']
+    if message_type == 'assistant':
+        socketio.emit('message_updated', emit_data, room=username)
+    elif message_type == 'group' and message.get('group'):
+        socketio.emit('message_updated', emit_data, room=message['group'])
+    elif message_type == 'dm' and message.get('recipient'):
+        # Emit to both sender and recipient for DM messages
+        socketio.emit('message_updated', emit_data, room=message['sender'])
+        socketio.emit('message_updated', emit_data, room=message['recipient'])
+    
+    return {'success': True, 'message': 'Message edited.'}
+
+@bp.route('/chat/delete-message', methods=['POST'])
+@login_required
+def delete_message():
+    from flask_login import current_user
+    import json
+    data = request.get_json()
+    message_id = data.get('message_id')
+    
+    if not message_id:
+        return {'success': False, 'message': 'Message ID required.'}, 400
+    
+    from app import find_message_in_user_files
+    team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+    username = current_user.username
+    
+    # Find the message across all possible files
+    message_info = find_message_in_user_files(message_id, username, team_number)
+    
+    if not message_info:
+        return {'success': False, 'message': 'Message not found.'}, 404
+    
+    message = message_info['message']
+    
+    # Check if user owns this message (only user messages can be deleted, not assistant responses)
+    if message.get('sender') != username:
+        return {'success': False, 'message': 'Cannot delete other users messages.'}, 403
+    
+    if message.get('sender') == 'assistant':
+        return {'success': False, 'message': 'Cannot delete assistant messages.'}, 403
+    
+    # Remove the message
+    history = message_info['history']
+    history.pop(message_info['index'])
+    
+    # Save the updated history
+    message_info['save_func'](history)
+    
+    # Emit socket event for real-time updates
+    from app import socketio
+    emit_data = {'message_id': message_id}
+    
+    message_type = message_info['file_type']
+    if message_type == 'assistant':
+        socketio.emit('message_deleted', emit_data, room=username)
+    elif message_type == 'group' and message.get('group'):
+        socketio.emit('message_deleted', emit_data, room=message['group'])
+    elif message_type == 'dm' and message.get('recipient'):
+        # Emit to both sender and recipient for DM messages
+        socketio.emit('message_deleted', emit_data, room=message['sender'])
+        socketio.emit('message_deleted', emit_data, room=message['recipient'])
+    
+    return {'success': True, 'message': 'Message deleted.'}
+
+@bp.route('/chat/react-message', methods=['POST'])
+@login_required
+def react_to_message():
+    from flask_login import current_user
+    import json
+    data = request.get_json()
+    message_id = data.get('message_id')
+    emoji = data.get('emoji')
+    
+    if not message_id or not emoji:
+        return {'success': False, 'message': 'Message ID and emoji required.'}, 400
+    
+    from app import find_message_in_user_files
+    team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+    username = current_user.username
+    
+    # Find the message across all possible files
+    message_info = find_message_in_user_files(message_id, username, team_number)
+    
+    if not message_info:
+        return {'success': False, 'message': 'Message not found.'}, 404
+    
+    message = message_info['message']
+    
+    # Update reactions
+    history = message_info['history']
+    if 'reactions' not in history[message_info['index']]:
+        history[message_info['index']]['reactions'] = []
+    
+    updated_reactions = toggle_reaction(history[message_info['index']]['reactions'], username, emoji)
+    history[message_info['index']]['reactions'] = updated_reactions
+    
+    # Save the updated history
+    message_info['save_func'](history)
+    
+    # Group reactions by emoji with counts
+    reaction_summary = group_reactions(updated_reactions)
+    
+    # Emit socket event for real-time updates
+    from app import socketio
+    emit_data = {
+        'message_id': message_id,
+        'reactions': reaction_summary
+    }
+    
+    message_type = message_info['file_type']
+    if message_type == 'assistant':
+        socketio.emit('message_updated', emit_data, room=username)
+    elif message_type == 'group' and message.get('group'):
+        socketio.emit('message_updated', emit_data, room=message['group'])
+    elif message_type == 'dm' and message.get('recipient'):
+        # Emit to both sender and recipient for DM messages
+        socketio.emit('message_updated', emit_data, room=message['sender'])
+        socketio.emit('message_updated', emit_data, room=message['recipient'])
+    
+    return {'success': True, 'reactions': reaction_summary}
+
+def toggle_reaction(reactions, username, emoji):
+    """Toggle a user's reaction with a specific emoji"""
+    # Find existing reaction by this user with this emoji
+    existing = next((r for r in reactions if r.get('user') == username and r.get('emoji') == emoji), None)
+    
+    if existing:
+        # Remove existing reaction (toggle off)
+        reactions.remove(existing)
+    else:
+        # Add new reaction
+        reactions.append({
+            'user': username,
+            'emoji': emoji,
+            'timestamp': datetime.utcnow().isoformat()
+        })
+    
+    return reactions
+
+def group_reactions(reactions):
+    """Group reactions by emoji and count them, including user lists"""
+    emoji_groups = {}
+    for reaction in reactions:
+        emoji = reaction.get('emoji')
+        user = reaction.get('user')
+        if emoji:
+            if emoji not in emoji_groups:
+                emoji_groups[emoji] = {'count': 0, 'users': []}
+            emoji_groups[emoji]['count'] += 1
+            if user and user not in emoji_groups[emoji]['users']:
+                emoji_groups[emoji]['users'].append(user)
+    
+    # Convert to list format expected by frontend
+    return [{'emoji': emoji, 'count': data['count'], 'users': data['users']} 
+            for emoji, data in emoji_groups.items()]
 
 def get_chat_folder():
     """Get the chat folder path and ensure it exists"""
@@ -834,7 +1036,35 @@ def get_chat_folder():
 
 def get_user_chat_state_file(username):
     """Get the path to a user's chat state file"""
-    return os.path.join(get_chat_folder(), f'chat_state_{username}.json')
+    # Prefer to place user chat state files under instance/chat/users/<scouting_team_number>/
+    try:
+        team_segment = 'no_team'
+        # Try to resolve the user's scouting team from the database first
+        try:
+            from app.models import User
+            user = User.query.filter_by(username=username).first()
+            if user and getattr(user, 'scouting_team_number', None):
+                team_segment = str(user.scouting_team_number)
+        except Exception:
+            # Fallback to current_user if DB lookup is not available in this context
+            try:
+                from flask_login import current_user
+                if current_user and getattr(current_user, 'scouting_team_number', None):
+                    team_segment = str(current_user.scouting_team_number)
+            except Exception:
+                pass
+
+        folder = os.path.join(current_app.instance_path, 'chat', 'users', team_segment)
+        os.makedirs(folder, exist_ok=True)
+        return os.path.join(folder, f'chat_state_{username}.json')
+    except Exception:
+        # As a final fallback, use the original chat folder
+        fallback = os.path.join(get_chat_folder(), f'chat_state_{username}.json')
+        try:
+            os.makedirs(os.path.dirname(fallback), exist_ok=True)
+        except Exception:
+            pass
+        return fallback
 
 @bp.route('/chat/state', methods=['GET', 'POST'])
 @login_required
@@ -871,6 +1101,14 @@ def increment_unread():
     if os.path.exists(state_file):
         with open(state_file, 'r', encoding='utf-8') as f:
             state = json.load(f)
+    # If request provides a JSON body, merge lastSource info
+    try:
+        body = request.get_json(silent=True) or {}
+    except Exception:
+        body = {}
+    if body and isinstance(body, dict) and 'lastSource' in body:
+        state['lastSource'] = body.get('lastSource')
+    # increment unread count
     state['unreadCount'] = state.get('unreadCount', 0) + 1
     with open(state_file, 'w', encoding='utf-8') as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
@@ -888,6 +1126,12 @@ def reset_unread():
         with open(state_file, 'r', encoding='utf-8') as f:
             state = json.load(f)
     state['unreadCount'] = 0
+    # Clear pointer to last source when user opens/clears chat
+    if 'lastSource' in state:
+        try:
+            del state['lastSource']
+        except Exception:
+            state['lastSource'] = None
     with open(state_file, 'w', encoding='utf-8') as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
     return {'success': True}

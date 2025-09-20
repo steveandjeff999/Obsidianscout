@@ -45,13 +45,184 @@ def load_chat_history():
         except Exception:
             return []
 
-def save_chat_message(message):
+def save_chat_history(history):
+    """Save chat history to the main chat file"""
     with CHAT_HISTORY_LOCK:
         ensure_chat_folder()
-        history = load_chat_history()
-        history.append(message)
         with open(CHAT_HISTORY_FILE, 'w', encoding='utf-8') as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
+
+def get_user_chat_file_path(user1, user2, team_number):
+    """Get the file path for chat between two users"""
+    ensure_chat_folder()
+    
+    # Create team directory if it doesn't exist
+    team_dir = os.path.join(CHAT_FOLDER, 'users', str(team_number))
+    os.makedirs(team_dir, exist_ok=True)
+    
+    # Create consistent filename regardless of message direction
+    users = sorted([user1, user2])
+    filename = f"{users[0]}_{users[1]}_chat_history.json"
+    return os.path.join(team_dir, filename)
+
+def load_user_chat_history(user1, user2, team_number):
+    """Load chat history between two specific users"""
+    file_path = get_user_chat_file_path(user1, user2, team_number)
+    if not os.path.exists(file_path):
+        return []
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def save_user_chat_history(user1, user2, team_number, history):
+    """Save chat history between two specific users"""
+    file_path = get_user_chat_file_path(user1, user2, team_number)
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
+
+def get_assistant_chat_file_path(username, team_number):
+    """Get the file path for assistant chat for a specific user"""
+    ensure_chat_folder()
+    
+    # Create team directory if it doesn't exist
+    team_dir = os.path.join(CHAT_FOLDER, 'users', str(team_number))
+    os.makedirs(team_dir, exist_ok=True)
+    
+    filename = f"{username}_assistant_chat_history.json"
+    return os.path.join(team_dir, filename)
+
+def load_assistant_chat_history(username, team_number):
+    """Load assistant chat history for a specific user"""
+    file_path = get_assistant_chat_file_path(username, team_number)
+    if not os.path.exists(file_path):
+        return []
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def save_assistant_chat_history(username, team_number, history):
+    """Save assistant chat history for a specific user"""
+    file_path = get_assistant_chat_file_path(username, team_number)
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
+
+def find_message_in_user_files(message_id, username, team_number):
+    """Find a message across all user files where it might be stored"""
+    import os
+    import glob
+    
+    # Check the user's assistant file first
+    assistant_history = load_assistant_chat_history(username, team_number)
+    for i, msg in enumerate(assistant_history):
+        if msg.get('id') == message_id:
+            return {
+                'message': msg,
+                'index': i,
+                'history': assistant_history,
+                'file_type': 'assistant',
+                'file_path': get_assistant_chat_file_path(username, team_number),
+                'save_func': lambda hist: save_assistant_chat_history(username, team_number, hist)
+            }
+    
+    # Check all DM files involving this user
+    team_dir = os.path.join(CHAT_FOLDER, 'users', str(team_number))
+    if os.path.exists(team_dir):
+        # Find all chat history files that include this username
+        pattern = os.path.join(team_dir, f'*{username}*_chat_history.json')
+        dm_files = glob.glob(pattern)
+        
+        for file_path in dm_files:
+            if '_assistant_' not in file_path:  # Skip assistant files
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        dm_history = json.load(f)
+                    
+                    for i, msg in enumerate(dm_history):
+                        if msg.get('id') == message_id:
+                            # Extract users from filename to create save function
+                            filename = os.path.basename(file_path).replace('_chat_history.json', '')
+                            users = filename.split('_')
+                            if len(users) >= 2:
+                                user1, user2 = users[0], users[1]
+                                return {
+                                    'message': msg,
+                                    'index': i,
+                                    'history': dm_history,
+                                    'file_type': 'dm',
+                                    'file_path': file_path,
+                                    'save_func': lambda hist: save_user_chat_history(user1, user2, team_number, hist)
+                                }
+                except Exception:
+                    continue
+    
+    # Check main group chat file
+    history = load_chat_history()
+    for i, msg in enumerate(history):
+        if msg.get('id') == message_id:
+            return {
+                'message': msg,
+                'index': i,
+                'history': history,
+                'file_type': 'group',
+                'file_path': CHAT_HISTORY_FILE,
+                'save_func': lambda hist: save_chat_history(hist)
+            }
+    
+    return None
+
+def save_chat_message(message):
+    import uuid
+    from flask_login import current_user
+    
+    with CHAT_HISTORY_LOCK:
+        ensure_chat_folder()
+        
+        # Add unique ID to message if not present
+        if 'id' not in message:
+            message['id'] = str(uuid.uuid4())
+        
+        # Determine message type and save to appropriate file
+        if message.get('recipient') == 'assistant' or message.get('sender') == 'assistant':
+            # Assistant message - save to user-specific assistant file
+            if current_user and current_user.is_authenticated:
+                username = message.get('owner', current_user.username)
+                team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+                
+                history = load_assistant_chat_history(username, team_number)
+                history.append(message)
+                save_assistant_chat_history(username, team_number, history)
+            else:
+                # Fallback to main file if no user context
+                history = load_chat_history()
+                history.append(message)
+                save_chat_history(history)
+                
+        elif message.get('recipient') and message.get('sender'):
+            # DM message - save to user-specific DM file
+            if current_user and current_user.is_authenticated:
+                team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+                user1 = message['sender']
+                user2 = message['recipient']
+                
+                history = load_user_chat_history(user1, user2, team_number)
+                history.append(message)
+                save_user_chat_history(user1, user2, team_number, history)
+            else:
+                # Fallback to main file
+                history = load_chat_history()
+                history.append(message)
+                save_chat_history(history)
+        else:
+            # Group message or other - save to main file
+            history = load_chat_history()
+            history.append(message)
+            save_chat_history(history)
 
 # Socket.IO event handlers for assistant chat
 @socketio.on('assistant_chat_message')
@@ -158,6 +329,7 @@ def leave_group_room(data):
 
 @socketio.on('group_chat_message')
 def handle_group_chat_message(data):
+    import uuid
     from app.utils.team_isolation import validate_user_in_same_team
     user = None
     try:
@@ -182,7 +354,14 @@ def handle_group_chat_message(data):
         group_members[group] = valid_members
         
         if sender in valid_members:
-            message = {'sender': sender, 'group': group, 'text': text, 'timestamp': timestamp}
+            message = {
+                'id': str(uuid.uuid4()),
+                'sender': sender, 
+                'group': group, 
+                'text': text, 
+                'timestamp': timestamp,
+                'reactions': []
+            }
             save_chat_message(message)
             socketio.emit('group_chat_message', message, room=group)
 
