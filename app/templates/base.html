@@ -2,7 +2,7 @@
 <html lang="en" class="h-100">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
     <title>{% block title %}ObsidianScout{% endblock %}</title>
     
     {% if game_config %}
@@ -31,6 +31,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/search-enhancements.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-ui.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-chat.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- Dynamic Theme CSS Variables -->
@@ -66,6 +67,16 @@
             -webkit-text-fill-color: transparent;
             background-clip: text;
             text-fill-color: transparent;
+        }
+        /* Small red dot used on user dropdown to indicate unread chat */
+        .user-chat-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #dc3545; /* bootstrap danger */
+            margin-left: 6px;
+            vertical-align: middle;
         }
         
         /* Enhanced Search Component Styles */
@@ -552,41 +563,44 @@
         <!-- User dropdown -->
         <div class="ms-auto d-flex align-items-center flex-shrink-0">
             {% if current_user.is_authenticated %}
-            <div class="dropdown">
-                <button class="btn btn-outline-primary btn-sm d-flex align-items-center dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="fas fa-user-circle me-1"></i>
-                    <span class="d-none d-md-inline">{{ current_user.username }}</span>
-                </button>
-                <ul class="dropdown-menu dropdown-menu-end shadow">
-                    <li>
-                        <div class="dropdown-user-header d-flex align-items-center px-3 py-2">
-                            <div class="me-2">
-                                <i class="fas fa-user-circle fa-2x"></i>
-                            </div>
-                            <div class="flex-grow-1">
-                                <div class="user-name fw-semibold">{{ current_user.username or 'User' }}</div>
-                                <div class="user-roles text-muted small">
-                                    {% for role in current_user.roles %}
-                                        <span class="badge bg-secondary text-uppercase me-1">{{ role.name }}</span>
-                                    {% else %}
-                                        <span class="text-muted">No roles</span>
-                                    {% endfor %}
+                <div class="d-flex align-items-center">
+                    <button class="btn btn-outline-primary btn-sm d-flex align-items-center dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fas fa-user-circle me-1"></i>
+                        <span class="d-none d-md-inline">{{ current_user.username }}</span>
+                        <span id="userChatDot" class="user-chat-dot" style="display:none;" title="You have unread chat messages"></span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow">
+                        <li id="userDropdownUnreadItem" style="display:none;"><a id="openUnreadChatLink" class="dropdown-item py-2" href="{{ url_for('main.chat_page') }}"><i class="fas fa-comments me-2 text-danger"></i>Open unread chat</a></li>
+                        <li><hr class="dropdown-divider my-1"></li>
+                        <li>
+                            <div class="dropdown-user-header d-flex align-items-center px-3 py-2">
+                                <div class="me-2">
+                                    <i class="fas fa-user-circle fa-2x"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="user-name fw-semibold">{{ current_user.username or 'User' }}</div>
+                                    <div class="user-roles text-muted small">
+                                        {% for role in current_user.roles %}
+                                            <span class="badge bg-secondary text-uppercase me-1">{{ role.name }}</span>
+                                        {% else %}
+                                            <span class="text-muted">No roles</span>
+                                        {% endfor %}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </li>
-                    <li><hr class="dropdown-divider my-1"></li>
-                    <li><a class="dropdown-item py-2" href="{{ url_for('auth.profile') }}"><i class="fas fa-user-edit me-2 text-primary"></i>Profile</a></li>
-                    {% if user_has_role('admin') or user_has_role('analytics') %}
-                    <li><a class="dropdown-item py-2 {% if request.endpoint == 'main.config' %}active{% endif %}" href="{{ url_for('main.config') }}"><i class="fas fa-wrench me-2 text-primary"></i>Game Configuration</a></li>
-                    {% endif %}
-                    {% if user_has_role('superadmin') %}
-                    <li><a class="dropdown-item py-2" href="{{ url_for('db_admin.database_status') }}"><i class="fas fa-database me-2 text-success"></i>Database Admin</a></li>
-                    {% endif %}
-                    <li><hr class="dropdown-divider my-1"></li>
-                    <li><a class="dropdown-item py-2 text-danger" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
-                </ul>
-            </div>
+                        </li>
+                        <li><hr class="dropdown-divider my-1"></li>
+                        <li><a class="dropdown-item py-2" href="{{ url_for('auth.profile') }}"><i class="fas fa-user-edit me-2 text-primary"></i>Profile</a></li>
+                        {% if user_has_role('admin') or user_has_role('analytics') %}
+                        <li><a class="dropdown-item py-2 {% if request.endpoint == 'main.config' %}active{% endif %}" href="{{ url_for('main.config') }}"><i class="fas fa-wrench me-2 text-primary"></i>Game Configuration</a></li>
+                        {% endif %}
+                        {% if user_has_role('superadmin') %}
+                        <li><a class="dropdown-item py-2" href="{{ url_for('db_admin.database_status') }}"><i class="fas fa-database me-2 text-success"></i>Database Admin</a></li>
+                        {% endif %}
+                        <li><hr class="dropdown-divider my-1"></li>
+                        <li><a class="dropdown-item py-2 text-danger" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                    </ul>
+                </div>
             {% else %}
             <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-sm">Login</a>
             {% endif %}
@@ -612,11 +626,7 @@
                 <a class="nav-link {% if request.endpoint == 'auth.add_user' %}active{% endif %}" href="{{ url_for('auth.add_user') }}"><i class="fas fa-user-plus"></i><span>Add User</span></a>
             </div>
             {% endif %}
-            {% if user_has_role('admin') %}
-            <div class="nav-group">
-                <div class="nav-group-title">Administration</div>
-            </div>
-            {% endif %}
+            {# Removed empty Administration nav-group - no links were present here. #}
             <div class="nav-group">
                 <div class="nav-group-title">Core</div>
                 {% if not (user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics')) %}
@@ -1023,6 +1033,8 @@
     
     <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
     
+    <script src="{{ url_for('static', filename='js/mobile-viewport-stabilizer.js') }}"></script>
+    
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Dark mode button logic
@@ -1226,6 +1238,23 @@
                         const _origScrollTo = window.scrollTo.bind(window);
                         window.scrollTo = function(x, y) {
                             try {
+                                // If a transient suppression flag is set (e.g. after a chat
+                                // message tap), ignore immediate scroll-to-top calls.
+                                if (window.__suppressImmediateScrollToTop) {
+                                    // Only suppress the canonical scroll-to-top signature
+                                    if (arguments.length === 1 && typeof x === 'object') {
+                                        if (x && (x.top === 0 || x.y === 0)) {
+                                            console.debug('Suppressed immediate scrollTo(options) due to transient flag');
+                                            return;
+                                        }
+                                    } else if (arguments.length >= 2) {
+                                        if (x === 0 && y === 0) {
+                                            console.debug('Suppressed immediate scrollTo(0,0) due to transient flag');
+                                            return;
+                                        }
+                                    }
+                                }
+
                                 // Normalize signature: scrollTo(options) or scrollTo(x,y)
                                 if (_ignoreNextScrollToTop) {
                                     if (arguments.length === 1 && typeof x === 'object') {
@@ -1240,13 +1269,54 @@
                     } catch (e) { /* ignore if binding fails */ }
                 }
             } catch (e) { /* ignore overall errors */ }
+            // Global scrollTo wrapper: ensure transient suppression (from chat taps)
+            try {
+                const _globalOrigScrollTo = window.scrollTo.bind(window);
+                window.scrollTo = function(x, y) {
+                    try {
+                        if (window.__suppressImmediateScrollToTop) {
+                            if (arguments.length === 1 && typeof x === 'object') {
+                                if (x && (x.top === 0 || x.y === 0)) {
+                                    console.debug('Global suppression: suppressed scrollTo(options) due to transient flag');
+                                    console.trace();
+                                    return;
+                                }
+                            } else if (arguments.length >= 2) {
+                                if (x === 0 && y === 0) {
+                                    console.debug('Global suppression: suppressed scrollTo(0,0) due to transient flag');
+                                    console.trace();
+                                    return;
+                                }
+                            }
+                        }
+                    } catch (e) { /* ignore */ }
+                    return _globalOrigScrollTo.apply(window, arguments);
+                };
+            } catch (e) { /* ignore */ }
+
+            // Debug: log hash changes to help track unexpected navigation/scroll triggers
+            try {
+                window.addEventListener('hashchange', function(ev) {
+                    console.debug('hashchange detected:', window.location.hash, ev);
+                });
+            } catch (e) { /* ignore */ }
         // Open modal on button click
 
 
         // Socket.IO setup
-        if (!window.socket) {
-            window.socket = io();
-        }
+        try {
+            if (!window.socket) {
+                // create the real socket if io is present
+                if (typeof io === 'function') {
+                    window.socket = io();
+                }
+            } else if (window.socket && window.socket._isStub && typeof io === 'function') {
+                // If a stub was installed earlier (to avoid ReferenceError), replace it with real socket
+                const prevStub = window.socket;
+                window.socket = io();
+                try { if (prevStub && typeof prevStub._flushTo === 'function') prevStub._flushTo(window.socket); } catch (e) { console.warn('Error flushing earlier stub socket queue', e); }
+            }
+        } catch (e) { console.warn('Socket init in base template failed', e); }
         const socket = window.socket;
     const recipientSelect = document.getElementById('assistantChatRecipient');
     const chatContainer = document.getElementById('assistantChatContainer');
@@ -1309,6 +1379,15 @@
         socket.on('assistant_chat_message', function(msg) {
             allMessages.push(msg);
             renderMessage(msg);
+            try {
+                // If user isn't viewing chat, show a notification
+                const chatModal = document.getElementById('chatModal');
+                const chatOpen = chatModal && chatModal.classList && chatModal.classList.contains('show');
+                if (!window.location.pathname.startsWith('/chat') && !chatOpen) {
+                    const preview = (msg.text && msg.text.length > 120) ? msg.text.slice(0,117) + '...' : (msg.text || 'New message');
+                    showChatNotification({ type: 'dm', sender: msg.sender || 'Assistant', text: preview });
+                }
+            } catch (e) { console.warn('assistant_chat_message notify error', e); }
         });
         socket.on('assistant_chat_history', renderHistory);
 
@@ -1416,12 +1495,30 @@
                 const resp = await fetch('/chat/state');
                 const data = await resp.json();
                 const badge = document.getElementById('chatUnreadBadge');
+                const userDot = document.getElementById('userChatDot');
+                const userUnreadItem = document.getElementById('userDropdownUnreadItem');
+                const openUnreadChatLink = document.getElementById('openUnreadChatLink');
                 if (badge) {
                     if (data.unreadCount && data.unreadCount > 0) {
                         badge.textContent = data.unreadCount;
                         badge.style.display = '';
+                        // show red dot on user dropdown
+                        if (userDot) userDot.style.display = '';
+                        if (userUnreadItem) userUnreadItem.style.display = '';
+                        // if backend provided a source, add it as query param so chat page can focus
+                        if (openUnreadChatLink && data.lastSource) {
+                            // lastSource could be {type: 'dm'|'group', id: 'username'|'groupname'}
+                            try {
+                                const s = encodeURIComponent(JSON.stringify(data.lastSource));
+                                openUnreadChatLink.href = `{{ url_for('main.chat_page') }}?focus=${s}`;
+                            } catch(e) {}
+                        } else if (openUnreadChatLink) {
+                            openUnreadChatLink.href = `{{ url_for('main.chat_page') }}`;
+                        }
                     } else {
                         badge.style.display = 'none';
+                        if (userDot) userDot.style.display = 'none';
+                        if (userUnreadItem) userUnreadItem.style.display = 'none';
                     }
                 }
             } catch (e) {}
@@ -1434,21 +1531,72 @@
         if (window.socket) {
             window.socket.on('dm_message', function(msg) {
                 if (!window.location.pathname.startsWith('/chat')) {
-                    fetch('/chat/increment-unread', {method: 'POST'}).then(updateChatUnreadBadge);
+                    // include source info so dropdown can open focused DM
+                    fetch('/chat/increment-unread', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({lastSource: {type: 'dm', id: msg.sender}})}).then(updateChatUnreadBadge);
+                    try {
+                        // Show an on-screen notification toast with sender and preview
+                        const preview = (msg.text && msg.text.length > 120) ? msg.text.slice(0, 117) + '...' : (msg.text || 'New message');
+                        showChatNotification({type: 'dm', sender: msg.sender, text: preview});
+                    } catch (e) { console.warn('showChatNotification dm error', e); }
                 }
             });
             window.socket.on('group_chat_message', function(msg) {
                 // Only increment if not on chat page and user is a member of the group
                 if (!window.location.pathname.startsWith('/chat')) {
-                    // Optionally, you could check group membership here if available in JS context
-                    fetch('/chat/increment-unread', {method: 'POST'}).then(updateChatUnreadBadge);
+                    fetch('/chat/increment-unread', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({lastSource: {type: 'group', id: msg.group}})}).then(updateChatUnreadBadge);
+                    try {
+                        const preview = (msg.text && msg.text.length > 120) ? msg.text.slice(0, 117) + '...' : (msg.text || 'New group message');
+                        showChatNotification({type: 'group', group: msg.group, sender: msg.sender || msg.from, text: preview});
+                    } catch (e) { console.warn('showChatNotification group error', e); }
                 }
             });
+        }
+
+        // Helper: show chat notification toast (DM or group)
+        function showChatNotification(opts) {
+            // opts: { type: 'dm'|'group', sender, group, text }
+            try {
+                const id = 'chat-notif-' + Date.now();
+                const title = opts.type === 'dm' ? (`New message from ${opts.sender}`) : (`New message in ${opts.group}`);
+                const body = opts.text || '';
+
+                const toastHtml = `
+                    <div id="${id}" class="toast align-items-start text-bg-light border shadow-sm" role="alert" aria-live="polite" aria-atomic="true">
+                      <div class="d-flex">
+                        <div class="toast-body">
+                          <strong style="display:block;">${title}</strong>
+                          <div style="font-size:0.9rem; margin-top:4px;">${body}</div>
+                        </div>
+                        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                      </div>
+                    </div>
+                `;
+
+                // Append to toast container (create if missing)
+                let container = document.querySelector('.toast-container.chat');
+                if (!container) {
+                    container = document.createElement('div');
+                    container.className = 'toast-container chat position-fixed top-0 end-0 p-3';
+                    container.style.zIndex = 1065; // above other UI but below modal
+                    document.body.appendChild(container);
+                }
+
+                container.insertAdjacentHTML('beforeend', toastHtml);
+                const toastEl = document.getElementById(id);
+                const bsToast = new bootstrap.Toast(toastEl, { autohide: true, delay: 6000 });
+                bsToast.show();
+
+                // Remove from DOM after hidden
+                toastEl.addEventListener('hidden.bs.toast', function() { try { toastEl.remove(); } catch(e){} });
+            } catch (e) {
+                console.warn('showChatNotification error', e);
+            }
         }
         // When chat page/modal is opened, reset unread count
         const chatNavItem = document.getElementById('chatNavItem');
         if (chatNavItem) {
             chatNavItem.addEventListener('click', function() {
+                // When user opens chat, clear unread and any source pointer
                 fetch('/chat/reset-unread', {method: 'POST'}).then(updateChatUnreadBadge);
             });
         }
@@ -1941,6 +2089,26 @@
         
         // Initialize navbar improvements
         initNavbarImprovements();
+
+            // Clear unread button (x) handler
+            const clearUnreadBtn = document.getElementById('clearUnreadBtn');
+            if (clearUnreadBtn) {
+                clearUnreadBtn.addEventListener('click', function() {
+                    fetch('/chat/reset-unread', { method: 'POST' })
+                        .then(r => {
+                            if (r.ok) {
+                                // hide dot and this button
+                                const dot = document.getElementById('userChatDot');
+                                if (dot) dot.style.display = 'none';
+                                clearUnreadBtn.style.display = 'none';
+                                const unreadItem = document.getElementById('userDropdownUnreadItem');
+                                if (unreadItem) unreadItem.style.display = 'none';
+                                const chatBadge = document.getElementById('chatUnreadBadge');
+                                if (chatBadge) { chatBadge.style.display = 'none'; chatBadge.textContent = '' }
+                            }
+                        }).catch(e => console.warn('Failed to clear unread', e));
+                });
+            }
         
         // Initialize search functionality
         initSearchFunctionality();

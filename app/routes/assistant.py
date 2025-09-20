@@ -4,6 +4,7 @@ Routes for the Scout Assistant feature
 
 from flask import Blueprint, render_template, request, jsonify, current_app, abort
 from flask_login import login_required, current_user
+from datetime import datetime
 from app.assistant import get_assistant, get_visualizer
 from functools import wraps
 import os
@@ -107,21 +108,25 @@ def ask_question():
     answer = assistant.answer_question(question)
     # Save both user question and assistant reply to chat history
     from app import save_chat_message
-    import datetime
+    import uuid
     username = current_user.username
     user_msg = {
+        'id': str(uuid.uuid4()),
         'sender': username,
         'recipient': 'assistant',
         'text': question,
-        'timestamp': datetime.datetime.utcnow().isoformat(),
-        'owner': username
+        'timestamp': datetime.utcnow().isoformat(),
+        'owner': username,
+        'reactions': []
     }
     assistant_msg = {
+        'id': str(uuid.uuid4()),
         'sender': 'assistant',
         'recipient': username,
         'text': answer.get('text', ''),
-        'timestamp': datetime.datetime.utcnow().isoformat(),
-        'owner': username
+        'timestamp': datetime.utcnow().isoformat(),
+        'owner': username,
+        'reactions': []
     }
     save_chat_message(user_msg)
     save_chat_message(assistant_msg)
@@ -175,21 +180,12 @@ def clear_context():
 @login_required
 def clear_assistant_history():
     from flask_login import current_user
+    from app import save_assistant_chat_history
     username = current_user.username
-    from app import load_chat_history
-    import os, json
-    history = load_chat_history()
-    # Remove all assistant messages for this user (old and new format)
-    new_history = [msg for msg in history if not (
-        (msg.get('recipient') == 'assistant' and msg.get('owner') == username) or
-        (msg.get('sender') == 'assistant' and msg.get('recipient') == username and msg.get('owner') == username) or
-        (msg.get('recipient') == username and (msg.get('sender') == 'assistant' or msg.get('sender') == username))
-    )]
-    # Save the filtered history
-    from app import CHAT_HISTORY_FILE, CHAT_HISTORY_LOCK
-    with CHAT_HISTORY_LOCK:
-        with open(CHAT_HISTORY_FILE, 'w', encoding='utf-8') as f:
-            json.dump(new_history, f, ensure_ascii=False, indent=2)
+    team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+    
+    # Clear the user's assistant history by saving an empty list
+    save_assistant_chat_history(username, team_number, [])
     return {'success': True, 'message': 'Assistant history cleared.'}
 
 @bp.route('/chat-users')
@@ -207,20 +203,9 @@ def chat_users():
 @login_required
 def assistant_history():
     from flask_login import current_user
+    from app import load_assistant_chat_history
     username = current_user.username
-    from app import load_chat_history
-    history = load_chat_history()
-    filtered = []
-    for msg in history:
-        if msg.get('recipient') == 'assistant' and msg.get('owner') and msg.get('owner') != username:
-            continue
-        # Also include messages where recipient is the user and sender is 'assistant' or the user
-        if (
-            msg.get('recipient') == username and (msg.get('sender') == 'assistant' or msg.get('sender') == username)
-        ) or (
-            msg.get('recipient') == 'assistant' and msg.get('owner') == username
-        ) or (
-            msg.get('sender') == 'assistant' and msg.get('recipient') == username and msg.get('owner') == username
-        ):
-            filtered.append(msg)
-    return {'history': filtered}
+    team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+    
+    history = load_assistant_chat_history(username, team_number)
+    return {'history': history}
