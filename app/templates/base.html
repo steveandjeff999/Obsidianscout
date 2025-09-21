@@ -1109,8 +1109,6 @@
     
     <script src="{{ url_for('static', filename='js/mobile-viewport-stabilizer.js') }}"></script>
     
-    <script src="{{ url_for('static', filename='js/scroll-debug.js') }}"></script>
-    
     <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
     
     <script>
@@ -1295,229 +1293,6 @@
     <!-- Dark mode handlers -->
     <script src="{{ url_for('static', filename='js/dark-mode-handlers.js') }}"></script>
     
-    <!-- Aggressive Mobile Scroll Protection - Must load last -->
-    <script>
-    (function() {
-        'use strict';
-        
-        // Aggressive mobile detection
-        const isMobileDevice = () => {
-            return window.innerWidth <= 900 || 
-                   /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-                   ('ontouchstart' in window) ||
-                   (navigator.maxTouchPoints > 0);
-        };
-        
-        if (!isMobileDevice()) {
-            console.log('Desktop detected, skipping aggressive scroll protection');
-            return;
-        }
-        
-        console.log('Aggressive mobile scroll protection: ACTIVE');
-        
-        // Immediate scroll position tracking
-        let lastKnownScrollY = 0;
-        let scrollLocked = false;
-        let currentlyInteracting = false;
-        
-        // Update scroll position tracking
-        const updateScrollPosition = () => {
-            if (!scrollLocked && !currentlyInteracting) {
-                lastKnownScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-            }
-        };
-        
-        // Aggressive scroll restoration
-        const forceRestoreScroll = (targetY, reason = 'unknown') => {
-            if (typeof targetY !== 'number' || targetY < 0) return;
-            
-            console.log(`🔒 FORCE RESTORE SCROLL: ${targetY}px (reason: ${reason})`);
-            
-            // Multiple restoration methods
-            const restoreMethods = [
-                () => window.scrollTo({ top: targetY, behavior: 'instant' }),
-                () => window.scrollTo(0, targetY),
-                () => { document.documentElement.scrollTop = targetY; },
-                () => { document.body.scrollTop = targetY; },
-                () => { window.scrollY = targetY; }
-            ];
-            
-            restoreMethods.forEach((method, index) => {
-                try {
-                    setTimeout(() => method(), index * 10);
-                } catch (e) {
-                    console.warn(`Scroll restore method ${index} failed:`, e);
-                }
-            });
-        };
-        
-        // Aggressive click protection
-        const protectClick = (e) => {
-            currentlyInteracting = true;
-            const beforeY = window.pageYOffset || document.documentElement.scrollTop || 0;
-            lastKnownScrollY = beforeY;
-            scrollLocked = true;
-            
-            console.log(`🖱️ Click detected on ${e.target.tagName}, scroll locked at ${beforeY}px`);
-            
-            // Multiple restoration checks at different intervals
-            const checkAndRestore = (delay, reason) => {
-                setTimeout(() => {
-                    const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    
-                    // If scroll jumped to top or moved significantly
-                    if (currentY === 0 && beforeY > 20) {
-                        forceRestoreScroll(beforeY, `click-${reason}`);
-                    } else if (Math.abs(currentY - beforeY) > 30) {
-                        forceRestoreScroll(beforeY, `jump-${reason}`);
-                    }
-                }, delay);
-            };
-            
-            // Staggered restoration checks
-            [1, 5, 10, 25, 50, 100, 200, 300, 500, 750, 1000].forEach((delay, index) => {
-                checkAndRestore(delay, `check${index + 1}`);
-            });
-            
-            // Release lock after interaction settles
-            setTimeout(() => {
-                scrollLocked = false;
-                currentlyInteracting = false;
-                updateScrollPosition();
-            }, 1200);
-        };
-        
-        // Aggressive input focus protection
-        const protectFocus = (e) => {
-            if (!e.target.matches('input, textarea, select')) return;
-            
-            currentlyInteracting = true;
-            const beforeY = window.pageYOffset || document.documentElement.scrollTop || 0;
-            lastKnownScrollY = beforeY;
-            scrollLocked = true;
-            
-            console.log(`🎯 Focus detected on ${e.target.type || e.target.tagName}, scroll locked at ${beforeY}px`);
-            
-            // Immediate and delayed restoration for focus events
-            const intervals = [50, 100, 200, 300, 500, 800, 1100];
-            intervals.forEach((delay, index) => {
-                setTimeout(() => {
-                    const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    if (Math.abs(currentY - beforeY) > 20) {
-                        forceRestoreScroll(beforeY, `focus-restore-${index + 1}`);
-                    }
-                }, delay);
-            });
-            
-            setTimeout(() => {
-                scrollLocked = false;
-                currentlyInteracting = false;
-                updateScrollPosition();
-            }, 1200);
-        };
-        
-        // Override window.scrollTo completely on mobile
-        const originalScrollTo = window.scrollTo;
-        window.scrollTo = function(...args) {
-            // If we're not actively allowing scroll changes, prevent them
-            if (scrollLocked || currentlyInteracting) {
-                console.log('🚫 BLOCKED scrollTo call during interaction');
-                return;
-            }
-            
-            // Parse arguments
-            let targetY = 0;
-            if (typeof args[0] === 'object' && args[0].top !== undefined) {
-                targetY = args[0].top;
-            } else if (args.length >= 2) {
-                targetY = args[1];
-            }
-            
-            // Block obvious scroll-to-top attempts
-            if (targetY === 0 && lastKnownScrollY > 50) {
-                console.log('🚫 BLOCKED scroll to top attempt');
-                return forceRestoreScroll(lastKnownScrollY, 'blocked-scroll-to-top');
-            }
-            
-            // Allow legitimate scrolls
-            console.log(`✅ Allowing scroll to ${targetY}px`);
-            return originalScrollTo.apply(window, args);
-        };
-        
-        // Global event listeners with highest priority
-        const addProtectionListeners = () => {
-            // Use capture phase to intercept before other handlers
-            document.addEventListener('click', protectClick, { capture: true, passive: true });
-            document.addEventListener('touchstart', protectClick, { capture: true, passive: true });
-            document.addEventListener('focusin', protectFocus, { capture: true, passive: true });
-            
-            // Track scroll changes when not interacting
-            window.addEventListener('scroll', updateScrollPosition, { passive: true });
-            
-            // Handle page visibility changes
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') {
-                    setTimeout(updateScrollPosition, 100);
-                }
-            });
-            
-            console.log('🛡️ Aggressive scroll protection listeners installed');
-        };
-        
-        // Initialize after everything else loads
-        const initialize = () => {
-            updateScrollPosition();
-            addProtectionListeners();
-            
-            // Additional protection for common problematic elements
-            const observeProblematicElements = () => {
-                const selector = 'button, .btn, select, .dropdown-toggle, .nav-link, input, textarea, a[href="#"], a[href=""]';
-                document.querySelectorAll(selector).forEach(el => {
-                    el.addEventListener('click', protectClick, { capture: true, passive: true });
-                    if (el.matches('input, textarea, select')) {
-                        el.addEventListener('focus', protectFocus, { capture: true, passive: true });
-                    }
-                });
-                
-                console.log(`🔍 Protected ${document.querySelectorAll(selector).length} problematic elements`);
-            };
-            
-            // Run immediately and after DOM mutations
-            observeProblematicElements();
-            
-            // Re-protect new elements
-            const observer = new MutationObserver(() => {
-                setTimeout(observeProblematicElements, 100);
-            });
-            
-            observer.observe(document.body, { childList: true, subtree: true });
-            
-            console.log('🚀 Aggressive mobile scroll protection fully initialized');
-        };
-        
-        // Initialize when everything is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                setTimeout(initialize, 100); // Small delay to let other scripts settle
-            });
-        } else {
-            setTimeout(initialize, 100);
-        }
-        
-        // Emergency scroll restoration on window events
-        ['resize', 'orientationchange', 'focus', 'blur'].forEach(event => {
-            window.addEventListener(event, () => {
-                setTimeout(() => {
-                    if (!scrollLocked && !currentlyInteracting) {
-                        updateScrollPosition();
-                    }
-                }, 200);
-            });
-        });
-        
-    })();
-    </script>
-    
     {% block scripts %}{% endblock %}
     {% block extra_js %}{% endblock %}
 
@@ -1533,102 +1308,30 @@
             .catch(err => console.warn('SW root registration failed:', err));
     }
     
-    // Bootstrap and AJAX scroll protection for mobile
+    // Lightweight mobile scroll protection
     (function() {
         const isMobile = window.innerWidth <= 900 || 
             /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         
         if (!isMobile) return;
         
-        console.log('🛡️ Bootstrap/AJAX scroll protection active');
+        // Simple emergency protection - only restore if scroll jumps to 0 unexpectedly
+        let lastGoodScrollY = 0;
         
-        // Protect against Bootstrap dropdown/modal/collapse scroll issues
-        document.addEventListener('shown.bs.dropdown', function() {
-            console.log('Bootstrap dropdown shown - preventing scroll');
-        });
-        
-        document.addEventListener('hidden.bs.dropdown', function() {
-            console.log('Bootstrap dropdown hidden - checking scroll');
-        });
-        
-        // Protect against AJAX request side effects
-        const originalFetch = window.fetch;
-        window.fetch = function(...args) {
-            const beforeY = window.pageYOffset || document.documentElement.scrollTop || 0;
-            
-            return originalFetch.apply(this, args).then(response => {
-                // Check if fetch caused unwanted scroll
-                setTimeout(() => {
-                    const afterY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    if (afterY === 0 && beforeY > 20) {
-                        console.log('🚫 AJAX request caused scroll to top, restoring...');
-                        try {
-                            window.scrollTo({ top: beforeY, behavior: 'instant' });
-                        } catch (e) {
-                            window.scrollTo(0, beforeY);
-                        }
-                    }
-                }, 50);
-                
-                return response;
-            });
-        };
-        
-        // Protect against XMLHttpRequest side effects
-        const originalSend = XMLHttpRequest.prototype.send;
-        XMLHttpRequest.prototype.send = function(...args) {
-            const beforeY = window.pageYOffset || document.documentElement.scrollTop || 0;
-            
-            this.addEventListener('readystatechange', function() {
-                if (this.readyState === 4) {
-                    setTimeout(() => {
-                        const afterY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        if (afterY === 0 && beforeY > 20) {
-                            console.log('🚫 XHR request caused scroll to top, restoring...');
-                            try {
-                                window.scrollTo({ top: beforeY, behavior: 'instant' });
-                            } catch (e) {
-                                window.scrollTo(0, beforeY);
-                            }
-                        }
-                    }, 25);
-                }
-            });
-            
-            return originalSend.apply(this, args);
-        };
-        
-        // Final emergency protection - intercept ALL scroll changes
-        let emergencyScrollY = 0;
-        let emergencyTimer = null;
-        
-        const updateEmergencyPosition = () => {
-            const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
-            if (currentY > 10) { // Only update if not at top
-                emergencyScrollY = currentY;
-            }
-        };
-        
-        // Track scroll position frequently
-        window.addEventListener('scroll', updateEmergencyPosition, { passive: true });
-        
-        // Emergency restoration if scroll goes to 0 unexpectedly
         window.addEventListener('scroll', () => {
-            clearTimeout(emergencyTimer);
-            emergencyTimer = setTimeout(() => {
-                const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                if (currentY === 0 && emergencyScrollY > 30) {
-                    console.log('🚨 EMERGENCY: Unexpected scroll to top detected, restoring!');
-                    try {
-                        window.scrollTo({ top: emergencyScrollY, behavior: 'instant' });
-                    } catch (e) {
-                        window.scrollTo(0, emergencyScrollY);
+            const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
+            if (currentY > 10) {
+                lastGoodScrollY = currentY;
+            } else if (currentY === 0 && lastGoodScrollY > 100) {
+                // Only restore if we had a good scroll position and jumped to top unexpectedly
+                setTimeout(() => {
+                    const stillAtTop = (window.pageYOffset || document.documentElement.scrollTop || 0) === 0;
+                    if (stillAtTop && lastGoodScrollY > 100) {
+                        window.scrollTo(0, lastGoodScrollY);
                     }
-                }
-            }, 100);
+                }, 200);
+            }
         }, { passive: true });
-        
-        console.log('🚀 Emergency scroll protection activated');
     })();
     </script>
 
