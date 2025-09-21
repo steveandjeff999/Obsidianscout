@@ -160,9 +160,9 @@
 </div>
 
 {% block extra_js %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js" integrity="sha512-GZ1RIgZaSc8rnco/8CXfRdCpDxRCphenIiZ2ztLy3XQfCbQUSCuk8IudvNHxkRA3oUg6q0qejgN/qqyG1duv5Q==" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/mode-json.min.js" integrity="sha512-RYmdX0POd7BQQJxHgL9BNjtpyOzZmRCE5XgnpfXYCdKAEzNUEEQ7Qfbc92QtxRm0kVTrky6zlPHyUHHp/gGZrw==" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/theme-monokai.min.js" integrity="sha512-S4I/WUGRs22+8rjUVu4kBjfNuBNp8GVsgcK2lbaFdws4q6TF3Nd00LxqnHhuxS9iVDfNcUh0jafEzrZrU8Yt7g==" crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='js/vendor/ace.js') }}"></script>
+<script src="{{ url_for('static', filename='js/vendor/ace.js') }}"></script>
+<script src="{{ url_for('static', filename='js/vendor/ace.js') }}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize the JSON editor

@@ -198,7 +198,7 @@
                                                                 <td><input type="text" class="form-control option-value-input" name="auto_element_option_value_{{ loop.index0 }}_{{ loop.index }}" value="{{ opt }}" required></td>
                                                                 <td><input type="text" class="form-control option-label-input" name="auto_element_option_label_{{ loop.index0 }}_{{ loop.index }}" value="{{ opt }}"></td>
                                                                 <td><input type="number" class="form-control option-points-input" name="auto_element_option_points_{{ loop.index0 }}_{{ loop.index }}" value="{{ element.points[opt] if element.points and opt in element.points else 0 }}" step="0.1"></td>
-                                                                <td><button type="button" class="btn btn-danger btn-sm remove-option" title="Remove Option">&times;</button></td>
+                                                                <td><button type="button" class="btn btn-danger btn-sm remove-option" title="Remove Option" aria-label="Remove option"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></td>
                                                             </tr>
                                                             {% endfor %}
                                                             </tbody>
@@ -281,7 +281,7 @@
                                                                 <td><input type="text" class="form-control option-value-input" name="teleop_element_option_value_{{ loop.index0 }}_{{ loop.index }}" value="{{ opt }}" required></td>
                                                                 <td><input type="text" class="form-control option-label-input" name="teleop_element_option_label_{{ loop.index0 }}_{{ loop.index }}" value="{{ opt }}"></td>
                                                                 <td><input type="number" class="form-control option-points-input" name="teleop_element_option_points_{{ loop.index0 }}_{{ loop.index }}" value="{{ element.points[opt] if element.points and opt in element.points else 0 }}" step="0.1"></td>
-                                                                <td><button type="button" class="btn btn-danger btn-sm remove-option" title="Remove Option">&times;</button></td>
+                                                                <td><button type="button" class="btn btn-danger btn-sm remove-option" title="Remove Option" aria-label="Remove option"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></td>
                                                             </tr>
                                                             {% endfor %}
                                                             </tbody>
@@ -364,7 +364,7 @@
                                                                 <td><input type="text" class="form-control option-value-input" name="endgame_element_option_value_{{ loop.index0 }}_{{ loop.index }}" value="{{ opt }}" required></td>
                                                                 <td><input type="text" class="form-control option-label-input" name="endgame_element_option_label_{{ loop.index0 }}_{{ loop.index }}" value="{{ opt }}"></td>
                                                                 <td><input type="number" class="form-control option-points-input" name="endgame_element_option_points_{{ loop.index0 }}_{{ loop.index }}" value="{{ element.points[opt] if element.points and opt in element.points else 0 }}" step="0.1"></td>
-                                                                <td><button type="button" class="btn btn-danger btn-sm remove-option" title="Remove Option">&times;</button></td>
+                                                                <td><button type="button" class="btn btn-danger btn-sm remove-option" title="Remove Option" aria-label="Remove option"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></td>
                                                             </tr>
                                                             {% endfor %}
                                                             </tbody>
@@ -1082,7 +1082,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td><input type="text" class="form-control option-value-input" name="${period}_element_option_value_${elementIndex}_${optionIndex}" required></td>
                 <td><input type="text" class="form-control option-label-input" name="${period}_element_option_label_${elementIndex}_${optionIndex}"></td>
                 <td><input type="number" class="form-control option-points-input" name="${period}_element_option_points_${elementIndex}_${optionIndex}" value="0" step="0.1"></td>
-                <td><button type="button" class="btn btn-danger btn-sm remove-option" title="Remove Option">&times;</button></td>
+                <td><button type="button" class="btn btn-danger btn-sm remove-option" title="Remove Option" aria-label="Remove option"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></td>
             </tr>
         `;
     }

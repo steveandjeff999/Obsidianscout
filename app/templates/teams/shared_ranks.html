@@ -6,9 +6,9 @@
     <title>{{ shared_ranks.title }} - Shared Team Rankings</title>
     
     <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/vendor/bootstrap.min.css') }}" rel="stylesheet">
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/vendor/fontawesome-all.min.css') }}">
     
     <style>
         .shared-header {
@@ -263,6 +263,6 @@
     </div>
 
     <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/vendor/bootstrap.bundle.min.js') }}"></script>
 </body>
 </html>
