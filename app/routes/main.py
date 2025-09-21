@@ -787,10 +787,32 @@ def dm_history():
 @bp.route('/chat/group-history')
 @login_required
 def group_history():
-    group = request.args.get('group')
-    history = load_chat_history()
-    filtered = [msg for msg in history if msg.get('group') == group]
-    return jsonify({'history': filtered})
+    from flask_login import current_user
+    from app import load_group_chat_history
+
+    group = request.args.get('group', 'main')
+    team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+    history = []
+    try:
+        history = load_group_chat_history(team_number, group)
+    except Exception:
+        history = []
+    return jsonify({'history': history})
+
+
+@bp.route('/chat/group-members')
+@login_required
+def chat_group_members():
+    """Return the list of members for a given group within the current user's scouting team."""
+    from flask_login import current_user
+    from app import load_group_members
+    group = request.args.get('group', 'main')
+    team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+    try:
+        members = load_group_members(team_number, group) or []
+    except Exception:
+        members = []
+    return jsonify({'members': members})
 
 @bp.route('/chat/dm', methods=['POST'])
 @login_required
@@ -871,10 +893,9 @@ def edit_message():
     }
     
     message_type = message_info['file_type']
+    # Only emit updates for assistant and direct messages. Group messaging was removed.
     if message_type == 'assistant':
         socketio.emit('message_updated', emit_data, room=username)
-    elif message_type == 'group' and message.get('group'):
-        socketio.emit('message_updated', emit_data, room=message['group'])
     elif message_type == 'dm' and message.get('recipient'):
         # Emit to both sender and recipient for DM messages
         socketio.emit('message_updated', emit_data, room=message['sender'])
@@ -924,10 +945,9 @@ def delete_message():
     emit_data = {'message_id': message_id}
     
     message_type = message_info['file_type']
+    # Only emit deletions for assistant and direct messages. Group messaging was removed.
     if message_type == 'assistant':
         socketio.emit('message_deleted', emit_data, room=username)
-    elif message_type == 'group' and message.get('group'):
-        socketio.emit('message_deleted', emit_data, room=message['group'])
     elif message_type == 'dm' and message.get('recipient'):
         # Emit to both sender and recipient for DM messages
         socketio.emit('message_deleted', emit_data, room=message['sender'])
@@ -968,10 +988,14 @@ def react_to_message():
     history[message_info['index']]['reactions'] = updated_reactions
     
     # Save the updated history
+    # Also store a grouped summary on the message so it's available when loading history
+    reaction_summary = group_reactions(updated_reactions)
+    try:
+        history[message_info['index']]['reactions_summary'] = reaction_summary
+    except Exception:
+        pass
     message_info['save_func'](history)
     
-    # Group reactions by emoji with counts
-    reaction_summary = group_reactions(updated_reactions)
     
     # Emit socket event for real-time updates
     from app import socketio
@@ -980,15 +1004,24 @@ def react_to_message():
         'reactions': reaction_summary
     }
     
+    # Emit reaction updates. For group messages, broadcast to the team+group room so others see updated counts.
     message_type = message_info['file_type']
     if message_type == 'assistant':
         socketio.emit('message_updated', emit_data, room=username)
-    elif message_type == 'group' and message.get('group'):
-        socketio.emit('message_updated', emit_data, room=message['group'])
     elif message_type == 'dm' and message.get('recipient'):
         # Emit to both sender and recipient for DM messages
         socketio.emit('message_updated', emit_data, room=message['sender'])
         socketio.emit('message_updated', emit_data, room=message['recipient'])
+    elif message_type == 'group':
+        # message should contain 'group' and 'team' properties
+        grp = message.get('group') or message.get('group_name')
+        team = message.get('team') or message.get('team_number')
+        try:
+            room_name = f"group_{team}_{grp}"
+            socketio.emit('message_updated', emit_data, room=room_name)
+        except Exception:
+            # If we can't construct the room, fall back to no-op
+            pass
     
     return {'success': True, 'reactions': reaction_summary}
 
@@ -1011,21 +1044,17 @@ def toggle_reaction(reactions, username, emoji):
     return reactions
 
 def group_reactions(reactions):
-    """Group reactions by emoji and count them, including user lists"""
-    emoji_groups = {}
+    """Group reactions by emoji and count them"""
+    emoji_counts = {}
     for reaction in reactions:
         emoji = reaction.get('emoji')
-        user = reaction.get('user')
         if emoji:
-            if emoji not in emoji_groups:
-                emoji_groups[emoji] = {'count': 0, 'users': []}
-            emoji_groups[emoji]['count'] += 1
-            if user and user not in emoji_groups[emoji]['users']:
-                emoji_groups[emoji]['users'].append(user)
+            if emoji not in emoji_counts:
+                emoji_counts[emoji] = 0
+            emoji_counts[emoji] += 1
     
     # Convert to list format expected by frontend
-    return [{'emoji': emoji, 'count': data['count'], 'users': data['users']} 
-            for emoji, data in emoji_groups.items()]
+    return [{'emoji': emoji, 'count': count} for emoji, count in emoji_counts.items()]
 
 def get_chat_folder():
     """Get the chat folder path and ensure it exists"""

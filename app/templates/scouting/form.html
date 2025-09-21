@@ -749,11 +749,15 @@
                             initializeFormComponents();
 
                             // Restore scroll position
-                            try {
-                                window.scrollTo(0, __savedScrollY);
-                            } catch (e) {
-                                console.warn('Could not restore scroll position', e);
-                            }
+                                try {
+                                    if (typeof window.safeRestoreScroll === 'function') {
+                                        window.safeRestoreScroll(__savedScrollY, { behavior: 'auto', timeout: 300 });
+                                    } else {
+                                        // Fallback already handled; no-op here to avoid double-restores
+                                    }
+                                } catch (e) {
+                                    console.warn('Could not restore scroll position', e);
+                                }
 
                             // Restore focus to previously focused element if it still exists
                             if (__savedActiveId) {
@@ -926,7 +930,11 @@
 
                         // Restore scroll position
                         try {
-                            window.scrollTo(0, __savedScrollY);
+                            if (typeof window.safeRestoreScroll === 'function') {
+                                window.safeRestoreScroll(__savedScrollY, { behavior: 'auto', timeout: 300 });
+                            } else {
+                                // Fallback already handled; no-op here to avoid double-restores
+                            }
                         } catch (e) { /* ignore */ }
 
                         // Restore focus to previously focused element if it still exists

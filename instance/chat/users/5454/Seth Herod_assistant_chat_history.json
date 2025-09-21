@@ -1,0 +1,18 @@
+[
+  {
+    "sender": "Seth Herod",
+    "recipient": "assistant",
+    "text": "hi",
+    "timestamp": "2025-09-20T13:44:52.109433",
+    "owner": "Seth Herod",
+    "id": "1c527f61-3766-4a71-8a50-4e7ecc675606"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "Seth Herod",
+    "text": "Hello Seth Herod, how can I help you?",
+    "timestamp": "2025-09-20T13:44:52.116699",
+    "owner": "Seth Herod",
+    "id": "67665623-0751-4e8d-acfc-e94d5c919be4"
+  }
+]

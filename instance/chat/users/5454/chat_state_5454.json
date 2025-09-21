@@ -1,6 +1,10 @@
 {
-  "joinedGroups": [],
-  "currentGroup": "",
+  "currentGroup": "bob",
+  "joinedGroups": [
+    "bob5",
+    "test",
+    "bob"
+  ],
   "lastDmUser": "Seth Herod",
   "unreadCount": 0
 }
