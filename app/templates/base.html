@@ -1101,13 +1101,76 @@
     
     <script src="{{ url_for('static', filename='js/vendor/select2.min.js') }}"></script>
     
+    <script src="{{ url_for('static', filename='js/select2-mobile-fix.js') }}"></script>
+    
     <script src="{{ url_for('static', filename='js/vendor/plotly-latest.min.js') }}"></script>
     
     <script src="{{ url_for('static', filename='js/vendor/socket.io.js') }}"></script>
     
     <script src="{{ url_for('static', filename='js/qrcode.min.js') }}"></script>
     
-    <script src="{{ url_for('static', filename='js/mobile-viewport-stabilizer.js') }}"></script>
+    <!-- Gentle Mobile Scroll Protection -->
+    <script>
+    (function() {
+        'use strict';
+        
+        const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        if (!isMobile) return;
+        
+        console.log('Gentle mobile scroll protection active');
+        
+        let isInteracting = false;
+        let lastScrollY = 0;
+        
+        // Track scroll position when not interacting
+        function updateScrollPosition() {
+            if (!isInteracting) {
+                lastScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+            }
+        }
+        
+        // Gentle protection only for obvious scroll-to-top jumps
+        function preventScrollToTop() {
+            const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+            
+            // Only intervene if scroll jumped to exactly 0 from a significant position
+            if (currentScrollY === 0 && lastScrollY > 100) {
+                console.log('Preventing scroll-to-top jump');
+                // Use smooth scroll to restore position
+                window.scrollTo({
+                    top: lastScrollY,
+                    behavior: 'smooth'
+                });
+            }
+        }
+        
+        // Very gentle click protection
+        function handleInteraction(e) {
+            // Only protect problematic elements
+            const problematic = e.target.matches('a[href="#"], a[href=""], button[type="button"]:not([data-bs-toggle])');
+            
+            if (problematic) {
+                isInteracting = true;
+                
+                // Single check after a short delay
+                setTimeout(() => {
+                    preventScrollToTop();
+                    isInteracting = false;
+                    updateScrollPosition();
+                }, 50);
+            }
+        }
+        
+        // Add minimal event listeners
+        document.addEventListener('click', handleInteraction, { passive: true });
+        window.addEventListener('scroll', updateScrollPosition, { passive: true });
+        
+        // Initialize
+        updateScrollPosition();
+        
+    })();
+    </script>
     
     <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
     
@@ -1132,114 +1195,44 @@
                 });
             };
             
-            // Enhanced Mobile Scroll Protection
-            function initializeMobileScrollProtection() {
-                const isMobile = window.innerWidth <= 768 || 
-                    /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-                    ('ontouchstart' in window);
-                
-                if (!isMobile) return;
-                
-                console.log('Initializing enhanced mobile scroll protection');
-                
-                // Prevent input focus from scrolling
-                document.addEventListener('focusin', function(e) {
-                    if (e.target.matches('input, textarea, select')) {
-                        const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        
-                        // Use setTimeout to check if scroll position changed after focus
-                        setTimeout(() => {
-                            const newY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                            if (Math.abs(newY - currentY) > 10) {
-                                console.log('Input focus scroll detected, restoring position');
-                                window.safeRestoreScroll(currentY, { behavior: 'auto', timeout: 200 });
-                            }
-                        }, 100);
-                    }
-                }, { passive: true });
-                
-                // Prevent dropdown clicks from scrolling
-                document.addEventListener('click', function(e) {
-                    const dropdown = e.target.closest('.dropdown-toggle, .dropdown-item, [data-bs-toggle="dropdown"]');
-                    if (dropdown) {
-                        const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        
-                        setTimeout(() => {
-                            const newY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                            if (Math.abs(newY - currentY) > 10) {
-                                console.log('Dropdown click scroll detected, restoring position');
-                                window.safeRestoreScroll(currentY, { behavior: 'auto', timeout: 200 });
-                            }
-                        }, 50);
-                    }
-                }, { passive: true });
-                
-                // Enhanced button click protection
-                document.addEventListener('click', function(e) {
-                    if (e.target.matches('button, .btn, input[type="submit"], input[type="button"]') ||
-                        e.target.closest('button, .btn, input[type="submit"], input[type="button"]')) {
-                        
-                        const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        
-                        setTimeout(() => {
-                            const newY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                            if (newY === 0 && currentY > 50) {
-                                console.log('Button click caused scroll to top, restoring position');
-                                window.safeRestoreScroll(currentY, { behavior: 'auto', timeout: 200 });
-                            }
-                        }, 10);
-                        
-                        // Additional checks at multiple intervals
-                        setTimeout(() => {
-                            const newY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                            if (newY === 0 && currentY > 50) {
-                                window.safeRestoreScroll(currentY, { behavior: 'auto', timeout: 200 });
-                            }
-                        }, 100);
-                    }
-                }, { passive: true });
-                
-                // Prevent tab switching from scrolling
-                document.addEventListener('click', function(e) {
-                    const tabTrigger = e.target.closest('[data-bs-toggle="tab"], .nav-link');
-                    if (tabTrigger) {
-                        const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        
-                        setTimeout(() => {
-                            const newY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                            if (Math.abs(newY - currentY) > 10) {
-                                console.log('Tab switch scroll detected, restoring position');
-                                window.safeRestoreScroll(currentY, { behavior: 'auto', timeout: 200 });
-                            }
-                        }, 100);
-                    }
-                }, { passive: true });
-                
-                // Prevent modal and collapse toggles from scrolling
-                document.addEventListener('click', function(e) {
-                    const toggle = e.target.closest('[data-bs-toggle="modal"], [data-bs-toggle="collapse"], [data-bs-toggle="offcanvas"]');
-                    if (toggle) {
-                        const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        
-                        setTimeout(() => {
-                            const newY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                            if (Math.abs(newY - currentY) > 10) {
-                                console.log('Modal/collapse toggle scroll detected, restoring position');
-                                window.safeRestoreScroll(currentY, { behavior: 'auto', timeout: 200 });
-                            }
-                        }, 100);
-                    }
-                }, { passive: true });
-            }
-            
             // Initialize mobile protection
             initializeMobileScrollProtection();
             
-            // Re-initialize on window resize in case device orientation changes
-            window.addEventListener('resize', function() {
-                clearTimeout(this.resizeTimeout);
-                this.resizeTimeout = setTimeout(initializeMobileScrollProtection, 250);
-            });
+            // ===============================
+            // GLOBAL SELECT2 MOBILE ENHANCEMENT
+            // ===============================
+            
+            // Apply mobile fixes to any existing Select2 dropdowns
+            setTimeout(() => {
+                if (typeof window.initSelect2Mobile === 'function') {
+                    // Re-initialize any existing Select2 instances with mobile fixes
+                    $('.select2-hidden-accessible').each(function() {
+                        const $this = $(this);
+                        const currentOptions = $this.data('select2') ? $this.data('select2').options.options : {};
+                        
+                        // Get existing configuration
+                        const existingConfig = {
+                            placeholder: currentOptions.placeholder || 'Select...',
+                            allowClear: currentOptions.allowClear || false,
+                            closeOnSelect: currentOptions.closeOnSelect !== false,
+                            theme: currentOptions.theme || 'bootstrap-5',
+                            width: currentOptions.width || '100%'
+                        };
+                        
+                        // Only re-initialize if on mobile and not already mobile-enhanced
+                        if (window.innerWidth <= 900 && !$this.hasClass('mobile-enhanced')) {
+                            try {
+                                $this.addClass('mobile-enhanced');
+                                window.initSelect2Mobile($this, existingConfig);
+                                console.log('Enhanced Select2 dropdown for mobile:', $this.attr('id') || $this.attr('name'));
+                            } catch (e) {
+                                console.warn('Failed to enhance Select2 for mobile:', e);
+                            }
+                        }
+                    });
+                }
+            }, 200);
+            
             // Dark mode button logic
             const darkModeBtn = document.getElementById('darkModeButton');
             const body = document.body;
@@ -1293,6 +1286,8 @@
     <!-- Dark mode handlers -->
     <script src="{{ url_for('static', filename='js/dark-mode-handlers.js') }}"></script>
     
+
+    
     {% block scripts %}{% endblock %}
     {% block extra_js %}{% endblock %}
 
@@ -1307,32 +1302,6 @@
             })
             .catch(err => console.warn('SW root registration failed:', err));
     }
-    
-    // Lightweight mobile scroll protection
-    (function() {
-        const isMobile = window.innerWidth <= 900 || 
-            /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        
-        if (!isMobile) return;
-        
-        // Simple emergency protection - only restore if scroll jumps to 0 unexpectedly
-        let lastGoodScrollY = 0;
-        
-        window.addEventListener('scroll', () => {
-            const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
-            if (currentY > 10) {
-                lastGoodScrollY = currentY;
-            } else if (currentY === 0 && lastGoodScrollY > 100) {
-                // Only restore if we had a good scroll position and jumped to top unexpectedly
-                setTimeout(() => {
-                    const stillAtTop = (window.pageYOffset || document.documentElement.scrollTop || 0) === 0;
-                    if (stillAtTop && lastGoodScrollY > 100) {
-                        window.scrollTo(0, lastGoodScrollY);
-                    }
-                }, 200);
-            }
-        }, { passive: true });
-    })();
     </script>
 
     {# Add a floating button for the assistant modal #}

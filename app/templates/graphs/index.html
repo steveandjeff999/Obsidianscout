@@ -480,16 +480,12 @@
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize Select2 for team selection with mobile-friendly settings
         function initializeTeamSelect() {
-            $('#teams').select2({
-                theme: 'bootstrap-5',
+            const teamConfig = {
                 placeholder: 'Search and select teams...',
                 allowClear: true,
                 closeOnSelect: false,
-                width: '100%',
-                // Append dropdown to body to avoid clipping by parent containers (more reliable on mobile)
-                dropdownParent: $(document.body),
-                dropdownCssClass: 'select2-dropdown-large', // Custom class for styling the dropdown
-                selectionCssClass: 'select2-selection-large', // Custom class for the selection area
+                dropdownCssClass: 'select2-dropdown-large',
+                selectionCssClass: 'select2-selection-large',
                 templateResult: function(team) {
                     if (!team.id) return team.text;
                     
@@ -512,37 +508,50 @@
                         return team.text;
                     }
                 },
-                // Fix for mobile devices
                 sorter: function(data) {
                     return data.sort(function(a, b) {
                         return (a.text > b.text) ? 1 : -1;
                     });
                 }
-            });
+            };
+            
+            // Use mobile-friendly initialization
+            if (typeof window.initSelect2Mobile === 'function') {
+                window.initSelect2Mobile('#teams', teamConfig);
+            } else {
+                $('#teams').select2($.extend({theme: 'bootstrap-5', width: '100%'}, teamConfig));
+            }
         }
         
         // Initialize Select2 for event selection
-        $('#event_id').select2({
-            theme: 'bootstrap-5',
-            placeholder: 'Select an event...',
-            allowClear: true,
-            width: '100%'
-        });
+        function initializeEventSelect() {
+            const eventConfig = {
+                placeholder: 'Select an event...',
+                allowClear: true
+            };
+            
+            if (typeof window.initSelect2Mobile === 'function') {
+                window.initSelect2Mobile('#event_id', eventConfig);
+            } else {
+                $('#event_id').select2($.extend({theme: 'bootstrap-5', width: '100%'}, eventConfig));
+            }
+        }
         
-        // Initialize Select2 for graph types selection (use dropdownParent to avoid clipping on mobile)
+        // Initialize Select2 for graph types selection
         function initializeGraphTypes() {
-            $('#graph_types').select2({
-                theme: 'bootstrap-5',
+            const graphTypesConfig = {
                 placeholder: 'Select graph types...',
                 allowClear: true,
                 closeOnSelect: false,
-                width: '100%',
-                // Ensure dropdown is appended to a container that won't clip it on small screens
-                // Append dropdown to body to avoid clipping by parent containers (more reliable on mobile)
-                dropdownParent: $(document.body),
                 dropdownCssClass: 'select2-dropdown-large',
                 selectionCssClass: 'select2-selection-large'
-            });
+            };
+            
+            if (typeof window.initSelect2Mobile === 'function') {
+                window.initSelect2Mobile('#graph_types', graphTypesConfig);
+            } else {
+                $('#graph_types').select2($.extend({theme: 'bootstrap-5', width: '100%'}, graphTypesConfig));
+            }
         }
         initializeGraphTypes();
         

@@ -388,18 +388,62 @@
         if (contextMenu) {
             contextMenu.remove();
             contextMenu = null;
-            // Simple scroll restore for mobile bottom sheet
+            // Restore body scrolling if we had locked it for mobile bottom sheet
+            // Restore any fixed positioning used for scroll lock
             if (document.body.dataset && document.body.dataset._savedScroll) {
-                const saved = parseInt(document.body.dataset._savedScroll, 10) || 0;
-                document.body.style.position = '';
-                document.body.style.top = '';
-                window.scrollTo(0, saved);
-                delete document.body.dataset._savedScroll;
+                try {
+                    const saved = parseInt(document.body.dataset._savedScroll, 10) || 0;
+                    document.body.style.position = '';
+                    document.body.style.top = '';
+                    // Briefly suppress the mobile stabilizer so it doesn't override our explicit restore
+                    try {
+                        // Use global helper that cooperates with the stabilizer
+                        if (typeof window.safeRestoreScroll === 'function') {
+                            window.safeRestoreScroll(saved, { behavior: 'auto', timeout: 300 });
+                        } else {
+                            // If helper unavailable, set suppression flag and attempt direct restore safely
+                            try { window.__suppressMobileScrollJumps = true; } catch (e) {}
+                            window.requestAnimationFrame(() => {
+                                try {
+                                    if (typeof window.safeRestoreScroll === 'function') {
+                                        window.safeRestoreScroll(saved, { behavior: 'auto', timeout: 300 });
+                                        } else {
+                                            // Fallback: prefer the global helper if available, otherwise attempt direct restore
+                                            try {
+                                                if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') {
+                                                    window.safeRestoreScroll(saved, { behavior: 'auto', timeout: 300 });
+                                                } else {
+                                                    try { window.scrollTo({ top: saved, behavior: 'auto' }); } catch (e) { try { window.scrollTo(0, saved); } catch(err){} }
+                                                }
+                                            } catch (e) {
+                                                try { window.scrollTo(0, saved); } catch(err){}
+                                            }
+                                        }
+                                } catch (e) {
+                                    try {
+                                        if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') {
+                                            window.safeRestoreScroll(saved, { behavior: 'auto', timeout: 300 });
+                                        } else {
+                                            try { if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') { window.safeRestoreScroll(saved, { behavior: 'auto', timeout: 300 }); } else { window.scrollTo(0, saved); } } catch (err) {}
+                                        }
+                                    } catch (err) { try { if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') { window.safeRestoreScroll(saved, { behavior: 'auto', timeout: 300 }); } else { window.scrollTo(0, saved); } } catch(e){} }
+                                }
+                                setTimeout(() => { try { window.__suppressMobileScrollJumps = false; } catch (e) {} }, 300);
+                            });
+                        }
+                    } catch (e) { /* ignore */ }
+                    delete document.body.dataset._savedScroll;
+                } catch (e) {
+                    document.body.style.position = '';
+                    document.body.style.top = '';
+                }
             }
             document.body.classList.remove('context-menu-open');
             // Remove the overlay if present
-            const overlay = document.getElementById('context-menu-overlay');
-            if (overlay) overlay.remove();
+            try {
+                const overlay = document.getElementById('context-menu-overlay');
+                if (overlay) overlay.remove();
+            } catch (e) {}
         }
     }
 
@@ -685,29 +729,49 @@
         }
     });
 
-    // Simple mobile scroll protection for chat inputs
+    // Additional mobile scroll protection for chat inputs
     function protectChatInputs() {
-        if (window.innerWidth <= 768) {
-            const chatInputs = ['dmChatInput', 'assistantChatInput', 'groupChatInput'];
-            
-            chatInputs.forEach(inputId => {
-                const input = document.getElementById(inputId);
-                if (input && !input.dataset.protected) {
-                    input.dataset.protected = 'true';
-                    input.addEventListener('focus', function() {
-                        // Prevent viewport from jumping around
-                        document.body.style.scrollBehavior = 'auto';
-                        setTimeout(() => {
-                            document.body.style.scrollBehavior = '';
-                        }, 100);
-                    }, { passive: true });
-                }
-            });
-        }
+        const isMobile = window.innerWidth <= 768;
+        if (!isMobile) return;
+        
+        const chatInputs = ['dmChatInput', 'assistantChatInput', 'groupChatInput'];
+        
+        chatInputs.forEach(inputId => {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.addEventListener('focus', function() {
+                    const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                    
+                    // Multiple checks to prevent any scroll jumping
+                    const checkAndRestore = () => {
+                        const newY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                        if (Math.abs(newY - currentY) > 20) {
+                            console.log(`Chat input focus scroll detected (${inputId}), restoring position`);
+                            if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') {
+                                window.safeRestoreScroll(currentY, { behavior: 'auto', timeout: 200 });
+                            } else {
+                                try { window.scrollTo(0, currentY); } catch(e) {}
+                            }
+                        }
+                    };
+                    
+                    setTimeout(checkAndRestore, 50);
+                    setTimeout(checkAndRestore, 100);
+                    setTimeout(checkAndRestore, 200);
+                    setTimeout(checkAndRestore, 300);
+                }, { passive: true });
+            }
+        });
     }
     
     // Initialize chat input protection
     protectChatInputs();
+    
+    // Re-initialize on window resize
+    window.addEventListener('resize', function() {
+        clearTimeout(this.chatResizeTimeout);
+        this.chatResizeTimeout = setTimeout(protectChatInputs, 250);
+    });
 
 </script>
 <script>

@@ -1,172 +1,266 @@
 /**
- * Mobile Scroll Protection and Input Stability
- * Prevents unwanted scroll-to-top behavior on mobile devices
+ * Gentle Mobile Scroll Protection
+ * Prevents unwanted scroll-to-top behavior without interfering with smooth scrolling
  */
 
-/* Emergency CSS-only scroll protection */
-@media (max-width: 900px) {
-    /* Prevent any element from programmatically scrolling to top */
-    html {
-        scroll-behavior: auto !important;
-    }
-    
-    /* Force stable positioning on all interactive elements */
-    body {
-        overflow-anchor: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-    
-    /* Prevent layout shifts that cause scroll jumps */
-    * {
-        scroll-margin-top: 0 !important;
-        scroll-padding-top: 0 !important;
-    }
-    
-    /* Aggressive input stabilization */
-    input, textarea, select, button, .btn, [role="button"] {
-        contain: layout !important;
-        will-change: auto !important;
-        transform: translateZ(0) !important;
-        -webkit-transform: translateZ(0) !important;
-    }
-}
-
-/* Global mobile viewport stability */
+/* Basic mobile input stabilization */
 @media (max-width: 768px) {
     /* Prevent iOS zoom on input focus */
     input, textarea, select, .form-control, .form-select {
         font-size: 16px !important;
-        transform: translateZ(0);
-        -webkit-transform: translateZ(0);
-        -webkit-appearance: none;
-        appearance: none;
-        border-radius: 4px;
     }
     
-    /* Prevent focus outline from causing scroll */
-    input:focus, textarea:focus, select:focus, 
-    .form-control:focus, .form-select:focus {
+    /* Prevent focus from jumping */
+    input:focus, textarea:focus, select:focus {
         scroll-margin: 0 !important;
-        scroll-behavior: auto !important;
-        outline: 2px solid var(--bs-primary, #0d6efd);
-        outline-offset: -2px;
     }
     
-    /* Stabilize form containers */
-    .form-group, .input-group, .form-floating, .tab-content {
-        contain: layout;
-        transform: translateZ(0);
-        -webkit-transform: translateZ(0);
-    }
-    
-    /* Force hardware acceleration on interactive elements */
-    button, .btn, [role="button"], .dropdown-toggle, .nav-link {
-        transform: translateZ(0);
-        -webkit-transform: translateZ(0);
+    /* Remove tap highlights */
+    button, .btn, [role="button"] {
         -webkit-tap-highlight-color: transparent;
     }
     
-    /* Prevent dropdown and modal scroll issues */
-    .dropdown-menu, .modal-dialog {
-        transform: translateZ(0);
-        -webkit-transform: translateZ(0);
-    }
-    
-    /* Prevent body overflow during interactions */
-    body.modal-open, body.dropdown-open {
-        overflow: hidden;
-        position: fixed;
-        width: 100%;
-    }
-    
-    /* Chat-specific fixes */
-    .chat-message, .card-body {
-        transform: translateZ(0);
-        -webkit-transform: translateZ(0);
-    }
-}
-
-/* Enhanced Mobile Click Protection */
-@media (max-width: 900px) {
-    /* Prevent unwanted scroll during interactions */
-    * {
-        -webkit-overflow-scrolling: touch;
-        touch-action: manipulation;
-    }
-    
-    /* Specific protection for common culprits */
-    a[href="#"], a[href=""], a[href="javascript:void(0)"], a[href="javascript:void(0);"] {
-        touch-action: none !important;
+    /* Stabilize problematic anchor links */
+    a[href="#"], a[href=""], a[href="javascript:void(0)"] {
         pointer-events: auto !important;
     }
-    
-    /* Block anchor-based scroll jumping */
-    a[href="#"]:focus, a[href=""]:focus {
-        scroll-behavior: auto !important;
-    }
-    
-    /* Stable positioning for fixed elements */
-    .topbar, .sidebar, .navbar-fixed-top {
-        transform: translateZ(0);
-        -webkit-transform: translateZ(0);
-    }
-    
-    /* Prevent Bootstrap component scroll issues */
-    .dropdown-menu.show {
-        transform: translateZ(0);
-        -webkit-transform: translateZ(0);
-        contain: layout;
-    }
-    
-    .modal.show {
-        overflow-anchor: none;
-    }
-    
-    .collapse.show, .collapsing {
-        contain: layout;
-    }
 }
 
-/* Bootstrap component stabilization */
-.nav-tabs .nav-link {
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
-}
-
+/* Minimal Bootstrap fixes */
 .dropdown-menu {
     transform: translateZ(0);
-    -webkit-transform: translateZ(0);
 }
 
-/* Prevent scroll jumps on tab switches */
-.tab-content {
-    contain: layout style;
-}
-
-/* Modal stabilization */
 .modal-backdrop {
     -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
 }
 
-/* Context menu specific mobile fixes */
-@media (max-width: 600px) {
-    .context-menu {
-        position: fixed !important;
-        transform: translateZ(0);
+/* ===============================
+   SELECT2 MOBILE FIXES
+   =============================== */
+
+/* Prevent Select2 dropdowns from closing immediately on mobile */
+@media (max-width: 900px) {
+    /* Fix Select2 touch events on mobile */
+    .select2-container {
+        touch-action: manipulation;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+    
+    /* CRITICAL: Hide search input completely on mobile to prevent keyboard */
+    .select2-search,
+    .select2-search__field {
+        display: none !important;
+    }
+    
+    /* Prevent dropdown from closing on touch */
+    .select2-dropdown {
+        touch-action: manipulation;
         -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
+        will-change: transform;
+        position: fixed !important;
+        z-index: 9999 !important;
+    }
+    
+    /* Fix for dropdown positioning */
+    .select2-container--open .select2-dropdown {
+        position: fixed !important;
+        z-index: 9999 !important;
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+    }
+    
+    /* Prevent background scroll when dropdown is open */
+    body.select2-dropdown-open {
+        overflow: hidden !important;
+        position: fixed !important;
+        width: 100% !important;
+        height: 100% !important;
+    }
+    
+    /* Make selection area more touch-friendly */
+    .select2-selection {
+        min-height: 44px !important;
+        line-height: 42px !important;
+        touch-action: manipulation;
+        /* Prevent text selection which can cause issues */
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+    
+    /* Larger touch targets for options */
+    .select2-results__option {
+        padding: 12px 16px !important;
+        min-height: 44px !important;
+        line-height: 1.4 !important;
+        touch-action: manipulation;
+        cursor: pointer !important;
+    }
+    
+    /* REMOVE ALL SEARCH-RELATED ELEMENTS ON MOBILE */
+    .select2-dropdown .select2-search,
+    .select2-dropdown .select2-search__field,
+    .select2-selection--multiple .select2-search--inline,
+    .select2-selection--multiple .select2-search__field {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        width: 0 !important;
+        opacity: 0 !important;
+    }
+    
+    /* Fix multiple selection tags */
+    .select2-selection--multiple .select2-selection__choice {
+        min-height: 32px !important;
+        line-height: 30px !important;
+        padding: 4px 8px !important;
+        margin: 2px !important;
+        font-size: 14px !important;
+    }
+    
+    /* Remove button styling for choices */
+    .select2-selection--multiple .select2-selection__choice__remove {
+        padding: 2px 6px !important;
+        margin-right: 4px !important;
+        font-size: 16px !important;
+        line-height: 1 !important;
+    }
+    
+    /* Larger clear button */
+    .select2-selection__clear {
+        font-size: 18px !important;
+        line-height: 1 !important;
+        padding: 8px !important;
+        margin-right: 8px !important;
+    }
+    
+    /* Fix arrow indicator */
+    .select2-selection__arrow {
+        width: 32px !important;
+        height: 42px !important;
+    }
+    
+    .select2-selection__arrow b {
+        border-width: 6px 6px 0 6px !important;
+        margin-left: -6px !important;
+        margin-top: -3px !important;
+    }
+    
+    /* Prevent viewport jumping */
+    .select2-container--open {
+        z-index: 9999 !important;
+    }
+    
+    /* Make sure dropdown doesn't get clipped */
+    .select2-dropdown {
+        border: 2px solid var(--bs-primary) !important;
+        border-radius: 8px !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important;
+        max-height: 60vh !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        /* Prevent any focus that might trigger keyboard */
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+    
+    /* Fix results container scrolling */
+    .select2-results {
+        max-height: 50vh !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Better visual feedback for selected items */
+    .select2-results__option[aria-selected="true"] {
+        background-color: var(--bs-primary) !important;
+        color: white !important;
+        font-weight: 600 !important;
+    }
+    
+    .select2-results__option--highlighted {
+        background-color: var(--bs-primary-bg-subtle) !important;
+        color: var(--bs-primary-text-emphasis) !important;
+    }
+    
+    /* Prevent any input focus that might trigger keyboard */
+    .select2-dropdown input,
+    .select2-dropdown textarea {
+        display: none !important;
+        visibility: hidden !important;
     }
 }
 
-/* Emergency scroll anchor prevention */
-@supports (scroll-behavior: auto) {
-    @media (max-width: 900px) {
-        html {
-            scroll-behavior: auto !important;
-        }
-        
-        a, button, input, select, textarea {
-            scroll-behavior: auto !important;
-        }
+/* Extra small screens (phones) */
+@media (max-width: 576px) {
+    /* Even larger touch targets on very small screens */
+    .select2-selection {
+        min-height: 48px !important;
+        line-height: 46px !important;
+        font-size: 16px !important;
+    }
+    
+    .select2-results__option {
+        padding: 16px 20px !important;
+        min-height: 48px !important;
+        font-size: 16px !important;
+    }
+    
+    .select2-search__field {
+        min-height: 48px !important;
+        font-size: 16px !important;
+        padding: 12px !important;
+    }
+    
+    /* Larger dropdown on small screens */
+    .select2-dropdown {
+        max-height: 70vh !important;
+        border-radius: 12px !important;
+    }
+    
+    .select2-results {
+        max-height: 60vh !important;
+    }
+}
+
+/* Dark mode fixes for Select2 mobile */
+@media (max-width: 900px) {
+    .dark-mode .select2-dropdown {
+        border-color: var(--bs-primary) !important;
+        background-color: var(--bs-dark) !important;
+        color: var(--bs-light) !important;
+    }
+    
+    .dark-mode .select2-search__field {
+        background-color: var(--bs-gray-800) !important;
+        color: var(--bs-light) !important;
+        border-color: var(--bs-gray-600) !important;
+    }
+    
+    .dark-mode .select2-results__option {
+        background-color: var(--bs-dark) !important;
+        color: var(--bs-light) !important;
+        border-bottom: 1px solid var(--bs-gray-700) !important;
+    }
+    
+    .dark-mode .select2-results__option[aria-selected="true"] {
+        background-color: var(--bs-primary) !important;
+        color: white !important;
+    }
+    
+    .dark-mode .select2-results__option--highlighted {
+        background-color: var(--bs-primary-bg-subtle) !important;
+        color: var(--bs-primary-text-emphasis) !important;
     }
 }
