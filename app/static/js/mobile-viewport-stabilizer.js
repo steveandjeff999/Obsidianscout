@@ -113,11 +113,17 @@
                 // Restore scroll position after focus is complete
                 setTimeout(() => {
                     const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    if (Math.abs(currentScrollY - focusScrollY) > 10) {
-                        window.scrollTo({
-                            top: focusScrollY,
-                            behavior: 'instant'
-                        });
+                        if (Math.abs(currentScrollY - focusScrollY) > 10) {
+                            // Use global safeRestoreScroll if available so suppression flags are coordinated
+                            if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') {
+                                window.safeRestoreScroll(focusScrollY, { behavior: 'auto', timeout: 300 });
+                            } else if (window.__suppressMobileScrollJumps) {
+                                // If suppression explicitly set, allow direct native call
+                                try { window.scrollTo(0, focusScrollY); } catch(e){}
+                            } else {
+                                // Fallback to calling scrollTo but avoid 'instant' which some browsers don't support
+                                try { window.scrollTo({ top: focusScrollY, behavior: 'auto' }); } catch(e) { try { window.scrollTo(0, focusScrollY); } catch(e2){} }
+                            }
                     }
                     preventScrollRestoration = false;
                 }, 300);
@@ -144,11 +150,14 @@
                 // Allow tab switch, then restore position
                 setTimeout(() => {
                     const afterScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    if (Math.abs(afterScrollY - beforeScrollY) > 5) {
-                        window.scrollTo({
-                            top: beforeScrollY,
-                            behavior: 'instant'
-                        });
+                        if (Math.abs(afterScrollY - beforeScrollY) > 5) {
+                            if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') {
+                                window.safeRestoreScroll(beforeScrollY, { behavior: 'auto', timeout: 200 });
+                            } else if (window.__suppressMobileScrollJumps) {
+                                try { window.scrollTo(0, beforeScrollY); } catch(e){}
+                            } else {
+                                try { window.scrollTo({ top: beforeScrollY, behavior: 'auto' }); } catch(e) { try { window.scrollTo(0, beforeScrollY); } catch(e2){} }
+                            }
                     }
                 }, 50);
             }
@@ -168,11 +177,14 @@
                 // Multiple restoration attempts at different intervals
                 const restorePosition = () => {
                     const afterScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    if (afterScrollY === 0 || Math.abs(afterScrollY - beforeScrollY) > 10) {
-                        window.scrollTo({
-                            top: beforeScrollY,
-                            behavior: 'instant'
-                        });
+                        if (afterScrollY === 0 || Math.abs(afterScrollY - beforeScrollY) > 10) {
+                            if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') {
+                                window.safeRestoreScroll(beforeScrollY, { behavior: 'auto', timeout: 300 });
+                            } else if (window.__suppressMobileScrollJumps) {
+                                try { window.scrollTo(0, beforeScrollY); } catch(e){}
+                            } else {
+                                try { window.scrollTo({ top: beforeScrollY, behavior: 'auto' }); } catch(e) { try { window.scrollTo(0, beforeScrollY); } catch(e2){} }
+                            }
                     }
                 };
                 
@@ -286,22 +298,30 @@
             let scrollProtectionActive = false;
             
             window.scrollTo = function(x, y) {
+                try {
+                    // If another script intentionally sets a suppression flag, allow this call
+                    if (window.__suppressMobileScrollJumps) {
+                        return originalScrollTo.apply(window, arguments);
+                    }
+                } catch (e) {}
+
                 // Allow scrollTo calls that are restoring to known positions
                 if (typeof x === 'object' && x.top !== undefined) {
                     y = x.top;
                 }
-                
-                // If trying to scroll to 0 (top) and we're not already near the top, block it
+
+                // If trying to scroll to 0 (top) and we're not already near the top, block it unless protection disabled
                 if (y === 0 && lastAllowedScrollY > 50 && !scrollProtectionActive) {
-                    console.log('Mobile Viewport Stabilizer: Blocked scroll to top, maintaining position:', lastAllowedScrollY);
+                    // If this looks like a forced attempt to jump to top caused by old libraries, gently restore
+                    console.log('Mobile Viewport Stabilizer: Intercepted scroll to top, restoring lastAllowedScrollY:', lastAllowedScrollY);
                     return originalScrollTo.call(window, 0, lastAllowedScrollY);
                 }
-                
+
                 // Update last allowed position for non-zero scrolls
-                if (y > 0) {
+                if (typeof y === 'number' && y > 0) {
                     lastAllowedScrollY = y;
                 }
-                
+
                 return originalScrollTo.apply(window, arguments);
             };
             

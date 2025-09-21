@@ -19,13 +19,13 @@
 
     <ul class="nav nav-tabs" id="chatTab" role="tablist" style="margin-bottom: 1rem;">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="dm-tab" data-bs-toggle="tab" data-bs-target="#dmTabPane" type="button" role="tab" aria-controls="dmTabPane" aria-selected="true">DMs</button>
+            <button class="nav-link active" id="dm-tab" data-bs-toggle="tab" data-bs-target="#dmTabPane" type="button" role="tab">DMs</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="assistant-tab" data-bs-toggle="tab" data-bs-target="#assistantTabPane" type="button" role="tab" aria-controls="assistantTabPane" aria-selected="false">Assistant</button>
+            <button class="nav-link" id="assistant-tab" data-bs-toggle="tab" data-bs-target="#assistantTabPane" type="button" role="tab">Assistant</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="group-tab" data-bs-toggle="tab" data-bs-target="#groupTabPane" type="button" role="tab" aria-controls="groupTabPane" aria-selected="false">Groups</button>
+            <button class="nav-link" id="groups-tab" data-bs-toggle="tab" data-bs-target="#groupsTabPane" type="button" role="tab">Groups</button>
         </li>
     </ul>
 
@@ -51,7 +51,7 @@
                     <div class="card h-100">
                         <div class="card-header">Messages</div>
                         <div class="card-body d-flex flex-column p-3">
-                            <div id="dmChatContainer" class="flex-grow-1 bg-light p-2 rounded chat-scrollbox" style="min-height: 300px; max-height: 420px; overflow-y: auto; -webkit-overflow-scrolling: touch;"></div>
+                            <div id="dmChatContainer" class="flex-grow-1 overflow-auto bg-light p-2 rounded" style="min-height: 300px;"></div>
                             <div class="mt-3">
                                 <div class="input-group">
                                     <input type="text" class="form-control" id="dmChatInput" placeholder="Type a message...">
@@ -75,7 +75,7 @@
                     <div class="card h-100">
                         <div class="card-header">Assistant Chat</div>
                         <div class="card-body d-flex flex-column p-3">
-                            <div id="assistantChatContainer" class="flex-grow-1 bg-light p-2 rounded chat-scrollbox" style="min-height: 300px; max-height: 420px; overflow-y: auto; -webkit-overflow-scrolling: touch;"></div>
+                            <div id="assistantChatContainer" class="flex-grow-1 overflow-auto bg-light p-2 rounded" style="min-height: 300px;"></div>
                             <div class="mt-3">
                                 <div class="input-group">
                                     <input type="text" class="form-control" id="assistantChatInput" placeholder="Ask the assistant...">
@@ -98,23 +98,32 @@
             </div>
         </div>
 
-        <!-- Group Tab -->
-        <div class="tab-pane fade" id="groupTabPane" role="tabpanel">
+        <!-- Group messaging UI removed -->
+        <!-- Groups Tab -->
+        <div class="tab-pane fade" id="groupsTabPane" role="tabpanel">
             <div class="row">
                 <div class="col-md-4 mb-3">
                     <div class="card h-100">
                         <div class="card-header">Groups</div>
                         <div class="card-body d-flex flex-column">
-                            <div class="mb-2">
-                                <input type="text" id="groupNameInput" class="form-control form-control-sm mb-2" placeholder="Group name">
-                                <button class="btn btn-outline-primary btn-sm mb-2" id="joinGroupBtn">Join/Create Group</button>
-                                <select id="currentGroupSelect" class="form-select form-select-sm mb-2"></select>
-                                <button class="btn btn-outline-danger btn-sm mb-2" id="leaveGroupBtn">Leave Group</button>
+                            <label for="groupNameInput" class="form-label mb-1">Group name:</label>
+                            <input id="groupNameInput" class="form-control form-control-sm mb-2" placeholder="main" />
+                            <label for="addMemberSelect" class="form-label mb-1">Add team member:</label>
+                            <div class="input-group mb-2">
+                                <select id="addMemberSelect" class="form-select form-select-sm"></select>
+                                <button class="btn btn-outline-primary btn-sm" id="addMemberBtn">Add</button>
                             </div>
-                            <div class="mt-auto">
-                                <label for="groupUserSelect" class="form-label mb-1">Add user:</label>
-                                <select id="groupUserSelect" class="form-select form-select-sm mb-2"></select>
-                                <button class="btn btn-success btn-sm" id="addUserToGroupBtn">Add to Group</button>
+                            <div class="text-muted small mb-2">Add a teammate to the current group (they'll be added to server-side membership).</div>
+                            <div class="btn-group mb-2" role="group">
+                                <button class="btn btn-primary btn-sm" id="joinGroupBtn">Join</button>
+                                <button class="btn btn-secondary btn-sm" id="leaveGroupBtn">Leave</button>
+                            </div>
+                            <div class="text-muted small mb-2">Join or enter a group name to chat with team members.</div>
+                            <div id="currentGroupLabel" class="fw-bold mt-2"></div>
+                            <hr />
+                            <div class="mt-2">
+                                <div class="fw-bold mb-1">Chats I'm in</div>
+                                <ul id="myChatsList" class="list-unstyled small text-muted" style="max-height:200px; overflow:auto;"></ul>
                             </div>
                         </div>
                     </div>
@@ -124,7 +133,7 @@
                     <div class="card h-100">
                         <div class="card-header">Group Messages</div>
                         <div class="card-body d-flex flex-column p-3">
-                            <div id="groupChatContainer" class="flex-grow-1 bg-light p-2 rounded chat-scrollbox" style="min-height: 300px; max-height: 420px; overflow-y: auto; -webkit-overflow-scrolling: touch;"></div>
+                            <div id="groupChatContainer" class="flex-grow-1 overflow-auto bg-light p-2 rounded" style="min-height: 300px;"></div>
                             <div class="mt-3">
                                 <div class="input-group">
                                     <input type="text" class="form-control" id="groupChatInput" placeholder="Type a group message...">
@@ -139,8 +148,7 @@
                     <div class="card h-100">
                         <div class="card-header">Members</div>
                         <div class="card-body">
-                            <strong>Group Members:</strong>
-                            <div id="groupMembersList" class="mt-2"></div>
+                            <ul id="groupMembersList" class="list-unstyled small text-muted"></ul>
                         </div>
                     </div>
                 </div>
@@ -152,373 +160,138 @@
 
 {% block scripts %}
 <script>
-    // Mobile scroll-to-top prevention system
-    (function() {
-        // Enhanced mobile detection
-        const isMobile = () => {
-            return window.innerWidth <= 768 || 
-                   /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-                   ('ontouchstart' in window) ||
-                   (navigator.maxTouchPoints > 0);
-        };
-        
-        // Store initial scroll position to restore if needed
-        let initialScrollY = 0;
-        
-        // 1. Enhanced focus() call prevention
-        const originalFocus = HTMLElement.prototype.focus;
-        HTMLElement.prototype.focus = function(options) {
-            if (isMobile()) {
-                // Store scroll position before focus
-                initialScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                
-                // Always use preventScroll on mobile
-                const result = originalFocus.call(this, { preventScroll: true });
-                
-                // Double-check scroll position hasn't changed after a short delay
-                setTimeout(() => {
-                    const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    if (Math.abs(currentScrollY - initialScrollY) > 10) {
-                        window.scrollTo(0, initialScrollY);
-                    }
-                }, 50);
-                
-                return result;
+    // Add CSS for context menu
+    const style = document.createElement('style');
+    style.textContent = `
+        :root {
+            --context-bg: #ffffff;
+            --context-border: #ccc;
+            --context-text: #212529;
+            --context-hover: #f8f9fa;
+            --context-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        /* Dark mode overrides via prefers-color-scheme */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --context-bg: #1e1e1e;
+                --context-border: #2c2c2c;
+                --context-text: #e9edf0;
+                --context-hover: #2a2a2a;
+                --context-shadow: 0 6px 20px rgba(0,0,0,0.6);
             }
-            return originalFocus.call(this, options);
-        };
+        }
+        /* Also support an explicit page-level dark mode class */
+        body.dark-mode {
+            --context-bg: #1e1e1e;
+            --context-border: #2c2c2c;
+            --context-text: #e9edf0;
+            --context-hover: #2a2a2a;
+            --context-shadow: 0 6px 20px rgba(0,0,0,0.6);
+        }
 
-        // 2. Enhanced input focus event handling
-        document.addEventListener('focusin', function(e) {
-            if (isMobile() && e.target.matches('input, textarea')) {
-                // Store current scroll position
-                const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                initialScrollY = currentScrollY;
-                
-                // Prevent any automatic scrolling behavior
-                e.target.style.scrollMargin = '0';
-                e.target.style.scrollMarginTop = '0';
-                e.target.style.scrollMarginBottom = '0';
-                
-                // Force maintain scroll position
-                setTimeout(() => {
-                    const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    if (Math.abs(newScrollY - currentScrollY) > 5) {
-                        window.scrollTo(0, currentScrollY);
-                    }
-                }, 10);
-            }
-        }, true);
+        .chat-message {
+            position: relative;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+        }
+        .chat-message:hover {
+            background-color: rgba(0,0,0,0.04);
+        }
+        .message-reactions {
+            font-size: 0.9em;
+            color: var(--context-text, #6c757d);
+            margin-left: 10px;
+        }
+        .context-menu {
+            position: absolute;
+            background: var(--context-bg);
+            color: var(--context-text);
+            border: 1px solid var(--context-border);
+            border-radius: 10px;
+            box-shadow: var(--context-shadow);
+            z-index: 1000;
+            min-width: 160px;
+            padding: 6px 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .context-menu-item {
+            padding: 12px 18px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            font-size: 16px;
+            line-height: 1.2;
+            display: block;
+            color: inherit;
+        }
+        .context-menu-item:hover {
+            background-color: var(--context-hover);
+        }
+        .context-menu-item:disabled {
+            color: #6c757d;
+            cursor: not-allowed;
+        }
+        .context-menu-item:disabled:hover {
+            background-color: transparent;
+        }
+        .message-editing {
+            background-color: #fff3cd;
+        }
+        .edit-input {
+            width: 100%;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-size: inherit;
+        }
+        .edit-actions {
+            margin-top: 8px;
+        }
+        .edit-actions button {
+            margin-right: 5px;
+        }
 
-        // 3. Enhanced hash change prevention
-        let preventNextHashChange = false;
-        const originalReplaceState = history.replaceState;
-        const originalPushState = history.pushState;
-        
-        // Override history methods to prevent unwanted hash changes
-        history.replaceState = function() {
-            try {
-                return originalReplaceState.apply(history, arguments);
-            } catch (e) {
-                console.warn('replaceState blocked:', e);
+        /* Mobile-specific context behavior */
+        @media (max-width: 600px) {
+            .context-menu {
+                min-width: calc(100% - 32px);
+                left: 16px !important;
+                right: 16px !important;
+                bottom: 20px !important;
+                top: auto !important;
+                border-radius: 12px;
+                padding: 8px 0;
             }
-        };
+            .context-menu-item { padding: 14px 18px; font-size: 18px; }
+        }
         
-        window.addEventListener('hashchange', function(e) {
-            if (preventNextHashChange || (isMobile() && window.location.hash === '')) {
-                e.preventDefault();
-                e.stopImmediatePropagation();
-                
-                // Restore the previous hash if there was one
-                if (e.oldURL && e.oldURL.includes('#')) {
-                    const oldHash = e.oldURL.split('#')[1] || '';
-                    if (oldHash) {
-                        history.replaceState(null, '', '#' + oldHash);
-                    }
-                }
-                preventNextHashChange = false;
-                return false;
-            }
-        }, true);
-
-        // 4. Enhanced Bootstrap tab and click handling
-        document.addEventListener('click', function(e) {
-            const target = e.target;
-            
-            // Handle Bootstrap tab clicks specially
-            if (target.matches('[data-bs-toggle="tab"]') || target.closest('[data-bs-toggle="tab"]')) {
-                const tabElement = target.closest('[data-bs-toggle="tab"]') || target;
-                
-                if (isMobile()) {
-                    // Prevent hash change for mobile
-                    preventNextHashChange = true;
-                    
-                    // Store current scroll position
-                    const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    
-                    // Allow the tab switch to happen
-                    setTimeout(() => {
-                        // Restore scroll position if it changed
-                        const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        if (Math.abs(newScrollY - currentScrollY) > 10) {
-                            window.scrollTo(0, currentScrollY);
-                        }
-                        preventNextHashChange = false;
-                    }, 100);
-                }
-                return;
+        /* Enhanced mobile input protection */
+        @media (max-width: 768px) {
+            /* Prevent chat inputs from zooming */
+            #dmChatInput, #assistantChatInput, #groupChatInput, 
+            #groupNameInput, #dmUserSelect, #addMemberSelect {
+                font-size: 16px !important;
+                transform: translateZ(0);
+                -webkit-transform: translateZ(0);
             }
             
-            // Allow clicks on genuinely interactive elements
-            if (target.matches('button, input, select, textarea, a[href]:not([href="#"]), [role="button"], [tabindex]') || 
-                target.closest('button, input, select, textarea, a[href]:not([href="#"]), [role="button"], [tabindex]')) {
-                return; // Let these proceed normally
+            /* Stabilize chat containers */
+            .card-body, .tab-content, .chat-message {
+                transform: translateZ(0);
+                -webkit-transform: translateZ(0);
             }
-
-            // For other elements that might cause navigation, prevent unwanted effects
-            if (target.closest('.container, .card-body, .tab-pane, .tab-content')) {
-                if (isMobile()) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
-            }
-        }, true); // Use capture phase
-
-        // 5. Enhanced touch event handling
-        let touchStartY = 0;
-        let touchStartTime = 0;
-        let touchStartScrollY = 0;
-        
-        document.addEventListener('touchstart', function(e) {
-            touchStartY = e.touches[0].clientY;
-            touchStartTime = Date.now();
-            touchStartScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-        }, { passive: true });
-
-        document.addEventListener('touchend', function(e) {
-            if (!isMobile()) return;
             
-            const touchEndY = e.changedTouches[0].clientY;
-            const touchDuration = Date.now() - touchStartTime;
-            const touchDistance = Math.abs(touchEndY - touchStartY);
-            
-            // If this was a tap (short duration, small distance)
-            if (touchDuration < 300 && touchDistance < 10) {
-                const target = e.target;
-                
-                // Don't interfere with interactive elements
-                if (!target.matches('button, input, select, textarea, a[href]:not([href="#"]), [role="button"], [tabindex]') && 
-                    !target.closest('button, input, select, textarea, a[href]:not([href="#"]), [role="button"], [tabindex]')) {
-                    
-                    // Check if scroll position changed during this touch
-                    const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    if (Math.abs(currentScrollY - touchStartScrollY) > 5) {
-                        // Restore original scroll position
-                        setTimeout(() => {
-                            window.scrollTo(0, touchStartScrollY);
-                        }, 10);
-                    }
-                    
-                    // Prevent any default behavior that might cause scrolling
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
+            /* Prevent scroll on focus */
+            #dmChatInput:focus, #assistantChatInput:focus, #groupChatInput:focus {
+                scroll-margin: 0 !important;
             }
-        }, { passive: false });
-        
-        // 6. Input-specific handling to prevent viewport shifts
-        document.addEventListener('input', function(e) {
-            if (isMobile() && e.target.matches('input, textarea')) {
-                // Maintain scroll position during input
-                const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                if (Math.abs(currentScrollY - initialScrollY) > 20) {
-                    setTimeout(() => {
-                        window.scrollTo(0, initialScrollY);
-                    }, 50);
-                }
-            }
-        }, { passive: true });
-        
-        // 7. Specific chat input field handling
-        const chatInputIds = ['dmChatInput', 'assistantChatInput', 'groupChatInput'];
-        
-        chatInputIds.forEach(inputId => {
-            const input = document.getElementById(inputId);
-            if (input) {
-                // Override focus behavior
-                const originalInputFocus = input.focus;
-                input.focus = function(options) {
-                    if (isMobile()) {
-                        const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        
-                        // Call original focus with preventScroll
-                        const result = originalInputFocus.call(this, { preventScroll: true });
-                        
-                        // Force maintain scroll position
-                        setTimeout(() => {
-                            const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                            if (Math.abs(newScrollY - scrollY) > 5) {
-                                window.scrollTo(0, scrollY);
-                            }
-                        }, 10);
-                        
-                        setTimeout(() => {
-                            const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                            if (Math.abs(newScrollY - scrollY) > 5) {
-                                window.scrollTo(0, scrollY);
-                            }
-                        }, 100);
-                        
-                        setTimeout(() => {
-                            const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                            if (Math.abs(newScrollY - scrollY) > 5) {
-                                window.scrollTo(0, scrollY);
-                            }
-                        }, 300);
-                        
-                        return result;
-                    }
-                    return originalInputFocus.call(this, options);
-                };
-                
-                // Enhanced focus event listener
-                input.addEventListener('focus', function(e) {
-                    if (isMobile()) {
-                        const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        
-                        // Set styles to prevent viewport changes
-                        this.style.setProperty('scroll-margin', '0', 'important');
-                        this.style.setProperty('scroll-margin-top', '0', 'important');
-                        this.style.setProperty('scroll-margin-bottom', '0', 'important');
-                        this.style.setProperty('transform', 'translateZ(0)', 'important');
-                        
-                        // Multiple checks to maintain position
-                        const checkAndRestore = () => {
-                            const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                            if (Math.abs(newScrollY - scrollY) > 3) {
-                                window.scrollTo(0, scrollY);
-                            }
-                        };
-                        
-                        setTimeout(checkAndRestore, 10);
-                        setTimeout(checkAndRestore, 50);
-                        setTimeout(checkAndRestore, 150);
-                        setTimeout(checkAndRestore, 300);
-                    }
-                }, true);
-                
-                // Handle clicks on input
-                input.addEventListener('click', function(e) {
-                    if (isMobile()) {
-                        const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        
-                        setTimeout(() => {
-                            const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                            if (Math.abs(newScrollY - scrollY) > 5) {
-                                window.scrollTo(0, scrollY);
-                            }
-                        }, 50);
-                    }
-                });
-                
-                // Handle touchstart on input
-                input.addEventListener('touchstart', function(e) {
-                    if (isMobile()) {
-                        const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        
-                        setTimeout(() => {
-                            const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                            if (Math.abs(newScrollY - scrollY) > 5) {
-                                window.scrollTo(0, scrollY);
-                            }
-                        }, 50);
-                    }
-                }, { passive: true });
-            }
-        });
-        
-        // Body position lock for interaction (prevents any visual movement)
-        let bodyLocked = false;
-        let lockedScrollY = 0;
-        let originalBodyStyle = {};
-        
-        const lockBody = () => {
-            if (bodyLocked) return;
-            
-            lockedScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-            
-            // Store original styles
-            originalBodyStyle = {
-                position: document.body.style.position,
-                top: document.body.style.top,
-                left: document.body.style.left,
-                width: document.body.style.width,
-                height: document.body.style.height,
-                overflow: document.body.style.overflow
-            };
-            
-            // Lock the body completely
-            document.body.style.position = 'fixed';
-            document.body.style.top = `-${lockedScrollY}px`;
-            document.body.style.left = '0';
-            document.body.style.width = '100%';
-            document.body.style.height = '100%';
-            document.body.style.overflow = 'hidden';
-            
-            bodyLocked = true;
-        };
-        
-        const unlockBody = () => {
-            if (!bodyLocked) return;
-            
-            // Restore original styles
-            Object.keys(originalBodyStyle).forEach(key => {
-                document.body.style[key] = originalBodyStyle[key];
-            });
-            
-            // Restore scroll position
-            window.scrollTo(0, lockedScrollY);
-            
-            bodyLocked = false;
-        };
-        
-        // Lock body during critical interactions
-        document.addEventListener('touchstart', function(e) {
-            if (e.target.matches('button, .btn, input, select, .dropdown-toggle') ||
-                e.target.closest('button, .btn, input, select, .dropdown-toggle')) {
-                lockBody();
-            }
-        }, true);
-        
-        document.addEventListener('touchend', function(e) {
-            if (bodyLocked) {
-                setTimeout(unlockBody, 10);
-            }
-        }, true);
-        
-        // Also lock on click for non-touch devices
-        document.addEventListener('mousedown', function(e) {
-            if (e.target.matches('button, .btn, input, select, .dropdown-toggle') ||
-                e.target.closest('button, .btn, input, select, .dropdown-toggle')) {
-                lockBody();
-            }
-        }, true);
-        
-        document.addEventListener('mouseup', function(e) {
-            if (bodyLocked) {
-                setTimeout(unlockBody, 10);
-            }
-        }, true);
-        
-        // Lock during focus events
-        document.addEventListener('focusin', function(e) {
-            if (e.target.matches('input, textarea, select')) {
-                lockBody();
-                setTimeout(unlockBody, 100);
-            }
-        }, true);
-        
-    })();
+        }
+    `;
+    document.head.appendChild(style);
 
     // Context menu system
     let contextMenu = null;
@@ -529,166 +302,166 @@
         event.preventDefault();
         hideContextMenu();
         
-        console.log('Showing context menu for:', messageElement);
-        
         const messageId = messageElement.getAttribute('data-message-id');
         const sender = messageElement.getAttribute('data-sender');
         const isOwnMessage = sender === currentUsername;
         
-        if (!messageId) {
-            console.log('No message ID found, skipping');
-            return; // Skip messages without IDs
-        }
-        
-        console.log('Creating context menu with messageId:', messageId, 'isOwnMessage:', isOwnMessage);
+        if (!messageId) return; // Skip messages without IDs
         
         contextMenu = document.createElement('div');
         contextMenu.className = 'context-menu';
-        
-        // Add a header for debugging
-        const header = document.createElement('div');
-        header.style.cssText = 'padding: 8px 16px; font-weight: bold; border-bottom: 1px solid #eee; font-size: 14px;';
-        header.textContent = 'Message Actions';
-        contextMenu.appendChild(header);
         
         // Edit option (only for own messages)
         if (isOwnMessage) {
             const editBtn = document.createElement('button');
             editBtn.className = 'context-menu-item';
-            editBtn.innerHTML = '<i class="fas fa-edit"></i> Edit Message';
+            editBtn.innerHTML = '<i class="fas fa-edit"></i> Edit';
             editBtn.onclick = () => editMessage(messageElement);
             contextMenu.appendChild(editBtn);
             
             // Delete option (only for own messages)
             const deleteBtn = document.createElement('button');
             deleteBtn.className = 'context-menu-item';
-            deleteBtn.innerHTML = '<i class="fas fa-trash"></i> Delete Message';
+            deleteBtn.innerHTML = '<i class="fas fa-trash"></i> Delete';
             deleteBtn.onclick = () => deleteMessage(messageElement);
             contextMenu.appendChild(deleteBtn);
-            
-            // Add separator if we have more options
-            const separator = document.createElement('div');
-            separator.style.borderTop = '1px solid var(--bs-border-color, #dee2e6)';
-            separator.style.margin = '4px 0';
-            contextMenu.appendChild(separator);
         }
         
-        // React options with better styling
-        const reactions = ['👍', '👎', '❤️', '😄', '😮', '😢', '🔥', '🎉'];
+        // React options
+        const reactions = ['👍', '👎', '❤️', '😄', '😮', '😢'];
         reactions.forEach(emoji => {
             const reactBtn = document.createElement('button');
-            reactBtn.className = 'context-menu-item reaction-item';
-            reactBtn.innerHTML = `<span class="emoji">${emoji}</span> ${getEmojiName(emoji)}`;
+            reactBtn.className = 'context-menu-item';
+            reactBtn.innerHTML = `${emoji} React`;
             reactBtn.onclick = () => reactToMessage(messageElement, emoji);
             contextMenu.appendChild(reactBtn);
         });
         
-        console.log('Context menu created with', contextMenu.children.length, 'items');
-        
         // Position the menu
-        const x = event.pageX || (event.touches && event.touches[0].pageX) || event.clientX;
-        const y = event.pageY || (event.touches && event.touches[0].pageY) || event.clientY;
-        
-        console.log('Positioning menu at:', x, y);
-        
-        // Add backdrop for mobile first (lower z-index)
-        let backdrop = null;
-        if (window.innerWidth <= 768) {
-            console.log('Adding mobile backdrop');
-            backdrop = document.createElement('div');
-            backdrop.className = 'context-menu-backdrop';
-            backdrop.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0,0,0,0.2);
-                z-index: 1045;
-                backdrop-filter: blur(2px);
-                -webkit-backdrop-filter: blur(2px);
-            `;
-            backdrop.onclick = hideContextMenu;
-            document.body.appendChild(backdrop);
+        // Create and append a blocking overlay for mobile to capture taps and prevent background scrolling
+        let overlay = document.getElementById('context-menu-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'context-menu-overlay';
+            overlay.style.position = 'fixed';
+            overlay.style.left = '0';
+            overlay.style.top = '0';
+            overlay.style.right = '0';
+            overlay.style.bottom = '0';
+            overlay.style.zIndex = 999;
+            overlay.style.background = 'transparent';
+            overlay.addEventListener('click', function(e) { hideContextMenu(); });
+            overlay.addEventListener('touchstart', function(e) { e.preventDefault(); }, { passive: false });
+            document.body.appendChild(overlay);
         }
-        
-        // Add context menu after backdrop (higher z-index)
         document.body.appendChild(contextMenu);
-        console.log('Context menu added to DOM');
-        
-        // Get computed position after adding to DOM
         const rect = contextMenu.getBoundingClientRect();
-        let finalX = x;
-        let finalY = y;
-        
-        console.log('Menu rect:', rect);
-        
-        // Improve positioning logic to prevent off-screen issues
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-        const padding = 20; // Minimum padding from screen edges
-        
-        // Adjust horizontal position
-        if (finalX + rect.width > viewportWidth - padding) {
-            finalX = Math.max(padding, viewportWidth - rect.width - padding);
+        // If on small screen (mobile), show as bottom sheet centered horizontally
+        const isMobile = window.matchMedia('(max-width: 600px)').matches;
+        if (isMobile) {
+            // Use fixed positioning so menu doesn't shift the document flow
+            contextMenu.style.position = 'fixed';
+            contextMenu.style.left = '16px';
+            contextMenu.style.right = '16px';
+            contextMenu.style.bottom = '20px';
+            contextMenu.style.top = 'auto';
+            // Lock body scroll while menu is open without causing jump: fix body and preserve scrollY
+            const scrollY = window.scrollY || window.pageYOffset || 0;
+            document.body.style.position = 'fixed';
+            document.body.style.top = `-${scrollY}px`;
+            document.body.dataset._savedScroll = String(scrollY);
+            document.body.classList.add('context-menu-open');
+        } else {
+            const x = (event.pageX || event.clientX || 0);
+            const y = (event.pageY || event.clientY || 0);
+            // Default place near the touch/click, but keep inside viewport
+            let left = x;
+            let top = y;
+            if (left + rect.width > window.innerWidth) left = Math.max(8, window.innerWidth - rect.width - 8);
+            if (top + rect.height > window.innerHeight) top = Math.max(8, window.innerHeight - rect.height - 8);
+            contextMenu.style.left = left + 'px';
+            contextMenu.style.top = top + 'px';
         }
-        if (finalX < padding) {
-            finalX = padding;
-        }
-        
-        // Adjust vertical position  
-        if (finalY + rect.height > viewportHeight - padding) {
-            finalY = Math.max(padding, viewportHeight - rect.height - padding);
-        }
-        if (finalY < padding) {
-            finalY = padding;
-        }
-        
-        console.log('Final position:', finalX, finalY);
-        
-        contextMenu.style.left = finalX + 'px';
-        contextMenu.style.top = finalY + 'px';
-        contextMenu.style.zIndex = '1055';
-        
-        if (backdrop) {
-            contextMenu.setAttribute('data-backdrop', 'true');
-        }
-        
-        console.log('Context menu should now be visible');
-    }
-
-    function getEmojiName(emoji) {
-        const names = {
-            '👍': 'Thumbs Up',
-            '👎': 'Thumbs Down', 
-            '❤️': 'Heart',
-            '😄': 'Laughing',
-            '😮': 'Surprised',
-            '😢': 'Sad',
-            '🔥': 'Fire',
-            '🎉': 'Party'
-        };
-        return names[emoji] || 'React';
     }
 
     function hideContextMenu() {
-        console.log('Hiding context menu');
         if (contextMenu) {
-            // Remove backdrop if it exists
-            const backdrop = document.querySelector('.context-menu-backdrop');
-            if (backdrop) {
-                console.log('Removing backdrop');
-                backdrop.remove();
-            }
-            console.log('Removing context menu');
             contextMenu.remove();
             contextMenu = null;
+            // Restore body scrolling if we had locked it for mobile bottom sheet
+            // Restore any fixed positioning used for scroll lock
+            if (document.body.dataset && document.body.dataset._savedScroll) {
+                try {
+                    const saved = parseInt(document.body.dataset._savedScroll, 10) || 0;
+                    document.body.style.position = '';
+                    document.body.style.top = '';
+                    // Briefly suppress the mobile stabilizer so it doesn't override our explicit restore
+                    try {
+                        // Use global helper that cooperates with the stabilizer
+                        if (typeof window.safeRestoreScroll === 'function') {
+                            window.safeRestoreScroll(saved, { behavior: 'auto', timeout: 300 });
+                        } else {
+                            // If helper unavailable, set suppression flag and attempt direct restore safely
+                            try { window.__suppressMobileScrollJumps = true; } catch (e) {}
+                            window.requestAnimationFrame(() => {
+                                try {
+                                    if (typeof window.safeRestoreScroll === 'function') {
+                                        window.safeRestoreScroll(saved, { behavior: 'auto', timeout: 300 });
+                                        } else {
+                                            // Fallback: prefer the global helper if available, otherwise attempt direct restore
+                                            try {
+                                                if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') {
+                                                    window.safeRestoreScroll(saved, { behavior: 'auto', timeout: 300 });
+                                                } else {
+                                                    try { window.scrollTo({ top: saved, behavior: 'auto' }); } catch (e) { try { window.scrollTo(0, saved); } catch(err){} }
+                                                }
+                                            } catch (e) {
+                                                try { window.scrollTo(0, saved); } catch(err){}
+                                            }
+                                        }
+                                } catch (e) {
+                                    try {
+                                        if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') {
+                                            window.safeRestoreScroll(saved, { behavior: 'auto', timeout: 300 });
+                                        } else {
+                                            try { if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') { window.safeRestoreScroll(saved, { behavior: 'auto', timeout: 300 }); } else { window.scrollTo(0, saved); } } catch (err) {}
+                                        }
+                                    } catch (err) { try { if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') { window.safeRestoreScroll(saved, { behavior: 'auto', timeout: 300 }); } else { window.scrollTo(0, saved); } } catch(e){} }
+                                }
+                                setTimeout(() => { try { window.__suppressMobileScrollJumps = false; } catch (e) {} }, 300);
+                            });
+                        }
+                    } catch (e) { /* ignore */ }
+                    delete document.body.dataset._savedScroll;
+                } catch (e) {
+                    document.body.style.position = '';
+                    document.body.style.top = '';
+                }
+            }
+            document.body.classList.remove('context-menu-open');
+            // Remove the overlay if present
+            try {
+                const overlay = document.getElementById('context-menu-overlay');
+                if (overlay) overlay.remove();
+            } catch (e) {}
         }
     }
 
-    // Hide context menu when clicking elsewhere
-    document.addEventListener('click', hideContextMenu);
-    document.addEventListener('scroll', hideContextMenu);
+    // Hide context menu when clicking elsewhere, but suppress the immediate click after opening via touch
+    let suppressClickUntil = 0;
+    document.addEventListener('click', function(e) {
+        if (Date.now() < suppressClickUntil) {
+            // ignore this click because it immediately followed a touch that opened the menu
+            return;
+        }
+        hideContextMenu();
+    });
+    document.addEventListener('scroll', function() {
+        // Only hide if menu is open and not displayed as a mobile bottom sheet
+        if (contextMenu && !document.body.classList.contains('context-menu-open')) {
+            hideContextMenu();
+        }
+    }, { passive: true });
 
     // Message action functions
     function editMessage(messageElement) {
@@ -802,129 +575,17 @@
     function updateReactionsDisplay(messageElement, reactions) {
         let reactionsEl = messageElement.querySelector('.message-reactions');
         if (!reactionsEl) {
-            reactionsEl = document.createElement('div');
-            reactionsEl.className = 'message-reactions';
+            reactionsEl = document.createElement('span');
+            reactionsEl.className = 'message-reactions ms-2';
             const textElement = messageElement.querySelector('.message-text');
             textElement.parentNode.insertBefore(reactionsEl, textElement.nextSibling);
         }
         
         if (reactions && reactions.length > 0) {
-            reactionsEl.innerHTML = '';
-            reactions.forEach(r => {
-                const reactionItem = document.createElement('span');
-                reactionItem.className = 'reaction-item';
-                reactionItem.innerHTML = `${r.emoji} ${r.count}`;
-                reactionItem.setAttribute('data-reaction-emoji', r.emoji);
-                reactionItem.setAttribute('data-reaction-users', JSON.stringify(r.users || []));
-                
-                // Add click handler for mobile
-                reactionItem.onclick = (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    showReactionDetails(reactionItem, r);
-                };
-                
-                // Add hover handler for desktop
-                let hoverTimeout;
-                reactionItem.onmouseenter = (e) => {
-                    clearTimeout(hoverTimeout);
-                    hoverTimeout = setTimeout(() => {
-                        showReactionTooltip(reactionItem, r);
-                    }, 500);
-                };
-                
-                reactionItem.onmouseleave = () => {
-                    clearTimeout(hoverTimeout);
-                    hideReactionTooltip();
-                };
-                
-                reactionsEl.appendChild(reactionItem);
-            });
+            reactionsEl.innerHTML = reactions.map(r => (r.count != null ? `${r.emoji} ${r.count}` : `${r.emoji}`)).join(' ');
             reactionsEl.style.display = '';
         } else {
             reactionsEl.style.display = 'none';
-        }
-    }
-
-    function showReactionDetails(reactionElement, reactionData) {
-        // Handle if reactionData is a string (from onclick attribute)
-        if (typeof reactionData === 'string') {
-            try {
-                reactionData = JSON.parse(reactionData);
-            } catch (e) {
-                console.error('Failed to parse reaction data:', e);
-                return;
-            }
-        }
-        
-        // Also try to get users from the data attribute if not in reactionData
-        if (!reactionData.users) {
-            const usersAttr = reactionElement.getAttribute('data-reaction-users');
-            if (usersAttr) {
-                try {
-                    reactionData.users = JSON.parse(usersAttr);
-                } catch (e) {
-                    console.warn('Failed to parse users from data attribute:', e);
-                }
-            }
-        }
-        
-        const users = reactionData.users || [];
-        if (users.length === 0) return;
-        
-        // For mobile, show a simple alert or modal
-        if (window.innerWidth <= 768) {
-            const userList = users.join(', ');
-            alert(`${reactionData.emoji} - Reacted by: ${userList}`);
-        } else {
-            showReactionTooltip(reactionElement, reactionData);
-        }
-    }
-
-    let currentTooltip = null;
-
-    function showReactionTooltip(reactionElement, reactionData) {
-        hideReactionTooltip();
-        
-        const users = reactionData.users || [];
-        if (users.length === 0) return;
-        
-        currentTooltip = document.createElement('div');
-        currentTooltip.className = 'reaction-tooltip show';
-        
-        const userList = users.join(', ');
-        currentTooltip.textContent = `Reacted by: ${userList}`;
-        
-        document.body.appendChild(currentTooltip);
-        
-        // Position tooltip
-        const rect = reactionElement.getBoundingClientRect();
-        const tooltipRect = currentTooltip.getBoundingClientRect();
-        
-        let left = rect.left + (rect.width / 2);
-        let top = rect.bottom + 5;
-        
-        // Adjust if tooltip goes off screen
-        if (left + (tooltipRect.width / 2) > window.innerWidth - 10) {
-            left = window.innerWidth - (tooltipRect.width / 2) - 10;
-        }
-        if (left - (tooltipRect.width / 2) < 10) {
-            left = (tooltipRect.width / 2) + 10;
-        }
-        
-        currentTooltip.style.left = left + 'px';
-        currentTooltip.style.top = top + 'px';
-        
-        // Auto-hide after delay
-        setTimeout(() => {
-            hideReactionTooltip();
-        }, 3000);
-    }
-
-    function hideReactionTooltip() {
-        if (currentTooltip) {
-            currentTooltip.remove();
-            currentTooltip = null;
         }
     }
 
@@ -933,688 +594,202 @@
         document.addEventListener('contextmenu', function(e) {
             const messageElement = e.target.closest('.chat-message');
             if (messageElement) {
-                // Prevent the browser default context menu and stop propagation so
-                // mobile/desktop browsers don't trigger other handlers that may
-                // cause a scroll-to-top or hash change.
-                try { e.preventDefault(); } catch (err) {}
-                try { e.stopPropagation(); } catch (err) {}
                 showContextMenu(e, messageElement);
             }
         });
 
         // Touch events for mobile long press
+        // Enhanced touch handling: support long-press and tap-to-open without causing page jumps
+        let touchStartInfo = null; // {time, x, y, target}
         document.addEventListener('touchstart', function(e) {
+            const touch = e.touches[0];
             const messageElement = e.target.closest('.chat-message');
+            touchStartInfo = {
+                time: Date.now(),
+                x: touch ? (touch.clientX || touch.pageX) : 0,
+                y: touch ? (touch.clientY || touch.pageY) : 0,
+                target: messageElement
+            };
             if (messageElement) {
                 longPressTriggered = false;
-                // Stop propagation to avoid other handlers (for example anchors)
-                // receiving the touch and causing a hash change or scroll-to-top.
-                e.stopPropagation();
-                
-                // Prevent any potential scroll jumps from touch start
-                const startY = window.scrollY || document.documentElement.scrollTop || 0;
-                
-                // Add visual feedback during long press
-                messageElement.style.backgroundColor = 'rgba(0,0,0,0.1)';
-                
                 longPressTimer = setTimeout(() => {
                     longPressTriggered = true;
-                    // Remove visual feedback
-                    messageElement.style.backgroundColor = '';
-                    // Use the actual touch coordinates to show the menu
-                    const touch = e.touches[0];
                     const syntheticEvent = {
-                        preventDefault: () => { 
-                            try { e.preventDefault(); } catch (err) {}
-                        },
-                        stopPropagation: () => {
-                            try { e.stopPropagation(); } catch (err) {}
-                        },
-                        pageX: touch.pageX,
-                        pageY: touch.pageY,
-                        touches: e.touches,
-                        clientX: touch.clientX,
-                        clientY: touch.clientY
+                        preventDefault: () => {},
+                        pageX: touchStartInfo.x,
+                        pageY: touchStartInfo.y,
+                        clientX: touchStartInfo.x,
+                        clientY: touchStartInfo.y
                     };
-                    console.log('Long press detected, showing context menu at:', touch.pageX, touch.pageY);
+                    // Blur active element to avoid accidental focus scrolls on iOS
+                    try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch(e) {}
                     showContextMenu(syntheticEvent, messageElement);
                     // Haptic feedback if available
-                    if (navigator.vibrate) {
-                        navigator.vibrate([50]);
-                    }
-                    
-                    // Ensure scroll position hasn't changed
-                    const currentY = window.scrollY || document.documentElement.scrollTop || 0;
-                    if (Math.abs(currentY - startY) > 5) {
-                        window.scrollTo(0, startY);
-                    }
-                }, 500); // 500ms long press
+                    if (navigator.vibrate) navigator.vibrate(50);
+                    // Suppress the next click which may immediately follow this touch
+                    suppressClickUntil = Date.now() + 500;
+                }, 500); // long-press threshold
             }
         }, { passive: false });
-
-        document.addEventListener('touchend', function(e) {
-            const messageElement = e.target.closest('.chat-message');
-            if (messageElement) {
-                messageElement.style.backgroundColor = '';
-                
-                // Prevent default behavior that might cause scroll
-                if (!longPressTriggered) {
-                    // This was just a tap, not a long press
-                    // Check if it was on a non-interactive part of the message
-                    const target = e.target;
-                    const isInteractive = target.matches('button, input, textarea, select, a[href]:not([href="#"]), [role="button"], .reaction-item') ||
-                                        target.closest('button, input, textarea, select, a[href]:not([href="#"]), [role="button"], .reaction-item');
-                    
-                    if (!isInteractive) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                    }
-                }
-            }
-            if (longPressTimer) {
-                clearTimeout(longPressTimer);
-                longPressTimer = null;
-            }
-        }, { passive: false });
-
-        // Capture-phase touchend: prevent non-interactive taps inside messages
-        // from triggering ancestor handlers (some mobile browsers fire handlers
-        // on touchend that cause hash changes or scrolls). Use capture so we
-        // can stop propagation before bubble-phase handlers run.
-        document.addEventListener('touchend', function(e) {
-            try {
-                const messageElement = e.target.closest && e.target.closest('.chat-message');
-                if (!messageElement) return;
-
-                const interactiveSelector = 'a[href]:not([href="#"]), button, input, textarea, select, [role="button"], .reaction-item, .context-menu-item';
-                const interactive = e.target.closest(interactiveSelector);
-                if (interactive) return; // allow interactive children
-
-                // Prevent any default actions and stop propagation to ancestors
-                // that might change the hash or call scrollTo.
-                try { e.preventDefault(); } catch (err) {}
-                try { e.stopPropagation(); } catch (err) {}
-
-                // Reinforce suppression flag in case a delayed handler runs soon
-                try {
-                    window.__suppressImmediateScrollToTop = true;
-                    window.setTimeout(() => { window.__suppressImmediateScrollToTop = false; }, 600);
-                } catch (err) {}
-            } catch (err) {
-                console.warn('Error in touchend capture handler', err);
-            }
-    }, { capture: true, passive: false });
 
         document.addEventListener('touchmove', function(e) {
-            const messageElement = e.target.closest('.chat-message');
-            if (messageElement) {
-                messageElement.style.backgroundColor = '';
+            // Cancel long-press if finger moves significantly
+            if (!touchStartInfo) return;
+            const t = e.touches[0];
+            const dx = Math.abs((t.clientX || t.pageX) - touchStartInfo.x);
+            const dy = Math.abs((t.clientY || t.pageY) - touchStartInfo.y);
+            if (dx > 10 || dy > 10) {
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+                touchStartInfo = null;
             }
+        }, { passive: true });
+
+        document.addEventListener('touchend', function(e) {
+            // If long-press was triggered, just clear timers
             if (longPressTimer) {
                 clearTimeout(longPressTimer);
                 longPressTimer = null;
             }
+            if (!touchStartInfo) return;
+            const duration = Date.now() - touchStartInfo.time;
+            // Treat as tap if short duration and small movement
+            if (!longPressTriggered && duration < 300) {
+                const touch = e.changedTouches ? e.changedTouches[0] : null;
+                const x = touch ? (touch.clientX || touch.pageX) : touchStartInfo.x;
+                const y = touch ? (touch.clientY || touch.pageY) : touchStartInfo.y;
+                const targetMessage = touchStartInfo.target;
+                if (targetMessage) {
+                // Prevent default behavior that might scroll to top
+                try { if (e.cancelable) e.preventDefault(); } catch (err) {}
+                try { if (e.stopPropagation) e.stopPropagation(); } catch (err) {}
+                    const syntheticEvent = {
+                        preventDefault: () => {},
+                        pageX: x,
+                        pageY: y,
+                        clientX: x,
+                        clientY: y
+                    };
+                    // Open context menu as mobile bottom sheet on tap
+                    showContextMenu(syntheticEvent, targetMessage);
+                    // Prevent the immediate click from hiding it
+                    suppressClickUntil = Date.now() + 500;
+                }
+            }
+            touchStartInfo = null;
+            longPressTriggered = false;
         }, { passive: false });
+
+        // Prevent default navigation for anchors that use '#' or empty hrefs which can cause scroll-to-top on mobile
+        document.addEventListener('click', function(e) {
+            const a = e.target.closest && e.target.closest('a');
+            if (!a) return;
+            const href = a.getAttribute('href');
+            if (!href || href === '#' || href.toLowerCase().startsWith('javascript:void')) {
+                e.preventDefault();
+                return false;
+            }
+        });
 
         // Prevent context menu on regular clicks for messages that had long press
         document.addEventListener('click', function(e) {
             const messageElement = e.target.closest('.chat-message');
             if (messageElement && longPressTriggered) {
                 e.preventDefault();
-                e.stopPropagation();
                 longPressTriggered = false;
-                return false;
-            }
-            
-            // Additional safeguard: prevent clicks on non-interactive areas from scrolling
-            if (messageElement) {
-                const target = e.target;
-                const isInteractive = target.matches('button, input, textarea, select, a[href]:not([href="#"]), [role="button"], .reaction-item') ||
-                                    target.closest('button, input, textarea, select, a[href]:not([href="#"]), [role="button"], .reaction-item');
-                
-                if (!isInteractive) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return false;
-                }
             }
         });
-
-        // Capturing click handler: intercept taps inside chat messages before they
-        // bubble to ancestor handlers (for example anchors with href="#" in the
-        // navbar or other templates) which can cause mobile browsers to jump to top.
-        // Allow clicks on interactive elements (links, buttons, inputs) to proceed.
-        document.addEventListener('click', function(e) {
-            try {
-                const messageElement = e.target.closest('.chat-message');
-                if (!messageElement) return; // not inside a message
-
-                // Elements that should be allowed to act normally
-                const interactiveSelector = 'a[href]:not([href="#"]), button, input, textarea, select, [role="button"], .reaction-item, .context-menu-item';
-                const interactive = e.target.closest(interactiveSelector);
-                if (interactive) return; // let the interactive element handle it
-
-                // Prevent default navigation / hash change and stop propagation so
-                // ancestor handlers (like the base href="#" safeguard) do not run
-                e.preventDefault();
-                e.stopPropagation();
-                // Set a short-lived flag so global scroll wrappers can ignore
-                // immediate scroll-to-top calls that some mobile browsers trigger
-                // right after tap events. Increase timeout to cover delayed handlers.
-                try {
-                    window.__suppressImmediateScrollToTop = true;
-                    window.setTimeout(() => { window.__suppressImmediateScrollToTop = false; }, 600);
-                } catch (err) { /* ignore */ }
-            } catch (err) {
-                // swallow to avoid breaking other handlers
-                console.warn('Error in message click capture handler', err);
-            }
-        }, true); // use capture phase
-    }
-
-    // ---------- Read tracking & autoscroll helpers ----------
-    function storageKeyFor(scope, id) {
-        if (scope === 'assistant') return 'chat:lastRead:assistant';
-        return `chat:lastRead:${scope}:${id}`;
-    }
-
-    function updateLastReadKey(key, messageId) {
-        try {
-            if (messageId) localStorage.setItem(key, messageId);
-        } catch (e) { /* ignore */ }
-    }
-
-    function isNearBottom(container, threshold = 120) {
-        return (container.scrollHeight - container.scrollTop - container.clientHeight) <= threshold;
-    }
-
-    function setupReadTracking(container, scope, idForScope) {
-        if (!container) return;
-        // Ensure touch-friendly scrolling
-        container.style.overflowY = 'auto';
-        container.style['-webkit-overflow-scrolling'] = 'touch';
-
-        // Disconnect any previous observer on the container
-        if (container._readObserver) {
-            try { container._readObserver.disconnect(); } catch (e) {}
-        }
-
-        const key = scope === 'assistant' ? storageKeyFor('assistant') : storageKeyFor(scope, idForScope);
-
-        const obs = new IntersectionObserver(entries => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const msgEl = entry.target;
-                    const mid = msgEl.getAttribute('data-message-id');
-                    if (mid) updateLastReadKey(key, mid);
-                }
-            });
-        }, {
-            root: container,
-            threshold: 0.6
-        });
-
-        // Observe existing messages
-        container.querySelectorAll('.chat-message').forEach(m => obs.observe(m));
-        container._readObserver = obs;
-
-        // When new messages are appended, observe them automatically
-        const mo = new MutationObserver(muts => {
-            muts.forEach(m => {
-                m.addedNodes && m.addedNodes.forEach(node => {
-                    if (node.nodeType === 1 && node.classList.contains('chat-message')) {
-                        try { obs.observe(node); } catch (e) {}
-                    }
-                });
-            });
-        });
-        mo.observe(container, { childList: true });
-        container._readMutation = mo;
-    }
-
-    function generateReactionsHTML(reactions) {
-        if (!reactions || reactions.length === 0) return '';
-        
-        const reactionsHtml = reactions.map(r => {
-            const users = r.users || [];
-            const count = r.count !== undefined ? r.count : (users.length || 1);
-            const emoji = r.emoji || '👍';
-            const usersJson = JSON.stringify(users);
-            const reactionData = JSON.stringify({ ...r, count, users });
-            return `<span class="reaction-item" data-reaction-emoji="${emoji}" data-reaction-users='${usersJson}' onclick="showReactionDetails(this, ${reactionData.replace(/"/g, '&quot;')})">${emoji} ${count}</span>`;
-        }).join(' ');
-        
-        return `<div class="message-reactions">${reactionsHtml}</div>`;
-    }
-
-    function groupReactionsClientSide(reactions) {
-        if (!reactions || reactions.length === 0) return [];
-        
-        const emojiGroups = {};
-        for (const reaction of reactions) {
-            const emoji = reaction.emoji;
-            const user = reaction.user;
-            if (emoji) {
-                if (!emojiGroups[emoji]) {
-                    emojiGroups[emoji] = { count: 0, users: [] };
-                }
-                emojiGroups[emoji].count += 1;
-                if (user && !emojiGroups[emoji].users.includes(user)) {
-                    emojiGroups[emoji].users.push(user);
-                }
-            }
-        }
-        
-        return Object.keys(emojiGroups).map(emoji => ({
-            emoji: emoji,
-            count: emojiGroups[emoji].count,
-            users: emojiGroups[emoji].users
-        }));
     }
 
     // Setup event listeners
     setupMessageEventListeners();
 
     // Socket listeners for real-time updates
-    // Helper to run socket setup when socket is available (some scripts run before socket initialization)
-    function whenSocketReady(cb) {
-        try {
-            if (window.socket) return cb(window.socket);
-            const iv = setInterval(function() {
-                if (window.socket) {
-                    clearInterval(iv);
-                    try { cb(window.socket); } catch (e) { console.error('whenSocketReady cb error', e); }
-                }
-            }, 50);
-            // give up after a few seconds to avoid infinite interval
-            setTimeout(function() { clearInterval(iv); }, 5000);
-        } catch (e) { console.error('whenSocketReady error', e); }
+    socket.on('message_updated', function(data) {
+        const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
+        if (messageElement) {
+            const textElement = messageElement.querySelector('.message-text');
+            if (textElement) {
+                textElement.innerHTML = data.text + ' <span class="text-muted ms-1">(edited)</span>';
+            }
+            updateReactionsDisplay(messageElement, data.reactions);
+        }
+    });
+
+    socket.on('message_deleted', function(data) {
+        const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
+        if (messageElement) {
+            messageElement.style.opacity = '0.5';
+            const textElement = messageElement.querySelector('.message-text');
+            if (textElement) {
+                textElement.innerHTML = '<em>Message deleted</em>';
+            }
+        }
+    });
+
+    // Additional mobile scroll protection for chat inputs
+    function protectChatInputs() {
+        const isMobile = window.innerWidth <= 768;
+        if (!isMobile) return;
+        
+        const chatInputs = ['dmChatInput', 'assistantChatInput', 'groupChatInput'];
+        
+        chatInputs.forEach(inputId => {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.addEventListener('focus', function() {
+                    const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                    
+                    // Multiple checks to prevent any scroll jumping
+                    const checkAndRestore = () => {
+                        const newY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                        if (Math.abs(newY - currentY) > 20) {
+                            console.log(`Chat input focus scroll detected (${inputId}), restoring position`);
+                            if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') {
+                                window.safeRestoreScroll(currentY, { behavior: 'auto', timeout: 200 });
+                            } else {
+                                try { window.scrollTo(0, currentY); } catch(e) {}
+                            }
+                        }
+                    };
+                    
+                    setTimeout(checkAndRestore, 50);
+                    setTimeout(checkAndRestore, 100);
+                    setTimeout(checkAndRestore, 200);
+                    setTimeout(checkAndRestore, 300);
+                }, { passive: true });
+            }
+        });
     }
-
-    whenSocketReady(function(socket) {
-        socket.on('message_updated', function(data) {
-            const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
-            if (messageElement) {
-                const textElement = messageElement.querySelector('.message-text');
-                if (textElement) {
-                    textElement.innerHTML = data.text + ' <span class="text-muted ms-1">(edited)</span>';
-                }
-                updateReactionsDisplay(messageElement, data.reactions);
-            }
-        });
-
-        socket.on('message_deleted', function(data) {
-            const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
-            if (messageElement) {
-                messageElement.style.opacity = '0.5';
-                const textElement = messageElement.querySelector('.message-text');
-                if (textElement) {
-                    textElement.innerHTML = '<em>Message deleted</em>';
-                }
-            }
-        });
+    
+    // Initialize chat input protection
+    protectChatInputs();
+    
+    // Re-initialize on window resize
+    window.addEventListener('resize', function() {
+        clearTimeout(this.chatResizeTimeout);
+        this.chatResizeTimeout = setTimeout(protectChatInputs, 250);
     });
 
 </script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   (async function() {
-    // Socket.IO setup - defensive early init to avoid 'socket is not defined' when other scripts
-    // reference `socket` before it is created. If Socket.IO library isn't loaded yet, leave
-    // creation to other init code but create a placeholder to avoid ReferenceError.
-    try {
-        if (!window.socket) {
-            if (typeof io === 'function') {
-                window.socket = io();
-            } else {
-                // Create a minimal stub that queues calls until real socket attaches.
-                window.socket = (function() {
-                    const q = [];
-                    const stub = {
-                        _isStub: true,
-                        emit: function() { q.push({ type: 'emit', args: Array.from(arguments) }); },
-                        on: function() { q.push({ type: 'on', args: Array.from(arguments) }); },
-                        off: function() { q.push({ type: 'off', args: Array.from(arguments) }); },
-                        _flushTo: function(realSocket) {
-                            try {
-                                q.forEach(entry => {
-                                    if (entry.type === 'emit' && typeof realSocket.emit === 'function') realSocket.emit.apply(realSocket, entry.args);
-                                    if (entry.type === 'on' && typeof realSocket.on === 'function') realSocket.on.apply(realSocket, entry.args);
-                                    if (entry.type === 'off' && typeof realSocket.off === 'function') realSocket.off.apply(realSocket, entry.args);
-                                });
-                            } catch (e) { console.warn('Error flushing stub socket queue', e); }
-                        }
-                    };
-                    return stub;
-                })();
-        
-        // 8. Global scroll lock for mobile input focus
-        if (isMobile()) {
-            let scrollLockActive = false;
-            let lockedScrollY = 0;
-            
-            // Function to lock scroll at current position
-            const lockScroll = () => {
-                lockedScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                scrollLockActive = true;
-                
-                // Override scrollTo while lock is active
-                const originalScrollTo = window.scrollTo;
-                window.scrollTo = function(x, y) {
-                    if (!scrollLockActive) {
-                        return originalScrollTo.call(this, x, y);
-                    }
-                    // Ignore scroll commands while locked
-                    return;
-                };
-                
-                // Listen for any scroll attempts and reset position
-                const scrollHandler = () => {
-                    if (scrollLockActive) {
-                        const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        if (Math.abs(currentScrollY - lockedScrollY) > 2) {
-                            originalScrollTo.call(window, 0, lockedScrollY);
-                        }
-                    }
-                };
-                
-                window.addEventListener('scroll', scrollHandler, { passive: false });
-                
-                // Restore scroll function after delay
-                setTimeout(() => {
-                    scrollLockActive = false;
-                    window.scrollTo = originalScrollTo;
-                    window.removeEventListener('scroll', scrollHandler);
-                }, 500);
-            };
-            
-            // Apply scroll lock to chat inputs
-            document.addEventListener('focusin', (e) => {
-                if (e.target && (e.target.id === 'dmChatInput' || 
-                    e.target.id === 'assistantChatInput' || 
-                    e.target.id === 'groupChatInput')) {
-                    
-                    // Add class to body for CSS-based fixes
-                    document.body.classList.add('chat-input-focused');
-                    
-                    lockScroll();
-                }
-            }, true);
-            
-            // Remove class when focus leaves chat inputs
-            document.addEventListener('focusout', (e) => {
-                if (e.target && (e.target.id === 'dmChatInput' || 
-                    e.target.id === 'assistantChatInput' || 
-                    e.target.id === 'groupChatInput')) {
-                    
-                    setTimeout(() => {
-                        document.body.classList.remove('chat-input-focused');
-                    }, 200);
-                }
-            }, true);
-        }
-        
-        // 9. Ultra-aggressive input focus override (last resort)
-        if (isMobile()) {
-            // Wait for DOM to be ready, then override input behaviors
-            document.addEventListener('DOMContentLoaded', function() {
-                const chatInputs = ['dmChatInput', 'assistantChatInput', 'groupChatInput'];
-                
-                chatInputs.forEach(inputId => {
-                    const input = document.getElementById(inputId);
-                    if (input) {
-                        // Store original focus method
-                        const originalFocus = input.focus.bind(input);
-                        
-                        // Replace focus method completely
-                        input.focus = function(options) {
-                            const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                            
-                            // Temporarily lock body scroll
-                            const originalOverflow = document.body.style.overflow;
-                            const originalPosition = document.body.style.position;
-                            const originalTop = document.body.style.top;
-                            
-                            document.body.style.overflow = 'hidden';
-                            document.body.style.position = 'fixed';
-                            document.body.style.top = `-${scrollY}px`;
-                            document.body.style.width = '100%';
-                            
-                            // Call original focus
-                            setTimeout(() => {
-                                originalFocus.call(this, { preventScroll: true });
-                                
-                                // Restore body after focus
-                                setTimeout(() => {
-                                    document.body.style.overflow = originalOverflow;
-                                    document.body.style.position = originalPosition;
-                                    document.body.style.top = originalTop;
-                                    document.body.style.width = '';
-                                    window.scrollTo(0, scrollY);
-                                }, 50);
-                            }, 10);
-                        };
-                        
-                        // Also prevent click from scrolling
-                        input.addEventListener('click', function(e) {
-                            const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                            
-                            setTimeout(() => {
-                                const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                                if (Math.abs(newScrollY - scrollY) > 5) {
-                                    window.scrollTo(0, scrollY);
-                                }
-                            }, 10);
-                            
-                            setTimeout(() => {
-                                const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                                if (Math.abs(newScrollY - scrollY) > 5) {
-                                    window.scrollTo(0, scrollY);
-                                }
-                            }, 100);
-                        });
-                    }
-                });
-            });
-        }
-        
-        // 10. Comprehensive button and dropdown protection
-        if (isMobile()) {
-            // List of all interactive elements that might cause scroll
-            const interactiveSelectors = [
-                'button', '.btn', 'select', '.dropdown-toggle', '.nav-link',
-                '#dmSendBtn', '#assistantSendBtn', '#groupSendBtn', '#assistantClearBtn',
-                '#joinGroupBtn', '#leaveGroupBtn', '#addUserToGroupBtn',
-                '#dmUserSelect', '#currentGroupSelect', '#groupUserSelect'
-            ];
-            
-            // Function to protect an element from causing scroll
-            const protectElement = (element) => {
-                if (!element) return;
-                
-                // Add click event listener to prevent scroll
-                element.addEventListener('click', function(e) {
-                    const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    
-                    // Multiple restoration attempts
-                    const restoreScroll = () => {
-                        const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        if (Math.abs(newScrollY - scrollY) > 3) {
-                            window.scrollTo(0, scrollY);
-                        }
-                    };
-                    
-                    setTimeout(restoreScroll, 10);
-                    setTimeout(restoreScroll, 50);
-                    setTimeout(restoreScroll, 150);
-                    setTimeout(restoreScroll, 300);
-                    setTimeout(restoreScroll, 500);
-                }, true);
-                
-                // Add focus event listener
-                element.addEventListener('focus', function(e) {
-                    const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    
-                    setTimeout(() => {
-                        const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        if (Math.abs(newScrollY - scrollY) > 3) {
-                            window.scrollTo(0, scrollY);
-                        }
-                    }, 10);
-                }, true);
-                
-                // Add touchstart event listener for mobile
-                element.addEventListener('touchstart', function(e) {
-                    const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    
-                    setTimeout(() => {
-                        const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        if (Math.abs(newScrollY - scrollY) > 3) {
-                            window.scrollTo(0, scrollY);
-                        }
-                    }, 10);
-                }, { passive: true });
-            };
-            
-            // Protect elements on DOM ready and when they're added
-            const protectElements = () => {
-                interactiveSelectors.forEach(selector => {
-                    if (selector.startsWith('#')) {
-                        // Single element by ID
-                        const element = document.querySelector(selector);
-                        if (element) protectElement(element);
-                    } else {
-                        // Multiple elements by selector
-                        const elements = document.querySelectorAll(selector);
-                        elements.forEach(protectElement);
-                    }
-                });
-            };
-            
-            // Initial protection
-            document.addEventListener('DOMContentLoaded', protectElements);
-            
-            // Re-protect when new elements are added (for dynamic content)
-            const observer = new MutationObserver(function(mutations) {
-                let needsProtection = false;
-                mutations.forEach(function(mutation) {
-                    if (mutation.addedNodes.length > 0) {
-                        needsProtection = true;
-                    }
-                });
-                
-                if (needsProtection) {
-                    setTimeout(protectElements, 50);
-                }
-            });
-            
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-        }
-        
-        // 11. Immediate scroll prevention for mobile (no flashing)
-        if (isMobile()) {
-            // Override window.scrollTo immediately to prevent ANY scrolling
-            const originalScrollTo = window.scrollTo;
-            let allowScroll = false;
-            let currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-            
-            // Track current position
-            window.addEventListener('scroll', function() {
-                if (allowScroll) {
-                    currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                }
-            }, { passive: true });
-            
-            // Override scrollTo to prevent unwanted scrolling
-            window.scrollTo = function(x, y) {
-                // If arguments are passed as object
-                if (typeof x === 'object' && x !== null) {
-                    y = x.top || x.y || 0;
-                    x = x.left || x.x || 0;
-                }
-                
-                // Block scroll to top unless explicitly allowed
-                if (y === 0 && currentScrollY > 30 && !allowScroll) {
-                    console.log('Blocked scroll-to-top, staying at:', currentScrollY);
-                    return; // Block the scroll completely
-                }
-                
-                // Allow other scroll operations
-                allowScroll = true;
-                const result = originalScrollTo.call(this, x, y);
-                setTimeout(() => { allowScroll = false; }, 100);
-                return result;
-            };
-            
-            // Prevent default behaviors that cause scrolling
-            const preventScrollingBehavior = function(e) {
-                // Get current position BEFORE any potential scroll
-                const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                
-                // For buttons and interactive elements, prevent default if it would cause scroll
-                if (e.target.matches('button, .btn, select, .dropdown-toggle, input[type="submit"], input[type="button"]') ||
-                    e.target.closest('button, .btn, select, .dropdown-toggle, input[type="submit"], input[type="button"]')) {
-                    
-                    // Check if this element has href="#" which would cause scroll to top
-                    const element = e.target.closest('a[href="#"]');
-                    if (element) {
-                        e.preventDefault();
-                        e.stopImmediatePropagation();
-                    }
-                    
-                    // For Bootstrap elements, prevent hash changes
-                    const bootstrapElement = e.target.closest('[data-bs-toggle]');
-                    if (bootstrapElement) {
-                        const href = bootstrapElement.getAttribute('href');
-                        if (href === '#' || !href) {
-                            e.preventDefault();
-                        }
-                    }
-                }
-            };
-            
-            // Add the preventing handler in capture phase (before any other handlers)
-            document.addEventListener('click', preventScrollingBehavior, true);
-            document.addEventListener('touchstart', preventScrollingBehavior, true);
-            
-            // Additional prevention for focus events
-            document.addEventListener('focus', function(e) {
-                if (e.target.matches('input, textarea, select, button')) {
-                    // Ensure scroll position doesn't change
-                    const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    
-                    // Temporarily lock the position
-                    allowScroll = true;
-                    setTimeout(() => {
-                        const newScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-                        if (newScrollY !== scrollY) {
-                            originalScrollTo.call(window, 0, scrollY);
-                        }
-                        allowScroll = false;
-                    }, 1);
-                }
-            }, true);
-        }
-            }
-        }
-    } catch (e) { console.warn('Socket init guard error', e); }
+    // Socket.IO setup
+    if (!window.socket) {
+        window.socket = io();
+    }
     const socket = window.socket;
-    let currentGroup = null;
-    let groupMembers = [];
     let currentUsername = null;
-    let joinedGroups = [];
-    // --- Backend helpers for persistence ---
+    // --- Backend helpers for persistence (only last selected DM user) ---
     async function saveChatState() {
         const dmUserSelectEl = document.getElementById('dmUserSelect');
         await fetch('/chat/state', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                joinedGroups,
-                currentGroup: currentGroup || '',
                 lastDmUser: dmUserSelectEl ? dmUserSelectEl.value : ''
             })
         });
@@ -1623,12 +798,8 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const resp = await fetch('/chat/state');
             const data = await resp.json();
-            joinedGroups = data.joinedGroups || [];
-            currentGroup = data.currentGroup || null;
             window._lastDmUser = data.lastDmUser || '';
         } catch (e) {
-            joinedGroups = [];
-            currentGroup = null;
             window._lastDmUser = '';
         }
     }
@@ -1647,18 +818,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Populate DM and group user selects
     fetch('/assistant/chat-users').then(r => r.json()).then(data => {
         const dmUserSelect = document.getElementById('dmUserSelect');
-        const groupUserSelect = document.getElementById('groupUserSelect');
         dmUserSelect.innerHTML = '';
-        groupUserSelect.innerHTML = '';
         data.users.forEach(u => {
             const opt1 = document.createElement('option');
             opt1.value = u;
             opt1.textContent = u;
             dmUserSelect.appendChild(opt1);
-            const opt2 = document.createElement('option');
-            opt2.value = u;
-            opt2.textContent = u;
-            groupUserSelect.appendChild(opt2);
         });
         currentUsername = data.current_user;
         // --- DM tab auto-select logic from URL ---
@@ -1674,19 +839,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         dmUserSelect.value = focus.id;
                         const dmTab = document.getElementById('dm-tab');
                         if (dmTab) dmTab.click();
-                    }
-                } else if (focus && focus.type === 'group' && focus.id) {
-                    // if group exists in select, select it and open group tab
-                    const gSelect = document.getElementById('currentGroupSelect');
-                    if (gSelect && Array.from(gSelect.options).some(opt => opt.value === focus.id)) {
-                        gSelect.value = focus.id;
-                        const groupTab = document.getElementById('group-tab');
-                        if (groupTab) groupTab.click();
-                        currentGroup = focus.id;
-                        loadGroupHistory();
-                    } else {
-                        // If group not in select yet, set currentGroup and try to load later when groups populated
-                        currentGroup = focus.id;
                     }
                 }
             } catch (e) {
@@ -1715,30 +867,252 @@ document.addEventListener('DOMContentLoaded', function() {
         loadAssistantHistory();
     });
 
-    // --- Restore joined groups and current group ---
-    function rejoinGroupsOnLoad() {
-        if (joinedGroups.length > 0) {
-            joinedGroups.forEach(group => {
-                socket.emit('join_group', { group });
+    // --- Group Chat: setup ---
+    const groupNameInput = document.getElementById('groupNameInput');
+    const joinGroupBtn = document.getElementById('joinGroupBtn');
+    const leaveGroupBtn = document.getElementById('leaveGroupBtn');
+    const groupChatInput = document.getElementById('groupChatInput');
+    const groupSendBtn = document.getElementById('groupSendBtn');
+    const groupChatContainer = document.getElementById('groupChatContainer');
+    const currentGroupLabel = document.getElementById('currentGroupLabel');
+    const groupMembersList = document.getElementById('groupMembersList');
+
+    let currentGroup = '';
+
+    async function loadGroupHistory(group) {
+        groupChatContainer.innerHTML = '';
+        if (!group) return;
+        try {
+            const resp = await fetch(`/chat/group-history?group=${encodeURIComponent(group)}`);
+            const data = await resp.json();
+            (data.history || []).forEach(msg => {
+                const div = document.createElement('div');
+                div.className = 'mb-2 chat-message';
+                div.setAttribute('data-message-id', msg.id || '');
+                div.setAttribute('data-sender', msg.sender);
+                div.innerHTML = `
+                    <strong>${msg.sender === currentUsername ? 'You' : msg.sender}:</strong>
+                    <span class="message-text">${msg.text}</span>
+                    ${((msg.reactions_summary && msg.reactions_summary.length > 0) ? msg.reactions_summary : (msg.reactions || [])).length > 0 ? `<span class="message-reactions">${((msg.reactions_summary && msg.reactions_summary.length > 0) ? msg.reactions_summary : (msg.reactions || [])).map(r => (r.count != null ? `${r.emoji} ${r.count}` : `${r.emoji}`)).join(' ')}</span>` : ''}
+                    ${msg.edited ? '<span class="text-muted ms-1">(edited)</span>' : ''}
+                `;
+                groupChatContainer.appendChild(div);
             });
-            updateGroupSelect();
-            if (currentGroup && joinedGroups.includes(currentGroup)) {
-                currentGroupSelect.value = currentGroup;
-                loadGroupHistory();
-            } else if (joinedGroups.length > 0) {
-                currentGroup = joinedGroups[0];
-                currentGroupSelect.value = currentGroup;
-                loadGroupHistory();
-            }
+            groupChatContainer.scrollTop = groupChatContainer.scrollHeight;
+        } catch (e) {
+            console.warn('Failed to load group history', e);
         }
     }
-    // Wait a bit to ensure selects are populated
-    setTimeout(rejoinGroupsOnLoad, 500);
+
+    function setCurrentGroup(group) {
+        currentGroup = group || '';
+        currentGroupLabel.textContent = currentGroup ? `Group: ${currentGroup}` : '';
+    }
+
+    joinGroupBtn && joinGroupBtn.addEventListener('click', async function() {
+        const group = (groupNameInput && groupNameInput.value.trim()) || 'main';
+        if (!group) return;
+        socket.emit('join_group', { group });
+        socket.emit('add_user_to_group', { group, username: currentUsername });
+        setCurrentGroup(group);
+        await loadGroupHistory(group);
+        // Refresh authoritative member list from server
+        await refreshGroupMembers(group);
+    });
+
+    leaveGroupBtn && leaveGroupBtn.addEventListener('click', async function() {
+        if (!currentGroup) return;
+        socket.emit('leave_group', { group: currentGroup });
+        socket.emit('remove_user_from_group', { group: currentGroup, username: currentUsername });
+        // Give server a moment to update persisted membership, then refresh
+        setCurrentGroup('');
+        groupChatContainer.innerHTML = '';
+        await refreshGroupMembers(currentGroup);
+        groupMembersList.innerHTML = '';
+    });
+
+    groupSendBtn && groupSendBtn.addEventListener('click', function() {
+        const text = groupChatInput ? groupChatInput.value.trim() : '';
+        if (!text || !currentGroup) return;
+        socket.emit('group_chat_message', { group: currentGroup, text });
+        groupChatInput.value = '';
+    });
+
+    groupChatInput && groupChatInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            groupSendBtn && groupSendBtn.click();
+        }
+    });
+
+    // --- New: Populate member dropdown and handle adding members to the group ---
+    const addMemberSelect = document.getElementById('addMemberSelect');
+    const addMemberBtn = document.getElementById('addMemberBtn');
+
+    async function populateMemberDropdown() {
+        if (!addMemberSelect) return;
+        try {
+            const resp = await fetch('/api/chat/users');
+            const users = await resp.json();
+            addMemberSelect.innerHTML = '';
+            const emptyOpt = document.createElement('option');
+            emptyOpt.value = '';
+            emptyOpt.textContent = '-- Select teammate --';
+            addMemberSelect.appendChild(emptyOpt);
+            users.forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u.username;
+                opt.textContent = u.username;
+                addMemberSelect.appendChild(opt);
+            });
+        } catch (e) {
+            console.warn('Failed to populate member dropdown', e);
+        }
+    }
+
+    addMemberBtn && addMemberBtn.addEventListener('click', function() {
+        const selected = addMemberSelect ? addMemberSelect.value : '';
+        if (!selected || !currentGroup) {
+            alert('Select a teammate and join a group first.');
+            return;
+        }
+        // Emit socket event to add user to group
+        socket.emit('add_user_to_group', { group: currentGroup, username: selected });
+        // Refresh authoritative members list from server (after a brief delay to allow server write)
+        setTimeout(() => refreshGroupMembers(currentGroup), 200);
+    });
+
+    // Fetch authoritative members from server for a group and update the UI
+    async function refreshGroupMembers(group) {
+        if (!group) return;
+        try {
+            const resp = await fetch(`/chat/group-members?group=${encodeURIComponent(group)}`);
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const members = data.members || [];
+            groupMembersList.innerHTML = '';
+            // Ensure current user appears as '(you)'
+            members.forEach(m => {
+                const li = document.createElement('li');
+                li.textContent = m === currentUsername ? `${m} (you)` : m;
+                groupMembersList.appendChild(li);
+            });
+        } catch (e) {
+            console.warn('Failed to refresh group members', e);
+        }
+    }
+
+    // --- New: 'Chats I'm in' list management (loads from /chat/state and updates) ---
+    const myChatsList = document.getElementById('myChatsList');
+
+    async function loadMyChatsState() {
+        try {
+            const resp = await fetch('/chat/state');
+            const data = await resp.json();
+            const joined = data.joinedGroups || [];
+            myChatsList.innerHTML = '';
+            // Add group entries
+            joined.forEach(g => {
+                const li = document.createElement('li');
+                li.className = 'my-chat-item';
+                li.style.cursor = 'pointer';
+                li.textContent = `Group: ${g}`;
+                li.onclick = () => {
+                    // Switch to groups tab and join that group locally
+                    const groupsTab = document.getElementById('groups-tab');
+                    if (groupsTab) groupsTab.click();
+                    groupNameInput.value = g;
+                    joinGroupBtn && joinGroupBtn.click();
+                };
+                myChatsList.appendChild(li);
+            });
+            // Add DMs list entry if lastDmUser present
+            if (data.lastDmUser) {
+                const li = document.createElement('li');
+                li.className = 'my-chat-item';
+                li.style.cursor = 'pointer';
+                li.textContent = `DM: ${data.lastDmUser}`;
+                li.onclick = () => {
+                    const dmTab = document.getElementById('dm-tab');
+                    if (dmTab) dmTab.click();
+                    const dmSelect = document.getElementById('dmUserSelect');
+                    if (dmSelect && Array.from(dmSelect.options).some(o => o.value === data.lastDmUser)) {
+                        dmSelect.value = data.lastDmUser;
+                        loadDmHistory();
+                    }
+                };
+                myChatsList.appendChild(li);
+            }
+        } catch (e) {
+            console.warn('Failed to load chat state', e);
+        }
+    }
+
+    async function saveJoinedGroupToState(group) {
+        try {
+            const resp = await fetch('/chat/state');
+            const data = await resp.json();
+            data.joinedGroups = data.joinedGroups || [];
+            if (!data.joinedGroups.includes(group)) {
+                data.joinedGroups.push(group);
+            }
+            data.currentGroup = group;
+            await fetch('/chat/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+            loadMyChatsState();
+        } catch (e) {
+            console.warn('Failed to save chat state', e);
+        }
+    }
+
+    async function removeJoinedGroupFromState(group) {
+        try {
+            const resp = await fetch('/chat/state');
+            const data = await resp.json();
+            data.joinedGroups = (data.joinedGroups || []).filter(g => g !== group);
+            if (data.currentGroup === group) data.currentGroup = '';
+            await fetch('/chat/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+            loadMyChatsState();
+        } catch (e) {
+            console.warn('Failed to remove joined group from state', e);
+        }
+    }
+
+    // Integrate with join/leave buttons to persist membership
+    const originalJoinHandler = joinGroupBtn && joinGroupBtn.onclick;
+    joinGroupBtn && joinGroupBtn.addEventListener('click', function() {
+        const group = (groupNameInput && groupNameInput.value.trim()) || 'main';
+        if (!group) return;
+        saveJoinedGroupToState(group);
+    });
+
+    leaveGroupBtn && leaveGroupBtn.addEventListener('click', function() {
+        if (!currentGroup) return;
+        removeJoinedGroupFromState(currentGroup);
+    });
+
+    // Initial population
+    populateMemberDropdown();
+    loadMyChatsState();
+
+    // Handle incoming group messages
+    socket.on('group_message', function(msg) {
+        if (!msg || !msg.group) return;
+        if (msg.group !== currentGroup) return;
+        const div = document.createElement('div');
+        div.className = 'mb-2 chat-message';
+        div.setAttribute('data-message-id', msg.id || '');
+        div.setAttribute('data-sender', msg.sender);
+        div.innerHTML = `
+            <strong>${msg.sender === currentUsername ? 'You' : msg.sender}:</strong>
+            <span class="message-text">${msg.text}</span>
+            ${((msg.reactions_summary && msg.reactions_summary.length > 0) ? msg.reactions_summary : (msg.reactions || [])).length > 0 ? `<span class="message-reactions">${((msg.reactions_summary && msg.reactions_summary.length > 0) ? msg.reactions_summary : (msg.reactions || [])).map(r => (r.count != null ? `${r.emoji} ${r.count}` : `${r.emoji}`)).join(' ')}</span>` : ''}
+        `;
+        groupChatContainer.appendChild(div);
+        groupChatContainer.scrollTop = groupChatContainer.scrollHeight;
+    });
 
     // --- Assistant Chat History ---
-    function loadAssistantHistory(options) {
-        options = options || {};
-        const preferLastRead = options.preferLastRead !== false; // default true
+    function loadAssistantHistory() {
         const assistantChatContainer = document.getElementById('assistantChatContainer');
         assistantChatContainer.innerHTML = '';
         fetch('/assistant/history')
@@ -1752,41 +1126,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     div.innerHTML = `
                         <strong>${msg.sender === 'assistant' ? 'Assistant' : 'You'}:</strong> 
                         <span class="message-text">${msg.text}</span>
+                        ${msg.reactions && msg.reactions.length > 0 ? 
+                            `<span class="message-reactions">${((msg.reactions_summary && msg.reactions_summary.length > 0) ? msg.reactions_summary : (msg.reactions || [])).map(r => (r.count != null ? `${r.emoji} ${r.count}` : `${r.emoji}`)).join(' ')}</span>` 
+                            : ''}
                         ${msg.edited ? '<span class="text-muted ms-1">(edited)</span>' : ''}
                     `;
-                    if (msg.reactions && msg.reactions.length > 0) {
-                        const groupedReactions = groupReactionsClientSide(msg.reactions);
-                        div.innerHTML += generateReactionsHTML(groupedReactions);
-                    }
                     assistantChatContainer.appendChild(div);
                 });
-                // Setup read-tracking for assistant container
-                setupReadTracking(assistantChatContainer, 'assistant');
-
-                // Auto-scroll logic: try to restore last-read position for assistant chat
-                try {
-                    const key = storageKeyFor('assistant');
-                    const lastRead = localStorage.getItem(key);
-                    if (preferLastRead && lastRead) {
-                        const el = assistantChatContainer.querySelector(`[data-message-id="${lastRead}"]`);
-                        if (el) {
-                            const next = el.nextElementSibling || el;
-                            next.scrollIntoView({ block: 'center' });
-                        } else {
-                            assistantChatContainer.scrollTop = assistantChatContainer.scrollHeight;
-                        }
-                    } else {
-                        // Either no stored lastRead or the caller asked to prefer bottom
-                        assistantChatContainer.scrollTop = assistantChatContainer.scrollHeight;
-                    }
-                } catch (e) { console.warn('assistant scroll restore failed', e); }
+                assistantChatContainer.scrollTop = assistantChatContainer.scrollHeight;
             });
     }
 
     // --- DM Chat History ---
-    function loadDmHistory(options) {
-        options = options || {};
-        const preferLastRead = options.preferLastRead !== false; // default true
+    function loadDmHistory() {
         const dmUserSelect = document.getElementById('dmUserSelect');
         const dmChatContainer = document.getElementById('dmChatContainer');
         dmChatContainer.innerHTML = '';
@@ -1803,31 +1155,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     div.innerHTML = `
                         <strong>${msg.sender === currentUsername ? 'You' : msg.sender}:</strong> 
                         <span class="message-text">${msg.text}</span>
+                        ${msg.reactions && msg.reactions.length > 0 ? 
+                            `<span class="message-reactions">${((msg.reactions_summary && msg.reactions_summary.length > 0) ? msg.reactions_summary : (msg.reactions || [])).map(r => (r.count != null ? `${r.emoji} ${r.count}` : `${r.emoji}`)).join(' ')}</span>` 
+                            : ''}
                         ${msg.edited ? '<span class="text-muted ms-1">(edited)</span>' : ''}
                     `;
-                    if (msg.reactions && msg.reactions.length > 0) {
-                        const groupedReactions = groupReactionsClientSide(msg.reactions);
-                        div.innerHTML += generateReactionsHTML(groupedReactions);
-                    }
                     dmChatContainer.appendChild(div);
                 });
-                // Setup read-tracking for this DM and restore last-read
-                setupReadTracking(dmChatContainer, 'dm', recipient);
-                try {
-                    const key = storageKeyFor('dm', recipient);
-                    const lastRead = localStorage.getItem(key);
-                    if (preferLastRead && lastRead) {
-                        const el = dmChatContainer.querySelector(`[data-message-id="${lastRead}"]`);
-                        if (el) {
-                            const next = el.nextElementSibling || el;
-                            next.scrollIntoView({ block: 'center' });
-                        } else {
-                            dmChatContainer.scrollTop = dmChatContainer.scrollHeight;
-                        }
-                    } else {
-                        dmChatContainer.scrollTop = dmChatContainer.scrollHeight;
-                    }
-                } catch (e) { console.warn('dm scroll restore failed', e); }
+                dmChatContainer.scrollTop = dmChatContainer.scrollHeight;
             });
     }
 
@@ -1850,192 +1185,16 @@ document.addEventListener('DOMContentLoaded', function() {
             div.innerHTML = `
                 <strong>${msg.sender === currentUsername ? 'You' : msg.sender}:</strong> 
                 <span class="message-text">${msg.text}</span>
+                ${msg.reactions && msg.reactions.length > 0 ? 
+                    `<span class="message-reactions">${((msg.reactions_summary && msg.reactions_summary.length > 0) ? msg.reactions_summary : (msg.reactions || [])).map(r => (r.count != null ? `${r.emoji} ${r.count}` : `${r.emoji}`)).join(' ')}</span>` 
+                    : ''}
             `;
-            if (msg.reactions && msg.reactions.length > 0) {
-                const groupedReactions = groupReactionsClientSide(msg.reactions);
-                div.innerHTML += generateReactionsHTML(groupedReactions);
-            }
             dmChatContainer.appendChild(div);
-            // Ensure new message is observed for read-tracking
-            try { if (dmChatContainer._readObserver) dmChatContainer._readObserver.observe(div); } catch (e) {}
-
-            // Auto-scroll only if user is near bottom
-            if (isNearBottom(dmChatContainer)) {
-                dmChatContainer.scrollTop = dmChatContainer.scrollHeight;
-                // update last-read to this message
-                try { localStorage.setItem(storageKeyFor('dm', dmUserSelect.value), msg.id); } catch (e) {}
-            } else {
-                // leave it; an unread marker could be shown (left as future improvement)
-            }
+            dmChatContainer.scrollTop = dmChatContainer.scrollHeight;
         }
     });
 
-    // --- Group Chat History ---
-    function loadGroupHistory(options) {
-        options = options || {};
-        const preferLastRead = options.preferLastRead !== false; // default true
-        const groupChatContainer = document.getElementById('groupChatContainer');
-        groupChatContainer.innerHTML = '';
-        if (!currentGroup) return;
-        fetch(`/chat/group-history?group=${encodeURIComponent(currentGroup)}`)
-            .then(r => r.json())
-            .then(data => {
-                (data.history || []).forEach(msg => {
-                    const div = document.createElement('div');
-                    div.className = 'mb-2 chat-message';
-                    div.setAttribute('data-message-id', msg.id || '');
-                    div.setAttribute('data-sender', msg.sender);
-                    div.innerHTML = `
-                        <strong>${msg.sender}:</strong> 
-                        <span class="message-text">${msg.text}</span>
-                        ${msg.edited ? '<span class="text-muted ms-1">(edited)</span>' : ''}
-                    `;
-                    if (msg.reactions && msg.reactions.length > 0) {
-                        const groupedReactions = groupReactionsClientSide(msg.reactions);
-                        div.innerHTML += generateReactionsHTML(groupedReactions);
-                    }
-                    groupChatContainer.appendChild(div);
-                });
-                // Setup read-tracking for this group and restore last-read
-                setupReadTracking(groupChatContainer, 'group', currentGroup);
-                try {
-                    const key = storageKeyFor('group', currentGroup);
-                    const lastRead = localStorage.getItem(key);
-                    if (preferLastRead && lastRead) {
-                        const el = groupChatContainer.querySelector(`[data-message-id="${lastRead}"]`);
-                        if (el) {
-                            const next = el.nextElementSibling || el;
-                            next.scrollIntoView({ block: 'center' });
-                        } else {
-                            groupChatContainer.scrollTop = groupChatContainer.scrollHeight;
-                        }
-                    } else {
-                        groupChatContainer.scrollTop = groupChatContainer.scrollHeight;
-                    }
-                } catch (e) { console.warn('group scroll restore failed', e); }
-            });
-    }
-
-    // Group chat logic
-    const joinGroupBtn = document.getElementById('joinGroupBtn');
-    const leaveGroupBtn = document.getElementById('leaveGroupBtn');
-    const addUserToGroupBtn = document.getElementById('addUserToGroupBtn');
-    const groupNameInput = document.getElementById('groupNameInput');
-    const currentGroupSelect = document.getElementById('currentGroupSelect');
-    const groupUserSelect = document.getElementById('groupUserSelect');
-    const groupMembersList = document.getElementById('groupMembersList');
-    const groupChatContainer = document.getElementById('groupChatContainer');
-    const groupChatInput = document.getElementById('groupChatInput');
-    const groupSendBtn = document.getElementById('groupSendBtn');
-
-    if (joinGroupBtn) {
-        joinGroupBtn.addEventListener('click', async function() {
-            const group = groupNameInput.value.trim();
-            if (group && !joinedGroups.includes(group)) {
-                socket.emit('join_group', { group });
-                joinedGroups.push(group);
-                updateGroupSelect();
-                currentGroupSelect.value = group;
-                currentGroup = group;
-                groupChatContainer.innerHTML = '';
-                loadGroupHistory(); // Load history for the new group
-                await saveChatState();
-            }
-        });
-    }
-    if (leaveGroupBtn) {
-        leaveGroupBtn.addEventListener('click', async function() {
-            const group = currentGroupSelect.value;
-            if (group) {
-                socket.emit('leave_group', { group });
-                joinedGroups = joinedGroups.filter(g => g !== group);
-                updateGroupSelect();
-                currentGroup = null;
-                groupChatContainer.innerHTML = '';
-                groupMembersList.textContent = '';
-                loadGroupHistory(); // Clear history for the group that was left
-                await saveChatState();
-            }
-        });
-    }
-    function updateGroupSelect() {
-        currentGroupSelect.innerHTML = '';
-        joinedGroups.forEach(g => {
-            const opt = document.createElement('option');
-            opt.value = g;
-            opt.textContent = g;
-            currentGroupSelect.appendChild(opt);
-        });
-        // Restore currentGroup selection
-        if (currentGroup && joinedGroups.includes(currentGroup)) {
-            currentGroupSelect.value = currentGroup;
-        }
-    }
-    if (currentGroupSelect) {
-        currentGroupSelect.addEventListener('change', async function() {
-            currentGroup = this.value;
-            groupChatContainer.innerHTML = '';
-            groupMembersList.textContent = '';
-            loadGroupHistory(); // Load history for the new group
-            await saveChatState();
-        });
-    }
-    if (addUserToGroupBtn) {
-        addUserToGroupBtn.addEventListener('click', function() {
-            const group = currentGroupSelect.value;
-            const user = groupUserSelect.value;
-            if (group && user) {
-                socket.emit('add_user_to_group', { group, user });
-            }
-        });
-    }
-    socket.on('group_members_updated', function(data) {
-        if (data.group === currentGroup) {
-            groupMembers = data.members;
-            groupMembersList.textContent = groupMembers.join(', ');
-        }
-    });
-    if (groupSendBtn) {
-        groupSendBtn.addEventListener('click', function() {
-            const text = groupChatInput.value.trim();
-            if (text && currentGroup && groupMembers.includes(currentUsername)) {
-                groupSendBtn.disabled = true;
-                try {
-                    socket.emit('group_chat_message', { group: currentGroup, text, sender: currentUsername });
-                    groupChatInput.value = '';
-                    // give the server a moment to persist/broadcast
-                    // Force preferLastRead:false so the user sees the newest message after sending
-                    setTimeout(() => loadGroupHistory({ preferLastRead: false }), 150);
-                } finally {
-                    groupSendBtn.disabled = false;
-                }
-            }
-        });
-    }
-    socket.on('group_chat_message', function(msg) {
-        if (msg.group === currentGroup && groupMembers.includes(currentUsername)) {
-            const div = document.createElement('div');
-            div.className = 'mb-2 chat-message';
-            div.setAttribute('data-message-id', msg.id || '');
-            div.setAttribute('data-sender', msg.sender);
-            div.innerHTML = `
-                <strong>${msg.sender}:</strong> 
-                <span class="message-text">${msg.text}</span> 
-                <span class="text-muted" style="font-size:0.8em;">${new Date(msg.timestamp).toLocaleTimeString()}</span>
-            `;
-            if (msg.reactions && msg.reactions.length > 0) {
-                const groupedReactions = groupReactionsClientSide(msg.reactions);
-                div.innerHTML += generateReactionsHTML(groupedReactions);
-            }
-            groupChatContainer.appendChild(div);
-            try { if (groupChatContainer._readObserver) groupChatContainer._readObserver.observe(div); } catch (e) {}
-
-            if (isNearBottom(groupChatContainer)) {
-                groupChatContainer.scrollTop = groupChatContainer.scrollHeight;
-                try { localStorage.setItem(storageKeyFor('group', currentGroup), msg.id); } catch (e) {}
-            }
-        }
-    });
+    // Group messaging disabled on this deployment; all related UI and socket handlers removed.
     // Assistant tab logic: send message to /assistant/ask and display response
     const assistantSendBtn = document.getElementById('assistantSendBtn');
     const assistantChatInput = document.getElementById('assistantChatInput');
@@ -2065,11 +1224,7 @@ document.addEventListener('DOMContentLoaded', function() {
             botDiv.setAttribute('data-sender', 'assistant');
             botDiv.innerHTML = `<strong>Assistant:</strong> <span class="message-text">${data.text || data.message || 'No response.'}</span>`;
             assistantChatContainer.appendChild(botDiv);
-            try { if (assistantChatContainer._readObserver) assistantChatContainer._readObserver.observe(botDiv); } catch (e) {}
-            if (isNearBottom(assistantChatContainer)) {
-                assistantChatContainer.scrollTop = assistantChatContainer.scrollHeight;
-                try { localStorage.setItem(storageKeyFor('assistant'), data.id || ''); } catch (e) {}
-            }
+            assistantChatContainer.scrollTop = assistantChatContainer.scrollHeight;
         });
         assistantChatInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') assistantSendBtn.click();
@@ -2081,12 +1236,11 @@ document.addEventListener('DOMContentLoaded', function() {
             assistantChatContainer.innerHTML = '';
             const resp = await fetch('/assistant/clear-assistant-history', { method: 'POST' });
             const data = await resp.json();
-                if (data.success) {
-                    // Add a small delay to ensure backend writes are complete
-                    // After clearing, prefer showing the latest (bottom)
-                    setTimeout(() => {
-                        loadAssistantHistory({ preferLastRead: false });
-                    }, 200);
+            if (data.success) {
+                // Add a small delay to ensure backend writes are complete
+                setTimeout(() => {
+                    loadAssistantHistory();
+                }, 200);
             } else {
                 alert('Failed to clear assistant history.');
             }
@@ -2118,8 +1272,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // when loadDmHistory re-renders the full history.
                     dmChatInput.value = '';
                     // Give the server/socket a small moment to broadcast, then reload
-                    // Force preferLastRead:false so the user sees the newest message after sending
-                    setTimeout(() => loadDmHistory({ preferLastRead: false }), 150);
+                    setTimeout(() => loadDmHistory(), 150);
                 } catch (e) {
                     console.error('Error sending DM', e);
                 } finally {

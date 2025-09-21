@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+
+{% block title %}Mobile Scroll Test{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2>Mobile Scroll Test Page</h2>
+    <p class="lead">Test page to verify mobile scroll fixes are working properly.</p>
+    
+    <!-- Add some content to make the page scrollable -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4>Test Forms</h4>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="testInput1" class="form-label">Text Input</label>
+                        <input type="text" class="form-control" id="testInput1" placeholder="Test clicking/tapping this input">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="testSelect1" class="form-label">Dropdown Select</label>
+                        <select class="form-select" id="testSelect1">
+                            <option value="">Choose an option...</option>
+                            <option value="1">Option 1</option>
+                            <option value="2">Option 2</option>
+                            <option value="3">Option 3</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="testTextarea1" class="form-label">Textarea</label>
+                        <textarea class="form-control" id="testTextarea1" rows="3" placeholder="Test focusing this textarea"></textarea>
+                    </div>
+                    
+                    <button type="button" class="btn btn-primary me-2">Test Button 1</button>
+                    <button type="button" class="btn btn-secondary me-2">Test Button 2</button>
+                </div>
+            </div>
+            
+            <!-- Bootstrap Dropdown Test -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4>Test Dropdowns</h4>
+                </div>
+                <div class="card-body">
+                    <div class="dropdown d-inline-block me-3">
+                        <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            Dropdown Test 1
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#test1">Action 1</a></li>
+                            <li><a class="dropdown-item" href="#test2">Action 2</a></li>
+                            <li><a class="dropdown-item" href="#test3">Action 3</a></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="dropdown d-inline-block">
+                        <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            Dropdown Test 2
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#test4">Item 1</a></li>
+                            <li><a class="dropdown-item" href="#test5">Item 2</a></li>
+                            <li><a class="dropdown-item" href="#test6">Item 3</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tab Test -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4>Test Tabs</h4>
+                </div>
+                <div class="card-body">
+                    <ul class="nav nav-tabs" id="testTabs">
+                        <li class="nav-item">
+                            <button class="nav-link active" id="tab1-btn" data-bs-toggle="tab" data-bs-target="#tab1">Tab 1</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" id="tab2-btn" data-bs-toggle="tab" data-bs-target="#tab2">Tab 2</button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" id="tab3-btn" data-bs-toggle="tab" data-bs-target="#tab3">Tab 3</button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content mt-3">
+                        <div class="tab-pane fade show active" id="tab1">
+                            <h5>Tab 1 Content</h5>
+                            <p>This is the content for tab 1. Test clicking between tabs to ensure no scroll jumping occurs.</p>
+                            <input type="text" class="form-control" placeholder="Input in tab 1">
+                        </div>
+                        <div class="tab-pane fade" id="tab2">
+                            <h5>Tab 2 Content</h5>
+                            <p>This is the content for tab 2. The scroll position should remain stable when switching tabs.</p>
+                            <input type="email" class="form-control" placeholder="Email input in tab 2">
+                        </div>
+                        <div class="tab-pane fade" id="tab3">
+                            <h5>Tab 3 Content</h5>
+                            <p>This is the content for tab 3. Test focusing inputs here as well.</p>
+                            <textarea class="form-control" rows="4" placeholder="Textarea in tab 3"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Add lots of content to make scrolling necessary -->
+            {% for i in range(20) %}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Test Card {{ i + 1 }}</h5>
+                    <p class="card-text">This is test content card {{ i + 1 }} to create a scrollable page. On mobile devices, interacting with forms, buttons, and dropdowns above should not cause the page to jump to the top.</p>
+                    <div class="row">
+                        <div class="col-6">
+                            <input type="text" class="form-control form-control-sm" placeholder="Card {{ i + 1 }} input">
+                        </div>
+                        <div class="col-6">
+                            <button class="btn btn-sm btn-outline-primary">Card {{ i + 1 }} button</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add some console logging to track any scroll issues
+    let lastScrollY = 0;
+    
+    function logScrollChange(source) {
+        const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+        if (Math.abs(currentScrollY - lastScrollY) > 10) {
+            console.log(`Scroll change detected (${source}): ${lastScrollY} -> ${currentScrollY}`);
+            lastScrollY = currentScrollY;
+        }
+    }
+    
+    // Monitor all interactive elements
+    document.addEventListener('click', function(e) {
+        const target = e.target.closest('button, a, select, input, .dropdown-toggle, .nav-link');
+        if (target) {
+            const beforeY = window.pageYOffset || document.documentElement.scrollTop || 0;
+            setTimeout(() => logScrollChange(`click on ${target.tagName}`), 50);
+        }
+    });
+    
+    document.addEventListener('focusin', function(e) {
+        const beforeY = window.pageYOffset || document.documentElement.scrollTop || 0;
+        setTimeout(() => logScrollChange(`focus on ${e.target.tagName}`), 50);
+    });
+    
+    // Track initial scroll position
+    lastScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    
+    console.log('Mobile scroll test page loaded. Watch console for scroll change logs.');
+});
+</script>
+{% endblock %}

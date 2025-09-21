@@ -94,6 +94,34 @@ def get_assistant_chat_file_path(username, team_number):
     filename = f"{username}_assistant_chat_history.json"
     return os.path.join(team_dir, filename)
 
+def get_group_chat_file_path(team_number, group_name='main'):
+    """Get the file path for a group's chat history for a specific scouting team.
+
+    By default groups are stored per-team under `instance/chat/groups/<team_number>/`.
+    The default group name is 'main' for a general team-wide group chat.
+    """
+    ensure_chat_folder()
+    team_dir = os.path.join(CHAT_FOLDER, 'groups', str(team_number))
+    os.makedirs(team_dir, exist_ok=True)
+    safe_group = str(group_name).replace('/', '_')
+    filename = f"{safe_group}_group_chat_history.json"
+    return os.path.join(team_dir, filename)
+
+def load_group_chat_history(team_number, group_name='main'):
+    file_path = get_group_chat_file_path(team_number, group_name)
+    if not os.path.exists(file_path):
+        return []
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def save_group_chat_history(team_number, group_name, history):
+    file_path = get_group_chat_file_path(team_number, group_name)
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
+
 def load_assistant_chat_history(username, team_number):
     """Load assistant chat history for a specific user"""
     file_path = get_assistant_chat_file_path(username, team_number)
@@ -162,6 +190,33 @@ def find_message_in_user_files(message_id, username, team_number):
                     continue
     
     # Check main group chat file
+    # Check per-team group chat files first
+    try:
+        team_dir = os.path.join(CHAT_FOLDER, 'groups', str(team_number))
+        if os.path.exists(team_dir):
+            import glob
+            pattern = os.path.join(team_dir, '*_group_chat_history.json')
+            for file_path in glob.glob(pattern):
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        grp_history = json.load(f)
+                    for i, msg in enumerate(grp_history):
+                        if msg.get('id') == message_id:
+                            group_name = os.path.basename(file_path).replace('_group_chat_history.json', '')
+                            return {
+                                'message': msg,
+                                'index': i,
+                                'history': grp_history,
+                                'file_type': 'group',
+                                'file_path': file_path,
+                                'save_func': lambda hist, tn=team_number, gn=group_name: save_group_chat_history(tn, gn, hist)
+                            }
+                except Exception:
+                    continue
+    except Exception:
+        pass
+
+    # Fallback to legacy single assistant/main chat file
     history = load_chat_history()
     for i, msg in enumerate(history):
         if msg.get('id') == message_id:
@@ -219,10 +274,21 @@ def save_chat_message(message):
                 history.append(message)
                 save_chat_history(history)
         else:
-            # Group message or other - save to main file
-            history = load_chat_history()
-            history.append(message)
-            save_chat_history(history)
+            # Group message or other - prefer per-team group storage if group specified
+            # Group messages should include a 'group' key and ideally a team context
+            group_name = message.get('group')
+            team_number = message.get('team') if message.get('team') is not None else getattr(current_user, 'scouting_team_number', 'no_team')
+
+            if group_name:
+                # Save to per-team group chat file
+                history = load_group_chat_history(team_number, group_name)
+                history.append(message)
+                save_group_chat_history(team_number, group_name, history)
+            else:
+                # Fallback to legacy main chat file
+                history = load_chat_history()
+                history.append(message)
+                save_chat_history(history)
 
 # Socket.IO event handlers for assistant chat
 @socketio.on('assistant_chat_message')
@@ -276,94 +342,184 @@ def handle_assistant_chat_history_request():
     socketio.emit('assistant_chat_history', filtered)
 
 # In-memory group membership (for demo; use DB for production)
-group_members = {}  # {group_name: set([usernames])}
+# Structure: { team_number: { group_name: set([usernames]) } }
+group_members = {}
+
+
+def _ensure_group_set(team_number, group_name):
+    team_key = str(team_number)
+    if team_key not in group_members:
+        group_members[team_key] = {}
+    if group_name not in group_members[team_key]:
+        group_members[team_key][group_name] = set()
+
+
+def get_group_members_file_path(team_number, group_name='main'):
+    """Return the path to the group's members JSON file for a team."""
+    ensure_chat_folder()
+    team_dir = os.path.join(CHAT_FOLDER, 'groups', str(team_number))
+    os.makedirs(team_dir, exist_ok=True)
+    safe_group = str(group_name).replace('/', '_')
+    filename = f"{safe_group}_members.json"
+    return os.path.join(team_dir, filename)
+
+
+def load_group_members(team_number, group_name='main'):
+    path = get_group_members_file_path(team_number, group_name)
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return data
+            # If stored as dict with keys, return list of usernames
+            if isinstance(data, dict):
+                return list(data.get('members', []))
+    except Exception:
+        pass
+    return []
+
+
+def save_group_members(team_number, group_name, members_list):
+    path = get_group_members_file_path(team_number, group_name)
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(list(members_list), f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
 
 @socketio.on('add_user_to_group')
 def add_user_to_group(data):
-    from app.utils.team_isolation import validate_user_in_same_team
-    group = data.get('group')
-    user = data.get('user')
-    if group and user and validate_user_in_same_team(user):
-        group_members.setdefault(group, set()).add(user)
-        socketio.emit('group_members_updated', {'group': group, 'members': list(group_members[group])}, room=group)
+    """Add a user to an existing group (server-side tracking). Expects `group` and `username`."""
+    try:
+        group = data.get('group')
+        username = data.get('username')
+        from flask_login import current_user
+        # Only allow adding users within the same scouting team
+        if not group or not username:
+            return
+        if not hasattr(current_user, 'scouting_team_number'):
+            return
+        # Persisted members: load, modify, save
+        team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+        members = set(load_group_members(team_number, group) or [])
+        members.add(username)
+        save_group_members(team_number, group, sorted(members))
+        # Keep in-memory map in sync
+        _ensure_group_set(team_number, group)
+        group_members[str(team_number)][group] = set(members)
+    except Exception:
+        pass
+
 
 @socketio.on('remove_user_from_group')
 def remove_user_from_group(data):
-    from app.utils.team_isolation import validate_user_in_same_team
-    group = data.get('group')
-    user = data.get('user')
-    if group and user and group in group_members and validate_user_in_same_team(user):
-        group_members[group].discard(user)
-        socketio.emit('group_members_updated', {'group': group, 'members': list(group_members[group])}, room=group)
+    """Remove a user from a group (server-side tracking). Expects `group` and `username`."""
+    try:
+        group = data.get('group')
+        username = data.get('username')
+        from flask_login import current_user
+        if not group or not username or not hasattr(current_user, 'scouting_team_number'):
+            return
+        team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+        members = set(load_group_members(team_number, group) or [])
+        members.discard(username)
+        save_group_members(team_number, group, sorted(members))
+        _ensure_group_set(team_number, group)
+        group_members[str(team_number)][group] = set(members)
+    except Exception:
+        pass
+
 
 @socketio.on('join_group')
 def join_group_room(data):
-    group = data.get('group')
-    user = None
+    """User joins a group room for real-time messaging. Expects `group`."""
     try:
         from flask_login import current_user
-        user = current_user
+        group = data.get('group') or 'main'
+        if not current_user or not getattr(current_user, 'is_authenticated', False):
+            return
+        # Only allow joining groups within the user's scouting team
+        team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+        # Ensure member persisted and in-memory
+        members = set(load_group_members(team_number, group) or [])
+        members.add(current_user.username)
+        save_group_members(team_number, group, sorted(members))
+        _ensure_group_set(team_number, group)
+        group_members[str(team_number)][group] = set(members)
+        # Join a room unique to team+group
+        room_name = f"group_{team_number}_{group}"
+        join_room(room_name)
     except Exception:
         pass
-    username = user.username if user and hasattr(user, 'username') else None
-    if group and username:
-        join_room(group)
-        group_members.setdefault(group, set()).add(username)
-        socketio.emit('group_members_updated', {'group': group, 'members': list(group_members[group])}, room=group)
+
 
 @socketio.on('leave_group')
 def leave_group_room(data):
-    group = data.get('group')
-    user = None
+    """User leaves a group room. Expects `group`."""
     try:
         from flask_login import current_user
-        user = current_user
+        group = data.get('group') or 'main'
+        if not current_user or not getattr(current_user, 'is_authenticated', False):
+            return
+        team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+        members = set(load_group_members(team_number, group) or [])
+        members.discard(current_user.username)
+        save_group_members(team_number, group, sorted(members))
+        _ensure_group_set(team_number, group)
+        group_members[str(team_number)][group] = set(members)
+        # No explicit leave_room call here; SocketIO removes socket on disconnect.
     except Exception:
         pass
-    username = user.username if user and hasattr(user, 'username') else None
-    if group and username and group in group_members:
-        from flask_socketio import leave_room
-        leave_room(group)
-        group_members[group].discard(username)
-        socketio.emit('group_members_updated', {'group': group, 'members': list(group_members[group])}, room=group)
+
 
 @socketio.on('group_chat_message')
 def handle_group_chat_message(data):
-    import uuid
-    from app.utils.team_isolation import validate_user_in_same_team
-    user = None
+    """Handle an incoming group message: validate team, persist to per-team group JSON, and emit to the group room."""
     try:
         from flask_login import current_user
-        user = current_user
+        if not current_user or not getattr(current_user, 'is_authenticated', False):
+            return
+        group = data.get('group') or 'main'
+        text = data.get('text')
+        if text is None:
+            return
+        team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+
+        # Build message object
+        import uuid
+        message = {
+            'id': str(uuid.uuid4()),
+            'sender': current_user.username,
+            'group': group,
+            'team': team_number,
+            'text': text,
+            'timestamp': datetime.utcnow().isoformat(),
+            'reactions': []
+        }
+
+        # Persist to per-team group history
+        try:
+            history = load_group_chat_history(team_number, group)
+            history.append(message)
+            save_group_chat_history(team_number, group, history)
+        except Exception:
+            # Fallback to global history
+            try:
+                hist = load_chat_history()
+                hist.append(message)
+                from app import save_chat_history
+                save_chat_history(hist)
+            except Exception:
+                pass
+
+        # Emit to the team+group room
+        room_name = f"group_{team_number}_{group}"
+        socketio.emit('group_message', message, room=room_name)
     except Exception:
         pass
-    sender = data.get('sender') or (user.username if user and hasattr(user, 'username') else 'Anonymous')
-    group = data.get('group')
-    text = data.get('text', '')
-    timestamp = datetime.utcnow().isoformat()
-    
-    # Only allow group members to send/receive and ensure sender is in same team
-    if group and sender in group_members.get(group, set()):
-        # Validate all group members are in the same scouting team
-        valid_members = set()
-        for member in group_members[group]:
-            if validate_user_in_same_team(member):
-                valid_members.add(member)
-        
-        # Update group members to only include valid team members
-        group_members[group] = valid_members
-        
-        if sender in valid_members:
-            message = {
-                'id': str(uuid.uuid4()),
-                'sender': sender, 
-                'group': group, 
-                'text': text, 
-                'timestamp': timestamp,
-                'reactions': []
-            }
-            save_chat_message(message)
-            socketio.emit('group_chat_message', message, room=group)
 
 @socketio.on('connect')
 def on_connect():

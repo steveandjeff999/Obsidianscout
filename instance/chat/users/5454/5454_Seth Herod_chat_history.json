@@ -1,35 +1,13 @@
 [
   {
-    "id": "7a4e19db-f1e3-47a4-9e96-00d4ed21e654",
-    "sender": "Seth Herod",
-    "recipient": "5454",
-    "text": "hi",
-    "timestamp": "2025-09-20T02:30:55.747992",
-    "reactions": []
-  },
-  {
-    "id": "fcd77df7-73de-41e4-b0aa-0ad8a8b6edb7",
-    "sender": "Seth Herod",
-    "recipient": "5454",
-    "text": "5454",
-    "timestamp": "2025-09-20T04:07:30.815853",
-    "reactions": []
-  },
-  {
-    "id": "7bf47d80-e768-4fd1-9cad-07da7ca1e008",
-    "sender": "Seth Herod",
-    "recipient": "5454",
-    "text": "54",
-    "timestamp": "2025-09-20T04:07:31.209250",
-    "reactions": []
-  },
-  {
     "id": "55a4a1fb-1982-4cfe-9c8f-7641add488e2",
     "sender": "Seth Herod",
     "recipient": "5454",
-    "text": "54",
+    "text": "5454",
     "timestamp": "2025-09-20T04:07:33.347697",
-    "reactions": []
+    "reactions": [],
+    "edited": true,
+    "edited_timestamp": "2025-09-21T00:10:56.531800"
   },
   {
     "id": "00f6963b-60fe-4251-adfd-612eea22f2aa",
@@ -45,15 +23,13 @@
     "recipient": "5454",
     "text": "4",
     "timestamp": "2025-09-20T04:07:34.433977",
-    "reactions": []
-  },
-  {
-    "id": "96425fb0-1682-4925-b138-9fedf371624a",
-    "sender": "Seth Herod",
-    "recipient": "5454",
-    "text": "54",
-    "timestamp": "2025-09-20T04:07:34.726473",
-    "reactions": []
+    "reactions": [
+      {
+        "user": "Seth Herod",
+        "emoji": "👍",
+        "timestamp": "2025-09-20T22:59:55.048287"
+      }
+    ]
   },
   {
     "id": "7da4f18c-6fee-45cb-9fe0-e1b23b2b133b",
@@ -61,7 +37,19 @@
     "recipient": "5454",
     "text": "54",
     "timestamp": "2025-09-20T04:07:34.998391",
-    "reactions": []
+    "reactions": [
+      {
+        "user": "Seth Herod",
+        "emoji": "👍",
+        "timestamp": "2025-09-21T00:00:49.050516"
+      }
+    ],
+    "reactions_summary": [
+      {
+        "emoji": "👍",
+        "count": 1
+      }
+    ]
   },
   {
     "id": "4e90c88f-3813-4c5f-b1d3-ec286a7b30f9",
@@ -69,7 +57,19 @@
     "recipient": "5454",
     "text": "5",
     "timestamp": "2025-09-20T04:07:35.166704",
-    "reactions": []
+    "reactions": [
+      {
+        "user": "Seth Herod",
+        "emoji": "❤️",
+        "timestamp": "2025-09-21T00:08:22.787260"
+      }
+    ],
+    "reactions_summary": [
+      {
+        "emoji": "❤️",
+        "count": 1
+      }
+    ]
   },
   {
     "id": "3b3b4f75-0d56-4163-a998-0845d3139fe5",
@@ -77,7 +77,13 @@
     "recipient": "5454",
     "text": "45",
     "timestamp": "2025-09-20T04:07:35.397440",
-    "reactions": []
+    "reactions": [
+      {
+        "user": "Seth Herod",
+        "emoji": "👍",
+        "timestamp": "2025-09-20T23:55:58.456610"
+      }
+    ]
   },
   {
     "id": "42a1626e-24c0-46fb-89af-19f7eeb3e488",
@@ -149,7 +155,28 @@
     "recipient": "Seth Herod",
     "text": "5454",
     "timestamp": "2025-09-20T04:16:38.888702",
-    "reactions": []
+    "reactions": [
+      {
+        "user": "Seth Herod",
+        "emoji": "😢",
+        "timestamp": "2025-09-21T00:04:05.270115"
+      },
+      {
+        "user": "Seth Herod",
+        "emoji": "👍",
+        "timestamp": "2025-09-21T00:04:10.104029"
+      }
+    ],
+    "reactions_summary": [
+      {
+        "emoji": "😢",
+        "count": 1
+      },
+      {
+        "emoji": "👍",
+        "count": 1
+      }
+    ]
   },
   {
     "id": "2329decc-d498-4a0d-ac65-c330eb950d1a",
@@ -213,6 +240,14 @@
     "recipient": "5454",
     "text": "bill",
     "timestamp": "2025-09-20T04:38:31.086498",
+    "reactions": []
+  },
+  {
+    "id": "56c49a63-1381-437f-af5e-138e3d393dfe",
+    "sender": "Seth Herod",
+    "recipient": "5454",
+    "text": "test",
+    "timestamp": "2025-09-20T13:40:37.497405",
     "reactions": []
   }
 ]

@@ -1,8 +1,10 @@
 {
+  "currentGroup": "bob5",
   "joinedGroups": [
-    "bob"
+    "bob",
+    "bob5",
+    "test"
   ],
-  "currentGroup": "bob",
-  "lastDmUser": "bill",
+  "lastDmUser": "5454",
   "unreadCount": 0
 }

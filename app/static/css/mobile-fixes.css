@@ -1,0 +1,172 @@
+/**
+ * Mobile Scroll Protection and Input Stability
+ * Prevents unwanted scroll-to-top behavior on mobile devices
+ */
+
+/* Emergency CSS-only scroll protection */
+@media (max-width: 900px) {
+    /* Prevent any element from programmatically scrolling to top */
+    html {
+        scroll-behavior: auto !important;
+    }
+    
+    /* Force stable positioning on all interactive elements */
+    body {
+        overflow-anchor: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Prevent layout shifts that cause scroll jumps */
+    * {
+        scroll-margin-top: 0 !important;
+        scroll-padding-top: 0 !important;
+    }
+    
+    /* Aggressive input stabilization */
+    input, textarea, select, button, .btn, [role="button"] {
+        contain: layout !important;
+        will-change: auto !important;
+        transform: translateZ(0) !important;
+        -webkit-transform: translateZ(0) !important;
+    }
+}
+
+/* Global mobile viewport stability */
+@media (max-width: 768px) {
+    /* Prevent iOS zoom on input focus */
+    input, textarea, select, .form-control, .form-select {
+        font-size: 16px !important;
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+        -webkit-appearance: none;
+        appearance: none;
+        border-radius: 4px;
+    }
+    
+    /* Prevent focus outline from causing scroll */
+    input:focus, textarea:focus, select:focus, 
+    .form-control:focus, .form-select:focus {
+        scroll-margin: 0 !important;
+        scroll-behavior: auto !important;
+        outline: 2px solid var(--bs-primary, #0d6efd);
+        outline-offset: -2px;
+    }
+    
+    /* Stabilize form containers */
+    .form-group, .input-group, .form-floating, .tab-content {
+        contain: layout;
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+    }
+    
+    /* Force hardware acceleration on interactive elements */
+    button, .btn, [role="button"], .dropdown-toggle, .nav-link {
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+        -webkit-tap-highlight-color: transparent;
+    }
+    
+    /* Prevent dropdown and modal scroll issues */
+    .dropdown-menu, .modal-dialog {
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+    }
+    
+    /* Prevent body overflow during interactions */
+    body.modal-open, body.dropdown-open {
+        overflow: hidden;
+        position: fixed;
+        width: 100%;
+    }
+    
+    /* Chat-specific fixes */
+    .chat-message, .card-body {
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+    }
+}
+
+/* Enhanced Mobile Click Protection */
+@media (max-width: 900px) {
+    /* Prevent unwanted scroll during interactions */
+    * {
+        -webkit-overflow-scrolling: touch;
+        touch-action: manipulation;
+    }
+    
+    /* Specific protection for common culprits */
+    a[href="#"], a[href=""], a[href="javascript:void(0)"], a[href="javascript:void(0);"] {
+        touch-action: none !important;
+        pointer-events: auto !important;
+    }
+    
+    /* Block anchor-based scroll jumping */
+    a[href="#"]:focus, a[href=""]:focus {
+        scroll-behavior: auto !important;
+    }
+    
+    /* Stable positioning for fixed elements */
+    .topbar, .sidebar, .navbar-fixed-top {
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+    }
+    
+    /* Prevent Bootstrap component scroll issues */
+    .dropdown-menu.show {
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+        contain: layout;
+    }
+    
+    .modal.show {
+        overflow-anchor: none;
+    }
+    
+    .collapse.show, .collapsing {
+        contain: layout;
+    }
+}
+
+/* Bootstrap component stabilization */
+.nav-tabs .nav-link {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+.dropdown-menu {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+/* Prevent scroll jumps on tab switches */
+.tab-content {
+    contain: layout style;
+}
+
+/* Modal stabilization */
+.modal-backdrop {
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+/* Context menu specific mobile fixes */
+@media (max-width: 600px) {
+    .context-menu {
+        position: fixed !important;
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+    }
+}
+
+/* Emergency scroll anchor prevention */
+@supports (scroll-behavior: auto) {
+    @media (max-width: 900px) {
+        html {
+            scroll-behavior: auto !important;
+        }
+        
+        a, button, input, select, textarea {
+            scroll-behavior: auto !important;
+        }
+    }
+}
