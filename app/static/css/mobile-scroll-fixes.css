@@ -1,0 +1,258 @@
+/**
+ * Mobile Scroll Fixes and Optimizations
+ * Improves mobile scrolling behavior and prevents glitches
+ */
+
+/* Mobile-specific scroll improvements */
+@media (max-width: 768px) {
+    
+    /* Core body and html optimizations */
+    html {
+        -webkit-text-size-adjust: 100%;
+        -webkit-touch-callout: none;
+    }
+    
+    body {
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+        overscroll-behavior: contain; /* Prevent bounce effect */
+        scroll-behavior: auto !important; /* Prevent smooth scrolling issues */
+    }
+    
+    /* Prevent iOS zoom on input focus */
+    input, textarea, select {
+        font-size: 16px !important;
+        -webkit-appearance: none;
+        appearance: none;
+        border-radius: 0;
+    }
+    
+    input:focus, textarea:focus, select:focus {
+        scroll-margin: 0 !important;
+        scroll-behavior: auto !important;
+        outline-offset: 0;
+    }
+    
+    /* Optimize form controls */
+    .form-control, .form-select {
+        font-size: 16px !important;
+        touch-action: manipulation;
+    }
+    
+    /* Prevent unwanted transforms that cause reflows */
+    .card:hover, .btn:hover {
+        transform: none !important;
+    }
+    
+    /* Stable tab content */
+    .tab-content {
+        contain: layout;
+        transform: translateZ(0); /* Force GPU acceleration */
+    }
+    
+    /* Force hardware acceleration for smooth interactions */
+    .btn, button, [role="button"], .nav-link {
+        will-change: auto;
+        transform: translateZ(0);
+        backface-visibility: hidden;
+    }
+    
+    /* Optimize dropdowns and modals */
+    .dropdown-menu {
+        will-change: auto;
+        transform: translateZ(0);
+    }
+    
+    .modal {
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .modal-backdrop {
+        touch-action: none;
+        transform: translateZ(0);
+    }
+    
+    /* Prevent Select2 scroll issues */
+    .select2-dropdown {
+        touch-action: manipulation;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .select2-results__options {
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+    }
+    
+    /* Bootstrap navbar optimizations */
+    .navbar {
+        will-change: auto;
+        transform: translateZ(0);
+    }
+    
+    .navbar-collapse {
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Chart container optimizations */
+    .chart-container {
+        contain: layout style;
+        transform: translateZ(0);
+    }
+    
+    /* Sidebar optimizations */
+    .sidebar {
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+        contain: layout style;
+    }
+    
+    /* Search suggestions optimizations */
+    .search-suggestions {
+        touch-action: manipulation;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Table optimizations for mobile */
+    .table-responsive {
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-x pan-y;
+    }
+    
+    /* Counter controls - prevent double-tap zoom */
+    .counter-btn {
+        touch-action: manipulation;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+    }
+    
+    /* Rating stars optimizations */
+    .star-rating {
+        touch-action: manipulation;
+        user-select: none;
+    }
+    
+    /* Prevent unwanted text selection */
+    .btn, .nav-link, .tab-link, .dropdown-item {
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+    }
+    
+    /* Optimize toast notifications */
+    .toast {
+        will-change: auto;
+        transform: translateZ(0);
+    }
+    
+    /* Floating elements optimizations */
+    .floating-action-btn, .fab {
+        will-change: auto;
+        transform: translateZ(0);
+        touch-action: manipulation;
+    }
+    
+    /* Progress bar optimizations */
+    .progress {
+        contain: layout;
+        transform: translateZ(0);
+    }
+    
+    /* Badge optimizations */
+    .badge {
+        will-change: auto;
+        transform: translateZ(0);
+    }
+    
+    /* Prevent scroll issues with fixed elements */
+    .fixed-top, .fixed-bottom, .sticky-top {
+        will-change: auto;
+        transform: translateZ(0);
+    }
+    
+    /* QR code container optimizations */
+    .qr-container {
+        contain: layout;
+        touch-action: manipulation;
+    }
+    
+    /* Chat interface optimizations */
+    .chat-container, .chat-messages {
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+        contain: layout style;
+    }
+    
+    /* Image optimizations */
+    img {
+        touch-action: manipulation;
+        user-select: none;
+    }
+    
+    /* Data visualization optimizations */
+    .plotly-graph, .chart-container canvas, .graph-container {
+        touch-action: pan-x pan-y pinch-zoom;
+        contain: layout;
+    }
+    
+    /* Loading spinner optimizations */
+    .spinner-border, .loading-spinner {
+        will-change: auto;
+        transform: translateZ(0);
+    }
+    
+    /* Alert optimizations */
+    .alert {
+        contain: layout;
+        transform: translateZ(0);
+    }
+    
+    /* Card deck/grid optimizations */
+    .card-deck, .card-columns, .row {
+        contain: layout;
+    }
+    
+    /* Prevent momentum scrolling issues in specific containers */
+    .modal-body, .offcanvas-body {
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+    }
+}
+
+/* Specific fixes for iOS Safari */
+@supports (-webkit-touch-callout: none) {
+    @media (max-width: 768px) {
+        body {
+            -webkit-transform: translateZ(0); /* Force hardware acceleration */
+            transform: translateZ(0);
+        }
+        
+        /* Fix iOS Safari input zoom */
+        input[type="text"], input[type="email"], input[type="password"], 
+        input[type="number"], input[type="tel"], textarea, select {
+            font-size: 16px !important;
+        }
+        
+        /* Fix iOS Safari momentum scrolling */
+        .modal-body, .dropdown-menu, .select2-results__options {
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        /* Prevent iOS Safari scroll bounce in specific containers */
+        .tab-content, .sidebar, .chart-container {
+            position: relative;
+            -webkit-overflow-scrolling: touch;
+        }
+    }
+}
+
+/* Additional fixes for Android Chrome */
+@media (max-width: 768px) {
+    /* Android-specific touch optimizations */
+    .android-chrome body {
+        overscroll-behavior-y: contain;
+    }
+    
+    /* Fix for Android keyboard issues */
+    .android-chrome .form-control:focus {
+        transform: translateZ(0);
+    }
+}
