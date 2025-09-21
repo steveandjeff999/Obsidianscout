@@ -55,8 +55,8 @@
     </div>
 </div>
 
-<!-- Include the HTML5-QRCode library -->
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<!-- Include the HTML5-QRCode library (local vendor) -->
+<script src="{{ url_for('static', filename='js/vendor/html5-qrcode.min.js') }}"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {

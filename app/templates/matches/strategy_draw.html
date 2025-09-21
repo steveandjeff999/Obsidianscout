@@ -38,7 +38,7 @@
     <button id="clear-canvas" class="btn btn-warning">Clear Drawing</button>
     <span class="text-muted ms-3">Drawings are synced in real time and saved per match.</span>
 </div>
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='js/vendor/socket.io-4.7.5.min.js') }}"></script>
 <script>
 const fieldImage = document.getElementById('field-image');
 const canvas = document.getElementById('drawing-canvas');

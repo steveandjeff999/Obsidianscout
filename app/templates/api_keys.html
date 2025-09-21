@@ -422,7 +422,7 @@
 <!-- New API Key Modal -->
 <div id="new-key-modal" class="modal">
     <div class="modal-content">
-        <span class="close">&times;</span>
+    <span class="close" aria-hidden="true"><i class="fa-solid fa-xmark"></i></span>
         <h3>New API Key Created</h3>
         <div class="alert-warning-key">
             <strong>Important:</strong> This is the only time you'll see the full API key. 
@@ -445,7 +445,7 @@
 <!-- Usage Details Modal -->
 <div id="usage-modal" class="modal">
     <div class="modal-content" style="max-width: 800px;">
-        <span class="close">&times;</span>
+    <span class="close" aria-hidden="true"><i class="fa-solid fa-xmark"></i></span>
         <h3>API Key Usage Details</h3>
         <div id="usage-details-content">
             <!-- Usage details will be loaded here -->
@@ -1301,7 +1301,7 @@ function showAlert(type, message) {
     alert.innerHTML = `
         ${message}
         <button type="button" class="close" data-dismiss="alert">
-            <span>&times;</span>
+            <span aria-hidden="true"><i class="fa-solid fa-xmark"></i></span>
         </button>
     `;
     
