@@ -1,0 +1,4 @@
+The test SQLite database `tests/test_sync.db` is kept in place (binary). To move it into this artifacts/ folder, perform the move manually to avoid accidental file corruption.
+
+Recommended command (PowerShell):
+Move-Item -Path .\tests\test_sync.db -Destination .\artifacts\test_sync.db

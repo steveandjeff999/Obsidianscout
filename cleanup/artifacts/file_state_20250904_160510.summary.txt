@@ -1,0 +1,3 @@
+This is a trimmed summary of `file_state_20250904_160510.json` moved from repository root.
+
+Full JSON remains in root as it is large; consider moving manually if desired.
