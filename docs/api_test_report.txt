@@ -1,0 +1,3 @@
+FRC Scout API Test Report (copied to docs/ to reduce root clutter)
+
+See original `api_test_report.txt` in repository root for full content.

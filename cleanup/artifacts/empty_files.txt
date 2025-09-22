@@ -1,0 +1,3 @@
+Copied from repository root `empty_files.txt` to reduce root clutter.
+
+See original for full detailed list.
