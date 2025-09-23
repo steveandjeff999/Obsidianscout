@@ -765,13 +765,31 @@ def create_app(test_config=None):
     # Serve service worker at root path so tools (and PWABuilder) can fetch it at /sw.js
     @app.route('/sw.js')
     def service_worker():
-        # Send the sw.js file from the static folder with cache control headers
-        response = send_from_directory(app.static_folder, 'sw.js')
+        # Prefer a root-level sw.js (project root) so service worker can be placed at repo root.
+        # Fall back to static folder if root-level sw.js is not present.
+        possible_root = os.path.join(app.root_path, 'sw.js')
+        if os.path.exists(possible_root):
+            response = send_from_directory(app.root_path, 'sw.js')
+        else:
+            response = send_from_directory(app.static_folder, 'sw.js')
         # Prevent caching of service worker to ensure updates are loaded
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
         return response
+
+    # Minimal realtime status endpoint (client-side expects '/realtime/status')
+    @app.route('/realtime/status')
+    def realtime_status():
+        try:
+            # Import here to avoid circular imports during initialization
+            from app.utils.real_time_replication import real_time_replicator
+            return jsonify({
+                'queue_size': real_time_replicator.get_queue_size(),
+                'worker_running': real_time_replicator.is_worker_running()
+            })
+        except Exception:
+            return jsonify({'queue_size': 0, 'worker_running': False})
 
     # Public PWA install page so browsers can fetch a login-free start URL.
     @app.route('/pwa')

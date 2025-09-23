@@ -7,7 +7,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Register service worker for offline support
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js?v=2', { scope: '/' })
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
             .then(reg => {
                 console.log('Service Worker registered:', reg.scope);
                 // Force update check
@@ -1516,22 +1516,120 @@ function renderPlotlyGraphs() {
             }
             
             // Check which format we're dealing with
+            function applyClientThemeAndPlot(dataObj, layoutObj) {
+                // Compute card background and text color to match UI
+                try {
+                    const cardEl = element.closest('.card') || element.parentElement;
+                    const computed = cardEl ? getComputedStyle(cardEl) : getComputedStyle(document.body);
+                    let bg = computed.backgroundColor;
+                    if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
+                        bg = getComputedStyle(document.body).backgroundColor || 'rgba(0,0,0,0)';
+                    }
+                    const textColor = computed.color || getComputedStyle(document.body).color || '#000';
+
+                    function rgbaWithAlpha(rgbString, alpha) {
+                        if (!rgbString) return `rgba(128,128,128,${alpha})`;
+                        const m = rgbString.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([0-9.]+))?\)/);
+                        if (m) return `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${alpha})`;
+                        const hex = rgbString.replace('#','');
+                        if (hex.length === 6) {
+                            const r = parseInt(hex.substr(0,2),16);
+                            const g = parseInt(hex.substr(2,2),16);
+                            const b = parseInt(hex.substr(4,2),16);
+                            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                        }
+                        return `rgba(128,128,128,${alpha})`;
+                    }
+
+                    layoutObj = layoutObj || {};
+                    layoutObj.template = null; // prevent plotly_dark from winning
+                    layoutObj.plot_bgcolor = bg;
+                    layoutObj.paper_bgcolor = bg;
+                    layoutObj.font = layoutObj.font || {};
+                    layoutObj.font.color = textColor;
+
+                    const subtleGrid = rgbaWithAlpha(textColor, 0.12);
+                    const faintLine = rgbaWithAlpha(textColor, 0.06);
+                    layoutObj.xaxis = layoutObj.xaxis || {};
+                    layoutObj.yaxis = layoutObj.yaxis || {};
+                    layoutObj.xaxis.gridcolor = subtleGrid;
+                    layoutObj.yaxis.gridcolor = subtleGrid;
+                    layoutObj.xaxis.zerolinecolor = faintLine;
+                    layoutObj.yaxis.zerolinecolor = faintLine;
+                    layoutObj.xaxis.tickfont = layoutObj.xaxis.tickfont || {};
+                    layoutObj.yaxis.tickfont = layoutObj.yaxis.tickfont || {};
+                    layoutObj.xaxis.tickfont.color = textColor;
+                    layoutObj.yaxis.tickfont.color = textColor;
+
+                    if (layoutObj.legend) {
+                        layoutObj.legend.font = layoutObj.legend.font || {};
+                        layoutObj.legend.font.color = textColor;
+                    }
+                    if (layoutObj.annotations) {
+                        layoutObj.annotations.forEach(function(a){ if (!a.font) a.font = {}; a.font.color = a.font.color || textColor; });
+                    }
+                    if (layoutObj.polar) {
+                        layoutObj.polar.angularaxis = layoutObj.polar.angularaxis || {};
+                        layoutObj.polar.radialaxis = layoutObj.polar.radialaxis || {};
+                        layoutObj.polar.angularaxis.tickfont = layoutObj.polar.angularaxis.tickfont || {};
+                        layoutObj.polar.radialaxis.tickfont = layoutObj.polar.radialaxis.tickfont || {};
+                        layoutObj.polar.angularaxis.tickfont.color = textColor;
+                        layoutObj.polar.radialaxis.tickfont.color = textColor;
+                        layoutObj.polar.radialaxis.gridcolor = rgbaWithAlpha(textColor, 0.12);
+                    }
+
+                    // Plot then relayout to be sure templates are overridden
+                    return Promise.resolve(Plotly.newPlot(element.id, dataObj, layoutObj, {responsive: true, displayModeBar: true, displaylogo: false}))
+                        .then(function(){
+                            const relayout = {
+                                'template': null,
+                                'plot_bgcolor': layoutObj.plot_bgcolor,
+                                'paper_bgcolor': layoutObj.paper_bgcolor,
+                                'font.color': layoutObj.font && layoutObj.font.color || textColor,
+                                'legend.font.color': (layoutObj.legend && layoutObj.legend.font && layoutObj.legend.font.color) || textColor,
+                                'xaxis.tickfont.color': (layoutObj.xaxis && layoutObj.xaxis.tickfont && layoutObj.xaxis.tickfont.color) || textColor,
+                                'yaxis.tickfont.color': (layoutObj.yaxis && layoutObj.yaxis.tickfont && layoutObj.yaxis.tickfont.color) || textColor,
+                                'xaxis.gridcolor': (layoutObj.xaxis && layoutObj.xaxis.gridcolor) || rgbaWithAlpha(textColor, 0.12),
+                                'yaxis.gridcolor': (layoutObj.yaxis && layoutObj.yaxis.gridcolor) || rgbaWithAlpha(textColor, 0.12),
+                                'xaxis.zerolinecolor': (layoutObj.xaxis && layoutObj.xaxis.zerolinecolor) || rgbaWithAlpha(textColor, 0.06),
+                                'yaxis.zerolinecolor': (layoutObj.yaxis && layoutObj.yaxis.zerolinecolor) || rgbaWithAlpha(textColor, 0.06)
+                            };
+                            if (layoutObj.polar) {
+                                relayout['polar.radialaxis.gridcolor'] = layoutObj.polar.radialaxis.gridcolor || rgbaWithAlpha(textColor, 0.12);
+                                relayout['polar.angularaxis.tickfont.color'] = layoutObj.polar.angularaxis.tickfont.color || textColor;
+                                relayout['polar.radialaxis.tickfont.color'] = layoutObj.polar.radialaxis.tickfont.color || textColor;
+                            }
+                            return Plotly.relayout(element.id, relayout).catch(()=>{});
+                        }).catch(()=>{});
+                } catch (e) {
+                    console.warn('Failed to compute client theme for Plotly element', e);
+                    // Fallback to plotting without client theme
+                    return Promise.resolve(Plotly.newPlot(element.id, dataObj, layoutObj || {}, {responsive: true, displayModeBar: true, displaylogo: false}));
+                }
+            }
+
             if (parsedData.data && parsedData.layout) {
                 // Our custom format with data and layout properties
                 console.log('Using custom format with data and layout properties');
-                Plotly.newPlot(element.id, parsedData.data, parsedData.layout, {
-                    responsive: true,
-                    displayModeBar: true, 
-                    displaylogo: false
-                });
+                applyClientThemeAndPlot(parsedData.data, parsedData.layout);
             } else {
                 // Using plotly.io.to_json format
                 console.log('Using plotly.io.to_json format');
-                Plotly.newPlot(element.id, parsedData, {
-                    responsive: true,
-                    displayModeBar: true, 
-                    displaylogo: false
-                });
+                // parsedData in this case is an array or figure object — pass as data
+                if (parsedData.data && parsedData.layout) {
+                    applyClientThemeAndPlot(parsedData.data, parsedData.layout);
+                } else if (parsedData.data) {
+                    applyClientThemeAndPlot(parsedData.data, parsedData.layout || {});
+                } else {
+                    // It's likely a figure encoded by plotly; try to plot directly and apply layout after
+                    const maybeFig = parsedData;
+                    if (maybeFig.data && maybeFig.layout) {
+                        applyClientThemeAndPlot(maybeFig.data, maybeFig.layout);
+                    } else {
+                        // Fallback: try plotting the parsedData directly
+                        applyClientThemeAndPlot(parsedData, {});
+                    }
+                }
             }
             
             console.log(`Successfully rendered graph for ${element.id}`);

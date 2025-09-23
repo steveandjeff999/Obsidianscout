@@ -51,7 +51,8 @@
                     <div class="card h-100">
                         <div class="card-header">Messages</div>
                         <div class="card-body d-flex flex-column p-3">
-                            <div id="dmChatContainer" class="flex-grow-1 overflow-auto bg-light p-2 rounded" style="min-height: 300px;"></div>
+                            <!-- Use a fixed height so the input remains visible and the messages area scrolls -->
+                            <div id="dmChatContainer" class="flex-grow-1 overflow-auto bg-light p-2 rounded chat-messages-fixed-height" style="min-height: 300px;" {% if last_read_message_id is defined and last_read_message_id %}data-last-read="{{ last_read_message_id }}"{% endif %}></div>
                             <div class="mt-3">
                                 <div class="input-group">
                                     <input type="text" class="form-control" id="dmChatInput" placeholder="Type a message...">
@@ -292,6 +293,13 @@
         }
     `;
     document.head.appendChild(style);
+    // Add a small stylesheet for fixed-height chat containers
+    const fixedStyle = document.createElement('style');
+    fixedStyle.textContent = `
+        .chat-messages-fixed-height { height: 420px; max-height: 420px; }
+        @media (max-width: 900px) { .chat-messages-fixed-height { height: 320px; max-height: 320px; } }
+    `;
+    document.head.appendChild(fixedStyle);
 
     // Context menu system
     let contextMenu = null;
@@ -1286,6 +1294,72 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    
+    /* Auto-scroll helpers: attempt to scroll to the last-read message if available
+       Priority: template variable `last_read_message_id` (server), then URL param `last_read`,
+       then URL `focus` JSON object (from unread link), else scroll to bottom. */
+    function getLastReadMessageIdFromUrl() {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const lr = params.get('last_read');
+            if (lr) return lr;
+            const focus = params.get('focus');
+            if (focus) {
+                try {
+                    const obj = JSON.parse(decodeURIComponent(focus));
+                    if (obj && obj.last_read) return obj.last_read;
+                    if (obj && obj.id) return obj.id;
+                } catch (e) {
+                    // ignore
+                }
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function scrollToMessageOrBottom(container, messageId) {
+        if (!container) return;
+        if (messageId) {
+            const el = container.querySelector(`[data-message-id="${messageId}"]`);
+            if (el) {
+                // Scroll so the target is visible with a small offset
+                const offset = 8;
+                const top = el.offsetTop - offset;
+                try {
+                    container.scrollTo({ top: top, behavior: 'auto' });
+                } catch (e) {
+                    container.scrollTop = top;
+                }
+                return true;
+            }
+        }
+        // fallback to bottom
+        try { container.scrollTo({ top: container.scrollHeight, behavior: 'auto' }); } catch(e) { container.scrollTop = container.scrollHeight; }
+        return false;
+    }
+
+    // Try a server-provided last read id first (template variable), then URL
+    let serverLastReadId = null;
+    try {
+        const dmEl = document.getElementById('dmChatContainer');
+        if (dmEl) serverLastReadId = dmEl.getAttribute('data-last-read') || null;
+    } catch (e) { serverLastReadId = null; }
+
+    // Hook into DM history loader to attempt smart scroll after rendering
+    const originalLoadDmHistory = loadDmHistory;
+    loadDmHistory = function() {
+        const dmChatContainerLocal = document.getElementById('dmChatContainer');
+        // Call original which populates container and scrolls to bottom
+        const promise = originalLoadDmHistory.apply(this, arguments);
+        // After a short delay to ensure DOM updates, try to scroll to last-read
+        setTimeout(() => {
+            const urlLastRead = getLastReadMessageIdFromUrl();
+            const chosen = serverLastReadId || urlLastRead || null;
+            // Try to scroll to chosen id; if not found, leave at bottom
+            scrollToMessageOrBottom(dmChatContainerLocal, chosen);
+        }, 250);
+        return promise;
+    };
   })();
 });
 </script>

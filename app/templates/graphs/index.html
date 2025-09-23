@@ -776,6 +776,59 @@
         // Check share button visibility on page load and form changes
         toggleShareButton();
         $('#teams').on('change', toggleShareButton);
+
+        // When the Share modal opens, copy current selection values into hidden inputs
+        // so the created share reflects the user's current configuration (teams, graph types, metric, etc.)
+        $('#shareModal').on('show.bs.modal', function () {
+            const modal = $(this);
+            const form = modal.find('form');
+
+            // Remove any previously-added dynamic hidden inputs
+            form.find('input[name="teams"]').remove();
+            form.find('input[name="event_id"]').remove();
+            form.find('input[name="metric"]').remove();
+            form.find('input[name="sort"]').remove();
+            form.find('input[name="data_view"]').remove();
+            form.find('input[name="graph_types"]').remove();
+
+            // Copy current teams
+            const teams = $('#teams').val() || [];
+            teams.forEach(function(teamNum) {
+                form.append($('<input>').attr({type: 'hidden', name: 'teams', value: teamNum}));
+            });
+
+            // Copy event if selected
+            const eventId = $('#event_id').val();
+            if (eventId && eventId !== '') {
+                form.append($('<input>').attr({type: 'hidden', name: 'event_id', value: eventId}));
+            }
+
+            // Copy metric
+            const metric = $('#metric').val() || 'points';
+            form.append($('<input>').attr({type: 'hidden', name: 'metric', value: metric}));
+
+            // Copy sort
+            const sortVal = $('#sort').val() || 'points_desc';
+            form.append($('<input>').attr({type: 'hidden', name: 'sort', value: sortVal}));
+
+            // Copy data view
+            const dataView = $('#data_view').val() || 'averages';
+            form.append($('<input>').attr({type: 'hidden', name: 'data_view', value: dataView}));
+
+            // Copy graph types - if none selected, include all available options
+            let graphTypes = $('#graph_types').val() || [];
+            if (!graphTypes || graphTypes.length === 0) {
+                // gather all option values
+                graphTypes = [];
+                $('#graph_types option').each(function() {
+                    const v = $(this).val();
+                    if (v) graphTypes.push(v);
+                });
+            }
+            graphTypes.forEach(function(gt) {
+                form.append($('<input>').attr({type: 'hidden', name: 'graph_types', value: gt}));
+            });
+        });
         
         // Responsive handling for Select2
         $(window).on('resize', function() {

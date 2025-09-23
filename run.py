@@ -382,10 +382,10 @@ if __name__ == '__main__':
                     print("SSL certificates not found. Generating self-signed certificates for local development...")
                     try:
                         from OpenSSL import crypto
-                        
+
                         k = crypto.PKey()
                         k.generate_key(crypto.TYPE_RSA, 2048)
-                        
+
                         cert = crypto.X509()
                         cert.get_subject().C = "US"
                         cert.get_subject().ST = "State"
@@ -398,13 +398,22 @@ if __name__ == '__main__':
                         cert.gmtime_adj_notAfter(10*365*24*60*60)
                         cert.set_issuer(cert.get_subject())
                         cert.set_pubkey(k)
+
+                        # Add Subject Alternative Names so the cert is valid for both localhost and 127.0.0.1
+                        try:
+                            san = b"DNS:localhost,IP:127.0.0.1"
+                            cert.add_extensions([crypto.X509Extension(b"subjectAltName", False, san)])
+                        except Exception:
+                            # Some pyOpenSSL/OpenSSL builds may reject adding SAN this way; continue without it
+                            pass
+
                         cert.sign(k, 'sha256')
-                        
+
                         with open(cert_file, "wb") as cf:
                             cf.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
                         with open(key_file, "wb") as kf:
                             kf.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, k))
-                        
+
                         ssl_context = (cert_file, key_file)
                         print("Self-signed SSL certificates generated successfully.")
                     except ImportError:

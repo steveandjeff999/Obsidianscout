@@ -29,11 +29,13 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-overrides.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modal-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-improvements.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/topbar-notifications.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/search-enhancements.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-ui.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-fixes.css') }}">
-    <script src="{{ url_for('static', filename='js/vendor/chart.min.js') }}"></script>
+    <!-- Use UMD build of Chart.js for compatibility with non-module script loading -->
+    <script src="{{ url_for('static', filename='js/vendor/chart.umd.min.js') }}"></script>
     
     <!-- Dynamic Theme CSS Variables -->
     {% if theme_css_variables and theme_css_variables.strip() %}
@@ -604,7 +606,7 @@
 </head>
 <body class="d-flex flex-column h-100 with-sidebar topbar-fixed">
     <!-- Global Top Bar (search + user) -->
-    <div class="topbar d-flex align-items-center gap-2 px-3 py-2 shadow-sm" role="banner">
+    <div class="topbar glass d-flex align-items-center gap-2 px-3 py-2 shadow-sm" role="banner">
         <div class="d-flex align-items-center gap-2 flex-shrink-0">
             <button id="sidebarToggle" class="btn btn-outline-primary btn-sm" aria-label="Toggle navigation"><i class="fas fa-bars"></i></button>
         </div>
@@ -628,10 +630,29 @@
         </div>
         <a href="{{ url_for('search.search_page') }}" class="btn btn-outline-secondary btn-sm d-sm-none" aria-label="Search"><i class="fas fa-search"></i></a>
         {% endif %}
-        <!-- User dropdown -->
-        <div class="ms-auto d-flex align-items-center flex-shrink-0">
+        <!-- User dropdown and notifications -->
+        <div class="ms-auto d-flex align-items-center flex-shrink-0 navbar-actions">
             {% if current_user.is_authenticated %}
                 <div class="d-flex align-items-center">
+                    <!-- Notifications dropdown -->
+                    <div class="dropdown me-2 topbar-notifications">
+                        <button id="notificationsToggle" class="btn btn-outline-secondary btn-sm d-flex align-items-center dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true" aria-controls="notificationsMenu" aria-label="Notifications">
+                            <i class="fas fa-bell"></i>
+                            <span id="notificationsBadge" class="badge bg-danger ms-1" style="display:none; font-size:0.65rem;">0</span>
+                        </button>
+                        <div id="notificationsMenu" class="dropdown-menu dropdown-menu-end shadow notifications-dropdown" aria-labelledby="notificationsToggle">
+                            <div class="dropdown-header d-flex align-items-center justify-content-between px-3 py-2">
+                                <strong>Notifications</strong>
+                                <button id="clearAllNotificationsBtn" class="btn btn-sm btn-link small" title="Clear all">Clear all</button>
+                            </div>
+                            <div id="notificationsList" class="list-group list-group-flush" style="max-height:320px; overflow:auto;">
+                                <div class="list-group-item text-muted small">Loading...</div>
+                            </div>
+                            <div class="dropdown-footer text-center py-2">
+                                <a href="{{ url_for('main.chat_page') }}" class="small">Open chat</a>
+                            </div>
+                        </div>
+                    </div>
                     <button class="btn btn-outline-primary btn-sm d-flex align-items-center dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-user-circle me-1"></i>
                         <span class="d-none d-md-inline">{{ current_user.username }}</span>
@@ -676,7 +697,7 @@
     </div>
 
     <!-- Sidebar -->
-    <aside id="appSidebar" class="sidebar">
+    <aside id="appSidebar" class="sidebar glass">
         <div class="sidebar-header d-flex align-items-center justify-content-between">
             <a class="brand d-flex align-items-center text-decoration-none" href="{% if user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics') %}{{ url_for('scouting.index') }}{% else %}{{ url_for('main.index') }}{% endif %}">
                 <i class="fas fa-robot brand-icon me-2"></i>
@@ -718,7 +739,7 @@
                 <a class="nav-link {% if request.endpoint == 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.ranks') }}"><i class="fas fa-list-ol"></i><span>Team Rankings</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('matches') %}active{% endif %}" href="{{ url_for('matches.index') }}"><i class="fas fa-gamepad"></i><span>Matches</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('alliances') %}active{% endif %}" href="{{ url_for('alliances.index') }}"><i class="fas fa-handshake"></i><span>Alliance Selection</span></a>
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') %}active{% endif %}" href="{{ url_for('graphs.index') }}"><i class="fas fa-chart-line"></i><span>Performance</span></a>
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') %}active{% endif %}" href="{{ url_for('graphs.index') }}"><i class="fas fa-chart-line"></i><span>Graphs</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') and 'side-by-side' in request.endpoint %}active{% endif %}" href="{{ url_for('graphs.side_by_side') }}"><i class="fas fa-columns"></i><span>Comparison</span></a>
                 <a class="nav-link {% if request.endpoint == 'matches.predict' %}active{% endif %}" href="{{ url_for('matches.predict') }}"><i class="fas fa-chart-area"></i><span>Predictions</span></a>
                 <a class="nav-link {% if request.endpoint == 'matches.predict_all' %}active{% endif %}" href="{{ url_for('matches.predict_all') }}"><i class="fas fa-list"></i><span>All Predictions</span></a>
@@ -1173,6 +1194,7 @@
     </script>
     
     <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/topbar-notifications.js') }}"></script>
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -1195,8 +1217,10 @@
                 });
             };
             
-            // Initialize mobile protection
-            initializeMobileScrollProtection();
+            // Initialize mobile protection (guard in case the function isn't present)
+            if (typeof initializeMobileScrollProtection === 'function') {
+                initializeMobileScrollProtection();
+            }
             
             // ===============================
             // GLOBAL SELECT2 MOBILE ENHANCEMENT
@@ -1294,7 +1318,7 @@
     <script>
     // Ensure service worker is registered at root (/sw.js) so PWABuilder and other tools can detect it
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js?v=2', { scope: '/' })
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
             .then(reg => {
                 console.log('SW root registered:', reg.scope);
                 // Force update check

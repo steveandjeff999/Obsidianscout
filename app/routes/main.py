@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, current_app, redirect, url_for, request, flash, send_from_directory
+from flask import Blueprint, render_template, current_app, redirect, url_for, request, flash, send_from_directory, get_flashed_messages, jsonify
 from flask_login import login_required, current_user
 import json
 import os
@@ -1326,6 +1326,94 @@ def api_sync_status():
     }
     
     return jsonify(status)
+
+
+@bp.route('/api/sync-event', methods=['POST'])
+@login_required
+def api_sync_event():
+    """Trigger a combined teams + matches sync for the configured event.
+
+    This endpoint calls the existing blueprint handlers for team and match
+    syncs. It returns JSON with per-step results. Only authenticated users
+    with admin or analytics roles should trigger this.
+    """
+    # Require admin or analytics role to prevent misuse
+    if not (current_user.has_role('admin') or current_user.has_role('analytics')):
+        return jsonify({'success': False, 'error': 'Insufficient permissions'}), 403
+
+    results = {
+        'teams_sync': {'success': False, 'message': '', 'flashes': []},
+        'matches_sync': {'success': False, 'message': '', 'flashes': []}
+    }
+
+    try:
+        # Import inside function to avoid circular imports at module level
+        from app.routes import teams as teams_bp
+        # Call the teams sync view function directly. It will perform DB work
+        # and flash messages; we ignore the redirect response but catch exceptions.
+        try:
+            # Drain any existing flashed messages so we only capture messages produced here
+            try:
+                _ = get_flashed_messages(with_categories=True)
+            except Exception:
+                pass
+
+            teams_resp = teams_bp.sync_from_config()
+            # Capture flashed messages (category, message) produced by the sync
+            try:
+                flashes = get_flashed_messages(with_categories=True)
+            except Exception:
+                flashes = []
+
+            results['teams_sync']['success'] = True
+            results['teams_sync']['message'] = 'Teams sync attempted.'
+            results['teams_sync']['flashes'] = [{'category': c, 'message': m} for c, m in flashes]
+        except Exception as e:
+            current_app.logger.exception('Teams sync failed')
+            results['teams_sync']['success'] = False
+            results['teams_sync']['message'] = str(e)
+            try:
+                flashes = get_flashed_messages(with_categories=True)
+            except Exception:
+                flashes = []
+            results['teams_sync']['flashes'] = [{'category': c, 'message': m} for c, m in flashes]
+
+        # Matches
+        from app.routes import matches as matches_bp
+        try:
+            # Drain any leftover flashed messages
+            try:
+                _ = get_flashed_messages(with_categories=True)
+            except Exception:
+                pass
+
+            matches_resp = matches_bp.sync_from_config()
+            try:
+                flashes = get_flashed_messages(with_categories=True)
+            except Exception:
+                flashes = []
+
+            results['matches_sync']['success'] = True
+            results['matches_sync']['message'] = 'Matches sync attempted.'
+            results['matches_sync']['flashes'] = [{'category': c, 'message': m} for c, m in flashes]
+        except Exception as e:
+            current_app.logger.exception('Matches sync failed')
+            results['matches_sync']['success'] = False
+            results['matches_sync']['message'] = str(e)
+            try:
+                flashes = get_flashed_messages(with_categories=True)
+            except Exception:
+                flashes = []
+            results['matches_sync']['flashes'] = [{'category': c, 'message': m} for c, m in flashes]
+
+        # Determine overall success
+        overall_success = results['teams_sync']['success'] or results['matches_sync']['success']
+
+        return jsonify({'success': overall_success, 'results': results})
+
+    except Exception as e:
+        current_app.logger.exception('Combined sync endpoint failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 def get_theme_context():
     theme_manager = ThemeManager()

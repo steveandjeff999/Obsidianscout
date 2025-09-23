@@ -263,22 +263,44 @@ def get_recommendations(event_id):
                     # Use first letter of metric name for other components
                     metric_name = metric_info.get(metric_id, {}).get('name', metric_id)
                     prefix = f"{metric_name[0]}:"
-                
-                value = round(rec['metrics'].get(metric_id, 0), 1) if rec['metrics'].get(metric_id) else 0
+
+                # Use 0 default if metric missing or falsy; allow explicit 0 values
+                raw_val = rec['metrics'].get(metric_id, 0)
+                try:
+                    value = round(raw_val, 1)
+                except Exception:
+                    value = 0
+
                 component_display_parts.append(f"{prefix}{value}")
-            
+
             component_metrics_display = " ".join(component_display_parts)
-            
+
+            # Determine total points robustly: prefer configured total_metric_id, then 'total_points', then sum components
+            metrics_dict = rec.get('metrics', {}) or {}
+            total_val = 0
+            if total_metric_id and total_metric_id in metrics_dict:
+                total_val = metrics_dict.get(total_metric_id, 0) or 0
+            elif 'total_points' in metrics_dict:
+                total_val = metrics_dict.get('total_points', 0) or 0
+            else:
+                # Sum component metrics if available
+                for mid in component_metric_ids:
+                    mval = metrics_dict.get(mid, 0) or 0
+                    try:
+                        total_val += float(mval)
+                    except Exception:
+                        continue
+
             team_data = {
                 'team_id': rec['team'].id,
                 'team_number': rec['team'].team_number,
                 'team_name': rec['team'].team_name or f"Team {rec['team'].team_number}",
-                'total_points': round(rec['metrics'].get(total_metric_id, 0), 1) if rec['metrics'].get(total_metric_id) else 0,
+                'total_points': round(total_val, 1),
                 'component_metrics_display': component_metrics_display,
                 # Keep these for backwards compatibility
-                'auto_points': round(rec['metrics'].get(component_metric_ids[0], 0), 1) if component_metric_ids and rec['metrics'].get(component_metric_ids[0]) else 0,
-                'teleop_points': round(rec['metrics'].get(component_metric_ids[1], 0), 1) if len(component_metric_ids) > 1 and rec['metrics'].get(component_metric_ids[1]) else 0,
-                'endgame_points': round(rec['metrics'].get(component_metric_ids[2], 0), 1) if len(component_metric_ids) > 2 and rec['metrics'].get(component_metric_ids[2]) else 0,
+                'auto_points': round(metrics_dict.get(component_metric_ids[0], metrics_dict.get('auto_points', 0)) or 0, 1) if component_metric_ids else 0,
+                'teleop_points': round(metrics_dict.get(component_metric_ids[1], metrics_dict.get('teleop_points', 0)) or 0, 1) if len(component_metric_ids) > 1 else 0,
+                'endgame_points': round(metrics_dict.get(component_metric_ids[2], metrics_dict.get('endgame_points', 0)) or 0, 1) if len(component_metric_ids) > 2 else 0,
                 'is_avoided': rec['is_avoided'],
                 'is_do_not_pick': rec['is_do_not_pick'],
                 'has_no_data': rec.get('has_no_data', False)

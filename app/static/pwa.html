@@ -18,7 +18,7 @@
 
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js?v=2', { scope: '/' })
+  navigator.serviceWorker.register('/sw.js', { scope: '/' })
         .then(function(reg) { 
           console.log('ServiceWorker registered successfully', reg); 
           // Force update check
