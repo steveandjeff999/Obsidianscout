@@ -2,6 +2,8 @@
 :root{
     --scout-accent: #5b3bff;
     --scout-success: #2dd4bf;
+    /* Color used for the "unknown" alliance state (friendly yellow) */
+    --scout-unknown: #f6c84c;
 }
 
 .alliance-indicator{border-radius:12px}
@@ -44,3 +46,25 @@ button:focus, input:focus, select:focus, textarea:focus{box-shadow:0 0 0 4px rgb
 .input-group-text i{width:16px;text-align:center}
 
 .form-select option[hidden]{display:none}
+
+/* Alliance - unknown state (override white/blue/red visual cues)
+   Apply `.alliance-unknown` on the alliance container to show yellow branding */
+.alliance-unknown .alliance-icon i,
+.alliance-unknown .alliance-icon svg {
+    /* force icon color to yellow (overrides utility classes like .text-white) */
+    color: var(--scout-unknown) !important;
+}
+
+.alliance-unknown .alliance-details h4,
+.alliance-unknown .alliance-details .text-white {
+    /* headings or elements using .text-white should appear yellow in this state */
+    color: var(--scout-unknown) !important;
+}
+
+.alliance-unknown .alliance-details .text-white-50 {
+    /* muted subtext - slightly transparent yellow */
+    color: rgba(246,200,76,0.85) !important;
+}
+
+/* optional: keep icon background transparent or add subtle emphasis */
+.alliance-unknown .alliance-icon{background:transparent}

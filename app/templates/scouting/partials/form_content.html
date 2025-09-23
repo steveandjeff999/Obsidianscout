@@ -1,12 +1,12 @@
 <!-- Alliance Indicator Bar -->
-<div class="alliance-indicator {% if alliance == 'red' %}bg-danger{% else %}bg-primary{% endif %} mb-4 py-3 px-4 rounded-4 shadow-sm">
+<div class="alliance-indicator {% if alliance == 'red' %}bg-danger{% elif alliance == 'blue' %}bg-primary{% else %}bg-warning alliance-unknown{% endif %} mb-4 py-3 px-4 rounded-4 shadow-sm">
     <div class="d-flex align-items-center">
         <div class="alliance-icon me-3">
-            <i class="fas {% if alliance == 'red' %}fa-fire{% else %}fa-tint{% endif %} fa-2x text-white"></i>
+            <i class="fas {% if alliance == 'red' %}fa-fire{% else %}fa-tint{% endif %} fa-2x {% if alliance == 'red' or alliance == 'blue' %}text-white{% else %}text-dark{% endif %}"></i>
         </div>
         <div class="alliance-details">
-            <h4 class="mb-0 text-white">{{ alliance|capitalize }} Alliance</h4>
-            <div class="text-white-50">Team {{ team.team_number }} - {{ team.team_name }}</div>
+            <h4 class="mb-0 {% if alliance == 'red' or alliance == 'blue' %}text-white{% else %}text-dark{% endif %}">{{ alliance|capitalize }} Alliance</h4>
+            <div class="{% if alliance == 'red' or alliance == 'blue' %}text-white-50{% else %}text-muted{% endif %}">Team {{ team.team_number }} - {{ team.team_name }}</div>
         </div>
         <div class="ms-auto match-details">
             <span class="badge {% if match.match_type == 'Qualification' %}bg-primary{% elif match.match_type == 'Playoff' %}bg-danger{% elif match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %} fs-5">
