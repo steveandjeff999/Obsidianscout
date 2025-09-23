@@ -1,0 +1,33 @@
+/* Styles for topbar notifications dropdown */
+.topbar-notifications .notifications-dropdown {
+  min-width: 320px;
+  max-width: 420px;
+  border-radius: 8px;
+}
+.topbar-notifications .notifications-dropdown .dropdown-header {
+  border-bottom: 1px solid var(--bs-border-color);
+}
+.topbar-notifications .notifications-dropdown .list-group-item {
+  cursor: default;
+}
+.topbar-notifications .notification-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.topbar-notifications .notification-item .notif-meta {
+  font-size: 0.75rem;
+  color: var(--bs-secondary);
+}
+.topbar-notifications .notification-dismiss {
+  border: none;
+  background: transparent;
+  color: var(--bs-secondary);
+}
+.topbar-notifications .badge {
+  transform: translateY(-1px);
+}
+.topbar-notifications .dropdown-footer {
+  border-top: 1px solid var(--bs-border-color);
+  background: transparent;
+}

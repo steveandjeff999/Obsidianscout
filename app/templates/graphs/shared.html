@@ -145,7 +145,78 @@
 
     <!-- Main Content -->
     <div class="container">
+        <!-- Viewer Filters: allow selecting teams and graph types -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <form class="card p-3" method="get" action="">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label"><i class="fas fa-users me-2"></i>Teams to show</label>
+                            <!-- Dropdown checklist that works on mobile (tap to toggle). Updates hidden `teams` input. -->
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="teamsDropdownBtn" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Select Teams
+                                </button>
+                                <div class="dropdown-menu p-2" aria-labelledby="teamsDropdownBtn" style="width:100%; max-height: 300px; overflow: hidden;">
+                                    <div class="mb-2">
+                                        <input type="search" id="teams_search" class="form-control form-control-sm" placeholder="Search teams...">
+                                    </div>
+                                    <div id="teams_checklist" class="list-group" style="max-height:220px; overflow-y: auto;">
+                                        {% for team in teams %}
+                                        <label class="list-group-item d-flex align-items-center">
+                                            <input class="form-check-input me-2 teams-checkbox" type="checkbox" value="{{ team.team_number }}" checked>
+                                            <span>Team {{ team.team_number }}</span>
+                                        </label>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="mt-2 d-flex gap-2">
+                                        <button type="button" id="teams_select_all" class="btn btn-sm btn-outline-primary">Select All</button>
+                                        <button type="button" id="teams_clear_all" class="btn btn-sm btn-outline-secondary">Clear</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Hidden input that stores comma-separated teams for the backend -->
+                            <input type="hidden" name="teams" id="teams_hidden_input" value="{{ teams|map(attribute='team_number')|join(',') }}">
+                            <div class="form-text">Tap teams to toggle selection. Use the search box to filter. Selected teams are submitted with the form.</div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label"><i class="fas fa-chart-pie me-2"></i>Graph Types</label>
+                            <div class="card p-2">
+                                <div class="d-flex flex-wrap gap-2">
+                                    {% for g in available_graph_types %}
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="graph_types" value="{{ g }}" id="graph_type_{{ g }}" {% if g in selected_graph_types %}checked{% endif %}>
+                                        <label class="form-check-label" for="graph_type_{{ g }}">{{ g|title }}</label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="form-text">Tap to toggle graph types. Leave all unchecked to use the original share settings.</div>
+                        </div>
+                        <div class="col-md-2 d-grid">
+                            <label class="form-label d-block invisible">Apply</label>
+                            <button type="submit" class="btn btn-primary">Apply Filters</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
         {% if plots %}
+        <!-- DEBUG: show selected graph types and plots keys -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card border-warning bg-light">
+                    <div class="card-body small">
+                        <strong>Debug Info:</strong>
+                        <div>Selected graph types (backend): {{ selected_graph_types }}</div>
+                        <div>Original share graph types: {{ shared_graph.graph_types_list }}</div>
+                        <div>Available graph types: {{ available_graph_types }}</div>
+                        <div>Plots generated: {{ plots.keys()|list }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
         <!-- Generated Graphs -->
         <div class="row">
             {% for plot_id, plot_json in plots.items() %}
@@ -266,13 +337,225 @@
                         }
                     };
                     
-                    Plotly.newPlot(element.id, graphData.data, graphData.layout, config);
+                    // Ensure charts match the client's theme (card background / text color)
+                    try {
+                        const cardEl = element.closest('.card') || element.parentElement;
+                        const computed = cardEl ? getComputedStyle(cardEl) : getComputedStyle(document.body);
+                        // Fallback to body background if card background is transparent
+                        let bg = computed.backgroundColor;
+                        if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
+                            bg = getComputedStyle(document.body).backgroundColor || 'rgba(0,0,0,0)';
+                        }
+                        const textColor = computed.color || getComputedStyle(document.body).color || '#000';
+
+                        // Helper: convert rgb/rgba to rgba with new alpha
+                        function rgbaWithAlpha(rgbString, alpha) {
+                            if (!rgbString) return `rgba(128,128,128,${alpha})`;
+                            const m = rgbString.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([0-9.]+))?\)/);
+                            if (m) {
+                                return `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${alpha})`;
+                            }
+                            // hex fallback
+                            const hex = rgbString.replace('#','');
+                            if (hex.length === 6) {
+                                const r = parseInt(hex.substr(0,2),16);
+                                const g = parseInt(hex.substr(2,2),16);
+                                const b = parseInt(hex.substr(4,2),16);
+                                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                            }
+                            return `rgba(128,128,128,${alpha})`;
+                        }
+
+                        // Apply theme-derived values to layout
+                        graphData.layout = graphData.layout || {};
+                        // Remove any Plotly template (e.g., plotly_dark) that can override colors
+                        graphData.layout.template = null;
+                        graphData.layout.plot_bgcolor = bg;
+                        graphData.layout.paper_bgcolor = bg;
+                        graphData.layout.font = graphData.layout.font || {};
+                        graphData.layout.font.color = textColor;
+
+                        // Axis grid/line colors (force-override any server template values)
+                        const subtleGrid = rgbaWithAlpha(textColor, 0.12);
+                        const faintLine = rgbaWithAlpha(textColor, 0.06);
+                        if (!graphData.layout.xaxis) graphData.layout.xaxis = {};
+                        if (!graphData.layout.yaxis) graphData.layout.yaxis = {};
+                        graphData.layout.xaxis.gridcolor = subtleGrid;
+                        graphData.layout.yaxis.gridcolor = subtleGrid;
+                        graphData.layout.xaxis.zerolinecolor = faintLine;
+                        graphData.layout.yaxis.zerolinecolor = faintLine;
+
+                        // Axis tick colors
+                        if (graphData.layout.xaxis) {
+                            graphData.layout.xaxis.tickfont = graphData.layout.xaxis.tickfont || {};
+                            graphData.layout.xaxis.tickfont.color = textColor;
+                        }
+                        if (graphData.layout.yaxis) {
+                            graphData.layout.yaxis.tickfont = graphData.layout.yaxis.tickfont || {};
+                            graphData.layout.yaxis.tickfont.color = textColor;
+                        }
+
+                        // Legend text
+                        if (graphData.layout.legend) {
+                            graphData.layout.legend.font = graphData.layout.legend.font || {};
+                            graphData.layout.legend.font.color = textColor;
+                        }
+
+                        // Annotations default color
+                        if (graphData.layout.annotations) {
+                            graphData.layout.annotations.forEach(function(a) {
+                                if (!a.font) a.font = {};
+                                a.font.color = a.font.color || textColor;
+                            });
+                        }
+
+                        // Polar charts (radar)
+                        if (graphData.layout.polar) {
+                            graphData.layout.polar.angularaxis = graphData.layout.polar.angularaxis || {};
+                            graphData.layout.polar.radialaxis = graphData.layout.polar.radialaxis || {};
+                            graphData.layout.polar.angularaxis.tickfont = graphData.layout.polar.angularaxis.tickfont || {};
+                            graphData.layout.polar.radialaxis.tickfont = graphData.layout.polar.radialaxis.tickfont || {};
+                            graphData.layout.polar.angularaxis.tickfont.color = textColor;
+                            graphData.layout.polar.radialaxis.tickfont.color = textColor;
+                            // Force polar radial grid to be subtle and visible in both themes
+                            graphData.layout.polar.radialaxis.gridcolor = rgbaWithAlpha(textColor, 0.12);
+                        }
+                    } catch (e) {
+                        console.warn('Failed to compute theme for Plotly chart:', e);
+                    }
+
+                    // Plot then force a relayout to override any server-provided template values
+                    Promise.resolve(Plotly.newPlot(element.id, graphData.data, graphData.layout, config))
+                        .then(function() {
+                            try {
+                                const relayout = {
+                                    'template': null,
+                                    'plot_bgcolor': graphData.layout.plot_bgcolor,
+                                    'paper_bgcolor': graphData.layout.paper_bgcolor,
+                                    'font.color': graphData.layout.font && graphData.layout.font.color || textColor,
+                                    'legend.font.color': (graphData.layout.legend && graphData.layout.legend.font && graphData.layout.legend.font.color) || textColor,
+                                    'xaxis.tickfont.color': (graphData.layout.xaxis && graphData.layout.xaxis.tickfont && graphData.layout.xaxis.tickfont.color) || textColor,
+                                    'yaxis.tickfont.color': (graphData.layout.yaxis && graphData.layout.yaxis.tickfont && graphData.layout.yaxis.tickfont.color) || textColor,
+                                    'xaxis.gridcolor': (graphData.layout.xaxis && graphData.layout.xaxis.gridcolor) || rgbaWithAlpha(textColor, 0.12),
+                                    'yaxis.gridcolor': (graphData.layout.yaxis && graphData.layout.yaxis.gridcolor) || rgbaWithAlpha(textColor, 0.12),
+                                    'xaxis.zerolinecolor': (graphData.layout.xaxis && graphData.layout.xaxis.zerolinecolor) || rgbaWithAlpha(textColor, 0.06),
+                                    'yaxis.zerolinecolor': (graphData.layout.yaxis && graphData.layout.yaxis.zerolinecolor) || rgbaWithAlpha(textColor, 0.06)
+                                };
+
+                                // Polar-specific overrides (dot notation)
+                                if (graphData.layout.polar) {
+                                    relayout['polar.radialaxis.gridcolor'] = graphData.layout.polar.radialaxis.gridcolor || rgbaWithAlpha(textColor, 0.12);
+                                    relayout['polar.angularaxis.tickfont.color'] = graphData.layout.polar.angularaxis.tickfont.color || textColor;
+                                    relayout['polar.radialaxis.tickfont.color'] = graphData.layout.polar.radialaxis.tickfont.color || textColor;
+                                }
+
+                                Plotly.relayout(element.id, relayout);
+                            } catch (e) {
+                                console.warn('Failed to relayout Plotly chart to client theme:', e);
+                            }
+                        })
+                        .catch(function(err){
+                            console.warn('Plotly plot error or relayout skipped:', err);
+                        });
                 } catch (error) {
                     console.error('Error rendering graph:', error);
                     element.innerHTML = '<div class="alert alert-danger">Error loading graph</div>';
                 }
             });
         });
+    </script>
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize Select2 for the teams/graph_types/event selectors if present
+        function initSharedSelects() {
+            if (typeof $ === 'undefined' || typeof $.fn.select2 === 'undefined') return;
+
+            // Teams: initialize Select2 on #teams_select (desktop). The textarea remains for mobile.
+            const teamsSelectEl = $('#teams_select');
+            if (teamsSelectEl.length) {
+                try {
+                    teamsSelectEl.select2({theme: 'bootstrap-5', width: '100%', placeholder: 'Select teams...'});
+                } catch (e) {
+                    console.warn('Select2 init failed for #teams_select', e);
+                }
+            }
+
+            const graphTypesEl = $('select[name="graph_types"]');
+            if (graphTypesEl.length) {
+                try {
+                    graphTypesEl.select2({theme: 'bootstrap-5', width: '100%'});
+                } catch (e) {
+                    console.warn('Select2 init failed for graph_types', e);
+                }
+            }
+
+            const eventEl = $('#event_id');
+            if (eventEl.length) {
+                try { eventEl.select2({theme: 'bootstrap-5', width: '100%'}); } catch (e) {}
+            }
+        }
+
+        initSharedSelects();
+
+        // Quick-select handlers for graph types (mimic index page behavior)
+        $('#select-basic-graphs').on('click', function() { $('select[name="graph_types"]').val(['bar','line','scatter','area']).trigger('change'); });
+        $('#select-distribution-graphs').on('click', function() { $('select[name="graph_types"]').val(['box','violin','histogram']).trigger('change'); });
+        $('#select-advanced-graphs').on('click', function() { $('select[name="graph_types"]').val(['radar','heatmap','bubble','sunburst','treemap']).trigger('change'); });
+        $('#clear-graph-types').on('click', function() { $('select[name="graph_types"]').val(null).trigger('change'); });
+
+        // When the filter form is submitted, if the desktop multi-select is visible, convert its selected values
+        // into a single comma-separated `teams` query parameter so the backend can read it the same as textarea input.
+        $('form').on('submit', function(e) {
+            const select = $('#teams_select');
+            if (select.length && select.is(':visible')) {
+                const values = select.val() || [];
+                // remove existing teams inputs to avoid duplicates, then append a single hidden input
+                $(this).find('input[name="teams"]').remove();
+                $(this).append($('<input>').attr({type: 'hidden', name: 'teams', value: values.join(',')}));
+            }
+            // If mobile textarea is used, it will be serialized automatically
+        });
+
+        // Teams dropdown checklist behavior (mobile-friendly, tap-to-select)
+        function updateHiddenTeamsInput() {
+            const vals = [];
+            $('#teams_checklist .teams-checkbox:checked').each(function() { vals.push($(this).val()); });
+            $('#teams_hidden_input').val(vals.join(','));
+            // Update dropdown button label with count
+            const btn = $('#teamsDropdownBtn');
+            if (vals.length === 0) btn.text('Select Teams');
+            else if (vals.length === 1) btn.text('1 team selected');
+            else btn.text(vals.length + ' teams selected');
+        }
+
+        // Attach change handler
+        $(document).on('change', '.teams-checkbox', function() { updateHiddenTeamsInput(); });
+
+        // Select all / clear
+        $('#teams_select_all').on('click', function() {
+            $('#teams_checklist .teams-checkbox').prop('checked', true);
+            updateHiddenTeamsInput();
+        });
+        $('#teams_clear_all').on('click', function() {
+            $('#teams_checklist .teams-checkbox').prop('checked', false);
+            updateHiddenTeamsInput();
+        });
+
+        // Search/filter inside dropdown
+        $('#teams_search').on('input', function() {
+            const q = $(this).val().toLowerCase().trim();
+            $('#teams_checklist label').each(function() {
+                const txt = $(this).text().toLowerCase();
+                $(this).toggle(txt.indexOf(q) !== -1);
+            });
+        });
+
+        // Initialize hidden input label
+        updateHiddenTeamsInput();
+
+        // Copy selected values into query params is handled by the form using GET; nothing more required.
+    });
     </script>
 </body>
 </html>

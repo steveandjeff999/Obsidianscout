@@ -28,6 +28,33 @@ def get_theme_context():
         'current_theme_id': theme_manager.current_theme
     }
 
+
+def _chart_theme():
+    """Return a small dict of theme values to use for Plotly charts.
+
+    Provides `plot_bg`, `paper_bg`, `text_main`, `text_muted`, and `grid_color`.
+    Falls back to transparent backgrounds and reasonable defaults when theme is missing.
+    """
+    try:
+        theme = ThemeManager().get_current_theme() or {}
+    except Exception:
+        theme = {}
+
+    card_bg = theme.get('colors', {}).get('card-bg', 'rgba(0,0,0,0)')
+    plot_bg = card_bg
+    paper_bg = card_bg
+    text_main = theme.get('colors', {}).get('text-main', '#000')
+    text_muted = theme.get('colors', {}).get('text-muted', 'gray')
+    grid_color = theme.get('colors', {}).get('grid-color', 'rgba(128,128,128,0.15)')
+
+    return {
+        'plot_bg': plot_bg,
+        'paper_bg': paper_bg,
+        'text_main': text_main,
+        'text_muted': text_muted,
+        'grid_color': grid_color
+    }
+
 bp = Blueprint('graphs', __name__, url_prefix='/graphs')
 
 @bp.route('/')
@@ -191,24 +218,12 @@ def index():
         
         # Generate graphs if we have teams selected
         if teams:
-            # Create team performance graphs
+            # Create team performance graphs using shared graph helper structure
             team_data = {}
             
-            # Get key metrics from game config (needed for both branches)
-            key_metrics = game_config.get('data_analysis', {}).get('key_metrics', [])
-            
-            # Add dynamic period-based metrics if key_metrics is empty or missing
-            if not key_metrics:
-                key_metrics = [
-                    {'id': 'auto_points', 'name': 'Auto Points', 'formula': 'auto_points', 'auto_generated': True},
-                    {'id': 'teleop_points', 'name': 'Teleop Points', 'formula': 'teleop_points', 'auto_generated': True},
-                    {'id': 'endgame_points', 'name': 'Endgame Points', 'formula': 'endgame_points', 'auto_generated': True},
-                    {'id': 'total_points', 'name': 'Total Points', 'formula': 'total_points', 'auto_generated': True}
-                ]
-            
-            # If we have scouting data, process it
+            # Process scouting data to match shared graph format
             if scouting_data:
-                # Calculate metrics for each team's matches
+                # Calculate selected metric for each team's matches
                 for data in scouting_data:
                     team = data.team
                     match = data.match
@@ -217,2117 +232,60 @@ def index():
                             'team_name': team.team_name, 
                             'matches': []
                         }
-                    match_metrics = {}
-                    # Filter out unwanted metrics
-                    excluded_metrics = ['coral', 'algae', 'accuracy', 'matches_scouted', 'defence', 'caa', 'dr', 'ecp', 'tot']
-                    for metric in key_metrics:
-                        if ('formula' in metric or metric.get('auto_generated', False)) and metric['id'] not in excluded_metrics:
-                            try:
-                                metric_id = metric['id']
-                                
-                                # Handle dynamic period-based metrics
-                                if metric.get('auto_generated', False) and metric_id in ['auto_points', 'teleop_points', 'endgame_points', 'total_points']:
-                                    if metric_id == 'auto_points':
-                                        value = data._calculate_auto_points_dynamic(data.data, game_config)
-                                    elif metric_id == 'teleop_points':
-                                        value = data._calculate_teleop_points_dynamic(data.data, game_config)
-                                    elif metric_id == 'endgame_points':
-                                        value = data._calculate_endgame_points_dynamic(data.data, game_config)
-                                    elif metric_id == 'total_points':
-                                        auto_pts = data._calculate_auto_points_dynamic(data.data, game_config)
-                                        teleop_pts = data._calculate_teleop_points_dynamic(data.data, game_config)
-                                        endgame_pts = data._calculate_endgame_points_dynamic(data.data, game_config)
-                                        value = auto_pts + teleop_pts + endgame_pts
-                                else:
-                                    # Handle legacy metrics with formulas
-                                    formula = metric.get('formula', metric_id)  # Use metric_id for auto_generated
-                                    value = data.calculate_metric(formula)
-                                    
-                                match_metrics[metric_id] = {
-                                    'match_number': match.match_number,
-                                    'metric_id': metric_id,
-                                    'metric_name': metric['name'],
-                                    'value': value
-                                }
-                            except Exception as e:
-                                print(f"Error calculating metric {metric_id}: {e}")
-                                match_metrics[metric_id] = {
-                                    'match_number': match.match_number,
-                                    'metric_id': metric_id,
-                                    'metric_name': metric['name'],
-                                    'value': None
-                                }
+                    
+                    # Calculate the selected metric for this match
+                    # Handle default 'points' metric which should map to total points
+                    if selected_metric == 'points' or selected_metric == '':
+                        metric_value = data.calculate_metric('tot')  # Use 'tot' for total points
+                    else:
+                        metric_value = data.calculate_metric(selected_metric)
+                    
                     team_data[team.team_number]['matches'].append({
                         'match_number': match.match_number,
-                        'metrics': match_metrics
+                        'match_type': match.match_type,
+                        'metric_value': metric_value,
+                        'timestamp': match.timestamp
                     })
             else:
-                # No scouting data, but we can still show points graphs using team_metrics
-                print("No scouting data found, but generating points graphs from team_metrics")
+                # No scouting data found, create empty structure
+                print("No scouting data found")
                 for team in teams:
                     team_data[team.team_number] = {
                         'team_name': team.team_name,
                         'matches': []
                     }
 
-            # --- Enhanced: Generate multiple graph types for all metrics ---
-            # Filter out unwanted metrics
-            excluded_metrics = ['coral', 'algae', 'accuracy', 'matches_scouted', 'defence', 'caa', 'dr', 'ecp', 'tot']
-            metric_ids = [m['id'] for m in key_metrics if ('formula' in m or m.get('auto_generated', False)) and m['id'] not in excluded_metrics]
-            metric_names = {m['id']: m['name'] for m in key_metrics if ('formula' in m or m.get('auto_generated', False)) and m['id'] not in excluded_metrics}
-            # Prepare data for radar chart (if 3+ metrics)
-            radar_ready = len(metric_ids) >= 3
-            radar_data = {}
-            
-            # Define metric_name for all cases
-            if selected_metric == 'points':
-                metric_name = "Total Points"
-            elif selected_metric in metric_names:
-                metric_name = metric_names[selected_metric]
-            else:
-                metric_name = "Unknown Metric"
-            
-            # Handle special 'points' metric selection
-            if selected_metric == 'points':
-                # Initialize points_data for all cases
-                points_data = []
-                # Initialize team_match_points for all cases
-                # Fixed UnboundLocalError by restructuring conditional blocks
-                team_match_points = {}
-                for team in teams:
-                    team_number = team.team_number
-                    team_name = team.team_name
-                    points = team_metrics.get(team_number, {}).get('total_points', 0)
-                    points_data.append({
-                        'team': f"{team_number} - {team_name}",
-                        'points': points
-                    })
-                    # Initialize empty list for each team
-                    team_match_points[team_number] = []
-                
-                if points_data:
-                    # Apply sorting based on selected_sort
-                    if selected_sort == 'points_desc':
-                        points_data = sorted(points_data, key=lambda x: x['points'], reverse=True)
-                    elif selected_sort == 'points_asc':
-                        points_data = sorted(points_data, key=lambda x: x['points'], reverse=False)
-                    elif selected_sort == 'team_asc':
-                        points_data = sorted(points_data, key=lambda x: int(str(x['team']).split(' - ')[0]))
-                    elif selected_sort == 'team_desc':
-                        points_data = sorted(points_data, key=lambda x: int(str(x['team']).split(' - ')[0]), reverse=True)
-                    else:
-                        # fallback
-                        points_data = sorted(points_data, key=lambda x: x['points'], reverse=True)
-                
-                if selected_data_view == 'averages':
-                    # points_data is already prepared above
-                    pass
-                else:
-                    # For match-by-match view, calculate points per match
-                    for team_number, tdata in team_data.items():
-                        team_match_points[team_number] = []
-                        for match in tdata['matches']:
-                            # Calculate points for this match using the same logic as team_metrics
-                            match_points = 0
-                            for metric_id, metric_data in match['metrics'].items():
-                                if metric_data.get('value') is not None:
-                                    # Add the metric value to match points
-                                    match_points += metric_data['value']
-                            if match_points > 0:  # Only add if there are points
-                                team_match_points[team_number].append({
-                                    'match_number': match['match_number'],
-                                    'points': match_points
-                                })
-                    
-                # Generate graphs for points metric
-                if 'bar' in selected_graph_types:
-                        if selected_data_view == 'averages':
-                            fig_points = go.Figure()
-                            fig_points.add_trace(go.Bar(
-                                x=[d['team'] for d in points_data],
-                                y=[d['points'] for d in points_data],
-                                marker_color='gold',
-                                hovertemplate='<b>%{x}</b><br>Total Points: %{y:.2f}<extra></extra>'
-                            ))
-                            fig_points.update_layout(
-                                title="Total Points by Team - Averages (Bar Chart)",
-                                xaxis_title="Team",
-                                yaxis_title="Total Points",
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif"),
-                                xaxis=dict(
-                                    tickangle=-45,
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                ),
-                                yaxis=dict(
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                )
-                            )
-                        else:
-                            # Match-by-match points bar chart
-                            fig_points = go.Figure()
-                            for team_number, match_points in team_match_points.items():
-                                if match_points:
-                                    match_numbers = [mp['match_number'] for mp in match_points]
-                                    points_values = [mp['points'] for mp in match_points]
-                                    fig_points.add_trace(go.Bar(
-                                        x=match_numbers,
-                                        y=points_values,
-                                        name=f"Team {team_number}",
-                                        hovertemplate='Team %{fullData.name}<br>Match %{x}: %{y:.2f} points<extra></extra>'
-                                    ))
-                            fig_points.update_layout(
-                                title="Points per Match - All Teams (Bar Chart)",
-                                xaxis_title="Match Number",
-                                yaxis_title="Points",
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif"),
-                                barmode='group',
-                                xaxis=dict(
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                ),
-                                yaxis=dict(
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                )
-                            )
-                        plots['points_bar'] = pio.to_json(fig_points)
-                
-                if 'line' in selected_graph_types:
-                        if selected_data_view == 'averages':
-                            fig_points_line = go.Figure()
-                            fig_points_line.add_trace(go.Scatter(
-                                x=[d['team'] for d in points_data],
-                                y=[d['points'] for d in points_data],
-                                mode='lines+markers',
-                                marker_color='gold',
-                                hovertemplate='<b>%{x}</b><br>Total Points: %{y:.2f}<extra></extra>'
-                            ))
-                            fig_points_line.update_layout(
-                                title="Total Points by Team - Averages (Line Chart)",
-                                xaxis_title="Team",
-                                yaxis_title="Total Points",
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif"),
-                                xaxis=dict(
-                                    tickangle=-45,
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                ),
-                                yaxis=dict(
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                )
-                            )
-                        else:
-                            # Match-by-match points line chart
-                            fig_points_line = go.Figure()
-                            for team_number, match_points in team_match_points.items():
-                                if match_points:
-                                    match_numbers = [mp['match_number'] for mp in match_points]
-                                    points_values = [mp['points'] for mp in match_points]
-                                    fig_points_line.add_trace(go.Scatter(
-                                        x=match_numbers,
-                                        y=points_values,
-                                        mode='lines+markers',
-                                        name=f"Team {team_number}",
-                                        hovertemplate='Team %{fullData.name}<br>Match %{x}: %{y:.2f} points<extra></extra>'
-                                    ))
-                            fig_points_line.update_layout(
-                                title="Points per Match - All Teams (Line Chart)",
-                                xaxis_title="Match Number",
-                                yaxis_title="Points",
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif"),
-                                xaxis=dict(
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                ),
-                                yaxis=dict(
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                )
-                            )
-                        plots['points_line'] = pio.to_json(fig_points_line)
-                
-                # For points metric, we can also generate some additional graph types using the points data
-                if 'histogram' in selected_graph_types:
-                        points_values = [d['points'] for d in points_data]
-                        fig_hist = go.Figure()
-                        fig_hist.add_trace(go.Histogram(
-                            x=points_values,
-                            nbinsx=20,
-                            marker_color='gold',
-                            hovertemplate='Points: %{x}<br>Count: %{y}<extra></extra>'
-                        ))
-                        fig_hist.update_layout(
-                            title="Total Points Distribution (Histogram)",
-                            xaxis_title="Total Points",
-                            yaxis_title="Frequency",
-                            margin=dict(l=40, r=20, t=50, b=60),
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font=dict(family="Arial, sans-serif"),
-                            xaxis=dict(
-                                showgrid=True,
-                                gridcolor='rgba(128,128,128,0.2)',
-                                gridwidth=1
-                            ),
-                            yaxis=dict(
-                                showgrid=True,
-                                gridcolor='rgba(128,128,128,0.2)',
-                                gridwidth=1
-                            )
-                        )
-                        plots['points_histogram'] = pio.to_json(fig_hist)
-                
-                if 'violin' in selected_graph_types:
-                        # For violin plot with points, we'll create a simple distribution
-                        points_values = [d['points'] for d in points_data]
-                        fig_violin = go.Figure()
-                        fig_violin.add_trace(go.Violin(
-                            y=points_values,
-                            name="All Teams",
-                            box_visible=True,
-                            meanline_visible=True,
-                            hovertemplate='Points: %{y:.2f}<extra></extra>'
-                        ))
-                        fig_violin.update_layout(
-                            title="Total Points Distribution (Violin Plot)",
-                            yaxis_title="Total Points",
-                            margin=dict(l=40, r=20, t=50, b=60),
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font=dict(family="Arial, sans-serif"),
-                            yaxis=dict(
-                                showgrid=True,
-                                gridcolor='rgba(128,128,128,0.2)',
-                                gridwidth=1
-                            )
-                        )
-                        plots['points_violin'] = pio.to_json(fig_violin)
-                
-                if 'scatter' in selected_graph_types:
-                        if selected_data_view == 'averages':
-                            fig_points_scatter = go.Figure()
-                            fig_points_scatter.add_trace(go.Scatter(
-                                x=[d['team'] for d in points_data],
-                                y=[d['points'] for d in points_data],
-                                mode='markers',
-                                marker=dict(size=12, color='gold'),
-                                hovertemplate='<b>%{x}</b><br>Total Points: %{y:.2f}<extra></extra>'
-                            ))
-                            fig_points_scatter.update_layout(
-                                title="Total Points by Team - Averages (Scatter Plot)",
-                                xaxis_title="Team",
-                                yaxis_title="Total Points",
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif"),
-                                xaxis=dict(
-                                    tickangle=-45,
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                ),
-                                yaxis=dict(
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                )
-                            )
-                            plots['points_scatter'] = pio.to_json(fig_points_scatter)
-                        else:
-                            # Match-by-match points scatter plot
-                            fig_points_scatter = go.Figure()
-                            for team_number, match_points in team_match_points.items():
-                                if match_points:
-                                    match_numbers = [mp['match_number'] for mp in match_points]
-                                    points_values = [mp['points'] for mp in match_points]
-                                    fig_points_scatter.add_trace(go.Scatter(
-                                        x=match_numbers,
-                                        y=points_values,
-                                        mode='markers',
-                                        name=f"Team {team_number}",
-                                        hovertemplate='Team %{fullData.name}<br>Match %{x}: %{y:.2f} points<extra></extra>'
-                                    ))
-                            fig_points_scatter.update_layout(
-                                title="Points per Match - All Teams (Scatter Plot)",
-                                xaxis_title="Match Number",
-                                yaxis_title="Points",
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif"),
-                                xaxis=dict(
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                ),
-                                yaxis=dict(
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                )
-                            )
-                        plots['points_scatter'] = pio.to_json(fig_points_scatter)
-                
-                if 'box' in selected_graph_types:
-                        if selected_data_view == 'averages':
-                            # Box plot not available for averages view - show info message
-                            fig_box_info = go.Figure()
-                            fig_box_info.add_annotation(
-                                text="Box Plot not available for averages view.<br>Switch to 'matches' view to see distribution data.",
-                                xref="paper", yref="paper",
-                                x=0.5, y=0.5,
-                                xanchor='center', yanchor='middle',
-                                showarrow=False,
-                                font=dict(size=16, color='orange'),
-                                bordercolor='orange',
-                                borderwidth=1
-                            )
-                            fig_box_info.update_layout(
-                                title="Box Plot - Information",
-                                xaxis=dict(visible=False),
-                                yaxis=dict(visible=False),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                height=200
-                            )
-                            plots['points_box'] = pio.to_json(fig_box_info)
-                        else:
-                            # For box plot with points, show distribution by team
-                            if team_match_points:
-                                fig_box = go.Figure()
-                                for team_number, match_points in team_match_points.items():
-                                    if match_points and len(match_points) > 1:
-                                        points_values = [mp['points'] for mp in match_points]
-                                        fig_box.add_trace(go.Box(
-                                            y=points_values,
-                                            name=f"Team {team_number}",
-                                            boxmean=True,
-                                            marker_color='gold',
-                                            hovertemplate='Team %{name}<br>Points: %{y:.2f}<extra></extra>'
-                                        ))
-                                fig_box.update_layout(
-                                    title="Points Distribution by Team (Box Plot)",
-                                    yaxis_title="Points",
-                                    margin=dict(l=40, r=20, t=50, b=60),
-                                    plot_bgcolor='rgba(0,0,0,0)',
-                                    paper_bgcolor='rgba(0,0,0,0)',
-                                    font=dict(family="Arial, sans-serif"),
-                                    yaxis=dict(
-                                        showgrid=True,
-                                        gridcolor='rgba(128,128,128,0.2)',
-                                        gridwidth=1
-                                    )
-                                )
-                                plots['points_box'] = pio.to_json(fig_box)
-                    
-                if 'sunburst' in selected_graph_types:
-                        # Create performance hierarchy for points
-                        if points_data:
-                            sunburst_data = []
-                            points_values = [d['points'] for d in points_data]
-                            
-                            for team_data in points_data:
-                                points = team_data['points']
-                                if points >= np.percentile(points_values, 75):
-                                    category = "High Scorers"
-                                elif points >= np.percentile(points_values, 50):
-                                    category = "Medium Scorers"  
-                                elif points >= np.percentile(points_values, 25):
-                                    category = "Low Scorers"
-                                else:
-                                    category = "Developing Teams"
-                                    
-                                sunburst_data.append({
-                                    'ids': team_data['team'],
-                                    'labels': team_data['team'],
-                                    'parents': category,
-                                    'values': points
-                                })
-                            
-                            # Add category parents
-                            categories = ["High Scorers", "Medium Scorers", "Low Scorers", "Developing Teams"]
-                            for category in categories:
-                                total_value = sum([d['values'] for d in sunburst_data if d.get('parents') == category])
-                                if total_value > 0:
-                                    sunburst_data.append({
-                                        'ids': category,
-                                        'labels': category,
-                                        'parents': "",
-                                        'values': total_value
-                                    })
-                            
-                            fig_sunburst = go.Figure(go.Sunburst(
-                                ids=[d['ids'] for d in sunburst_data],
-                                labels=[d['labels'] for d in sunburst_data],
-                                parents=[d['parents'] for d in sunburst_data],
-                                values=[d['values'] for d in sunburst_data],
-                                branchvalues="total",
-                                hovertemplate='<b>%{label}</b><br>Points: %{value:.2f}<extra></extra>'
-                            ))
-                            fig_sunburst.update_layout(
-                                title="Team Scoring Performance Hierarchy (Sunburst)",
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif")
-                            )
-                            plots['points_sunburst'] = pio.to_json(fig_sunburst)
-                    
-                if 'treemap' in selected_graph_types:
-                        # Create treemap for points
-                        if points_data:
-                            treemap_data = []
-                            points_values = [d['points'] for d in points_data]
-                            
-                            for team_data in points_data:
-                                points = team_data['points']
-                                if points >= np.percentile(points_values, 75):
-                                    category = "High Scorers"
-                                elif points >= np.percentile(points_values, 50):
-                                    category = "Medium Scorers"
-                                elif points >= np.percentile(points_values, 25):
-                                    category = "Low Scorers"
-                                else:
-                                    category = "Developing Teams"
-                                    
-                                treemap_data.append({
-                                    'ids': team_data['team'],
-                                    'labels': team_data['team'],
-                                    'parents': category,
-                                    'values': points
-                                })
-                            
-                            # Add category parents
-                            categories = ["High Scorers", "Medium Scorers", "Low Scorers", "Developing Teams"]
-                            for category in categories:
-                                total_value = sum([d['values'] for d in treemap_data if d.get('parents') == category])
-                                if total_value > 0:
-                                    treemap_data.append({
-                                        'ids': category,
-                                        'labels': category,
-                                        'parents': "",
-                                        'values': total_value
-                                    })
-                            
-                            fig_treemap = go.Figure(go.Treemap(
-                                ids=[d['ids'] for d in treemap_data],
-                                labels=[d['labels'] for d in treemap_data],
-                                parents=[d['parents'] for d in treemap_data],
-                                values=[d['values'] for d in treemap_data],
-                                branchvalues="total",
-                                hovertemplate='<b>%{label}</b><br>Points: %{value:.2f}<extra></extra>'
-                            ))
-                            fig_treemap.update_layout(
-                                title="Team Scoring Distribution (Treemap)",
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif")
-                            )
-                            plots['points_treemap'] = pio.to_json(fig_treemap)
-                
-                # --- Waterfall Chart: Show contribution breakdown ---
-                if 'waterfall' in selected_graph_types:
-                    if points_data and team_match_points:
-                        # Create waterfall chart showing team contributions to total event score
-                        waterfall_data = []
-                        cumulative = 0
-                        
-                        # Sort teams by points for better visualization
-                        sorted_teams = sorted(points_data, key=lambda x: x['points'], reverse=True)[:10]  # Top 10 teams
-                        
-                        for i, team_data in enumerate(sorted_teams):
-                            points = team_data['points']
-                            waterfall_data.append({
-                                'x': team_data['team'],
-                                'y': points,
-                                'measure': 'relative' if i > 0 else 'absolute',
-                                'text': f"{points:.1f} pts"
-                            })
-                        
-                        if waterfall_data:
-                            fig_waterfall = go.Figure()
-                            fig_waterfall.add_trace(go.Waterfall(
-                                name="Team Contributions",
-                                orientation="v",
-                                measure=[d['measure'] for d in waterfall_data],
-                                x=[d['x'] for d in waterfall_data],
-                                textposition="outside",
-                                text=[d['text'] for d in waterfall_data],
-                                y=[d['y'] for d in waterfall_data],
-                                connector={"line":{"color":"rgb(63, 63, 63)"}},
-                                decreasing={"marker":{"color":"red"}},
-                                increasing={"marker":{"color":"green"}},
-                                totals={"marker":{"color":"blue"}}
-                            ))
-                            fig_waterfall.update_layout(
-                                title="Team Points Contribution Breakdown (Waterfall)",
-                                xaxis_title="Teams",
-                                yaxis_title="Points Contribution",
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif"),
-                                xaxis=dict(tickangle=-45)
-                            )
-                            plots['points_waterfall'] = pio.to_json(fig_waterfall)
-                
-                # --- Enhanced Sankey Diagram: Show comprehensive performance flow ---
-                if 'sankey' in selected_graph_types:
-                    if points_data and team_match_points:
-                        # Create multi-layer Sankey diagram showing team -> performance -> results flow
-                        sankey_nodes = []
-                        sankey_links = []
-                        
-                        # Layer 1: Teams
-                        teams_layer_start = 0
-                        team_indices = {}
-                        for i, team_data in enumerate(points_data):
-                            team_name = team_data['team']
-                            sankey_nodes.append(f"Team {team_name}")
-                            team_indices[team_name] = i
-                        
-                        # Layer 2: Performance Categories
-                        perf_layer_start = len(sankey_nodes)
-                        performance_categories = ["Elite Performance", "Strong Performance", "Average Performance", "Developing Performance"]
-                        perf_indices = {}
-                        for i, category in enumerate(performance_categories):
-                            sankey_nodes.append(category)
-                            perf_indices[category] = perf_layer_start + i
-                        
-                        # Layer 3: Match Outcome Categories
-                        outcome_layer_start = len(sankey_nodes)
-                        outcome_categories = ["High Impact Matches", "Solid Contributions", "Standard Performance", "Growth Opportunities"]
-                        outcome_indices = {}
-                        for i, category in enumerate(outcome_categories):
-                            sankey_nodes.append(category)
-                            outcome_indices[category] = outcome_layer_start + i
-                        
-                        # Calculate performance metrics for categorization
-                        points_values = [d['points'] for d in points_data]
-                        perf_75 = np.percentile(points_values, 75)
-                        perf_50 = np.percentile(points_values, 50)
-                        perf_25 = np.percentile(points_values, 25)
-                        
-                        # Create links from Teams to Performance Categories
-                        for team_data in points_data:
-                            team_name = team_data['team']
-                            points = team_data['points']
-                            team_idx = team_indices[team_name]
-                            
-                            # Determine performance category and flow weight
-                            if points >= perf_75:
-                                target_idx = perf_indices["Elite Performance"]
-                                color = "rgba(76, 175, 80, 0.6)"  # Green
-                            elif points >= perf_50:
-                                target_idx = perf_indices["Strong Performance"]
-                                color = "rgba(255, 193, 7, 0.6)"  # Amber
-                            elif points >= perf_25:
-                                target_idx = perf_indices["Average Performance"]
-                                color = "rgba(255, 152, 0, 0.6)"  # Orange
-                            else:
-                                target_idx = perf_indices["Developing Performance"]
-                                color = "rgba(244, 67, 54, 0.6)"  # Red
-                            
-                            sankey_links.append({
-                                'source': team_idx,
-                                'target': target_idx,
-                                'value': points,
-                                'color': color
-                            })
-                        
-                        # Create links from Performance Categories to Match Outcomes
-                        # Get match-level data for outcome categorization
-                        for team_name, match_points in team_match_points.items():
-                            if match_points and team_name in [str(d['team']).replace('Team ', '') for d in points_data]:
-                                team_points = next(d['points'] for d in points_data if str(d['team']).replace('Team ', '') == team_name)
-                                match_values = [mp['points'] for mp in match_points]
-                                
-                                # Categorize based on consistency and peak performance
-                                avg_match = np.mean(match_values) if match_values else 0
-                                peak_match = max(match_values) if match_values else 0
-                                consistency = (1 - (np.std(match_values) / np.mean(match_values))) * 100 if match_values and np.mean(match_values) > 0 else 0
-                                
-                                # Determine source performance category
-                                if team_points >= perf_75:
-                                    source_idx = perf_indices["Elite Performance"]
-                                elif team_points >= perf_50:
-                                    source_idx = perf_indices["Strong Performance"]
-                                elif team_points >= perf_25:
-                                    source_idx = perf_indices["Average Performance"]
-                                else:
-                                    source_idx = perf_indices["Developing Performance"]
-                                
-                                # Determine outcome based on match performance characteristics
-                                if peak_match > perf_75 and consistency > 70:
-                                    target_idx = outcome_indices["High Impact Matches"]
-                                    color = "rgba(139, 195, 74, 0.7)"  # Light Green
-                                elif avg_match > perf_50 and consistency > 50:
-                                    target_idx = outcome_indices["Solid Contributions"] 
-                                    color = "rgba(255, 235, 59, 0.7)"  # Yellow
-                                elif avg_match > perf_25:
-                                    target_idx = outcome_indices["Standard Performance"]
-                                    color = "rgba(255, 183, 77, 0.7)"  # Light Orange
-                                else:
-                                    target_idx = outcome_indices["Growth Opportunities"]
-                                    color = "rgba(239, 154, 154, 0.7)"  # Light Red
-                                
-                                # Flow value proportional to match performance
-                                flow_value = avg_match * len(match_values)  # Total contribution
-                                
-                                sankey_links.append({
-                                    'source': source_idx,
-                                    'target': target_idx,
-                                    'value': flow_value,
-                                    'color': color
-                                })
-                        
-                        # Create node colors based on their layer
-                        node_colors = []
-                        for i, node in enumerate(sankey_nodes):
-                            if i < perf_layer_start:  # Teams layer
-                                node_colors.append("rgba(33, 150, 243, 0.8)")  # Blue
-                            elif i < outcome_layer_start:  # Performance layer  
-                                node_colors.append("rgba(156, 39, 176, 0.8)")  # Purple
-                            else:  # Outcome layer
-                                node_colors.append("rgba(0, 150, 136, 0.8)")  # Teal
-                        
-                        if sankey_nodes and sankey_links:
-                            fig_sankey = go.Figure(data=[go.Sankey(
-                                node = dict(
-                                    pad = 20,
-                                    thickness = 25,
-                                    line = dict(color = "rgba(0,0,0,0.3)", width = 1),
-                                    label = sankey_nodes,
-                                    color = node_colors,
-                                    hovertemplate='<b>%{label}</b><br>Total Flow: %{value}<extra></extra>'
-                                ),
-                                link = dict(
-                                    source = [link['source'] for link in sankey_links],
-                                    target = [link['target'] for link in sankey_links],
-                                    value = [link['value'] for link in sankey_links],
-                                    color = [link['color'] for link in sankey_links],
-                                    hovertemplate='<b>%{source.label}</b> → <b>%{target.label}</b><br>Flow: %{value:.1f}<extra></extra>'
-                                )
-                            )])
-                            fig_sankey.update_layout(
-                                title="Team Performance Flow Analysis (Enhanced Sankey Diagram)",
-                                margin=dict(l=50, r=50, t=80, b=50),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif", size=11),
-                                height=600,
-                                annotations=[
-                                    dict(
-                                        text="Teams → Performance Categories → Match Outcomes",
-                                        showarrow=False,
-                                        xref="paper", yref="paper",
-                                        x=0.5, y=1.02, xanchor='center', yanchor='bottom',
-                                        font=dict(size=12, color='gray')
-                                    )
-                                ]
-                            )
-                            plots['points_sankey'] = pio.to_json(fig_sankey)
-                
-                # Add heatmap implementation for "averages" data view
-                if selected_data_view == 'averages' and 'heatmap' in selected_graph_types:
-                    if points_data and team_match_points:
-                        # Create a team vs metrics heatmap for averages view
-                        # Calculate different performance metrics for each team
-                        team_metrics_data = []
-                        metric_names = ['Total Points', 'Average Points', 'Consistency', 'Match Count', 'Peak Performance']
-                        
-                        for team_number, match_points in team_match_points.items():
-                            if match_points:
-                                points_values = [mp['points'] for mp in match_points]
-                                total_points = sum(points_values)
-                                avg_points = np.mean(points_values)
-                                # Consistency: higher value = more consistent (100 - coefficient of variation)
-                                consistency = 100 - (np.std(points_values) / np.mean(points_values) * 100) if np.mean(points_values) > 0 else 0
-                                match_count = len(points_values)
-                                peak_performance = max(points_values)
-                                
-                                team_metrics_data.append({
-                                    'team': team_number,
-                                    'metrics': [total_points, avg_points, max(0, consistency), match_count, peak_performance]
-                                })
-                        
-                        if team_metrics_data:
-                            # Normalize metrics to 0-100 scale for better heatmap visualization
-                            normalized_data = []
-                            for i, metric_name in enumerate(metric_names):
-                                metric_values = [team['metrics'][i] for team in team_metrics_data]
-                                max_val = max(metric_values) if metric_values else 1
-                                min_val = min(metric_values) if metric_values else 0
-                                range_val = max_val - min_val if max_val != min_val else 1
-                                
-                                for j, team in enumerate(team_metrics_data):
-                                    if j >= len(normalized_data):
-                                        normalized_data.append([])
-                                    # Normalize to 0-100 scale
-                                    normalized_val = ((team['metrics'][i] - min_val) / range_val) * 100
-                                    normalized_data[j].append(normalized_val)
-                            
-                            # Create the heatmap
-                            fig_heatmap = go.Figure(data=go.Heatmap(
-                                z=normalized_data,
-                                x=metric_names,
-                                y=[f"Team {team['team']}" for team in team_metrics_data],
-                                colorscale='RdYlBu_r',  # Red-Yellow-Blue reversed (red=high, blue=low)
-                                hovertemplate='<b>%{y}</b><br>%{x}: %{z:.1f}<br>Normalized Score<extra></extra>',
-                                colorbar=dict(title="Performance Score (0-100)")
-                            ))
-                            fig_heatmap.update_layout(
-                                title="Team Performance Metrics Heatmap (Averages View)",
-                                xaxis_title="Performance Metrics",
-                                yaxis_title="Teams",
-                                margin=dict(l=80, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif"),
-                                height=max(400, len(team_metrics_data) * 25 + 100)  # Dynamic height based on team count
-                            )
-                            plots['points_heatmap'] = pio.to_json(fig_heatmap)
-                
-                # Add match-by-match chart implementations for "matches" data view
-                if selected_data_view == 'matches' and team_match_points:
-                    # --- Heatmap: Team vs Match performance matrix ---
-                    if 'heatmap' in selected_graph_types:
-                        # Prepare data for heatmap
-                        all_matches = set()
-                        for team_number, match_points in team_match_points.items():
-                            for mp in match_points:
-                                all_matches.add(mp['match_number'])
-                        
-                        if all_matches:
-                            all_matches = sorted(list(all_matches))
-                            team_numbers = sorted(team_match_points.keys())
-                            
-                            # Create heatmap data matrix
-                            heatmap_data = []
-                            for team_number in team_numbers:
-                                row = []
-                                for match_number in all_matches:
-                                    # Find points for this team in this match
-                                    points = None
-                                    for mp in team_match_points[team_number]:
-                                        if mp['match_number'] == match_number:
-                                            points = mp['points']
-                                            break
-                                    row.append(points if points is not None else 0)
-                                heatmap_data.append(row)
-                            
-                            fig_heatmap = go.Figure(data=go.Heatmap(
-                                z=heatmap_data,
-                                x=[f"Match {m}" for m in all_matches],
-                                y=[f"Team {t}" for t in team_numbers],
-                                colorscale='Viridis',
-                                hovertemplate='<b>%{y}</b><br>%{x}: %{z:.2f} points<extra></extra>'
-                            ))
-                            fig_heatmap.update_layout(
-                                title="Team vs Match Points Heatmap",
-                                xaxis_title="Matches",
-                                yaxis_title="Teams",
-                                margin=dict(l=60, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif")
-                            )
-                            plots['points_heatmap'] = pio.to_json(fig_heatmap)
-                    
-                    # --- Bubble Chart: Match number vs Points with team size as bubble size ---
-                    if 'bubble' in selected_graph_types:
-                        fig_bubble = go.Figure()
-                        for team_number, match_points in team_match_points.items():
-                            if match_points:
-                                match_numbers = [mp['match_number'] for mp in match_points]
-                                points_values = [mp['points'] for mp in match_points]
-                                # Use team number as bubble size (scaled)
-                                bubble_sizes = [max(10, min(50, team_number / 100)) for _ in match_points]
-                                
-                                fig_bubble.add_trace(go.Scatter(
-                                    x=match_numbers,
-                                    y=points_values,
-                                    mode='markers',
-                                    name=f"Team {team_number}",
-                                    marker=dict(
-                                        size=bubble_sizes,
-                                        sizemode='diameter',
-                                        opacity=0.7
-                                    ),
-                                    hovertemplate='<b>Team %{fullData.name}</b><br>Match %{x}: %{y:.2f} points<extra></extra>'
-                                ))
-                        
-                        fig_bubble.update_layout(
-                            title="Points by Match - Bubble Chart",
-                            xaxis_title="Match Number",
-                            yaxis_title="Points",
-                            margin=dict(l=40, r=20, t=50, b=60),
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font=dict(family="Arial, sans-serif"),
-                            xaxis=dict(
-                                showgrid=True,
-                                gridcolor='rgba(128,128,128,0.2)',
-                                gridwidth=1
-                            ),
-                            yaxis=dict(
-                                showgrid=True,
-                                gridcolor='rgba(128,128,128,0.2)',
-                                gridwidth=1
-                            )
-                        )
-                        plots['points_bubble'] = pio.to_json(fig_bubble)
-                    
-                    # --- Area Chart: Cumulative points over matches ---
-                    if 'area' in selected_graph_types:
-                        fig_area = go.Figure()
-                        for team_number, match_points in team_match_points.items():
-                            if match_points:
-                                # Sort by match number
-                                sorted_matches = sorted(match_points, key=lambda x: x['match_number'])
-                                match_numbers = [mp['match_number'] for mp in sorted_matches]
-                                points_values = [mp['points'] for mp in sorted_matches]
-                                
-                                # Calculate cumulative points
-                                cumulative_points = np.cumsum(points_values)
-                                
-                                fig_area.add_trace(go.Scatter(
-                                    x=match_numbers,
-                                    y=cumulative_points,
-                                    mode='lines',
-                                    name=f"Team {team_number}",
-                                    fill='tonexty' if len(fig_area.data) > 0 else 'tozeroy',
-                                    hovertemplate='<b>Team %{fullData.name}</b><br>Match %{x}: %{y:.2f} cumulative points<extra></extra>'
-                                ))
-                        
-                        fig_area.update_layout(
-                            title="Cumulative Points Over Matches (Area Chart)",
-                            xaxis_title="Match Number",
-                            yaxis_title="Cumulative Points",
-                            margin=dict(l=40, r=20, t=50, b=60),
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font=dict(family="Arial, sans-serif"),
-                            xaxis=dict(
-                                showgrid=True,
-                                gridcolor='rgba(128,128,128,0.2)',
-                                gridwidth=1
-                            ),
-                            yaxis=dict(
-                                showgrid=True,
-                                gridcolor='rgba(128,128,128,0.2)',
-                                gridwidth=1
-                            )
-                        )
-                        plots['points_area'] = pio.to_json(fig_area)
-                    
-                    # --- Radar Chart: Multi-dimensional team performance comparison ---
-                    if 'radar' in selected_graph_types and len(team_match_points) >= 3:
-                        # Calculate metrics for radar chart
-                        radar_metrics = ['Total Points', 'Average Points', 'Consistency', 'Peak Performance']
-                        fig_radar = go.Figure()
-                        
-                        # Calculate radar metrics for each team
-                        for team_number, match_points in team_match_points.items():
-                            if match_points and len(match_points) >= 2:
-                                points_values = [mp['points'] for mp in match_points]
-                                total_points = sum(points_values)
-                                avg_points = np.mean(points_values)
-                                consistency = 100 - (np.std(points_values) / np.mean(points_values) * 100) if np.mean(points_values) > 0 else 0
-                                peak_performance = max(points_values)
-                                
-                                # Normalize values for radar chart (0-100 scale)
-                                max_total = max([sum([mp['points'] for mp in mps]) for mps in team_match_points.values()])
-                                max_avg = max([np.mean([mp['points'] for mp in mps]) for mps in team_match_points.values() if mps])
-                                max_peak = max([max([mp['points'] for mp in mps]) for mps in team_match_points.values() if mps])
-                                
-                                normalized_values = [
-                                    (total_points / max_total * 100) if max_total > 0 else 0,
-                                    (avg_points / max_avg * 100) if max_avg > 0 else 0,
-                                    max(0, min(100, consistency)),
-                                    (peak_performance / max_peak * 100) if max_peak > 0 else 0
-                                ]
-                                
-                                fig_radar.add_trace(go.Scatterpolar(
-                                    r=normalized_values + [normalized_values[0]],  # Close the shape
-                                    theta=radar_metrics + [radar_metrics[0]],
-                                    fill='toself',
-                                    name=f"Team {team_number}",
-                                    hovertemplate='<b>Team %{fullData.name}</b><br>%{theta}: %{r:.1f}<extra></extra>'
-                                ))
-                        
-                        fig_radar.update_layout(
-                            polar=dict(
-                                radialaxis=dict(
-                                    visible=True,
-                                    range=[0, 100]
-                                )
-                            ),
-                            title="Team Performance Radar Chart",
-                            margin=dict(l=40, r=20, t=50, b=60),
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font=dict(family="Arial, sans-serif")
-                        )
-                        plots['points_radar'] = pio.to_json(fig_radar)
-                    
-                    # --- Waterfall Chart: Match-by-match progression ---
-                    if 'waterfall' in selected_graph_types:
-                        # Create waterfall chart for a representative team showing match progression
-                        # Select team with most matches for demonstration
-                        best_team = max(team_match_points.items(), key=lambda x: len(x[1])) if team_match_points else None
-                        
-                        if best_team:
-                            team_number, match_points = best_team
-                            if len(match_points) >= 3:  # Need at least 3 matches for meaningful waterfall
-                                sorted_matches = sorted(match_points, key=lambda x: x['match_number'])
-                                
-                                waterfall_data = []
-                                waterfall_data.append({
-                                    'x': f"Match {sorted_matches[0]['match_number']}",
-                                    'y': sorted_matches[0]['points'],
-                                    'measure': 'absolute',
-                                    'text': f"{sorted_matches[0]['points']:.1f}"
-                                })
-                                
-                                # Add subsequent matches as relative changes
-                                for i in range(1, len(sorted_matches)):
-                                    change = sorted_matches[i]['points'] - sorted_matches[i-1]['points']
-                                    waterfall_data.append({
-                                        'x': f"Match {sorted_matches[i]['match_number']}",
-                                        'y': change,
-                                        'measure': 'relative',
-                                        'text': f"{change:+.1f}"
-                                    })
-                                
-                                # Add total
-                                total_points = sum([mp['points'] for mp in sorted_matches])
-                                waterfall_data.append({
-                                    'x': 'Total',
-                                    'y': total_points,
-                                    'measure': 'total',
-                                    'text': f"{total_points:.1f}"
-                                })
-                                
-                                fig_waterfall = go.Figure()
-                                fig_waterfall.add_trace(go.Waterfall(
-                                    name=f"Team {team_number} Progression",
-                                    orientation="v",
-                                    measure=[d['measure'] for d in waterfall_data],
-                                    x=[d['x'] for d in waterfall_data],
-                                    textposition="outside",
-                                    text=[d['text'] for d in waterfall_data],
-                                    y=[d['y'] for d in waterfall_data],
-                                    connector={"line":{"color":"rgb(63, 63, 63)"}},
-                                    decreasing={"marker":{"color":"red"}},
-                                    increasing={"marker":{"color":"green"}},
-                                    totals={"marker":{"color":"blue"}}
-                                ))
-                                fig_waterfall.update_layout(
-                                    title=f"Team {team_number} Match Progression (Waterfall)",
-                                    xaxis_title="Matches",
-                                    yaxis_title="Points Change",
-                                    margin=dict(l=40, r=20, t=50, b=60),
-                                    plot_bgcolor='rgba(0,0,0,0)',
-                                    paper_bgcolor='rgba(0,0,0,0)',
-                                    font=dict(family="Arial, sans-serif"),
-                                    xaxis=dict(tickangle=-45)
-                                )
-                                plots['points_waterfall'] = pio.to_json(fig_waterfall)
-                    
-                    # --- Enhanced Sankey Diagram: Multi-layer match performance flow ---
-                    if 'sankey' in selected_graph_types:
-                        # Create comprehensive Sankey showing teams -> match types -> performance -> outcomes
-                        sankey_nodes = []
-                        sankey_links = []
-                        
-                        # Layer 1: Teams
-                        teams_with_data = [team for team, matches in team_match_points.items() if matches]
-                        team_indices = {}
-                        for i, team_number in enumerate(teams_with_data):
-                            team_name = f"Team {team_number}"
-                            sankey_nodes.append(team_name)
-                            team_indices[team_number] = i
-                        
-                        # Layer 2: Match Performance Categories  
-                        perf_layer_start = len(sankey_nodes)
-                        performance_categories = ["Dominant Matches", "Strong Matches", "Competitive Matches", "Developing Matches"]
-                        perf_indices = {}
-                        for i, category in enumerate(performance_categories):
-                            sankey_nodes.append(category)
-                            perf_indices[category] = perf_layer_start + i
-                        
-                        # Layer 3: Consistency & Impact Categories
-                        outcome_layer_start = len(sankey_nodes)
-                        outcome_categories = ["High Impact Player", "Reliable Contributor", "Steady Performer", "Growth Focus"]
-                        outcome_indices = {}
-                        for i, category in enumerate(outcome_categories):
-                            sankey_nodes.append(category)
-                            outcome_indices[category] = outcome_layer_start + i
-                        
-                        # Calculate performance thresholds dynamically
-                        all_match_points = []
-                        for match_points in team_match_points.values():
-                            all_match_points.extend([mp['points'] for mp in match_points])
-                        
-                        if all_match_points:
-                            threshold_90 = np.percentile(all_match_points, 90)
-                            threshold_70 = np.percentile(all_match_points, 70)
-                            threshold_50 = np.percentile(all_match_points, 50)
-                            threshold_30 = np.percentile(all_match_points, 30)
-                        
-                            # Create Links: Teams -> Performance Categories
-                            for team_number in teams_with_data:
-                                match_points = team_match_points[team_number]
-                                team_idx = team_indices[team_number]
-                                
-                                # Categorize matches by performance level
-                                dominant_matches = [mp for mp in match_points if mp['points'] >= threshold_90]
-                                strong_matches = [mp for mp in match_points if threshold_70 <= mp['points'] < threshold_90]
-                                competitive_matches = [mp for mp in match_points if threshold_30 <= mp['points'] < threshold_70]
-                                developing_matches = [mp for mp in match_points if mp['points'] < threshold_30]
-                                
-                                # Create links based on match counts and total points in each category
-                                categories_data = [
-                                    (dominant_matches, "Dominant Matches", "rgba(76, 175, 80, 0.7)"),
-                                    (strong_matches, "Strong Matches", "rgba(255, 193, 7, 0.7)"), 
-                                    (competitive_matches, "Competitive Matches", "rgba(255, 152, 0, 0.7)"),
-                                    (developing_matches, "Developing Matches", "rgba(244, 67, 54, 0.7)")
-                                ]
-                                
-                                for matches, category, color in categories_data:
-                                    if matches:
-                                        total_points = sum(mp['points'] for mp in matches)
-                                        target_idx = perf_indices[category]
-                                        
-                                        sankey_links.append({
-                                            'source': team_idx,
-                                            'target': target_idx,
-                                            'value': total_points,
-                                            'color': color
-                                        })
-                            
-                            # Create Links: Performance Categories -> Outcome Categories
-                            for team_number in teams_with_data:
-                                match_points = team_match_points[team_number]
-                                match_values = [mp['points'] for mp in match_points]
-                                
-                                if match_values:
-                                    # Calculate team characteristics
-                                    avg_points = np.mean(match_values)
-                                    peak_points = max(match_values)
-                                    consistency = (1 - (np.std(match_values) / np.mean(match_values))) * 100 if np.mean(match_values) > 0 else 0
-                                    match_count = len(match_values)
-                                    
-                                    # Determine outcome category based on comprehensive analysis
-                                    if peak_points >= threshold_90 and avg_points >= threshold_70 and consistency > 60:
-                                        outcome_category = "High Impact Player"
-                                        outcome_color = "rgba(139, 195, 74, 0.8)"
-                                    elif avg_points >= threshold_50 and consistency > 40:
-                                        outcome_category = "Reliable Contributor"
-                                        outcome_color = "rgba(255, 235, 59, 0.8)"
-                                    elif avg_points >= threshold_30 and match_count >= 3:
-                                        outcome_category = "Steady Performer"
-                                        outcome_color = "rgba(255, 183, 77, 0.8)"
-                                    else:
-                                        outcome_category = "Growth Focus"
-                                        outcome_color = "rgba(239, 154, 154, 0.8)"
-                                    
-                                    # Find the primary performance category for this team
-                                    dominant_total = sum(mp['points'] for mp in match_points if mp['points'] >= threshold_90)
-                                    strong_total = sum(mp['points'] for mp in match_points if threshold_70 <= mp['points'] < threshold_90)
-                                    competitive_total = sum(mp['points'] for mp in match_points if threshold_30 <= mp['points'] < threshold_70)
-                                    developing_total = sum(mp['points'] for mp in match_points if mp['points'] < threshold_30)
-                                    
-                                    # Link from strongest performance category to outcome
-                                    category_totals = [
-                                        (dominant_total, "Dominant Matches"),
-                                        (strong_total, "Strong Matches"),
-                                        (competitive_total, "Competitive Matches"),
-                                        (developing_total, "Developing Matches")
-                                    ]
-                                    
-                                    primary_category = max(category_totals, key=lambda x: x[0])
-                                    if primary_category[0] > 0:  # Only create link if there's actual performance
-                                        source_idx = perf_indices[primary_category[1]]
-                                        target_idx = outcome_indices[outcome_category]
-                                        
-                                        sankey_links.append({
-                                            'source': source_idx,
-                                            'target': target_idx,
-                                            'value': primary_category[0],
-                                            'color': outcome_color
-                                        })
-                        
-                        # Create node colors for visual distinction
-                        node_colors = []
-                        for i, node in enumerate(sankey_nodes):
-                            if i < perf_layer_start:  # Teams
-                                node_colors.append("rgba(33, 150, 243, 0.9)")  # Blue
-                            elif i < outcome_layer_start:  # Performance categories
-                                node_colors.append("rgba(156, 39, 176, 0.9)")  # Purple  
-                            else:  # Outcome categories
-                                node_colors.append("rgba(0, 150, 136, 0.9)")  # Teal
-                        
-                        if sankey_nodes and sankey_links:
-                            fig_sankey = go.Figure(data=[go.Sankey(
-                                node = dict(
-                                    pad = 25,
-                                    thickness = 30,
-                                    line = dict(color = "rgba(0,0,0,0.4)", width = 1.5),
-                                    label = sankey_nodes,
-                                    color = node_colors,
-                                    hovertemplate='<b>%{label}</b><br>Total Flow: %{value:.1f}<extra></extra>'
-                                ),
-                                link = dict(
-                                    source = [link['source'] for link in sankey_links],
-                                    target = [link['target'] for link in sankey_links],
-                                    value = [link['value'] for link in sankey_links],
-                                    color = [link['color'] for link in sankey_links],
-                                    hovertemplate='<b>%{source.label}</b> → <b>%{target.label}</b><br>Points Flow: %{value:.1f}<extra></extra>'
-                                )
-                            )])
-                            fig_sankey.update_layout(
-                                title="Enhanced Match Performance Flow Analysis (Sankey Diagram)",
-                                margin=dict(l=60, r=60, t=100, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif", size=12),
-                                height=700,
-                                annotations=[
-                                    dict(
-                                        text="Teams → Match Performance → Player Impact Analysis",
-                                        showarrow=False,
-                                        xref="paper", yref="paper",
-                                        x=0.5, y=1.05, xanchor='center', yanchor='bottom',
-                                        font=dict(size=13, color='gray')
-                                    ),
-                                    dict(
-                                        text=f"Analysis based on {len(all_match_points)} total matches",
-                                        showarrow=False,
-                                        xref="paper", yref="paper", 
-                                        x=0.5, y=-0.08, xanchor='center', yanchor='top',
-                                        font=dict(size=10, color='lightgray')
-                                    )
-                                ]
-                            )
-                            plots['points_sankey'] = pio.to_json(fig_sankey)
-                    
-                # Add a note about incompatible graph types for points metric when using averages view
-                if selected_data_view == 'averages':
-                    incompatible_graphs = []
-                    # Heatmap is now available for averages view (team vs metric performance)
-                    if 'bubble' in selected_graph_types:
-                        incompatible_graphs.append('Bubble Chart')
-                    if 'area' in selected_graph_types:
-                        incompatible_graphs.append('Area Chart')
-                    if 'radar' in selected_graph_types:
-                        incompatible_graphs.append('Radar Chart')
-                    
-                    if incompatible_graphs:
-                            # Create an info message plot
-                            fig_info = go.Figure()
-                            fig_info.add_annotation(
-                                text=f"Note: {', '.join(incompatible_graphs)} not available for Total Points metric<br>as they require match-by-match data.",
-                                xref="paper", yref="paper",
-                                x=0.5, y=0.5,
-                                showarrow=False,
-                                font=dict(size=14, color="gray"),
-                                bgcolor="lightyellow",
-                                bordercolor="gray",
-                                borderwidth=1
-                            )
-                            fig_info.update_layout(
-                                title="Graph Type Information",
-                                xaxis=dict(visible=False),
-                                yaxis=dict(visible=False),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                height=200
-                            )
-                            plots['points_info'] = pio.to_json(fig_info)
-            else:
-                # Only show the selected metric as the main graph
-                if selected_metric in metric_ids:
-                    metric_id = selected_metric
-                    # Collect per-team, per-match values
-                    team_match_values = {team_number: [] for team_number in team_data}
-                    for team_number, tdata in team_data.items():
-                        for match in tdata['matches']:
-                            value = match['metrics'].get(metric_id, {}).get('value')
-                            if value is not None:
-                                team_match_values[team_number].append(value)
-                    
-
-                    # Generate selected graph types
-                    if 'bar' in selected_graph_types:
-                        if selected_data_view == 'averages':
-                            # --- Bar Chart: Average per team ---
-                            avg_data = []
-                            for team_number, values in team_match_values.items():
-                                avg = np.mean(values) if values else 0
-                                avg_data.append({'team': team_number, 'avg': avg})
-                            # Sort avg_data according to selected_sort
-                            if selected_sort == 'points_desc' or selected_sort == 'team_desc':
-                                avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=True)
-                            elif selected_sort == 'points_asc' or selected_sort == 'team_asc':
-                                avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=False)
-                            else:
-                                avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=True)
-                            fig_bar = go.Figure()
-                            fig_bar.add_trace(go.Bar(
-                                x=[str(d['team']) for d in avg_data],
-                                y=[d['avg'] for d in avg_data],
-                                marker_color='royalblue',
-                                hovertemplate='<b>Team %{x}</b><br>Average: %{y:.2f}<extra></extra>'
-                            ))
-                            fig_bar.update_layout(
-                                title=f"{metric_name} by Team - Averages (Bar Chart)",
-                                xaxis_title="Team",
-                                yaxis_title=f"Average {metric_name}",
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif"),
-                                xaxis=dict(
-                                    tickangle=-45,
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                ),
-                                yaxis=dict(
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                )
-                            )
-                        else:
-                            # --- Bar Chart: Match-by-match data ---
-                            fig_bar = go.Figure()
-                            for team_number, values in team_match_values.items():
-                                if values:
-                                    # Get match numbers for this team's matches that have data
-                                    match_numbers = []
-                                    match_values = []
-                                    for match in team_data[team_number]['matches']:
-                                        value = match['metrics'].get(metric_id, {}).get('value')
-                                        if value is not None:
-                                            match_numbers.append(match['match_number'])
-                                            match_values.append(value)
-                                    
-                                    fig_bar.add_trace(go.Bar(
-                                        x=match_numbers,
-                                        y=match_values,
-                                        name=f"Team {team_number}",
-                                        hovertemplate='Team %{fullData.name}<br>Match %{x}: %{y:.2f}<extra></extra>'
-                                    ))
-                            fig_bar.update_layout(
-                                title=f"{metric_name} by Match - All Teams (Bar Chart)",
-                                xaxis_title="Match Number",
-                                yaxis_title=metric_name,
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif"),
-                                barmode='group',
-                                xaxis=dict(
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                ),
-                                yaxis=dict(
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                )
-                            )
-                        plots[f'{metric_id}_bar'] = pio.to_json(fig_bar)
-                    
-                    if 'line' in selected_graph_types:
-                        if selected_data_view == 'averages':
-                            # --- Line Chart: Average per team (sorted) ---
-                            avg_data = []
-                            for team_number, values in team_match_values.items():
-                                avg = np.mean(values) if values else 0
-                                avg_data.append({'team': team_number, 'avg': avg})
-                            if selected_sort == 'points_desc' or selected_sort == 'team_desc':
-                                avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=True)
-                            elif selected_sort == 'points_asc' or selected_sort == 'team_asc':
-                                avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=False)
-                            else:
-                                avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=True)
-                            
-                            fig_line = go.Figure()
-                            fig_line.add_trace(go.Scatter(
-                                x=[str(d['team']) for d in avg_data],
-                                y=[d['avg'] for d in avg_data],
-                                mode='lines+markers',
-                                marker_color='royalblue',
-                                hovertemplate='<b>Team %{x}</b><br>Average: %{y:.2f}<extra></extra>'
-                            ))
-                            fig_line.update_layout(
-                                title=f"{metric_name} by Team - Averages (Line Chart)",
-                                xaxis_title="Team",
-                                yaxis_title=f"Average {metric_name}",
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif"),
-                                xaxis=dict(
-                                    tickangle=-45,
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                ),
-                                yaxis=dict(
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                )
-                            )
-                        else:
-                            # --- Line Chart: Value per match (trend) ---
-                            fig_line = go.Figure()
-                            for team_number, values in team_match_values.items():
-                                if values:
-                                    # Get match numbers for this team's matches that have data
-                                    match_numbers = []
-                                    match_values = []
-                                    for match in team_data[team_number]['matches']:
-                                        value = match['metrics'].get(metric_id, {}).get('value')
-                                        if value is not None:
-                                            match_numbers.append(match['match_number'])
-                                            match_values.append(value)
-                                    
-                                    fig_line.add_trace(go.Scatter(
-                                        x=match_numbers,
-                                        y=match_values,
-                                        mode='lines+markers',
-                                        name=f"Team {team_number}",
-                                        hovertemplate='Team %{fullData.name}<br>Match %{x}: %{y:.2f}<extra></extra>'
-                                    ))
-                            fig_line.update_layout(
-                                title=f"{metric_name} Trend by Match (Line Chart)",
-                                xaxis_title="Match Number",
-                                yaxis_title=metric_name,
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif"),
-                                xaxis=dict(
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                ),
-                                yaxis=dict(
-                                    showgrid=True,
-                                    gridcolor='rgba(128,128,128,0.2)',
-                                    gridwidth=1
-                                )
-                            )
-                        plots[f'{metric_id}_line'] = pio.to_json(fig_line)
-                    
-                    if 'box' in selected_graph_types:
-                        # --- Box Plot: Distribution per team ---
-                        fig_box = go.Figure()
-                        for team_number, values in team_match_values.items():
-                            if values and len(values) > 1:
-                                fig_box.add_trace(go.Box(
-                                    y=values,
-                                    name=f"{team_number}",
-                                    boxmean=True,
-                                    marker_color='rgb(26, 118, 255)',
-                                    hovertemplate='Team %{name}<br>Value: %{y:.2f}'
-                                ))
-                        fig_box.update_layout(
-                            title=f"{metric_name} Distribution by Team (Box Plot)",
-                            yaxis_title=metric_name,
-                            margin=dict(l=40, r=20, t=50, b=60),
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font=dict(family="Arial, sans-serif")
-                        )
-                        plots[f'{metric_id}_box'] = pio.to_json(fig_box)
-                    
-                    if 'scatter' in selected_graph_types:
-                        # --- Scatter Plot: Match number vs value ---
-                        fig_scatter = go.Figure()
-                        for team_number, values in team_match_values.items():
-                            if values:
-                                match_numbers = [m['match_number'] for m in team_data[team_number]['matches'] if m['metrics'].get(metric_id, {}).get('value') is not None]
-                                fig_scatter.add_trace(go.Scatter(
-                                    x=match_numbers,
-                                    y=values,
-                                    mode='markers',
-                                    name=f"{team_number}",
-                                    hovertemplate='Team %{name}<br>Match %{x}: %{y:.2f}<extra></extra>'
-                                ))
-                        fig_scatter.update_layout(
-                            title=f"{metric_name} by Match (Scatter Plot)",
-                            xaxis_title="Match Number",
-                            yaxis_title=metric_name,
-                            margin=dict(l=40, r=20, t=50, b=60),
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font=dict(family="Arial, sans-serif")
-                        )
-                        plots[f'{metric_id}_scatter'] = pio.to_json(fig_scatter)
-                    
-                    if 'histogram' in selected_graph_types:
-                        # --- Histogram: Distribution of all values ---
-                        all_values = []
-                        for values in team_match_values.values():
-                            all_values.extend(values)
-                        if all_values:
-                            fig_hist = go.Figure()
-                            fig_hist.add_trace(go.Histogram(
-                                x=all_values,
-                                nbinsx=20,
-                                marker_color='lightblue',
-                                hovertemplate='Value: %{x}<br>Count: %{y}<extra></extra>'
-                            ))
-                            fig_hist.update_layout(
-                                title=f"{metric_name} Distribution (Histogram)",
-                                xaxis_title=metric_name,
-                                yaxis_title="Frequency",
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif")
-                            )
-                            plots[f'{metric_id}_histogram'] = pio.to_json(fig_hist)
-                    
-                    if 'violin' in selected_graph_types:
-                        # --- Violin Plot: Density distribution per team ---
-                        fig_violin = go.Figure()
-                        for team_number, values in team_match_values.items():
-                            if values and len(values) > 1:
-                                fig_violin.add_trace(go.Violin(
-                                    y=values,
-                                    name=f"{team_number}",
-                                    box_visible=True,
-                                    meanline_visible=True,
-                                    hovertemplate='Team %{name}<br>Value: %{y:.2f}<extra></extra>'
-                                ))
-                        fig_violin.update_layout(
-                            title=f"{metric_name} Density Distribution (Violin Plot)",
-                            yaxis_title=metric_name,
-                            margin=dict(l=40, r=20, t=50, b=60),
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font=dict(family="Arial, sans-serif")
-                        )
-                        plots[f'{metric_id}_violin'] = pio.to_json(fig_violin)
-                    
-                    if 'area' in selected_graph_types and selected_metric != 'points':
-                        # --- Area Chart: Cumulative values over time ---
-                        fig_area = go.Figure()
-                        for team_number, values in team_match_values.items():
-                            if values:
-                                match_numbers = [m['match_number'] for m in team_data[team_number]['matches'] if m['metrics'].get(metric_id, {}).get('value') is not None]
-                                cumulative_values = np.cumsum(values)
-                                fig_area.add_trace(go.Scatter(
-                                    x=match_numbers,
-                                    y=cumulative_values,
-                                    mode='lines',
-                                    fill='tonexty',
-                                    name=f"{team_number}",
-                                    hovertemplate='Team %{name}<br>Match %{x}: Cumulative %{y:.2f}<extra></extra>'
-                                ))
-                        fig_area.update_layout(
-                            title=f"{metric_name} Cumulative Values (Area Chart)",
-                            xaxis_title="Match Number",
-                            yaxis_title=f"Cumulative {metric_name}",
-                            margin=dict(l=40, r=20, t=50, b=60),
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font=dict(family="Arial, sans-serif")
-                        )
-                        plots[f'{metric_id}_area'] = pio.to_json(fig_area)
-                # --- Radar Chart: Team profiles (if 3+ metrics) ---
-                if 'radar' in selected_graph_types and radar_ready and len(radar_data) > 0 and selected_metric != 'points':
-                    fig_radar = go.Figure()
-                    categories = [metric_names[mid] for mid in metric_ids]
-                    for team_number, metrics in radar_data.items():
-                        values = [metrics.get(mid, 0) for mid in metric_ids]
-                        fig_radar.add_trace(go.Scatterpolar(
-                            r=values + [values[0]],
-                            theta=categories + [categories[0]],
-                            fill='toself',
-                            name=f"{team_number} - {team_data[team_number]['team_name']}"
-                        ))
-                    fig_radar.update_layout(
-                        polar=dict(
-                            radialaxis=dict(visible=True)
-                        ),
-                        showlegend=True,
-                        title="Team Metric Profiles (Radar Chart)",
-                        margin=dict(l=40, r=20, t=50, b=60),
-                        font=dict(family="Arial, sans-serif")
-                    )
-                    plots['team_radar'] = pio.to_json(fig_radar)
-                
-                # --- Heatmap: Team vs Match performance matrix ---
-                if 'heatmap' in selected_graph_types and selected_metric != 'points':
-                    # Create a matrix of team vs match performance
-                    team_numbers = list(team_data.keys())
-                    match_numbers = []
-                    for tdata in team_data.values():
-                        for match in tdata['matches']:
-                            if match['match_number'] not in match_numbers:
-                                match_numbers.append(match['match_number'])
-                    match_numbers.sort()
-                    
-                    if team_numbers and match_numbers:
-                        # Create the heatmap data
-                        heatmap_data = []
-                        for team_number in team_numbers:
-                            row = []
-                            for match_number in match_numbers:
-                                # Find the value for this team and match
-                                value = None
-                                for match in team_data[team_number]['matches']:
-                                    if match['match_number'] == match_number:
-                                        value = match['metrics'].get(metric_id, {}).get('value')
-                                        break
-                                row.append(value if value is not None else 0)
-                            heatmap_data.append(row)
-                        
-                        fig_heatmap = go.Figure(data=go.Heatmap(
-                            z=heatmap_data,
-                            x=match_numbers,
-                            y=[str(t) for t in team_numbers],
-                            colorscale='Viridis',
-                            hovertemplate='Team %{y}<br>Match %{x}<br>Value: %{z:.2f}<extra></extra>'
-                        ))
-                        fig_heatmap.update_layout(
-                            title=f"{metric_name} Performance Matrix (Heatmap)",
-                            xaxis_title="Match Number",
-                            yaxis_title="Team",
-                            margin=dict(l=40, r=20, t=50, b=60),
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font=dict(family="Arial, sans-serif")
-                        )
-                        plots[f'{metric_id}_heatmap'] = pio.to_json(fig_heatmap)
-                
-                # --- Bubble Chart: Team performance with size based on consistency ---
-                if 'bubble' in selected_graph_types and selected_metric != 'points':
-                    bubble_data = []
-                    for team_number, values in team_match_values.items():
-                        if values:
-                            avg_value = np.mean(values)
-                            std_value = np.std(values) if len(values) > 1 else 0
-                            consistency = 1 / (1 + std_value) if std_value > 0 else 1  # Higher consistency = larger bubble
-                            bubble_data.append({
-                                'team': team_number,
-                                'avg': avg_value,
-                                'consistency': consistency,
-                                'matches': len(values)
-                            })
-                    
-                    if bubble_data:
-                        fig_bubble = go.Figure()
-                        fig_bubble.add_trace(go.Scatter(
-                            x=[d['avg'] for d in bubble_data],
-                            y=[d['consistency'] for d in bubble_data],
-                            mode='markers',
-                            marker=dict(
-                                size=[d['matches'] * 10 for d in bubble_data],  # Size based on number of matches
-                                color=[d['avg'] for d in bubble_data],
-                                colorscale='Viridis',
-                                showscale=True,
-                                colorbar=dict(title=f"Avg {metric_name}")
-                            ),
-                            text=[f"Team {d['team']}<br>Avg: {d['avg']:.2f}<br>Matches: {d['matches']}" for d in bubble_data],
-                            hovertemplate='%{text}<extra></extra>'
-                        ))
-                        fig_bubble.update_layout(
-                            title=f"{metric_name} Performance vs Consistency (Bubble Chart)",
-                            xaxis_title=f"Average {metric_name}",
-                            yaxis_title="Consistency (1/StdDev)",
-                            margin=dict(l=40, r=20, t=50, b=60),
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font=dict(family="Arial, sans-serif")
-                        )
-                        plots[f'{metric_id}_bubble'] = pio.to_json(fig_bubble)
-                
-                # --- Sunburst Chart: Hierarchical team performance ---
-                if 'sunburst' in selected_graph_types and selected_metric != 'points':
-                    sunburst_data = []
-                    for team_number, values in team_match_values.items():
-                        if values:
-                            avg_value = np.mean(values)
-                            # Create performance categories
-                            if avg_value >= np.percentile([np.mean(v) for v in team_match_values.values() if v], 75):
-                                category = "High Performers"
-                            elif avg_value >= np.percentile([np.mean(v) for v in team_match_values.values() if v], 50):
-                                category = "Medium Performers"
-                            elif avg_value >= np.percentile([np.mean(v) for v in team_match_values.values() if v], 25):
-                                category = "Low Performers"
-                            else:
-                                category = "Developing Teams"
-                                
-                            sunburst_data.append({
-                                'ids': f"Team {team_number}",
-                                'labels': f"Team {team_number}",
-                                'parents': category,
-                                'values': avg_value
-                            })
-                    
-                    # Add category parents
-                    categories = ["High Performers", "Medium Performers", "Low Performers", "Developing Teams"]
-                    for category in categories:
-                        sunburst_data.append({
-                            'ids': category,
-                            'labels': category,
-                            'parents': "",
-                            'values': sum([d['values'] for d in sunburst_data if d.get('parents') == category])
-                        })
-                    
-                    if sunburst_data:
-                        fig_sunburst = go.Figure(go.Sunburst(
-                            ids=[d['ids'] for d in sunburst_data],
-                            labels=[d['labels'] for d in sunburst_data],
-                            parents=[d['parents'] for d in sunburst_data],
-                            values=[d['values'] for d in sunburst_data],
-                            branchvalues="total",
-                            hovertemplate='<b>%{label}</b><br>Value: %{value:.2f}<extra></extra>'
-                        ))
-                        fig_sunburst.update_layout(
-                            title=f"{metric_name} Team Performance Hierarchy (Sunburst)",
-                            margin=dict(l=40, r=20, t=50, b=60),
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font=dict(family="Arial, sans-serif")
-                        )
-                        plots[f'{metric_id}_sunburst'] = pio.to_json(fig_sunburst)
-                
-                # --- Treemap Chart: Team performance as nested rectangles ---
-                if 'treemap' in selected_graph_types and selected_metric != 'points':
-                    treemap_data = []
-                    for team_number, values in team_match_values.items():
-                        if values:
-                            avg_value = np.mean(values)
-                            # Create performance categories
-                            if avg_value >= np.percentile([np.mean(v) for v in team_match_values.values() if v], 75):
-                                category = "High Performers"
-                            elif avg_value >= np.percentile([np.mean(v) for v in team_match_values.values() if v], 50):
-                                category = "Medium Performers"
-                            elif avg_value >= np.percentile([np.mean(v) for v in team_match_values.values() if v], 25):
-                                category = "Low Performers"
-                            else:
-                                category = "Developing Teams"
-                                
-                            treemap_data.append({
-                                'ids': f"Team {team_number}",
-                                'labels': f"Team {team_number}",
-                                'parents': category,
-                                'values': avg_value
-                            })
-                    
-                    # Add category parents
-                    categories = ["High Performers", "Medium Performers", "Low Performers", "Developing Teams"]
-                    for category in categories:
-                        treemap_data.append({
-                            'ids': category,
-                            'labels': category,
-                            'parents': "",
-                            'values': sum([d['values'] for d in treemap_data if d.get('parents') == category])
-                        })
-                    
-                    if treemap_data:
-                        fig_treemap = go.Figure(go.Treemap(
-                            ids=[d['ids'] for d in treemap_data],
-                            labels=[d['labels'] for d in treemap_data],
-                            parents=[d['parents'] for d in treemap_data],
-                            values=[d['values'] for d in treemap_data],
-                            branchvalues="total",
-                            hovertemplate='<b>%{label}</b><br>Value: %{value:.2f}<extra></extra>'
-                        ))
-                        fig_treemap.update_layout(
-                            title=f"{metric_name} Team Performance Distribution (Treemap)",
-                            margin=dict(l=40, r=20, t=50, b=60),
-                            plot_bgcolor='rgba(0,0,0,0)',
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            font=dict(family="Arial, sans-serif")
-                        )
-                        plots[f'{metric_id}_treemap'] = pio.to_json(fig_treemap)
-                
-                # --- Waterfall Chart for non-points metrics ---
-                if 'waterfall' in selected_graph_types and selected_metric != 'points':
-                    if selected_data_view == 'averages':
-                        # Create waterfall for average values across teams
-                        avg_data = []
-                        for team_number, values in team_match_values.items():
-                            avg = np.mean(values) if values else 0
-                            avg_data.append({'team': team_number, 'avg': avg})
-                        # Respect selected_sort when choosing top teams for waterfall
-                        if selected_sort == 'points_asc' or selected_sort == 'team_asc':
-                            avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=False)[:8]
-                        else:
-                            avg_data = sorted(avg_data, key=lambda x: x['avg'], reverse=True)[:8]  # Top 8 teams
-                        
-                        if avg_data:
-                            waterfall_data = []
-                            waterfall_data.append({
-                                'x': f"Team {avg_data[0]['team']}",
-                                'y': avg_data[0]['avg'],
-                                'measure': 'absolute',
-                                'text': f"{avg_data[0]['avg']:.1f}"
-                            })
-                            
-                            for i in range(1, len(avg_data)):
-                                change = avg_data[i]['avg'] - avg_data[i-1]['avg']
-                                waterfall_data.append({
-                                    'x': f"Team {avg_data[i]['team']}",
-                                    'y': change,
-                                    'measure': 'relative',
-                                    'text': f"{change:+.1f}"
-                                })
-                            
-                            fig_waterfall = go.Figure()
-                            fig_waterfall.add_trace(go.Waterfall(
-                                name=f"{metric_name} Progression",
-                                orientation="v",
-                                measure=[d['measure'] for d in waterfall_data],
-                                x=[d['x'] for d in waterfall_data],
-                                textposition="outside",
-                                text=[d['text'] for d in waterfall_data],
-                                y=[d['y'] for d in waterfall_data],
-                                connector={"line":{"color":"rgb(63, 63, 63)"}},
-                                decreasing={"marker":{"color":"red"}},
-                                increasing={"marker":{"color":"green"}},
-                                totals={"marker":{"color":"blue"}}
-                            ))
-                            fig_waterfall.update_layout(
-                                title=f"{metric_name} Team Performance Waterfall",
-                                xaxis_title="Teams",
-                                yaxis_title=f"{metric_name} Change",
-                                margin=dict(l=40, r=20, t=50, b=60),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif"),
-                                xaxis=dict(tickangle=-45)
-                            )
-                            plots[f'{metric_id}_waterfall'] = pio.to_json(fig_waterfall)
-                    else:
-                        # Match-by-match waterfall for a representative team
-                        best_team = max(team_match_values.items(), key=lambda x: len(x[1])) if team_match_values else None
-                        
-                        if best_team and len(best_team[1]) >= 3:
-                            team_number, values = best_team
-                            
-                            # Get match data for this team
-                            team_matches = team_data[team_number]['matches']
-                            match_data = []
-                            for match in team_matches:
-                                value = match['metrics'].get(metric_id, {}).get('value')
-                                if value is not None:
-                                    match_data.append({
-                                        'match_number': match['match_number'],
-                                        'value': value
-                                    })
-                            
-                            match_data = sorted(match_data, key=lambda x: x['match_number'])
-                            
-                            if len(match_data) >= 3:
-                                waterfall_data = []
-                                waterfall_data.append({
-                                    'x': f"Match {match_data[0]['match_number']}",
-                                    'y': match_data[0]['value'],
-                                    'measure': 'absolute',
-                                    'text': f"{match_data[0]['value']:.1f}"
-                                })
-                                
-                                for i in range(1, len(match_data)):
-                                    change = match_data[i]['value'] - match_data[i-1]['value']
-                                    waterfall_data.append({
-                                        'x': f"Match {match_data[i]['match_number']}",
-                                        'y': change,
-                                        'measure': 'relative',
-                                        'text': f"{change:+.1f}"
-                                    })
-                                
-                                fig_waterfall = go.Figure()
-                                fig_waterfall.add_trace(go.Waterfall(
-                                    name=f"Team {team_number} {metric_name}",
-                                    orientation="v",
-                                    measure=[d['measure'] for d in waterfall_data],
-                                    x=[d['x'] for d in waterfall_data],
-                                    textposition="outside",
-                                    text=[d['text'] for d in waterfall_data],
-                                    y=[d['y'] for d in waterfall_data],
-                                    connector={"line":{"color":"rgb(63, 63, 63)"}},
-                                    decreasing={"marker":{"color":"red"}},
-                                    increasing={"marker":{"color":"green"}},
-                                    totals={"marker":{"color":"blue"}}
-                                ))
-                                fig_waterfall.update_layout(
-                                    title=f"Team {team_number} {metric_name} Progression",
-                                    xaxis_title="Matches",
-                                    yaxis_title=f"{metric_name} Change",
-                                    margin=dict(l=40, r=20, t=50, b=60),
-                                    plot_bgcolor='rgba(0,0,0,0)',
-                                    paper_bgcolor='rgba(0,0,0,0)',
-                                    font=dict(family="Arial, sans-serif"),
-                                    xaxis=dict(tickangle=-45)
-                                )
-                                plots[f'{metric_id}_waterfall'] = pio.to_json(fig_waterfall)
-                
-                # --- Enhanced Sankey Diagram for non-points metrics ---
-                if 'sankey' in selected_graph_types and selected_metric != 'points':
-                    # Create multi-layer Sankey showing teams -> performance -> impact -> outcomes
-                    sankey_nodes = []
-                    sankey_links = []
-                    
-                    # Calculate performance categories based on metric values
-                    all_values = []
-                    for values in team_match_values.values():
-                        all_values.extend(values)
-                    
-                    if all_values and len(team_match_values) > 1:
-                        # Layer 1: Teams
-                        teams_with_data = [team for team, values in team_match_values.items() if values]
-                        team_indices = {}
-                        for i, team_number in enumerate(teams_with_data):
-                            team_name = f"Team {team_number}"
-                            sankey_nodes.append(team_name)
-                            team_indices[team_number] = i
-                        
-                        # Layer 2: Performance Levels
-                        perf_layer_start = len(sankey_nodes)
-                        performance_categories = [f"Elite {metric_name}", f"Strong {metric_name}", 
-                                                f"Solid {metric_name}", f"Developing {metric_name}"]
-                        perf_indices = {}
-                        for i, category in enumerate(performance_categories):
-                            sankey_nodes.append(category)
-                            perf_indices[category] = perf_layer_start + i
-                        
-                        # Layer 3: Consistency & Impact
-                        impact_layer_start = len(sankey_nodes)
-                        impact_categories = ["Consistent High Impact", "Variable High Impact", 
-                                           "Steady Contribution", "Inconsistent Performance"]
-                        impact_indices = {}
-                        for i, category in enumerate(impact_categories):
-                            sankey_nodes.append(category)
-                            impact_indices[category] = impact_layer_start + i
-                        
-                        # Layer 4: Strategic Value
-                        value_layer_start = len(sankey_nodes)
-                        value_categories = ["Key Strategic Asset", "Reliable Performer", 
-                                          "Supporting Player", "Development Focus"]
-                        value_indices = {}
-                        for i, category in enumerate(value_categories):
-                            sankey_nodes.append(category)
-                            value_indices[category] = value_layer_start + i
-                        
-                        # Calculate thresholds
-                        threshold_85 = np.percentile(all_values, 85)
-                        threshold_65 = np.percentile(all_values, 65) 
-                        threshold_40 = np.percentile(all_values, 40)
-                        threshold_15 = np.percentile(all_values, 15)
-                        
-                        # Teams -> Performance Categories
-                        for team_number in teams_with_data:
-                            values = team_match_values[team_number]
-                            avg_value = np.mean(values)
-                            team_idx = team_indices[team_number]
-                            
-                            # Determine performance category and flow strength
-                            if avg_value >= threshold_85:
-                                target_idx = perf_indices[f"Elite {metric_name}"]
-                                color = "rgba(76, 175, 80, 0.7)"  # Green
-                            elif avg_value >= threshold_65:
-                                target_idx = perf_indices[f"Strong {metric_name}"]
-                                color = "rgba(255, 193, 7, 0.7)"  # Amber
-                            elif avg_value >= threshold_40:
-                                target_idx = perf_indices[f"Solid {metric_name}"]
-                                color = "rgba(255, 152, 0, 0.7)"  # Orange
-                            else:
-                                target_idx = perf_indices[f"Developing {metric_name}"]
-                                color = "rgba(244, 67, 54, 0.7)"  # Red
-                            
-                            sankey_links.append({
-                                'source': team_idx,
-                                'target': target_idx,
-                                'value': avg_value * len(values),  # Total contribution
-                                'color': color
-                            })
-                        
-                        # Performance Categories -> Impact Categories
-                        for team_number in teams_with_data:
-                            values = team_match_values[team_number]
-                            if len(values) > 1:
-                                avg_value = np.mean(values)
-                                std_value = np.std(values)
-                                max_value = max(values)
-                                consistency = (1 - (std_value / avg_value)) * 100 if avg_value > 0 else 0
-                                
-                                # Determine source performance category
-                                if avg_value >= threshold_85:
-                                    source_idx = perf_indices[f"Elite {metric_name}"]
-                                elif avg_value >= threshold_65:
-                                    source_idx = perf_indices[f"Strong {metric_name}"]
-                                elif avg_value >= threshold_40:
-                                    source_idx = perf_indices[f"Solid {metric_name}"]
-                                else:
-                                    source_idx = perf_indices[f"Developing {metric_name}"]
-                                
-                                # Determine impact category based on consistency and peak performance
-                                if max_value >= threshold_85 and consistency >= 60:
-                                    target_idx = impact_indices["Consistent High Impact"]
-                                    color = "rgba(139, 195, 74, 0.8)"
-                                elif max_value >= threshold_85 and consistency < 60:
-                                    target_idx = impact_indices["Variable High Impact"]
-                                    color = "rgba(255, 235, 59, 0.8)"
-                                elif avg_value >= threshold_40 and consistency >= 40:
-                                    target_idx = impact_indices["Steady Contribution"]
-                                    color = "rgba(255, 183, 77, 0.8)"
-                                else:
-                                    target_idx = impact_indices["Inconsistent Performance"]
-                                    color = "rgba(239, 154, 154, 0.8)"
-                                
-                                flow_value = avg_value * len(values) * (consistency / 100 + 0.5)  # Weighted by consistency
-                                
-                                sankey_links.append({
-                                    'source': source_idx,
-                                    'target': target_idx,
-                                    'value': flow_value,
-                                    'color': color
-                                })
-                        
-                        # Impact Categories -> Strategic Value
-                        impact_to_value_mapping = {
-                            "Consistent High Impact": ("Key Strategic Asset", "rgba(0, 200, 83, 0.9)"),
-                            "Variable High Impact": ("Reliable Performer", "rgba(255, 214, 0, 0.9)"),
-                            "Steady Contribution": ("Supporting Player", "rgba(255, 171, 64, 0.9)"),
-                            "Inconsistent Performance": ("Development Focus", "rgba(244, 81, 30, 0.9)")
-                        }
-                        
-                        # Aggregate flows from impact to value categories
-                        value_flows = {}
-                        for team_number in teams_with_data:
-                            values = team_match_values[team_number]
-                            if len(values) > 1:
-                                avg_value = np.mean(values)
-                                std_value = np.std(values)
-                                max_value = max(values)
-                                consistency = (1 - (std_value / avg_value)) * 100 if avg_value > 0 else 0
-                                
-                                # Determine impact category
-                                if max_value >= threshold_85 and consistency >= 60:
-                                    impact_cat = "Consistent High Impact"
-                                elif max_value >= threshold_85 and consistency < 60:
-                                    impact_cat = "Variable High Impact"
-                                elif avg_value >= threshold_40 and consistency >= 40:
-                                    impact_cat = "Steady Contribution"
-                                else:
-                                    impact_cat = "Inconsistent Performance"
-                                
-                                value_cat, color = impact_to_value_mapping[impact_cat]
-                                flow_value = avg_value * len(values)
-                                
-                                if (impact_cat, value_cat) not in value_flows:
-                                    value_flows[(impact_cat, value_cat)] = {'value': 0, 'color': color}
-                                value_flows[(impact_cat, value_cat)]['value'] += flow_value
-                        
-                        # Create impact -> value links
-                        for (impact_cat, value_cat), flow_data in value_flows.items():
-                            source_idx = impact_indices[impact_cat]
-                            target_idx = value_indices[value_cat]
-                            
-                            sankey_links.append({
-                                'source': source_idx,
-                                'target': target_idx,
-                                'value': flow_data['value'],
-                                'color': flow_data['color']
-                            })
-                        
-                        # Create layered node colors
-                        node_colors = []
-                        for i, node in enumerate(sankey_nodes):
-                            if i < perf_layer_start:  # Teams
-                                node_colors.append("rgba(33, 150, 243, 0.9)")  # Blue
-                            elif i < impact_layer_start:  # Performance
-                                node_colors.append("rgba(156, 39, 176, 0.9)")  # Purple
-                            elif i < value_layer_start:  # Impact
-                                node_colors.append("rgba(255, 152, 0, 0.9)")  # Orange
-                            else:  # Strategic Value
-                                node_colors.append("rgba(0, 150, 136, 0.9)")  # Teal
-                        
-                        if sankey_nodes and sankey_links:
-                            fig_sankey = go.Figure(data=[go.Sankey(
-                                node = dict(
-                                    pad = 30,
-                                    thickness = 35,
-                                    line = dict(color = "rgba(0,0,0,0.4)", width = 1.5),
-                                    label = sankey_nodes,
-                                    color = node_colors,
-                                    hovertemplate='<b>%{label}</b><br>Total Flow: %{value:.1f}<extra></extra>'
-                                ),
-                                link = dict(
-                                    source = [link['source'] for link in sankey_links],
-                                    target = [link['target'] for link in sankey_links],
-                                    value = [link['value'] for link in sankey_links],
-                                    color = [link['color'] for link in sankey_links],
-                                    hovertemplate='<b>%{source.label}</b> → <b>%{target.label}</b><br>Flow: %{value:.1f}<extra></extra>'
-                                )
-                            )])
-                            fig_sankey.update_layout(
-                                title=f"Enhanced {metric_name} Performance Flow Analysis",
-                                margin=dict(l=70, r=70, t=120, b=80),
-                                plot_bgcolor='rgba(0,0,0,0)',
-                                paper_bgcolor='rgba(0,0,0,0)',
-                                font=dict(family="Arial, sans-serif", size=12),
-                                height=750,
-                                annotations=[
-                                    dict(
-                                        text=f"Teams → Performance → Impact → Strategic Value",
-                                        showarrow=False,
-                                        xref="paper", yref="paper",
-                                        x=0.5, y=1.08, xanchor='center', yanchor='bottom',
-                                        font=dict(size=14, color='gray')
-                                    ),
-                                    dict(
-                                        text=f"Multi-layer analysis of {metric_name} across {len(teams_with_data)} teams",
-                                        showarrow=False,
-                                        xref="paper", yref="paper",
-                                        x=0.5, y=-0.12, xanchor='center', yanchor='top',
-                                        font=dict(size=10, color='lightgray')
-                                    )
-                                ]
-                            )
-                            plots[f'{metric_id}_sankey'] = pio.to_json(fig_sankey)
-    
+            # Generate the requested graph types using helper functions
+            # Use the selected list of graph types for rendering
+            for graph_type in selected_graph_types:
+                if graph_type == 'bar':
+                    plots.update(_create_bar_chart(team_data, selected_metric, selected_data_view))
+                elif graph_type == 'line':
+                    plots.update(_create_line_chart(team_data, selected_metric, selected_data_view))
+                elif graph_type == 'scatter':
+                    plots.update(_create_scatter_chart(team_data, selected_metric, selected_data_view))
+                elif graph_type == 'histogram':
+                    plots.update(_create_histogram_chart(team_data, selected_metric, selected_data_view))
+                elif graph_type == 'violin':
+                    plots.update(_create_violin_chart(team_data, selected_metric, selected_data_view))
+                elif graph_type == 'box':
+                    plots.update(_create_box_chart(team_data, selected_metric, selected_data_view))
+                elif graph_type == 'sunburst':
+                    plots.update(_create_sunburst_chart(team_data, selected_metric, selected_data_view))
+                elif graph_type == 'treemap':
+                    plots.update(_create_treemap_chart(team_data, selected_metric, selected_data_view))
+                elif graph_type == 'waterfall':
+                    plots.update(_create_waterfall_chart(team_data, selected_metric, selected_data_view))
+                elif graph_type == 'sankey':
+                    plots.update(_create_sankey_chart(team_data, selected_metric, selected_data_view))
+                elif graph_type == 'heatmap':
+                    plots.update(_create_heatmap_chart(team_data, selected_metric, selected_data_view))
+                elif graph_type == 'bubble':
+                    plots.update(_create_bubble_chart(team_data, selected_metric, selected_data_view))
+                elif graph_type == 'area':
+                    plots.update(_create_area_chart(team_data, selected_metric, selected_data_view))
+                elif graph_type == 'radar':
+                    plots.update(_create_radar_chart(team_data, selected_metric, selected_data_view))
 
     
     return render_template('graphs/index.html', 
@@ -2700,8 +658,51 @@ def view_shared(share_id):
     # Get game configuration (use a default/public configuration)
     game_config = get_effective_game_config()
     
-    # Get teams and data for the shared configuration
-    team_numbers = shared_graph.team_numbers_list
+    # Allow overriding teams and graph types via query parameters so viewers
+    # can interactively filter the shared view. Accepts either multiple
+    # occurrences (e.g. ?teams=123&teams=456) or a comma-separated string
+    # (e.g. ?teams=123,456).
+    def _parse_int_list(arg_name):
+        vals = request.args.getlist(arg_name)
+        if len(vals) == 1 and vals[0] and ',' in vals[0]:
+            vals = [v.strip() for v in vals[0].split(',') if v.strip()]
+        # Filter out empty and non-numeric values
+        out = []
+        for v in vals:
+            try:
+                out.append(int(v))
+            except Exception:
+                continue
+        return out
+
+    def _parse_str_list(arg_name):
+        vals = request.args.getlist(arg_name)
+        if len(vals) == 1 and vals[0] and ',' in vals[0]:
+            vals = [v.strip() for v in vals[0].split(',') if v.strip()]
+        return [v for v in vals if v]
+
+    # Whitelist of allowed graph types (keeps backend safe)
+    available_graph_types = [
+        'bar','line','scatter','histogram','violin','box','sunburst','treemap',
+        'waterfall','sankey','heatmap','bubble','area','radar'
+    ]
+
+    # Parse overrides from query params
+    query_team_numbers = _parse_int_list('teams')
+    query_graph_types = _parse_str_list('graph_types')
+
+    # Decide which teams and graph types to use for rendering
+    team_numbers = query_team_numbers if query_team_numbers else shared_graph.team_numbers_list
+    # Respect only whitelisted graph types; fall back to stored types if none provided
+    selected_graph_types = [g for g in query_graph_types if g in available_graph_types] if query_graph_types else shared_graph.graph_types_list
+
+    # Debug logging to help diagnose cases where selections are not applied
+    try:
+        current_app.logger.debug(f"Shared view override - query_graph_types={query_graph_types}, selected_graph_types={selected_graph_types}")
+    except Exception:
+        # Swallow logging errors to avoid breaking view
+        pass
+
     teams = Team.query.filter(Team.team_number.in_(team_numbers)).all()
     
     if not teams:
@@ -2758,7 +759,8 @@ def view_shared(share_id):
             })
         
         # Generate the requested graph types
-        for graph_type in shared_graph.graph_types_list:
+    # Use the selected/overridden list of graph types for rendering
+    for graph_type in selected_graph_types:
             if graph_type == 'bar':
                 plots.update(_create_bar_chart(team_data, shared_graph.metric, shared_graph.data_view))
             elif graph_type == 'line':
@@ -2788,11 +790,58 @@ def view_shared(share_id):
             elif graph_type == 'radar':
                 plots.update(_create_radar_chart(team_data, shared_graph.metric, shared_graph.data_view))
     
+    # Provide the same selection UI context as the main graphs index so
+    # viewers can make selections just like regular graphs.
+    try:
+        all_teams = Team.query.order_by(Team.team_number).all()
+    except Exception:
+        all_teams = []
+
+    try:
+        all_events = Event.query.order_by(Event.id).all()
+    except Exception:
+        all_events = []
+
+    team_event_mapping = {}
+    for t in all_teams:
+        try:
+            team_event_mapping[t.team_number] = [e.id for e in t.events]
+        except Exception:
+            team_event_mapping[t.team_number] = []
+
+    all_teams_data = []
+    for t in all_teams:
+        all_teams_data.append({
+            'teamNumber': t.team_number,
+            'teamName': t.team_name or 'Unknown',
+            'displayText': f"{t.team_number} - {t.team_name or 'Unknown'}",
+            'points': 0
+        })
+    all_teams_json = json.dumps(all_teams_data)
+
+    # Selected values for the UI controls: prefer query params, fall back to share settings
+    selected_team_numbers = team_numbers
+    selected_event_id = request.args.get('event_id', type=int) or shared_graph.event_id
+    selected_metric = request.args.get('metric') or (shared_graph.metric or 'points')
+    selected_data_view = request.args.get('data_view') or (shared_graph.data_view or 'averages')
+    selected_sort = request.args.get('sort', 'points_desc')
+
     return render_template('graphs/shared.html',
                          shared_graph=shared_graph,
                          plots=plots,
                          teams=teams,
                          game_config=game_config,
+                         available_graph_types=available_graph_types,
+                         all_teams=all_teams,
+                         all_events=all_events,
+                         team_event_mapping=team_event_mapping,
+                         all_teams_json=all_teams_json,
+                         selected_team_numbers=selected_team_numbers,
+                         selected_event_id=selected_event_id,
+                         selected_metric=selected_metric,
+                         selected_graph_types=selected_graph_types,
+                         selected_data_view=selected_data_view,
+                         selected_sort=selected_sort,
                          **get_theme_context())
 
 @bp.route('/my-shares')
@@ -2963,7 +1012,32 @@ def _create_line_chart(team_data, metric, data_view):
             margin=dict(l=40, r=20, t=50, b=60)
         )
         plots[f'{metric}_line_matches'] = pio.to_json(fig)
-    
+    else:
+        # Averages view: show a line across team averages (like index page)
+        avg_data = []
+        for team_number, data in team_data.items():
+            values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
+            avg = np.mean(values) if values else 0
+            avg_data.append({'team': team_number, 'avg': avg})
+
+        if avg_data:
+            # sort by team number for stable ordering
+            avg_data = sorted(avg_data, key=lambda x: int(x['team']))
+            fig_line = go.Figure()
+            fig_line.add_trace(go.Scatter(
+                x=[str(d['team']) for d in avg_data],
+                y=[d['avg'] for d in avg_data],
+                mode='lines+markers',
+                marker_color='royalblue'
+            ))
+            fig_line.update_layout(
+                title=f"{metric.replace('_', ' ').title()} by Team - Averages (Line Chart)",
+                xaxis_title="Team",
+                yaxis_title=metric.replace('_', ' ').title(),
+                margin=dict(l=40, r=20, t=50, b=60)
+            )
+            plots[f'{metric}_line_avg'] = pio.to_json(fig_line)
+
     return plots
 
 def _create_scatter_chart(team_data, metric, data_view):
@@ -2992,7 +1066,31 @@ def _create_scatter_chart(team_data, metric, data_view):
             margin=dict(l=40, r=20, t=50, b=60)
         )
         plots[f'{metric}_scatter_matches'] = pio.to_json(fig)
-    
+    else:
+        # Averages view: scatter of team averages
+        avg_data = []
+        for team_number, data in team_data.items():
+            values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
+            avg = np.mean(values) if values else 0
+            avg_data.append({'team': team_number, 'avg': avg})
+
+        if avg_data:
+            avg_data = sorted(avg_data, key=lambda x: int(x['team']))
+            fig_scatter = go.Figure()
+            fig_scatter.add_trace(go.Scatter(
+                x=[str(d['team']) for d in avg_data],
+                y=[d['avg'] for d in avg_data],
+                mode='markers',
+                marker=dict(size=10, color='royalblue')
+            ))
+            fig_scatter.update_layout(
+                title=f"{metric.replace('_', ' ').title()} by Team - Averages (Scatter Plot)",
+                xaxis_title="Team",
+                yaxis_title=metric.replace('_', ' ').title(),
+                margin=dict(l=40, r=20, t=50, b=60)
+            )
+            plots[f'{metric}_scatter_avg'] = pio.to_json(fig_scatter)
+
     return plots
 
 def _create_histogram_chart(team_data, metric, data_view):
@@ -3015,13 +1113,15 @@ def _create_histogram_chart(team_data, metric, data_view):
             hovertemplate=f'{metric.replace("_", " ").title()}: %{{x}}<br>Count: %{{y}}<extra></extra>'
         ))
         
+        theme_vals = _chart_theme()
         fig.update_layout(
             title=f"{metric.replace('_', ' ').title()} Distribution (Histogram)",
             xaxis_title=metric.replace('_', ' ').title(),
             yaxis_title="Frequency",
             margin=dict(l=40, r=20, t=50, b=60),
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)'
+            plot_bgcolor=theme_vals['plot_bg'],
+            paper_bgcolor=theme_vals['paper_bg'],
+            font=dict(color=theme_vals['text_main'])
         )
         plots[f'{metric}_histogram'] = pio.to_json(fig)
     
@@ -3045,12 +1145,14 @@ def _create_violin_chart(team_data, metric, data_view):
                         hovertemplate=f'Team %{{fullData.name}}<br>{metric.replace("_", " ").title()}: %{{y}}<extra></extra>'
                     ))
         
+        theme_vals = _chart_theme()
         fig.update_layout(
             title=f"{metric.replace('_', ' ').title()} Distribution by Team (Violin Plot)",
             yaxis_title=metric.replace('_', ' ').title(),
             margin=dict(l=40, r=20, t=50, b=60),
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)'
+            plot_bgcolor=theme_vals['plot_bg'],
+            paper_bgcolor=theme_vals['paper_bg'],
+            font=dict(color=theme_vals['text_main'])
         )
         plots[f'{metric}_violin'] = pio.to_json(fig)
     
@@ -3073,12 +1175,14 @@ def _create_box_chart(team_data, metric, data_view):
                         hovertemplate=f'Team %{{fullData.name}}<br>{metric.replace("_", " ").title()}: %{{y}}<extra></extra>'
                     ))
         
+        theme_vals = _chart_theme()
         fig.update_layout(
             title=f"{metric.replace('_', ' ').title()} Distribution by Team (Box Plot)",
             yaxis_title=metric.replace('_', ' ').title(),
             margin=dict(l=40, r=20, t=50, b=60),
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)'
+            plot_bgcolor=theme_vals['plot_bg'],
+            paper_bgcolor=theme_vals['paper_bg'],
+            font=dict(color=theme_vals['text_main'])
         )
         plots[f'{metric}_box'] = pio.to_json(fig)
     
@@ -3148,11 +1252,13 @@ def _create_sunburst_chart(team_data, metric, data_view):
                 branchvalues="total",
                 hovertemplate=f'<b>%{{label}}</b><br>{metric.replace("_", " ").title()}: %{{value:.2f}}<extra></extra>'
             ))
+            theme_vals = _chart_theme()
             fig.update_layout(
                 title=f"Team {metric.replace('_', ' ').title()} Performance Hierarchy (Sunburst)",
                 margin=dict(l=40, r=20, t=50, b=60),
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)'
+                plot_bgcolor=theme_vals['plot_bg'],
+                paper_bgcolor=theme_vals['paper_bg'],
+                font=dict(color=theme_vals['text_main'])
             )
             plots[f'{metric}_sunburst'] = pio.to_json(fig)
     
@@ -3183,9 +1289,13 @@ def _create_treemap_chart(team_data, metric, data_view):
             hovertemplate=f'<b>%{{label}}</b><br>{metric.replace("_", " ").title()}: %{{value:.2f}}<extra></extra>'
         ))
         
+        theme_vals = _chart_theme()
         fig.update_layout(
             title=f"Team {metric.replace('_', ' ').title()} Performance (Treemap)",
-            margin=dict(l=40, r=20, t=50, b=60)
+            margin=dict(l=40, r=20, t=50, b=60),
+            plot_bgcolor=theme_vals['plot_bg'],
+            paper_bgcolor=theme_vals['paper_bg'],
+            font=dict(color=theme_vals['text_main'])
         )
         plots[f'{metric}_treemap'] = pio.to_json(fig)
     
@@ -3220,11 +1330,15 @@ def _create_waterfall_chart(team_data, metric, data_view):
                 hovertemplate=f'<b>%{{x}}</b><br>{metric.replace("_", " ").title()}: %{{y:.2f}}<extra></extra>'
             ))
             
+            theme_vals = _chart_theme()
             fig.update_layout(
                 title=f"Team {metric.replace('_', ' ').title()} Contribution (Waterfall)",
                 xaxis_title="Teams",
                 yaxis_title=metric.replace('_', ' ').title(),
-                margin=dict(l=40, r=20, t=50, b=60)
+                margin=dict(l=40, r=20, t=50, b=60),
+                plot_bgcolor=theme_vals['plot_bg'],
+                paper_bgcolor=theme_vals['paper_bg'],
+                font=dict(color=theme_vals['text_main'])
             )
             plots[f'{metric}_waterfall'] = pio.to_json(fig)
     
@@ -3243,6 +1357,12 @@ def _create_sankey_chart(team_data, metric, data_view):
     
     if all_values and len(team_data) > 1:
         import numpy as np
+        # Use theme card background so charts blend with UI
+        try:
+            theme = ThemeManager().get_current_theme()
+        except Exception:
+            theme = {}
+        card_bg = theme.get('colors', {}).get('card-bg') if isinstance(theme, dict) else None
         
         sankey_nodes = []
         sankey_links = []
@@ -3485,6 +1605,10 @@ def _create_sankey_chart(team_data, metric, data_view):
             height = 700
         
         if sankey_nodes and sankey_links:
+            # cap height to avoid overflowing page/card, still allow reasonable size
+            max_height = 700
+            height = min(height if 'height' in locals() else 650, max_height)
+
             fig = go.Figure(data=[go.Sankey(
                 node = dict(
                     pad = 25,
@@ -3502,20 +1626,22 @@ def _create_sankey_chart(team_data, metric, data_view):
                     hovertemplate='<b>%{source.label}</b> → <b>%{target.label}</b><br>Flow: %{value:.1f}<extra></extra>'
                 )
             )])
+            theme_vals = _chart_theme()
             fig.update_layout(
                 title=title_text,
-                margin=dict(l=60, r=60, t=100, b=80),
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                font=dict(family="Arial, sans-serif", size=12),
+                margin=dict(l=30, r=30, t=70, b=50),
+                plot_bgcolor=theme_vals['plot_bg'],
+                paper_bgcolor=theme_vals['paper_bg'],
+                font=dict(family="Arial, sans-serif", size=12, color=theme_vals['text_main']),
                 height=height,
+                autosize=True,
                 annotations=[
                     dict(
                         text=subtitle_text,
                         showarrow=False,
                         xref="paper", yref="paper",
-                        x=0.5, y=1.05, xanchor='center', yanchor='bottom',
-                        font=dict(size=13, color='gray')
+                        x=0.5, y=1.02, xanchor='center', yanchor='bottom',
+                        font=dict(size=13, color=theme_vals['text_muted'])
                     )
                 ]
             )
@@ -3598,13 +1724,15 @@ def _create_bubble_chart(team_data, metric, data_view):
                     hovertemplate=f'Team %{{fullData.name}}<br>Match %{{x}}: %{{y:.2f}}<extra></extra>'
                 ))
         
+        theme_vals = _chart_theme()
         fig.update_layout(
             title=f"{metric.replace('_', ' ').title()} by Match (Bubble Chart)",
             xaxis_title="Match Number",
             yaxis_title=metric.replace('_', ' ').title(),
             margin=dict(l=40, r=20, t=50, b=60),
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)'
+            plot_bgcolor=theme_vals['plot_bg'],
+            paper_bgcolor=theme_vals['paper_bg'],
+            font=dict(color=theme_vals['text_main'])
         )
         plots[f'{metric}_bubble'] = pio.to_json(fig)
     
@@ -3636,13 +1764,15 @@ def _create_area_chart(team_data, metric, data_view):
                     hovertemplate=f'<b>Team %{{fullData.name}}</b><br>Match %{{x}}: %{{y:.2f}} cumulative<extra></extra>'
                 ))
         
+        theme_vals = _chart_theme()
         fig.update_layout(
             title=f"Cumulative {metric.replace('_', ' ').title()} Over Matches (Area Chart)",
             xaxis_title="Match Number",
             yaxis_title=f"Cumulative {metric.replace('_', ' ').title()}",
             margin=dict(l=40, r=20, t=50, b=60),
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)'
+            plot_bgcolor=theme_vals['plot_bg'],
+            paper_bgcolor=theme_vals['paper_bg'],
+            font=dict(color=theme_vals['text_main'])
         )
         plots[f'{metric}_area'] = pio.to_json(fig)
     
@@ -3651,64 +1781,105 @@ def _create_area_chart(team_data, metric, data_view):
 def _create_radar_chart(team_data, metric, data_view):
     """Create a radar chart for the given team data and metric"""
     plots = {}
-    
-    if len(team_data) >= 3:  # Need at least 3 teams for meaningful radar
-        import numpy as np
-        
-        # Calculate radar metrics for each team
-        radar_metrics = ['Average', 'Total', 'Consistency', 'Peak Performance']
-        fig = go.Figure()
-        
-        # Calculate max values for normalization
-        all_totals = []
-        all_averages = []
-        all_peaks = []
-        
-        for team_number, data in team_data.items():
-            team_values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
-            if team_values:
-                all_totals.append(sum(team_values))
-                all_averages.append(sum(team_values) / len(team_values))
-                all_peaks.append(max(team_values))
-        
+
+    # Build radar-friendly summary series for each team (allow 2+ teams to render)
+    import numpy as np
+
+    radar_metrics = ['Average', 'Total', 'Consistency', 'Peak Performance']
+    team_series = {}
+    all_totals = []
+    all_averages = []
+    all_peaks = []
+
+    for team_number, data in team_data.items():
+        vals = [m['metric_value'] for m in data['matches'] if m.get('metric_value') is not None]
+        if vals:
+            total = sum(vals)
+            avg = total / len(vals)
+            peak = max(vals)
+            # If only one datapoint, treat consistency as high (can't compute stddev reliably)
+            if len(vals) > 1 and np.mean(vals) > 0:
+                consistency = max(0, min(100, 100 - (np.std(vals) / np.mean(vals) * 100)))
+            else:
+                consistency = 100.0
+
+            team_series[team_number] = {
+                'avg': avg,
+                'total': total,
+                'consistency': consistency,
+                'peak': peak
+            }
+            all_totals.append(total)
+            all_averages.append(avg)
+            all_peaks.append(peak)
+
+    # Require at least 2 teams with data to render a useful radar chart
+    if len(team_series) >= 2:
         max_total = max(all_totals) if all_totals else 1
         max_avg = max(all_averages) if all_averages else 1
         max_peak = max(all_peaks) if all_peaks else 1
-        
-        for team_number, data in team_data.items():
-            team_values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
-            if team_values and len(team_values) >= 2:
-                total_val = sum(team_values)
-                avg_val = sum(team_values) / len(team_values)
-                consistency = 100 - (np.std(team_values) / np.mean(team_values) * 100) if np.mean(team_values) > 0 else 0
-                peak_val = max(team_values)
-                
-                # Normalize values (0-100 scale)
-                normalized_values = [
-                    (avg_val / max_avg * 100) if max_avg > 0 else 0,
-                    (total_val / max_total * 100) if max_total > 0 else 0,
-                    max(0, min(100, consistency)),
-                    (peak_val / max_peak * 100) if max_peak > 0 else 0
-                ]
-                
-                fig.add_trace(go.Scatterpolar(
-                    r=normalized_values + [normalized_values[0]],  # Close the shape
-                    theta=radar_metrics + [radar_metrics[0]],
-                    fill='toself',
-                    name=f"Team {team_number}",
-                    hovertemplate=f'<b>Team %{{fullData.name}}</b><br>%{{theta}}: %{{r:.1f}}<extra></extra>'
-                ))
-        
+
+        fig = go.Figure()
+
+        for team_number, series in team_series.items():
+            normalized = [
+                (series['avg'] / max_avg * 100) if max_avg > 0 else 0,
+                (series['total'] / max_total * 100) if max_total > 0 else 0,
+                max(0, min(100, series['consistency'])),
+                (series['peak'] / max_peak * 100) if max_peak > 0 else 0
+            ]
+
+            fig.add_trace(go.Scatterpolar(
+                r=normalized + [normalized[0]],
+                theta=radar_metrics + [radar_metrics[0]],
+                fill='toself',
+                name=f"Team {team_number}",
+                hovertemplate=f'<b>Team %{{fullData.name}}</b><br>%{{theta}}: %{{r:.1f}}<extra></extra>'
+            ))
+
+        # Height and layout
+        base_height = 380
+        extra_per_team = 16
+        calculated_height = base_height + len(team_series) * extra_per_team
+        height = min(calculated_height, 520)
+
+        theme_vals = _chart_theme()
+
         fig.update_layout(
             polar=dict(
-                radialaxis=dict(
-                    visible=True,
-                    range=[0, 100]
-                )),
+                radialaxis=dict(range=[0, 100], tickfont=dict(color=theme_vals['text_main']), gridcolor=theme_vals['grid_color']),
+                angularaxis=dict(tickfont=dict(color=theme_vals['text_main']))
+            ),
             showlegend=True,
             title=f"Team {metric.replace('_', ' ').title()} Performance Comparison (Radar)",
-            margin=dict(l=40, r=20, t=50, b=60)
+            margin=dict(l=20, r=20, t=60, b=40),
+            height=height,
+            autosize=True,
+            plot_bgcolor=theme_vals['plot_bg'],
+            paper_bgcolor=theme_vals['paper_bg'],
+            font=dict(color=theme_vals['text_main']),
+            legend=dict(orientation='h', yanchor='bottom', y=-0.12, xanchor='center', x=0.5)
         )
+
         plots[f'{metric}_radar'] = pio.to_json(fig)
-    
+    else:
+        # Not enough data; return an info figure so the card displays a message
+        theme_vals = _chart_theme()
+        fig_info = go.Figure()
+        fig_info.add_annotation(
+            text="Not enough data for Radar chart. Select at least 2 teams with match data.",
+            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14, color=theme_vals['text_muted'])
+        )
+        fig_info.update_layout(
+            title=f"Team {metric.replace('_', ' ').title()} Performance Comparison (Radar)",
+            xaxis=dict(visible=False), yaxis=dict(visible=False),
+            margin=dict(l=20, r=20, t=50, b=40),
+            plot_bgcolor=theme_vals['plot_bg'],
+            paper_bgcolor=theme_vals['paper_bg'],
+            height=220,
+            font=dict(color=theme_vals['text_main'])
+        )
+        plots[f'{metric}_radar'] = pio.to_json(fig_info)
+
     return plots

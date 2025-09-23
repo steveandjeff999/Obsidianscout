@@ -1,0 +1,18 @@
+[
+  {
+    "sender": "5454",
+    "recipient": "assistant",
+    "text": "5454",
+    "timestamp": "2025-09-22T14:38:15.694663",
+    "owner": "5454",
+    "id": "4f2ed7a3-cde4-4c5b-9d3f-ef24a7fbc137"
+  },
+  {
+    "sender": "assistant",
+    "recipient": "5454",
+    "text": "Hello 5454, how can I help you?",
+    "timestamp": "2025-09-22T14:38:15.699868",
+    "owner": "5454",
+    "id": "654e744c-3579-420b-82b4-2ba1377107fe"
+  }
+]

@@ -5,60 +5,108 @@
 {% block heading %}Matches{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
-                <h5 class="mb-0">All Matches</h5>
-                <div>
-                    <a href="{{ url_for('matches.sync_from_config') }}" class="btn btn-success me-2">
-                        <i class="fas fa-sync me-2"></i> Sync Matches from Event Code
-                    </a>
-                    <a href="{{ url_for('matches.add') }}" class="btn btn-light">
-                        <i class="fas fa-plus me-2"></i>Add Match
-                    </a>
-                </div>
-            </div>
+<div class="row mb-3">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="mb-0">Matches</h2>
+            <p class="text-muted mb-0">View and manage matches for events.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('matches.sync_from_config') }}" class="btn btn-outline-success">
+                <i class="fas fa-sync me-2"></i> Sync Matches
+            </a>
+            <a href="{{ url_for('matches.add') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i> Add Match
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-lg-4 col-md-12 mb-3">
+        <div class="card h-100">
             <div class="card-body">
-                {% if config.GAME_CONFIG.current_event_code %}
-                <div class="mb-3 alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i> Current event code: <strong>{{ config.GAME_CONFIG.current_event_code }}</strong>
-                    <a href="{{ url_for('main.edit_config') }}" class="alert-link ms-2">Change</a>
-                </div>
-                {% else %}
-                <div class="mb-3 alert alert-warning">
-                    <i class="fas fa-exclamation-triangle me-2"></i> No event code configured. 
-                    <a href="{{ url_for('main.edit_config') }}" class="alert-link">Set an event code</a> to enable syncing matches.
-                </div>
-                {% endif %}
-                
-                {% if matches %}
-                <div class="mb-3">
-                    <label for="match-type-filter" class="form-label">Filter by match type:</label>
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-outline-secondary filter-btn active" data-filter="all">All</button>
-                        <button type="button" class="btn btn-outline-success filter-btn" data-filter="Practice">Practice</button>
-                        <button type="button" class="btn btn-outline-primary filter-btn" data-filter="Qualification">Qualification</button>
-                        <button type="button" class="btn btn-outline-danger filter-btn" data-filter="Playoff">Playoff</button>
+                <h6 class="card-title">Total Matches</h6>
+                <p class="display-6 mb-0">{{ matches|length if matches is not none else 0 }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 col-md-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-title">Events</h6>
+                <p class="display-6 mb-0">{{ events|length if events is not none else 0 }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 col-md-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-title">Current Event Code</h6>
+                <p class="mb-0">{% if game_config and game_config.get('current_event_code') %}<strong>{{ game_config.get('current_event_code') }}</strong>
+                <a href="{{ url_for('main.edit_config') }}" class="ms-2">Change</a>
+                {% else %}<span class="text-muted">Not configured</span>
+                <a href="{{ url_for('main.edit_config') }}" class="ms-2">Set</a>{% endif %}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-lg-4 col-md-12 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <form id="match-filter-form" class="row gx-2 gy-2" method="get" action="{{ url_for('matches.index') }}">
+                    <div class="col-12">
+                        <input type="search" name="q" value="{{ request.args.get('q','') }}" class="form-control" placeholder="Search by match number or team">
                     </div>
-                </div>
+                    <div class="col-12">
+                        <label class="form-label mb-1 mt-2">Match Type</label>
+                        <select name="match_type" class="form-select">
+                            <option value="">All</option>
+                            <option value="Practice">Practice</option>
+                            <option value="Qualification">Qualification</option>
+                            <option value="Playoff">Playoff</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label mb-1 mt-2">Event</label>
+                        <select name="event_id" class="form-select">
+                            <option value="">All Events</option>
+                            {% for event in events %}
+                            <option value="{{ event.id }}" {% if request.args.get('event_id') and request.args.get('event_id')|int == event.id %}selected{% endif %}>{{ event.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12 mt-2">
+                        <button class="btn btn-primary w-100" type="submit">Apply Filters</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8 col-md-12 mb-3">
+        <div class="card">
+            <div class="card-body">
+                {% if matches %}
                 <div class="table-responsive">
-                    <table class="table table-hover table-striped">
+                    <table class="table table-hover align-middle">
                         <thead>
                             <tr>
-                                <th>Match #</th>
+                                <th style="width:110px">Match #</th>
                                 <th>Type</th>
                                 <th>Event</th>
-                                <th>Red Alliance</th>
-                                <th>Blue Alliance</th>
-                                <th>Score</th>
-                                <th>Actions</th>
+                                <th>Red</th>
+                                <th>Blue</th>
+                                <th style="width:160px">Score</th>
+                                <th style="width:220px">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for match in matches %}
                             <tr>
-                                <td>{{ match.match_number }}</td>
+                                <td class="fw-bold">{{ match.match_number }}</td>
                                 <td>
                                     <span class="badge {% if match.match_type == 'Qualification' %}bg-primary{% elif match.match_type == 'Playoff' %}bg-danger{% elif match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %}">
                                         {{ match.match_type }}
@@ -67,35 +115,34 @@
                                 <td>{{ match.event.name if match.event else 'N/A' }}</td>
                                 <td>
                                     {% for team_number in match.red_alliance.split(',') if team_number %}
-                                    <span class="badge bg-danger">{{ team_number }}</span>
+                                    <span class="badge bg-danger me-1">{{ team_number }}</span>
                                     {% endfor %}
                                 </td>
                                 <td>
                                     {% for team_number in match.blue_alliance.split(',') if team_number %}
-                                    <span class="badge bg-primary">{{ team_number }}</span>
+                                    <span class="badge bg-primary me-1">{{ team_number }}</span>
                                     {% endfor %}
                                 </td>
                                 <td>
                                     {% if match.red_score is not none and match.blue_score is not none %}
-                                    <span class="fw-bold text-danger">{{ match.red_score }}</span> - 
-                                    <span class="fw-bold text-primary">{{ match.blue_score }}</span>
+                                    <div><span class="fw-bold text-danger">{{ match.red_score }}</span> - <span class="fw-bold text-primary">{{ match.blue_score }}</span></div>
                                     {% else %}
-                                    Not scored
+                                    <span class="text-muted">Not scored</span>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <a href="{{ url_for('matches.view', match_id=match.id) }}" class="btn btn-sm btn-primary">
-                                        <i class="fas fa-search"></i> View
-                                    </a>
-                                    <a href="{{ url_for('matches.edit', match_id=match.id) }}" class="btn btn-sm btn-warning">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </a>
-                                    <button type="button" class="btn btn-sm btn-danger" 
-                                            data-bs-toggle="modal" data-bs-target="#deleteModal{{ match.id }}">
-                                        <i class="fas fa-trash"></i> Delete
-                                    </button>
-                                    
-                                    <!-- Delete Confirmation Modal -->
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ url_for('matches.view', match_id=match.id) }}" class="btn btn-sm btn-primary">
+                                            <i class="fas fa-search me-1"></i> View
+                                        </a>
+                                        <a href="{{ url_for('matches.edit', match_id=match.id) }}" class="btn btn-sm btn-secondary">
+                                            <i class="fas fa-edit me-1"></i> Edit
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ match.id }}">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </button>
+                                    </div>
+                                    <!-- Delete modal preserved -->
                                     <div class="modal fade" id="deleteModal{{ match.id }}" tabindex="-1" aria-hidden="true">
                                         <div class="modal-dialog">
                                             <div class="modal-content">
@@ -126,86 +173,6 @@
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle me-2"></i> No matches found. 
                     <a href="{{ url_for('matches.add') }}" class="alert-link">Add your first match</a>.
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row mb-4">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center bg-info text-white">
-                <h5 class="mb-0">Events</h5>
-            </div>
-            <div class="card-body">
-                {% if events %}
-                <div class="table-responsive">
-                    <table class="table table-hover table-striped">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Location</th>
-                                <th>Date</th>
-                                <th>Matches</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for event in events %}
-                            <tr>
-                                <td>{{ event.name }}</td>
-                                <td>{{ event.location }}</td>
-                                <td>{{ event.start_date.strftime('%m/%d/%Y') if event.start_date else 'TBD' }}</td>
-                                <td>{{ event.matches|length }}</td>
-                                <td>
-                                    <a href="{{ url_for('matches.index', event_id=event.id) }}" class="btn btn-sm btn-primary">
-                                        <i class="fas fa-eye"></i> View Matches
-                                    </a>
-                                    <button type="button" class="btn btn-sm btn-danger" 
-                                            data-bs-toggle="modal" data-bs-target="#deleteEventModal{{ event.id }}">
-                                        <i class="fas fa-trash"></i> Delete
-                                    </button>
-                                    
-                                    <!-- Delete Confirmation Modal -->
-                                    <div class="modal fade" id="deleteEventModal{{ event.id }}" tabindex="-1" aria-hidden="true">
-                                        <div class="modal-dialog">
-                                            <div class="modal-content">
-                                                <div class="modal-header bg-danger text-white">
-                                                    <h5 class="modal-title">Delete Event</h5>
-                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                </div>
-                                                <div class="modal-body">
-                                                    <p>Are you sure you want to delete the event <strong>{{ event.name }}</strong>?</p>
-                                                    <div class="alert alert-danger">
-                                                        <i class="fas fa-exclamation-triangle me-2"></i>
-                                                        <strong>Warning:</strong> This will permanently delete:
-                                                        <ul class="mb-0">
-                                                            <li>All {{ event.matches|length }} matches associated with this event</li>
-                                                            <li>All scouting data for these matches</li>
-                                                            <li>All team associations with this event</li>
-                                                        </ul>
-                                                    </div>
-                                                </div>
-                                                <div class="modal-footer">
-                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                                    <form action="{{ url_for('events.delete', event_id=event.id) }}" method="post">
-                                                        <button type="submit" class="btn btn-danger">Delete Event</button>
-                                                    </form>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i> No events found.
                 </div>
                 {% endif %}
             </div>

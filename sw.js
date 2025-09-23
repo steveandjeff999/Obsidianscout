@@ -22,14 +22,12 @@ const STATIC_ASSETS = [
   '/static/offline.html'
 ];
 
-// Install event: cache static assets
+// Install event: pre-cache site shell
 self.addEventListener('install', event => {
-  // Pre-cache site shell
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       return cache.addAll(STATIC_ASSETS.map(normalizeUrlForCache))
         .catch(err => {
-          // If some assets fail to cache, still allow SW to install but log for diagnosis
           console.warn('Some assets failed to cache during install:', err);
         });
     })
@@ -38,9 +36,8 @@ self.addEventListener('install', event => {
   self.skipWaiting();
 });
 
-// Activate event: cleanup old caches
+// Activate event: cleanup old caches and take control
 self.addEventListener('activate', event => {
-  // Clean up old caches
   event.waitUntil(
     caches.keys().then(keys => {
       return Promise.all(
@@ -51,7 +48,7 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Fetch event: simplified strategy without offline analytics
+// Fetch handler: caching strategies
 self.addEventListener('fetch', event => {
   const req = event.request;
   const url = new URL(req.url);
@@ -146,7 +143,6 @@ async function navigationHandler(req) {
 
 // Utility: normalize urls for cache storage - make sure root and index resolve
 function normalizeUrlForCache(path) {
-  // Ensure absolute path strings are returned as Request-like strings
   if (path === '/') return '/';
   return path;
 }
@@ -154,7 +150,5 @@ function normalizeUrlForCache(path) {
 // Utility: Determine if a URL points to a static asset we want cached
 function isStaticAsset(url) {
   const pathname = url.pathname;
-  // Common static file extensions
   return /\.(?:js|css|png|jpg|jpeg|svg|gif|webp|woff2?|ttf|eot|json|map)$/.test(pathname) || pathname.startsWith('/static/');
 }
-

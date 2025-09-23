@@ -1,5 +1,59 @@
 /* Theme Overrides for Bootstrap Components */
 
+/* Glass / semitransparent design variables and utility */
+:root {
+    /* default glass colors - can be overridden by theming system or dark-mode */
+    --glass-bg: rgba(255,255,255,0.72);
+    --glass-border: rgba(0,0,0,0.06);
+    --glass-backdrop: rgba(255,255,255,0.35);
+    --glass-blur: 8px;
+}
+
+.glass {
+    background: var(--glass-bg) !important;
+    border: 1px solid var(--glass-border) !important;
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border-radius: 10px;
+}
+
+/* Dark mode overrides for glass */
+.dark-mode :root,
+.dark-mode {
+    --glass-bg: rgba(18,18,18,0.55);
+    --glass-border: rgba(255,255,255,0.06);
+    --glass-backdrop: rgba(0,0,0,0.45);
+}
+
+/* Utility for softer glass (less opaque) */
+.glass-soft { --glass-bg: rgba(255,255,255,0.6); }
+
+/* Apply glass look to common surface components site-wide */
+.topbar, .card, .modal-content, .dropdown-menu, .sidebar, .user-mini {
+    /* Use glass but keep existing css specificity - this file overrides Bootstrap defaults */
+    background-clip: padding-box;
+}
+
+/* Prefer explicit .glass application so callers can opt-in; provide sensible default fallbacks */
+.topbar.glass { background: var(--glass-bg) !important; border-bottom: 1px solid var(--glass-border) !important; box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
+.card.glass, .dashboard-card.glass, .stat-card.glass { background: var(--glass-bg) !important; border-color: var(--glass-border) !important; }
+.modal-content.glass { background: var(--glass-bg) !important; border-color: var(--glass-border) !important; }
+.dropdown-menu.glass { background: var(--glass-bg) !important; border-color: var(--glass-border) !important; }
+.sidebar.glass { background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.5)) !important; border-right: 1px solid var(--glass-border) !important; box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+.user-mini.glass { background: rgba(255,255,255,0.06) !important; }
+
+/* Ensure contrast remains acceptable */
+.glass, .glass * { color: inherit; }
+
+/* Accessibility: reduce blur for users who prefer reduced motion/visual effects */
+@media (prefers-reduced-motion: reduce), (prefers-reduced-transparency: reduce) {
+    .glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+}
+
+/* Opt-out helper: apply this class on any container to preserve solid backgrounds */
+.no-glass { background: initial !important; border: none !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+
+
 /* Bootstrap Button Overrides */
 .btn-primary {
     background-color: var(--primary, var(--primary-color, #0d6efd)) !important;

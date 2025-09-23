@@ -6,7 +6,8 @@
 {% block subheading %}Comprehensive alliance strategy and matchup analysis{% endblock %}
 
 {% block head %}
-<script src="{{ url_for('static', filename='js/vendor/chart.min.js') }}"></script>
+<!-- Use UMD build for compatibility with non-module usage in templates -->
+<script src="{{ url_for('static', filename='js/vendor/chart.umd.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/vendor/chartjs-adapter-date-fns.bundle.min.js') }}"></script>
 {% endblock %}
 
