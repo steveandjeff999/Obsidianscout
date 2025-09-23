@@ -7,16 +7,21 @@
 (function() {
     'use strict';
     
-    // Mobile detection with multiple methods
+    // Mobile detection with multiple methods plus tall-portrait heuristics
     const isMobile = () => {
-        return window.innerWidth <= 768 || 
+        const base = window.innerWidth <= 768 || 
                /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
                ('ontouchstart' in window) ||
                (navigator.maxTouchPoints > 0) ||
                (navigator.msMaxTouchPoints > 0);
+
+        // Consider tall portrait screens (height > width and reasonably tall) as mobile-like too
+        const isPortraitTall = (window.innerHeight > window.innerWidth) && (window.innerHeight >= 900);
+
+        return base || isPortraitTall;
     };
-    
-    // Only apply mobile-specific fixes
+
+    // Only apply mobile/tall-portrait-specific fixes
     if (!isMobile()) return;
     
     console.log('Mobile Viewport Stabilizer: Initializing for mobile device');
@@ -207,12 +212,16 @@
         
         // Restore scroll position after orientation change settles
         window.addEventListener('resize', () => {
-            if (orientationScrollY > 0) {
+                    if (orientationScrollY > 0) {
                 setTimeout(() => {
-                    window.scrollTo({
-                        top: orientationScrollY,
-                        behavior: 'instant'
-                    });
+                    try {
+                        window.scrollTo({
+                            top: orientationScrollY,
+                            behavior: 'auto'
+                        });
+                    } catch(e) {
+                        try { window.scrollTo(0, orientationScrollY); } catch(_) {}
+                    }
                     orientationScrollY = 0;
                 }, 200);
             }
@@ -231,13 +240,12 @@
             const beforeScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
             const result = originalPushState.apply(history, arguments);
             
-            setTimeout(() => {
+                setTimeout(() => {
                 const afterScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
                 if (Math.abs(afterScrollY - beforeScrollY) > 10) {
-                    window.scrollTo({
-                        top: beforeScrollY,
-                        behavior: 'instant'
-                    });
+                    try {
+                        window.scrollTo({ top: beforeScrollY, behavior: 'auto' });
+                    } catch(e) { try { window.scrollTo(0, beforeScrollY); } catch(_) {} }
                 }
             }, 50);
             
@@ -248,13 +256,12 @@
             const beforeScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
             const result = originalReplaceState.apply(history, arguments);
             
-            setTimeout(() => {
+                setTimeout(() => {
                 const afterScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
                 if (Math.abs(afterScrollY - beforeScrollY) > 10) {
-                    window.scrollTo({
-                        top: beforeScrollY,
-                        behavior: 'instant'
-                    });
+                    try {
+                        window.scrollTo({ top: beforeScrollY, behavior: 'auto' });
+                    } catch(e) { try { window.scrollTo(0, beforeScrollY); } catch(_) {} }
                 }
             }, 50);
             
