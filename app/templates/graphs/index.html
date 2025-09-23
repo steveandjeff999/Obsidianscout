@@ -158,65 +158,86 @@
                             
                             <!-- Graph Type Selection -->
                             <div class="mb-3">
-                                <label for="graph_types" class="form-label fw-semibold">
+                                <label class="form-label fw-semibold">
                                     <i class="fas fa-chart-bar me-2 text-warning"></i>Select Graph Types
+                                    <span id="graph-type-selected-count" class="badge bg-warning text-dark ms-2">{{ selected_graph_types|length }} selected</span>
                                 </label>
-                                <select name="graph_types" id="graph_types" class="form-select" multiple>
-                                    <optgroup label="Basic Charts">
-                                        <option value="bar" {% if 'bar' in selected_graph_types %}selected{% endif %}>
-                                            📊 Bar Chart
-                                        </option>
-                                        <option value="line" {% if 'line' in selected_graph_types %}selected{% endif %}>
-                                            📈 Line Chart
-                                        </option>
-                                        <option value="scatter" {% if 'scatter' in selected_graph_types %}selected{% endif %}>
-                                            🔵 Scatter Plot
-                                        </option>
-                                        <option value="area" {% if 'area' in selected_graph_types %}selected{% endif %}>
-                                            📊 Area Chart
-                                        </option>
-                                    </optgroup>
-                                    <optgroup label="Distribution Charts">
-                                        <option value="box" {% if 'box' in selected_graph_types %}selected{% endif %}>
-                                            📦 Box Plot
-                                        </option>
-                                        <option value="violin" {% if 'violin' in selected_graph_types %}selected{% endif %}>
-                                            🎻 Violin Plot
-                                        </option>
-                                        <option value="histogram" {% if 'histogram' in selected_graph_types %}selected{% endif %}>
-                                            📊 Histogram
-                                        </option>
-                                    </optgroup>
-                                    <optgroup label="Advanced Charts">
-                                        <option value="radar" {% if 'radar' in selected_graph_types %}selected{% endif %}>
-                                            🕸️ Radar Chart
-                                        </option>
-                                        <option value="heatmap" {% if 'heatmap' in selected_graph_types %}selected{% endif %}>
-                                            🔥 Heatmap
-                                        </option>
-                                        <option value="bubble" {% if 'bubble' in selected_graph_types %}selected{% endif %}>
-                                            🫧 Bubble Chart
-                                        </option>
-                                        <option value="sunburst" {% if 'sunburst' in selected_graph_types %}selected{% endif %}>
-                                            ☀️ Sunburst Chart
-                                        </option>
-                                        <option value="treemap" {% if 'treemap' in selected_graph_types %}selected{% endif %}>
-                                            🌳 Treemap
-                                        </option>
-                                        <option value="waterfall" {% if 'waterfall' in selected_graph_types %}selected{% endif %}>
-                                            💧 Waterfall Chart
-                                        </option>
-                                        <option value="sankey" {% if 'sankey' in selected_graph_types %}selected{% endif %}>
-                                            🌊 Sankey Diagram
-                                        </option>
-                                    </optgroup>
-                                </select>
-                                <div class="form-text">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    Select multiple graph types to display. Some charts work better with specific metrics and data views.
+                                <div class="card p-2">
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <!-- Basic Charts -->
+                                        <div class="form-check">
+                                            <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="bar" id="graph_type_bar" {% if 'bar' in selected_graph_types %}checked{% endif %}>
+                                            <label class="form-check-label" for="graph_type_bar">📊 Bar Chart</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="line" id="graph_type_line" {% if 'line' in selected_graph_types %}checked{% endif %}>
+                                            <label class="form-check-label" for="graph_type_line">📈 Line Chart</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="scatter" id="graph_type_scatter" {% if 'scatter' in selected_graph_types %}checked{% endif %}>
+                                            <label class="form-check-label" for="graph_type_scatter">🔵 Scatter Plot</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="area" id="graph_type_area" {% if 'area' in selected_graph_types %}checked{% endif %}>
+                                            <label class="form-check-label" for="graph_type_area">📊 Area Chart</label>
+                                        </div>
+
+                                        <!-- Distribution Charts -->
+                                        <div class="form-check">
+                                            <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="box" id="graph_type_box" {% if 'box' in selected_graph_types %}checked{% endif %}>
+                                            <label class="form-check-label" for="graph_type_box">📦 Box Plot</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="violin" id="graph_type_violin" {% if 'violin' in selected_graph_types %}checked{% endif %}>
+                                            <label class="form-check-label" for="graph_type_violin">🎻 Violin Plot</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="histogram" id="graph_type_histogram" {% if 'histogram' in selected_graph_types %}checked{% endif %}>
+                                            <label class="form-check-label" for="graph_type_histogram">📊 Histogram</label>
+                                        </div>
+
+                                        <!-- Advanced Charts -->
+                                        <div class="form-check">
+                                            <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="radar" id="graph_type_radar" {% if 'radar' in selected_graph_types %}checked{% endif %}>
+                                            <label class="form-check-label" for="graph_type_radar">🕸️ Radar Chart</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="heatmap" id="graph_type_heatmap" {% if 'heatmap' in selected_graph_types %}checked{% endif %}>
+                                            <label class="form-check-label" for="graph_type_heatmap">🔥 Heatmap</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="bubble" id="graph_type_bubble" {% if 'bubble' in selected_graph_types %}checked{% endif %}>
+                                            <label class="form-check-label" for="graph_type_bubble">🫧 Bubble Chart</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="sunburst" id="graph_type_sunburst" {% if 'sunburst' in selected_graph_types %}checked{% endif %}>
+                                            <label class="form-check-label" for="graph_type_sunburst">☀️ Sunburst Chart</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="treemap" id="graph_type_treemap" {% if 'treemap' in selected_graph_types %}checked{% endif %}>
+                                            <label class="form-check-label" for="graph_type_treemap">🌳 Treemap</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="waterfall" id="graph_type_waterfall" {% if 'waterfall' in selected_graph_types %}checked{% endif %}>
+                                            <label class="form-check-label" for="graph_type_waterfall">💧 Waterfall Chart</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="sankey" id="graph_type_sankey" {% if 'sankey' in selected_graph_types %}checked{% endif %}>
+                                            <label class="form-check-label" for="graph_type_sankey">🌊 Sankey Diagram</label>
+                                        </div>
+                                    </div>
                                 </div>
-                                
-                                <!-- Quick selection buttons for graph types -->
+                                <div class="mt-2 d-flex gap-2">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="graph-types-select-all">Select All</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="graph-types-clear">Clear</button>
+                                </div>
+
+                                <div class="form-text mt-2">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Tap to toggle graph types. Leave all unchecked to use the default selection.
+                                </div>
+
+                                <!-- Quick selection buttons for graph types (keep existing IDs but handlers will use helper) -->
                                 <div class="mt-2">
                                     <div class="btn-group btn-group-sm" role="group">
                                         <button type="button" class="btn btn-outline-primary" id="select-basic-graphs">
@@ -537,8 +558,9 @@
             }
         }
         
-        // Initialize Select2 for graph types selection
+        // Initialize Select2 for graph types selection (only when the select element exists)
         function initializeGraphTypes() {
+            if (!$('#graph_types') || $('#graph_types').length === 0) return;
             const graphTypesConfig = {
                 placeholder: 'Select graph types...',
                 allowClear: true,
@@ -552,8 +574,8 @@
             } else {
                 $('#graph_types').select2($.extend({theme: 'bootstrap-5', width: '100%'}, graphTypesConfig));
             }
-        }
-        initializeGraphTypes();
+    }
+    initializeGraphTypes();
         
         // Initialize team select
         initializeTeamSelect();
@@ -716,22 +738,64 @@
             $('#teams').val(topTeamValues).trigger('change');
         });
         
-        // Graph Type Selection Button Handlers
-        $('#select-basic-graphs').click(function() {
-            $('#graph_types').val(['bar', 'line', 'scatter', 'area']).trigger('change');
+        // Graph Type helpers: support both checkbox-based UI and the original select2 fallback
+        function getSelectedGraphTypes() {
+            // Prefer checkbox UI if present
+            const checked = document.querySelectorAll('.graph-type-checkbox:checked');
+            if (checked && checked.length) {
+                return Array.from(checked).map(function(cb) { return cb.value; });
+            }
+            // Fallback to select element
+            if (typeof $ !== 'undefined' && $('#graph_types').length) {
+                return $('#graph_types').val() || [];
+            }
+            return [];
+        }
+
+        function setGraphTypes(types) {
+            // If checkboxes present, use them
+            const checkboxes = document.querySelectorAll('.graph-type-checkbox');
+            if (checkboxes && checkboxes.length) {
+                checkboxes.forEach(function(cb) {
+                    cb.checked = Array.isArray(types) && types.includes(cb.value);
+                });
+                updateGraphTypeCount();
+            }
+
+            // Also sync select2 if present
+            if (typeof $ !== 'undefined' && $('#graph_types').length) {
+                try {
+                    $('#graph_types').val(types && types.length ? types : null).trigger('change');
+                } catch (e) {
+                    // ignore
+                }
+            }
+        }
+
+        function updateGraphTypeCount() {
+            const count = getSelectedGraphTypes().length;
+            const el = document.getElementById('graph-type-selected-count');
+            if (el) el.textContent = `${count} selected`;
+        }
+
+        // Attach change listener to checkboxes so badge updates
+        $(document).on('change', '.graph-type-checkbox', function() { updateGraphTypeCount(); });
+
+        // Quick selection button handlers use the helper
+        $('#select-basic-graphs').click(function() { setGraphTypes(['bar','line','scatter','area']); });
+        $('#select-distribution-graphs').click(function() { setGraphTypes(['box','violin','histogram']); });
+        $('#select-advanced-graphs').click(function() { setGraphTypes(['radar','heatmap','bubble','sunburst','treemap']); });
+
+        // Clear buttons (both IDs used in UI)
+        $('#clear-graph-types, #graph-types-clear').click(function() { setGraphTypes([]); });
+
+        // Select all / Clear for the checkbox group
+        $('#graph-types-select-all').click(function() {
+            const all = Array.from(document.querySelectorAll('.graph-type-checkbox')).map(function(cb) { return cb.value; });
+            setGraphTypes(all);
         });
-        
-        $('#select-distribution-graphs').click(function() {
-            $('#graph_types').val(['box', 'violin', 'histogram']).trigger('change');
-        });
-        
-        $('#select-advanced-graphs').click(function() {
-            $('#graph_types').val(['radar', 'heatmap', 'bubble', 'sunburst', 'treemap']).trigger('change');
-        });
-        
-        $('#clear-graph-types').click(function() {
-            $('#graph_types').val(null).trigger('change');
-        });
+
+        $('#graph-types-clear').click(function() { setGraphTypes([]); });
         
 
         
@@ -815,15 +879,17 @@
             const dataView = $('#data_view').val() || 'averages';
             form.append($('<input>').attr({type: 'hidden', name: 'data_view', value: dataView}));
 
-            // Copy graph types - if none selected, include all available options
-            let graphTypes = $('#graph_types').val() || [];
+            // Copy graph types - prefer checkbox UI, fallback to select options
+            let graphTypes = getSelectedGraphTypes();
             if (!graphTypes || graphTypes.length === 0) {
-                // gather all option values
-                graphTypes = [];
-                $('#graph_types option').each(function() {
-                    const v = $(this).val();
-                    if (v) graphTypes.push(v);
-                });
+                // gather all available graph types from checkboxes or select options
+                const allCheckboxes = document.querySelectorAll('.graph-type-checkbox');
+                if (allCheckboxes && allCheckboxes.length) {
+                    graphTypes = Array.from(allCheckboxes).map(function(cb) { return cb.value; });
+                } else if (typeof $ !== 'undefined' && $('#graph_types').length) {
+                    graphTypes = [];
+                    $('#graph_types option').each(function() { const v = $(this).val(); if (v) graphTypes.push(v); });
+                }
             }
             graphTypes.forEach(function(gt) {
                 form.append($('<input>').attr({type: 'hidden', name: 'graph_types', value: gt}));

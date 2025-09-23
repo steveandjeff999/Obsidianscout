@@ -155,28 +155,28 @@ function initPageTransitions() {
     
     // Listen for link clicks and add page exit animation
     document.querySelectorAll('a:not([target="_blank"]):not([href^="#"]):not(.modal-trigger):not(.no-transition)').forEach(link => {
-        link.addEventListener('click', function(e) {
-            // Skip if modifier keys are pressed
-            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-            
-            const href = this.getAttribute('href');
-            
-            // Skip if it's an anchor or javascript link
-            if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
-            
-            // Skip API calls and downloads
-            if (href.includes('/api/') || this.getAttribute('download')) return;
-            
-            e.preventDefault();
-            
-            // Show loading indicator
-            document.body.classList.add('page-transition');
-            
-            // After a short delay, navigate to the new page
-            setTimeout(() => {
-                window.location.href = href;
-            }, 300);
-        });
+            link.addEventListener('click', function(e) {
+                // Skip if modifier keys are pressed
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                
+                const href = this.getAttribute('href');
+                
+                // Skip if it's an anchor or javascript link
+                if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+                
+                // Skip API calls and downloads
+                if (href.includes('/api/') || this.getAttribute('download')) return;
+                
+                e.preventDefault();
+                
+                // Show loading indicator
+                document.body.classList.add('page-transition');
+                
+                // After a short delay, navigate to the new page
+                setTimeout(() => {
+                    window.location.href = href;
+                }, 300);
+            });
     });
     
     // Add loading overlay functionality
@@ -1519,51 +1519,134 @@ function renderPlotlyGraphs() {
             function applyClientThemeAndPlot(dataObj, layoutObj) {
                 // Compute card background and text color to match UI
                 try {
-                    const cardEl = element.closest('.card') || element.parentElement;
-                    const computed = cardEl ? getComputedStyle(cardEl) : getComputedStyle(document.body);
-                    let bg = computed.backgroundColor;
-                    if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
-                        bg = getComputedStyle(document.body).backgroundColor || 'rgba(0,0,0,0)';
-                    }
-                    const textColor = computed.color || getComputedStyle(document.body).color || '#000';
-
-                    function rgbaWithAlpha(rgbString, alpha) {
-                        if (!rgbString) return `rgba(128,128,128,${alpha})`;
-                        const m = rgbString.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([0-9.]+))?\)/);
-                        if (m) return `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${alpha})`;
-                        const hex = rgbString.replace('#','');
-                        if (hex.length === 6) {
+                    // Helpers: parse rgb/rgba/hex to {r,g,b,a}
+                    function parseColor(s) {
+                        if (!s) return null;
+                        s = s.trim().toLowerCase();
+                        if (s === 'transparent') return null;
+                        const rgbMatch = s.match(/rgba?\(([^)]+)\)/);
+                        if (rgbMatch) {
+                            const parts = rgbMatch[1].split(',').map(p => p.trim());
+                            const r = parseInt(parts[0]);
+                            const g = parseInt(parts[1]);
+                            const b = parseInt(parts[2]);
+                            const a = parts[3] !== undefined ? parseFloat(parts[3]) : 1;
+                            // Treat fully transparent colors as no background so we fall back
+                            if (a === 0) return null;
+                            return {r,g,b,a};
+                        }
+                        const hexMatch = s.match(/^#([0-9a-f]{6})$/i);
+                        if (hexMatch) {
+                            const hex = hexMatch[1];
                             const r = parseInt(hex.substr(0,2),16);
                             const g = parseInt(hex.substr(2,2),16);
                             const b = parseInt(hex.substr(4,2),16);
-                            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                            return {r,g,b,a:1};
                         }
-                        return `rgba(128,128,128,${alpha})`;
+                        return null;
                     }
+
+                    function rgbaString(col, alpha) {
+                        if (!col) return `rgba(128,128,128,${alpha})`;
+                        return `rgba(${col.r}, ${col.g}, ${col.b}, ${alpha})`;
+                    }
+
+                    function luminance(col) {
+                        if (!col) return 0;
+                        const srgb = [col.r, col.g, col.b].map(v => v/255).map(c => {
+                            return c <= 0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4);
+                        });
+                        return 0.2126*srgb[0] + 0.7152*srgb[1] + 0.0722*srgb[2];
+                    }
+
+                    // Walk up ancestors to find first non-transparent background
+                    function findEffectiveBackground(el) {
+                        let cur = el;
+                        while (cur) {
+                            try {
+                                const cs = getComputedStyle(cur);
+                                const bg = cs.backgroundColor;
+                                if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return {css: bg, parsed: parseColor(bg)};
+                            } catch (e) {
+                                // ignore and continue
+                            }
+                            cur = cur.parentElement;
+                        }
+                        const bodyBg = getComputedStyle(document.body).backgroundColor;
+                        return {css: bodyBg, parsed: parseColor(bodyBg)};
+                    }
+
+                    const cardFind = element.closest('.card') || element.parentElement || document.body;
+                    const cardBgInfo = findEffectiveBackground(cardFind);
+                    const bodyBgInfo = findEffectiveBackground(document.body);
+
+                    // Decide intended theme: prefer an explicit body class if present
+                    const intendedDark = document.body.classList.contains('dark-mode') || document.body.classList.contains('theme-dark');
+
+                    // If card background luminance doesn't match intended theme, prefer body background
+                    const cardLum = cardBgInfo.parsed ? luminance(cardBgInfo.parsed) : null;
+                    const bodyLum = bodyBgInfo.parsed ? luminance(bodyBgInfo.parsed) : null;
+
+                    let bgParsed = cardBgInfo.parsed || bodyBgInfo.parsed;
+                    let bgCss = cardBgInfo.css || bodyBgInfo.css;
+
+                    if (cardLum !== null && bodyLum !== null) {
+                        const cardIsDark = cardLum < 0.5;
+                        const bodyIsDark = bodyLum < 0.5;
+                        // If card color contradicts the intended theme, choose body background instead
+                        if (cardIsDark !== intendedDark && bodyIsDark === intendedDark) {
+                            bgParsed = bodyBgInfo.parsed;
+                            bgCss = bodyBgInfo.css;
+                        }
+                    }
+
+                    const textColor = (cardFind && getComputedStyle(cardFind).color) || getComputedStyle(document.body).color || '#000';
+
+                    // Invert the chosen background color per user's request
+                    function invertParsedColor(p) {
+                        if (!p) return null;
+                        try {
+                            const lum = luminance(p);
+                            // Preserve pure white and pure black to avoid off-white/brown artifacts
+                            if (lum >= 0.95) return {r:255,g:255,b:255,a: p.a !== undefined ? p.a : 1};
+                            if (lum <= 0.05) return {r:0,g:0,b:0,a: p.a !== undefined ? p.a : 1};
+                        } catch (e) {
+                            // fall back
+                        }
+                        return { r: 255 - p.r, g: 255 - p.g, b: 255 - p.b, a: p.a };
+                    }
+                    function parsedToCss(p) {
+                        if (!p) return 'rgba(255,255,255,1)';
+                        return `rgba(${p.r}, ${p.g}, ${p.b}, ${p.a !== undefined ? p.a : 1})`;
+                    }
+
+                    const chosenParsed = bgParsed || bodyBgInfo.parsed || parseColor(bgCss);
+                    // Use the chosen background color directly (do not invert) so charts match the surrounding UI
+                    const chosenCss = parsedToCss(chosenParsed) || (bodyBgInfo.css === 'transparent' ? 'rgba(255,255,255,1)' : bodyBgInfo.css);
 
                     layoutObj = layoutObj || {};
                     layoutObj.template = null; // prevent plotly_dark from winning
-                    layoutObj.plot_bgcolor = bg;
-                    layoutObj.paper_bgcolor = bg;
+                    layoutObj.plot_bgcolor = chosenCss;
+                    layoutObj.paper_bgcolor = chosenCss;
                     layoutObj.font = layoutObj.font || {};
                     layoutObj.font.color = textColor;
 
-                    const subtleGrid = rgbaWithAlpha(textColor, 0.12);
-                    const faintLine = rgbaWithAlpha(textColor, 0.06);
+                    const subtleGrid = rgbaString(parseColor(textColor) || {r:128,g:128,b:128}, 0.12);
+                    const faintLine = rgbaString(parseColor(textColor) || {r:128,g:128,b:128}, 0.06);
                     layoutObj.xaxis = layoutObj.xaxis || {};
                     layoutObj.yaxis = layoutObj.yaxis || {};
-                    layoutObj.xaxis.gridcolor = subtleGrid;
-                    layoutObj.yaxis.gridcolor = subtleGrid;
-                    layoutObj.xaxis.zerolinecolor = faintLine;
-                    layoutObj.yaxis.zerolinecolor = faintLine;
+                    layoutObj.xaxis.gridcolor = layoutObj.xaxis.gridcolor || subtleGrid;
+                    layoutObj.yaxis.gridcolor = layoutObj.yaxis.gridcolor || subtleGrid;
+                    layoutObj.xaxis.zerolinecolor = layoutObj.xaxis.zerolinecolor || faintLine;
+                    layoutObj.yaxis.zerolinecolor = layoutObj.yaxis.zerolinecolor || faintLine;
                     layoutObj.xaxis.tickfont = layoutObj.xaxis.tickfont || {};
                     layoutObj.yaxis.tickfont = layoutObj.yaxis.tickfont || {};
-                    layoutObj.xaxis.tickfont.color = textColor;
-                    layoutObj.yaxis.tickfont.color = textColor;
+                    layoutObj.xaxis.tickfont.color = layoutObj.xaxis.tickfont.color || textColor;
+                    layoutObj.yaxis.tickfont.color = layoutObj.yaxis.tickfont.color || textColor;
 
                     if (layoutObj.legend) {
                         layoutObj.legend.font = layoutObj.legend.font || {};
-                        layoutObj.legend.font.color = textColor;
+                        layoutObj.legend.font.color = layoutObj.legend.font.color || textColor;
                     }
                     if (layoutObj.annotations) {
                         layoutObj.annotations.forEach(function(a){ if (!a.font) a.font = {}; a.font.color = a.font.color || textColor; });
@@ -1573,9 +1656,9 @@ function renderPlotlyGraphs() {
                         layoutObj.polar.radialaxis = layoutObj.polar.radialaxis || {};
                         layoutObj.polar.angularaxis.tickfont = layoutObj.polar.angularaxis.tickfont || {};
                         layoutObj.polar.radialaxis.tickfont = layoutObj.polar.radialaxis.tickfont || {};
-                        layoutObj.polar.angularaxis.tickfont.color = textColor;
-                        layoutObj.polar.radialaxis.tickfont.color = textColor;
-                        layoutObj.polar.radialaxis.gridcolor = rgbaWithAlpha(textColor, 0.12);
+                        layoutObj.polar.angularaxis.tickfont.color = layoutObj.polar.angularaxis.tickfont.color || textColor;
+                        layoutObj.polar.radialaxis.tickfont.color = layoutObj.polar.radialaxis.tickfont.color || textColor;
+                        layoutObj.polar.radialaxis.gridcolor = layoutObj.polar.radialaxis.gridcolor || rgbaString(parseColor(textColor) || {r:128,g:128,b:128}, 0.12);
                     }
 
                     // Plot then relayout to be sure templates are overridden
@@ -1585,17 +1668,17 @@ function renderPlotlyGraphs() {
                                 'template': null,
                                 'plot_bgcolor': layoutObj.plot_bgcolor,
                                 'paper_bgcolor': layoutObj.paper_bgcolor,
-                                'font.color': layoutObj.font && layoutObj.font.color || textColor,
+                                'font.color': (layoutObj.font && layoutObj.font.color) || textColor,
                                 'legend.font.color': (layoutObj.legend && layoutObj.legend.font && layoutObj.legend.font.color) || textColor,
                                 'xaxis.tickfont.color': (layoutObj.xaxis && layoutObj.xaxis.tickfont && layoutObj.xaxis.tickfont.color) || textColor,
                                 'yaxis.tickfont.color': (layoutObj.yaxis && layoutObj.yaxis.tickfont && layoutObj.yaxis.tickfont.color) || textColor,
-                                'xaxis.gridcolor': (layoutObj.xaxis && layoutObj.xaxis.gridcolor) || rgbaWithAlpha(textColor, 0.12),
-                                'yaxis.gridcolor': (layoutObj.yaxis && layoutObj.yaxis.gridcolor) || rgbaWithAlpha(textColor, 0.12),
-                                'xaxis.zerolinecolor': (layoutObj.xaxis && layoutObj.xaxis.zerolinecolor) || rgbaWithAlpha(textColor, 0.06),
-                                'yaxis.zerolinecolor': (layoutObj.yaxis && layoutObj.yaxis.zerolinecolor) || rgbaWithAlpha(textColor, 0.06)
+                                'xaxis.gridcolor': (layoutObj.xaxis && layoutObj.xaxis.gridcolor) || subtleGrid,
+                                'yaxis.gridcolor': (layoutObj.yaxis && layoutObj.yaxis.gridcolor) || subtleGrid,
+                                'xaxis.zerolinecolor': (layoutObj.xaxis && layoutObj.xaxis.zerolinecolor) || faintLine,
+                                'yaxis.zerolinecolor': (layoutObj.yaxis && layoutObj.yaxis.zerolinecolor) || faintLine
                             };
                             if (layoutObj.polar) {
-                                relayout['polar.radialaxis.gridcolor'] = layoutObj.polar.radialaxis.gridcolor || rgbaWithAlpha(textColor, 0.12);
+                                relayout['polar.radialaxis.gridcolor'] = layoutObj.polar.radialaxis.gridcolor || rgbaString(parseColor(textColor) || {r:128,g:128,b:128}, 0.12);
                                 relayout['polar.angularaxis.tickfont.color'] = layoutObj.polar.angularaxis.tickfont.color || textColor;
                                 relayout['polar.radialaxis.tickfont.color'] = layoutObj.polar.radialaxis.tickfont.color || textColor;
                             }
@@ -1655,6 +1738,132 @@ function renderPlotlyGraphs() {
         }
     });
 }
+
+/**
+ * Re-apply client theme values to all already-rendered Plotly charts.
+ * This is called when the page theme (body classes) changes so charts
+ * update their background, grid and text colors to match the surrounding UI.
+ */
+window.rethemePlotlyCharts = function() {
+    if (typeof Plotly === 'undefined') return;
+    // Reuse parsing and luminance helpers similar to applyClientThemeAndPlot
+    function parseColor(s) {
+        if (!s) return null;
+        s = s.trim().toLowerCase();
+        if (s === 'transparent') return null;
+        const rgbMatch = s.match(/rgba?\(([^)]+)\)/);
+        if (rgbMatch) {
+            const parts = rgbMatch[1].split(',').map(p => p.trim());
+            const r = parseInt(parts[0]);
+            const g = parseInt(parts[1]);
+            const b = parseInt(parts[2]);
+            const a = parts[3] !== undefined ? parseFloat(parts[3]) : 1;
+            if (a === 0) return null;
+            return {r,g,b,a};
+        }
+        const hexMatch = s.match(/^#([0-9a-f]{6})$/i);
+        if (hexMatch) {
+            const hex = hexMatch[1];
+            const r = parseInt(hex.substr(0,2),16);
+            const g = parseInt(hex.substr(2,2),16);
+            const b = parseInt(hex.substr(4,2),16);
+            return {r,g,b,a:1};
+        }
+        return null;
+    }
+
+    function rgbaString(col, alpha) {
+        if (!col) return `rgba(128,128,128,${alpha})`;
+        return `rgba(${col.r}, ${col.g}, ${col.b}, ${alpha})`;
+    }
+
+    function luminance(col) {
+        if (!col) return 0;
+        const srgb = [col.r, col.g, col.b].map(v => v/255).map(c => {
+            return c <= 0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4);
+        });
+        return 0.2126*srgb[0] + 0.7152*srgb[1] + 0.0722*srgb[2];
+    }
+
+    function findEffectiveBackground(el) {
+        let cur = el;
+        while (cur) {
+            try {
+                const cs = getComputedStyle(cur);
+                const bg = cs.backgroundColor;
+                if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return {css: bg, parsed: parseColor(bg)};
+            } catch (e) {}
+            cur = cur.parentElement;
+        }
+        const bodyBg = getComputedStyle(document.body).backgroundColor;
+        return {css: bodyBg, parsed: parseColor(bodyBg)};
+    }
+
+    document.querySelectorAll('.plotly-graph').forEach(element => {
+        try {
+            if (!element.id || !element._fullLayout) return;
+
+            const cardEl = element.closest('.card') || element.parentElement || document.body;
+            const cardBgInfo = findEffectiveBackground(cardEl);
+            const bodyBgInfo = findEffectiveBackground(document.body);
+            const intendedDark = document.body.classList.contains('dark-mode') || document.body.classList.contains('theme-dark');
+
+            const cardLum = cardBgInfo.parsed ? luminance(cardBgInfo.parsed) : null;
+            const bodyLum = bodyBgInfo.parsed ? luminance(bodyBgInfo.parsed) : null;
+
+            let bgParsed = cardBgInfo.parsed || bodyBgInfo.parsed;
+            let bgCss = cardBgInfo.css || bodyBgInfo.css;
+            function invertParsedColor(p) {
+                if (!p) return null;
+                try {
+                    const lum = luminance(p);
+                    if (lum >= 0.95) return {r:255,g:255,b:255,a: p.a !== undefined ? p.a : 1};
+                    if (lum <= 0.05) return {r:0,g:0,b:0,a: p.a !== undefined ? p.a : 1};
+                } catch (e) {}
+                return { r: 255 - p.r, g: 255 - p.g, b: 255 - p.b, a: p.a };
+            }
+            function parsedToCss(p) { if (!p) return 'rgba(255,255,255,1)'; return `rgba(${p.r}, ${p.g}, ${p.b}, ${p.a !== undefined ? p.a : 1})`; }
+            const chosenParsed = bgParsed || bodyBgInfo.parsed || parseColor(bgCss);
+            // Use the chosen background directly to match card/body theme (don't invert)
+            const chosenCss = parsedToCss(chosenParsed) || (bodyBgInfo.css === 'transparent' ? 'rgba(255,255,255,1)' : bodyBgInfo.css);
+            bgParsed = chosenParsed; bgCss = chosenCss;
+            if (cardLum !== null && bodyLum !== null) {
+                const cardIsDark = cardLum < 0.5;
+                const bodyIsDark = bodyLum < 0.5;
+                if (cardIsDark !== intendedDark && bodyIsDark === intendedDark) {
+                    bgParsed = bodyBgInfo.parsed;
+                    bgCss = bodyBgInfo.css;
+                }
+            }
+
+            const textColor = (cardEl && getComputedStyle(cardEl).color) || getComputedStyle(document.body).color || '#000';
+
+            const relayout = {
+                'template': null,
+                'plot_bgcolor': bgCss,
+                'paper_bgcolor': bgCss,
+                'font.color': textColor,
+                'legend.font.color': textColor,
+                'xaxis.gridcolor': rgbaString(parseColor(textColor) || {r:128,g:128,b:128}, 0.12),
+                'yaxis.gridcolor': rgbaString(parseColor(textColor) || {r:128,g:128,b:128}, 0.12),
+                'xaxis.zerolinecolor': rgbaString(parseColor(textColor) || {r:128,g:128,b:128}, 0.06),
+                'yaxis.zerolinecolor': rgbaString(parseColor(textColor) || {r:128,g:128,b:128}, 0.06),
+                'xaxis.tickfont.color': textColor,
+                'yaxis.tickfont.color': textColor
+            };
+
+            if (element._fullLayout && element._fullLayout.polar) {
+                relayout['polar.radialaxis.gridcolor'] = rgbaString(parseColor(textColor) || {r:128,g:128,b:128}, 0.12);
+                relayout['polar.angularaxis.tickfont.color'] = textColor;
+                relayout['polar.radialaxis.tickfont.color'] = textColor;
+            }
+
+            Plotly.relayout(element.id, relayout).catch(()=>{});
+        } catch (e) {
+            console.warn('Failed to retheme Plotly element', element.id, e);
+        }
+    });
+};
 
 /**
  * Setup import and export functionality

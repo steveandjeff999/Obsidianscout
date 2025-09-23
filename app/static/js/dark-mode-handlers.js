@@ -61,6 +61,8 @@ function initDarkModeHandlers() {
     
     // Initial application of dark mode styles
     updateSelect2DarkMode();
+    // Retheme any already-rendered Plotly charts to match initial theme
+    try { if (window.rethemePlotlyCharts) window.rethemePlotlyCharts(); } catch(e) { console.warn('Initial Plotly retheme failed', e); }
 }
 
 // Initialize when document is ready
@@ -68,3 +70,13 @@ $(document).ready(function() {
     // Initialize dark mode handlers
     initDarkModeHandlers();
 });
+
+// Also ensure we retheme charts whenever the body's class attribute changes
+const __plotlyRethemeObserver = new MutationObserver(function(muts){
+    muts.forEach(m => {
+        if (m.type === 'attributes' && m.attributeName === 'class' && m.target === document.body) {
+            try { if (window.rethemePlotlyCharts) window.rethemePlotlyCharts(); } catch(e) { console.warn('Plotly retheme on class change failed', e); }
+        }
+    });
+});
+__plotlyRethemeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
