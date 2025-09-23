@@ -13,7 +13,7 @@ body.with-sidebar {
 	min-height: 100vh;
 }
 
-.topbar { background: var(--bs-body-bg); border-bottom: 1px solid var(--sidebar-border); position: sticky; top: 0; z-index: 1070; transition: margin-left .25s ease, width .25s ease; }
+.topbar { background: var(--bs-body-bg); border-bottom: 1px solid var(--sidebar-border); position: sticky; top: 0; z-index: 1030; transition: margin-left .25s ease, width .25s ease; }
 .topbar .dropdown { position: relative; }
 .topbar .dropdown-menu { margin-top: 6px; }
 .topbar .top-search { max-width: 420px; flex: 1 1 auto; }
@@ -144,8 +144,14 @@ body.topbar-fixed main { padding-top: 0.75rem; }
 .sidebar::-webkit-scrollbar-thumb { background: rgba(0,0,0,.15); border-radius: 4px; }
 .dark-mode .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.25); }
 
-/* Dark mode adjustments */
 .dark-mode .sidebar { background: var(--card-bg); border-right-color: rgba(255,255,255,0.08); color: var(--bs-body-color); }
+.dark-mode .sidebar.glass {
+	/* Use the glass semi-transparent background in dark mode when the sidebar opts-in to .glass */
+	background: var(--glass-bg) !important;
+	border-right: 1px solid var(--glass-border) !important;
+	/* slightly stronger shadow to match topbar's depth in dark mode */
+	box-shadow: 0 8px 24px rgba(0,0,0,0.45) !important;
+}
 .dark-mode .nav-group-title { color: rgba(255,255,255,.6); }
 .dark-mode .sidebar .nav-link { color: rgba(255,255,255,.92); }
 .dark-mode .sidebar .nav-link:hover { background: rgba(255,255,255,.06); }
