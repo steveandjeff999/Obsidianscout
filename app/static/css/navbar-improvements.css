@@ -151,19 +151,48 @@
     }
 }
 
-/* Dropdown improvements */
-.dropdown-menu {
-    border-radius: 8px;
-    border: none;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+/* Dropdown improvements: glass surface, spacing and interaction polish */
+.dropdown-menu,
+.dropdown-menu.navbar-glass,
+.topbar .dropdown-menu {
+    border-radius: 10px;
+    /* Use topbar surface variables (glass) for a consistent look */
+    background: var(--topbar-surface-light, linear-gradient(180deg, rgba(255,255,255,0.62), rgba(255,255,255,0.34)));
+    -webkit-backdrop-filter: blur(var(--topbar-blur, 10px));
+    backdrop-filter: blur(var(--topbar-blur, 10px));
+    border: 1px solid var(--topbar-border-light, rgba(2,6,23,0.06));
+    box-shadow: 0 10px 30px rgba(2,6,23,0.08);
     margin-top: 8px;
-    min-width: auto; /* Allow dropdowns to size based on content */
-    max-width: max-content; /* Limit to content width */
-    width: max-content !important; /* Size to content */
-    white-space: nowrap;
-    z-index: 1055 !important; /* Ensure dropdowns appear above navbar */
-    position: fixed !important; /* Use fixed positioning to escape all containers */
-    padding: 8px 0; /* Add some padding for better appearance */
+    min-width: 160px; /* sensible minimum for usability */
+    max-width: calc(100vw - 32px);
+    width: auto !important;
+    white-space: normal; /* allow wrapping for long labels */
+    z-index: 1055 !important; /* Ensure dropdowns appear above most UI */
+    position: fixed !important; /* fixed to escape containers and support JS positioning */
+    padding: 6px 0; /* Add some vertical padding for items */
+}
+
+/* Dark mode variant for dropdowns */
+body.dark-mode .dropdown-menu,
+body.dark-mode .dropdown-menu.navbar-glass,
+body.dark-mode .topbar .dropdown-menu {
+    background: var(--topbar-surface-dark, linear-gradient(180deg, rgba(12,16,20,0.60), rgba(12,16,20,0.42)));
+    -webkit-backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px));
+    backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px));
+    border: 1px solid var(--topbar-border-dark, rgba(255,255,255,0.06));
+    box-shadow: 0 8px 22px rgba(0,0,0,0.45);
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))) {
+    .dropdown-menu, .dropdown-menu.navbar-glass, .topbar .dropdown-menu {
+        background: rgba(255,255,255,0.96) !important;
+        border: 1px solid rgba(0,0,0,0.06) !important;
+    }
+    body.dark-mode .dropdown-menu, body.dark-mode .dropdown-menu.navbar-glass, body.dark-mode .topbar .dropdown-menu {
+        background: rgba(15,17,20,0.94) !important;
+        border: 1px solid rgba(255,255,255,0.04) !important;
+    }
 }
 
 /* Fix dropdown positioning to escape navbar container overflow */
@@ -186,8 +215,8 @@
 
 .dropdown-item {
     border-radius: 6px;
-    margin: 2px 8px;
-    padding: 10px 14px;
+    margin: 4px 10px;
+    padding: 10px 16px;
     transition: all 0.2s ease;
     font-size: 1rem;
     white-space: nowrap;
@@ -220,9 +249,10 @@
     white-space: nowrap;
 }
 
-.dropdown-item:hover {
-    background-color: rgba(var(--bs-primary-rgb), 0.1);
+.dropdown-item:hover, .dropdown-item:focus {
+    background-color: rgba(var(--bs-primary-rgb), 0.08);
     transform: translateX(4px);
+    outline: none;
 }
 
 .dropdown-item.active {
@@ -553,17 +583,17 @@
 }
 
 .dropdown-menu::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 4px;
+    background: rgba(2,6,23,0.02);
+    border-radius: 6px;
 }
 
 .dropdown-menu::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 4px;
+    background: rgba(2,6,23,0.12);
+    border-radius: 6px;
 }
 
 .dropdown-menu::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(2,6,23,0.18);
 }
 
 /* Dark mode scrollbar styling */
@@ -578,3 +608,284 @@
 .dark-mode .dropdown-menu::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.3);
 }
+
+/* Add a subtle divider style for grouped menu items */
+.dropdown-divider {
+    height: 1px;
+    margin: 6px 8px;
+    background: linear-gradient(90deg, rgba(0,0,0,0.04), rgba(0,0,0,0));
+}
+
+body.dark-mode .dropdown-divider {
+    background: linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0));
+}
+
+/* ------------------------------------------------------------------ */
+/* Glass / semi-transparent card variant to match navbar styling       */
+/* Use by adding the `navbar-glass` class to cards (e.g.              */
+/* `<div class="card mb-4 navbar-glass">` )                         */
+/* ------------------------------------------------------------------ */
+.card.navbar-glass,
+.card.mb-4.navbar-glass {
+    /* Reuse topbar surface variables for consistent look */
+    background: var(--topbar-surface-light, linear-gradient(180deg, rgba(255,255,255,0.62), rgba(255,255,255,0.34)));
+    -webkit-backdrop-filter: blur(var(--topbar-blur, 10px));
+    backdrop-filter: blur(var(--topbar-blur, 10px));
+    border: 1px solid var(--topbar-border-light, rgba(2,6,23,0.06));
+    box-shadow: 0 8px 20px rgba(2,6,23,0.06);
+    color: inherit; /* keep text color as set by context */
+}
+
+/* Make headers inside the glass card slightly more distinct while keeping transparency */
+.card.navbar-glass .card-header {
+    background-clip: padding-box; /* keep header background contained */
+    /* If header uses a utility color like bg-primary, leave it — otherwise slightly translucent */
+}
+
+/* Dark-mode variant */
+body.dark-mode .card.navbar-glass,
+body.dark-mode .card.mb-4.navbar-glass {
+    background: var(--topbar-surface-dark, linear-gradient(180deg, rgba(12,16,20,0.60), rgba(12,16,20,0.42)));
+    -webkit-backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px));
+    backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px));
+    border: 1px solid var(--topbar-border-dark, rgba(255,255,255,0.06));
+    box-shadow: 0 8px 22px rgba(0,0,0,0.45);
+    color: #ffffff;
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))) {
+    .card.navbar-glass,
+    .card.mb-4.navbar-glass {
+        background: rgba(255,255,255,0.92) !important;
+        border: 1px solid rgba(0,0,0,0.06) !important;
+    }
+
+    body.dark-mode .card.navbar-glass,
+    body.dark-mode .card.mb-4.navbar-glass {
+        background: rgba(15,17,20,0.88) !important;
+        border: 1px solid rgba(255,255,255,0.04) !important;
+    }
+}
+
+/* Make card internals blend with glass background */
+.card.navbar-glass .card-body,
+.card.mb-4.navbar-glass .card-body {
+    background: transparent;
+}
+
+/* Make card header translucent when using navbar-glass but keep utility color contrast */
+.card.navbar-glass .card-header,
+.card.mb-4.navbar-glass .card-header {
+    background-color: rgba(0,0,0,0.12); /* subtle translucent header by default */
+    backdrop-filter: none; /* keep header crisp */
+}
+
+/* If header uses a bootstrap contextual color (bg-primary/etc), make a translucent variant */
+.card.navbar-glass .card-header.bg-primary {
+    background-color: rgba(var(--bs-primary-rgb), 0.14) !important;
+    color: var(--bs-primary-contrast, #fff) !important;
+}
+
+/* Inputs/selects inside the glass card should be slightly translucent and inherit the card's look */
+.card.navbar-glass .form-control,
+.card.navbar-glass .form-select,
+.card.navbar-glass .input-group-text,
+.card.navbar-glass .custom-select-toggle,
+.card.navbar-glass .custom-select-menu {
+    background-color: rgba(255,255,255,0.03);
+    border-color: rgba(255,255,255,0.06);
+    color: inherit;
+}
+
+/* Dark-mode tuning for form controls inside glass card */
+body.dark-mode .card.navbar-glass .form-control,
+body.dark-mode .card.navbar-glass .form-select,
+body.dark-mode .card.navbar-glass .input-group-text,
+body.dark-mode .card.navbar-glass .custom-select-toggle,
+body.dark-mode .card.navbar-glass .custom-select-menu {
+    background-color: rgba(255,255,255,0.03);
+    border-color: rgba(255,255,255,0.06);
+    color: #fff;
+}
+
+/* Ensure dropdown/menu items inside custom select are readable */
+.card.navbar-glass .custom-select-menu .custom-select-item {
+    background: transparent;
+    color: inherit;
+}
+
+/* Focus and hover states: slightly stronger contrast for accessibility */
+.card.navbar-glass .form-control:focus,
+.card.navbar-glass .form-select:focus,
+.card.navbar-glass .custom-select-toggle:focus {
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.12);
+    border-color: rgba(var(--bs-primary-rgb), 0.5);
+}
+
+/* Tweak padding for the custom select toggle to match native select look */
+.card.navbar-glass .custom-select-toggle {
+    padding-left: .9rem;
+    padding-right: .9rem;
+}
+
+/* QR Code modal styling */
+.qr-container {
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+    padding: 1.5rem;
+    border-radius: .75rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(8px) saturate(120%);
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
+    border: 1px solid rgba(255,255,255,0.06);
+    max-width: 440px;
+    margin: 0 auto;
+}
+
+.qr-container #qrcode {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+    padding: .75rem;
+    box-sizing: border-box;
+}
+
+.qr-container #qrcode canvas {
+    /* If the QR generator emits a canvas and an img, prefer the image for styling/printing.
+       Hide the canvas so only the single backed image is visible. JS download will still be able
+       to use the canvas if needed (we're only hiding it visually). */
+    display: none !important;
+}
+
+.qr-container #qrcode::before {
+    /* White backing plate for the QR image so it reads well in dark mode. It sits behind the
+       generated <img> and the canvas (canvas is hidden). Adjusted to provide a small inset to
+       create a rounded white surround and allow a subtle cutout look. */
+    content: "";
+    position: absolute;
+    top: .5rem;
+    left: .5rem;
+    right: .5rem;
+    bottom: .5rem;
+    background: #ffffff;
+    border-radius: .5rem;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35) inset;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.qr-container #qrcode img {
+    position: relative;
+    z-index: 2;
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: .375rem;
+    /* Add a small inner white padding effect so the QR has breathing room from the backing plate */
+    padding: .375rem;
+    box-sizing: border-box;
+    background: transparent;
+}
+
+#qrDownloadContainer .btn {
+    margin-top: .75rem;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+}
+
+/* Dark mode specific tweaks - stronger glass and adjusted borders */
+@media (prefers-color-scheme: dark) {
+    .qr-container {
+        background: linear-gradient(180deg, rgba(20,20,20,0.72), rgba(18,18,18,0.62));
+        border: 1px solid rgba(255,255,255,0.06);
+        box-shadow: 0 12px 40px rgba(0,0,0,0.7);
+    }
+
+    .qr-container #qrcode::before {
+        background: #ffffff;
+        box-shadow: 0 8px 26px rgba(0,0,0,0.6) inset;
+    }
+
+    #qrDownloadContainer .btn {
+        background-color: #2b70ff; /* slightly deeper blue in dark */
+        border-color: rgba(255,255,255,0.06);
+        color: #fff;
+    }
+}
+
+/* Subtle entrance animation for modal QR content */
+.qr-container {
+    transform-origin: center center;
+    animation: qr-pop 260ms cubic-bezier(.2,.9,.2,1) both;
+}
+@keyframes qr-pop {
+    from { transform: scale(.96) translateY(6px); opacity: 0; }
+    to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* Print rules: ensure QR prints on white paper and hides UI chrome */
+@media print {
+    .modal { box-shadow: none !important; }
+    .modal-backdrop { display: none !important; }
+    .qr-container {
+        background: #ffffff !important;
+        border: none !important;
+        box-shadow: none !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    #qrDownloadContainer { display: none !important; }
+}
+
+/* Force dark-mode QR container override to beat legacy rules in styles.css which set
+   the QR container white under a `.dark-mode` class. Use high-specificity and
+   `!important` so dark-mode stays dark. Keep the white inner backing (the ::before)
+   for contrast of the QR itself. */
+.dark-mode .qr-container,
+body.dark-mode .qr-container {
+    background: linear-gradient(180deg, rgba(20,20,20,0.72) , rgba(18,18,18,0.62)) !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.7) !important;
+    color: #fff !important;
+}
+
+/* Ensure inner #qrcode stays contained and backed by white plate; this prevents the
+   outer container from showing white edges in dark-mode. */
+.dark-mode .qr-container #qrcode::before,
+body.dark-mode .qr-container #qrcode::before {
+    background: #ffffff; /* keep plate white */
+}
+
+/* Make only the QR modal transparent so the qr-container supplies the visible
+   rounded dark panel. This removes white backgrounds from Bootstrap or legacy
+   CSS that otherwise show around the card. */
+#qrModal .modal-content,
+#qrModal .modal-dialog {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+#qrModal .modal-header,
+#qrModal .modal-body,
+#qrModal .modal-footer {
+    background: transparent !important;
+    border: none !important;
+}
+
+/* Keep header text muted but visible */
+#qrModal .modal-header .modal-title {
+    color: var(--bs-body-color, #fff) !important;
+}
+
+/* Slight extra padding inside modal-body so qr-container sits nicely */
+#qrModal .modal-body {
+    padding: 1rem 1.25rem !important;
+}
+
+

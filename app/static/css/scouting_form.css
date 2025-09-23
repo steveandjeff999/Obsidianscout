@@ -6,44 +6,55 @@
     --scout-unknown: #f6c84c;
 }
 
-.alliance-indicator{border-radius:12px}
-.alliance-icon{width:48px;height:48px;display:flex;align-items:center;justify-content:center}
-.alliance-details h4{font-size:1.05rem}
+.alliance-indicator{border-radius:12px;padding:0.5rem}
+.alliance-icon{width:56px;height:56px;display:flex;align-items:center;justify-content:center;border-radius:12px}
+.alliance-details h4{font-size:1.05rem;margin:0}
 
-.form-section{margin-bottom:1.25rem}
-.form-section .form-section-header{margin-bottom:.75rem}
+.form-section{margin-bottom:1.4rem}
+.form-section .form-section-header{margin-bottom:.6rem}
 .form-section .form-section-title{font-weight:600}
 
-.points-display .card{border-radius:10px}
-.points-value{letter-spacing:.5px}
+.points-display .card{border-radius:12px;transition:transform .18s ease, box-shadow .18s ease}
+.points-display .card:hover{transform:translateY(-4px);box-shadow:0 10px 30px rgba(0,0,0,0.06)}
+.points-value{letter-spacing:.6px}
 
-.match-period-tabs{display:flex;gap:.5rem}
-.match-period-tab{flex:1;padding:.6rem .8rem;border-radius:.5rem;background:#f8f9fa;cursor:pointer;text-align:center;user-select:none}
-.match-period-tab.active{background:var(--scout-accent);color:#fff;box-shadow:0 6px 18px rgba(91,59,255,.12)}
+.match-period-tabs{display:flex;gap:.6rem;align-items:stretch}
+.match-period-tab{flex:1;padding:.7rem 1rem;border-radius:.6rem;background:#f8f9fa;cursor:pointer;text-align:center;user-select:none;display:flex;align-items:center;justify-content:center;gap:.5rem;border:1px solid rgba(0,0,0,0.04)}
+.match-period-tab:focus{outline:none;box-shadow:0 0 0 4px rgba(91,59,255,.08)}
+.match-period-tab.active{background:var(--scout-accent);color:#fff;box-shadow:0 6px 24px rgba(91,59,255,.14);border-color:transparent}
 
 .counter-container{display:flex;gap:.5rem;align-items:center;flex-wrap:nowrap}
-.btn-counter{width:48px;height:48px;padding:0;border-radius:8px}
-.counter-input{max-width:88px;text-align:center}
+.btn-counter{min-width:48px;height:48px;padding:0;border-radius:10px;display:flex;align-items:center;justify-content:center}
+.btn-counter i{pointer-events:none}
+.counter-input{max-width:96px;text-align:center;padding:.6rem .5rem}
 
-.rating-star{color:#e9ecef;cursor:pointer}
-.rating-star.active{color:#f6c84c;text-shadow:0 1px 0 rgba(0,0,0,.15)}
+.rating-star{color:#e9ecef;cursor:pointer;font-size:1.25rem;transition:transform .08s ease, color .12s ease}
+.rating-star:hover{transform:translateY(-2px)}
+.rating-star.active{color:var(--scout-unknown);text-shadow:0 1px 0 rgba(0,0,0,.12)}
 
 .save-indicator{transition:opacity .25s ease}
 .form-saved{outline:5px solid rgba(45,212,191,.08);transition:outline .25s ease}
 
 /* Responsive tweaks */
-@media (max-width:575px){
+@media (max-width:767px){
     .match-period-tabs{flex-direction:column}
-    .points-display .card .fs-1{font-size:1.6rem}
+    .points-display .card .fs-1{font-size:1.5rem}
+    .counter-container{gap:.4rem}
+    .btn-counter{height:44px;min-width:44px}
+}
+
+@media (max-width:480px){
+    .counter-input{max-width:72px}
+    .match-period-tab{padding:.6rem .6rem}
 }
 
 /* Accessibility focus styles */
 button:focus, input:focus, select:focus, textarea:focus{box-shadow:0 0 0 4px rgba(91,59,255,.12);outline:none}
 
 /* Search inputs for team and match selectors */
-.input-group .form-control-sm{height:36px}
-#team-search, #match-search{font-size:.9rem}
-.input-group-text i{width:16px;text-align:center}
+.input-group .form-control-sm{height:40px}
+#team-search, #match-search{font-size:.95rem}
+.input-group-text i{width:18px;text-align:center}
 
 .form-select option[hidden]{display:none}
 
@@ -63,8 +74,187 @@ button:focus, input:focus, select:focus, textarea:focus{box-shadow:0 0 0 4px rgb
 
 .alliance-unknown .alliance-details .text-white-50 {
     /* muted subtext - slightly transparent yellow */
-    color: rgba(246,200,76,0.85) !important;
+    color: rgba(246,200,76,0.9) !important;
 }
 
 /* optional: keep icon background transparent or add subtle emphasis */
 .alliance-unknown .alliance-icon{background:transparent}
+
+/* Action buttons: make primary actions more prominent on mobile */
+.form-section .btn-lg { padding-top:.6rem;padding-bottom:.6rem }
+.form-section .btn-success { box-shadow: 0 6px 18px rgba(45, 212, 191, .12); }
+
+/* Improve spacing for card body content */
+.card .card-body { padding:1rem }
+
+/* Make scouting form cards semi-transparent (glass) to match topbar/nav appearance */
+.scouting-form .card,
+.scouting-form .card.card-body,
+.scouting-form .points-display .card,
+.scouting-form .card.border-0 {
+    background: var(--topbar-surface-light, linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.32))); /* fallback to topbar surface variable */
+    -webkit-backdrop-filter: blur(var(--topbar-blur, 10px));
+    backdrop-filter: blur(var(--topbar-blur, 10px));
+    border: 1px solid var(--topbar-border-light, rgba(2,6,23,0.06));
+}
+
+/* Dark mode variant: use the dark surface variable if available */
+body.dark-mode .scouting-form .card,
+body.dark-mode .scouting-form .points-display .card {
+    background: var(--topbar-surface-dark, linear-gradient(180deg, rgba(12,16,20,0.58), rgba(12,16,20,0.40)));
+    -webkit-backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px));
+    backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px));
+    border: 1px solid var(--topbar-border-dark, rgba(255,255,255,0.06));
+}
+
+/* Slightly reduce shadow for glass effect and keep crisp separation from page background */
+.scouting-form .card { box-shadow: 0 8px 22px rgba(2,6,23,0.04); }
+
+/* Ensure alerts and modals inside the form still have readable backgrounds */
+.scouting-form .alert, .scouting-form .modal-content { background-clip: padding-box; }
+
+/* Fallback for browsers not supporting backdrop-filter: add subtle solid with transparency */
+@supports not ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))) {
+    .scouting-form .card, .scouting-form .points-display .card {
+        background: rgba(255,255,255,0.94);
+        border: 1px solid rgba(0,0,0,0.06);
+    }
+    body.dark-mode .scouting-form .card, body.dark-mode .scouting-form .points-display .card {
+        background: rgba(15,17,20,0.9);
+        border: 1px solid rgba(255,255,255,0.04);
+    }
+}
+
+/* Scale UI widget: match the navbar glass look */
+#scaleUiWidget, .scale-ui-widget {
+    position: fixed; /* ensure it floats above content */
+    right: 12px;
+    z-index: 1085;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: var(--topbar-surface-light, linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.32)));
+    -webkit-backdrop-filter: blur(var(--topbar-blur, 10px));
+    backdrop-filter: blur(var(--topbar-blur, 10px));
+    border: 1px solid var(--topbar-border-light, rgba(2,6,23,0.06));
+    box-shadow: 0 8px 24px rgba(2,6,23,0.06);
+}
+
+body.dark-mode #scaleUiWidget, body.dark-mode .scale-ui-widget {
+    background: var(--topbar-surface-dark, linear-gradient(180deg, rgba(12,16,20,0.58), rgba(12,16,20,0.40)));
+    -webkit-backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px));
+    backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px));
+    border: 1px solid var(--topbar-border-dark, rgba(255,255,255,0.06));
+}
+
+/* Make inputs inside widget compact and accessible */
+#scaleUiWidget .scale-icon { display:inline-flex; align-items:center; justify-content:center; color:var(--ui-muted); }
+#scaleUiWidget .scale-label { font-size:.9rem; color:var(--ui-foreground); margin-right:6px; }
+#scaleUiWidget input[type="range"] { width:110px; }
+
+/* Fallback behavior for browsers without backdrop-filter */
+@supports not ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))) {
+    #scaleUiWidget, .scale-ui-widget {
+        background: rgba(255,255,255,0.94);
+        border: 1px solid rgba(0,0,0,0.06);
+    }
+    body.dark-mode #scaleUiWidget, body.dark-mode .scale-ui-widget {
+        background: rgba(15,17,20,0.92);
+        border: 1px solid rgba(255,255,255,0.04);
+    }
+}
+
+/* Slight hover/focus emphasis */
+#scaleUiWidget:hover, #scaleUiWidget:focus-within, .scale-ui-widget:hover, .scale-ui-widget:focus-within {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 34px rgba(2,6,23,0.08);
+}
+
+/* Custom select widget styles (used for team/match selectors) */
+.custom-select-wrapper { position: relative; width: 100%; }
+.custom-select-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    background: var(--topbar-surface-light, linear-gradient(180deg, rgba(255,255,255,0.62), rgba(255,255,255,0.34))) !important;
+    -webkit-backdrop-filter: blur(var(--topbar-blur,10px));
+    backdrop-filter: blur(var(--topbar-blur,10px));
+    border: 1px solid var(--topbar-border-light, rgba(2,6,23,0.06));
+    color: var(--ui-foreground);
+}
+.custom-select-toggle .chev { opacity: .9 }
+
+.custom-select-menu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 2147483640; /* very high so it sits above other UI */
+    border-radius: 10px;
+    padding: 6px 4px;
+    max-height: 44vh;
+    overflow: auto;
+    background: var(--topbar-surface-light, linear-gradient(180deg, rgba(255,255,255,0.62), rgba(255,255,255,0.34))) !important;
+    -webkit-backdrop-filter: blur(var(--topbar-blur,10px));
+    backdrop-filter: blur(var(--topbar-blur,10px));
+    border: 1px solid var(--topbar-border-light, rgba(2,6,23,0.06));
+    box-shadow: 0 12px 36px rgba(2,6,23,0.08);
+}
+
+.custom-select-item { padding: 10px 12px; border-radius: 6px; cursor: pointer; color: var(--ui-foreground); }
+.custom-select-item.placeholder { color: var(--ui-muted); }
+.custom-select-item.disabled { opacity: .5; pointer-events: none }
+.custom-select-item:hover, .custom-select-item:focus { background: rgba(var(--bs-primary-rgb),0.06); transform: translateX(4px); }
+
+/* Selected state */
+.custom-select-item.selected {
+    background: linear-gradient(90deg, rgba(var(--bs-primary-rgb),0.08), rgba(var(--bs-primary-rgb),0.03));
+    border-left: 4px solid rgba(var(--bs-primary-rgb),0.9);
+    padding-left: 8px; /* accommodate left border */
+}
+
+/* Toggle open state */
+.custom-select-wrapper.open .custom-select-toggle {
+    box-shadow: 0 8px 26px rgba(2,6,23,0.12);
+    border-color: rgba(var(--bs-primary-rgb),0.55) !important;
+}
+
+/* Small separator for headers inside menu */
+.custom-select-menu .menu-header { padding:6px 12px; font-weight:700; color:var(--ui-muted); border-bottom:1px solid rgba(0,0,0,0.04); margin-bottom:6px }
+
+/* Improve toggle visuals to look like a select control */
+.custom-select-toggle { border-radius: 10px; border: 1px solid rgba(0,0,0,0.06); }
+.custom-select-toggle .custom-select-value { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: 92%; }
+.custom-select-toggle .chev { font-weight:700; color:var(--ui-muted); }
+
+/* Dark mode for custom select */
+body.dark-mode .custom-select-toggle,
+body.dark-mode .custom-select-menu {
+    background: var(--topbar-surface-dark, linear-gradient(180deg, rgba(12,16,20,0.60), rgba(12,16,20,0.42))) !important;
+    -webkit-backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px)) !important;
+    backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px)) !important;
+    border: 1px solid var(--topbar-border-dark, rgba(255,255,255,0.06)) !important;
+}
+
+/* Fallback when backdrop-filter unsupported */
+@supports not ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))) {
+    .custom-select-toggle, .custom-select-menu {
+        background: rgba(255,255,255,0.96) !important;
+        border: 1px solid rgba(0,0,0,0.06) !important;
+    }
+    body.dark-mode .custom-select-toggle, body.dark-mode .custom-select-menu {
+        background: rgba(15,17,20,0.92) !important;
+        border: 1px solid rgba(255,255,255,0.04) !important;
+    }
+}
+
+/* scrollbar for custom menus */
+.custom-select-menu::-webkit-scrollbar { width: 10px }
+.custom-select-menu::-webkit-scrollbar-track { background: rgba(2,6,23,0.02); border-radius:6px }
+.custom-select-menu::-webkit-scrollbar-thumb { background: rgba(2,6,23,0.12); border-radius:6px }
+.custom-select-menu::-webkit-scrollbar-thumb:hover { background: rgba(2,6,23,0.18) }

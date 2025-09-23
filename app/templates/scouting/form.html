@@ -13,8 +13,8 @@
 {% block content %}
 <div class="row">
     <div class="col-md-12">
-        <!-- Team and Match Selection -->
-        <div class="card mb-4">
+    <!-- Team and Match Selection -->
+    <div class="card mb-4 navbar-glass">
             <div class="card-header bg-primary text-white">
                 <h5 class="mb-0">Select Team and Match</h5>
             </div>
@@ -496,6 +496,8 @@
                         teamSelector.dispatchEvent(new Event('change', { bubbles: true }));
                     }
                 }
+                // Sync any custom select UI visibility if present
+                try { syncCustomSelectVisibility(teamSelector); } catch (e) { /* ignore if not present */ }
             }
 
             // Filter match options by match type or number, with shorthand parsing
@@ -619,6 +621,8 @@
                     matchSelector.value = only.value;
                     matchSelector.dispatchEvent(new Event('change', { bubbles: true }));
                 }
+                // Sync any custom select UI visibility if present
+                try { syncCustomSelectVisibility(matchSelector); } catch (e) { /* ignore if not present */ }
             }
 
             // Attach input listeners with debounce to avoid overfiring
@@ -842,6 +846,116 @@
             // Attach event listeners
             teamSelector.addEventListener('change', checkSelections);
             matchSelector.addEventListener('change', checkSelections);
+
+            // Create custom dropdown wrappers for better styling and consistent appearance
+            function createCustomSelects() {
+                [teamSelector, matchSelector].forEach(function(sel) {
+                    if (!sel) return;
+
+                    // Avoid creating twice
+                    if (sel.dataset.custom === '1') return;
+                    sel.dataset.custom = '1';
+
+                    // Hide native select but keep it in DOM for form submission
+                    sel.style.display = 'none';
+
+                    // Create wrapper
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'custom-select-wrapper';
+                    wrapper.dataset.for = sel.id;
+
+                    const toggle = document.createElement('button');
+                    toggle.type = 'button';
+                    toggle.className = 'custom-select-toggle btn btn-outline-secondary w-100 text-start';
+                    toggle.setAttribute('aria-haspopup', 'listbox');
+                    toggle.setAttribute('aria-expanded', 'false');
+                    toggle.innerHTML = `<span class="custom-select-value">${sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : sel.querySelector('option')?.textContent}</span><span class="chev float-end">▾</span>`;
+
+                    const menu = document.createElement('div');
+                    menu.className = 'custom-select-menu shadow-sm';
+                    menu.setAttribute('role', 'listbox');
+                    menu.style.maxHeight = '40vh';
+                    menu.style.overflow = 'auto';
+                    menu.style.display = 'none';
+
+                    // Populate items and mark selected
+                    Array.from(sel.options).forEach(function(opt) {
+                        const item = document.createElement('div');
+                        item.className = 'custom-select-item p-2';
+                        item.setAttribute('role', 'option');
+                        item.dataset.value = opt.value;
+                        item.textContent = opt.textContent;
+                        if (opt.disabled) item.classList.add('disabled');
+                        if (opt.hidden) item.style.display = 'none';
+                        if (!opt.value) item.classList.add('placeholder');
+                        if (opt.selected) item.classList.add('selected');
+                        menu.appendChild(item);
+                    });
+
+                    // Insert wrapper before native select
+                    sel.parentNode.insertBefore(wrapper, sel);
+                    wrapper.appendChild(toggle);
+                    wrapper.appendChild(menu);
+
+                    // Toggle menu
+                    toggle.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const open = menu.style.display !== 'none';
+                        // close any other menus
+                        document.querySelectorAll('.custom-select-menu').forEach(m => { if (m !== menu) m.style.display = 'none'; m.previousSibling && m.previousSibling.setAttribute('aria-expanded','false'); });
+                        menu.style.display = open ? 'none' : 'block';
+                        toggle.setAttribute('aria-expanded', (!open).toString());
+                        // add open class to wrapper for styling
+                        if (!open) wrapper.classList.add('open'); else wrapper.classList.remove('open');
+                    });
+
+                    // Item click
+                    menu.addEventListener('click', function(e) {
+                        const it = e.target.closest('.custom-select-item');
+                        if (!it) return;
+                        if (it.classList.contains('disabled')) return;
+                        const value = it.dataset.value || '';
+                        sel.value = value;
+                        // sync toggle text
+                        const valueLabel = it.textContent;
+                        wrapper.querySelector('.custom-select-value').textContent = valueLabel;
+                        // mark selected visually
+                        menu.querySelectorAll('.custom-select-item').forEach(i => i.classList.remove('selected'));
+                        it.classList.add('selected');
+                        // close
+                        menu.style.display = 'none';
+                        toggle.setAttribute('aria-expanded','false');
+                        wrapper.classList.remove('open');
+                        sel.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+
+                    // Close on outside click
+                    document.addEventListener('click', function(ev) {
+                        if (!wrapper.contains(ev.target)) {
+                            menu.style.display = 'none';
+                            toggle.setAttribute('aria-expanded','false');
+                        }
+                    });
+
+                    // Store reference for syncing
+                    sel._customWrapper = wrapper;
+                });
+            }
+
+            // Sync visibility of custom menu items with native select options (used by filters)
+            function syncCustomSelectVisibility(sel) {
+                if (!sel || !sel._customWrapper) return;
+                const menu = sel._customWrapper.querySelector('.custom-select-menu');
+                const items = Array.from(menu.querySelectorAll('.custom-select-item'));
+                Array.from(sel.options).forEach(function(opt, idx) {
+                    const it = items[idx];
+                    if (!it) return;
+                    it.style.display = opt.hidden ? 'none' : '';
+                });
+            }
+
+            // Initialize custom selects after dom wiring
+            try { createCustomSelects(); syncCustomSelectVisibility(teamSelector); syncCustomSelectVisibility(matchSelector); } catch (e) { /* ignore */ }
         }
         
         // Initialize existing form components if present on page load

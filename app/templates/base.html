@@ -1135,9 +1135,12 @@
     (function() {
         'use strict';
         
-        const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        
-        if (!isMobile) return;
+    // Treat narrow screens and tall portrait screens (height > width and tall) as "mobile-like"
+    const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isPortraitTall = (window.innerHeight > window.innerWidth) && (window.innerHeight >= 900);
+
+    // If not mobile and not a tall portrait device, skip this gentle protection.
+    if (!isMobile && !isPortraitTall) return;
         
         console.log('Gentle mobile scroll protection active');
         
@@ -1328,6 +1331,397 @@
     }
     </script>
 
+    <!-- Temporary debug shim: intercept scrollTo to capture unexpected jumps to top on tall portrait screens -->
+    <script>
+    (function(){
+        try {
+            const isPortraitTall = (window.innerHeight > window.innerWidth) && (window.innerHeight >= 900);
+            if (!isPortraitTall) return; // only active for the environment where you reported the bug
+
+            window.__scrollJumpLogs = window.__scrollJumpLogs || [];
+
+            const origScrollTo = window.scrollTo.bind(window);
+            let lastUserClickY = null;
+
+            // Track recent clicks
+            document.addEventListener('click', function(e){
+                try { lastUserClickY = window.pageYOffset || document.documentElement.scrollTop || 0; } catch(e) { lastUserClickY = null; }
+                // expire after short time
+                setTimeout(function(){ lastUserClickY = null; }, 700);
+            }, true);
+
+            window.scrollTo = function(){
+                try {
+                    // Normalize arguments
+                    let targetY = null;
+                    if (arguments.length === 1 && typeof arguments[0] === 'object' && arguments[0] !== null) {
+                        targetY = arguments[0].top != null ? arguments[0].top : (arguments[0].left != null ? arguments[0].left : null);
+                    } else if (arguments.length >= 2) {
+                        // scrollTo(x, y)
+                        targetY = arguments[1];
+                    }
+
+                    // If a call is trying to jump to the very top (0) shortly after a user click
+                    if (targetY === 0 && lastUserClickY && lastUserClickY > 50) {
+                        const entry = {
+                            time: Date.now(),
+                            beforeY: lastUserClickY,
+                            stack: (new Error('scrollTo captured')).stack,
+                            args: Array.prototype.slice.call(arguments)
+                        };
+                        window.__scrollJumpLogs.push(entry);
+                        // Print brief warning so you can observe in console if present
+                        console.warn('Captured scrollTo(0) after user click — recorded to window.__scrollJumpLogs (first 3 chars of stack):', (entry.stack||'').slice(0,120));
+                        // Still perform the original call so behavior is unchanged while debugging
+                        return origScrollTo.apply(window, arguments);
+                    }
+                } catch (err) {
+                    // ignore errors in debug shim
+                }
+                return origScrollTo.apply(window, arguments);
+            };
+            console.log('Scroll debug shim active for tall-portrait screens — logs available at window.__scrollJumpLogs');
+        } catch(e) { /* ignore */ }
+    })();
+    </script>
+
+    <!-- Extra debug instrumentation: focus, history, and hashchange logging (temporary) -->
+    <script>
+    (function(){
+        try {
+            const isPortraitTall = (window.innerHeight > window.innerWidth) && (window.innerHeight >= 900);
+            if (!isPortraitTall) return;
+
+            window.__scrollActionLogs = window.__scrollActionLogs || [];
+
+            // Wrap the current focus implementation (don't clobber earlier production wrapper)
+            const currentFocus = HTMLElement.prototype.focus;
+            HTMLElement.prototype.focus = function(options){
+                let beforeY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                try {
+                    // Call whatever focus implementation is present (production wrapper or native)
+                    return currentFocus.call(this, options);
+                } finally {
+                    // Check shortly after focus whether the page was moved to top
+                    setTimeout(() => {
+                        try {
+                            const afterY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                            if (afterY === 0 && beforeY > 50) {
+                                const entry = { type: 'focus', tag: this && this.tagName, beforeY, time: Date.now(), stack: (new Error('focus captured')).stack };
+                                window.__scrollActionLogs.push(entry);
+                                console.warn('Debug: focus caused scroll-to-top; entry recorded in window.__scrollActionLogs (focus)');
+                            }
+                        } catch(e) {}
+                    }, 40);
+                }
+            };
+
+            // Wrap history methods to detect scroll changes after push/replace
+            ['pushState','replaceState'].forEach(function(name){
+                try {
+                    const orig = history[name];
+                    history[name] = function(){
+                        const beforeY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                        const res = orig.apply(history, arguments);
+                        setTimeout(() => {
+                            try {
+                                const afterY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                                if (afterY === 0 && beforeY > 50) {
+                                    const entry = { type: name, args: Array.prototype.slice.call(arguments), beforeY, time: Date.now(), stack: (new Error(name+' captured')).stack };
+                                    window.__scrollActionLogs.push(entry);
+                                    console.warn('Debug: history.'+name+' caused scroll-to-top; entry recorded in window.__scrollActionLogs');
+                                }
+                            } catch(e) {}
+                        }, 30);
+                        return res;
+                    };
+                } catch(e) { /* ignore */ }
+            });
+
+            // Hashchange listener
+            window.addEventListener('hashchange', function(e){
+                try {
+                    const beforeY = window.__lastUserScrollBeforeHash || 0;
+                    const afterY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                    if (afterY === 0 && beforeY > 50) {
+                        const entry = { type: 'hashchange', beforeY, time: Date.now(), stack: (new Error('hashchange captured')).stack };
+                        window.__scrollActionLogs.push(entry);
+                        console.warn('Debug: hashchange caused scroll-to-top; entry recorded in window.__scrollActionLogs');
+                    }
+                } catch(e) {}
+            }, true);
+
+            // Track last scroll position before clicks (helps hashchange detection)
+            document.addEventListener('click', function(){
+                try { window.__lastUserScrollBeforeHash = window.pageYOffset || document.documentElement.scrollTop || 0; } catch(e) { window.__lastUserScrollBeforeHash = 0; }
+                setTimeout(function(){ window.__lastUserScrollBeforeHash = 0; }, 700);
+            }, true);
+
+            console.log('Extra scroll/focus/history debug instrumentation active — logs available at window.__scrollActionLogs');
+        } catch(e) { /* ignore */ }
+    })();
+    </script>
+
+    <!-- Aggressive click watcher: detect sudden jump-to-top after clicks and restore previous scroll Y -->
+    <script>
+    (function(){
+        try {
+            const isPortraitTall = (window.innerHeight > window.innerWidth) && (window.innerHeight >= 900);
+            if (!isPortraitTall) return;
+
+            // Keep a short history of recent restores so we don't loop
+            window.__recentAutoRestores = window.__recentAutoRestores || [];
+
+            document.addEventListener('click', function(ev){
+                try {
+                    const beforeY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                    // Only watch if user was scrolled down a bit
+                    if (!beforeY || beforeY <= 30) return;
+
+                    let rafCount = 0;
+                    const maxRafs = 20; // watch for a short period (~20 frames)
+
+                    function checkFrame(){
+                        rafCount++;
+                        const nowY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                        // If it jumped to top (or nearly top) restore immediately
+                        if ((nowY === 0 || Math.abs(nowY) <= 2) && beforeY > 30) {
+                            // Avoid rapidly re-restoring the same Y repeatedly
+                            const last = window.__recentAutoRestores[window.__recentAutoRestores.length - 1] || {};
+                            if (last.y === beforeY && (Date.now() - (last.t || 0) < 1000)) {
+                                return; // recently restored same position
+                            }
+
+                            // Log with stacktrace
+                            const trace = (new Error('auto-restore')).stack;
+                            window.__scrollJumpLogs = window.__scrollJumpLogs || [];
+                            window.__scrollJumpLogs.push({ time: Date.now(), beforeY, afterY: nowY, stack: trace, cause: 'auto-restore-after-click' });
+                            window.__recentAutoRestores.push({ t: Date.now(), y: beforeY });
+                            if (window.__recentAutoRestores.length > 10) window.__recentAutoRestores.shift();
+
+                            // Use safeRestoreScroll if present to cooperate with stabilizer
+                            if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') {
+                                try { window.safeRestoreScroll(beforeY, { behavior: 'auto', timeout: 300 }); } catch(e) { try { window.scrollTo(0, beforeY); } catch(e2) {} }
+                            } else {
+                                try { window.scrollTo(0, beforeY); } catch(e) { /* ignore */ }
+                            }
+
+                            console.warn('Auto-restored scroll position after unexpected jump-to-top (debug): restored to', beforeY);
+                            return;
+                        }
+
+                        if (rafCount < maxRafs) {
+                            window.requestAnimationFrame(checkFrame);
+                        }
+                    }
+
+                    window.requestAnimationFrame(checkFrame);
+                } catch(e) { /* ignore */ }
+            }, true);
+
+            console.log('Aggressive click watcher active on tall-portrait screens');
+        } catch(e) { /* ignore */ }
+    })();
+    </script>
+
+    <!-- Very aggressive polling detector: sample scrollTop rapidly after clicks and restore if it jumps to top -->
+    <script>
+    (function(){
+        try {
+            const isPortraitTall = (window.innerHeight > window.innerWidth) && (window.innerHeight >= 900);
+            if (!isPortraitTall) return;
+
+            window.__scrollJumpLogs = window.__scrollJumpLogs || [];
+
+            document.addEventListener('click', function(){
+                try {
+                    const beforeY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                    if (!beforeY || beforeY <= 30) return;
+
+                    let elapsed = 0;
+                    const intervalMs = 12; // rapid sampling
+                    const maxDuration = 700; // watch for 700ms
+
+                    const id = setInterval(() => {
+                        try {
+                            elapsed += intervalMs;
+                            const nowY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                            if ((nowY === 0 || Math.abs(nowY) <= 2) && beforeY > 30) {
+                                // Capture stack
+                                let stack = null;
+                                try { stack = (new Error('poll-capture')).stack; } catch(e) { stack = 'no-stack'; }
+
+                                const entry = { t: Date.now(), beforeY, afterY: nowY, stack, note: 'poll-detected' };
+                                window.__scrollJumpLogs.push(entry);
+
+                                // Avoid loops: if last restore same y recently, skip
+                                const recent = window.__recentAutoRestores || [];
+                                const last = recent[recent.length-1] || {};
+                                if (!(last.y === beforeY && (Date.now() - (last.t||0) < 1000))) {
+                                    // restore using safeRestoreScroll when available
+                                    try {
+                                        if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') {
+                                            window.safeRestoreScroll(beforeY, { behavior: 'auto', timeout: 300 });
+                                        } else {
+                                            window.scrollTo(0, beforeY);
+                                        }
+                                        window.__recentAutoRestores = window.__recentAutoRestores || [];
+                                        window.__recentAutoRestores.push({ t: Date.now(), y: beforeY });
+                                        if (window.__recentAutoRestores.length > 10) window.__recentAutoRestores.shift();
+                                    } catch(e) { /* ignore */ }
+                                }
+
+                                clearInterval(id);
+                                return;
+                            }
+                            if (elapsed >= maxDuration) {
+                                clearInterval(id);
+                                return;
+                            }
+                        } catch(e) { clearInterval(id); }
+                    }, intervalMs);
+                } catch(e) { /* ignore */ }
+            }, true);
+
+            console.log('Polling scroll detector active on tall-portrait screens');
+        } catch(e) { /* ignore */ }
+    })();
+    </script>
+
+    <!-- Strong capture-phase anchor guard: prevents href="#" and empty/invalid anchors from jumping to top -->
+    <script>
+    (function(){
+        'use strict';
+        // This runs on all viewports (conservative safety) to block anchors that would change the hash
+        // and cause browsers to scroll to top. We whitelist elements that explicitly opt-in or are
+        // known interactive controls (Bootstrap toggles, ARIA buttons, data attributes).
+
+        function isWhitelistedAnchor(anchor) {
+            if (!anchor) return false;
+            if (anchor.hasAttribute('data-allow-navigation') || anchor.hasAttribute('data-allow-top')) return true;
+            if (anchor.hasAttribute('data-bs-toggle') || anchor.hasAttribute('data-toggle') || anchor.hasAttribute('data-bs-target') || anchor.getAttribute('role') === 'button') return true;
+            // If anchor has a real href to an external location or a valid same-page target, allow
+            return false;
+        }
+
+        document.body.addEventListener('click', function(e){
+            try {
+                const anchor = e.target && e.target.closest ? e.target.closest('a') : null;
+                if (!anchor) return;
+
+                const href = (anchor.getAttribute('href') || '').trim();
+
+                // Allow whitelisted anchors
+                if (isWhitelistedAnchor(anchor)) return;
+
+                // Block empty, hash-only, or javascript:void anchors which often cause jumps
+                if (href === '' || href === '#' || href.toLowerCase().startsWith('javascript:') || href === '#!') {
+                    if (e.cancelable) e.preventDefault();
+                    // Stop other handlers from acting on this anchor which might trigger navigation
+                    e.stopImmediatePropagation();
+
+                    // If anchor wraps a real control, forward the click to it
+                    const inner = anchor.querySelector('button, [role="button"], input[type="button"], input[type="submit"]');
+                    if (inner) {
+                        try { inner.click(); } catch(err) { /* ignore */ }
+                    }
+                    return;
+                }
+
+                // If it's a hash targeting an element that doesn't exist, prevent the jump
+                if (href.startsWith('#') && href.length > 1) {
+                    const id = href.slice(1);
+                    if (!document.getElementById(id)) {
+                        if (e.cancelable) e.preventDefault();
+                        e.stopImmediatePropagation();
+                        return;
+                    }
+                }
+            } catch(err) { /* swallow errors to avoid breaking page */ }
+        }, true); // capture phase ensures we intercept before other handlers
+    })();
+    </script>
+
+    <!-- Unconditional conservative click+scroll guard (production-safe):
+         - Records last user click scroll position/time
+         - Microtask restores scroll if it immediately jumps to top after a click
+         - Overrides window.scrollTo to block programmatic scroll-to-top right after interaction
+         - Whitelist by setting `window.allowScrollToTop = true` when needed
+    -->
+    <script>
+    (function(){
+        'use strict';
+        try {
+            window.__lastUserInteraction = window.__lastUserInteraction || { time: 0, y: 0 };
+
+            // Capture-phase listener records last Y and timestamp for user interactions
+            document.addEventListener('click', function(e){
+                try {
+                    var y = window.pageYOffset || document.documentElement.scrollTop || 0;
+                    window.__lastUserInteraction.time = Date.now();
+                    window.__lastUserInteraction.y = y;
+
+                    // schedule a microtask to detect immediate jump-to-top caused by this click
+                    Promise.resolve().then(function(){
+                        try {
+                            var afterY = window.pageYOffset || document.documentElement.scrollTop || 0;
+                            if ((afterY === 0 || Math.abs(afterY) <= 2) && window.__lastUserInteraction.y > 30 && !window.allowScrollToTop) {
+                                // restore using safeRestoreScroll if available
+                                try {
+                                    if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') {
+                                        window.safeRestoreScroll(window.__lastUserInteraction.y, { behavior: 'auto', timeout: 300 });
+                                    } else {
+                                        window.scrollTo(0, window.__lastUserInteraction.y);
+                                    }
+                                } catch (err) {
+                                    try { window.scrollTo(0, window.__lastUserInteraction.y); } catch(e){}
+                                }
+                            }
+                        } catch(e) {}
+                    });
+                } catch(e) { /* ignore */ }
+            }, true);
+
+            // Override window.scrollTo conservatively: if a script tries to programmatically set top=0
+            // shortly after a user interaction, prevent it unless explicitly allowed.
+            (function(){
+                var origScrollTo = window.scrollTo.bind(window);
+                window.scrollTo = function(x, y){
+                    try {
+                        var targetY = null;
+                        if (arguments.length === 1 && typeof x === 'object' && x !== null) {
+                            if (x.top !== undefined) targetY = x.top;
+                        } else if (arguments.length >= 2) {
+                            targetY = y;
+                        }
+
+                        var now = Date.now();
+                        if (targetY === 0 || targetY === 0) {
+                            var last = window.__lastUserInteraction || { time: 0, y: 0 };
+                            if (!window.allowScrollToTop && last && (now - last.time) < 700 && last.y > 30) {
+                                // Block the jump-to-top; instead restore to last y.
+                                try {
+                                    if (window.safeRestoreScroll && typeof window.safeRestoreScroll === 'function') {
+                                        window.safeRestoreScroll(last.y, { behavior: 'auto', timeout: 300 });
+                                    } else {
+                                        origScrollTo(0, last.y);
+                                    }
+                                } catch (e) {
+                                    try { origScrollTo(0, last.y); } catch(_) {}
+                                }
+                                return;
+                            }
+                        }
+                    } catch (e) { /* ignore */ }
+                    return origScrollTo.apply(window, arguments);
+                };
+            })();
+
+            console.log('Conservative click+scroll guard initialized');
+        } catch(e) { console.warn('click+scroll guard init failed', e); }
+    })();
+    </script>
+
     {# Add a floating button for the assistant modal #}
     {# Remove the floating assistant button:
     <button id="openAssistantModalBtn" class="btn btn-primary rounded-circle shadow position-fixed" style="bottom: 32px; right: 32px; z-index: 1050; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center;">
@@ -1447,8 +1841,9 @@
             // and prevent stray href="#" clicks from jumping the page on small viewports.
             document.addEventListener('click', function(e) {
                 try {
-                    // Only active for narrow screens where this is a frequent problem
-                    if (window.innerWidth > 900) return;
+                                // Only active for narrow screens or tall portrait devices where this is a frequent problem
+                                const isPortraitTallNow = (window.innerHeight > window.innerWidth) && (window.innerHeight >= 900);
+                                if (window.innerWidth > 900 && !isPortraitTallNow) return;
 
                     // Snapshot before click
                     const beforeY = window.pageYOffset || document.documentElement.scrollTop || 0;

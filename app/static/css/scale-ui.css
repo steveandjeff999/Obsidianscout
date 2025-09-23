@@ -7,16 +7,18 @@
 }
 
 /* Slider container */
-.scale-ui-widget {
+.scale-ui-widget, body .scale-ui-widget {
     position: fixed;
     right: 12px;
     bottom: 12px;
     z-index: 2000;
-    background: rgba(255,255,255,0.95);
-    border: 1px solid rgba(0,0,0,0.08);
-    border-radius: 8px;
-    padding: 8px 10px;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+    background: var(--topbar-surface-light, linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.32))) !important;
+    -webkit-backdrop-filter: blur(var(--topbar-blur, 10px)) !important;
+    backdrop-filter: blur(var(--topbar-blur, 10px)) !important;
+    border: 1.5px solid var(--topbar-border-light, rgba(2,6,23,0.08)) !important;
+    border-radius: 10px !important;
+    padding: 8px 10px !important;
+    box-shadow: 0 8px 24px rgba(2,6,23,0.10) !important;
     display: flex;
     gap: 8px;
     align-items: center;
@@ -52,6 +54,26 @@
     background: var(--bs-primary);
     border: 2px solid #fff;
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+/* Dark mode support for the widget */
+body.dark-mode .scale-ui-widget, body.dark-mode body .scale-ui-widget {
+    background: var(--topbar-surface-dark, linear-gradient(180deg, rgba(12,16,20,0.58), rgba(12,16,20,0.40))) !important;
+    -webkit-backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px)) !important;
+    backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px)) !important;
+    border: 1.5px solid var(--topbar-border-dark, rgba(255,255,255,0.08)) !important;
+}
+
+/* Fallback for browsers that don't support backdrop-filter */
+@supports not ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))) {
+    .scale-ui-widget, body .scale-ui-widget {
+        background: rgba(255,255,255,0.94) !important;
+        border: 1.5px solid rgba(0,0,0,0.08) !important;
+    }
+    body.dark-mode .scale-ui-widget, body.dark-mode body .scale-ui-widget {
+        background: rgba(15,17,20,0.92) !important;
+        border: 1.5px solid rgba(255,255,255,0.08) !important;
+    }
 }
 
 /* Make sure the widget is not intrusive on small screens */
