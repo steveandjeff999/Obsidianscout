@@ -62,26 +62,31 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Handle mouse events to prevent modal movement on hover
     function addMouseEventHandlers(modal) {
-        // Apply a hard fixed position to all elements
+        // Apply a hard fixed position once when handlers are attached
         fixAllPositions(modal);
-        
-        // Prevent mouse events from causing repositioning
-        const preventDefaultHandlers = ['mouseenter', 'mouseleave', 'mouseover', 'mouseout', 'mousemove'];
-        
-        preventDefaultHandlers.forEach(eventName => {
-            modal.addEventListener(eventName, function(e) {
-                // Only prevent if this is a modal-related event
-                if (e.target.closest('.modal, .modal-dialog, .modal-content, .modal-header, .modal-body, .modal-footer')) {
-                    // Immediately restore positioning to prevent shifts
-                    fixAllPositions(modal);
-                }
-            }, true); // Use capture phase to handle events before default handlers
-        });
-        
-        // Special handler for mousemove that reapplies fixed position
-        modal.addEventListener('mousemove', function() {
-            fixAllPositions(modal);
+
+        // Throttle repeated reflows: avoid reapplying styles on every mousemove.
+        // Only reapply positioning at most once per 100ms when user interacts.
+        let lastApplied = 0;
+        function throttledFix() {
+            const now = Date.now();
+            if (now - lastApplied < 100) return;
+            lastApplied = now;
+            // Use rAF for layout stability
+            window.requestAnimationFrame(() => fixAllPositions(modal));
+        }
+
+        // Use pointer events (covers mouse and touch) and focus/blur instead of mousemove
+        modal.addEventListener('pointerenter', function(e) {
+            if (e.target.closest('.modal, .modal-dialog, .modal-content')) throttledFix();
         }, true);
+
+        modal.addEventListener('pointerdown', function(e) {
+            if (e.target.closest('.modal, .modal-dialog, .modal-content')) throttledFix();
+        }, true);
+
+        // Also respond to focus changes inside the modal (some browsers modify outline/borders)
+        modal.addEventListener('focusin', function() { throttledFix(); }, true);
     }
     
     // Helper to fix all positions at once

@@ -84,7 +84,7 @@ class User(UserMixin, ConcurrentModelMixin, db.Model):
         if self.has_role('scout'):
             allowed_routes = [
                 'scouting.index', 'scouting.form', 'scouting.list', 
-                'scouting.view', 'scouting.qr', 'scouting.qr_scan', 'scouting.datamatrix',
+                'scouting.view', 'scouting.qr_code', 'scouting.qr_scan', 'scouting.datamatrix',
                 'pit_scouting.index', 'pit_scouting.form', 'pit_scouting.list', 
                 'pit_scouting.view', 'pit_scouting.sync', 'pit_scouting.upload',
                 'auth.logout', 'auth.profile'

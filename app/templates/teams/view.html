@@ -133,29 +133,7 @@
             </div>
         </div>
         
-        <div class="card mb-4">
-            <div class="card-header bg-success text-white">
-                <h5 class="mb-0">Key Metrics</h5>
-            </div>
-            <div class="card-body">
-                <table class="table">
-                    {% for metric_id, metric_value in metrics.items() %}
-                        {% if metric_id != 'endgame_success_rate' and metric_id != 'special_success_rate' and metric_id != 'primary_accuracy' %}
-                        <tr>
-                            <th>{{ game_config['data_analysis']['key_metrics']|selectattr('id', 'equalto', metric_id)|map(attribute='name')|first }}:</th>
-                            <td>
-                                {% if metric_value is number %}
-                                    {{ "%.2f"|format(metric_value) }}
-                                {% else %}
-                                    {{ metric_value }}
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endif %}
-                    {% endfor %}
-                </table>
-            </div>
-        </div>
+        <!-- Key Metrics card removed as requested -->
         {% endif %}
     </div>
 

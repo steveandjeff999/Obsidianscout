@@ -262,8 +262,26 @@ def add():
         # Check if team already exists for this scouting team
         existing_team = filter_teams_by_scouting_team().filter(Team.team_number == team_number).first()
         if existing_team:
-            flash(f'Team {team_number} already exists', 'danger')
-            return render_template('teams/add.html', events=events, default_event_id=default_event_id, **get_theme_context())
+            # Merge behavior: update provided fields and associate selected events
+            existing_team.team_name = team_name or existing_team.team_name
+            existing_team.location = location or existing_team.location
+            try:
+                if event_ids:
+                    for event_id in event_ids:
+                        event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
+                        if event and event not in existing_team.events:
+                            existing_team.events.append(event)
+
+                db.session.commit()
+                flash(f'Team {team_number} already existed — merged selected events and updated team info.', 'success')
+                # Redirect to the last selected event if available so user sees merged associations
+                if event_ids:
+                    return redirect(url_for('teams.index', event_id=event_ids[-1]))
+                return redirect(url_for('teams.index'))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error merging existing team: {str(e)}', 'danger')
+                return render_template('teams/add.html', events=events, default_event_id=default_event_id, **get_theme_context())
         
         # Create new team
         team = Team(team_number=team_number, team_name=team_name, location=location)

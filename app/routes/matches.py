@@ -243,7 +243,70 @@ def add():
         if not all([match_number, match_type, event_id, red_alliance, blue_alliance]):
             flash('All required fields must be filled out!', 'error')
             return redirect(url_for('matches.add'))
-        
+
+        # Prevent creating duplicate matches for same event/type/number
+        existing = filter_matches_by_scouting_team().filter(
+            Match.event_id == event_id,
+            Match.match_number == match_number,
+            Match.match_type == match_type
+        ).first()
+        if existing:
+            flash(f'Match {match_type} {match_number} already exists for this event; updating existing match instead.', 'warning')
+            existing.red_alliance = red_alliance
+            existing.blue_alliance = blue_alliance
+            existing.red_score = red_score
+            existing.blue_score = blue_score
+            db.session.commit()
+            return redirect(url_for('matches.view', match_id=existing.id))
+
+        # Ensure Team records exist for any team numbers referenced in alliances and associate them with the event
+        def ensure_team_and_associate(team_number_str):
+            # team_number_str may include whitespace; return the canonical string used in alliances
+            tn = team_number_str.strip()
+            if not tn:
+                return None
+            try:
+                tn_int = int(tn)
+            except Exception:
+                # Non-numeric team identifiers are allowed but we treat them as strings
+                tn_int = None
+
+            team_obj = None
+            if tn_int is not None:
+                team_obj = filter_teams_by_scouting_team().filter(Team.team_number == tn_int).first()
+
+            # Fallback: try to find any team with matching team_number string
+            if not team_obj:
+                if tn_int is not None:
+                    # If numeric but not found, create a new Team with that number
+                    team_obj = Team(team_number=tn_int, team_name=None, location=None)
+                else:
+                    # Non-numeric key - create with team_number set to 0 and store identifier in team_name
+                    team_obj = Team(team_number=0, team_name=tn, location=None)
+                assign_scouting_team_to_model(team_obj)
+                try:
+                    db.session.add(team_obj)
+                    db.session.flush()
+                except Exception as e:
+                    db.session.rollback()
+                    current_app.logger.error(f"Failed to create team {tn}: {e}")
+                    return None
+
+            # Associate the team with the event if not already
+            try:
+                ev = Event.query.get(event_id)
+                if ev and ev not in team_obj.events:
+                    team_obj.events.append(ev)
+                    db.session.flush()
+            except Exception:
+                db.session.rollback()
+
+            return tn
+
+        # Ensure all referenced teams exist/are associated
+        for t in red_teams + blue_teams:
+            ensure_team_and_associate(t)
+
         # Create new match
         match = Match(
             match_number=match_number,
@@ -254,10 +317,11 @@ def add():
             red_score=red_score,
             blue_score=blue_score
         )
-        
+        assign_scouting_team_to_model(match)
+
         db.session.add(match)
         db.session.commit()
-        
+
         flash(f'Match {match_type} {match_number} added successfully!', 'success')
         return redirect(url_for('matches.index'))
     

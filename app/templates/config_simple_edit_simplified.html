@@ -199,6 +199,12 @@
                                                                            placeholder="Points" step="0.1">
                                                                 </div>
                                                             </div>
+                                                            <div class="form-check form-check-inline mt-2">
+                                                                <input class="form-check-input" type="checkbox" 
+                                                                       name="auto_element_display_predictions_{{ loop.index0 }}" 
+                                                                       value="1" {{ 'checked' if element.display_in_predictions }}>
+                                                                <label class="form-check-label">Show in Predictions</label>
+                                                            </div>
                                                             {% if element.type == 'multiple_choice' %}
                                                             <div class="multiple-choice-options mt-2" style="display: block;">
                                                                 <small class="text-muted">Multiple Choice Options:</small>
@@ -290,6 +296,12 @@
                                                                            placeholder="Points" step="0.1">
                                                                 </div>
                                                             </div>
+                                                            <div class="form-check form-check-inline mt-2">
+                                                                <input class="form-check-input" type="checkbox" 
+                                                                       name="teleop_element_display_predictions_{{ loop.index0 }}" 
+                                                                       value="1" {{ 'checked' if element.display_in_predictions }}>
+                                                                <label class="form-check-label">Show in Predictions</label>
+                                                            </div>
                                                             {% if element.type == 'multiple_choice' %}
                                                             <div class="multiple-choice-options mt-2" style="display: block;">
                                                                 <small class="text-muted">Multiple Choice Options:</small>
@@ -380,6 +392,12 @@
                                                                            value="{{ element.points if element.points is number else 0 }}" 
                                                                            placeholder="Points" step="0.1">
                                                                 </div>
+                                                            </div>
+                                                            <div class="form-check form-check-inline mt-2">
+                                                                <input class="form-check-input" type="checkbox" 
+                                                                       name="endgame_element_display_predictions_{{ loop.index0 }}" 
+                                                                       value="1" {{ 'checked' if element.display_in_predictions }}>
+                                                                <label class="form-check-label">Show in Predictions</label>
                                                             </div>
                                                             {% if element.type == 'multiple_choice' %}
                                                             <div class="multiple-choice-options mt-2" style="display: block;">
@@ -485,6 +503,88 @@
                                 </div>
                             </div>
                         </div>
+                        
+                        <!-- Post-Match Section -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="postMatchHeading">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                        data-bs-target="#postMatchCollapse" aria-expanded="false" aria-controls="postMatchCollapse">
+                                    <i class="fas fa-comments me-2"></i>Post-Match & Comments
+                                </button>
+                            </h2>
+                            <div id="postMatchCollapse" class="accordion-collapse collapse"
+                                 aria-labelledby="postMatchHeading" data-bs-parent="#configAccordion">
+                                <div class="accordion-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6 class="text-muted mb-3">Post-Match Questions</h6>
+                                            <div id="rating-elements-simple">
+                                                {% if game_config.post_match and game_config.post_match.rating_elements %}
+                                                {% for element in game_config.post_match.rating_elements %}
+                                                <div class="rating-item p-2 mb-2 border rounded" data-index="{{ loop.index0 }}">
+                                                    <input type="text" class="form-control form-control-sm mb-2"
+                                                           name="rating_element_name_{{ loop.index0 }}"
+                                                           value="{{ element.name }}" placeholder="Rating question">
+                                                    <div class="row">
+                                                        <div class="col-4">
+                                                            <input type="number" class="form-control form-control-sm"
+                                                                   name="rating_element_min_{{ loop.index0 }}"
+                                                                   value="{{ element.min }}" placeholder="Min">
+                                                        </div>
+                                                        <div class="col-4">
+                                                            <input type="number" class="form-control form-control-sm"
+                                                                   name="rating_element_max_{{ loop.index0 }}"
+                                                                   value="{{ element.max }}" placeholder="Max">
+                                                        </div>
+                                                        <div class="col-4">
+                                                            <input type="number" class="form-control form-control-sm"
+                                                                   name="rating_element_default_{{ loop.index0 }}"
+                                                                   value="{{ element.default }}" placeholder="Default">
+                                                        </div>
+                                                    </div>
+                                                    <input type="hidden" name="rating_element_id_{{ loop.index0 }}" value="{{ element.id }}">
+                                                    <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-rating">Remove</button>
+                                                </div>
+                                                {% endfor %}
+                                                {% else %}
+                                                <p class="text-muted mb-3">No rating questions yet. These are useful for subjective evaluations like "Defense Rating" (1-5 scale).</p>
+                                                {% endif %}
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-success" id="add-rating-element">
+                                                <i class="fas fa-plus me-1"></i>Add Rating
+                                            </button>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6 class="text-muted mb-3">Text Comments</h6>
+                                            <div id="text-elements-simple">
+                                                {% if game_config.post_match and game_config.post_match.text_elements %}
+                                                {% for element in game_config.post_match.text_elements %}
+                                                <div class="text-item p-2 mb-2 border rounded" data-index="{{ loop.index0 }}">
+                                                    <input type="text" class="form-control form-control-sm mb-2"
+                                                           name="text_element_name_{{ loop.index0 }}"
+                                                           value="{{ element.name }}" placeholder="Comment field name">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox"
+                                                               name="text_element_multiline_{{ loop.index0 }}"
+                                                               value="1" {{ 'checked' if element.multiline }}>
+                                                        <label class="form-check-label">Allow multiple lines</label>
+                                                    </div>
+                                                    <input type="hidden" name="text_element_id_{{ loop.index0 }}" value="{{ element.id }}">
+                                                    <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-text">Remove</button>
+                                                </div>
+                                                {% endfor %}
+                                                {% else %}
+                                                <p class="text-muted mb-3">No comment fields yet. These allow scouts to leave notes like "Struggled with intake" or "Great defense".</p>
+                                                {% endif %}
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-success" id="add-text-element">
+                                                <i class="fas fa-plus me-1"></i>Add Comment Field
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
                         <!-- Settings Section -->
                         <div class="accordion-item">
@@ -566,74 +666,7 @@
                                         </div>
                                     </div>
                                     
-                                    <!-- Post Match Elements -->
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <h6 class="text-muted mb-3">Post-Match Questions</h6>
-                                            <div id="rating-elements-simple">
-                                                {% if game_config.post_match and game_config.post_match.rating_elements %}
-                                                {% for element in game_config.post_match.rating_elements %}
-                                                <div class="rating-item p-2 mb-2 border rounded" data-index="{{ loop.index0 }}">
-                                                    <input type="text" class="form-control form-control-sm mb-2" 
-                                                           name="rating_element_name_{{ loop.index0 }}" 
-                                                           value="{{ element.name }}" placeholder="Rating question">
-                                                    <div class="row">
-                                                        <div class="col-4">
-                                                            <input type="number" class="form-control form-control-sm" 
-                                                                   name="rating_element_min_{{ loop.index0 }}" 
-                                                                   value="{{ element.min }}" placeholder="Min">
-                                                        </div>
-                                                        <div class="col-4">
-                                                            <input type="number" class="form-control form-control-sm" 
-                                                                   name="rating_element_max_{{ loop.index0 }}" 
-                                                                   value="{{ element.max }}" placeholder="Max">
-                                                        </div>
-                                                        <div class="col-4">
-                                                            <input type="number" class="form-control form-control-sm" 
-                                                                   name="rating_element_default_{{ loop.index0 }}" 
-                                                                   value="{{ element.default }}" placeholder="Default">
-                                                        </div>
-                                                    </div>
-                                                    <input type="hidden" name="rating_element_id_{{ loop.index0 }}" value="{{ element.id }}">
-                                                    <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-rating">Remove</button>
-                                                </div>
-                                                {% endfor %}
-                                                {% else %}
-                                                <p class="text-muted mb-3">No rating questions yet. These are useful for subjective evaluations like "Defense Rating" (1-5 scale).</p>
-                                                {% endif %}
-                                            </div>
-                                            <button type="button" class="btn btn-sm btn-success" id="add-rating-element">
-                                                <i class="fas fa-plus me-1"></i>Add Rating
-                                            </button>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <h6 class="text-muted mb-3">Text Comments</h6>
-                                            <div id="text-elements-simple">
-                                                {% if game_config.post_match and game_config.post_match.text_elements %}
-                                                {% for element in game_config.post_match.text_elements %}
-                                                <div class="text-item p-2 mb-2 border rounded" data-index="{{ loop.index0 }}">
-                                                    <input type="text" class="form-control form-control-sm mb-2" 
-                                                           name="text_element_name_{{ loop.index0 }}" 
-                                                           value="{{ element.name }}" placeholder="Comment field name">
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" 
-                                                               name="text_element_multiline_{{ loop.index0 }}" 
-                                                               value="1" {{ 'checked' if element.multiline }}>
-                                                        <label class="form-check-label">Allow multiple lines</label>
-                                                    </div>
-                                                    <input type="hidden" name="text_element_id_{{ loop.index0 }}" value="{{ element.id }}">
-                                                    <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-text">Remove</button>
-                                                </div>
-                                                {% endfor %}
-                                                {% else %}
-                                                <p class="text-muted mb-3">No comment fields yet. These allow scouts to leave notes like "Struggled with intake" or "Great defense".</p>
-                                                {% endif %}
-                                            </div>
-                                            <button type="button" class="btn btn-sm btn-success" id="add-text-element">
-                                                <i class="fas fa-plus me-1"></i>Add Comment Field
-                                            </button>
-                                        </div>
-                                    </div>
+                                    <!-- Post Match Elements removed (moved to its own accordion item above) -->
                                 </div>
                             </div>
                         </div>
@@ -934,6 +967,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         default: typeSelect && typeSelect.value === 'boolean' ? false : 0,
                         points: pointsInput ? parseFloat(pointsInput.value) || 0 : 0
                     };
+                    // Show in predictions flag
+                    const displayCheckbox = item.querySelector(`input[name^="${period}_element_display_predictions_"]`);
+                    element.display_in_predictions = displayCheckbox ? !!displayCheckbox.checked : false;
                     
                     // Handle multiple choice options with individual point values
                     if (typeSelect && typeSelect.value === 'multiple_choice') {

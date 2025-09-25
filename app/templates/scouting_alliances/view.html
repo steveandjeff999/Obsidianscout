@@ -753,8 +753,14 @@ if (typeof window.socket !== 'undefined') {
 
 // Utility function for notifications
 function showNotification(message, type) {
+    // Normalize notification type
+    let normalizedType = type;
+    if (!type || type === 'info' || type === 'message' || type === 'default') normalizedType = 'success';
+    if (type === 'error' || type === 'err') normalizedType = 'danger';
+    if (type === 'warn') normalizedType = 'warning';
+
     const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    alertDiv.className = `alert alert-${normalizedType} alert-dismissible fade show position-fixed`;
     alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
     alertDiv.innerHTML = `
         ${message}

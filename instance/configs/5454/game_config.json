@@ -20,6 +20,7 @@
         "name": "Leave Strating Zone",
         "type": "boolean",
         "default": false,
+        "display_in_predictions": true,
         "points": 3.0
       },
       {
@@ -28,6 +29,7 @@
         "name": "CORAL (L1)",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
         "points": 3.0
       },
       {
@@ -36,6 +38,7 @@
         "name": "CORAL (L2)",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
         "points": 4.0
       },
       {
@@ -44,6 +47,7 @@
         "name": "CORAL (L3)",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
         "points": 6.0
       },
       {
@@ -52,6 +56,7 @@
         "name": "CORAL (L4)",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
         "points": 7.0
       },
       {
@@ -60,6 +65,7 @@
         "name": "ALGAE in Net",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
         "points": 4.0
       },
       {
@@ -68,6 +74,7 @@
         "name": "ALGAE Processer",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
         "points": 6.0
       },
       {
@@ -76,6 +83,7 @@
         "name": "ALGAE Missed",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
         "points": 0.0
       }
     ]
@@ -89,6 +97,7 @@
         "name": "CORAL (L1)",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
         "points": 2.0
       },
       {
@@ -97,6 +106,7 @@
         "name": "CORAL (L2)",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
         "points": 3.0
       },
       {
@@ -105,6 +115,7 @@
         "name": "CORAL (L3)",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
         "points": 4.0
       },
       {
@@ -113,6 +124,7 @@
         "name": "CORAL (L4)",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
         "points": 5.0
       },
       {
@@ -121,6 +133,7 @@
         "name": "ALGAE in Processor",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
         "points": 6.0
       },
       {
@@ -129,6 +142,7 @@
         "name": "ALGAE in Net",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
         "points": 4.0
       },
       {
@@ -137,6 +151,7 @@
         "name": "Defense Played",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
         "points": 0.0
       }
     ]
@@ -150,6 +165,7 @@
         "name": "Climb",
         "type": "multiple_choice",
         "default": "Park",
+        "display_in_predictions": true,
         "options": [
           {
             "name": "Park",

@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block content %}
+  <h2>Import Portable Archive</h2>
+  <p>Upload a portable ZIP created by the portable export to import events, teams, matches and scouting data.</p>
+
+  <form method="post" enctype="multipart/form-data">
+    <div class="form-group">
+      <label for="file">Archive (.zip)</label>
+      <input type="file" class="form-control" id="file" name="file" accept="application/zip" required>
+    </div>
+    <button type="submit" class="btn btn-primary">Upload and Import</button>
+    <a href="{{ url_for('data.index') }}" class="btn btn-secondary">Cancel</a>
+  </form>
+
+{% endblock %}

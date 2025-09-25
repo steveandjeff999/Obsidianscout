@@ -55,6 +55,19 @@
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5) !important;
 }
 
+/* Ensure predictable sizing inside modals to avoid reflow on focus */
+.modal *,
+.modal *:before,
+.modal *:after {
+    box-sizing: border-box !important;
+}
+
+/* Neutralize outlines that change layout; prefer subtle box-shadow that doesn't affect flow */
+.modal :focus {
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(25,118,210,0.12) !important; /* visual focus without changing layout */
+}
+
 /* Modal backdrop */
 .modal-backdrop {
     position: fixed !important;

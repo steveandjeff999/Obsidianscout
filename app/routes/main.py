@@ -395,8 +395,17 @@ def save_simple_config():
                             'perm_id': el.get('perm_id') or el.get('id'),
                             'name': el.get('name'),
                             'type': el.get('type'),
-                            'default': parse_default_value(el.get('default', ''), el.get('type'))
+                                    'default': parse_default_value(el.get('default', ''), el.get('type'))
                         }
+                        
+                        # Preserve display_in_predictions flag from payload when present
+                        try:
+                            if 'display_in_predictions' in el:
+                                element['display_in_predictions'] = el.get('display_in_predictions')
+                            else:
+                                element['display_in_predictions'] = False
+                        except Exception:
+                            element['display_in_predictions'] = False
                         if element['type'] != 'select' and element['type'] != 'multiple_choice' and 'points' in el:
                             try:
                                 element['points'] = float(el.get('points'))
@@ -455,6 +464,11 @@ def save_simple_config():
                             'type': element_type,
                             'default': parse_default_value(request.form.get(f'{period}_element_default_{index}', '0'), element_type)
                         }
+                        # Read display_in_predictions checkbox for this element if present
+                        try:
+                            element['display_in_predictions'] = bool(request.form.get(f'{period}_element_display_predictions_{index}'))
+                        except Exception:
+                            element['display_in_predictions'] = False
 
                         # Add points if provided (for non-select and non-multiple-choice types)
                         points = request.form.get(f'{period}_element_points_{index}')
