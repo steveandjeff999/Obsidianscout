@@ -157,11 +157,12 @@
 .topbar .dropdown-menu {
     border-radius: 10px;
     /* Use topbar surface variables (glass) for a consistent look */
-    background: var(--topbar-surface-light, linear-gradient(180deg, rgba(255,255,255,0.62), rgba(255,255,255,0.34)));
+    /* Slightly less transparent for better legibility */
+    background: var(--topbar-surface-light, linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.86)));
     -webkit-backdrop-filter: blur(var(--topbar-blur, 10px));
     backdrop-filter: blur(var(--topbar-blur, 10px));
-    border: 1px solid var(--topbar-border-light, rgba(2,6,23,0.06));
-    box-shadow: 0 10px 30px rgba(2,6,23,0.08);
+    border: 1px solid var(--topbar-border-light, rgba(2,6,23,0.08));
+    box-shadow: 0 14px 40px rgba(2,6,23,0.12);
     margin-top: 8px;
     min-width: 160px; /* sensible minimum for usability */
     max-width: calc(100vw - 32px);
@@ -176,22 +177,24 @@
 body.dark-mode .dropdown-menu,
 body.dark-mode .dropdown-menu.navbar-glass,
 body.dark-mode .topbar .dropdown-menu {
-    background: var(--topbar-surface-dark, linear-gradient(180deg, rgba(12,16,20,0.60), rgba(12,16,20,0.42)));
+    /* Dark variant - slightly more opaque */
+    background: var(--topbar-surface-dark, linear-gradient(180deg, rgba(12,16,20,0.88), rgba(12,16,20,0.84)));
     -webkit-backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px));
     backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px));
-    border: 1px solid var(--topbar-border-dark, rgba(255,255,255,0.06));
-    box-shadow: 0 8px 22px rgba(0,0,0,0.45);
+    border: 1px solid var(--topbar-border-dark, rgba(255,255,255,0.08));
+    box-shadow: 0 14px 40px rgba(0,0,0,0.55);
 }
 
 /* Fallback for browsers without backdrop-filter support */
 @supports not ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))) {
     .dropdown-menu, .dropdown-menu.navbar-glass, .topbar .dropdown-menu {
-        background: rgba(255,255,255,0.96) !important;
-        border: 1px solid rgba(0,0,0,0.06) !important;
+        /* Fallback: make nearly opaque to improve contrast */
+        background: rgba(255,255,255,0.98) !important;
+        border: 1px solid rgba(0,0,0,0.08) !important;
     }
     body.dark-mode .dropdown-menu, body.dark-mode .dropdown-menu.navbar-glass, body.dark-mode .topbar .dropdown-menu {
-        background: rgba(15,17,20,0.94) !important;
-        border: 1px solid rgba(255,255,255,0.04) !important;
+        background: rgba(15,17,20,0.96) !important;
+        border: 1px solid rgba(255,255,255,0.06) !important;
     }
 }
 

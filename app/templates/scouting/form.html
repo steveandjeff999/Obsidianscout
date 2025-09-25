@@ -1086,10 +1086,16 @@
         });
         
         // Function to show config update notifications
-        function showConfigUpdateNotification(message) {
+        function showConfigUpdateNotification(message, type = 'info') {
+            // Normalize type
+            let normalizedType = type;
+            if (!type || type === 'info' || type === 'message' || type === 'default') normalizedType = 'success';
+            if (type === 'error' || type === 'err') normalizedType = 'danger';
+            if (type === 'warn') normalizedType = 'warning';
+
             // Create a notification banner
             const notification = document.createElement('div');
-            notification.className = 'alert alert-info alert-dismissible fade show position-fixed';
+            notification.className = `alert alert-${normalizedType} alert-dismissible fade show position-fixed`;
             notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
             notification.innerHTML = `
                 <i class="fas fa-sync-alt me-2"></i>

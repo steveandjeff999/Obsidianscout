@@ -138,30 +138,11 @@
                                         <a href="{{ url_for('matches.edit', match_id=match.id) }}" class="btn btn-sm btn-secondary">
                                             <i class="fas fa-edit me-1"></i> Edit
                                         </a>
-                                        <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ match.id }}">
-                                            <i class="fas fa-trash"></i> Delete
-                                        </button>
-                                    </div>
-                                    <!-- Delete modal preserved -->
-                                    <div class="modal fade" id="deleteModal{{ match.id }}" tabindex="-1" aria-hidden="true">
-                                        <div class="modal-dialog">
-                                            <div class="modal-content">
-                                                <div class="modal-header bg-danger text-white">
-                                                    <h5 class="modal-title">Delete Match</h5>
-                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                </div>
-                                                <div class="modal-body">
-                                                    Are you sure you want to delete {{ match.match_type }} Match #{{ match.match_number }}?
-                                                    This will also delete all scouting data for this match.
-                                                </div>
-                                                <div class="modal-footer">
-                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                                    <form action="{{ url_for('matches.delete', match_id=match.id) }}" method="post">
-                                                        <button type="submit" class="btn btn-danger">Delete</button>
-                                                    </form>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <form class="d-inline delete-confirm-form" action="{{ url_for('matches.delete', match_id=match.id) }}" method="post" data-match-number="{{ match.match_number }}">
+                                            <button type="button" class="btn btn-sm btn-danger delete-confirm-btn" title="Click to confirm delete">
+                                                <i class="fas fa-trash"></i> Delete
+                                            </button>
+                                        </form>
                                     </div>
                                 </td>
                             </tr>
@@ -216,7 +197,62 @@
             });
         });
     });
-    
+        // Two-click inline delete confirmation (replaces modal flow)
+        (function(){
+            const CONFIRM_TIMEOUT = 5000; // ms to wait before canceling
+
+            document.querySelectorAll('.delete-confirm-form').forEach(form => {
+                const btn = form.querySelector('.delete-confirm-btn');
+                if (!btn) return;
+
+                let confirming = false;
+                let timer = null;
+
+                function enterConfirmState() {
+                    confirming = true;
+                    btn.classList.remove('btn-danger');
+                    btn.classList.add('btn-outline-danger');
+                    btn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Confirm';
+                    btn.setAttribute('aria-pressed', 'true');
+
+                    // start timeout to revert
+                    timer = setTimeout(() => {
+                        exitConfirmState();
+                    }, CONFIRM_TIMEOUT);
+                }
+
+                function exitConfirmState() {
+                    confirming = false;
+                    btn.classList.remove('btn-outline-danger');
+                    btn.classList.add('btn-danger');
+                    btn.innerHTML = '<i class="fas fa-trash"></i> Delete';
+                    btn.removeAttribute('aria-pressed');
+                    if (timer) { clearTimeout(timer); timer = null; }
+                }
+
+                btn.addEventListener('click', function(e){
+                    e.preventDefault();
+                    // If not yet confirming, toggle to confirm state
+                    if (!confirming) {
+                        enterConfirmState();
+                        // optional: announce to user
+                        try { if (window.toasts && typeof window.toasts.info === 'function') window.toasts.info('Click the button again to confirm delete'); } catch(e) {}
+                        return;
+                    }
+
+                    // Second click while confirming -> submit form
+                    if (confirming) {
+                        // Optionally add a small disabled state so user doesn't double-submit
+                        btn.disabled = true;
+                        form.submit();
+                    }
+                });
+
+                // Clean up if user navigates away or focuses elsewhere
+                form.addEventListener('mouseleave', function(){ if (confirming) exitConfirmState(); });
+            });
+        })();
+
     function reloadMatchesWithNewConfig() {
         console.log('Reloading matches with new configuration...');
         

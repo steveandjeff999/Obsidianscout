@@ -38,10 +38,14 @@
                 </p>
                 
                 <div class="d-grid gap-2">
-                    <a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{{ excel_data }}" 
-                       download="{{ filename }}" 
-                       class="btn btn-lg btn-success">
-                        <i class="fas fa-download me-2"></i> Download Excel File
+                    <a href="{{ url_for('data.export_excel') }}?download=1" class="btn btn-lg btn-success">
+                        <i class="fas fa-download me-2"></i> Download Excel File (direct)
+                    </a>
+                    <a href="{{ url_for('data.export_portable') }}" class="btn btn-lg btn-info mt-3">
+                        <i class="fas fa-file-archive me-2"></i> Download Portable ZIP (export all JSON)
+                    </a>
+                    <a href="{{ url_for('data.import_portable') }}" class="btn btn-outline-info mt-2">
+                        <i class="fas fa-file-import me-2"></i> Import Portable ZIP
                     </a>
                 </div>
             </div>

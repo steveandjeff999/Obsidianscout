@@ -178,6 +178,27 @@
                                                 </div>
                                             {% endif %}
                                         </div>
+                                        {# Show selected scoring elements (auto/teleop/endgame) if configured to display in predictions #}
+                                        <div class="row row-cols-2 row-cols-md-3 g-2 mt-2">
+                                            {% if game_config %}
+                                                {% for period in ['auto','teleop','endgame'] %}
+                                                    {% set period_cfg = game_config.get(period + '_period', {}) %}
+                                                    {% for element in period_cfg.get('scoring_elements', []) %}
+                                                        {% if element.display_in_predictions %}
+                                                            <div class="col">
+                                                                <div class="small fw-bold">{{ element.name }}</div>
+                                                                {% set val = team_data.metrics.get(element.id, element.get('default', '')) %}
+                                                                {% if val is iterable and val is not string %}
+                                                                    <div>{{ val | join(', ') }}</div>
+                                                                {% else %}
+                                                                    <div>{{ val }}</div>
+                                                                {% endif %}
+                                                            </div>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                {% endfor %}
+                                            {% endif %}
+                                        </div>
                                     </div>
                                 </div>
                                 {% endfor %}

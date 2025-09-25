@@ -653,42 +653,44 @@
                             </div>
                         </div>
                     </div>
-                    <button class="btn btn-outline-primary btn-sm d-flex align-items-center dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="fas fa-user-circle me-1"></i>
-                        <span class="d-none d-md-inline">{{ current_user.username }}</span>
-                        <span id="userChatDot" class="user-chat-dot" style="display:none;" title="You have unread chat messages"></span>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end shadow">
-                        <li id="userDropdownUnreadItem" style="display:none;"><a id="openUnreadChatLink" class="dropdown-item py-2" href="{{ url_for('main.chat_page') }}"><i class="fas fa-comments me-2 text-danger"></i>Open unread chat</a></li>
-                        <li><hr class="dropdown-divider my-1"></li>
-                        <li>
-                            <div class="dropdown-user-header d-flex align-items-center px-3 py-2">
-                                <div class="me-2">
-                                    <i class="fas fa-user-circle fa-2x"></i>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <div class="user-name fw-semibold">{{ current_user.username or 'User' }}</div>
-                                    <div class="user-roles text-muted small">
-                                        {% for role in current_user.roles %}
-                                            <span class="badge bg-secondary text-uppercase me-1">{{ role.name }}</span>
-                                        {% else %}
-                                            <span class="text-muted">No roles</span>
-                                        {% endfor %}
+                    <div class="dropdown">
+                        <button id="userToggle" class="btn btn-outline-primary btn-sm d-flex align-items-center dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true" aria-controls="userMenu">
+                            <i class="fas fa-user-circle me-1"></i>
+                            <span class="d-none d-md-inline">{{ current_user.username }}</span>
+                            <span id="userChatDot" class="user-chat-dot" style="display:none;" title="You have unread chat messages"></span>
+                        </button>
+                        <ul id="userMenu" class="dropdown-menu dropdown-menu-end shadow notifications-dropdown navbar-glass" aria-labelledby="userToggle">
+                            <li id="userDropdownUnreadItem" style="display:none;"><a id="openUnreadChatLink" class="dropdown-item py-2" href="{{ url_for('main.chat_page') }}"><i class="fas fa-comments me-2 text-danger"></i>Open unread chat</a></li>
+                            <li><hr class="dropdown-divider my-1"></li>
+                            <li>
+                                <div class="dropdown-user-header d-flex align-items-center px-3 py-2">
+                                    <div class="me-2">
+                                        <i class="fas fa-user-circle fa-2x"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="user-name fw-semibold">{{ current_user.username or 'User' }}</div>
+                                        <div class="user-roles text-muted small">
+                                            {% for role in current_user.roles %}
+                                                <span class="badge bg-secondary text-uppercase me-1">{{ role.name }}</span>
+                                            {% else %}
+                                                <span class="text-muted">No roles</span>
+                                            {% endfor %}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </li>
-                        <li><hr class="dropdown-divider my-1"></li>
-                        <li><a class="dropdown-item py-2" href="{{ url_for('auth.profile') }}"><i class="fas fa-user-edit me-2 text-primary"></i>Profile</a></li>
-                        {% if user_has_role('admin') or user_has_role('analytics') %}
-                        <li><a class="dropdown-item py-2 {% if request.endpoint == 'main.config' %}active{% endif %}" href="{{ url_for('main.config') }}"><i class="fas fa-wrench me-2 text-primary"></i>Game Configuration</a></li>
-                        {% endif %}
-                        {% if user_has_role('superadmin') %}
-                        <li><a class="dropdown-item py-2" href="{{ url_for('db_admin.database_status') }}"><i class="fas fa-database me-2 text-success"></i>Database Admin</a></li>
-                        {% endif %}
-                        <li><hr class="dropdown-divider my-1"></li>
-                        <li><a class="dropdown-item py-2 text-danger" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
-                    </ul>
+                            </li>
+                            <li><hr class="dropdown-divider my-1"></li>
+                            <li><a class="dropdown-item py-2" href="{{ url_for('auth.profile') }}"><i class="fas fa-user-edit me-2 text-primary"></i>Profile</a></li>
+                            {% if user_has_role('admin') or user_has_role('analytics') %}
+                            <li><a class="dropdown-item py-2 {% if request.endpoint == 'main.config' %}active{% endif %}" href="{{ url_for('main.config') }}"><i class="fas fa-wrench me-2 text-primary"></i>Game Configuration</a></li>
+                            {% endif %}
+                            {% if user_has_role('superadmin') %}
+                            <li><a class="dropdown-item py-2" href="{{ url_for('db_admin.database_status') }}"><i class="fas fa-database me-2 text-success"></i>Database Admin</a></li>
+                            {% endif %}
+                            <li><hr class="dropdown-divider my-1"></li>
+                            <li><a class="dropdown-item py-2 text-danger" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                        </ul>
+                    </div>
                 </div>
             {% else %}
             <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-sm">Login</a>
@@ -737,7 +739,7 @@
                 <div class="nav-group-title">Analytics</div>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('teams') and request.endpoint != 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.index') }}"><i class="fas fa-users"></i><span>Teams</span></a>
                 <a class="nav-link {% if request.endpoint == 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.ranks') }}"><i class="fas fa-list-ol"></i><span>Team Rankings</span></a>
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('matches') %}active{% endif %}" href="{{ url_for('matches.index') }}"><i class="fas fa-gamepad"></i><span>Matches</span></a>
+                <a class="nav-link {% if request.endpoint == 'matches.index' %}active{% endif %}" href="{{ url_for('matches.index') }}"><i class="fas fa-gamepad"></i><span>Matches</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('alliances') %}active{% endif %}" href="{{ url_for('alliances.index') }}"><i class="fas fa-handshake"></i><span>Alliance Selection</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') %}active{% endif %}" href="{{ url_for('graphs.index') }}"><i class="fas fa-chart-line"></i><span>Graphs</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') and 'side-by-side' in request.endpoint %}active{% endif %}" href="{{ url_for('graphs.side_by_side') }}"><i class="fas fa-columns"></i><span>Comparison</span></a>
@@ -1005,12 +1007,23 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
+                    {# Normalize category values so templates can rely on Bootstrap color classes #}
+                    {% set normalized = category %}
+                    {# Map common non-Bootstrap category names to Bootstrap classes #}
+                    {% if not category or category == 'message' or category == 'info' or category == 'regular' or category == 'normal' %}
+                        {% set normalized = 'success' %}
+                    {% elif category == 'error' or category == 'err' %}
+                        {% set normalized = 'danger' %}
+                    {% elif category == 'warn' or category == 'warning' %}
+                        {% set normalized = 'warning' %}
+                    {% endif %}
+
                     <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
-                        <div class="toast-header bg-{{ category }}{% if category in ['danger', 'success', 'primary'] %} text-white{% endif %}">
-                            <i class="fas {% if category == 'success' %}fa-check-circle{% elif category == 'danger' %}fa-exclamation-triangle{% elif category == 'warning' %}fa-exclamation-circle{% else %}fa-info-circle{% endif %} me-2"></i>
+                        <div class="toast-header bg-{{ normalized }}{% if normalized in ['danger', 'success', 'primary'] %} text-white{% endif %}">
+                            <i class="fas {% if normalized == 'success' %}fa-check-circle{% elif normalized == 'danger' %}fa-exclamation-triangle{% elif normalized == 'warning' %}fa-exclamation-circle{% else %}fa-info-circle{% endif %} me-2"></i>
                             <strong class="me-auto">Notification</strong>
                             <small>Just now</small>
-                            <button type="button" class="btn-close {% if category in ['danger', 'success', 'primary'] %}btn-close-white{% endif %}" data-bs-dismiss="toast" aria-label="Close"></button>
+                            <button type="button" class="btn-close {% if normalized in ['danger', 'success', 'primary'] %}btn-close-white{% endif %}" data-bs-dismiss="toast" aria-label="Close"></button>
                         </div>
                         <div class="toast-body">
                             {{ message }}
@@ -1329,6 +1342,33 @@
             })
             .catch(err => console.warn('SW root registration failed:', err));
     }
+
+    // Reposition any portalled dropdowns on scroll/resize/mousewheel to prevent visual drift
+    (function addPortalledRepositionHandler(){
+        let pending = false;
+        function repositionPortalled() {
+            pending = false;
+            // Find any portalled menus
+            document.querySelectorAll('.dropdown-menu.navbar-glass').forEach(menu => {
+                try {
+                    if (!menu.__isPortalled || !menu.__portalToggle) return;
+                    positionFixedDropdown(menu.__portalToggle, menu);
+                } catch(e) { /* ignore */ }
+            });
+        }
+
+        function scheduleReposition() {
+            if (pending) return;
+            pending = true;
+            window.requestAnimationFrame(repositionPortalled);
+        }
+
+        // Listen to scroll, wheel and touchmove for robust repositioning
+        window.addEventListener('scroll', scheduleReposition, { passive: true });
+        window.addEventListener('wheel', scheduleReposition, { passive: true });
+        window.addEventListener('touchmove', scheduleReposition, { passive: true });
+        window.addEventListener('resize', scheduleReposition);
+    })();
     </script>
 
     <!-- Temporary debug shim: intercept scrollTo to capture unexpected jumps to top on tall portrait screens -->
@@ -2193,9 +2233,19 @@
         
         // Function to show auto-sync notifications
         function showAutoSyncNotification(message, type = 'info') {
+            // Normalize type values to Bootstrap alert classes
+            let normalizedType = type;
+            if (!type || type === 'info' || type === 'message' || type === 'default') {
+                normalizedType = 'success';
+            } else if (type === 'error' || type === 'err') {
+                normalizedType = 'danger';
+            } else if (type === 'warn') {
+                normalizedType = 'warning';
+            }
+
             // Create a notification banner
             const notification = document.createElement('div');
-            notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+            notification.className = `alert alert-${normalizedType} alert-dismissible fade show position-fixed`;
             notification.style.cssText = 'top: 80px; right: 20px; z-index: 9999; max-width: 400px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);';
             
             const iconMap = {
@@ -2204,8 +2254,8 @@
                 'warning': 'fas fa-exclamation-triangle',
                 'danger': 'fas fa-times-circle'
             };
-            
-            const icon = iconMap[type] || iconMap['info'];
+
+            const icon = iconMap[normalizedType] || iconMap['info'];
             
             notification.innerHTML = `
                 <div class="d-flex align-items-center">
@@ -2727,10 +2777,10 @@
             }
         });
 
-        // Portal topbar dropdowns to body so they stay fixed during page scroll (desktop only)
+        // Portal navbar/topbar dropdowns to body so they stay fixed during page scroll (desktop only)
         document.addEventListener('shown.bs.dropdown', function(event) {
             try {
-                const dropdown = event.target.closest('.topbar .dropdown');
+                const dropdown = event.target.closest('.navbar .dropdown, .topbar .dropdown');
                 if (!dropdown) return;
                 // Only portal dropdowns on desktop where we handle fixed positioning.
                 if (window.innerWidth < 992) return;
@@ -2750,8 +2800,11 @@
                 // Move menu to body and mark as navbar-glass so it matches topbar surface
                 menu.classList.add('navbar-glass');
                 document.body.appendChild(menu);
-                // Mark placeholder for restoration
+                // Mark placeholder and toggle for restoration/repositioning
                 menu.__portalPlaceholder = placeholder;
+                // Keep a reference to the toggle so we can reposition on scroll/resize
+                menu.__portalToggle = toggle;
+                menu.__isPortalled = true;
 
                 // Make it fixed and position it
                 menu.style.position = 'fixed';
@@ -2785,7 +2838,7 @@
         // Restore portalled dropdowns when they hide
         document.addEventListener('hide.bs.dropdown', function(event) {
             try {
-                const dropdown = event.target.closest('.topbar .dropdown');
+                const dropdown = event.target.closest('.navbar .dropdown, .topbar .dropdown');
                 if (!dropdown) return;
                 // The menu might already be in the dropdown or on body. Prefer any portalled menu (navbar-glass) first.
                 const menu = document.querySelector('.dropdown-menu.navbar-glass') || dropdown.querySelector('.dropdown-menu') || document.querySelector('.dropdown-menu[aria-expanded="true"]');
@@ -2854,7 +2907,10 @@
                     }
                 } catch (e) { /* ignore */ }
 
-                delete menu.__portalPlaceholder;
+                // Clean up portalling metadata
+                try { delete menu.__portalPlaceholder; } catch(e) {}
+                try { delete menu.__portalToggle; } catch(e) {}
+                try { delete menu.__isPortalled; } catch(e) {}
             } catch (e) {
                 console.warn('Dropdown portal restore error', e);
             }
