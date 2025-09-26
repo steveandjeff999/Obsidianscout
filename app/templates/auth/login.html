@@ -1,139 +1,91 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Scouting System</title>
-    <link href="{{ url_for('static', filename='css/vendor/bootstrap.min.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/vendor/fontawesome-all.min.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/styles.css') }}" rel="stylesheet">
+{% extends 'base.html' %}
+{% block title %}Sign In{% endblock %}
+{% block head %}
+    {{ super() }}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
     <style>
-        .login-container {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, rgba(40, 40, 40, 0.9) 0%, rgba(60, 60, 60, 0.8) 100%);
-        }
-        .login-card {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 15px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
-            overflow: hidden;
-            max-width: 400px;
-            width: 100%;
-            backdrop-filter: blur(5px);
-        }
-        .login-header {
-            background: linear-gradient(135deg, rgba(40, 40, 40, 0.95) 0%, rgba(60, 60, 60, 0.9) 100%);
-            color: white;
-            padding: 2rem;
-            text-align: center;
-        }
-        .login-body {
-            padding: 2rem;
-        }
-        .form-control:focus {
-            border-color: #555555;
-            box-shadow: 0 0 0 0.2rem rgba(70, 70, 70, 0.25);
-        }
-        .form-check-input:checked {
-            background-color: #555555;
-            border-color: #555555;
-        }
-        .btn-login {
-            background: linear-gradient(135deg, rgba(50, 50, 50, 0.95) 0%, rgba(70, 70, 70, 0.9) 100%);
-            border: none;
-            padding: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: white;
-        }
-        .btn-login:hover {
-            background: linear-gradient(135deg, rgba(60, 60, 60, 1) 0%, rgba(80, 80, 80, 1) 100%);
-            transform: translateY(-1px);
-            color: white;
-        }
+        /* Hide global sidebar and topbar for auth pages */
+        #appSidebar, .topbar { display: none !important; }
+        /* Remove any left offset applied for pages that normally show the sidebar */
+        body.with-sidebar main,
+        body.with-sidebar footer,
+        body.with-sidebar .topbar { margin-left: 0 !important; width: auto !important; }
+        body.with-sidebar { --sidebar-width: 0 !important; padding-top: 0 !important; }
+        main { padding-top: 0 !important; }
+        /* Make auth content centered and not constrained by sidebar */
+        .container, .auth-card { max-width: 680px; margin: 0 auto; }
     </style>
-</head>
-<body>
-    <div class="login-container">
-        <div class="login-card">
-            <div class="login-header">
-                <h3 class="mb-0">
-                    <i class="fas fa-shield-alt me-2"></i>
-                    Scouting System
-                </h3>
-                <p class="mb-0 mt-2 opacity-75">Please sign in to continue</p>
-            </div>
-            <div class="login-body">
-                <!-- Flash Messages -->
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                            </div>
-                        {% endfor %}
-                    {% endif %}
-                {% endwith %}
+{% endblock %}
 
-                <!-- Login Form -->
-                <form method="POST">
-                    <div class="mb-3">
-                        <label for="username" class="form-label">
-                            <i class="fas fa-user me-2 text-muted"></i>Username
-                        </label>
-                        <input type="text" class="form-control" id="username" name="username" required autofocus>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="team_number" class="form-label">
-                            <i class="fas fa-users me-2 text-muted"></i>Team Number
-                        </label>
-                        <input type="number" class="form-control" id="team_number" name="team_number" required>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="password" class="form-label">
-                            <i class="fas fa-lock me-2 text-muted"></i>Password
-                        </label>
-                        <input type="password" class="form-control" id="password" name="password" required>
-                        <div class="mt-2">
-                            <a href="{{ url_for('auth.forgot_password') }}">Forgot password?</a>
+{% block content %}
+<div class="d-flex align-items-center justify-content-center" style="min-height:70vh;">
+    <div class="card shadow-sm auth-card" style="max-width:420px; width:100%; border-radius:12px;">
+        <div class="card-header text-center bg-transparent border-0 py-4">
+            <h3 class="mb-1"><i class="fas fa-shield-alt me-2"></i>ObsidianScout</h3>
+            <div class="text-muted small">Sign in to continue to your team's scouting dashboard</div>
+        </div>
+        <div class="card-body px-4 py-3">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
-                    </div>
-                    
-                    <div class="mb-3 form-check">
-                        <input type="checkbox" class="form-check-input" id="remember_me" name="remember_me">
-                        <label class="form-check-label" for="remember_me">
-                            Remember me
-                        </label>
-                    </div>
-                    
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-login">
-                            <i class="fas fa-sign-in-alt me-2"></i>Sign In
-                        </button>
-                    </div>
-                </form>
-                
-                <div class="mt-4 text-center">
-                    <small class="text-muted d-block mb-2">
-                        Don't have an account? <a href="{{ url_for('auth.register') }}">Sign Up</a>
-                    </small>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
 
-                    <!-- About / Features button - links to public feature overview -->
-                    <a href="{{ url_for('setup.features') }}" class="btn btn-outline-secondary btn-sm" title="About ObsidianScout - Features">
-                        <i class="fas fa-info-circle me-1"></i> About / Features
-                    </a>
+            <form method="POST" novalidate class="needs-validation" id="loginForm">
+                <div class="mb-3">
+                    <label for="username" class="form-label visually-hidden">Username</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-user"></i></span>
+                        <input type="text" class="form-control" id="username" name="username" placeholder="Username" required autofocus>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="team_number" class="form-label visually-hidden">Team number</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-users"></i></span>
+                        <input type="number" class="form-control" id="team_number" name="team_number" placeholder="Team number" required>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="password" class="form-label visually-hidden">Password</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                        <input type="password" class="form-control" id="password" name="password" placeholder="Password" required aria-describedby="togglePassword">
+                        <button type="button" id="togglePassword" class="btn btn-outline-secondary" title="Show password"><i class="fas fa-eye"></i></button>
+                    </div>
+                    <div class="d-flex justify-content-between mt-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="remember_me" name="remember_me">
+                            <label class="form-check-label small" for="remember_me">Remember me</label>
+                        </div>
+                        <div><a href="{{ url_for('auth.forgot_password') }}" class="small">Forgot password?</a></div>
+                    </div>
+                </div>
+
+                <div class="d-grid mb-2">
+                    <button type="submit" class="btn btn-primary btn-lg">Sign In</button>
+                </div>
+            </form>
+
+            <div class="text-center mt-3">
+                <small class="text-muted">Don't have an account? <a href="{{ url_for('auth.register') }}">Create account</a></small>
+                <div class="mt-2">
+                    <a href="{{ url_for('setup.features') }}" class="btn btn-outline-secondary btn-sm mt-2"><i class="fas fa-info-circle me-1"></i> About / Features</a>
                 </div>
             </div>
         </div>
     </div>
+</div>
+{% endblock %}
 
-    <script src="{{ url_for('static', filename='js/vendor/bootstrap.bundle.min.js') }}"></script>
-</body>
-</html>
+{% block scripts %}
+    {{ super() }}
+    <script src="{{ url_for('static', filename='js/auth-enhancements.js') }}"></script>
+{% endblock %}
