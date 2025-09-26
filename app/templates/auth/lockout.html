@@ -2,6 +2,15 @@
 
 {% block title %}Account Temporarily Locked{% endblock %}
 
+{% block head %}
+    {{ super() }}
+    <style>
+        #appSidebar, .topbar { display: none !important; }
+        body.with-sidebar main, body.with-sidebar footer, body.with-sidebar .topbar { margin-left: 0 !important; width: auto !important; }
+        body.with-sidebar { --sidebar-width: 0 !important; padding-top: 0 !important; }
+    </style>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-5">
     <div class="row justify-content-center">

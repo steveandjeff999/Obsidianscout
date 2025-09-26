@@ -1,0 +1,23 @@
+/* Modern auth UI tweaks */
+.auth-card { border: 1px solid rgba(0,0,0,0.04); }
+.auth-card .card-header { background: linear-gradient(90deg, rgba(112,101,162,0.06), rgba(98,85,145,0.03)); }
+.input-group-text { background: transparent; border-right: 0; }
+.input-group .form-control { border-left: 0; }
+.btn-outline-secondary { border-color: rgba(0,0,0,0.08); }
+
+/* Smaller screens adjustments */
+@media (max-width: 576px) {
+    .auth-card { margin: 0 1rem; }
+}
+
+/* Accessibility focus styles */
+.form-control:focus { box-shadow: 0 0 0 0.2rem rgba(25, 118, 210, 0.15); }
+
+/* Subtle button elevation */
+.btn-primary { box-shadow: 0 6px 18px rgba(25,118,210,0.08); }
+
+/* Small helpers */
+.small-ghost { color: #6c757d; }
+
+/* Reduce .visually-hidden label visual regression */
+.visually-hidden { position: absolute !important; height: 1px; width: 1px; overflow: hidden; clip: rect(1px, 1px, 1px, 1px); white-space: nowrap; }

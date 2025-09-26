@@ -203,15 +203,14 @@ def reset_password(token):
 @bp.route('/change-password', methods=['GET', 'POST'])
 @login_required
 def change_password():
-    """Force password change for users who must change password, or allow voluntary changes"""
-    # Allow superadmins to change password anytime, or users who must change password
-    if not current_user.must_change_password and not current_user.has_role('superadmin'):
-        # If user doesn't need to change password and isn't superadmin, redirect appropriately
-        if current_user.has_role('scout') and not current_user.has_role('admin') and not current_user.has_role('analytics'):
-            return redirect(url_for('scouting.index'))
-        else:
-            return redirect(url_for('main.index'))
-    
+    """Force password change for users who must change password, or allow voluntary changes.
+
+    Previously this endpoint blocked access for normal users who didn't have the
+    `must_change_password` flag set. We allow any authenticated user to change
+    their password voluntarily while preserving the forced-change behavior at
+    login (login redirects to this page when must_change_password is True).
+    """
+    # No early redirect: allow any authenticated user to use this page.
     if request.method == 'POST':
         current_password = request.form['current_password']
         new_password = request.form['new_password']
@@ -235,11 +234,18 @@ def change_password():
             flash('New password must be different from current password.', 'error')
             return render_template('auth/change_password.html', **get_theme_context())
         
-        # Update password and clear the must_change_password flag
+        # Update password and clear the must_change_password flag. Wrap commit
+        # in try/except to avoid leaving the user in a broken state on DB errors.
         current_user.set_password(new_password)
         current_user.must_change_password = False
-        db.session.commit()
-        
+        try:
+            db.session.commit()
+        except Exception:
+            current_app.logger.exception('Failed to commit password change to database')
+            db.session.rollback()
+            flash('An internal error occurred while saving your new password. Please try again or contact an administrator.', 'error')
+            return render_template('auth/change_password.html', **get_theme_context())
+
         flash('Password changed successfully!', 'success')
         
         # Redirect to appropriate page based on role
