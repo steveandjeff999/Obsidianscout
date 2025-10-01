@@ -584,7 +584,9 @@ def create_app(test_config=None):
         SQLALCHEMY_DATABASE_URI='sqlite:///' + os.path.join(app.instance_path, 'scouting.db'),
         # Additional database bind for user accounts (stored separately)
         SQLALCHEMY_BINDS={
-            'users': 'sqlite:///' + os.path.join(app.instance_path, 'users.db')
+            'users': 'sqlite:///' + os.path.join(app.instance_path, 'users.db'),
+            # Dedicated database for user-created pages/widgets
+            'pages': 'sqlite:///' + os.path.join(app.instance_path, 'pages.db')
         },
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SQLALCHEMY_ENGINE_OPTIONS={
@@ -851,6 +853,21 @@ def create_app(test_config=None):
                             db.metadata.create_all(bind=users_engine, tables=users_tables)
                 except Exception as e:
                     app.logger.info('Could not create users bind tables via metadata.create_all; will attempt full create_all: %s', e)
+
+            # If a separate pages bind is configured, create its tables explicitly.
+            if 'SQLALCHEMY_BINDS' in app.config and 'pages' in app.config['SQLALCHEMY_BINDS']:
+                try:
+                    pages_engine = db.get_engine(app, bind='pages')
+                    try:
+                        from app.models import CustomPage
+                        CustomPage.__table__.create(pages_engine, checkfirst=True)
+                    except Exception as e:
+                        # Fall back to metadata create_all for pages bind
+                        pages_tables = [t for name, t in db.metadata.tables.items() if getattr(t, 'name', None) == 'custom_page']
+                        if pages_tables:
+                            db.metadata.create_all(bind=pages_engine, tables=pages_tables)
+                except Exception as e:
+                    app.logger.info('Could not create pages bind tables via metadata.create_all; continuing: %s', e)
 
             # Finally create all remaining tables on the default bind.
             # Creating per-table avoids SQLAlchemy attempting to sort cross-bind
