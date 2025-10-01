@@ -947,7 +947,15 @@ def pages_create():
     # Provide teams list for team-selection dropdown in the widget builder
     teams_q = Team.query.order_by(Team.team_number).all()
     teams = [{'id': t.team_number, 'name': t.team_name or f'Team {t.team_number}'} for t in teams_q]
-    return render_template('graphs/pages_create.html', game_config=game_config, metrics=metrics, scoring_elements=scoring_elements, teams=teams, initial_widgets=None, **get_theme_context())
+    
+    # Fetch events and matches for dropdown population
+    events_q = Event.query.order_by(Event.name).limit(500).all()
+    events = [{'id': e.id, 'name': e.name or e.code, 'code': e.code} for e in events_q]
+    
+    matches_q = Match.query.order_by(Match.event_id, Match.match_number).limit(1000).all()
+    matches = [{'id': m.id, 'event_id': m.event_id, 'match_type': m.match_type, 'match_number': m.match_number} for m in matches_q]
+    
+    return render_template('graphs/pages_create.html', game_config=game_config, metrics=metrics, scoring_elements=scoring_elements, teams=teams, events=events, matches=matches, initial_widgets=None, **get_theme_context())
 
 
 @bp.route('/pages/<int:page_id>/edit', methods=['GET', 'POST'])
@@ -999,8 +1007,15 @@ def pages_edit(page_id):
 
     teams_q = Team.query.order_by(Team.team_number).all()
     teams = [{'id': t.team_number, 'name': t.team_name or f'Team {t.team_number}'} for t in teams_q]
+    
+    # Fetch events and matches for dropdown population
+    events_q = Event.query.order_by(Event.name).limit(500).all()
+    events = [{'id': e.id, 'name': e.name or e.code, 'code': e.code} for e in events_q]
+    
+    matches_q = Match.query.order_by(Match.event_id, Match.match_number).limit(1000).all()
+    matches = [{'id': m.id, 'event_id': m.event_id, 'match_type': m.match_type, 'match_number': m.match_number} for m in matches_q]
 
-    return render_template('graphs/pages_create.html', game_config=game_config, metrics=metrics, scoring_elements=scoring_elements, teams=teams, initial_widgets=initial_widgets, page=page, **get_theme_context())
+    return render_template('graphs/pages_create.html', game_config=game_config, metrics=metrics, scoring_elements=scoring_elements, teams=teams, events=events, matches=matches, initial_widgets=initial_widgets, page=page, **get_theme_context())
 
 
 @bp.route('/pages/<int:page_id>/render_widget/<int:widget_index>', methods=['POST'])
@@ -1142,6 +1157,7 @@ def pages_widget_render(page_id, widget_index):
 @analytics_required
 def pages_view(page_id):
     """Render a custom page composed of widgets. Graph widgets will be generated using existing chart helpers."""
+    from flask import request
     page = CustomPage.query.get_or_404(page_id)
     # Only allow viewing pages owned by this team (for now)
     if page.owner_team != current_user.scouting_team_number:
@@ -1149,6 +1165,9 @@ def pages_view(page_id):
 
     widgets = page.widgets()
     plots = {}
+
+    # Import needed functions for new widget types
+    from app.utils.analysis import predict_match_outcome, get_match_details_with_teams
 
     # For each widget, generate plots and collect them under a widget key
     for i, widget in enumerate(widgets):
@@ -1260,6 +1279,210 @@ def pages_view(page_id):
 
             plots[wkey] = {'config': widget, 'plots': widget_plots}
 
+        elif wtype == 'match_prediction':
+            # Handle match prediction widget
+            # Check if user has selected a match via URL parameter
+            match_id = widget.get('match')
+            if widget.get('prediction_match') == 'user_select':
+                # Look for user selection in URL parameters
+                user_match = request.args.get(f'prediction_{i}')
+                if user_match:
+                    match_id = user_match
+            
+            prediction_data = None
+            if match_id and match_id != 'user_select':
+                try:
+                    match_details = get_match_details_with_teams(int(match_id))
+                    if match_details and match_details.get('prediction'):
+                        prediction_data = match_details['prediction']
+                        # Add match info for display
+                        prediction_data['match'] = match_details['match']
+                        prediction_data['match_completed'] = match_details.get('match_completed', False)
+                        prediction_data['actual_winner'] = match_details.get('actual_winner')
+                except Exception as e:
+                    current_app.logger.error(f"Error fetching match prediction for widget {i}: {e}")
+            plots[wkey] = {'config': widget, 'plots': {}, 'prediction_data': prediction_data}
+
+        elif wtype == 'team_comparison':
+            # Handle team comparison widget
+            team1_num = widget.get('team1') or widget.get('comparison_team1')
+            team2_num = widget.get('team2') or widget.get('comparison_team2')
+            # Check if user has selected teams via URL parameters
+            if widget.get('comparison_user_select'):
+                user_team1 = request.args.get(f'comparison_{i}_team1')
+                user_team2 = request.args.get(f'comparison_{i}_team2')
+                if user_team1:
+                    team1_num = user_team1
+                if user_team2:
+                    team2_num = user_team2
+            
+            metrics = widget.get('metrics', []) or widget.get('comparison_metrics', [])
+            comparison_data = None
+            
+            if team1_num and team2_num and metrics:
+                try:
+                    team1 = Team.query.filter_by(team_number=int(team1_num)).first()
+                    team2 = Team.query.filter_by(team_number=int(team2_num)).first()
+                    
+                    if team1 and team2:
+                        from app.utils.analysis import calculate_team_metrics
+                        team1_analytics = calculate_team_metrics(team1.id)
+                        team2_analytics = calculate_team_metrics(team2.id)
+                        
+                        comparison_data = {
+                            'team1': {
+                                'team_number': team1.team_number,
+                                'team_name': team1.team_name or f'Team {team1.team_number}',
+                                'metrics': team1_analytics.get('metrics', {})
+                            },
+                            'team2': {
+                                'team_number': team2.team_number,
+                                'team_name': team2.team_name or f'Team {team2.team_number}',
+                                'metrics': team2_analytics.get('metrics', {})
+                            },
+                            'selected_metrics': metrics
+                        }
+                except Exception as e:
+                    current_app.logger.error(f"Error fetching team comparison for widget {i}: {e}")
+            plots[wkey] = {'config': widget, 'plots': {}, 'comparison_data': comparison_data}
+
+        elif wtype == 'team_rankings':
+            # Handle team rankings widget
+            event_filter = widget.get('event', 'all') or widget.get('rankings_event', 'all')
+            # Check if user has selected an event via URL parameters
+            if event_filter == 'user_select':
+                user_event = request.args.get(f'rankings_{i}_event')
+                if user_event:
+                    event_filter = user_event
+            
+            count = int(widget.get('count', 10) or widget.get('rankings_count', 10))
+            sort_by = widget.get('sort_by', 'points') or widget.get('rankings_sort', 'points')
+            show_stats = widget.get('show_stats', False) or widget.get('rankings_show_stats', False)
+            rankings_data = None
+            
+            try:
+                from app.utils.analysis import calculate_team_metrics
+                
+                # Get teams based on event filter
+                if event_filter and event_filter != 'all':
+                    # Filter teams by event (would need event-team relationship)
+                    teams_query = Team.query.order_by(Team.team_number).all()
+                else:
+                    teams_query = Team.query.order_by(Team.team_number).all()
+                
+                # Calculate metrics for each team
+                team_rankings = []
+                for team in teams_query:
+                    analytics_result = calculate_team_metrics(team.id)
+                    metrics = analytics_result.get('metrics', {})
+                    
+                    # Determine sort value based on sort_by parameter
+                    if sort_by == 'points' or sort_by == 'score':
+                        sort_value = metrics.get('total_points') or metrics.get('tot') or 0
+                    elif sort_by == 'wins':
+                        sort_value = metrics.get('wins') or 0
+                    elif sort_by == 'RP':
+                        sort_value = metrics.get('ranking_points') or 0
+                    else:
+                        sort_value = metrics.get(sort_by) or 0
+                    
+                    team_rankings.append({
+                        'team_number': team.team_number,
+                        'team_name': team.team_name or f'Team {team.team_number}',
+                        'sort_value': sort_value,
+                        'metrics': metrics if show_stats else {}
+                    })
+                
+                # Sort by sort_value descending
+                team_rankings.sort(key=lambda x: x['sort_value'], reverse=True)
+                
+                # Limit to count
+                team_rankings = team_rankings[:count]
+                
+                # Add rank numbers
+                for idx, ranking in enumerate(team_rankings):
+                    ranking['rank'] = idx + 1
+                
+                rankings_data = {
+                    'rankings': team_rankings,
+                    'sort_by': sort_by,
+                    'show_stats': show_stats
+                }
+            except Exception as e:
+                current_app.logger.error(f"Error calculating team rankings for widget {i}: {e}")
+            
+            plots[wkey] = {'config': widget, 'plots': {}, 'rankings_data': rankings_data}
+
+        elif wtype == 'recent_matches':
+            # Handle recent matches widget
+            filter_type = widget.get('filter', 'all') or widget.get('matches_filter', 'all')
+            team_num = widget.get('team') or widget.get('matches_team')
+            event_filter = widget.get('event') or widget.get('matches_event')
+            # Check if user has selected an event via URL parameters
+            if event_filter == 'user_select':
+                user_event = request.args.get(f'matches_{i}_event')
+                if user_event:
+                    event_filter = user_event
+                    filter_type = 'event'  # Override filter type when user selects
+            
+            count = int(widget.get('count', 10) or widget.get('matches_count', 10))
+            show_scores = widget.get('show_scores', True) if widget.get('show_scores') is not None else widget.get('matches_show_scores', True)
+            matches_data = None
+            
+            try:
+                # Build query based on filter
+                matches_query = Match.query
+                
+                if filter_type == 'team' and team_num:
+                    # Filter matches that include this team
+                    team_num_str = str(team_num)
+                    matches_query = matches_query.filter(
+                        db.or_(
+                            Match.red_alliance.like(f'%{team_num_str}%'),
+                            Match.blue_alliance.like(f'%{team_num_str}%')
+                        )
+                    )
+                elif filter_type == 'event' and event_filter and event_filter != 'user_select':
+                    # Filter by event ID
+                    try:
+                        event_id = int(event_filter)
+                        matches_query = matches_query.filter_by(event_id=event_id)
+                    except ValueError:
+                        pass  # Invalid event ID
+                
+                # Order by most recent and limit
+                matches_query = matches_query.order_by(Match.timestamp.desc()).limit(count)
+                matches = matches_query.all()
+                
+                # Format matches data
+                matches_list = []
+                for match in matches:
+                    match_data = {
+                        'match_id': match.id,
+                        'match_type': match.match_type,
+                        'match_number': match.match_number,
+                        'red_alliance': match.red_alliance,
+                        'blue_alliance': match.blue_alliance,
+                        'timestamp': match.timestamp
+                    }
+                    
+                    if show_scores and match.red_score is not None and match.blue_score is not None:
+                        match_data['red_score'] = match.red_score
+                        match_data['blue_score'] = match.blue_score
+                        match_data['winner'] = 'red' if match.red_score > match.blue_score else 'blue' if match.blue_score > match.red_score else 'tie'
+                    
+                    matches_list.append(match_data)
+                
+                matches_data = {
+                    'matches': matches_list,
+                    'filter_type': filter_type,
+                    'show_scores': show_scores
+                }
+            except Exception as e:
+                current_app.logger.error(f"Error fetching recent matches for widget {i}: {e}")
+            
+            plots[wkey] = {'config': widget, 'plots': {}, 'matches_data': matches_data}
+
         else:
             # For unknown widget types, store as-is
             plots[wkey] = {'config': widget, 'plots': {}}
@@ -1282,7 +1505,14 @@ def pages_view(page_id):
     teams_q = Team.query.order_by(Team.team_number).all()
     teams = [{'id': t.team_number, 'name': t.team_name or f'Team {t.team_number}'} for t in teams_q]
 
-    return render_template('graphs/pages_view.html', page=page, plots=plots, metrics=metrics, scoring_elements=scoring_elements, teams=teams, **get_theme_context())
+    # Fetch events and matches for dropdown population
+    events_q = Event.query.order_by(Event.name).limit(500).all()
+    events = [{'id': e.id, 'name': e.name or e.code, 'code': e.code} for e in events_q]
+    
+    matches_q = Match.query.order_by(Match.event_id, Match.match_number).limit(1000).all()
+    matches = [{'id': m.id, 'event_id': m.event_id, 'match_type': m.match_type, 'match_number': m.match_number} for m in matches_q]
+
+    return render_template('graphs/pages_view.html', page=page, plots=plots, metrics=metrics, scoring_elements=scoring_elements, teams=teams, events=events, matches=matches, **get_theme_context())
 
 
 @bp.route('/pages/<int:page_id>/delete', methods=['POST'])
