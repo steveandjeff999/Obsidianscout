@@ -1,0 +1,295 @@
+{% extends 'base.html' %}
+{% block title %}{{ page.title }}{% endblock %}
+{% block heading %}{{ page.title }}{% endblock %}
+
+{% block content %}
+  <div class="mb-3">
+    <a class="btn btn-secondary" href="{{ url_for('graphs.pages_index') }}">Back to Pages</a>
+    {% if page.owner_team == current_user.scouting_team_number and page.owner_user == current_user.username %}
+      <a class="btn btn-outline-secondary ms-2" href="{{ url_for('graphs.pages_edit', page_id=page.id) }}">Edit Page</a>
+    {% endif %}
+  </div>
+
+  {% for key, widget in plots.items() %}
+    <div class="card mb-3 widget-view-card" data-widget-width="{{ widget.config.width or '' }}" data-widget-height="{{ widget.config.height or '' }}" style="position: relative; {% if widget.config.width %}width: {{ widget.config.width }}px; max-width: 100%; {% endif %}{% if widget.config.height %}min-height: {{ widget.config.height }}px; {% endif %}">
+      <div class="card-body" style="{% if widget.config.height %}min-height: calc({{ widget.config.height }}px - 3rem); {% endif %}">
+        <h5 class="card-title">{{ widget.config.title if widget.config.title else (widget.config.metric or 'Widget') }}</h5>
+        {# If widget config includes user_select flags, render controls for viewers #}
+        {% if widget.config.type == 'graph' %}
+          <div class="viewer-controls mb-2" data-widget-key="{{ loop.index0 }}">
+            {# Metric selector #}
+            {% set metric_user_select = widget.config.user_select if widget.config.user_select is defined else False %}
+            {% if metric_user_select %}
+              <div class="row g-2 align-items-center mb-2">
+                <div class="col-auto small text-muted">Metric:</div>
+                <div class="col">
+                  <select class="form-select viewer-metric-select" data-widget-index="{{ loop.index0 }}">
+                    {% for m in metrics %}
+                      <option value="{{ m.id }}" {% if m.id == widget.config.metric %}selected{% endif %}>{{ m.name }}</option>
+                    {% endfor %}
+                    {% for s in scoring_elements %}
+                      <option value="se:{{ s.id }}" {% if ('se:'~s.id) == widget.config.metric %}selected{% endif %}>{{ s.period }}: {{ s.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+            {% endif %}
+
+            {# Graph type selector #}
+            {% set graphtype_user_select = widget.config.graphtype_user_select if widget.config.graphtype_user_select is defined else False %}
+            {% if graphtype_user_select %}
+              <div class="row g-2 align-items-center mb-2">
+                <div class="col-auto small text-muted">Graph Types:</div>
+                <div class="col">
+                  <select class="form-select viewer-graphtype-select" data-widget-index="{{ loop.index0 }}" multiple>
+                    <option value="bar" {% if 'bar' in widget.config.graph_types %}selected{% endif %}>bar</option>
+                    <option value="line" {% if 'line' in widget.config.graph_types %}selected{% endif %}>line</option>
+                    <option value="scatter" {% if 'scatter' in widget.config.graph_types %}selected{% endif %}>scatter</option>
+                    <option value="histogram" {% if 'histogram' in widget.config.graph_types %}selected{% endif %}>histogram</option>
+                  </select>
+                </div>
+              </div>
+            {% endif %}
+
+            {# Teams selector #}
+            {% set teams_user_select = widget.config.teams_user_select if widget.config.teams_user_select is defined else False %}
+            {% if teams_user_select %}
+              <div class="row g-2 align-items-center mb-2">
+                <div class="col-auto small text-muted">Teams:</div>
+                <div class="col">
+                  <select class="form-select viewer-teams-select" data-widget-index="{{ loop.index0 }}" multiple>
+                    <option value="all" {% if not widget.config.teams or (widget.config.teams|length)==0 or ('all' in widget.config.teams) %}selected{% endif %}>All Teams</option>
+                    {% for t in teams %}
+                      <option value="{{ t.id }}" {% if t.id in widget.config.teams %}selected{% endif %}>{{ t.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+            {% endif %}
+
+            <div class="d-flex justify-content-end">
+              <button class="btn btn-sm btn-primary viewer-refresh" data-widget-index="{{ loop.index0 }}">Refresh</button>
+            </div>
+          </div>
+        {% endif %}
+        {% if widget.config.type == 'text' %}
+          <div class="widget-text-content">
+            <p style="white-space: pre-wrap;">{{ widget.config.text or '' }}</p>
+          </div>
+        {% elif widget.plots %}
+          <div class="row">
+            {% for plot_key, plot_json in widget.plots.items() %}
+              <div class="col-md-6 mb-3">
+                <div class="plotly-figure" data-plot-json='{{ plot_json|tojson|safe }}'></div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted">No plots for this widget.</p>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+
+  <style>
+  /* Ensure widget cards maintain their configured sizes */
+  .widget-view-card {
+    display: inline-block;
+    vertical-align: top;
+  }
+  .widget-view-card .card-body {
+    overflow: auto;
+  }
+  .widget-text-content {
+    padding: 0.5rem 0;
+  }
+  </style>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', function(){
+    // Apply widget sizes from data attributes (fallback if inline styles don't work)
+    document.querySelectorAll('.widget-view-card').forEach(function(card){
+      var width = card.getAttribute('data-widget-width');
+      var height = card.getAttribute('data-widget-height');
+      if (width && width !== '') {
+        card.style.width = width + 'px';
+        card.style.maxWidth = '100%';
+      }
+      if (height && height !== '') {
+        card.style.minHeight = height + 'px';
+      }
+    });
+
+    // Render Plotly charts from JSON stored in data-plot-json attributes
+    document.querySelectorAll('.plotly-figure').forEach(function(el){
+      try{
+        var j = JSON.parse(el.getAttribute('data-plot-json'));
+        Plotly.newPlot(el, j['data'], j['layout'] || {});
+      }catch(e){
+        console.error('Failed to render plotly figure', e);
+      }
+    });
+
+    // Wire up viewer controls for user-selectable widgets
+    document.querySelectorAll('.viewer-refresh').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var idx = btn.dataset.widgetIndex;
+        // gather overrides from possible viewer controls
+        var metricSel = document.querySelector('.viewer-metric-select[data-widget-index="'+idx+'"]');
+        var gtypeSel = document.querySelector('.viewer-graphtype-select[data-widget-index="'+idx+'"]');
+        var teamsSel = document.querySelector('.viewer-teams-select[data-widget-index="'+idx+'"]');
+        var overrides = {};
+        if (metricSel) overrides.metric = metricSel.value;
+
+        if (gtypeSel) {
+          // prefer live select.selectedOptions; if wrapped, read wrapper checkboxes
+          var gtypes = Array.from(gtypeSel.selectedOptions).map(o=>o.value);
+          if (!gtypes.length) {
+            var gw = gtypeSel.previousElementSibling;
+            if (gw && gw.classList && gw.classList.contains('custom-multiselect')) {
+              gtypes = Array.from(gw.querySelectorAll('.form-check-input:checked')).map(cb => cb.dataset.value);
+            }
+          }
+          overrides.graph_types = gtypes;
+        }
+
+        if (teamsSel) {
+          var teams = Array.from(teamsSel.selectedOptions).map(o=>o.value);
+          if (!teams.length) {
+            var tw = teamsSel.previousElementSibling;
+            if (tw && tw.classList && tw.classList.contains('custom-multiselect')) {
+              teams = Array.from(tw.querySelectorAll('.form-check-input:checked')).map(cb => cb.dataset.value);
+            }
+          }
+          overrides.teams = teams.map(v => (v === 'all' ? 'all' : parseInt(v))).filter(v => v !== '' && v !== null && !(isNaN(v) && v !== 'all'));
+        }
+
+        // Debug: log overrides so issues are visible in browser console
+        try{ console.info('Widget overrides for idx='+idx, overrides); }catch(e){}
+
+        // POST to render endpoint
+        fetch("{{ url_for('graphs.pages_widget_render', page_id=page.id, widget_index=0) }}".replace('/0', '/'+idx), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(overrides)
+        }).then(r=>r.json()).then(data=>{
+          if (data && data.plots) {
+            // Replace first plotly-figure inside the corresponding card
+            var card = btn.closest('.card');
+            if (card) {
+              var plotEl = card.querySelector('.plotly-figure');
+              // Use the first plot JSON returned
+              var keys = Object.keys(data.plots || {});
+              if (keys.length) {
+                try {
+                  // Prefer the plot that matches the user's selected graph type (if provided in overrides)
+                  var chosenKey = keys[0];
+                  try {
+                    if (overrides && overrides.graph_types && overrides.graph_types.length) {
+                      var pref = Array.isArray(overrides.graph_types) ? overrides.graph_types[0] : overrides.graph_types;
+                      for (var k_i = 0; k_i < keys.length; k_i++) {
+                        var k = keys[k_i];
+                        // keys are like '<metric>_line_avg' or '<metric>_bar_matches' - look for the preferred type string
+                        if (k.indexOf('_' + pref + '_') !== -1 || k.endsWith('_' + pref) || k.indexOf('_' + pref + 's') !== -1) { chosenKey = k; break; }
+                      }
+                    }
+                  } catch (e) { /* ignore */ }
+                  var pj = JSON.parse(data.plots[chosenKey]);
+                  if (plotEl) {
+                    Plotly.react(plotEl, pj.data, pj.layout || {});
+                  } else {
+                    // create a plot container and insert it into the card body (remove placeholder text)
+                    var cardBody = card.querySelector('.card-body') || card;
+                    // remove any placeholder 'No plots...' paragraph
+                    var placeholder = cardBody.querySelector('p.text-muted');
+                    if (placeholder && placeholder.textContent.trim().startsWith('No plots')) placeholder.remove();
+                    var containerRow = document.createElement('div');
+                    containerRow.className = 'row';
+                    var col = document.createElement('div');
+                    col.className = 'col-md-12 mb-3';
+                    var newPlotEl = document.createElement('div');
+                    newPlotEl.className = 'plotly-figure';
+                    col.appendChild(newPlotEl);
+                    containerRow.appendChild(col);
+                    // append after viewer-controls if present, else to end of card body
+                    var vc = card.querySelector('.viewer-controls');
+                    if (vc && vc.parentNode) vc.parentNode.insertBefore(containerRow, vc.nextSibling);
+                    else cardBody.appendChild(containerRow);
+                    Plotly.newPlot(newPlotEl, pj.data, pj.layout || {});
+                  }
+                } catch(e) { console.error('Failed to parse returned plot', e); }
+              }
+            }
+          }
+        }).catch(console.error);
+      });
+    });
+  });
+  </script>
+  <script>
+  // Convert multi-selects in viewer-controls to a checkbox dropdown so they behave like a collapsed dropdown
+  (function(){
+    function makeCustomMulti(el){
+      if (!el || el.dataset.customized) return;
+      el.dataset.customized = '1';
+      const wrapper = document.createElement('div');
+      wrapper.className = 'custom-multiselect dropdown';
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-outline-secondary dropdown-toggle';
+      btn.setAttribute('data-bs-toggle','dropdown');
+      btn.textContent = (el.getAttribute('data-placeholder') || 'Select...');
+
+      const menu = document.createElement('div');
+      menu.className = 'dropdown-menu';
+
+      Array.from(el.options).forEach(opt => {
+        const item = document.createElement('div');
+        item.className = 'form-check';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'form-check-input';
+        cb.id = 'cb_' + Math.random().toString(36).slice(2,9);
+        cb.checked = opt.selected;
+        // keep the original option value so we can reconstruct values from the wrapper
+        cb.dataset.value = opt.value;
+        const label = document.createElement('label');
+        label.className = 'form-check-label';
+        label.htmlFor = cb.id;
+        label.textContent = opt.text;
+        cb.addEventListener('change', function(){
+          opt.selected = cb.checked;
+          // dispatch bubbled events so other handlers notice
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          updateBtnText();
+        });
+        item.appendChild(cb);
+        item.appendChild(label);
+        menu.appendChild(item);
+      });
+
+      function updateBtnText(){
+        const sel = Array.from(el.selectedOptions).map(o=>o.text);
+        btn.textContent = sel.length ? sel.join(', ') : (el.getAttribute('data-placeholder') || 'Select...');
+      }
+
+      // replace select with wrapper but keep the select in DOM (hidden) so form logic still works
+      // copy data-* attributes (eg data-widget-index) from the select to the wrapper for easier lookup
+      Array.from(el.attributes).forEach(attr => { if (attr.name.startsWith('data-')) wrapper.setAttribute(attr.name, attr.value); });
+      el.style.display = 'none';
+      el.parentNode.insertBefore(wrapper, el);
+      wrapper.appendChild(btn);
+      wrapper.appendChild(menu);
+      updateBtnText();
+      // close dropdown when clicking outside
+      document.addEventListener('click', function(e){ if (!wrapper.contains(e.target)) bootstrap.Dropdown && bootstrap.Dropdown.getOrCreateInstance(btn).hide(); });
+    }
+
+    document.addEventListener('DOMContentLoaded', function(){
+      document.querySelectorAll('.viewer-controls select[multiple]').forEach(makeCustomMulti);
+    });
+  })();
+  </script>
+{% endblock %}

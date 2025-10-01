@@ -1547,6 +1547,37 @@ class SharedTeamRanks(db.Model):
         return query.order_by(cls.created_at.desc()).all()
 
 
+class CustomPage(db.Model):
+    """Model to store user-created custom pages composed of widgets.
+
+    widgets_json stores a JSON array of widget definitions. Each widget is a
+    dict with at least: {'type': 'graph', 'metric': '<metric_id>', 'graph_types': [...], 'data_view': 'averages', 'teams': [numbers]}
+    """
+    __tablename__ = 'custom_page'
+    __bind_key__ = 'pages'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    owner_team = db.Column(db.Integer, nullable=False)
+    owner_user = db.Column(db.String(80), nullable=False)
+    widgets_json = db.Column(db.Text, nullable=False)  # JSON array of widget configs
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True)
+
+    def __repr__(self):
+        return f'<CustomPage {self.id} - {self.title} by {self.owner_user}> '
+
+    def widgets(self):
+        try:
+            return json.loads(self.widgets_json)
+        except Exception:
+            return []
+
+    def set_widgets(self, widgets_obj):
+        self.widgets_json = json.dumps(widgets_obj)
+
+
 # =============================================================================
 # Multi-Server Synchronization Models
 # =============================================================================
