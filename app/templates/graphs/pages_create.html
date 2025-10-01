@@ -39,19 +39,131 @@
               </div>
             </div>
           </div>
+          <div class="toolbox-item list-group mb-2" draggable="true" data-widget-type="heading" style="cursor:grab;">
+            <div class="list-group-item d-flex align-items-center">
+              <i class="fas fa-heading me-2"></i>
+              <div>
+                <div class="fw-semibold">Heading Widget</div>
+                <div class="small text-muted">Add section headings</div>
+              </div>
+            </div>
+          </div>
+          <div class="toolbox-item list-group mb-2" draggable="true" data-widget-type="image" style="cursor:grab;">
+            <div class="list-group-item d-flex align-items-center">
+              <i class="fas fa-image me-2"></i>
+              <div>
+                <div class="fw-semibold">Image Widget</div>
+                <div class="small text-muted">Display images or logos</div>
+              </div>
+            </div>
+          </div>
+          <div class="toolbox-item list-group mb-2" draggable="true" data-widget-type="stats" style="cursor:grab;">
+            <div class="list-group-item d-flex align-items-center">
+              <i class="fas fa-list-ol me-2"></i>
+              <div>
+                <div class="fw-semibold">Stats Widget</div>
+                <div class="small text-muted">Show key statistics</div>
+              </div>
+            </div>
+          </div>
+          <div class="toolbox-item list-group mb-2" draggable="true" data-widget-type="divider" style="cursor:grab;">
+            <div class="list-group-item d-flex align-items-center">
+              <i class="fas fa-minus me-2"></i>
+              <div>
+                <div class="fw-semibold">Divider Widget</div>
+                <div class="small text-muted">Visual separator line</div>
+              </div>
+            </div>
+          </div>
+          <div class="toolbox-item list-group mb-2" draggable="true" data-widget-type="button" style="cursor:grab;">
+            <div class="list-group-item d-flex align-items-center">
+              <i class="fas fa-hand-pointer me-2"></i>
+              <div>
+                <div class="fw-semibold">Button Widget</div>
+                <div class="small text-muted">Clickable button with link</div>
+              </div>
+            </div>
+          </div>
+          <div class="toolbox-item list-group mb-2" draggable="true" data-widget-type="link" style="cursor:grab;">
+            <div class="list-group-item d-flex align-items-center">
+              <i class="fas fa-link me-2"></i>
+              <div>
+                <div class="fw-semibold">Link Widget</div>
+                <div class="small text-muted">Hyperlink to external page</div>
+              </div>
+            </div>
+          </div>
+          <div class="toolbox-item list-group mb-2" draggable="true" data-widget-type="list" style="cursor:grab;">
+            <div class="list-group-item d-flex align-items-center">
+              <i class="fas fa-list-ul me-2"></i>
+              <div>
+                <div class="fw-semibold">List Widget</div>
+                <div class="small text-muted">Bullet or numbered list</div>
+              </div>
+            </div>
+          </div>
+          <div class="toolbox-item list-group mb-2" draggable="true" data-widget-type="spacer" style="cursor:grab;">
+            <div class="list-group-item d-flex align-items-center">
+              <i class="fas fa-arrows-alt-v me-2"></i>
+              <div>
+                <div class="fw-semibold">Spacer Widget</div>
+                <div class="small text-muted">Empty space for layout</div>
+              </div>
+            </div>
+          </div>
+          <div class="toolbox-item list-group mb-2" draggable="true" data-widget-type="match_prediction" style="cursor:grab;">
+            <div class="list-group-item d-flex align-items-center">
+              <i class="fas fa-trophy me-2"></i>
+              <div>
+                <div class="fw-semibold">Match Prediction Widget</div>
+                <div class="small text-muted">AI-powered match outcome prediction</div>
+              </div>
+            </div>
+          </div>
+          <div class="toolbox-item list-group mb-2" draggable="true" data-widget-type="team_comparison" style="cursor:grab;">
+            <div class="list-group-item d-flex align-items-center">
+              <i class="fas fa-balance-scale me-2"></i>
+              <div>
+                <div class="fw-semibold">Team Comparison Widget</div>
+                <div class="small text-muted">Compare two teams side-by-side</div>
+              </div>
+            </div>
+          </div>
+          <div class="toolbox-item list-group mb-2" draggable="true" data-widget-type="team_rankings" style="cursor:grab;">
+            <div class="list-group-item d-flex align-items-center">
+              <i class="fas fa-list-ol me-2"></i>
+              <div>
+                <div class="fw-semibold">Team Rankings Widget</div>
+                <div class="small text-muted">Display team leaderboard</div>
+              </div>
+            </div>
+          </div>
+          <div class="toolbox-item list-group mb-2" draggable="true" data-widget-type="recent_matches" style="cursor:grab;">
+            <div class="list-group-item d-flex align-items-center">
+              <i class="fas fa-history me-2"></i>
+              <div>
+                <div class="fw-semibold">Recent Matches Widget</div>
+                <div class="small text-muted">Show recent match results</div>
+              </div>
+            </div>
+          </div>
           <div class="form-text">Tip: drag multiple widgets into the canvas and reorder them.</div>
         </div>
       </div>
     </div>
 
-    <div class="col-lg-8">
-      <div class="card">
-        <div class="card-header">Canvas</div>
+    <div class="col-lg-8" id="canvasColumn">
+      <div class="card" id="canvasCard">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>Canvas</span>
+          <button type="button" class="btn btn-sm btn-outline-primary" id="toggleFullscreenBtn" title="Toggle Fullscreen">
+            <i class="fas fa-expand"></i> <span id="fullscreenBtnText">Fullscreen</span>
+          </button>
+        </div>
         <div class="card-body">
-          <div id="canvas" class="border rounded p-3" style="min-height:320px; background:#f8f9fa; max-height:60vh; overflow:auto; position:relative;">
+          <div id="canvas" class="border rounded p-3" style="min-height:320px; background:#f8f9fa; position:relative; width: 100%; box-sizing: border-box; overflow-x: hidden; overflow-y: auto;">
             <div id="canvasEmpty" class="text-muted">Drop widgets here</div>
           </div>
-          <div class="form-text mt-2">Canvas is scrollable. Widgets can be resized by dragging the handle at the bottom-right of each widget.</div>
         </div>
         <div class="card-footer d-flex justify-content-between">
           <div>
@@ -93,6 +205,8 @@
 <script id="page_builder_metrics_json" type="application/json">{{ metrics|tojson|safe }}</script>
 <script id="page_builder_scoring_json" type="application/json">{{ scoring_elements|tojson|safe }}</script>
 <script id="page_builder_teams_json" type="application/json">{{ teams|tojson|safe }}</script>
+<script id="page_builder_events_json" type="application/json">{{ events|default([])|tojson|safe }}</script>
+<script id="page_builder_matches_json" type="application/json">{{ matches|default([])|tojson|safe }}</script>
 <script id="page_builder_initial_widgets" type="application/json">{{ initial_widgets|tojson|safe }}</script>
 <script id="page_builder_initial_page" type="application/json">{% if page is defined %}{{ {'title': page.title, 'id': page.id}|tojson|safe }}{% else %}{}{% endif %}</script>
 
@@ -136,6 +250,330 @@
   user-select: none;
   width: 100%;
 }
+
+/* Make sure checkboxes are visible and usable in the custom multiselects */
+.custom-multiselect .dropdown-menu .form-check-input {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+  accent-color: var(--bs-primary, #0d6efd);
+  cursor: pointer;
+}
+
+@media (prefers-color-scheme: dark) {
+  .custom-multiselect .dropdown-menu {
+    background-color: #222 !important;
+    color: #f8f9fa !important;
+  }
+  /* add left padding so checkbox icons don't get clipped by rounded corners */
+  .custom-multiselect .dropdown-menu {
+    padding-left: 0.6rem;
+    padding-right: 0.4rem;
+    box-sizing: border-box;
+  }
+  .custom-multiselect .dropdown-menu .form-check-label {
+    color: #f8f9fa !important;
+  }
+  .custom-multiselect .dropdown-menu .form-check-input {
+    accent-color: #66b2ff;
+    filter: none;
+  }
+  .custom-multiselect .dropdown-menu .form-check-input {
+    margin-left: 0.35rem;
+  }
+}
+
+/* Fullscreen canvas styling */
+#canvasCard.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  margin: 0;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+#canvasCard.fullscreen .card-header {
+  flex-shrink: 0;
+  padding: 0.75rem 1rem;
+}
+
+#canvasCard.fullscreen .card-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0 !important;
+  overflow: hidden;
+  min-height: 0;
+  height: 100%;
+}
+
+#canvasCard.fullscreen #canvas {
+  max-height: none !important;
+  height: 100% !important;
+  flex: 1 1 auto;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  min-height: 0;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 1rem !important;
+}
+
+#canvasCard.fullscreen .card-footer {
+  margin-top: 0;
+  flex-shrink: 0;
+  padding: 0.75rem 1rem;
+}
+
+#canvasCard.fullscreen ~ .card {
+  display: none;
+}
+
+/* Hide the form-text in fullscreen */
+#canvasCard.fullscreen .form-text {
+  display: none;
+}
+
+/* Toolbox in fullscreen - floating panel */
+.fullscreen-toolbox {
+  position: fixed;
+  left: 15px;
+  top: 80px;
+  width: 320px;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+  z-index: 10000;
+  background: var(--bs-card-bg, #fff);
+  border: 2px solid var(--bs-border-color, #dee2e6);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease;
+  padding: 0;
+}
+
+.fullscreen-toolbox.collapsed {
+  transform: translateX(-350px);
+}
+
+.fullscreen-toolbox .card-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bs-card-cap-bg, rgba(0, 0, 0, 0.03));
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fullscreen-toolbox .card-body {
+  padding: 1rem;
+  background: var(--bs-card-bg, #fff);
+}
+
+.fullscreen-toolbox-toggle {
+  position: fixed;
+  left: 15px;
+  top: 80px;
+  z-index: 10001;
+  transition: left 0.3s ease;
+  opacity: 0.9;
+}
+
+.fullscreen-toolbox-toggle:hover {
+  opacity: 1;
+}
+
+.fullscreen-toolbox.collapsed + .fullscreen-toolbox-toggle {
+  left: 15px;
+}
+
+.fullscreen-toolbox:not(.collapsed) + .fullscreen-toolbox-toggle {
+  left: 345px;
+}
+
+/* Dark mode friendly styles */
+@media (prefers-color-scheme: dark) {
+  #canvas {
+    background: #2b3035 !important;
+    border-color: #495057 !important;
+  }
+  
+  #canvasCard.fullscreen #canvas {
+    background: #1a1d20 !important;
+  }
+  
+  .widget-card {
+    background: #343a40;
+    border-color: #495057;
+  }
+  
+  .widget-card .card-header {
+    background: #2b3035;
+    border-color: #495057;
+    color: #f8f9fa;
+  }
+  
+  .widget-card .card-body {
+    background: #343a40;
+    color: #f8f9fa;
+  }
+  
+  .divider-preview,
+  .heading-preview,
+  .image-preview,
+  .stats-preview,
+  .button-preview,
+  .list-preview {
+    background: #2b3035 !important;
+    color: #f8f9fa;
+  }
+  
+  #canvasEmpty {
+    color: #adb5bd;
+  }
+  
+  .form-control,
+  .form-select {
+    background-color: #2b3035;
+    border-color: #495057;
+    color: #f8f9fa;
+  }
+  
+  .form-control:focus,
+  .form-select:focus {
+    background-color: #343a40;
+    border-color: #6c757d;
+    color: #f8f9fa;
+  }
+  
+  #canvasCard.fullscreen .form-control,
+  #canvasCard.fullscreen .form-select,
+  #canvasCard.fullscreen textarea {
+    max-height: none !important;
+  }
+}
+
+.widget-card {
+  cursor: default;
+  box-sizing: border-box;
+}
+
+.widget-card .card-body {
+  overflow: visible;
+  height: auto;
+}
+
+.widget-card.dragging {
+  opacity: 0.5;
+}
+
+.widget-card[style*="position: absolute"] {
+  cursor: default;
+}
+
+.widget-card[style*="position: absolute"] .card-header {
+  cursor: move;
+}
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  #canvasColumn {
+    margin-top: 1rem;
+  }
+  
+  .widget-card {
+    max-width: 100% !important;
+    box-sizing: border-box;
+  }
+  
+  .widget-card[style*="position: absolute"] {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    margin: 0 0 1rem 0 !important;
+    width: 100% !important;
+  }
+  
+  #canvas {
+    padding: 0.5rem !important;
+    overflow-x: hidden !important;
+    max-height: 60vh;
+  }
+  
+  #canvasCard:not(.fullscreen) #canvas {
+    max-height: 60vh;
+  }
+  
+  .toolbox-item {
+    touch-action: none;
+  }
+  
+  #canvasCard.fullscreen {
+    padding: 0;
+  }
+  
+  #canvasCard.fullscreen #canvas {
+    max-height: none !important;
+    height: 100% !important;
+    overflow: auto !important;
+  }
+  
+  #canvasCard.fullscreen .widget-card {
+    max-width: 100%;
+    box-sizing: border-box;
+    height: auto !important;
+    min-height: auto !important;
+  }
+  
+  #canvasCard.fullscreen .widget-card .card-body {
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  
+  #canvasCard.fullscreen .widget-card .card-body > * {
+    max-height: none !important;
+  }
+  
+  .card-header {
+    font-size: 0.9rem;
+  }
+  
+  .form-label {
+    font-size: 0.875rem;
+  }
+  
+  .form-select, .form-control, .btn {
+    font-size: 0.875rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .card-footer {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .card-footer > div {
+    width: 100%;
+  }
+  
+  .card-footer .btn {
+    width: 100%;
+  }
+}
 </style>
 
 <script>
@@ -144,12 +582,42 @@ document.addEventListener('DOMContentLoaded', function() {
   const PAGE_BUILDER_METRICS = JSON.parse(document.getElementById('page_builder_metrics_json').textContent || '[]');
   const PAGE_BUILDER_SCORING = JSON.parse(document.getElementById('page_builder_scoring_json').textContent || '[]');
   const PAGE_BUILDER_TEAMS = JSON.parse(document.getElementById('page_builder_teams_json').textContent || '[]');
+  const PAGE_BUILDER_EVENTS = JSON.parse(document.getElementById('page_builder_events_json').textContent || '[]');
+  const PAGE_BUILDER_MATCHES = JSON.parse(document.getElementById('page_builder_matches_json').textContent || '[]');
 
   const toolboxItems = document.querySelectorAll('.toolbox-item');
   const canvas = document.getElementById('canvas');
   const canvasEmpty = document.getElementById('canvasEmpty');
   const form = document.getElementById('pageCreateForm');
   const hiddenField = document.getElementById('widgets_json_hidden');
+
+  // Helper function to populate matches dropdown for an event
+  function populateMatchesForEvent(eventId, matchSelect) {
+    if (!matchSelect) return;
+    const currentValue = matchSelect.value;
+    const userSelectOpt = matchSelect.querySelector('option[value="user_select"]');
+    // Clear existing match options
+    Array.from(matchSelect.options).forEach(opt => {
+      if (opt.value && opt.value !== 'user_select' && opt.value !== '') {
+        opt.remove();
+      }
+    });
+    // Filter matches from PAGE_BUILDER_MATCHES for this event
+    const eventMatches = PAGE_BUILDER_MATCHES.filter(m => m.event_id == eventId);
+    eventMatches.forEach(match => {
+      const opt = document.createElement('option');
+      opt.value = match.id;
+      opt.textContent = `${match.match_type} ${match.match_number}`;
+      if (userSelectOpt) {
+        matchSelect.insertBefore(opt, userSelectOpt);
+      } else {
+        matchSelect.appendChild(opt);
+      }
+    });
+    if (currentValue && eventMatches.some(m => m.id == currentValue)) {
+      matchSelect.value = currentValue;
+    }
+  }
 
   let draggedToolType = null;
   let draggedWidget = null;
@@ -162,50 +630,152 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // Make canvas accept drops
-  canvas.addEventListener('dragover', (e) => { e.preventDefault(); });
+  canvas.addEventListener('dragover', (e) => { 
+    e.preventDefault(); 
+    e.stopPropagation();
+  });
   canvas.addEventListener('drop', (e) => {
     e.preventDefault();
+    e.stopPropagation();
     const type = e.dataTransfer.getData('text/plain') || draggedToolType;
-    if (!type) return;
-    addWidgetToCanvas(type);
+    if (!type || type === 'widget') return; // Ignore widget reordering drops
+    
+    // Get drop position relative to canvas
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left + canvas.scrollLeft;
+    const y = e.clientY - rect.top + canvas.scrollTop;
+    
+    addWidgetToCanvas(type, null, x, y);
   });
 
   // Allow reordering of widgets inside canvas using native drag on widget cards
+  // Only for relatively positioned widgets (not absolutely positioned ones)
   function enableWidgetDnD(widgetEl){
+    // Skip drag-and-drop reordering for absolutely positioned widgets
+    if (widgetEl.style.position === 'absolute') {
+      widgetEl.setAttribute('draggable','false');
+      return;
+    }
+    
     widgetEl.setAttribute('draggable','true');
-    widgetEl.addEventListener('dragstart', (e)=>{ draggedWidget = widgetEl; e.dataTransfer.setData('text/plain','widget'); widgetEl.classList.add('dragging'); });
-    widgetEl.addEventListener('dragend', ()=>{ draggedWidget = null; widgetEl.classList.remove('dragging'); });
-    widgetEl.addEventListener('dragover', (e)=>{ e.preventDefault(); const target = e.currentTarget; if (draggedWidget && draggedWidget !== target) {
-      const rect = target.getBoundingClientRect();
-      const before = (e.clientY - rect.top) < (rect.height / 2);
-      canvas.insertBefore(draggedWidget, before ? target : target.nextSibling);
-    }});
+    widgetEl.addEventListener('dragstart', (e)=>{ 
+      // Only allow dragging if not absolutely positioned
+      if (widgetEl.style.position === 'absolute') {
+        e.preventDefault();
+        return;
+      }
+      draggedWidget = widgetEl; 
+      e.dataTransfer.setData('text/plain','widget'); 
+      widgetEl.classList.add('dragging'); 
+    });
+    widgetEl.addEventListener('dragend', ()=>{ 
+      draggedWidget = null; 
+      widgetEl.classList.remove('dragging'); 
+    });
+    widgetEl.addEventListener('dragover', (e)=>{ 
+      // Only reorder if both widgets are relatively positioned
+      if (draggedWidget && draggedWidget !== widgetEl && widgetEl.style.position !== 'absolute' && draggedWidget.style.position !== 'absolute') {
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = widgetEl.getBoundingClientRect();
+        const before = (e.clientY - rect.top) < (rect.height / 2);
+        canvas.insertBefore(draggedWidget, before ? widgetEl : widgetEl.nextSibling);
+      }
+    });
+    widgetEl.addEventListener('drop', (e)=>{
+      // Prevent canvas drop handler from firing
+      if (draggedWidget && widgetEl.style.position !== 'absolute') {
+        e.stopPropagation();
+      }
+    });
   }
 
-  function addWidgetToCanvas(type, initial){
+  function addWidgetToCanvas(type, initial, dropX, dropY){
     if (canvasEmpty) canvasEmpty.style.display = 'none';
     const id = 'w_' + Date.now() + '_' + Math.floor(Math.random()*1000);
     const wrapper = document.createElement('div');
     wrapper.className = 'card mb-3 widget-card';
-    // Ensure wrappers are positioned so resize handle can be absolute
-    wrapper.style.position = 'relative';
     
     // Set default sizes - can be overridden by initial config or resized by user
-    const defaultWidth = type === 'text' ? '400px' : '600px';
-    const defaultHeight = type === 'text' ? '200px' : '400px';
+    let defaultWidth, defaultHeight;
+    switch(type) {
+      case 'text':
+        defaultWidth = '400px'; defaultHeight = '200px'; break;
+      case 'heading':
+        defaultWidth = '500px'; defaultHeight = '100px'; break;
+      case 'image':
+        defaultWidth = '400px'; defaultHeight = '300px'; break;
+      case 'stats':
+        defaultWidth = '300px'; defaultHeight = '180px'; break;
+      case 'divider':
+        defaultWidth = '100%'; defaultHeight = '50px'; break;
+      case 'button':
+        defaultWidth = '250px'; defaultHeight = '120px'; break;
+      case 'link':
+        defaultWidth = '300px'; defaultHeight = '100px'; break;
+      case 'list':
+        defaultWidth = '400px'; defaultHeight = '220px'; break;
+      case 'spacer':
+        defaultWidth = '100%'; defaultHeight = '80px'; break;
+      case 'match_prediction':
+        defaultWidth = '700px'; defaultHeight = '500px'; break;
+      case 'team_comparison':
+        defaultWidth = '800px'; defaultHeight = '450px'; break;
+      case 'team_rankings':
+        defaultWidth = '500px'; defaultHeight = '600px'; break;
+      case 'recent_matches':
+        defaultWidth = '600px'; defaultHeight = '400px'; break;
+      default:
+        defaultWidth = '600px'; defaultHeight = '400px';
+    }
     
     wrapper.style.width = defaultWidth;
-    wrapper.style.height = defaultHeight;
+    wrapper.style.minHeight = defaultHeight;
     wrapper.dataset.widgetType = type;
     wrapper.dataset.widgetId = id;
     wrapper.innerHTML = widgetInnerHtml(type, id, initial || {});
-    canvas.appendChild(wrapper);
-    enableWidgetDnD(wrapper);
-    attachWidgetControls(wrapper);
-    attachResizeHandlers(wrapper);
+    
+    // Determine final position - check initial data first, then drop coordinates
+    let finalPosition = 'relative';
+    let finalX, finalY;
+    
+    if (initial && initial.x !== undefined && initial.y !== undefined) {
+      // Loading saved widget with position
+      finalPosition = 'absolute';
+      finalX = typeof initial.x === 'number' ? initial.x : parseInt(initial.x);
+      finalY = typeof initial.y === 'number' ? initial.y : parseInt(initial.y);
+    } else if (dropX !== undefined && dropY !== undefined) {
+      // New widget dropped on canvas
+      finalPosition = 'absolute';
+      finalX = dropX;
+      finalY = dropY;
+    }
+    
+    // Apply position
+    wrapper.style.position = finalPosition;
+    if (finalPosition === 'absolute') {
+      wrapper.style.left = finalX + 'px';
+      wrapper.style.top = finalY + 'px';
+      wrapper.style.margin = '0';
+    }
+    
     // Apply initial size if provided (override defaults)
     if (initial && initial.width) wrapper.style.width = (typeof initial.width === 'number' ? initial.width + 'px' : initial.width);
     if (initial && initial.height) wrapper.style.height = (typeof initial.height === 'number' ? initial.height + 'px' : initial.height);
+    
+    // Add to canvas AFTER setting all styles
+    canvas.appendChild(wrapper);
+    
+    attachWidgetControls(wrapper);
+    attachResizeHandlers(wrapper);
+    
+    // Attach appropriate drag handlers based on position type
+    if (wrapper.style.position === 'absolute') {
+      wrapper.setAttribute('draggable', 'false');
+      attachDragMoveHandlers(wrapper);
+    } else {
+      enableWidgetDnD(wrapper);
+    }
     
     // Convert any multi-select dropdowns in this widget to custom dropdowns
     wrapper.querySelectorAll('select[multiple]').forEach(makeCustomMulti);
@@ -292,11 +862,497 @@ document.addEventListener('DOMContentLoaded', function() {
             <textarea class="form-control widget-text" rows="3">${initial.text || ''}</textarea>
           </div>
         </div>`;
+    } else if (type === 'heading'){
+      const headingSize = initial.heading_size || 'h3';
+      return `
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Heading Widget</strong>
+          <div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-widget" title="Remove"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Preview</label>
+            <div class="heading-preview p-2 bg-light rounded">
+              <${headingSize} class="heading-preview-text m-0" style="color: ${initial.heading_color || '#212529'};">${initial.heading_text || 'Heading Text'}</${headingSize}>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Heading Text</label>
+            <input type="text" class="form-control widget-heading-text" value="${initial.heading_text || ''}" placeholder="Enter heading...">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Size</label>
+            <select class="form-select widget-heading-size">
+              <option value="h1" ${initial.heading_size === 'h1' ? 'selected' : ''}>H1 (Largest)</option>
+              <option value="h2" ${initial.heading_size === 'h2' ? 'selected' : ''}>H2</option>
+              <option value="h3" ${initial.heading_size === 'h3' || !initial.heading_size ? 'selected' : ''}>H3 (Default)</option>
+              <option value="h4" ${initial.heading_size === 'h4' ? 'selected' : ''}>H4</option>
+              <option value="h5" ${initial.heading_size === 'h5' ? 'selected' : ''}>H5</option>
+              <option value="h6" ${initial.heading_size === 'h6' ? 'selected' : ''}>H6 (Smallest)</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Color</label>
+            <div class="input-group">
+              <input type="color" class="form-control form-control-color widget-heading-color" value="${initial.heading_color || '#212529'}">
+              <input type="text" class="form-control widget-heading-color-text" value="${initial.heading_color || '#212529'}" placeholder="#212529">
+            </div>
+          </div>
+        </div>`;
+    } else if (type === 'image'){
+      return `
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Image Widget</strong>
+          <div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-widget" title="Remove"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Preview</label>
+            <div class="image-preview text-center p-2 bg-light rounded" style="min-height: 100px;">
+              ${initial.image_url ? `<img src="${initial.image_url}" alt="${initial.image_alt || ''}" style="max-width: 100%; max-height: 150px; object-fit: ${initial.image_size || 'contain'};">` : '<small class="text-muted">Enter URL to preview</small>'}
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Image URL</label>
+            <input type="text" class="form-control widget-image-url" value="${initial.image_url || ''}" placeholder="https://example.com/image.jpg">
+            <small class="form-text text-muted">Or upload to an image hosting service</small>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Alt Text (Accessibility)</label>
+            <input type="text" class="form-control widget-image-alt" value="${initial.image_alt || ''}" placeholder="Description of the image">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Display Mode</label>
+            <select class="form-select widget-image-size">
+              <option value="contain" ${initial.image_size === 'contain' || !initial.image_size ? 'selected' : ''}>Fit (Preserve aspect ratio)</option>
+              <option value="cover" ${initial.image_size === 'cover' ? 'selected' : ''}>Fill (Crop to fit)</option>
+              <option value="auto" ${initial.image_size === 'auto' ? 'selected' : ''}>Original Size</option>
+            </select>
+          </div>
+        </div>`;
+    } else if (type === 'stats'){
+      return `
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Stats Widget</strong>
+          <div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-widget" title="Remove"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Preview</label>
+            <div class="stats-preview text-center p-3 bg-light rounded">
+              <h2 class="display-4 mb-2 stats-preview-value" style="color: ${initial.stats_color || '#0d6efd'};">${initial.stats_value || '0'}</h2>
+              <h5 class="text-muted mb-2 stats-preview-title">${initial.stats_title || 'Statistic'}</h5>
+              <p class="small stats-preview-desc">${initial.stats_desc || ''}</p>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Value (Number or Text)</label>
+            <input type="text" class="form-control widget-stats-value" value="${initial.stats_value || ''}" placeholder="42">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Title/Label</label>
+            <input type="text" class="form-control widget-stats-title" value="${initial.stats_title || ''}" placeholder="Total Matches">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Description (Optional)</label>
+            <textarea class="form-control widget-stats-desc" rows="2" placeholder="Additional context...">${initial.stats_desc || ''}</textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Value Color</label>
+            <div class="input-group">
+              <input type="color" class="form-control form-control-color widget-stats-color" value="${initial.stats_color || '#0d6efd'}">
+              <input type="text" class="form-control widget-stats-color-text" value="${initial.stats_color || '#0d6efd'}" placeholder="#0d6efd">
+            </div>
+          </div>
+        </div>`;
+    } else if (type === 'divider'){
+      return `
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-link p-0 toggle-divider-settings" title="Toggle Settings">
+              <i class="fas fa-chevron-down"></i>
+            </button>
+            <span class="text-muted small">Divider</span>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-danger btn-remove-widget" title="Remove"><i class="fas fa-trash"></i></button>
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Preview</label>
+            <div class="divider-preview" style="padding: 1rem; background: #f8f9fa; border-radius: 0.25rem;">
+              <hr class="divider-line" style="border: none; border-top: ${initial.divider_thickness || '1'}px ${initial.divider_style || 'solid'} ${initial.divider_color || '#dee2e6'}; margin: 0;">
+            </div>
+          </div>
+          <div class="divider-settings-panel">
+            <div class="mb-2">
+              <label class="form-label">Style</label>
+              <select class="form-select widget-divider-style">
+                <option value="solid" ${initial.divider_style === 'solid' || !initial.divider_style ? 'selected' : ''}>Solid Line</option>
+                <option value="dashed" ${initial.divider_style === 'dashed' ? 'selected' : ''}>Dashed Line</option>
+                <option value="dotted" ${initial.divider_style === 'dotted' ? 'selected' : ''}>Dotted Line</option>
+                <option value="double" ${initial.divider_style === 'double' ? 'selected' : ''}>Double Line</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Thickness (px)</label>
+              <input type="range" class="form-range widget-divider-thickness" min="1" max="10" step="1" value="${initial.divider_thickness || '1'}">
+              <small class="text-muted"><span class="thickness-value">${initial.divider_thickness || '1'}</span>px</small>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Color</label>
+              <div class="input-group">
+                <input type="color" class="form-control form-control-color widget-divider-color" value="${initial.divider_color || '#dee2e6'}">
+                <input type="text" class="form-control widget-divider-color-text" value="${initial.divider_color || '#dee2e6'}" placeholder="#dee2e6">
+              </div>
+            </div>
+          </div>
+        </div>`;
+    } else if (type === 'button'){
+      return `
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Button Widget</strong>
+          <div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-widget" title="Remove"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Preview</label>
+            <div class="button-preview text-center p-3 bg-light rounded">
+              <button type="button" class="btn btn-${initial.button_style || 'primary'} btn-${initial.button_size || 'md'}" disabled>
+                ${initial.button_text || 'Click Me'}
+              </button>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Button Text</label>
+            <input type="text" class="form-control widget-button-text" value="${initial.button_text || ''}" placeholder="Click Me">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Link URL</label>
+            <input type="text" class="form-control widget-button-url" value="${initial.button_url || ''}" placeholder="https://example.com">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Style</label>
+            <select class="form-select widget-button-style">
+              <option value="primary" ${initial.button_style === 'primary' || !initial.button_style ? 'selected' : ''}>Primary (Blue)</option>
+              <option value="secondary" ${initial.button_style === 'secondary' ? 'selected' : ''}>Secondary (Gray)</option>
+              <option value="success" ${initial.button_style === 'success' ? 'selected' : ''}>Success (Green)</option>
+              <option value="danger" ${initial.button_style === 'danger' ? 'selected' : ''}>Danger (Red)</option>
+              <option value="warning" ${initial.button_style === 'warning' ? 'selected' : ''}>Warning (Yellow)</option>
+              <option value="info" ${initial.button_style === 'info' ? 'selected' : ''}>Info (Cyan)</option>
+              <option value="light" ${initial.button_style === 'light' ? 'selected' : ''}>Light</option>
+              <option value="dark" ${initial.button_style === 'dark' ? 'selected' : ''}>Dark</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Size</label>
+            <select class="form-select widget-button-size">
+              <option value="sm" ${initial.button_size === 'sm' ? 'selected' : ''}>Small</option>
+              <option value="md" ${initial.button_size === 'md' || !initial.button_size ? 'selected' : ''}>Medium</option>
+              <option value="lg" ${initial.button_size === 'lg' ? 'selected' : ''}>Large</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input widget-button-newtab" ${initial.button_newtab ? 'checked' : ''}>
+              <label class="form-check-label">Open in new tab</label>
+            </div>
+          </div>
+        </div>`;
+    } else if (type === 'link'){
+      return `
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Link Widget</strong>
+          <div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-widget" title="Remove"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Preview</label>
+            <div class="link-preview p-2 bg-light rounded">
+              <a href="#" class="preview-link-element" style="font-size: ${initial.link_size || '1'}rem;">
+                <i class="fas fa-external-link-alt me-1"></i>
+                ${initial.link_text || 'Link Text'}
+              </a>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Link Text</label>
+            <input type="text" class="form-control widget-link-text" value="${initial.link_text || ''}" placeholder="Click here">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">URL</label>
+            <input type="text" class="form-control widget-link-url" value="${initial.link_url || ''}" placeholder="https://example.com">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Size</label>
+            <select class="form-select widget-link-size">
+              <option value="0.875" ${initial.link_size === '0.875' ? 'selected' : ''}>Small</option>
+              <option value="1" ${initial.link_size === '1' || !initial.link_size ? 'selected' : ''}>Normal</option>
+              <option value="1.25" ${initial.link_size === '1.25' ? 'selected' : ''}>Large</option>
+              <option value="1.5" ${initial.link_size === '1.5' ? 'selected' : ''}>Extra Large</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input widget-link-newtab" ${initial.link_newtab ? 'checked' : ''}>
+              <label class="form-check-label">Open in new tab</label>
+            </div>
+          </div>
+        </div>`;
+    } else if (type === 'list'){
+      const items = initial.list_items || ['Item 1', 'Item 2', 'Item 3'];
+      const itemsStr = items.join('\n');
+      return `
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>List Widget</strong>
+          <div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-widget" title="Remove"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Preview</label>
+            <div class="list-preview p-2 bg-light rounded">
+              <${initial.list_type === 'ordered' ? 'ol' : 'ul'} class="preview-list-element mb-0">
+                ${items.map(item => `<li>${item || 'Empty item'}</li>`).join('')}
+              </${initial.list_type === 'ordered' ? 'ol' : 'ul'}>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">List Type</label>
+            <select class="form-select widget-list-type">
+              <option value="unordered" ${initial.list_type === 'unordered' || !initial.list_type ? 'selected' : ''}>Bullet List</option>
+              <option value="ordered" ${initial.list_type === 'ordered' ? 'selected' : ''}>Numbered List</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">List Items (one per line)</label>
+            <textarea class="form-control widget-list-items" rows="5" placeholder="Item 1\nItem 2\nItem 3">${itemsStr}</textarea>
+          </div>
+        </div>`;
+    } else if (type === 'spacer'){
+      return `
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Spacer Widget</strong>
+          <div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-widget" title="Remove"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Preview</label>
+            <div class="spacer-preview bg-light rounded" style="height: ${initial.spacer_height || '50'}px; display: flex; align-items: center; justify-content: center;">
+              <small class="text-muted">Empty space (${initial.spacer_height || '50'}px)</small>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Height (px)</label>
+            <input type="range" class="form-range widget-spacer-height" min="10" max="300" step="10" value="${initial.spacer_height || '50'}">
+            <small class="text-muted"><span class="spacer-height-value">${initial.spacer_height || '50'}</span>px</small>
+          </div>
+        </div>`;
+    } else if (type === 'match_prediction'){
+      return `
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Match Prediction Widget</strong>
+          <div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-widget" title="Remove"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Event</label>
+            <select class="form-select widget-prediction-event">
+              <option value="">Select Event...</option>
+              <option value="user_select" ${initial.prediction_event === 'user_select' ? 'selected' : ''}>User Selects Event</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Match</label>
+            <select class="form-select widget-prediction-match">
+              <option value="">Select Match...</option>
+              <option value="user_select" ${initial.prediction_match === 'user_select' || !initial.prediction_match ? 'selected' : ''}>User Selects Match</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Display Style</label>
+            <select class="form-select widget-prediction-style">
+              <option value="full" ${initial.prediction_style === 'full' || !initial.prediction_style ? 'selected' : ''}>Full Prediction (Win probability, scores)</option>
+              <option value="compact" ${initial.prediction_style === 'compact' ? 'selected' : ''}>Compact (Winner only)</option>
+              <option value="detailed" ${initial.prediction_style === 'detailed' ? 'selected' : ''}>Detailed (All metrics)</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input widget-prediction-auto-update" ${initial.prediction_auto_update ? 'checked' : ''}>
+              <label class="form-check-label">Auto-update predictions</label>
+            </div>
+          </div>
+        </div>`;
+    } else if (type === 'team_comparison'){
+      return `
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Team Comparison Widget</strong>
+          <div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-widget" title="Remove"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Team 1</label>
+            <input type="number" class="form-control widget-comparison-team1" value="${initial.comparison_team1 || ''}" placeholder="Team number">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Team 2</label>
+            <input type="number" class="form-control widget-comparison-team2" value="${initial.comparison_team2 || ''}" placeholder="Team number">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Metrics to Compare</label>
+            <select class="form-select widget-comparison-metrics" multiple size="5">
+              <option value="total_points" selected>Total Points</option>
+              <option value="auto_points">Auto Points</option>
+              <option value="teleop_points">Teleop Points</option>
+              <option value="endgame_points">Endgame Points</option>
+              <option value="avg_score">Average Score</option>
+            </select>
+            <small class="text-muted">Hold Ctrl/Cmd to select multiple</small>
+          </div>
+          <div class="mb-2">
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input widget-comparison-user-select" ${initial.comparison_user_select ? 'checked' : ''}>
+              <label class="form-check-label">Allow viewer to select teams</label>
+            </div>
+          </div>
+        </div>`;
+    } else if (type === 'team_rankings'){
+      return `
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Team Rankings Widget</strong>
+          <div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-widget" title="Remove"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Event</label>
+            <select class="form-select widget-rankings-event">
+              <option value="">All Events</option>
+              <option value="user_select" ${initial.rankings_event === 'user_select' ? 'selected' : ''}>User Selects Event</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Number of Teams</label>
+            <input type="number" class="form-control widget-rankings-count" value="${initial.rankings_count || '10'}" min="5" max="50" placeholder="10">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Sort By</label>
+            <select class="form-select widget-rankings-sort">
+              <option value="total_points" ${initial.rankings_sort === 'total_points' || !initial.rankings_sort ? 'selected' : ''}>Total Points</option>
+              <option value="avg_score" ${initial.rankings_sort === 'avg_score' ? 'selected' : ''}>Average Score</option>
+              <option value="wins" ${initial.rankings_sort === 'wins' ? 'selected' : ''}>Win Record</option>
+              <option value="ranking_points" ${initial.rankings_sort === 'ranking_points' ? 'selected' : ''}>Ranking Points</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input widget-rankings-show-stats" ${initial.rankings_show_stats !== false ? 'checked' : ''}>
+              <label class="form-check-label">Show detailed statistics</label>
+            </div>
+          </div>
+        </div>`;
+    } else if (type === 'recent_matches'){
+      return `
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Recent Matches Widget</strong>
+          <div>
+            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-widget" title="Remove"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <label class="form-label">Filter</label>
+            <select class="form-select widget-matches-filter">
+              <option value="all" ${initial.matches_filter === 'all' || !initial.matches_filter ? 'selected' : ''}>All Matches</option>
+              <option value="team" ${initial.matches_filter === 'team' ? 'selected' : ''}>Specific Team</option>
+              <option value="event" ${initial.matches_filter === 'event' ? 'selected' : ''}>Specific Event</option>
+            </select>
+          </div>
+          <div class="mb-2 filter-team-input" style="display: ${initial.matches_filter === 'team' ? 'block' : 'none'};">
+            <label class="form-label">Team Number</label>
+            <input type="number" class="form-control widget-matches-team" value="${initial.matches_team || ''}" placeholder="Team number">
+          </div>
+          <div class="mb-2 filter-event-input" style="display: ${initial.matches_filter === 'event' ? 'block' : 'none'};">
+            <label class="form-label">Event</label>
+            <select class="form-select widget-matches-event">
+              <option value="">Select Event...</option>
+              <option value="user_select" ${initial.matches_event === 'user_select' ? 'selected' : ''}>User Selects Event</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Number of Matches</label>
+            <input type="number" class="form-control widget-matches-count" value="${initial.matches_count || '5'}" min="1" max="20" placeholder="5">
+          </div>
+          <div class="mb-2">
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input widget-matches-show-scores" ${initial.matches_show_scores !== false ? 'checked' : ''}>
+              <label class="form-check-label">Show scores</label>
+            </div>
+          </div>
+        </div>`;
     }
     return '';
   }
 
   function attachWidgetControls(wrapper){
+    const card = wrapper.querySelector('.widget-card');
+    
+    // Populate event dropdowns with server-side data
+    const eventSelects = card ? card.querySelectorAll('.widget-prediction-event, .widget-rankings-event, .widget-matches-event') : [];
+    eventSelects.forEach(sel => {
+      const currentValue = sel.value;
+      const userSelectOpt = sel.querySelector('option[value="user_select"]');
+      // Add event options from PAGE_BUILDER_EVENTS
+      PAGE_BUILDER_EVENTS.forEach(event => {
+        const opt = document.createElement('option');
+        opt.value = event.id;
+        opt.textContent = event.name || event.code;
+        if (userSelectOpt) {
+          sel.insertBefore(opt, userSelectOpt);
+        } else {
+          sel.appendChild(opt);
+        }
+      });
+      if (currentValue) sel.value = currentValue;
+    });
+    
+    // Handle event selection for match prediction - load matches for selected event
+    const predEventSel = card ? card.querySelector('.widget-prediction-event') : null;
+    const predMatchSel = card ? card.querySelector('.widget-prediction-match') : null;
+    if (predEventSel && predMatchSel) {
+      // Populate matches for initial event value if set
+      const initialEventId = predEventSel.value;
+      if (initialEventId && initialEventId !== 'user_select' && initialEventId !== '') {
+        populateMatchesForEvent(initialEventId, predMatchSel);
+      }
+      
+      predEventSel.addEventListener('change', function() {
+        const eventId = this.value;
+        if (!eventId || eventId === 'user_select') {
+          return;
+        }
+        populateMatchesForEvent(eventId, predMatchSel);
+      });
+    }
+    
     const removeBtn = wrapper.querySelector('.btn-remove-widget');
     if (removeBtn) removeBtn.addEventListener('click', ()=>{ 
       wrapper.remove(); 
@@ -305,6 +1361,228 @@ document.addEventListener('DOMContentLoaded', function() {
         if (canvasEmpty) canvasEmpty.style.display='block';
       }
     });
+    
+    // Live preview for heading widget
+    const headingText = wrapper.querySelector('.widget-heading-text');
+    const headingSize = wrapper.querySelector('.widget-heading-size');
+    const headingColor = wrapper.querySelector('.widget-heading-color');
+    const headingColorText = wrapper.querySelector('.widget-heading-color-text');
+    const headingPreview = wrapper.querySelector('.heading-preview-text');
+    
+    if (headingText && headingPreview) {
+      headingText.addEventListener('input', ()=> headingPreview.textContent = headingText.value || 'Heading Text');
+      if (headingSize) headingSize.addEventListener('change', ()=>{
+        const oldTag = headingPreview.tagName.toLowerCase();
+        const newTag = headingSize.value;
+        if (oldTag !== newTag) {
+          const newEl = document.createElement(newTag);
+          newEl.className = headingPreview.className;
+          newEl.style.cssText = headingPreview.style.cssText;
+          newEl.textContent = headingPreview.textContent;
+          headingPreview.parentNode.replaceChild(newEl, headingPreview);
+        }
+      });
+      if (headingColor) {
+        headingColor.addEventListener('input', ()=>{
+          headingPreview.style.color = headingColor.value;
+          if (headingColorText) headingColorText.value = headingColor.value;
+        });
+      }
+      if (headingColorText) {
+        headingColorText.addEventListener('input', ()=>{
+          if (/^#[0-9A-F]{6}$/i.test(headingColorText.value)) {
+            headingPreview.style.color = headingColorText.value;
+            if (headingColor) headingColor.value = headingColorText.value;
+          }
+        });
+      }
+    }
+    
+    // Live preview for image widget
+    const imageUrl = wrapper.querySelector('.widget-image-url');
+    const imageSize = wrapper.querySelector('.widget-image-size');
+    const imagePreview = wrapper.querySelector('.image-preview');
+    
+    if (imageUrl && imagePreview) {
+      imageUrl.addEventListener('input', ()=>{
+        if (imageUrl.value) {
+          const img = document.createElement('img');
+          img.src = imageUrl.value;
+          img.alt = wrapper.querySelector('.widget-image-alt')?.value || '';
+          img.style.cssText = 'max-width: 100%; max-height: 150px; object-fit: ' + (imageSize?.value || 'contain');
+          img.onerror = ()=> imagePreview.innerHTML = '<small class="text-danger">Failed to load image</small>';
+          imagePreview.innerHTML = '';
+          imagePreview.appendChild(img);
+        } else {
+          imagePreview.innerHTML = '<small class="text-muted">Enter URL to preview</small>';
+        }
+      });
+      if (imageSize) imageSize.addEventListener('change', ()=>{
+        const img = imagePreview.querySelector('img');
+        if (img) img.style.objectFit = imageSize.value;
+      });
+    }
+    
+    // Live preview for stats widget
+    const statsValue = wrapper.querySelector('.widget-stats-value');
+    const statsTitle = wrapper.querySelector('.widget-stats-title');
+    const statsDesc = wrapper.querySelector('.widget-stats-desc');
+    const statsColor = wrapper.querySelector('.widget-stats-color');
+    const statsColorText = wrapper.querySelector('.widget-stats-color-text');
+    const statsPreviewValue = wrapper.querySelector('.stats-preview-value');
+    const statsPreviewTitle = wrapper.querySelector('.stats-preview-title');
+    const statsPreviewDesc = wrapper.querySelector('.stats-preview-desc');
+    
+    if (statsValue && statsPreviewValue) {
+      statsValue.addEventListener('input', ()=> statsPreviewValue.textContent = statsValue.value || '0');
+    }
+    if (statsTitle && statsPreviewTitle) {
+      statsTitle.addEventListener('input', ()=> statsPreviewTitle.textContent = statsTitle.value || 'Statistic');
+    }
+    if (statsDesc && statsPreviewDesc) {
+      statsDesc.addEventListener('input', ()=> statsPreviewDesc.textContent = statsDesc.value);
+    }
+    if (statsColor && statsPreviewValue) {
+      statsColor.addEventListener('input', ()=>{
+        statsPreviewValue.style.color = statsColor.value;
+        if (statsColorText) statsColorText.value = statsColor.value;
+      });
+    }
+    if (statsColorText && statsPreviewValue) {
+      statsColorText.addEventListener('input', ()=>{
+        if (/^#[0-9A-F]{6}$/i.test(statsColorText.value)) {
+          statsPreviewValue.style.color = statsColorText.value;
+          if (statsColor) statsColor.value = statsColorText.value;
+        }
+      });
+    }
+    
+    // Live preview for divider widget
+    const dividerStyle = wrapper.querySelector('.widget-divider-style');
+    const dividerThickness = wrapper.querySelector('.widget-divider-thickness');
+    const dividerColor = wrapper.querySelector('.widget-divider-color');
+    const dividerColorText = wrapper.querySelector('.widget-divider-color-text');
+    const dividerLine = wrapper.querySelector('.divider-line');
+    const thicknessValue = wrapper.querySelector('.thickness-value');
+    const toggleBtn = wrapper.querySelector('.toggle-divider-settings');
+    const settingsPanel = wrapper.querySelector('.divider-settings-panel');
+    
+    // Collapse/expand settings for divider
+    if (toggleBtn && settingsPanel) {
+      toggleBtn.addEventListener('click', (e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        const icon = toggleBtn.querySelector('i');
+        if (settingsPanel.style.display === 'none') {
+          settingsPanel.style.display = 'block';
+          icon.className = 'fas fa-chevron-down';
+        } else {
+          settingsPanel.style.display = 'none';
+          icon.className = 'fas fa-chevron-right';
+        }
+      });
+    }
+    
+    if (dividerLine) {
+      if (dividerStyle) dividerStyle.addEventListener('change', ()=> 
+        dividerLine.style.borderTopStyle = dividerStyle.value
+      );
+      if (dividerThickness) {
+        dividerThickness.addEventListener('input', ()=>{
+          dividerLine.style.borderTopWidth = dividerThickness.value + 'px';
+          if (thicknessValue) thicknessValue.textContent = dividerThickness.value;
+        });
+      }
+      if (dividerColor) {
+        dividerColor.addEventListener('input', ()=>{
+          dividerLine.style.borderTopColor = dividerColor.value;
+          if (dividerColorText) dividerColorText.value = dividerColor.value;
+        });
+      }
+      if (dividerColorText) {
+        dividerColorText.addEventListener('input', ()=>{
+          if (/^#[0-9A-F]{6}$/i.test(dividerColorText.value)) {
+            dividerLine.style.borderTopColor = dividerColorText.value;
+            if (dividerColor) dividerColor.value = dividerColorText.value;
+          }
+        });
+      }
+    }
+    
+    // Live preview for button widget
+    const buttonText = wrapper.querySelector('.widget-button-text');
+    const buttonStyle = wrapper.querySelector('.widget-button-style');
+    const buttonSize = wrapper.querySelector('.widget-button-size');
+    const buttonPreview = wrapper.querySelector('.button-preview button');
+    
+    if (buttonText && buttonPreview) {
+      buttonText.addEventListener('input', ()=> buttonPreview.textContent = buttonText.value || 'Click Me');
+    }
+    if (buttonStyle && buttonPreview) {
+      buttonStyle.addEventListener('change', ()=>{
+        buttonPreview.className = `btn btn-${buttonStyle.value} btn-${buttonSize?.value || 'md'}`;
+      });
+    }
+    if (buttonSize && buttonPreview) {
+      buttonSize.addEventListener('change', ()=>{
+        buttonPreview.className = `btn btn-${buttonStyle?.value || 'primary'} btn-${buttonSize.value}`;
+      });
+    }
+    
+    // Live preview for link widget
+    const linkText = wrapper.querySelector('.widget-link-text');
+    const linkSize = wrapper.querySelector('.widget-link-size');
+    const linkPreview = wrapper.querySelector('.preview-link-element');
+    
+    if (linkText && linkPreview) {
+      linkText.addEventListener('input', ()=>{
+        linkPreview.innerHTML = '<i class="fas fa-external-link-alt me-1"></i>' + (linkText.value || 'Link Text');
+      });
+    }
+    if (linkSize && linkPreview) {
+      linkSize.addEventListener('change', ()=> linkPreview.style.fontSize = linkSize.value + 'rem');
+    }
+    
+    // Live preview for list widget
+    const listType = wrapper.querySelector('.widget-list-type');
+    const listItems = wrapper.querySelector('.widget-list-items');
+    const listPreviewContainer = wrapper.querySelector('.list-preview');
+    
+    function updateListPreview() {
+      if (!listPreviewContainer || !listItems) return;
+      const items = listItems.value.split('\n').filter(line => line.trim());
+      const tag = listType?.value === 'ordered' ? 'ol' : 'ul';
+      const listHtml = items.map(item => `<li>${item || 'Empty item'}</li>`).join('');
+      listPreviewContainer.innerHTML = `<${tag} class="preview-list-element mb-0">${listHtml}</${tag}>`;
+    }
+    
+    if (listType) listType.addEventListener('change', updateListPreview);
+    if (listItems) listItems.addEventListener('input', updateListPreview);
+    
+    // Live preview for spacer widget
+    const spacerHeight = wrapper.querySelector('.widget-spacer-height');
+    const spacerHeightValue = wrapper.querySelector('.spacer-height-value');
+    const spacerPreview = wrapper.querySelector('.spacer-preview');
+    
+    if (spacerHeight && spacerPreview) {
+      spacerHeight.addEventListener('input', ()=>{
+        spacerPreview.style.height = spacerHeight.value + 'px';
+        spacerPreview.querySelector('small').textContent = `Empty space (${spacerHeight.value}px)`;
+        if (spacerHeightValue) spacerHeightValue.textContent = spacerHeight.value;
+      });
+    }
+    
+    // Event handlers for recent matches widget
+    const matchesFilter = wrapper.querySelector('.widget-matches-filter');
+    const filterTeamInput = wrapper.querySelector('.filter-team-input');
+    const filterEventInput = wrapper.querySelector('.filter-event-input');
+    
+    if (matchesFilter) {
+      matchesFilter.addEventListener('change', ()=>{
+        if (filterTeamInput) filterTeamInput.style.display = matchesFilter.value === 'team' ? 'block' : 'none';
+        if (filterEventInput) filterEventInput.style.display = matchesFilter.value === 'event' ? 'block' : 'none';
+      });
+    }
   }
 
   // Attach resize handle and handlers to a widget wrapper
@@ -331,6 +1609,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function onPointerDown(e){
       e.preventDefault();
+      e.stopPropagation(); // Prevent drag move from triggering
       resizing = true;
       document.body.style.userSelect = 'none';
       startX = (e.touches ? e.touches[0].clientX : e.clientX);
@@ -370,6 +1649,59 @@ document.addEventListener('DOMContentLoaded', function() {
     handle.addEventListener('touchstart', onPointerDown, { passive:false });
   }
 
+  // Attach drag-to-move handlers for absolutely positioned widgets
+  function attachDragMoveHandlers(wrapper){
+    let dragging = false;
+    let startX = 0, startY = 0, initialLeft = 0, initialTop = 0;
+    
+    const header = wrapper.querySelector('.card-header');
+    if (!header) return;
+    
+    header.style.cursor = 'move';
+
+    function onMouseDown(e){
+      // Don't drag if clicking on the remove button
+      if (e.target.closest('.btn-remove-widget')) return;
+      // Only for absolutely positioned widgets
+      if (wrapper.style.position !== 'absolute') return;
+      
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      header.style.cursor = 'grabbing';
+      document.body.style.userSelect = 'none';
+      
+      startX = e.clientX;
+      startY = e.clientY;
+      initialLeft = parseInt(wrapper.style.left) || 0;
+      initialTop = parseInt(wrapper.style.top) || 0;
+      
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    }
+
+    function onMouseMove(e){
+      if (!dragging) return;
+      e.preventDefault();
+      
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      
+      wrapper.style.left = (initialLeft + dx) + 'px';
+      wrapper.style.top = (initialTop + dy) + 'px';
+    }
+
+    function onMouseUp(){
+      dragging = false;
+      header.style.cursor = 'move';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    }
+
+    header.addEventListener('mousedown', onMouseDown);
+  }
+
   // Auto-scroll canvas when dragging a widget near the edges
   function autoScrollDuringDrag(e){
     if (!draggedWidget) return;
@@ -398,6 +1730,14 @@ document.addEventListener('DOMContentLoaded', function() {
       const computed = window.getComputedStyle(card);
       const widthPx = computed.width;
       const heightPx = computed.height;
+      
+      // Capture position if absolutely positioned
+      let x = undefined, y = undefined;
+      if (card.style.position === 'absolute') {
+        x = parseInt(card.style.left) || 0;
+        y = parseInt(card.style.top) || 0;
+      }
+      
       if (type === 'graph'){
         const metricSel = card.querySelector('.widget-metric');
         const graphTypeSel = card.querySelector('.widget-graph-type');
@@ -416,10 +1756,119 @@ document.addEventListener('DOMContentLoaded', function() {
         const graphtypeUserSelect = !!(card.querySelector('.widget-graphtype-user-select') && card.querySelector('.widget-graphtype-user-select').checked);
         const metricUserSelect = !!(card.querySelector('.widget-user-select') && card.querySelector('.widget-user-select').checked);
         const teamsUserSelect = !!(card.querySelector('.widget-teams-user-select') && card.querySelector('.widget-teams-user-select').checked);
-        widgets.push({ type: 'graph', metric: metricVal, graph_types: graphTypes, teams: teams, width: parseInt(widthPx), height: parseInt(heightPx), user_select: metricUserSelect, graphtype_user_select: graphtypeUserSelect, teams_user_select: teamsUserSelect });
+        const widget = { type: 'graph', metric: metricVal, graph_types: graphTypes, teams: teams, width: parseInt(widthPx), height: parseInt(heightPx), user_select: metricUserSelect, graphtype_user_select: graphtypeUserSelect, teams_user_select: teamsUserSelect };
+        if (x !== undefined) widget.x = x;
+        if (y !== undefined) widget.y = y;
+        widgets.push(widget);
       } else if (type === 'text'){
         const text = card.querySelector('.widget-text') ? card.querySelector('.widget-text').value : '';
-        widgets.push({ type: 'text', text: text, width: parseInt(widthPx), height: parseInt(heightPx) });
+        const widget = { type: 'text', text: text, width: parseInt(widthPx), height: parseInt(heightPx) };
+        if (x !== undefined) widget.x = x;
+        if (y !== undefined) widget.y = y;
+        widgets.push(widget);
+      } else if (type === 'heading'){
+        const headingText = card.querySelector('.widget-heading-text') ? card.querySelector('.widget-heading-text').value : '';
+        const headingSize = card.querySelector('.widget-heading-size') ? card.querySelector('.widget-heading-size').value : 'h3';
+        const headingColor = card.querySelector('.widget-heading-color') ? card.querySelector('.widget-heading-color').value : '#212529';
+        const widget = { type: 'heading', heading_text: headingText, heading_size: headingSize, heading_color: headingColor, width: parseInt(widthPx), height: parseInt(heightPx) };
+        if (x !== undefined) widget.x = x;
+        if (y !== undefined) widget.y = y;
+        widgets.push(widget);
+      } else if (type === 'image'){
+        const imageUrl = card.querySelector('.widget-image-url') ? card.querySelector('.widget-image-url').value : '';
+        const imageAlt = card.querySelector('.widget-image-alt') ? card.querySelector('.widget-image-alt').value : '';
+        const imageSize = card.querySelector('.widget-image-size') ? card.querySelector('.widget-image-size').value : 'contain';
+        const widget = { type: 'image', image_url: imageUrl, image_alt: imageAlt, image_size: imageSize, width: parseInt(widthPx), height: parseInt(heightPx) };
+        if (x !== undefined) widget.x = x;
+        if (y !== undefined) widget.y = y;
+        widgets.push(widget);
+      } else if (type === 'stats'){
+        const statsTitle = card.querySelector('.widget-stats-title') ? card.querySelector('.widget-stats-title').value : '';
+        const statsValue = card.querySelector('.widget-stats-value') ? card.querySelector('.widget-stats-value').value : '';
+        const statsDesc = card.querySelector('.widget-stats-desc') ? card.querySelector('.widget-stats-desc').value : '';
+        const statsColor = card.querySelector('.widget-stats-color') ? card.querySelector('.widget-stats-color').value : '#0d6efd';
+        const widget = { type: 'stats', stats_title: statsTitle, stats_value: statsValue, stats_desc: statsDesc, stats_color: statsColor, width: parseInt(widthPx), height: parseInt(heightPx) };
+        if (x !== undefined) widget.x = x;
+        if (y !== undefined) widget.y = y;
+        widgets.push(widget);
+      } else if (type === 'divider'){
+        const dividerStyle = card.querySelector('.widget-divider-style') ? card.querySelector('.widget-divider-style').value : 'solid';
+        const dividerThickness = card.querySelector('.widget-divider-thickness') ? card.querySelector('.widget-divider-thickness').value : '1';
+        const dividerColor = card.querySelector('.widget-divider-color') ? card.querySelector('.widget-divider-color').value : '#dee2e6';
+        const widget = { type: 'divider', divider_style: dividerStyle, divider_thickness: dividerThickness, divider_color: dividerColor, width: parseInt(widthPx), height: parseInt(heightPx) };
+        if (x !== undefined) widget.x = x;
+        if (y !== undefined) widget.y = y;
+        widgets.push(widget);
+      } else if (type === 'button'){
+        const buttonText = card.querySelector('.widget-button-text') ? card.querySelector('.widget-button-text').value : '';
+        const buttonUrl = card.querySelector('.widget-button-url') ? card.querySelector('.widget-button-url').value : '';
+        const buttonStyle = card.querySelector('.widget-button-style') ? card.querySelector('.widget-button-style').value : 'primary';
+        const buttonSize = card.querySelector('.widget-button-size') ? card.querySelector('.widget-button-size').value : 'md';
+        const buttonNewtab = card.querySelector('.widget-button-newtab') ? card.querySelector('.widget-button-newtab').checked : false;
+        const widget = { type: 'button', button_text: buttonText, button_url: buttonUrl, button_style: buttonStyle, button_size: buttonSize, button_newtab: buttonNewtab, width: parseInt(widthPx), height: parseInt(heightPx) };
+        if (x !== undefined) widget.x = x;
+        if (y !== undefined) widget.y = y;
+        widgets.push(widget);
+      } else if (type === 'link'){
+        const linkText = card.querySelector('.widget-link-text') ? card.querySelector('.widget-link-text').value : '';
+        const linkUrl = card.querySelector('.widget-link-url') ? card.querySelector('.widget-link-url').value : '';
+        const linkSize = card.querySelector('.widget-link-size') ? card.querySelector('.widget-link-size').value : '1';
+        const linkNewtab = card.querySelector('.widget-link-newtab') ? card.querySelector('.widget-link-newtab').checked : false;
+        const widget = { type: 'link', link_text: linkText, link_url: linkUrl, link_size: linkSize, link_newtab: linkNewtab, width: parseInt(widthPx), height: parseInt(heightPx) };
+        if (x !== undefined) widget.x = x;
+        if (y !== undefined) widget.y = y;
+        widgets.push(widget);
+      } else if (type === 'list'){
+        const listType = card.querySelector('.widget-list-type') ? card.querySelector('.widget-list-type').value : 'unordered';
+        const listItemsText = card.querySelector('.widget-list-items') ? card.querySelector('.widget-list-items').value : '';
+        const listItems = listItemsText.split('\n').filter(line => line.trim());
+        const widget = { type: 'list', list_type: listType, list_items: listItems, width: parseInt(widthPx), height: parseInt(heightPx) };
+        if (x !== undefined) widget.x = x;
+        if (y !== undefined) widget.y = y;
+        widgets.push(widget);
+      } else if (type === 'spacer'){
+        const spacerHeight = card.querySelector('.widget-spacer-height') ? card.querySelector('.widget-spacer-height').value : '50';
+        const widget = { type: 'spacer', spacer_height: spacerHeight, width: parseInt(widthPx), height: parseInt(heightPx) };
+        if (x !== undefined) widget.x = x;
+        if (y !== undefined) widget.y = y;
+        widgets.push(widget);
+      } else if (type === 'match_prediction'){
+        const predictionEvent = card.querySelector('.widget-prediction-event') ? card.querySelector('.widget-prediction-event').value : 'user_select';
+        const predictionMatch = card.querySelector('.widget-prediction-match') ? card.querySelector('.widget-prediction-match').value : 'user_select';
+        const predictionStyle = card.querySelector('.widget-prediction-style') ? card.querySelector('.widget-prediction-style').value : 'full';
+        const predictionAutoUpdate = card.querySelector('.widget-prediction-auto-update') ? card.querySelector('.widget-prediction-auto-update').checked : false;
+        const widget = { type: 'match_prediction', prediction_event: predictionEvent, prediction_match: predictionMatch, prediction_style: predictionStyle, prediction_auto_update: predictionAutoUpdate, width: parseInt(widthPx), height: parseInt(heightPx) };
+        if (x !== undefined) widget.x = x;
+        if (y !== undefined) widget.y = y;
+        widgets.push(widget);
+      } else if (type === 'team_comparison'){
+        const comparisonTeam1 = card.querySelector('.widget-comparison-team1') ? card.querySelector('.widget-comparison-team1').value : '';
+        const comparisonTeam2 = card.querySelector('.widget-comparison-team2') ? card.querySelector('.widget-comparison-team2').value : '';
+        const comparisonMetrics = card.querySelector('.widget-comparison-metrics') ? Array.from(card.querySelector('.widget-comparison-metrics').selectedOptions).map(o=>o.value) : [];
+        const comparisonUserSelect = card.querySelector('.widget-comparison-user-select') ? card.querySelector('.widget-comparison-user-select').checked : false;
+        const widget = { type: 'team_comparison', comparison_team1: comparisonTeam1, comparison_team2: comparisonTeam2, comparison_metrics: comparisonMetrics, comparison_user_select: comparisonUserSelect, width: parseInt(widthPx), height: parseInt(heightPx) };
+        if (x !== undefined) widget.x = x;
+        if (y !== undefined) widget.y = y;
+        widgets.push(widget);
+      } else if (type === 'team_rankings'){
+        const rankingsEvent = card.querySelector('.widget-rankings-event') ? card.querySelector('.widget-rankings-event').value : '';
+        const rankingsCount = card.querySelector('.widget-rankings-count') ? card.querySelector('.widget-rankings-count').value : '10';
+        const rankingsSort = card.querySelector('.widget-rankings-sort') ? card.querySelector('.widget-rankings-sort').value : 'total_points';
+        const rankingsShowStats = card.querySelector('.widget-rankings-show-stats') ? card.querySelector('.widget-rankings-show-stats').checked : true;
+        const widget = { type: 'team_rankings', rankings_event: rankingsEvent, rankings_count: rankingsCount, rankings_sort: rankingsSort, rankings_show_stats: rankingsShowStats, width: parseInt(widthPx), height: parseInt(heightPx) };
+        if (x !== undefined) widget.x = x;
+        if (y !== undefined) widget.y = y;
+        widgets.push(widget);
+      } else if (type === 'recent_matches'){
+        const matchesFilter = card.querySelector('.widget-matches-filter') ? card.querySelector('.widget-matches-filter').value : 'all';
+        const matchesTeam = card.querySelector('.widget-matches-team') ? card.querySelector('.widget-matches-team').value : '';
+        const matchesEvent = card.querySelector('.widget-matches-event') ? card.querySelector('.widget-matches-event').value : '';
+        const matchesCount = card.querySelector('.widget-matches-count') ? card.querySelector('.widget-matches-count').value : '5';
+        const matchesShowScores = card.querySelector('.widget-matches-show-scores') ? card.querySelector('.widget-matches-show-scores').checked : true;
+        const widget = { type: 'recent_matches', matches_filter: matchesFilter, matches_team: matchesTeam, matches_event: matchesEvent, matches_count: matchesCount, matches_show_scores: matchesShowScores, width: parseInt(widthPx), height: parseInt(heightPx) };
+        if (x !== undefined) widget.x = x;
+        if (y !== undefined) widget.y = y;
+        widgets.push(widget);
       }
     });
     return widgets;
@@ -529,6 +1978,151 @@ multiSelectObserver.observe(canvas, { childList: true, subtree: true });
 
 // Initial conversion of any existing multi-selects
 convertAllMultiSelects();
+
+// Fullscreen toggle functionality
+const toggleFullscreenBtn = document.getElementById('toggleFullscreenBtn');
+const canvasCard = document.getElementById('canvasCard');
+const canvasColumn = document.getElementById('canvasColumn');
+const fullscreenBtnText = document.getElementById('fullscreenBtnText');
+const fullscreenBtnIcon = toggleFullscreenBtn.querySelector('i');
+
+toggleFullscreenBtn.addEventListener('click', function(){
+  canvasCard.classList.toggle('fullscreen');
+  
+  if (canvasCard.classList.contains('fullscreen')) {
+    fullscreenBtnText.textContent = 'Exit Fullscreen';
+    fullscreenBtnIcon.className = 'fas fa-compress';
+    document.body.style.overflow = 'hidden';
+    
+    // Force canvas to recalculate height and fix widget heights
+    setTimeout(() => {
+      canvas.style.height = '100%';
+      canvas.style.maxHeight = 'none';
+      canvas.style.overflow = 'auto';
+      
+      // Remove height restrictions from all widgets in fullscreen
+      canvas.querySelectorAll('.widget-card').forEach(widget => {
+        widget.style.height = 'auto';
+        widget.style.minHeight = widget.style.minHeight || 'auto';
+        const cardBody = widget.querySelector('.card-body');
+        if (cardBody) {
+          cardBody.style.height = 'auto';
+          cardBody.style.maxHeight = 'none';
+          cardBody.style.overflow = 'visible';
+        }
+      });
+    }, 50);
+    
+    createFloatingToolbox();
+  } else {
+    fullscreenBtnText.textContent = 'Fullscreen';
+    fullscreenBtnIcon.className = 'fas fa-expand';
+    document.body.style.overflow = '';
+    
+    // Reset canvas styles
+    canvas.style.height = '';
+    canvas.style.maxHeight = '';
+    
+    // Restore widget styling when exiting fullscreen
+    canvas.querySelectorAll('.widget-card').forEach(widget => {
+      widget.style.height = '';
+    });
+    
+    removeFloatingToolbox();
+  }
+});
+
+// Create floating toolbox for fullscreen mode
+function createFloatingToolbox() {
+  // Remove existing if any
+  removeFloatingToolbox();
+  
+  // Find the toolbox - it's in the first column
+  const allCards = document.querySelectorAll('.card');
+  let originalToolbox = null;
+  allCards.forEach(card => {
+    const header = card.querySelector('.card-header');
+    if (header && header.textContent.includes('Toolbox')) {
+      originalToolbox = card;
+    }
+  });
+  
+  if (!originalToolbox) {
+    console.warn('Toolbox not found');
+    return;
+  }
+  
+  const floatingToolbox = document.createElement('div');
+  floatingToolbox.className = 'fullscreen-toolbox card';
+  floatingToolbox.id = 'floatingToolbox';
+  
+  // Create header with close button
+  const header = document.createElement('div');
+  header.className = 'card-header';
+  header.innerHTML = '<span>Toolbox</span><button class="btn btn-sm btn-outline-secondary" id="closeToolboxBtn" title="Hide toolbox"><i class="fas fa-times"></i></button>';
+  
+  // Clone toolbox body
+  const originalBody = originalToolbox.querySelector('.card-body');
+  if (!originalBody) return;
+  
+  const body = originalBody.cloneNode(true);
+  body.className = 'card-body';
+  
+  floatingToolbox.appendChild(header);
+  floatingToolbox.appendChild(body);
+  document.body.appendChild(floatingToolbox);
+  
+  // Add toggle button
+  const toggleBtn = document.createElement('button');
+  toggleBtn.className = 'btn btn-primary fullscreen-toolbox-toggle';
+  toggleBtn.innerHTML = '<i class="fas fa-toolbox"></i>';
+  toggleBtn.title = 'Show toolbox';
+  toggleBtn.id = 'toggleToolboxBtn';
+  document.body.appendChild(toggleBtn);
+  
+  // Re-enable drag on new toolbox items
+  floatingToolbox.querySelectorAll('.toolbox-item').forEach(item => {
+    item.setAttribute('draggable', 'true');
+    item.addEventListener('dragstart', (e) => {
+      draggedToolType = item.dataset.widgetType;
+      e.dataTransfer.setData('text/plain', draggedToolType);
+    });
+    // Double-click support
+    item.addEventListener('dblclick', () => addWidgetToCanvas(item.dataset.widgetType));
+  });
+  
+  // Toggle functionality
+  const closeBtn = document.getElementById('closeToolboxBtn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      floatingToolbox.classList.add('collapsed');
+    });
+  }
+  
+  toggleBtn.addEventListener('click', function(e) {
+    e.preventDefault();
+    floatingToolbox.classList.toggle('collapsed');
+  });
+}
+
+function removeFloatingToolbox() {
+  const floatingToolbox = document.getElementById('floatingToolbox');
+  const toggleBtn = document.getElementById('toggleToolboxBtn');
+  if (floatingToolbox) floatingToolbox.remove();
+  if (toggleBtn) toggleBtn.remove();
+}
+
+// Exit fullscreen on Escape key
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape' && canvasCard.classList.contains('fullscreen')) {
+    canvasCard.classList.remove('fullscreen');
+    fullscreenBtnText.textContent = 'Fullscreen';
+    fullscreenBtnIcon.className = 'fas fa-expand';
+    document.body.style.overflow = '';
+    removeFloatingToolbox();
+  }
+});
 
 });
 </script>

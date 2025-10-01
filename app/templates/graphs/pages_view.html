@@ -10,10 +10,13 @@
     {% endif %}
   </div>
 
+  <div class="widgets-container" style="position: relative; width: 100%; overflow-x: hidden; overflow-y: visible;">
   {% for key, widget in plots.items() %}
-    <div class="card mb-3 widget-view-card" data-widget-width="{{ widget.config.width or '' }}" data-widget-height="{{ widget.config.height or '' }}" style="position: relative; {% if widget.config.width %}width: {{ widget.config.width }}px; max-width: 100%; {% endif %}{% if widget.config.height %}min-height: {{ widget.config.height }}px; {% endif %}">
+    <div class="card mb-3 widget-view-card" data-widget-type="{{ widget.config.type }}" data-widget-width="{{ widget.config.width or '' }}" data-widget-height="{{ widget.config.height or '' }}" data-widget-x="{{ widget.config.x if widget.config.x is defined else '' }}" data-widget-y="{{ widget.config.y if widget.config.y is defined else '' }}" style="{% if widget.config.x is defined and widget.config.y is defined %}position: absolute; left: {{ widget.config.x }}px; top: {{ widget.config.y }}px; margin: 0;{% else %}position: relative;{% endif %} {% if widget.config.width %}width: {{ widget.config.width }}px; max-width: 100%; {% endif %}{% if widget.config.height %}min-height: {{ widget.config.height }}px; {% endif %}">
       <div class="card-body" style="{% if widget.config.height %}min-height: calc({{ widget.config.height }}px - 3rem); {% endif %}">
-        <h5 class="card-title">{{ widget.config.title if widget.config.title else (widget.config.metric or 'Widget') }}</h5>
+        {% if widget.config.type != 'divider' and widget.config.type != 'heading' %}
+          <h5 class="card-title">{{ widget.config.title if widget.config.title else (widget.config.metric or '') }}</h5>
+        {% endif %}
         {# If widget config includes user_select flags, render controls for viewers #}
         {% if widget.config.type == 'graph' %}
           <div class="viewer-controls mb-2" data-widget-key="{{ loop.index0 }}">
@@ -76,26 +79,357 @@
           <div class="widget-text-content">
             <p style="white-space: pre-wrap;">{{ widget.config.text or '' }}</p>
           </div>
+        {% elif widget.config.type == 'heading' %}
+          <div class="widget-heading-content">
+            {% set heading_size = widget.config.heading_size or 'h3' %}
+            {% set heading_color = widget.config.heading_color or '#212529' %}
+            {% if heading_size == 'h1' %}
+              <h1 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }}</h1>
+            {% elif heading_size == 'h2' %}
+              <h2 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }}</h2>
+            {% elif heading_size == 'h3' %}
+              <h3 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }}</h3>
+            {% elif heading_size == 'h4' %}
+              <h4 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }}</h4>
+            {% elif heading_size == 'h5' %}
+              <h5 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }}</h5>
+            {% else %}
+              <h6 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }}</h6>
+            {% endif %}
+          </div>
+        {% elif widget.config.type == 'image' %}
+          <div class="widget-image-content text-center">
+            {% if widget.config.image_url %}
+              <img src="{{ widget.config.image_url }}" alt="{{ widget.config.image_alt or 'Image' }}" 
+                   style="max-width: 100%; height: auto; object-fit: {{ widget.config.image_size or 'contain' }};">
+            {% else %}
+              <div class="alert alert-secondary">No image URL provided</div>
+            {% endif %}
+          </div>
+        {% elif widget.config.type == 'stats' %}
+          <div class="widget-stats-content">
+            <div class="text-center p-3">
+              {% set stats_color = widget.config.stats_color or '#0d6efd' %}
+              <h2 class="display-4 mb-2" style="color: {{ stats_color }};">{{ widget.config.stats_value or '0' }}</h2>
+              <h5 class="text-muted mb-2">{{ widget.config.stats_title or 'Statistic' }}</h5>
+              {% if widget.config.stats_desc %}
+                <p class="small">{{ widget.config.stats_desc }}</p>
+              {% endif %}
+            </div>
+          </div>
+        {% elif widget.config.type == 'divider' %}
+          <div class="widget-divider-content">
+            {% set divider_style = widget.config.divider_style or 'solid' %}
+            {% set divider_thickness = widget.config.divider_thickness or '1' %}
+            {% set divider_color = widget.config.divider_color or '#dee2e6' %}
+            <hr style="border: none; border-top: {{ divider_thickness }}px {{ divider_style }} {{ divider_color }}; margin: 1rem 0;">
+          </div>
+        {% elif widget.config.type == 'button' %}
+          <div class="widget-button-content text-center" style="padding: 1.5rem;">
+            {% set raw_btn_url = (widget.config.button_url or '') | trim %}
+            {% if raw_btn_url == '' %}
+              {% set btn_href = '#' %}
+            {% elif raw_btn_url.startswith('http://') or raw_btn_url.startswith('https://') %}
+              {% set btn_href = raw_btn_url %}
+            {% else %}
+              {% set btn_href = 'https://' ~ raw_btn_url %}
+            {% endif %}
+            <a href="{{ btn_href }}" 
+               class="btn btn-{{ widget.config.button_style or 'primary' }} btn-{{ widget.config.button_size or 'md' }}"
+               {% if widget.config.button_newtab %}target="_blank" rel="noopener noreferrer"{% endif %}>
+              {{ widget.config.button_text or 'Click Me' }}
+            </a>
+          </div>
+        {% elif widget.config.type == 'link' %}
+          <div class="widget-link-content" style="padding: 1rem;">
+            {% set raw_link_url = (widget.config.link_url or '') | trim %}
+            {% if raw_link_url == '' %}
+              {% set link_href = '#' %}
+            {% elif raw_link_url.startswith('http://') or raw_link_url.startswith('https://') %}
+              {% set link_href = raw_link_url %}
+            {% else %}
+              {% set link_href = 'https://' ~ raw_link_url %}
+            {% endif %}
+            <a href="{{ link_href }}" 
+               style="font-size: {{ widget.config.link_size or '1' }}rem;"
+               {% if widget.config.link_newtab %}target="_blank" rel="noopener noreferrer"{% endif %}>
+              <i class="fas fa-external-link-alt me-1"></i>
+              {{ widget.config.link_text or 'Link Text' }}
+            </a>
+          </div>
+        {% elif widget.config.type == 'list' %}
+          <div class="widget-list-content" style="padding: 1rem;">
+            {% if widget.config.list_type == 'ordered' %}
+              <ol>
+                {% for item in widget.config.list_items %}
+                  <li>{{ item }}</li>
+                {% endfor %}
+              </ol>
+            {% else %}
+              <ul>
+                {% for item in widget.config.list_items %}
+                  <li>{{ item }}</li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          </div>
+        {% elif widget.config.type == 'spacer' %}
+          <div class="widget-spacer-content" style="height: {{ widget.config.spacer_height or '50' }}px;">
+            <!-- Empty space for layout -->
+          </div>
+        {% elif widget.config.type == 'match_prediction' %}
+          <div class="widget-match-prediction-content" style="padding: 1rem;">
+            {% if widget.config.prediction_event == 'user_select' or widget.config.prediction_match == 'user_select' %}
+            <div class="viewer-controls mb-3 p-3 bg-light border rounded">
+              <h6 class="mb-2"><i class="fas fa-sliders-h me-2"></i>Match Selection</h6>
+              {% if widget.config.prediction_event == 'user_select' %}
+              <div class="mb-2">
+                <label class="form-label">Event</label>
+                <select class="form-select viewer-prediction-event" data-widget-index="{{ loop.index0 }}">
+                  <option value="">Select Event...</option>
+                  <!-- Events will be loaded via JS -->
+                </select>
+              </div>
+              {% endif %}
+              {% if widget.config.prediction_match == 'user_select' %}
+              <div class="mb-2">
+                <label class="form-label">Match</label>
+                <select class="form-select viewer-prediction-match" data-widget-index="{{ loop.index0 }}">
+                  <option value="">Select Match...</option>
+                  <!-- Matches will be loaded via JS -->
+                </select>
+              </div>
+              {% endif %}
+              <button type="button" class="btn btn-primary btn-sm viewer-refresh-prediction" data-widget-index="{{ loop.index0 }}">
+                <i class="fas fa-sync-alt me-1"></i>Load Prediction
+              </button>
+            </div>
+            {% endif %}
+            <div class="match-prediction-widget" data-event="{{ widget.config.prediction_event }}" data-match="{{ widget.config.prediction_match }}" data-style="{{ widget.config.prediction_style }}">
+              {% if widget.prediction_data %}
+                <div class="alert alert-info">
+                  <h5><i class="fas fa-trophy me-2"></i>Match Prediction</h5>
+                  <div class="prediction-display">
+                    {% if widget.config.prediction_style == 'compact' %}
+                      <p class="mb-0"><strong>Predicted Winner:</strong> <span class="badge bg-{{ 'danger' if widget.prediction_data.predicted_winner == 'red' else 'primary' if widget.prediction_data.predicted_winner == 'blue' else 'secondary' }}">{{ widget.prediction_data.predicted_winner|upper }}</span></p>
+                    {% elif widget.config.prediction_style == 'detailed' %}
+                      <div class="row">
+                        <div class="col-md-6">
+                          <h6>Red Alliance</h6>
+                          <p>Win Probability: {{ (widget.prediction_data.probabilities.red * 100)|round(1) }}%</p>
+                          <p>Predicted Score: {{ widget.prediction_data.red_alliance.predicted_score }}</p>
+                        </div>
+                        <div class="col-md-6">
+                          <h6>Blue Alliance</h6>
+                          <p>Win Probability: {{ (widget.prediction_data.probabilities.blue * 100)|round(1) }}%</p>
+                          <p>Predicted Score: {{ widget.prediction_data.blue_alliance.predicted_score }}</p>
+                        </div>
+                      </div>
+                    {% else %}
+                      <div class="text-center">
+                        <h6>Win Probability</h6>
+                        <div class="progress mb-2" style="height: 30px;">
+                          <div class="progress-bar bg-danger" style="width: {{ widget.prediction_data.probabilities.red * 100 }}%">Red {{ (widget.prediction_data.probabilities.red * 100)|round(1) }}%</div>
+                          <div class="progress-bar bg-primary" style="width: {{ widget.prediction_data.probabilities.blue * 100 }}%">Blue {{ (widget.prediction_data.probabilities.blue * 100)|round(1) }}%</div>
+                        </div>
+                        <p class="mb-0">Predicted: Red {{ widget.prediction_data.red_alliance.predicted_score }} - {{ widget.prediction_data.blue_alliance.predicted_score }} Blue</p>
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+              {% else %}
+                <div class="alert alert-warning">
+                  <i class="fas fa-info-circle me-2"></i>Select a match to view prediction
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        {% elif widget.config.type == 'team_comparison' %}
+          <div class="widget-team-comparison-content" style="padding: 1rem;">
+            {% if widget.config.comparison_user_select %}
+            <div class="viewer-controls mb-3 p-3 bg-light border rounded">
+              <h6 class="mb-2"><i class="fas fa-sliders-h me-2"></i>Team Selection</h6>
+              <div class="row">
+                <div class="col-md-6 mb-2">
+                  <label class="form-label">Team 1</label>
+                  <input type="number" class="form-control viewer-comparison-team1" data-widget-index="{{ loop.index0 }}" placeholder="Team number" value="{{ widget.config.comparison_team1 or '' }}">
+                </div>
+                <div class="col-md-6 mb-2">
+                  <label class="form-label">Team 2</label>
+                  <input type="number" class="form-control viewer-comparison-team2" data-widget-index="{{ loop.index0 }}" placeholder="Team number" value="{{ widget.config.comparison_team2 or '' }}">
+                </div>
+              </div>
+              <button type="button" class="btn btn-primary btn-sm viewer-refresh-comparison" data-widget-index="{{ loop.index0 }}">
+                <i class="fas fa-sync-alt me-1"></i>Compare Teams
+              </button>
+            </div>
+            {% endif %}
+            {% if widget.comparison_data %}
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="card bg-danger text-white">
+                    <div class="card-body text-center">
+                      <h5>{{ widget.comparison_data.team1.team_name }}</h5>
+                      <small>#{{ widget.comparison_data.team1.team_number }}</small>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="card bg-primary text-white">
+                    <div class="card-body text-center">
+                      <h5>{{ widget.comparison_data.team2.team_name }}</h5>
+                      <small>#{{ widget.comparison_data.team2.team_number }}</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <table class="table table-striped mt-3">
+                <thead>
+                  <tr>
+                    <th>Metric</th>
+                    <th class="text-center">{{ widget.comparison_data.team1.team_name }}</th>
+                    <th class="text-center">{{ widget.comparison_data.team2.team_name }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for metric_id in widget.comparison_data.selected_metrics %}
+                  <tr>
+                    <td>{{ metric_id|replace('_', ' ')|title }}</td>
+                    <td class="text-center">{{ widget.comparison_data.team1.metrics.get(metric_id, 'N/A') }}</td>
+                    <td class="text-center">{{ widget.comparison_data.team2.metrics.get(metric_id, 'N/A') }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% else %}
+              <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>Enter team numbers to compare statistics
+              </div>
+            {% endif %}
+          </div>
+        {% elif widget.config.type == 'team_rankings' %}
+          <div class="widget-team-rankings-content" style="padding: 1rem;">
+            {% if widget.config.rankings_event == 'user_select' %}
+            <div class="viewer-controls mb-3 p-3 bg-light border rounded">
+              <h6 class="mb-2"><i class="fas fa-sliders-h me-2"></i>Event Selection</h6>
+              <div class="mb-2">
+                <label class="form-label">Event</label>
+                <select class="form-select viewer-rankings-event" data-widget-index="{{ loop.index0 }}">
+                  <option value="">All Events</option>
+                  <!-- Events will be loaded via JS -->
+                </select>
+              </div>
+              <button type="button" class="btn btn-primary btn-sm viewer-refresh-rankings" data-widget-index="{{ loop.index0 }}">
+                <i class="fas fa-sync-alt me-1"></i>Load Rankings
+              </button>
+            </div>
+            {% endif %}
+            {% if widget.rankings_data %}
+              <h5 class="mb-3"><i class="fas fa-list-ol me-2"></i>Team Rankings (Sorted by {{ widget.rankings_data.sort_by|title }})</h5>
+              <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Rank</th>
+                      <th>Team</th>
+                      <th class="text-end">{{ widget.rankings_data.sort_by|replace('_', ' ')|title }}</th>
+                      {% if widget.rankings_data.show_stats %}
+                      <th class="text-end">Avg Points</th>
+                      {% endif %}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for team in widget.rankings_data.rankings %}
+                    <tr>
+                      <td><span class="badge bg-{{ 'warning' if team.rank <= 3 else 'secondary' }}">{{ team.rank }}</span></td>
+                      <td><strong>{{ team.team_number }}</strong> - {{ team.team_name }}</td>
+                      <td class="text-end">{{ team.sort_value|round(2) }}</td>
+                      {% if widget.rankings_data.show_stats %}
+                      <td class="text-end">{{ team.metrics.get('total_points', team.metrics.get('tot', 'N/A')) }}</td>
+                      {% endif %}
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>No ranking data available
+              </div>
+            {% endif %}
+          </div>
+        {% elif widget.config.type == 'recent_matches' %}
+          <div class="widget-recent-matches-content" style="padding: 1rem;">
+            {% if widget.config.matches_event == 'user_select' %}
+            <div class="viewer-controls mb-3 p-3 bg-light border rounded">
+              <h6 class="mb-2"><i class="fas fa-sliders-h me-2"></i>Event Selection</h6>
+              <div class="mb-2">
+                <label class="form-label">Event</label>
+                <select class="form-select viewer-matches-event" data-widget-index="{{ loop.index0 }}">
+                  <option value="">Select Event...</option>
+                  <!-- Events will be loaded via JS -->
+                </select>
+              </div>
+              <button type="button" class="btn btn-primary btn-sm viewer-refresh-matches" data-widget-index="{{ loop.index0 }}">
+                <i class="fas fa-sync-alt me-1"></i>Load Matches
+              </button>
+            </div>
+            {% endif %}
+            {% if widget.matches_data %}
+              <h5 class="mb-3"><i class="fas fa-history me-2"></i>Recent Matches</h5>
+              <div class="list-group">
+                {% for match in widget.matches_data.matches %}
+                <div class="list-group-item">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                      <strong>{{ match.match_type }} {{ match.match_number }}</strong>
+                      {% if match.timestamp %}
+                      <small class="text-muted ms-2">{{ match.timestamp.strftime('%m/%d %H:%M') }}</small>
+                      {% endif %}
+                    </div>
+                    {% if widget.matches_data.show_scores and match.get('red_score') is not none %}
+                    <div>
+                      <span class="badge bg-{{ 'danger' if match.get('winner') == 'red' else 'secondary' }}">Red: {{ match.red_score }}</span>
+                      <span class="badge bg-{{ 'primary' if match.get('winner') == 'blue' else 'secondary' }} ms-1">Blue: {{ match.blue_score }}</span>
+                    </div>
+                    {% endif %}
+                  </div>
+                  <div class="mt-1">
+                    <small class="text-danger">Red: {{ match.red_alliance }}</small>
+                    <small class="text-primary ms-3">Blue: {{ match.blue_alliance }}</small>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>No match data available
+              </div>
+            {% endif %}
+          </div>
         {% elif widget.plots %}
           <div class="row">
             {% for plot_key, plot_json in widget.plots.items() %}
-              <div class="col-md-6 mb-3">
-                <div class="plotly-figure" data-plot-json='{{ plot_json|tojson|safe }}'></div>
-              </div>
-            {% endfor %}
+                  <div class="col-12 mb-3">
+                    <div class="plotly-figure" data-plot-json='{{ plot_json|tojson|safe }}'></div>
+                  </div>
+                {% endfor %}
           </div>
         {% else %}
-          <p class="text-muted">No plots for this widget.</p>
+          <p class="text-muted">No content for this widget.</p>
         {% endif %}
       </div>
     </div>
   {% endfor %}
+  </div><!-- end widgets-container -->
 
   <style>
   /* Ensure widget cards maintain their configured sizes */
   .widget-view-card {
     display: inline-block;
     vertical-align: top;
+    max-width: 100%;
+    box-sizing: border-box;
   }
   .widget-view-card .card-body {
     overflow: auto;
@@ -103,31 +437,391 @@
   .widget-text-content {
     padding: 0.5rem 0;
   }
+
+  /* Render divider widget as a single horizontal line (no gray background) */
+  .widget-divider-content {
+    background: transparent !important;
+    padding: 0.25rem 0 !important;
+    margin: 0 !important;
+  }
+
+  .widget-divider-content hr {
+    border: none;
+    height: 0;
+    margin: 0.25rem 0;
+    display: block;
+  }
+
+  /* Ensure the entire card for divider widgets is transparent and minimal
+     so only the line is visible (overrides default card styling) */
+  .widget-view-card[data-widget-type="divider"] {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0.25rem 0 !important;
+    min-height: 0 !important;
+  }
+
+  .widget-view-card[data-widget-type="divider"] .card-body {
+    background: transparent !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+  }
+
+  /* Style the hr inside divider cards to be a thin centered line */
+  .widget-view-card[data-widget-type="divider"] .widget-divider-content hr {
+    border: none !important;
+    border-top: 3px solid rgba(255,255,255,0.2) !important; /* default thin line */
+    margin: 0.5rem 20px !important;
+    height: 0 !important;
+    display: block;
+  }
+  
+  /* Responsive container for widgets */
+  .plotly-figure {
+    width: 100%;
+    min-height: 300px;
+  }
+
+  /* Ensure custom-multiselect checkboxes are visible (including dark mode) */
+  .custom-multiselect .dropdown-menu .form-check-input {
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+    accent-color: var(--bs-primary, #0d6efd);
+    cursor: pointer;
+  }
+
+  .custom-multiselect .dropdown-menu .form-check-label {
+    color: inherit;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .custom-multiselect .dropdown-menu {
+      background-color: #222 !important;
+      color: #f8f9fa !important;
+    }
+    /* add left padding so checkboxes don't get clipped by rounded corners */
+    .custom-multiselect .dropdown-menu {
+      padding-left: 0.6rem;
+      padding-right: 0.4rem;
+      box-sizing: border-box;
+    }
+    .custom-multiselect .dropdown-menu .form-check-label {
+      color: #f8f9fa !important;
+    }
+    .custom-multiselect .dropdown-menu .form-check-input {
+      accent-color: #66b2ff;
+      filter: none;
+    }
+
+    /* nudge checkbox inward so it's fully visible */
+    .custom-multiselect .dropdown-menu .form-check-input {
+      margin-left: 0.35rem;
+    }
+  }
+  
+  /* Container needs minimum height for absolute positioned widgets */
+  .widgets-container {
+    min-height: 500px;
+  }
+  
+  /* Mobile responsive styles for view page */
+  @media (max-width: 768px) {
+    .widget-view-card {
+      width: 100% !important;
+      max-width: 100% !important;
+      display: block !important;
+    }
+    
+    .widget-view-card[style*="position: absolute"] {
+      position: relative !important;
+      left: auto !important;
+      top: auto !important;
+      margin: 0 0 1rem 0 !important;
+    }
+    
+    .widgets-container {
+      min-height: auto;
+      overflow: visible;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .widget-view-card .row .col-md-6 {
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+    
+    .viewer-controls .row {
+      margin-bottom: 0.5rem;
+    }
+    
+    .viewer-controls .col-auto {
+      flex: 0 0 100%;
+      max-width: 100%;
+      margin-bottom: 0.25rem;
+    }
+    
+    .viewer-controls .col {
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+    
+    .plotly-figure {
+      min-height: 250px;
+    }
+  }
+  
+  /* Tablet and above - preserve layout */
+  @media (min-width: 769px) {
+    .widgets-container {
+      position: relative;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .mb-3 .btn {
+      display: block;
+      width: 100%;
+      margin: 0.25rem 0 !important;
+    }
+    
+    .card-title {
+      font-size: 1rem;
+    }
+  }
   </style>
+
+  <!-- Embed events and matches data for dropdown population -->
+  <script id="page_viewer_events_json" type="application/json">{{ events|default([])|tojson|safe }}</script>
+  <script id="page_viewer_matches_json" type="application/json">{{ matches|default([])|tojson|safe }}</script>
 
   <script>
   document.addEventListener('DOMContentLoaded', function(){
-    // Apply widget sizes from data attributes (fallback if inline styles don't work)
+    // Apply widget sizes and positions from data attributes
+    // On mobile (<=768px), force full width stacked layout
+    // On desktop, preserve custom positions
+    var isMobile = window.innerWidth <= 768;
+    
     document.querySelectorAll('.widget-view-card').forEach(function(card){
       var width = card.getAttribute('data-widget-width');
       var height = card.getAttribute('data-widget-height');
-      if (width && width !== '') {
-        card.style.width = width + 'px';
+      var x = card.getAttribute('data-widget-x');
+      var y = card.getAttribute('data-widget-y');
+      
+      // Check if widget has position data (not empty string)
+      var hasPosition = x !== '' && y !== '' && x !== null && y !== null;
+      
+      if (isMobile) {
+        // Force full width stacked layout on mobile
+        card.style.width = '100%';
         card.style.maxWidth = '100%';
+        card.style.position = 'relative';
+        card.style.left = 'auto';
+        card.style.top = 'auto';
+        card.style.margin = '0 0 1rem 0';
+        card.style.display = 'block';
+      } else {
+        // Desktop: preserve custom positions or use stacked layout
+        if (width && width !== '') {
+          card.style.width = width + 'px';
+          card.style.maxWidth = '100%';
+        }
+        if (height && height !== '') {
+          card.style.minHeight = height + 'px';
+        }
+        
+        // Apply absolute positioning only if coordinates exist
+        if (hasPosition) {
+          card.style.position = 'absolute';
+          card.style.left = x + 'px';
+          card.style.top = y + 'px';
+          card.style.margin = '0';
+        } else {
+          // No position data: use relative positioning (stacked)
+          card.style.position = 'relative';
+          card.style.display = 'block';
+          card.style.margin = '0 0 1rem 0';
+        }
       }
-      if (height && height !== '') {
-        card.style.minHeight = height + 'px';
-      }
+    });
+    
+    // Handle window resize with debouncing
+    var resizeTimeout;
+    window.addEventListener('resize', function(){
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(function(){
+        isMobile = window.innerWidth <= 768;
+        
+        document.querySelectorAll('.widget-view-card').forEach(function(card){
+          var width = card.getAttribute('data-widget-width');
+          var height = card.getAttribute('data-widget-height');
+          var x = card.getAttribute('data-widget-x');
+          var y = card.getAttribute('data-widget-y');
+          var hasPosition = x !== '' && y !== '' && x !== null && y !== null;
+          
+          if (isMobile) {
+            // Mobile layout
+            card.style.width = '100%';
+            card.style.maxWidth = '100%';
+            card.style.position = 'relative';
+            card.style.left = 'auto';
+            card.style.top = 'auto';
+            card.style.margin = '0 0 1rem 0';
+            card.style.display = 'block';
+          } else {
+            // Desktop layout
+            if (width && width !== '') {
+              card.style.width = width + 'px';
+              card.style.maxWidth = '100%';
+            }
+            if (height && height !== '') {
+              card.style.minHeight = height + 'px';
+            }
+            
+            if (hasPosition) {
+              card.style.position = 'absolute';
+              card.style.left = x + 'px';
+              card.style.top = y + 'px';
+              card.style.margin = '0';
+            } else {
+              card.style.position = 'relative';
+              card.style.display = 'block';
+              card.style.margin = '0 0 1rem 0';
+            }
+          }
+        });
+        
+        // Re-render Plotly charts on resize
+        document.querySelectorAll('.plotly-figure').forEach(function(el){
+          if (el.data) {
+            Plotly.Plots.resize(el);
+          }
+        });
+      }, 250);
     });
 
     // Render Plotly charts from JSON stored in data-plot-json attributes
     document.querySelectorAll('.plotly-figure').forEach(function(el){
       try{
         var j = JSON.parse(el.getAttribute('data-plot-json'));
-        Plotly.newPlot(el, j['data'], j['layout'] || {});
+        var layout = j['layout'] || {};
+        // Make Plotly charts responsive
+        layout.autosize = true;
+        layout.responsive = true;
+        if (!layout.margin) {
+          layout.margin = { l: 50, r: 50, t: 50, b: 50 };
+        }
+        var config = { responsive: true, displayModeBar: true, displaylogo: false };
+        Plotly.newPlot(el, j['data'], layout, config);
       }catch(e){
         console.error('Failed to render plotly figure', e);
       }
+    });
+
+    // Load events and matches from server-side data
+    const PAGE_VIEWER_EVENTS = JSON.parse(document.getElementById('page_viewer_events_json').textContent || '[]');
+    const PAGE_VIEWER_MATCHES = JSON.parse(document.getElementById('page_viewer_matches_json').textContent || '[]');
+    
+    // Populate event dropdowns
+    document.querySelectorAll('.viewer-prediction-event, .viewer-rankings-event, .viewer-matches-event').forEach(sel => {
+      PAGE_VIEWER_EVENTS.forEach(event => {
+        const opt = document.createElement('option');
+        opt.value = event.id;
+        opt.textContent = event.name || event.code;
+        sel.appendChild(opt);
+      });
+    });
+
+    // Handle event selection for match prediction - load matches
+    document.querySelectorAll('.viewer-prediction-event').forEach(function(sel) {
+      sel.addEventListener('change', function() {
+        const idx = this.dataset.widgetIndex;
+        const matchSel = document.querySelector('.viewer-prediction-match[data-widget-index="' + idx + '"]');
+        const eventId = this.value;
+        if (matchSel && eventId) {
+          // Clear existing matches
+          matchSel.innerHTML = '<option value="">Loading matches...</option>';
+          fetch(`/api/v1/matches?event_id=${eventId}&limit=200`)
+            .then(r => r.json())
+            .then(data => {
+              matchSel.innerHTML = '<option value="">Select Match...</option>';
+              // Filter matches from server-side data
+              const eventMatches = PAGE_VIEWER_MATCHES.filter(m => m.event_id == eventId);
+              eventMatches.forEach(match => {
+                const opt = document.createElement('option');
+                opt.value = match.id;
+                opt.textContent = `${match.match_type} ${match.match_number}`;
+                matchSel.appendChild(opt);
+              });
+            })
+            .catch(err => {
+              console.error('Failed to load matches:', err);
+              matchSel.innerHTML = '<option value="">Error loading matches</option>';
+            });
+        }
+      });
+    });
+
+    // Wire up match prediction refresh
+    document.querySelectorAll('.viewer-refresh-prediction').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const idx = btn.dataset.widgetIndex;
+        const matchSel = document.querySelector('.viewer-prediction-match[data-widget-index="' + idx + '"]');
+        const matchId = matchSel ? matchSel.value : null;
+        if (!matchId) {
+          alert('Please select a match');
+          return;
+        }
+        // Reload the page with match_id parameter
+        window.location.href = window.location.pathname + '?prediction_' + idx + '=' + matchId;
+      });
+    });
+
+    // Wire up team comparison refresh
+    document.querySelectorAll('.viewer-refresh-comparison').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const idx = btn.dataset.widgetIndex;
+        const team1Input = document.querySelector('.viewer-comparison-team1[data-widget-index="' + idx + '"]');
+        const team2Input = document.querySelector('.viewer-comparison-team2[data-widget-index="' + idx + '"]');
+        const team1 = team1Input ? team1Input.value : null;
+        const team2 = team2Input ? team2Input.value : null;
+        if (!team1 || !team2) {
+          alert('Please enter both team numbers');
+          return;
+        }
+        // Reload the page with team parameters
+        window.location.href = window.location.pathname + '?comparison_' + idx + '_team1=' + team1 + '&comparison_' + idx + '_team2=' + team2;
+      });
+    });
+
+    // Wire up rankings refresh
+    document.querySelectorAll('.viewer-refresh-rankings').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const idx = btn.dataset.widgetIndex;
+        const eventSel = document.querySelector('.viewer-rankings-event[data-widget-index="' + idx + '"]');
+        const eventId = eventSel ? eventSel.value : '';
+        // Reload the page with event parameter
+        window.location.href = window.location.pathname + '?rankings_' + idx + '_event=' + (eventId || 'all');
+      });
+    });
+
+    // Wire up recent matches refresh
+    document.querySelectorAll('.viewer-refresh-matches').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const idx = btn.dataset.widgetIndex;
+        const eventSel = document.querySelector('.viewer-matches-event[data-widget-index="' + idx + '"]');
+        const eventId = eventSel ? eventSel.value : null;
+        if (!eventId) {
+          alert('Please select an event');
+          return;
+        }
+        // Reload the page with event parameter
+        window.location.href = window.location.pathname + '?matches_' + idx + '_event=' + eventId;
+      });
     });
 
     // Wire up viewer controls for user-selectable widgets
@@ -174,55 +868,239 @@
           body: JSON.stringify(overrides)
         }).then(r=>r.json()).then(data=>{
           if (data && data.plots) {
-            // Replace first plotly-figure inside the corresponding card
             var card = btn.closest('.card');
-            if (card) {
-              var plotEl = card.querySelector('.plotly-figure');
-              // Use the first plot JSON returned
-              var keys = Object.keys(data.plots || {});
-              if (keys.length) {
-                try {
-                  // Prefer the plot that matches the user's selected graph type (if provided in overrides)
-                  var chosenKey = keys[0];
-                  try {
-                    if (overrides && overrides.graph_types && overrides.graph_types.length) {
-                      var pref = Array.isArray(overrides.graph_types) ? overrides.graph_types[0] : overrides.graph_types;
-                      for (var k_i = 0; k_i < keys.length; k_i++) {
-                        var k = keys[k_i];
-                        // keys are like '<metric>_line_avg' or '<metric>_bar_matches' - look for the preferred type string
-                        if (k.indexOf('_' + pref + '_') !== -1 || k.endsWith('_' + pref) || k.indexOf('_' + pref + 's') !== -1) { chosenKey = k; break; }
-                      }
+            if (!card) return;
+
+            var keys = Object.keys(data.plots || {});
+            if (!keys.length) return;
+
+            // Order keys to prefer user-selected graph types if provided
+            var orderedKeys = [];
+            try {
+              if (overrides && overrides.graph_types && overrides.graph_types.length) {
+                var prefs = Array.isArray(overrides.graph_types) ? overrides.graph_types : [overrides.graph_types];
+                // For each preferred type, pick matching keys (preserving original key order)
+                prefs.forEach(function(pref){
+                  keys.forEach(function(k){
+                    if (orderedKeys.indexOf(k) !== -1) return;
+                    if (k.indexOf('_' + pref + '_') !== -1 || k.endsWith('_' + pref) || k.indexOf('_' + pref + 's') !== -1 || k.indexOf(pref) !== -1) {
+                      orderedKeys.push(k);
                     }
-                  } catch (e) { /* ignore */ }
-                  var pj = JSON.parse(data.plots[chosenKey]);
-                  if (plotEl) {
-                    Plotly.react(plotEl, pj.data, pj.layout || {});
-                  } else {
-                    // create a plot container and insert it into the card body (remove placeholder text)
-                    var cardBody = card.querySelector('.card-body') || card;
-                    // remove any placeholder 'No plots...' paragraph
-                    var placeholder = cardBody.querySelector('p.text-muted');
-                    if (placeholder && placeholder.textContent.trim().startsWith('No plots')) placeholder.remove();
-                    var containerRow = document.createElement('div');
-                    containerRow.className = 'row';
-                    var col = document.createElement('div');
-                    col.className = 'col-md-12 mb-3';
-                    var newPlotEl = document.createElement('div');
-                    newPlotEl.className = 'plotly-figure';
-                    col.appendChild(newPlotEl);
-                    containerRow.appendChild(col);
-                    // append after viewer-controls if present, else to end of card body
-                    var vc = card.querySelector('.viewer-controls');
-                    if (vc && vc.parentNode) vc.parentNode.insertBefore(containerRow, vc.nextSibling);
-                    else cardBody.appendChild(containerRow);
-                    Plotly.newPlot(newPlotEl, pj.data, pj.layout || {});
-                  }
-                } catch(e) { console.error('Failed to parse returned plot', e); }
+                  });
+                });
               }
-            }
+            } catch (e) { /* ignore ordering errors */ }
+
+            // Append any remaining keys that weren't matched by preferences
+            keys.forEach(function(k){ if (orderedKeys.indexOf(k) === -1) orderedKeys.push(k); });
+
+            // Remove existing plot elements in the card so we can insert the new set
+            var cardBody = card.querySelector('.card-body') || card;
+            // Remove columns that contain existing plotly figures
+            card.querySelectorAll('.plotly-figure').forEach(function(el){
+              var col = el.closest('.col-md-6') || el.closest('.col-md-12');
+              if (col) col.remove(); else el.remove();
+            });
+            // Remove any empty rows we previously created
+            cardBody.querySelectorAll('.row').forEach(function(r){
+              if (!r.querySelector('.col-md-6') && !r.querySelector('.col-md-12')) r.remove();
+            });
+
+            // Create a new row to hold all returned plots
+            var containerRow = document.createElement('div');
+            containerRow.className = 'row';
+
+            orderedKeys.forEach(function(k, idx){
+              try {
+                var pj = JSON.parse(data.plots[k]);
+                var col = document.createElement('div');
+                // Always make plots full-width (stacked vertically)
+                col.className = 'col-12 mb-3';
+                var newPlotEl = document.createElement('div');
+                newPlotEl.className = 'plotly-figure';
+                // store raw json in attribute for potential resizing/render reuse
+                newPlotEl.setAttribute('data-plot-json', data.plots[k]);
+                col.appendChild(newPlotEl);
+                containerRow.appendChild(col);
+                // Render the plot
+                try {
+                  var layout = pj.layout || {};
+                  layout.autosize = true;
+                  layout.responsive = true;
+                  if (!layout.margin) layout.margin = { l:50, r:50, t:50, b:50 };
+                  var config = { responsive: true, displayModeBar: true, displaylogo: false };
+                  Plotly.newPlot(newPlotEl, pj.data, layout, config);
+                } catch (e) {
+                  console.error('Failed to render returned plot for key', k, e);
+                }
+              } catch (e) {
+                console.error('Failed to parse returned plot for key', k, e);
+              }
+            });
+
+            // Insert after viewer-controls if present, else append to card body
+            var vc = card.querySelector('.viewer-controls');
+            if (vc && vc.parentNode) vc.parentNode.insertBefore(containerRow, vc.nextSibling);
+            else cardBody.appendChild(containerRow);
+
+            // After inserting new plots, trigger dynamic layout reflow
+            setTimeout(function() {
+              resolveWidgetCollisions();
+            }, 100);
           }
         }).catch(console.error);
       });
+    });
+
+    // Dynamic layout collision detection and resolution
+    // This function detects when widgets overlap vertically and shifts lower widgets down
+    // Also ensures widgets don't go off-screen horizontally or vertically
+    function resolveWidgetCollisions() {
+      if (window.innerWidth <= 768) return; // Skip on mobile (uses stacked layout)
+
+      var cards = Array.from(document.querySelectorAll('.widget-view-card'));
+      
+      // Filter to only positioned (absolute) cards
+      var positionedCards = cards.filter(function(card) {
+        var x = card.getAttribute('data-widget-x');
+        var y = card.getAttribute('data-widget-y');
+        return x !== '' && y !== '' && x !== null && y !== null;
+      });
+
+      if (positionedCards.length === 0) return;
+
+      // Get container dimensions
+      var container = document.querySelector('.widgets-container');
+      if (!container) return;
+      var containerWidth = container.clientWidth;
+      var containerRect = container.getBoundingClientRect();
+
+      // Sort by original Y position (top to bottom)
+      positionedCards.sort(function(a, b) {
+        var aY = parseFloat(a.getAttribute('data-widget-y')) || 0;
+        var bY = parseFloat(b.getAttribute('data-widget-y')) || 0;
+        return aY - bY;
+      });
+
+      // Track adjusted positions
+      var adjustedPositions = new Map();
+
+      positionedCards.forEach(function(card, idx) {
+        var rect = card.getBoundingClientRect();
+
+        var originalX = parseFloat(card.getAttribute('data-widget-x')) || 0;
+        var originalY = parseFloat(card.getAttribute('data-widget-y')) || 0;
+        var currentX = originalX;
+        // Start with any previously adjusted Y, otherwise original
+        var currentY = adjustedPositions.get(card) || originalY;
+
+        var cardWidth = rect.width;
+        var cardHeight = rect.height;
+
+        // Check if widget goes off-screen horizontally and adjust
+        var rightEdge = currentX + cardWidth;
+        var xWasAdjusted = false;
+        if (rightEdge > containerWidth) {
+          // Shift left to fit, but don't go negative
+          currentX = Math.max(0, containerWidth - cardWidth - 10);
+          card.style.left = currentX + 'px';
+          xWasAdjusted = true;
+        } else if (currentX < 0) {
+          // Shift right if starting off-screen left
+          currentX = 10;
+          card.style.left = currentX + 'px';
+          xWasAdjusted = true;
+        }
+
+        // Build list of already-placed cards (those earlier in sorted order)
+        var placed = positionedCards.slice(0, idx);
+
+        // Iteratively find the smallest Y >= originalY that doesn't overlap placed cards horizontally
+        var gap = 10;
+        var candidateY = adjustedPositions.get(card) || originalY;
+        var safety = 0;
+        while (true) {
+          var collided = false;
+          for (var j = 0; j < placed.length; j++) {
+            var otherCard = placed[j];
+            var otherRect = otherCard.getBoundingClientRect();
+            var otherOriginalY = parseFloat(otherCard.getAttribute('data-widget-y')) || 0;
+            var otherY = adjustedPositions.get(otherCard) || otherOriginalY;
+            var otherX = parseFloat(otherCard.style.left) || parseFloat(otherCard.getAttribute('data-widget-x')) || 0;
+            var otherW = otherRect.width;
+            var otherH = otherRect.height;
+
+            // Check horizontal overlap at currentX
+            var horizontalOverlap = !(currentX + cardWidth < otherX + 5 || currentX > otherX + otherW - 5);
+            if (!horizontalOverlap) continue;
+
+            var otherTop = otherY;
+            var otherBottom = otherY + otherH;
+
+            // If candidateY overlaps vertically with this other card, move candidateY below it
+            if (!(candidateY + cardHeight <= otherTop || candidateY >= otherBottom)) {
+              candidateY = otherBottom + gap;
+              collided = true;
+              break; // re-check from start with new candidateY
+            }
+          }
+          safety++;
+          if (!collided || safety > 1000) break;
+        }
+
+        // Finalize position
+        currentY = Math.max(candidateY, 10);
+        adjustedPositions.set(card, currentY);
+        card.style.top = currentY + 'px';
+      });
+
+      // Update container height to accommodate all widgets
+      var maxBottom = 0;
+      positionedCards.forEach(function(card) {
+        var rect = card.getBoundingClientRect();
+        var containerTop = containerRect.top;
+        var cardBottom = rect.bottom - containerTop;
+        maxBottom = Math.max(maxBottom, cardBottom);
+      });
+      
+      if (maxBottom > 0) {
+        container.style.minHeight = (maxBottom + 50) + 'px';
+      }
+    }
+
+    // Trigger collision resolution on initial load
+    setTimeout(function() {
+      resolveWidgetCollisions();
+    }, 300);
+
+    // Observe widget height changes and trigger reflow
+    var widgetObserver = new MutationObserver(function(mutations) {
+      var shouldReflow = false;
+      mutations.forEach(function(mutation) {
+        if (mutation.type === 'childList' || mutation.type === 'attributes') {
+          shouldReflow = true;
+        }
+      });
+      if (shouldReflow) {
+        clearTimeout(window.reflowTimeout);
+        window.reflowTimeout = setTimeout(resolveWidgetCollisions, 150);
+      }
+    });
+
+    // Observe all widget cards for changes
+    document.querySelectorAll('.widget-view-card').forEach(function(card) {
+      widgetObserver.observe(card, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style']
+      });
+    });
+
+    // Also trigger reflow on window resize
+    window.addEventListener('resize', function() {
+      clearTimeout(window.reflowTimeout);
+      window.reflowTimeout = setTimeout(resolveWidgetCollisions, 250);
     });
   });
   </script>
