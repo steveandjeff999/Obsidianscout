@@ -11,6 +11,7 @@ import sys
 import numpy as np
 from datetime import datetime
 from app.models import Team, Match, ScoutingData, Event, SharedGraph
+from app.models import CustomPage
 from app import db
 from app.utils.analysis import calculate_team_metrics
 from app.utils.theme_manager import ThemeManager
@@ -732,6 +733,12 @@ def view_shared(share_id):
     # Process the data and create graphs
     if teams and scouting_data:
         # Create team performance graphs using the selected metric and graph types
+        # Deduplicate team rows and prepare team_data
+        unique_map = {}
+        for t in teams:
+            if t.team_number not in unique_map:
+                unique_map[t.team_number] = t
+        teams = sorted(unique_map.values(), key=lambda x: x.team_number) if teams else []
         team_data = {}
         
         # Calculate metrics for each team's matches
@@ -887,6 +894,409 @@ def my_shares():
                          **get_theme_context())
 
 
+# ======== CUSTOM PAGES ========
+
+
+@bp.route('/pages')
+@analytics_required
+def pages_index():
+    """List custom pages created by this user's team/user"""
+    pages = CustomPage.query.filter_by(owner_team=current_user.scouting_team_number, is_active=True).order_by(CustomPage.updated_at.desc()).all()
+    return render_template('graphs/pages_index.html', pages=pages, **get_theme_context())
+
+
+@bp.route('/pages/create', methods=['GET', 'POST'])
+@analytics_required
+def pages_create():
+    """Create a new custom page. Simple form-based creation where widgets are submitted as JSON."""
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        widgets_raw = request.form.get('widgets_json', '').strip()
+        if not title:
+            flash('Please provide a title for your custom page.', 'error')
+            return redirect(url_for('graphs.pages_create'))
+        try:
+            widgets_obj = json.loads(widgets_raw) if widgets_raw else []
+        except Exception as e:
+            current_app.logger.error(f'Failed to parse widgets JSON for custom page: {e}')
+            flash(f'Widgets JSON is invalid: {str(e)}', 'error')
+            return redirect(url_for('graphs.pages_create'))
+
+        page = CustomPage(title=title, owner_team=current_user.scouting_team_number, owner_user=current_user.username, widgets_json=json.dumps(widgets_obj))
+        db.session.add(page)
+        db.session.commit()
+        flash('Custom page created.', 'success')
+        return redirect(url_for('graphs.pages_index'))
+
+    # Prepare a minimal game_config-driven widget palette for the form
+    game_config = get_effective_game_config()
+    # Collect metrics and scoring elements
+    metrics = game_config.get('data_analysis', {}).get('key_metrics', [])
+    # Ensure a 'total_points' metric exists so widgets can select it even if not in game_config
+    try:
+        if isinstance(metrics, list):
+            if not any(m.get('id') == 'total_points' for m in metrics):
+                metrics.append({'id': 'total_points', 'name': 'Total Points'})
+    except Exception:
+        metrics = metrics
+    scoring_elements = []
+    for period in ['auto_period', 'teleop_period', 'endgame_period']:
+        for el in game_config.get(period, {}).get('scoring_elements', []):
+            scoring_elements.append({'period': period, 'id': el.get('perm_id', el.get('id')), 'name': el.get('name', el.get('id'))})
+
+    # Provide teams list for team-selection dropdown in the widget builder
+    teams_q = Team.query.order_by(Team.team_number).all()
+    teams = [{'id': t.team_number, 'name': t.team_name or f'Team {t.team_number}'} for t in teams_q]
+    return render_template('graphs/pages_create.html', game_config=game_config, metrics=metrics, scoring_elements=scoring_elements, teams=teams, initial_widgets=None, **get_theme_context())
+
+
+@bp.route('/pages/<int:page_id>/edit', methods=['GET', 'POST'])
+@analytics_required
+def pages_edit(page_id):
+    """Edit an existing custom page. Only the creator and team may edit."""
+    page = CustomPage.query.get_or_404(page_id)
+    if page.owner_team != current_user.scouting_team_number or page.owner_user != current_user.username:
+        abort(403)
+
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        widgets_raw = request.form.get('widgets_json', '').strip()
+        if not title:
+            flash('Please provide a title for your custom page.', 'error')
+            return redirect(url_for('graphs.pages_edit', page_id=page.id))
+        try:
+            widgets_obj = json.loads(widgets_raw) if widgets_raw else []
+        except Exception as e:
+            current_app.logger.error(f'Failed to parse widgets JSON for custom page {page.id}: {e}')
+            flash(f'Widgets JSON is invalid: {str(e)}', 'error')
+            return redirect(url_for('graphs.pages_edit', page_id=page.id))
+
+        page.title = title
+        page.set_widgets(widgets_obj)
+        db.session.commit()
+        flash('Custom page updated.', 'success')
+        return redirect(url_for('graphs.pages_index'))
+
+    # GET -> render builder with initial widgets loaded
+    game_config = get_effective_game_config()
+    metrics = game_config.get('data_analysis', {}).get('key_metrics', [])
+    # Ensure a 'total_points' metric exists so widgets can select it even if not in game_config
+    try:
+        if isinstance(metrics, list):
+            if not any(m.get('id') == 'total_points' for m in metrics):
+                metrics.append({'id': 'total_points', 'name': 'Total Points'})
+    except Exception:
+        metrics = metrics
+    scoring_elements = []
+    for period in ['auto_period', 'teleop_period', 'endgame_period']:
+        for el in game_config.get(period, {}).get('scoring_elements', []):
+            scoring_elements.append({'period': period, 'id': el.get('perm_id', el.get('id')), 'name': el.get('name', el.get('id'))})
+
+    try:
+        initial_widgets = page.widgets()
+    except Exception:
+        initial_widgets = []
+
+    teams_q = Team.query.order_by(Team.team_number).all()
+    teams = [{'id': t.team_number, 'name': t.team_name or f'Team {t.team_number}'} for t in teams_q]
+
+    return render_template('graphs/pages_create.html', game_config=game_config, metrics=metrics, scoring_elements=scoring_elements, teams=teams, initial_widgets=initial_widgets, page=page, **get_theme_context())
+
+
+@bp.route('/pages/<int:page_id>/render_widget/<int:widget_index>', methods=['POST'])
+@analytics_required
+def pages_widget_render(page_id, widget_index):
+    """Render a single widget for a page with optional overrides (used by user-selectable controls).
+    Expects JSON body with overrides for fields like 'metric' or 'teams'. Returns JSON mapping plot_key -> plot_json."""
+    page = CustomPage.query.get_or_404(page_id)
+    if page.owner_team != current_user.scouting_team_number:
+        abort(403)
+
+    widgets = page.widgets()
+    if widget_index < 0 or widget_index >= len(widgets):
+        return jsonify({'error': 'Invalid widget index'}), 400
+
+    widget = dict(widgets[widget_index])
+    overrides = request.get_json() or {}
+    # apply overrides shallowly
+    for k, v in overrides.items():
+        widget[k] = v
+
+    # Normalize graph_types override: ensure it's a non-empty list of lowercase strings
+    try:
+        raw_gt = widget.get('graph_types', ['bar', 'line'])
+        if isinstance(raw_gt, str):
+            raw_gt = [raw_gt]
+        graph_types = [str(x).lower() for x in (raw_gt or []) if x is not None]
+        if not graph_types:
+            graph_types = ['bar', 'line']
+        widget['graph_types'] = graph_types
+    except Exception:
+        widget['graph_types'] = widget.get('graph_types', ['bar', 'line'])
+
+    # helpful debug logging when rendering widgets dynamically
+    try:
+        current_app.logger.debug('pages_widget_render: overrides=%s, resolved_graph_types=%s, metric=%s', overrides, widget.get('graph_types'), widget.get('metric'))
+    except Exception:
+        pass
+
+    # Reuse the same plot creation logic as pages_view for a single widget
+    wtype = widget.get('type')
+    widget_plots = {}
+
+    if wtype == 'graph':
+        selected_teams = widget.get('teams', [])
+        # normalize strings/numeric values (clients may send strings for 'all' or numeric ids)
+        if isinstance(selected_teams, list):
+            selected_teams = [s for s in selected_teams]
+        metric = widget.get('metric', 'points')
+        # allow alias 'total_points' to map to backend 'tot' calculation
+        metric_alias = 'tot' if metric in ('total_points', 'points', 'tot') else metric
+        graph_types = widget.get('graph_types', ['bar', 'line'])
+        data_view = widget.get('data_view', 'averages')
+        # Interpret ['all'] or empty selection as all teams
+        # If explicit teams were selected and not the 'all' sentinel, interpret them as team ids or numbers
+        if selected_teams and not (len(selected_teams) == 1 and str(selected_teams[0]) == 'all'):
+            # coerce values to ints where possible (these may be Team.id or team_number values coming from the client)
+            team_ids = []
+            for s in selected_teams:
+                if s == 'all':
+                    team_ids = []
+                    break
+                try:
+                    team_ids.append(int(s))
+                except Exception:
+                    pass
+            if team_ids:
+                # First try to find teams by database id
+                teams = Team.query.filter(Team.id.in_(team_ids)).all()
+                found_ids = {t.id for t in teams}
+                # For any values not found as ids, try matching by team_number
+                missing = [tid for tid in team_ids if tid not in found_ids]
+                if missing:
+                    more_by_number = Team.query.filter(Team.team_number.in_(missing)).all()
+                    if more_by_number:
+                        teams.extend(more_by_number)
+            else:
+                teams = Team.query.order_by(Team.team_number).all()
+        else:
+            teams = Team.query.order_by(Team.team_number).all()
+        team_data = {}
+        if teams:
+            team_ids = [t.id for t in teams]
+            # Initialize team_data entries for all selected teams so teams with no scouting rows are still represented
+            for t in teams:
+                if t.team_number not in team_data:
+                    team_data[t.team_number] = {'team_name': t.team_name, 'matches': []}
+
+            scouting_data = ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids), ScoutingData.scouting_team_number==current_user.scouting_team_number).all()
+            for data in scouting_data:
+                team = data.team
+                match = data.match
+                if team.team_number not in team_data:
+                    team_data[team.team_number] = {'team_name': team.team_name, 'matches': []}
+                if metric_alias == 'tot':
+                    metric_value = data.calculate_metric('tot')
+                else:
+                    metric_value = data.calculate_metric(metric_alias)
+                team_data[team.team_number]['matches'].append({'match_number': match.match_number if match else None, 'metric_value': metric_value, 'timestamp': match.timestamp if match else None})
+
+        for gt in graph_types:
+            if gt == 'bar':
+                widget_plots.update(_create_bar_chart(team_data, metric, data_view))
+            elif gt == 'line':
+                widget_plots.update(_create_line_chart(team_data, metric, data_view))
+            elif gt == 'scatter':
+                widget_plots.update(_create_scatter_chart(team_data, metric, data_view))
+            elif gt == 'histogram':
+                widget_plots.update(_create_histogram_chart(team_data, metric, data_view))
+            elif gt == 'violin':
+                widget_plots.update(_create_violin_chart(team_data, metric, data_view))
+            elif gt == 'box':
+                widget_plots.update(_create_box_chart(team_data, metric, data_view))
+            elif gt == 'sunburst':
+                widget_plots.update(_create_sunburst_chart(team_data, metric, data_view))
+            elif gt == 'treemap':
+                widget_plots.update(_create_treemap_chart(team_data, metric, data_view))
+            elif gt == 'waterfall':
+                widget_plots.update(_create_waterfall_chart(team_data, metric, data_view))
+            elif gt == 'sankey':
+                widget_plots.update(_create_sankey_chart(team_data, metric, data_view))
+            elif gt == 'heatmap':
+                widget_plots.update(_create_heatmap_chart(team_data, metric, data_view))
+            elif gt == 'bubble':
+                widget_plots.update(_create_bubble_chart(team_data, metric, data_view))
+            elif gt == 'area':
+                widget_plots.update(_create_area_chart(team_data, metric, data_view))
+            elif gt == 'radar':
+                widget_plots.update(_create_radar_chart(team_data, metric, data_view))
+
+    else:
+        # no dynamic plots for other widget types
+        widget_plots = {}
+
+    return jsonify({'plots': widget_plots})
+
+
+@bp.route('/pages/<int:page_id>')
+@analytics_required
+def pages_view(page_id):
+    """Render a custom page composed of widgets. Graph widgets will be generated using existing chart helpers."""
+    page = CustomPage.query.get_or_404(page_id)
+    # Only allow viewing pages owned by this team (for now)
+    if page.owner_team != current_user.scouting_team_number:
+        abort(403)
+
+    widgets = page.widgets()
+    plots = {}
+
+    # For each widget, generate plots and collect them under a widget key
+    for i, widget in enumerate(widgets):
+        wtype = widget.get('type')
+        wkey = f'widget_{i}'
+        if wtype == 'graph':
+            # Build team_data limited to provided teams
+            selected_teams = widget.get('teams', [])
+            # normalize selection values
+            if isinstance(selected_teams, list):
+                selected_teams = [s for s in selected_teams]
+            metric = widget.get('metric', 'points')
+            metric_alias = 'tot' if metric in ('total_points', 'points', 'tot') else metric
+            graph_types = widget.get('graph_types', ['bar', 'line'])
+            data_view = widget.get('data_view', 'averages')
+
+            # Fetch team objects. Interpret empty selected_teams as "all teams"
+            team_ids = []
+            if selected_teams and not (len(selected_teams) == 1 and str(selected_teams[0]) == 'all'):
+                # client sends Team.id values; coerce
+                team_ids = []
+                for s in selected_teams:
+                    if s == 'all':
+                        team_ids = []
+                        break
+                    try:
+                        team_ids.append(int(s))
+                    except Exception:
+                        pass
+                if team_ids:
+                    teams = Team.query.filter(Team.id.in_(team_ids)).all()
+                    found_ids = {t.id for t in teams}
+                    missing = [tid for tid in team_ids if tid not in found_ids]
+                    if missing:
+                        more_by_number = Team.query.filter(Team.team_number.in_(missing)).all()
+                        if more_by_number:
+                            teams.extend(more_by_number)
+                else:
+                    teams = Team.query.order_by(Team.team_number).all()
+            else:
+                teams = Team.query.order_by(Team.team_number).all()
+            # Ensure we have an entry for each requested team (even if no ScoutingData exists)
+            if selected_teams and team_ids:
+                existing_ids = {t.id for t in teams}
+                missing_ids = [tid for tid in team_ids if tid not in existing_ids]
+                if missing_ids:
+                    more = Team.query.filter(Team.id.in_(missing_ids)).all()
+                    teams.extend(more)
+            # Deduplicate teams by team_number (some events may have duplicate rows)
+            unique_map = {}
+            for t in teams:
+                if t.team_number not in unique_map:
+                    unique_map[t.team_number] = t
+            teams = sorted(unique_map.values(), key=lambda x: x.team_number)
+            team_numbers = [t.team_number for t in teams]
+
+            team_data = {}
+            # Gather scouting data for these teams
+            if teams:
+                team_ids = [t.id for t in teams]
+                scouting_data = ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids), ScoutingData.scouting_team_number==current_user.scouting_team_number).all()
+                for data in scouting_data:
+                    team = data.team
+                    match = data.match
+                    if team.team_number not in team_data:
+                        team_data[team.team_number] = {'team_name': team.team_name, 'matches': []}
+                    if metric_alias == 'tot':
+                        metric_value = data.calculate_metric('tot')
+                    else:
+                        metric_value = data.calculate_metric(metric_alias)
+                    team_data[team.team_number]['matches'].append({'match_number': match.match_number if match else None, 'metric_value': metric_value, 'timestamp': match.timestamp if match else None})
+
+            # If this widget exposes user-select controls to viewers, don't auto-generate the plots here.
+            # The viewer will click Refresh to generate with their overrides. This avoids heavy rendering when viewers need to pick options.
+            if widget.get('user_select') or widget.get('graphtype_user_select') or widget.get('teams_user_select'):
+                widget_plots = {}
+            else:
+                # Use graph helpers to create plots for this widget
+                widget_plots = {}
+                for gt in graph_types:
+                    if gt == 'bar':
+                        widget_plots.update(_create_bar_chart(team_data, metric, data_view))
+                    elif gt == 'line':
+                        widget_plots.update(_create_line_chart(team_data, metric, data_view))
+                    elif gt == 'scatter':
+                        widget_plots.update(_create_scatter_chart(team_data, metric, data_view))
+                    elif gt == 'histogram':
+                        widget_plots.update(_create_histogram_chart(team_data, metric, data_view))
+                    elif gt == 'violin':
+                        widget_plots.update(_create_violin_chart(team_data, metric, data_view))
+                    elif gt == 'box':
+                        widget_plots.update(_create_box_chart(team_data, metric, data_view))
+                    elif gt == 'sunburst':
+                        widget_plots.update(_create_sunburst_chart(team_data, metric, data_view))
+                    elif gt == 'treemap':
+                        widget_plots.update(_create_treemap_chart(team_data, metric, data_view))
+                    elif gt == 'waterfall':
+                        widget_plots.update(_create_waterfall_chart(team_data, metric, data_view))
+                    elif gt == 'sankey':
+                        widget_plots.update(_create_sankey_chart(team_data, metric, data_view))
+                    elif gt == 'heatmap':
+                        widget_plots.update(_create_heatmap_chart(team_data, metric, data_view))
+                    elif gt == 'bubble':
+                        widget_plots.update(_create_bubble_chart(team_data, metric, data_view))
+                    elif gt == 'area':
+                        widget_plots.update(_create_area_chart(team_data, metric, data_view))
+                    elif gt == 'radar':
+                        widget_plots.update(_create_radar_chart(team_data, metric, data_view))
+
+            plots[wkey] = {'config': widget, 'plots': widget_plots}
+
+        else:
+            # For unknown widget types, store as-is
+            plots[wkey] = {'config': widget, 'plots': {}}
+
+    # Provide metric/scoring/teams context for viewer controls
+    game_config = get_effective_game_config()
+    metrics = game_config.get('data_analysis', {}).get('key_metrics', [])
+    # Ensure a 'total_points' metric exists for viewers as well
+    try:
+        if isinstance(metrics, list):
+            if not any(m.get('id') == 'total_points' for m in metrics):
+                metrics.append({'id': 'total_points', 'name': 'Total Points'})
+    except Exception:
+        metrics = metrics
+    scoring_elements = []
+    for period in ['auto_period', 'teleop_period', 'endgame_period']:
+        for el in game_config.get(period, {}).get('scoring_elements', []):
+            scoring_elements.append({'period': period, 'id': el.get('perm_id', el.get('id')), 'name': el.get('name', el.get('id'))})
+
+    teams_q = Team.query.order_by(Team.team_number).all()
+    teams = [{'id': t.team_number, 'name': t.team_name or f'Team {t.team_number}'} for t in teams_q]
+
+    return render_template('graphs/pages_view.html', page=page, plots=plots, metrics=metrics, scoring_elements=scoring_elements, teams=teams, **get_theme_context())
+
+
+@bp.route('/pages/<int:page_id>/delete', methods=['POST'])
+@analytics_required
+def pages_delete(page_id):
+    page = CustomPage.query.get_or_404(page_id)
+    if page.owner_team != current_user.scouting_team_number or page.owner_user != current_user.username:
+        abort(403)
+    page.is_active = False
+    db.session.commit()
+    flash('Custom page deleted.', 'success')
+    return redirect(url_for('graphs.pages_index'))
+
+
 @bp.route('/strategy_share/<token>/revoke', methods=['POST'])
 @analytics_required
 def revoke_strategy_share(token):
@@ -945,10 +1355,13 @@ def _create_bar_chart(team_data, metric, data_view):
         values = []
         
         for team_number, data in team_data.items():
+            # Include teams even if they have no matches; show zero for no-data teams
             if data['matches']:
                 avg_value = sum(m['metric_value'] for m in data['matches']) / len(data['matches'])
-                teams.append(f"Team {team_number}")
-                values.append(avg_value)
+            else:
+                avg_value = 0
+            teams.append(f"Team {team_number}")
+            values.append(avg_value)
         
         if teams:
             fig = go.Figure(data=[

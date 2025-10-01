@@ -714,3 +714,76 @@ div.bg-light {
     background-color: var(--light, #f8f9fa) !important;
     color: var(--text-main, #212529) !important;
 } 
+
+/* Custom Pages: make viewer & widget selects look like real dropdowns */
+/* Targets: viewer-metric-select, viewer-graphtype-select, viewer-teams-select, */
+/* and the page-builder widget selects (.widget-*) so they visually match the top metric select. */
+.viewer-controls .form-select,
+.widget-card .form-select,
+.input-group .form-select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-color: var(--card-bg, #fff) !important;
+    border: 1px solid rgba(0,0,0,0.12) !important;
+    border-radius: 8px !important;
+    padding: .45rem .9rem .45rem .75rem !important;
+    padding-right: 2.4rem !important; /* room for arrow */
+    min-height: calc(1.5em + .75rem) !important;
+    box-shadow: none !important;
+}
+
+/* Add a custom arrow using background gradients so it looks like a native dropdown */
+.viewer-controls .form-select,
+.widget-card .form-select {
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                      linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: calc(100% - 1rem) calc(50% - 0.15em), calc(100% - 0.6rem) calc(50% - 0.15em);
+    background-size: .4em .4em, .4em .4em;
+    background-repeat: no-repeat;
+    background-origin: content-box;
+}
+
+/* Multi-selects: make them behave more like dropdowns (collapsed box with scrollbar) */
+.viewer-controls select[multiple],
+.widget-card select[multiple],
+.input-group select[multiple] {
+    /* keep native multi-select behavior but visually collapse to a smaller box */
+    max-height: 8.6rem; /* roughly 4-6 options visible */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure the input-group addon doesn't overlap the custom arrow */
+.input-group .input-group-text {
+    z-index: 2;
+}
+
+/* Focus state to match other form controls */
+.viewer-controls .form-select:focus,
+.widget-card .form-select:focus {
+    border-color: var(--primary, var(--primary-color, #0d6efd)) !important;
+    box-shadow: 0 0 0 0.18rem rgba(13,110,253,0.12) !important;
+    outline: none !important;
+}
+
+/* Small screens / tablets: prefer native appearance for accessibility */
+@media (max-width: 768px) {
+    .viewer-controls .form-select,
+    .widget-card .form-select {
+        appearance: auto;
+        -webkit-appearance: auto;
+    }
+}
+
+/* Custom multi-select dropdown (replaces always-open listboxes) */
+.custom-multiselect.dropdown { position: relative; }
+.custom-multiselect .dropdown-toggle { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.custom-multiselect .dropdown-menu { max-height: 10rem; overflow-y: auto; -webkit-overflow-scrolling: touch; width: 100%; box-shadow: 0 6px 18px rgba(0,0,0,0.12); border-radius: 8px; }
+.custom-multiselect .form-check { display: flex; align-items: center; gap: .5rem; padding: .15rem .25rem; }
+.custom-multiselect .form-check-label { margin: 0; }
+.custom-multiselect .dropdown-menu.show { display: block; }
+.custom-multiselect .dropdown-toggle:after { display: none; } /* hide native caret since we use button caret via bootstrap */
+
+/* Ensure dropdowns in cards sit above other content */
+.custom-multiselect .dropdown-menu { z-index: 1200; }
