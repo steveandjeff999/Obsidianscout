@@ -743,6 +743,7 @@
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('alliances') %}active{% endif %}" href="{{ url_for('alliances.index') }}"><i class="fas fa-handshake"></i><span>Alliance Selection</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') %}active{% endif %}" href="{{ url_for('graphs.index') }}"><i class="fas fa-chart-line"></i><span>Graphs</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') and 'side-by-side' in request.endpoint %}active{% endif %}" href="{{ url_for('graphs.side_by_side') }}"><i class="fas fa-columns"></i><span>Comparison</span></a>
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs.pages') %}active{% endif %}" href="{{ url_for('graphs.pages_index') }}"><i class="fas fa-file-alt"></i><span>Custom Pages</span></a>
                 <a class="nav-link {% if request.endpoint == 'matches.predict' %}active{% endif %}" href="{{ url_for('matches.predict') }}"><i class="fas fa-chart-area"></i><span>Predictions</span></a>
                 <a class="nav-link {% if request.endpoint == 'matches.predict_all' %}active{% endif %}" href="{{ url_for('matches.predict_all') }}"><i class="fas fa-list"></i><span>All Predictions</span></a>
                 <a class="nav-link {% if request.endpoint == 'matches.strategy' %}active{% endif %}" href="{{ url_for('matches.strategy') }}"><i class="fas fa-chess"></i><span>Strategy</span></a>

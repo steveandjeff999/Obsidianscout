@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}My Custom Pages{% endblock %}
+{% block heading %}My Custom Pages{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a class="btn btn-primary" href="{{ url_for('graphs.pages_create') }}">Create New Page</a>
+</div>
+
+{% if pages %}
+  <div class="row">
+    {% for page in pages %}
+      <div class="col-md-6">
+        <div class="card mb-3">
+          <div class="card-body">
+            <h5 class="card-title">{{ page.title }}</h5>
+            <p class="card-text text-muted">Created: {{ page.created_at.strftime('%Y-%m-%d') }}</p>
+            <a href="{{ url_for('graphs.pages_view', page_id=page.id) }}" class="btn btn-sm btn-outline-primary">View</a>
+            {% if page.owner_team == current_user.scouting_team_number and page.owner_user == current_user.username %}
+              <a href="{{ url_for('graphs.pages_edit', page_id=page.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+            {% endif %}
+            <form method="post" action="{{ url_for('graphs.pages_delete', page_id=page.id) }}" style="display:inline-block;">
+              <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p>No custom pages created yet.</p>
+{% endif %}
+{% endblock %}
