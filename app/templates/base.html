@@ -737,15 +737,22 @@
         <nav class="sidebar-nav flex-grow-1" aria-label="Main navigation">
             {% if current_user.is_authenticated %}
             {% if user_has_role('superadmin') %}
-            <div class="nav-group">
-                <div class="nav-group-title">Super Admin</div>
-                <a class="nav-link {% if request.endpoint == 'auth.manage_users' %}active{% endif %}" href="{{ url_for('auth.manage_users') }}"><i class="fas fa-user-shield"></i><span>Manage Users</span></a>
-                <a class="nav-link {% if request.endpoint == 'auth.add_user' %}active{% endif %}" href="{{ url_for('auth.add_user') }}"><i class="fas fa-user-plus"></i><span>Add User</span></a>
+            <div class="nav-group" id="group-superadmin">
+                <button class="nav-group-title btn btn-toggle" aria-expanded="true" aria-controls="group-superadmin-items" data-group="group-superadmin">
+                    Super Admin <i class="fas fa-chevron-down group-chevron ms-2" aria-hidden="true"></i>
+                </button>
+                <div class="nav-group-items" id="group-superadmin-items">
+                    <a class="nav-link {% if request.endpoint == 'auth.manage_users' %}active{% endif %}" href="{{ url_for('auth.manage_users') }}"><i class="fas fa-user-shield"></i><span>Manage Users</span></a>
+                    <a class="nav-link {% if request.endpoint == 'auth.add_user' %}active{% endif %}" href="{{ url_for('auth.add_user') }}"><i class="fas fa-user-plus"></i><span>Add User</span></a>
+                </div>
             </div>
             {% endif %}
             {# Administration nav-group removed on request #}
-            <div class="nav-group">
-                <div class="nav-group-title">Core</div>
+            <div class="nav-group" id="group-core">
+                <button class="nav-group-title btn btn-toggle" aria-expanded="true" aria-controls="group-core-items" data-group="group-core">
+                    Core <i class="fas fa-chevron-down group-chevron ms-2" aria-hidden="true"></i>
+                </button>
+                <div class="nav-group-items" id="group-core-items">
                 {% if not (user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics')) %}
                 <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" href="{{ url_for('main.index') }}"><i class="fas fa-home"></i><span>Dashboard</span></a>
                 {% endif %}
@@ -755,10 +762,14 @@
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('scouting_alliances') %}active{% endif %}" href="{{ url_for('scouting_alliances.dashboard') }}"><i class="fas fa-users"></i><span>Scouting Alliances</span></a>
                 <a class="nav-link {% if request.endpoint == 'scouting.list_data' %}active{% endif %}" href="{{ url_for('scouting.list_data') }}"><i class="fas fa-list"></i><span>All Data</span></a>
                 <a class="nav-link {% if request.endpoint == 'scouting.view_text_elements' %}active{% endif %}" href="{{ url_for('scouting.view_text_elements') }}"><i class="fas fa-comment-alt"></i><span>Text Elements</span></a>
+                </div>
             </div>
             {% if user_has_role('admin') or user_has_role('analytics') %}
-            <div class="nav-group">
-                <div class="nav-group-title">Analytics</div>
+            <div class="nav-group" id="group-analytics">
+                <button class="nav-group-title btn btn-toggle" aria-expanded="true" aria-controls="group-analytics-items" data-group="group-analytics">
+                    Analytics <i class="fas fa-chevron-down group-chevron ms-2" aria-hidden="true"></i>
+                </button>
+                <div class="nav-group-items" id="group-analytics-items">
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('teams') and request.endpoint != 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.index') }}"><i class="fas fa-users"></i><span>Teams</span></a>
                 <a class="nav-link {% if request.endpoint == 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.ranks') }}"><i class="fas fa-list-ol"></i><span>Team Rankings</span></a>
                 <a class="nav-link {% if request.endpoint == 'matches.index' %}active{% endif %}" href="{{ url_for('matches.index') }}"><i class="fas fa-gamepad"></i><span>Matches</span></a>
@@ -773,18 +784,27 @@
                 <a class="nav-link {% if request.endpoint == 'graphs.my_shares' %}active{% endif %}" href="{{ url_for('graphs.my_shares') }}"><i class="fas fa-share-alt"></i><span>My Graph Shares</span></a>
                 <a class="nav-link {% if request.endpoint == 'teams.my_ranks_shares' %}active{% endif %}" href="{{ url_for('teams.my_ranks_shares') }}"><i class="fas fa-trophy"></i><span>My Ranking Shares</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('data') %}active{% endif %}" href="{{ url_for('data.index') }}"><i class="fas fa-database"></i><span>Data</span></a>
+                </div>
             </div>
             {% endif %}
-            <div class="nav-group">
-                <div class="nav-group-title">Community</div>
+            <div class="nav-group" id="group-community">
+                <button class="nav-group-title btn btn-toggle" aria-expanded="true" aria-controls="group-community-items" data-group="group-community">
+                    Community <i class="fas fa-chevron-down group-chevron ms-2" aria-hidden="true"></i>
+                </button>
+                <div class="nav-group-items" id="group-community-items">
                 <a class="nav-link {% if request.endpoint == 'main.users_page' %}active{% endif %}" href="{{ url_for('main.users_page') }}"><i class="fas fa-users"></i><span>Users</span></a>
                 <a class="nav-link {% if request.endpoint == 'main.chat_page' %}active{% endif %}" href="{{ url_for('main.chat_page') }}"><i class="fas fa-comments"></i><span>Chat <span id="chatUnreadBadge" class="badge bg-danger ms-1" style="display:none;">0</span></span></a>
                 <a class="nav-link {% if request.endpoint == 'main.sponsors' %}active{% endif %}" href="{{ url_for('main.sponsors') }}"><i class="fas fa-handshake"></i><span>Sponsors</span></a>
+                </div>
             </div>
-            <div class="nav-group">
-                <div class="nav-group-title">Help</div>
+            <div class="nav-group" id="group-help">
+                <button class="nav-group-title btn btn-toggle" aria-expanded="true" aria-controls="group-help-items" data-group="group-help">
+                    Help <i class="fas fa-chevron-down group-chevron ms-2" aria-hidden="true"></i>
+                </button>
+                <div class="nav-group-items" id="group-help-items">
                 <a class="nav-link {% if request.endpoint == 'main.help_page' %}active{% endif %}" href="{{ url_for('main.help_page') }}"><i class="fas fa-book"></i><span>Documentation</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('setup') %}active{% endif %}" href="{{ url_for('setup.index') }}"><i class="fas fa-graduation-cap"></i><span>Setup & Tutorial</span></a>
+                </div>
             </div>
             {% endif %}
         </nav>
@@ -1042,6 +1062,38 @@
         // Also hook into existing toggle button to dispatch an event for other listeners
         const toggle = document.getElementById('sidebarToggle');
         if(toggle) toggle.addEventListener('click', ()=>{ setTimeout(()=>{ document.dispatchEvent(new CustomEvent('obsidian:sidebar:toggled')); }, 250); });
+    })();
+    </script>
+    <script>
+    // Sidebar nav-group collapse/expand behavior with simple persistence
+    (function(){
+        const GROUP_KEY = 'obsidian_sidebar_groups';
+        function loadState(){ try{ const v = localStorage.getItem(GROUP_KEY); return v ? JSON.parse(v) : {}; }catch(e){ return {}; } }
+        function saveState(state){ try{ localStorage.setItem(GROUP_KEY, JSON.stringify(state)); }catch(e){} }
+
+        const state = loadState();
+        document.querySelectorAll('.btn-toggle[data-group]').forEach(btn=>{
+            const group = btn.getAttribute('data-group');
+            const items = document.getElementById(group + '-items');
+            if(!items) return;
+            // initialize from state
+            const open = (state[group] === undefined) ? true : !!state[group];
+            btn.setAttribute('aria-expanded', open? 'true' : 'false');
+            if(!open) items.classList.add('collapsed');
+
+            btn.addEventListener('click', ()=>{
+                const expanded = btn.getAttribute('aria-expanded') === 'true';
+                btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                items.classList.toggle('collapsed');
+                state[group] = !expanded;
+                saveState(state);
+            });
+
+            // keyboard accessibility: toggle on Enter/Space
+            btn.addEventListener('keydown', (e)=>{
+                if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); btn.click(); }
+            });
+        });
     })();
     </script>
     {# Embedded site-wide notification banner placed directly under the navbar #}

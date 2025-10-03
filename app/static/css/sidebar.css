@@ -127,6 +127,46 @@ body.topbar-fixed main { padding-top: 0.75rem; }
 .nav-group { display: flex; flex-direction: column; }
 .nav-group-title { font-size: .65rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--bs-secondary); padding: 0 .75rem .35rem; }
 
+/* Collapsible nav-group toggle (modern) */
+.btn-toggle {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	background: transparent;
+	border: none;
+	padding: .5rem .6rem;
+	font-weight: 700;
+	font-size: .72rem;
+	color: var(--bs-secondary);
+	text-align: left;
+	border-radius: 8px;
+	cursor: pointer;
+}
+.btn-toggle:hover { background: var(--bs-secondary-bg); color: var(--bs-body-color); }
+.btn-toggle:focus { outline: none; box-shadow: 0 0 0 3px rgba(var(--bs-primary-rgb),0.08); }
+
+/* Group items collapse container */
+.nav-group-items {
+	overflow: hidden;
+	transition: max-height .28s cubic-bezier(.2,.9,.2,1), opacity .2s ease;
+	max-height: 9999px; /* default expanded */
+}
+.nav-group-items.collapsed {
+	max-height: 0 !important;
+	opacity: 0; /* fade slightly when collapsed */
+}
+
+/* Chevron that indicates group open/closed */
+.group-chevron { transition: transform .22s ease; color: var(--bs-secondary); }
+.btn-toggle[aria-expanded="false"] .group-chevron { transform: rotate(-90deg); }
+
+/* Subtle separator cosmetic for groups */
+.nav-group + .nav-group { margin-top: .25rem; }
+
+/* Avatar improvements for user-mini */
+.user-mini i.fa-user-circle { background: transparent; border-radius: 6px; color: var(--bs-primary); }
+
 .sidebar .nav-link { display: flex; align-items: center; gap: .6rem; padding: .55rem .75rem; border-radius: 8px; font-size: .85rem; font-weight: 500; color: var(--sidebar-link); text-decoration: none; position: relative; transition: background .15s, color .15s; }
 .sidebar .nav-link i { width: 18px; text-align: center; font-size: .95rem; opacity: .9; }
 .sidebar .nav-link:hover { background: var(--bs-secondary-bg); text-decoration: none; }

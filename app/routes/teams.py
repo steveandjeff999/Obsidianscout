@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort
 from flask_login import login_required, current_user
 from app.routes.auth import analytics_required
-from app.models import Team, Event, ScoutingData
+from app.models import Team, Event, ScoutingData, team_event
 from app import db
 from app.utils.api_utils import get_teams, ApiError, api_to_db_team_conversion, get_event_details, get_teams_dual_api, get_event_details_dual_api
 from app.utils.tba_api_utils import get_tba_team_events, TBAApiError
@@ -185,7 +185,20 @@ def sync_from_config():
                 
                 # Associate this team with the current event if not already associated
                 try:
-                    # Check if association already exists to avoid unique constraint violation
+                    # Prevent two different Team rows with the same team_number from being associated
+                    # with the same Event. Check existing teams on the event with the same team_number.
+                    conflict = False
+                    for existing_team in event.teams:
+                        if existing_team.team_number == team.team_number and existing_team.id != team.id:
+                            conflict = True
+                            break
+
+                    if conflict:
+                        # Log and skip association to avoid duplicate logical team entries on same event
+                        print(f"Skipping association for team {team.team_number} -> event {event.code}: another team row with same number already associated")
+                        continue
+
+                    # Check if association already exists to avoid duplicate
                     if event not in team.events:
                         team.events.append(event)
                         db.session.flush()  # Flush after each team-event association
@@ -269,8 +282,20 @@ def add():
                 if event_ids:
                     for event_id in event_ids:
                         event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
-                        if event and event not in existing_team.events:
-                            existing_team.events.append(event)
+                        if event:
+                            # Prevent conflict: ensure no other Team row with same team_number is already attached
+                            conflict = False
+                            for et in event.teams:
+                                if et.team_number == existing_team.team_number and et.id != existing_team.id:
+                                    conflict = True
+                                    break
+
+                            if conflict:
+                                flash(f"Skipped associating Event {event.name} — another team entry with number {existing_team.team_number} is already associated with that event.", 'warning')
+                                continue
+
+                            if event not in existing_team.events:
+                                existing_team.events.append(event)
 
                 db.session.commit()
                 flash(f'Team {team_number} already existed — merged selected events and updated team info.', 'success')
@@ -296,7 +321,19 @@ def add():
                 for event_id in event_ids:
                     event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
                     if event:
-                        team.events.append(event)
+                        # Prevent conflict: if the event already has a different team row with this team_number, skip
+                        conflict = False
+                        for et in event.teams:
+                            if et.team_number == team.team_number and et.id != team.id:
+                                conflict = True
+                                break
+
+                        if conflict:
+                            flash(f"Skipped associating Event {event.name} — another team entry with number {team.team_number} is already associated with that event.", 'warning')
+                            continue
+
+                        if event not in team.events:
+                            team.events.append(event)
                 
                 # Use the last selected event as the return URL
                 return_event_id = event_ids[-1]
@@ -353,14 +390,27 @@ def edit(team_number):
             # Update team-event associations
             # First, remove all existing associations
             team.events = []
-            
-            # Then add the selected events
+
+            # Then add the selected events, skipping any that would create a duplicate logical team
             if event_ids:
                 for event_id in event_ids:
                     event = Event.query.get(event_id)
-                    if event:
-                        team.events.append(event)
-            
+                    if not event:
+                        continue
+
+                    # Check for conflict: another Team row with same team_number attached to this event
+                    conflict = False
+                    for et in event.teams:
+                        if et.team_number == team.team_number and et.id != team.id:
+                            conflict = True
+                            break
+
+                    if conflict:
+                        flash(f"Skipped associating Event {event.name} — another team entry with number {team.team_number} is already associated with that event.", 'warning')
+                        continue
+
+                    team.events.append(event)
+
             db.session.commit()
             flash(f'Team {team.team_number} updated successfully', 'success')
             
