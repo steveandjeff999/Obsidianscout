@@ -602,6 +602,20 @@
   <script id="page_viewer_matches_json" type="application/json">{{ matches|default([])|tojson|safe }}</script>
 
   <script>
+  // If this page was rendered for a public share, `public_share_token` will be
+  // provided; otherwise it's null. Use it to build token-aware widget render URLs.
+  var PUBLIC_SHARE_TOKEN = {{ (public_share_token|default(None))|tojson }};
+  function widgetRenderUrl(idx) {
+    // Authenticated widget render endpoint (uses page.id)
+    var authUrl = "{{ url_for('graphs.pages_widget_render', page_id=page.id, widget_index=0) }}";
+    // Public widget render template with placeholder token
+    var publicTemplate = "{{ url_for('graphs.public_page_widget_render', token='__TOKEN__', widget_index=0) }}";
+    if (PUBLIC_SHARE_TOKEN) {
+      return publicTemplate.replace('__TOKEN__', PUBLIC_SHARE_TOKEN).replace('/0', '/' + idx);
+    }
+    return authUrl.replace('/0', '/' + idx);
+  }
+
   document.addEventListener('DOMContentLoaded', function(){
     // Apply widget sizes and positions from data attributes
     // On mobile (<=768px), force full width stacked layout
@@ -772,8 +786,8 @@
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
         
-        // POST to widget render endpoint with prediction parameters
-        fetch("{{ url_for('graphs.pages_widget_render', page_id=page.id, widget_index=0) }}".replace('/0', '/'+idx), {
+  // POST to widget render endpoint with prediction parameters
+  fetch(widgetRenderUrl(idx), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prediction_match: matchId })
@@ -818,7 +832,7 @@
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Comparing...';
         
-        fetch("{{ url_for('graphs.pages_widget_render', page_id=page.id, widget_index=0) }}".replace('/0', '/'+idx), {
+  fetch(widgetRenderUrl(idx), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ comparison_team1: parseInt(team1), comparison_team2: parseInt(team2) })
@@ -865,7 +879,7 @@
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
         
-        fetch("{{ url_for('graphs.pages_widget_render', page_id=page.id, widget_index=0) }}".replace('/0', '/'+idx), {
+  fetch(widgetRenderUrl(idx), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rankings_event: eventId || 'all' })
@@ -902,7 +916,7 @@
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
         
-        fetch("{{ url_for('graphs.pages_widget_render', page_id=page.id, widget_index=0) }}".replace('/0', '/'+idx), {
+  fetch(widgetRenderUrl(idx), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ matches_event: eventId })
@@ -976,7 +990,7 @@
         try{ console.info('Widget overrides for idx='+idx, overrides); }catch(e){}
 
         // POST to render endpoint
-        fetch("{{ url_for('graphs.pages_widget_render', page_id=page.id, widget_index=0) }}".replace('/0', '/'+idx), {
+  fetch(widgetRenderUrl(idx), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(overrides)

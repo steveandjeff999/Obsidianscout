@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Manage Page Shares{% endblock %}
+{% block heading %}Manage Page Shares{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a class="btn btn-secondary" href="{{ url_for('graphs.pages_index') }}">Back to Pages</a>
+</div>
+
+{% if shares %}
+  <div class="list-group">
+    {% for s in shares %}
+      <div class="list-group-item d-flex justify-content-between align-items-start">
+        <div>
+          <div class="fw-semibold">{{ s.page_title }} <small class="text-muted">(token: {{ s.token }})</small></div>
+          <div class="small text-muted">Created: {{ s.created_at }}</div>
+        </div>
+        <div>
+          <a class="btn btn-sm btn-outline-primary me-2" href="{{ url_for('graphs.public_page_view', token=s.token) }}" target="_blank">Open</a>
+          <form method="post" action="{{ url_for('graphs.revoke_page_share', token=s.token) }}" style="display:inline">
+            <button class="btn btn-sm btn-outline-danger">Revoke</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p>No shares found for your team.</p>
+{% endif %}
+
+{% endblock %}

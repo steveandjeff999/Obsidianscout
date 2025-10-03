@@ -21,6 +21,9 @@ from app.utils.team_isolation import (
     filter_events_by_scouting_team, get_event_by_code
 )
 import os
+import secrets
+import copy
+
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -55,6 +58,197 @@ def _chart_theme():
         'text_muted': text_muted,
         'grid_color': grid_color
     }
+
+
+def _sanitize_public_widgets(widgets):
+    """Return a deep-copied list of widgets for public consumption.
+
+    Historically we stripped image URLs for public shares. The user requested
+    that public shares should include images again, so this helper now returns
+    a deep copy of the widgets without removing image_url fields.
+    """
+    sanitized = []
+    for w in (widgets or []):
+        try:
+            wcopy = copy.deepcopy(w)
+        except Exception:
+            try:
+                wcopy = json.loads(json.dumps(w))
+            except Exception:
+                wcopy = {}
+
+        # keep everything as-is (including any image_url). If we later want
+        # to provide owner-controlled opt-in behavior we can filter here.
+
+        sanitized.append(wcopy)
+    return sanitized
+
+
+def _build_page_context(page, scouting_team_number):
+    """Build plots and viewer context for a CustomPage using the provided
+    scouting_team_number for queries that would normally use current_user.
+
+    Returns: (plots, metrics, scoring_elements, teams, events, matches)
+    """
+    widgets = []
+    try:
+        widgets = page.widgets()
+    except Exception:
+        widgets = []
+
+    plots = {}
+
+    # Import needed functions for new widget types
+    from app.utils.analysis import predict_match_outcome, get_match_details_with_teams
+
+    # For each widget, generate plots and collect them under a widget key
+    for i, widget in enumerate(widgets):
+        wtype = widget.get('type')
+        wkey = f'widget_{i}'
+        if wtype == 'graph':
+            selected_teams = widget.get('teams', [])
+            if isinstance(selected_teams, list):
+                selected_teams = [s for s in selected_teams]
+            metric = widget.get('metric', 'points')
+            metric_alias = 'tot' if metric in ('total_points', 'points', 'tot') else metric
+            graph_types = widget.get('graph_types', ['bar', 'line'])
+            data_view = widget.get('data_view', 'averages')
+
+            team_ids = []
+            if selected_teams and not (len(selected_teams) == 1 and str(selected_teams[0]) == 'all'):
+                for s in selected_teams:
+                    if s == 'all':
+                        team_ids = []
+                        break
+                    try:
+                        team_ids.append(int(s))
+                    except Exception:
+                        pass
+                if team_ids:
+                    teams = Team.query.filter(Team.id.in_(team_ids)).all()
+                    found_ids = {t.id for t in teams}
+                    missing = [tid for tid in team_ids if tid not in found_ids]
+                    if missing:
+                        more_by_number = Team.query.filter(Team.team_number.in_(missing)).all()
+                        if more_by_number:
+                            teams.extend(more_by_number)
+                else:
+                    teams = Team.query.order_by(Team.team_number).all()
+            else:
+                teams = Team.query.order_by(Team.team_number).all()
+
+            # Deduplicate teams
+            unique_map = {}
+            for t in teams:
+                if t.team_number not in unique_map:
+                    unique_map[t.team_number] = t
+            teams = sorted(unique_map.values(), key=lambda x: x.team_number)
+
+            team_data = {}
+            if teams:
+                team_ids = [t.id for t in teams]
+                scouting_data = ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids), ScoutingData.scouting_team_number==scouting_team_number).all()
+                for data in scouting_data:
+                    team = data.team
+                    match = data.match
+                    if team.team_number not in team_data:
+                        team_data[team.team_number] = {'team_name': team.team_name, 'matches': []}
+                    if metric_alias == 'tot':
+                        metric_value = data.calculate_metric('tot')
+                    else:
+                        metric_value = data.calculate_metric(metric_alias)
+                    team_data[team.team_number]['matches'].append({'match_number': match.match_number if match else None, 'metric_value': metric_value, 'timestamp': match.timestamp if match else None})
+
+            # Generate plots unless user_select controls exist
+            if widget.get('user_select') or widget.get('graphtype_user_select') or widget.get('teams_user_select'):
+                widget_plots = {}
+            else:
+                widget_plots = {}
+                for gt in graph_types:
+                    if gt == 'bar':
+                        widget_plots.update(_create_bar_chart(team_data, metric, data_view))
+                    elif gt == 'line':
+                        widget_plots.update(_create_line_chart(team_data, metric, data_view))
+                    elif gt == 'scatter':
+                        widget_plots.update(_create_scatter_chart(team_data, metric, data_view))
+                    elif gt == 'histogram':
+                        widget_plots.update(_create_histogram_chart(team_data, metric, data_view))
+                    elif gt == 'violin':
+                        widget_plots.update(_create_violin_chart(team_data, metric, data_view))
+                    elif gt == 'box':
+                        widget_plots.update(_create_box_chart(team_data, metric, data_view))
+                    elif gt == 'sunburst':
+                        widget_plots.update(_create_sunburst_chart(team_data, metric, data_view))
+                    elif gt == 'treemap':
+                        widget_plots.update(_create_treemap_chart(team_data, metric, data_view))
+                    elif gt == 'waterfall':
+                        widget_plots.update(_create_waterfall_chart(team_data, metric, data_view))
+                    elif gt == 'sankey':
+                        widget_plots.update(_create_sankey_chart(team_data, metric, data_view))
+                    elif gt == 'heatmap':
+                        widget_plots.update(_create_heatmap_chart(team_data, metric, data_view))
+                    elif gt == 'bubble':
+                        widget_plots.update(_create_bubble_chart(team_data, metric, data_view))
+                    elif gt == 'area':
+                        widget_plots.update(_create_area_chart(team_data, metric, data_view))
+                    elif gt == 'radar':
+                        widget_plots.update(_create_radar_chart(team_data, metric, data_view))
+
+            plots[wkey] = {'config': widget, 'plots': widget_plots}
+
+        elif wtype == 'match_prediction':
+            match_id = widget.get('match')
+            if widget.get('prediction_match') == 'user_select':
+                # no user selection available for public view by default
+                match_id = None
+
+            prediction_data = None
+            if match_id and match_id != 'user_select':
+                try:
+                    match_details = get_match_details_with_teams(int(match_id))
+                    if match_details and match_details.get('prediction'):
+                        prediction = match_details['prediction']
+                        prediction_data = {
+                            'red_alliance': prediction.get('red_alliance', {}),
+                            'blue_alliance': prediction.get('blue_alliance', {}),
+                            'predicted_winner': prediction.get('predicted_winner', 'unknown'),
+                            'probabilities': prediction.get('probabilities', {'red': 0, 'blue': 0, 'tie': 0}),
+                            'confidence': prediction.get('confidence', 0),
+                            'match': match_details.get('match'),
+                            'match_completed': match_details.get('match_completed', False),
+                            'actual_winner': match_details.get('actual_winner')
+                        }
+                except Exception:
+                    prediction_data = None
+            plots[wkey] = {'config': widget, 'plots': {}, 'prediction_data': prediction_data}
+
+        else:
+            plots[wkey] = {'config': widget, 'plots': {}}
+
+    # Provide metric/scoring/teams context for viewer controls
+    game_config = get_effective_game_config()
+    metrics = game_config.get('data_analysis', {}).get('key_metrics', [])
+    try:
+        if isinstance(metrics, list):
+            if not any(m.get('id') == 'total_points' for m in metrics):
+                metrics.append({'id': 'total_points', 'name': 'Total Points'})
+    except Exception:
+        metrics = metrics
+    scoring_elements = []
+    for period in ['auto_period', 'teleop_period', 'endgame_period']:
+        for el in game_config.get(period, {}).get('scoring_elements', []):
+            scoring_elements.append({'period': period, 'id': el.get('perm_id', el.get('id')), 'name': el.get('name', el.get('id'))})
+
+    teams_q = Team.query.order_by(Team.team_number).all()
+    teams = [{'id': t.team_number, 'name': t.team_name or f'Team {t.team_number}'} for t in teams_q]
+
+    events_q = Event.query.order_by(Event.name).limit(500).all()
+    events = [{'id': e.id, 'name': e.name or e.code, 'code': e.code} for e in events_q]
+
+    matches_q = Match.query.order_by(Match.event_id, Match.match_number).limit(1000).all()
+    matches = [{'id': m.id, 'event_id': m.event_id, 'match_type': m.match_type, 'match_number': m.match_number} for m in matches_q]
+
+    return plots, metrics, scoring_elements, teams, events, matches
 
 bp = Blueprint('graphs', __name__, url_prefix='/graphs')
 
@@ -903,6 +1097,623 @@ def pages_index():
     """List custom pages created by this user's team/user"""
     pages = CustomPage.query.filter_by(owner_team=current_user.scouting_team_number, is_active=True).order_by(CustomPage.updated_at.desc()).all()
     return render_template('graphs/pages_index.html', pages=pages, **get_theme_context())
+
+
+@bp.route('/pages/share', methods=['POST'])
+@analytics_required
+def create_page_share():
+    """Create a public share token for a custom page. Expects JSON: {"page_id": <int>, "expires_in": <seconds, optional>}"""
+    data = request.get_json() or {}
+    page_id = data.get('page_id')
+    if not page_id:
+        return jsonify({'error': 'page_id required'}), 400
+
+    page = CustomPage.query.get(page_id)
+    if not page:
+        return jsonify({'error': 'page not found'}), 404
+
+    # Only owner may create a public share for now
+    if page.owner_team != current_user.scouting_team_number or page.owner_user != current_user.username:
+        return jsonify({'error': 'insufficient permissions'}), 403
+
+    token = secrets.token_urlsafe(24)
+    shares_file = os.path.join(current_app.instance_path, 'pages_shares.json')
+    os.makedirs(current_app.instance_path, exist_ok=True)
+    try:
+        if os.path.exists(shares_file):
+            with open(shares_file, 'r') as f:
+                shares = json.load(f) or {}
+        else:
+            shares = {}
+    except Exception:
+        shares = {}
+
+    entry = {
+        'page_id': int(page_id),
+        'created_by': current_user.id if current_user.is_authenticated else None,
+        'created_by_user': current_user.username if current_user.is_authenticated else None,
+        'owner_team': current_user.scouting_team_number,
+        'created_at': datetime.utcnow().isoformat(),
+        'revoked': False
+    }
+
+    shares[token] = entry
+
+    # Atomic write
+    tmp = shares_file + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(shares, f)
+    os.replace(tmp, shares_file)
+
+    # Compute public path (relative) and return it
+    public_path = url_for('graphs.public_page_view', token=token)
+    return jsonify({'path': public_path, 'token': token})
+
+
+@bp.route('/pages/public/<token>')
+def public_page_view(token):
+    """Public view for a shared custom page identified by token. Renders a simple preview and a download link."""
+    shares_file = os.path.join(current_app.instance_path, 'pages_shares.json')
+    entry = None
+    try:
+        if os.path.exists(shares_file):
+            with open(shares_file, 'r') as f:
+                shares = json.load(f) or {}
+                e = shares.get(token)
+                if e and not e.get('revoked'):
+                    entry = e
+    except Exception:
+        entry = None
+
+    if not entry:
+        flash('Shared page not found or access revoked.', 'danger')
+        return redirect(url_for('graphs.pages_index'))
+
+    page = CustomPage.query.get(entry.get('page_id'))
+    if not page:
+        flash('Shared page not available.', 'danger')
+        return redirect(url_for('graphs.pages_index'))
+
+    # Build the full page context but use the owning team number for data
+    plots, metrics, scoring_elements, teams, events, matches = _build_page_context(page, page.owner_team or current_user.scouting_team_number)
+
+    # Render the same view template so public shares look identical to authenticated view
+    return render_template('graphs/pages_view.html', page=page, plots=plots, metrics=metrics, scoring_elements=scoring_elements, teams=teams, events=events, matches=matches, public_share_token=token, **get_theme_context())
+
+
+@bp.route('/pages/public/<token>/download')
+def public_page_download(token):
+    """Return the raw page JSON for a valid share token."""
+    shares_file = os.path.join(current_app.instance_path, 'pages_shares.json')
+    entry = None
+    try:
+        if os.path.exists(shares_file):
+            with open(shares_file, 'r') as f:
+                shares = json.load(f) or {}
+                e = shares.get(token)
+                if e and not e.get('revoked'):
+                    entry = e
+    except Exception:
+        entry = None
+
+    if not entry:
+        return jsonify({'error': 'invalid or revoked token'}), 404
+
+    page = CustomPage.query.get(entry.get('page_id'))
+    if not page:
+        return jsonify({'error': 'page not found'}), 404
+
+    # Provide sanitized widgets in the public download as well
+    try:
+        widgets = page.widgets()
+    except Exception:
+        widgets = []
+
+    payload = {
+        'title': page.title,
+        'widgets': widgets
+    }
+    return jsonify(payload)
+
+
+@bp.route('/pages/public/<token>/render_widget/<int:widget_index>', methods=['POST'])
+def public_page_widget_render(token, widget_index):
+        """Render a single widget for a public shared page identified by token.
+
+        This mirrors pages_widget_render but validates the share token and uses
+        the owning team's scouting_team_number for any data isolation.
+        Returns the same JSON structure as pages_widget_render.
+        """
+        # Validate token
+        shares_file = os.path.join(current_app.instance_path, 'pages_shares.json')
+        entry = None
+        try:
+                if os.path.exists(shares_file):
+                        with open(shares_file, 'r') as f:
+                                shares = json.load(f) or {}
+                                e = shares.get(token)
+                                if e and not e.get('revoked'):
+                                        entry = e
+        except Exception:
+                entry = None
+
+        if not entry:
+                return jsonify({'error': 'invalid or revoked token'}), 404
+
+        page = CustomPage.query.get(entry.get('page_id'))
+        if not page:
+                return jsonify({'error': 'page not found'}), 404
+
+        from flask import render_template_string
+        from app.utils.analysis import predict_match_outcome, get_match_details_with_teams, calculate_team_metrics
+
+        try:
+                widgets = page.widgets()
+        except Exception:
+                widgets = []
+
+        if widget_index < 0 or widget_index >= len(widgets):
+                return jsonify({'error': 'Invalid widget index'}), 400
+
+        widget = dict(widgets[widget_index])
+        overrides = request.get_json() or {}
+        for k, v in overrides.items():
+                widget[k] = v
+
+        # Normalize graph_types override
+        try:
+                raw_gt = widget.get('graph_types', ['bar', 'line'])
+                if isinstance(raw_gt, str):
+                        raw_gt = [raw_gt]
+                graph_types = [str(x).lower() for x in (raw_gt or []) if x is not None]
+                if not graph_types:
+                        graph_types = ['bar', 'line']
+                widget['graph_types'] = graph_types
+        except Exception:
+                widget['graph_types'] = widget.get('graph_types', ['bar', 'line'])
+
+        # Use owner's scouting team number for data isolation
+        scouting_team_number = entry.get('owner_team')
+
+        wtype = widget.get('type')
+        widget_plots = {}
+
+        if wtype == 'graph':
+                selected_teams = widget.get('teams', [])
+                if isinstance(selected_teams, list):
+                        selected_teams = [s for s in selected_teams]
+                metric = widget.get('metric', 'points')
+                metric_alias = 'tot' if metric in ('total_points', 'points', 'tot') else metric
+                graph_types = widget.get('graph_types', ['bar', 'line'])
+                data_view = widget.get('data_view', 'averages')
+
+                if selected_teams and not (len(selected_teams) == 1 and str(selected_teams[0]) == 'all'):
+                        team_ids = []
+                        for s in selected_teams:
+                                if s == 'all':
+                                        team_ids = []
+                                        break
+                                try:
+                                        team_ids.append(int(s))
+                                except Exception:
+                                        pass
+                        if team_ids:
+                                teams = Team.query.filter(Team.id.in_(team_ids)).all()
+                                found_ids = {t.id for t in teams}
+                                missing = [tid for tid in team_ids if tid not in found_ids]
+                                if missing:
+                                        more_by_number = Team.query.filter(Team.team_number.in_(missing)).all()
+                                        if more_by_number:
+                                                teams.extend(more_by_number)
+                        else:
+                                teams = Team.query.order_by(Team.team_number).all()
+                else:
+                        teams = Team.query.order_by(Team.team_number).all()
+
+                team_data = {}
+                if teams:
+                        team_ids = [t.id for t in teams]
+                        for t in teams:
+                                if t.team_number not in team_data:
+                                        team_data[t.team_number] = {'team_name': t.team_name, 'matches': []}
+
+                        scouting_data = ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids), ScoutingData.scouting_team_number==scouting_team_number).all()
+                        for data in scouting_data:
+                                team = data.team
+                                match = data.match
+                                if team.team_number not in team_data:
+                                        team_data[team.team_number] = {'team_name': team.team_name, 'matches': []}
+                                if metric_alias == 'tot':
+                                        metric_value = data.calculate_metric('tot')
+                                else:
+                                        metric_value = data.calculate_metric(metric_alias)
+                                team_data[team.team_number]['matches'].append({'match_number': match.match_number if match else None, 'metric_value': metric_value, 'timestamp': match.timestamp if match else None})
+
+                for gt in graph_types:
+                        if gt == 'bar':
+                                widget_plots.update(_create_bar_chart(team_data, metric, data_view))
+                        elif gt == 'line':
+                                widget_plots.update(_create_line_chart(team_data, metric, data_view))
+                        elif gt == 'scatter':
+                                widget_plots.update(_create_scatter_chart(team_data, metric, data_view))
+                        elif gt == 'histogram':
+                                widget_plots.update(_create_histogram_chart(team_data, metric, data_view))
+                        elif gt == 'violin':
+                                widget_plots.update(_create_violin_chart(team_data, metric, data_view))
+                        elif gt == 'box':
+                                widget_plots.update(_create_box_chart(team_data, metric, data_view))
+                        elif gt == 'sunburst':
+                                widget_plots.update(_create_sunburst_chart(team_data, metric, data_view))
+                        elif gt == 'treemap':
+                                widget_plots.update(_create_treemap_chart(team_data, metric, data_view))
+                        elif gt == 'waterfall':
+                                widget_plots.update(_create_waterfall_chart(team_data, metric, data_view))
+                        elif gt == 'sankey':
+                                widget_plots.update(_create_sankey_chart(team_data, metric, data_view))
+                        elif gt == 'heatmap':
+                                widget_plots.update(_create_heatmap_chart(team_data, metric, data_view))
+                        elif gt == 'bubble':
+                                widget_plots.update(_create_bubble_chart(team_data, metric, data_view))
+                        elif gt == 'area':
+                                widget_plots.update(_create_area_chart(team_data, metric, data_view))
+                        elif gt == 'radar':
+                                widget_plots.update(_create_radar_chart(team_data, metric, data_view))
+
+        elif wtype == 'match_prediction':
+                match_id = overrides.get('prediction_match')
+                prediction_data = None
+                if match_id:
+                        try:
+                                match_details = get_match_details_with_teams(int(match_id))
+                                if match_details and match_details.get('prediction'):
+                                        prediction = match_details['prediction']
+                                        prediction_data = {
+                                                'red_alliance': prediction.get('red_alliance', {}),
+                                                'blue_alliance': prediction.get('blue_alliance', {}),
+                                                'predicted_winner': prediction.get('predicted_winner', 'unknown'),
+                                                'probabilities': prediction.get('probabilities', {'red': 0, 'blue': 0, 'tie': 0}),
+                                                'confidence': prediction.get('confidence', 0),
+                                                'match': match_details.get('match'),
+                                                'match_completed': match_details.get('match_completed', False),
+                                                'actual_winner': match_details.get('actual_winner')
+                                        }
+                        except Exception:
+                                prediction_data = None
+                prediction_style = widget.get('prediction_style', 'default')
+                html_template = '''
+                <div class="match-prediction-widget">
+                {% if prediction_data %}
+                    <div class="alert alert-info">
+                        <h5><i class="fas fa-trophy me-2"></i>Match Prediction</h5>
+                        <div class="prediction-display">
+                            {% if prediction_style == 'compact' %}
+                                <p class="mb-0"><strong>Predicted Winner:</strong> <span class="badge bg-{{ 'danger' if prediction_data['predicted_winner'] == 'red' else 'primary' if prediction_data['predicted_winner'] == 'blue' else 'secondary' }}">{{ prediction_data['predicted_winner']|upper }}</span></p>
+                            {% elif prediction_style == 'detailed' %}
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>Red Alliance</h6>
+                                        <p>Win Probability: {{ (prediction_data['probabilities']['red'] * 100)|round(1) }}%</p>
+                                        <p>Predicted Score: {{ prediction_data['red_alliance']['predicted_score'] }}</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>Blue Alliance</h6>
+                                        <p>Win Probability: {{ (prediction_data['probabilities']['blue'] * 100)|round(1) }}%</p>
+                                        <p>Predicted Score: {{ prediction_data['blue_alliance']['predicted_score'] }}</p>
+                                    </div>
+                                </div>
+                            {% else %}
+                                <div class="text-center">
+                                    <h6>Win Probability</h6>
+                                    <div class="progress mb-2" style="height: 30px;">
+                                        <div class="progress-bar bg-danger" style="width: {{ prediction_data['probabilities']['red'] * 100 }}%">Red {{ (prediction_data['probabilities']['red'] * 100)|round(1) }}%</div>
+                                        <div class="progress-bar bg-primary" style="width: {{ prediction_data['probabilities']['blue'] * 100 }}%">Blue {{ (prediction_data['probabilities']['blue'] * 100)|round(1) }}%</div>
+                                    </div>
+                                    <p class="mb-0">Predicted: Red {{ prediction_data['red_alliance']['predicted_score'] }} - {{ prediction_data['blue_alliance']['predicted_score'] }} Blue</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-info-circle me-2"></i>Select a match to view prediction
+                    </div>
+                {% endif %}
+                </div>
+                '''
+                html = render_template_string(html_template, prediction_data=prediction_data, prediction_style=prediction_style)
+                return jsonify({'html': html})
+
+        elif wtype == 'team_comparison':
+                # reuse pages_widget_render logic for these widget types
+                team1_num = overrides.get('comparison_team1')
+                team2_num = overrides.get('comparison_team2')
+                event_filter = overrides.get('comparison_event', 'all')
+                metrics_list = widget.get('metrics', []) or widget.get('comparison_metrics', [])
+                if not metrics_list:
+                        metrics_list = ['total_points', 'auto_points', 'teleop_points', 'endgame_points']
+                comparison_data = None
+                if team1_num and team2_num:
+                        try:
+                                team1 = Team.query.filter_by(team_number=int(team1_num)).first()
+                                team2 = Team.query.filter_by(team_number=int(team2_num)).first()
+                                if team1 and team2:
+                                        event_id = None
+                                        if event_filter and event_filter != 'all':
+                                                try:
+                                                        event_id = int(event_filter)
+                                                except ValueError:
+                                                        pass
+                                        team1_analytics = calculate_team_metrics(team1.id, event_id=event_id)
+                                        team2_analytics = calculate_team_metrics(team2.id, event_id=event_id)
+                                        comparison_data = {
+                                                'team1': {
+                                                        'team_number': team1.team_number,
+                                                        'team_name': team1.team_name or f'Team {team1.team_number}',
+                                                        'metrics': team1_analytics.get('metrics', {})
+                                                },
+                                                'team2': {
+                                                        'team_number': team2.team_number,
+                                                        'team_name': team2.team_name or f'Team {team2.team_number}',
+                                                        'metrics': team2_analytics.get('metrics', {})
+                                                },
+                                                'selected_metrics': metrics_list
+                                        }
+                        except Exception:
+                                pass
+                html_template = '''
+                {% if comparison_data %}
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="card bg-danger text-white">
+                                <div class="card-body text-center">
+                                    <h5>{{ comparison_data.team1.team_name }}</h5>
+                                    <small>#{{ comparison_data.team1.team_number }}</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body text-center">
+                                    <h5>{{ comparison_data.team2.team_name }}</h5>
+                                    <small>#{{ comparison_data.team2.team_number }}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Metric</th>
+                                    <th class="text-center">{{ comparison_data.team1.team_name }}</th>
+                                    <th class="text-center">{{ comparison_data.team2.team_name }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for metric_id in comparison_data.selected_metrics %}
+                                <tr>
+                                    <td>{{ metric_id|replace('_', ' ')|title }}</td>
+                                    <td class="text-center">{% set val = comparison_data.team1.metrics.get(metric_id) %}{{ val|round(2) if val is number else (val if val else 'N/A') }}</td>
+                                    <td class="text-center">{% set val = comparison_data.team2.metrics.get(metric_id) %}{{ val|round(2) if val is number else (val if val else 'N/A') }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>Enter team numbers to compare statistics
+                    </div>
+                {% endif %}
+                '''
+                html = render_template_string(html_template, comparison_data=comparison_data)
+                return jsonify({'html': html})
+
+        elif wtype == 'team_rankings':
+                event_filter = overrides.get('rankings_event', 'all')
+                count = int(widget.get('count', 10) or widget.get('rankings_count', 10))
+                sort_by = widget.get('sort_by', 'points') or widget.get('rankings_sort', 'points')
+                show_stats = widget.get('show_stats', False) or widget.get('rankings_show_stats', False)
+                rankings_data = None
+                try:
+                        event_id = None
+                        if event_filter and event_filter != 'all':
+                                try:
+                                        event_id = int(event_filter)
+                                except ValueError:
+                                        pass
+                        teams_query = Team.query.order_by(Team.team_number).all()
+                        team_rankings = []
+                        for team in teams_query:
+                                analytics_result = calculate_team_metrics(team.id, event_id=event_id)
+                                metrics = analytics_result.get('metrics', {})
+                                if sort_by == 'points' or sort_by == 'score':
+                                        sort_value = metrics.get('total_points') or metrics.get('tot') or 0
+                                elif sort_by == 'wins':
+                                        sort_value = metrics.get('wins') or 0
+                                elif sort_by == 'RP':
+                                        sort_value = metrics.get('ranking_points') or 0
+                                else:
+                                        sort_value = metrics.get(sort_by) or 0
+                                team_rankings.append({'team_number': team.team_number, 'team_name': team.team_name or f'Team {team.team_number}', 'sort_value': sort_value, 'metrics': metrics if show_stats else {}})
+                        team_rankings.sort(key=lambda x: x['sort_value'], reverse=True)
+                        team_rankings = team_rankings[:count]
+                        for idx, ranking in enumerate(team_rankings):
+                                ranking['rank'] = idx + 1
+                        rankings_data = {'rankings': team_rankings, 'sort_by': sort_by, 'show_stats': show_stats, 'event_filter': event_filter if event_id else 'all'}
+                except Exception:
+                        rankings_data = None
+                html_template = '''
+                {% if rankings_data %}
+                    <h5 class="mb-3"><i class="fas fa-list-ol me-2"></i>Team Rankings{% if rankings_data.event_filter != 'all' %} (Event){% endif %} ({{ rankings_data.sort_by|title }})</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Rank</th>
+                                    <th>Team</th>
+                                    <th class="text-end">{{ rankings_data.sort_by|replace('_', ' ')|title }}</th>
+                                    {% if rankings_data.show_stats %}
+                                    <th class="text-end">Avg Points</th>
+                                    {% endif %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for team in rankings_data.rankings %}
+                                <tr>
+                                    <td><span class="badge bg-{{ 'warning' if team.rank <= 3 else 'secondary' }}">{{ team.rank }}</span></td>
+                                    <td><strong>{{ team.team_number }}</strong> - {{ team.team_name }}</td>
+                                    <td class="text-end">{{ team.sort_value|round(2) }}</td>
+                                    {% if rankings_data.show_stats %}
+                                    <td class="text-end">{{ team.metrics.get('total_points', team.metrics.get('tot', 'N/A')) }}</td>
+                                    {% endif %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>No ranking data available
+                    </div>
+                {% endif %}
+                '''
+                html = render_template_string(html_template, rankings_data=rankings_data)
+                return jsonify({'html': html})
+
+        elif wtype == 'recent_matches':
+                event_filter = overrides.get('matches_event')
+                filter_type = widget.get('filter', 'all')
+                count = int(widget.get('count', 10) or widget.get('matches_count', 10))
+                show_scores = widget.get('show_scores', True) if widget.get('show_scores') is not None else widget.get('matches_show_scores', True)
+                matches_data = None
+                try:
+                        matches_query = Match.query
+                        if event_filter:
+                                try:
+                                        event_id = int(event_filter)
+                                        matches_query = matches_query.filter_by(event_id=event_id)
+                                except ValueError:
+                                        pass
+                        matches_query = matches_query.order_by(Match.timestamp.desc()).limit(count)
+                        matches = matches_query.all()
+                        matches_list = []
+                        for match in matches:
+                                match_data = {'match_id': match.id, 'match_type': match.match_type, 'match_number': match.match_number, 'red_alliance': match.red_alliance, 'blue_alliance': match.blue_alliance, 'timestamp': match.timestamp}
+                                if show_scores and match.red_score is not None and match.blue_score is not None:
+                                        match_data['red_score'] = match.red_score
+                                        match_data['blue_score'] = match.blue_score
+                                        match_data['winner'] = 'red' if match.red_score > match.blue_score else 'blue' if match.blue_score > match.red_score else 'tie'
+                                matches_list.append(match_data)
+                        matches_data = {'matches': matches_list, 'show_scores': show_scores}
+                except Exception:
+                        matches_data = None
+                html_template = '''
+                {% if matches_data %}
+                    <h5 class="mb-3"><i class="fas fa-history me-2"></i>Recent Matches</h5>
+                    <div class="list-group">
+                        {% for match in matches_data.matches %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ match.match_type }} {{ match.match_number }}</strong>
+                                    {% if match.timestamp %}
+                                    <small class="text-muted ms-2">{{ match.timestamp.strftime('%m/%d %H:%M') }}</small>
+                                    {% endif %}
+                                </div>
+                                {% if matches_data.show_scores and match.get('red_score') is not none %}
+                                <div>
+                                    <span class="badge bg-{{ 'danger' if match.get('winner') == 'red' else 'secondary' }}">Red: {{ match.red_score }}</span>
+                                    <span class="badge bg-{{ 'primary' if match.get('winner') == 'blue' else 'secondary' }} ms-1">Blue: {{ match.blue_score }}</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="mt-1">
+                                <small class="text-danger">Red: {{ match.red_alliance }}</small>
+                                <small class="text-primary ms-3">Blue: {{ match.blue_alliance }}</small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>No match data available
+                    </div>
+                {% endif %}
+                '''
+                html = render_template_string(html_template, matches_data=matches_data)
+                return jsonify({'html': html})
+
+        return jsonify({'plots': widget_plots})
+
+
+@bp.route('/pages/shares')
+@analytics_required
+def pages_shares():
+    """List public shares created by this team and allow revocation."""
+    shares_file = os.path.join(current_app.instance_path, 'pages_shares.json')
+    shares_list = []
+    try:
+        if os.path.exists(shares_file):
+            with open(shares_file, 'r') as f:
+                shares = json.load(f) or {}
+                for token, entry in shares.items():
+                    # Only include shares for this team
+                    try:
+                        if int(entry.get('owner_team')) == int(current_user.scouting_team_number):
+                            shares_list.append({'token': token, **entry})
+                    except Exception:
+                        continue
+    except Exception:
+        shares_list = []
+
+    # Enrich with page title if possible
+    for s in shares_list:
+        try:
+            p = CustomPage.query.get(s.get('page_id'))
+            s['page_title'] = p.title if p else 'Deleted'
+        except Exception:
+            s['page_title'] = 'Unknown'
+
+    return render_template('graphs/pages_shares.html', shares=shares_list, **get_theme_context())
+
+
+@bp.route('/pages/shares/<token>/revoke', methods=['POST'])
+@analytics_required
+def revoke_page_share(token):
+    shares_file = os.path.join(current_app.instance_path, 'pages_shares.json')
+    try:
+        if os.path.exists(shares_file):
+            with open(shares_file, 'r') as f:
+                shares = json.load(f) or {}
+        else:
+            shares = {}
+    except Exception:
+        shares = {}
+
+    entry = shares.get(token)
+    if not entry:
+        flash('Share not found', 'danger')
+        return redirect(url_for('graphs.pages_shares'))
+
+    # Only owner team may revoke
+    try:
+        if int(entry.get('owner_team')) != int(current_user.scouting_team_number):
+            flash('Insufficient permissions to revoke this share', 'danger')
+            return redirect(url_for('graphs.pages_shares'))
+    except Exception:
+        flash('Insufficient permissions', 'danger')
+        return redirect(url_for('graphs.pages_shares'))
+
+    entry['revoked'] = True
+    shares[token] = entry
+    tmp = shares_file + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(shares, f)
+    os.replace(tmp, shares_file)
+
+    flash('Share revoked', 'success')
+    return redirect(url_for('graphs.pages_shares'))
 
 
 @bp.route('/pages/create', methods=['GET', 'POST'])

@@ -1,23 +1,42 @@
 {% extends 'base.html' %}
 
-{% block title %}404 - Page Not Found{% endblock %}
+{% block title %}404 — Page not found{% endblock %}
 
-{% block heading %}Page Not Found{% endblock %}
+{% block heading %}Page not found{% endblock %}
 
 {% block content %}
 <div class="row">
-    <div class="col-md-8 mx-auto text-center">
-        <div class="card">
-            <div class="card-body py-5">
-                <h1 class="display-1 text-danger mb-4">404</h1>
-                <h2 class="mb-4">Oops! We couldn't find that page.</h2>
-                <p class="lead mb-4">The page you are looking for might have been removed, had its name changed, or is temporarily unavailable.</p>
-                <div class="mb-4">
-                    <i class="fas fa-robot fa-4x text-muted mb-3"></i>
+    <div class="col-12 col-lg-10 mx-auto">
+        <div class="site-error-hero">
+            <div class="site-error-panel">
+                <div class="d-flex align-items-start gap-3">
+                    <div>
+                        <h1 class="site-error-code">404</h1>
+                    </div>
+                    <div style="flex:1;">
+                        <div class="site-error-title">We couldn't find that page</div>
+                        <div class="site-error-desc">The URL may be incorrect, the page was moved, or it might be temporarily unavailable. Try searching the site or go back to a safe place.</div>
+
+                        <div class="site-error-actions">
+                            <button class="btn btn-outline-secondary" onclick="history.back()"><i class="fas fa-arrow-left me-2"></i>Go back</button>
+                            <a href="{{ url_for('main.index') }}" class="btn btn-primary"><i class="fas fa-home me-2"></i>Home</a>
+                        </div>
+                    </div>
                 </div>
-                <a href="{{ url_for('main.index') }}" class="btn btn-primary btn-lg">
-                    <i class="fas fa-home me-2"></i> Back to Home
-                </a>
+            </div>
+
+            <div class="text-center">
+                <svg class="site-error-illustration" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <g fill="none" fill-rule="evenodd">
+                        <circle cx="100" cy="60" r="48" fill="rgba(2,6,23,0.06)" />
+                        <rect x="26" y="110" width="148" height="56" rx="8" fill="rgba(2,6,23,0.04)" />
+                        <g transform="translate(44,36)" stroke="currentColor" stroke-opacity="0.12" stroke-width="2">
+                            <path d="M78 20c0 10-14 18-32 18S14 30 14 20" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M28 52v20" stroke-linecap="round"/>
+                            <path d="M56 52v20" stroke-linecap="round"/>
+                        </g>
+                    </g>
+                </svg>
             </div>
         </div>
     </div>

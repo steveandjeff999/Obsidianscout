@@ -33,6 +33,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/search-enhancements.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-ui.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-force.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-fixes.css') }}">
     <!-- Use UMD build of Chart.js for compatibility with non-module script loading -->
     <script src="{{ url_for('static', filename='js/vendor/chart.umd.min.js') }}"></script>
@@ -43,6 +44,31 @@
         :root { {{ theme_css_variables | safe }} }
     </style>
     {% endif %}
+    <style>
+        /* Ensure card-bg variable uses the neutral, non-blue glass color in dark mode */
+        body.dark-mode, body.modern-layout.dark-mode {
+            --card-bg: rgba(24,24,26,0.78) !important;
+            --glass-bg: rgba(22,22,24,0.6) !important;
+            --glass-border: rgba(255,255,255,0.035) !important;
+        }
+        /* Force nested cards and small panels to match the neutral card background in dark mode.
+           This duplicate inline rule helps in cases where external CSS is loaded before our override
+           and prevents visual mismatches on initial render. */
+        body.dark-mode .card .card,
+        body.modern-layout.dark-mode .card .card,
+        body.dark-mode .stat-card,
+        body.modern-layout.dark-mode .stat-card,
+        body.dark-mode .dashboard-card,
+        body.modern-layout.dark-mode .dashboard-card {
+            background: var(--card-bg) !important;
+            background-color: var(--card-bg) !important;
+            border: 1px solid rgba(0,0,0,0.45) !important;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.45) !important;
+            color: var(--bs-body-color) !important;
+            background-clip: padding-box !important;
+            overflow: hidden !important;
+        }
+    </style>
     
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <link rel="icon" type="image/png" sizes="192x192" href="/static/obsidian-192.png">
@@ -717,11 +743,7 @@
                 <a class="nav-link {% if request.endpoint == 'auth.add_user' %}active{% endif %}" href="{{ url_for('auth.add_user') }}"><i class="fas fa-user-plus"></i><span>Add User</span></a>
             </div>
             {% endif %}
-            {% if user_has_role('admin') %}
-            <div class="nav-group">
-                <div class="nav-group-title">Administration</div>
-            </div>
-            {% endif %}
+            {# Administration nav-group removed on request #}
             <div class="nav-group">
                 <div class="nav-group-title">Core</div>
                 {% if not (user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics')) %}
@@ -999,6 +1021,27 @@
             // (for example on desktop navbar dropdowns not positioned fixed)
             lastScrollY = window.scrollY;
         });
+    })();
+    </script>
+    <script>
+    // Populate data-label attributes on sidebar nav links for collapsed hover tooltips
+    (function(){
+        const sidebar = document.getElementById('appSidebar');
+        function setNavLabels(){
+            if(!sidebar) return;
+            const links = sidebar.querySelectorAll('a.nav-link');
+            links.forEach(a=>{
+                const label = a.querySelector('span') ? a.querySelector('span').textContent.trim() : a.textContent.trim();
+                if(label) a.setAttribute('data-label', label);
+            });
+        }
+        setNavLabels();
+        // Update labels if window resizes or user toggles sidebar
+        window.addEventListener('resize', setNavLabels);
+        document.addEventListener('obsidian:sidebar:toggled', setNavLabels);
+        // Also hook into existing toggle button to dispatch an event for other listeners
+        const toggle = document.getElementById('sidebarToggle');
+        if(toggle) toggle.addEventListener('click', ()=>{ setTimeout(()=>{ document.dispatchEvent(new CustomEvent('obsidian:sidebar:toggled')); }, 250); });
     })();
     </script>
     {# Embedded site-wide notification banner placed directly under the navbar #}

@@ -5,6 +5,7 @@
 {% block content %}
 <div class="mb-3">
   <a class="btn btn-primary" href="{{ url_for('graphs.pages_create') }}">Create New Page</a>
+  <a class="btn btn-outline-secondary ms-2" href="{{ url_for('graphs.pages_shares') }}">Manage Shares</a>
 </div>
 
 {% if pages %}
@@ -18,6 +19,7 @@
             <a href="{{ url_for('graphs.pages_view', page_id=page.id) }}" class="btn btn-sm btn-outline-primary">View</a>
             {% if page.owner_team == current_user.scouting_team_number and page.owner_user == current_user.username %}
               <a href="{{ url_for('graphs.pages_edit', page_id=page.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+              <button type="button" class="btn btn-sm btn-outline-success share-page-btn" data-page-id="{{ page.id }}">Share</button>
             {% endif %}
             <form method="post" action="{{ url_for('graphs.pages_delete', page_id=page.id) }}" style="display:inline-block;">
               <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
@@ -30,4 +32,41 @@
 {% else %}
   <p>No custom pages created yet.</p>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('.share-page-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      const pageId = this.dataset.pageId;
+      if (!confirm('Create a public share link for this page? Anyone with the link can view it.')) return;
+      this.disabled = true;
+      fetch('{{ url_for("graphs.create_page_share") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ page_id: pageId })
+      }).then(r=>r.json()).then(data=>{
+        this.disabled = false;
+        if (data && data.path) {
+          const origin = window.location.origin;
+          const full = origin + data.path;
+          // try copy to clipboard
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(full).then(()=>{
+              alert('Share link copied to clipboard:\n' + full);
+            }).catch(()=>{ prompt('Share link (copy manually):', full); });
+          } else {
+            prompt('Share link (copy):', full);
+          }
+        } else if (data && data.error) {
+          alert('Error creating share: ' + data.error);
+        } else {
+          alert('Unexpected response creating share');
+        }
+      }).catch(err=>{ this.disabled = false; alert('Failed to create share: ' + err); });
+    });
+  });
+});
+</script>
 {% endblock %}

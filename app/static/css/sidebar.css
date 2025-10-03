@@ -211,3 +211,131 @@ body.topbar-fixed main { padding-top: 0.75rem; }
 /* Smooth transitions for main area shifting */
 body.with-sidebar main, body.with-sidebar footer { transition: margin-left .25s ease; }
 
+/* Modern enhancements */
+.sidebar .nav-link { transition: background .18s ease, color .18s ease, transform .12s ease; }
+.sidebar .nav-link:hover { transform: translateX(2px); }
+
+/* Active left indicator */
+.sidebar .nav-link.active { position: relative; }
+.sidebar .nav-link.active::before { content: ''; position: absolute; left: 8px; top: 12%; bottom: 12%; width: 4px; border-radius: 4px; background: var(--bs-primary); box-shadow: 0 4px 12px rgba(var(--bs-primary-rgb),0.15); }
+
+/* When collapsed, slightly larger to accommodate icons comfortably */
+@media (min-width: 992px) {
+		body.with-sidebar.sidebar-collapsed .sidebar { width: 72px; }
+		body.with-sidebar.sidebar-collapsed main, body.with-sidebar.sidebar-collapsed footer { margin-left: 72px; }
+}
+
+/* Tighter, centered footer buttons when the sidebar is collapsed */
+@media (min-width: 992px) {
+	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
+		padding-top: .45rem; /* keep a little breathing room */
+	}
+
+	/* Make each footer button a centered square icon */
+	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .btn {
+		font-size: 0; /* hide inline text */
+		width: 44px;
+		height: 44px;
+		padding: 0;
+		display: inline-flex;
+		justify-content: center;
+		align-items: center;
+		border-radius: 10px;
+		box-shadow: none;
+		border-width: 0 !important; /* remove border when collapsed */
+		box-sizing: border-box; /* include border in size calculations */
+		line-height: 1; /* avoid extra inline spacing */
+	}
+
+	/* Ensure icons remain visible and centered */
+	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .btn i {
+		font-size: 1.1rem;
+		margin-right: 0;
+		line-height: 1;
+		display: inline-block;
+		vertical-align: middle; /* avoid stretching; keep natural icon size */
+		height: auto;
+		width: auto;
+	}
+
+	/* Absolute-centering fallback to handle font-metric drift across icons */
+	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .btn .icon-wrapper {
+		position: relative;
+		width: 100%;
+		height: 100%;
+		display: block;
+	}
+
+	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .btn .icon-wrapper i {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		transform: translate(-50%, -50%);
+		margin: 0;
+		line-height: 1;
+		display: block;
+	}
+
+	/* Remove borders & focus rings for footer buttons while collapsed to avoid visual offsets */
+	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .btn,
+	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .btn:hover {
+		border: none !important;
+		box-shadow: none !important;
+		background: transparent !important;
+	}
+
+	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .btn:focus,
+	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .btn:active,
+	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .btn:focus-visible {
+		outline: none !important;
+		box-shadow: none !important;
+	}
+
+	/* Keep the dark-mode toggle appearance neutral when collapsed */
+	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .btn.btn-outline-secondary {
+		background: transparent;
+	}
+
+	/* Prevent translated hover movement for these footer controls (no floating on collapse) */
+	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .btn:hover {
+		transform: none;
+	}
+}
+
+/* Icon-only centered in collapsed mode */
+.sidebar .nav-link i { display: inline-block; width: 28px; text-align: center; }
+.sidebar .nav-link span { transition: opacity .12s ease; }
+
+/* Tooltip preview when collapsed: uses data-label attribute (set via JS) */
+.sidebar.sidebar-collapsed .nav-link[data-label]:hover::after {
+		content: attr(data-label);
+		position: fixed;
+		left: calc(var(--sidebar-width) + 12px);
+		top: 50%;
+		transform: translateY(-50%);
+		background: rgba(0,0,0,0.85);
+		color: #fff;
+		padding: 6px 10px;
+		border-radius: 6px;
+		white-space: nowrap;
+		z-index: 1060;
+		font-size: 0.85rem;
+		box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+}
+
+/* Make sure tooltip is not shown on mobile (no hover) */
+@media (max-width: 991.98px) {
+	.sidebar.sidebar-collapsed .nav-link[data-label]:hover::after { display: none; }
+}
+
+/* Small badge refinements inside nav-links */
+.sidebar .nav-link .badge { margin-left: auto; font-size: .65rem; padding: .25rem .35rem; border-radius: 999px; }
+
+/* Subtle divider between sections */
+.sidebar .nav-group { padding-bottom: .4rem; border-bottom: 1px dashed rgba(0,0,0,0.03); margin-bottom: .6rem; }
+
+

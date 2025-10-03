@@ -1,0 +1,227 @@
+{% extends 'base.html' %}
+{% block title %}Integrity Status{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h4">File Integrity & Server Status</h1>
+    <div>
+      <button id="refreshBtn" class="btn btn-sm btn-primary"><i class="fas fa-sync-alt me-1"></i> Refresh</button>
+      <button id="scanBtn" class="btn btn-sm btn-outline-secondary"><i class="fas fa-search me-1"></i> Run Full Scan</button>
+    </div>
+  </div>
+
+  <div id="alerts"></div>
+
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">Overview</h5>
+          <div id="overviewSummary" class="mb-2">
+            <span id="badgeCompromised"></span>
+            <span id="badgeWarning" class="ms-2"></span>
+          </div>
+          <ul class="list-unstyled small mb-0">
+            <li><strong>Files monitored:</strong> <span id="filesMonitored">–</span></li>
+            <li><strong>Overall OK:</strong> <span id="overallOk">–</span></li>
+            <li><strong>App version:</strong> <span id="appVersion">–</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">Database</h5>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div><span id="dbStatusBadge"></span></div>
+            <div class="small text-muted">Latency: <span id="dbLatency">–</span> ms</div>
+          </div>
+          <div id="dbError" class="small text-danger"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">Process / System</h5>
+          <div class="row">
+            <div class="col-6 small text-muted">PID: <span id="pid">–</span></div>
+            <div class="col-6 small text-muted">Threads: <span id="threads">–</span></div>
+            <div class="col-6 small text-muted">Uptime: <span id="uptime">–</span></div>
+            <div class="col-6 small text-muted">Python: <span id="pyver">–</span></div>
+          </div>
+          <div class="mt-2">
+            <div class="small text-muted">CPU</div>
+            <div class="progress mb-2" style="height:10px"><div id="cpuBar" class="progress-bar" role="progressbar" style="width:0%"></div></div>
+            <div class="small text-muted">Memory (RSS)</div>
+            <div class="progress" style="height:10px"><div id="memBar" class="progress-bar bg-info" role="progressbar" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">Disk Usage</h5>
+          <div id="diskList" class="small text-muted">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card mt-3">
+        <div class="card-body">
+          <h5 class="card-title">Checksum File</h5>
+          <div id="checksumInfo" class="small text-muted">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card mt-3">
+        <div class="card-body">
+          <h5 class="card-title">Quick Scan</h5>
+          <div id="quickScanInfo" class="small text-muted">Run a full scan to show modified/new/deleted files (can be slow).</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+function formatBytes(n){
+  if(!n || n <= 0) return '0 B';
+  const units = ['B','KB','MB','GB','TB'];
+  let u = 0;
+  while(n >= 1024 && u < units.length-1){ n /= 1024; u++; }
+  return n.toFixed(n>=100?0:1) + ' ' + units[u];
+}
+
+function formatUptime(sec){
+  if(sec == null) return '–';
+  const d = Math.floor(sec / 86400); sec %= 86400;
+  const h = Math.floor(sec/3600); sec %= 3600;
+  const m = Math.floor(sec/60); const s = sec%60;
+  let out = [];
+  if(d) out.push(d+'d');
+  if(h) out.push(h+'h');
+  if(m) out.push(m+'m');
+  out.push(s+'s');
+  return out.join(' ');
+}
+
+function setBadge(elemId, ok, textOk, textBad){
+  const el = document.getElementById(elemId);
+  if(!el) return;
+  if(ok){ el.innerHTML=`<span class="badge bg-success">${textOk}</span>`; }
+  else{ el.innerHTML=`<span class="badge bg-danger">${textBad}</span>`; }
+}
+
+async function fetchStatus(runScan=false){
+  try{
+    document.getElementById('alerts').innerHTML='';
+    const url = '/integrity/status' + (runScan ? '?quick=1' : '');
+    const resp = await fetch(url, {headers:{'Accept':'application/json'}});
+    if(!resp.ok){
+      document.getElementById('alerts').innerHTML = `<div class="alert alert-danger">Failed to fetch status: ${resp.status}</div>`;
+      return;
+    }
+    const data = await resp.json();
+
+    // Overview
+    setBadge('badgeCompromised', !data.compromised, 'No Issues', 'Compromised');
+    document.getElementById('badgeWarning').innerHTML = data.warning_only_mode ? '<span class="badge bg-warning text-dark">Warning-only</span>' : '<span class="badge bg-secondary">Enforced</span>';
+    document.getElementById('filesMonitored').textContent = data.files_monitored ?? '–';
+    document.getElementById('overallOk').textContent = data.ok ? 'Yes' : 'No';
+    document.getElementById('appVersion').textContent = (data.app && data.app.version) ? data.app.version : '–';
+
+    // Database
+    document.getElementById('dbLatency').textContent = data.database && data.database.latency_ms ? data.database.latency_ms : '–';
+    const dbOk = data.database && data.database.ok;
+    document.getElementById('dbStatusBadge').innerHTML = dbOk ? '<span class="badge bg-success">DB OK</span>' : '<span class="badge bg-danger">DB Error</span>';
+    document.getElementById('dbError').textContent = data.database && data.database.error ? data.database.error : '';
+
+    // Process
+    document.getElementById('pid').textContent = data.process && data.process.pid ? data.process.pid : '–';
+    document.getElementById('threads').textContent = data.process && data.process.threads ? data.process.threads : '–';
+    document.getElementById('uptime').textContent = data.process && typeof data.process.uptime_seconds === 'number' ? formatUptime(data.process.uptime_seconds) : '–';
+    document.getElementById('pyver').textContent = data.system && data.system.python_version ? data.system.python_version : '–';
+
+    // CPU / Memory bars
+    const cpuPct = data.process && typeof data.process.cpu_percent === 'number' && data.process.cpu_percent !== null ? Math.min(100, Math.round(data.process.cpu_percent)) : 0;
+    const memRss = data.process && data.process.memory_rss ? data.process.memory_rss : null;
+    // Memory bar requires total memory guess; if not present, show relative to 1GB for visualization
+    const memPct = memRss ? Math.min(100, Math.round((memRss / (1024*1024*1024)) * 100)) : 0;
+    document.getElementById('cpuBar').style.width = cpuPct + '%';
+    document.getElementById('cpuBar').textContent = cpuPct ? cpuPct + '%' : '';
+    document.getElementById('memBar').style.width = memPct + '%';
+    document.getElementById('memBar').textContent = memRss ? formatBytes(memRss) : '';
+
+    // Disk
+    const diskList = document.getElementById('diskList'); diskList.innerHTML='';
+    if(data.disk){
+      for(const k of Object.keys(data.disk)){
+        const d = data.disk[k];
+        if(d && d.total){
+          const usedPct = Math.round((d.used / d.total)*100);
+          const row = document.createElement('div');
+          row.innerHTML = `<div class="mb-1"><strong>${k}</strong> — ${d.path} <small class="text-muted">${formatBytes(d.used)} / ${formatBytes(d.total)}</small>
+            <div class="progress" style="height:8px"><div class="progress-bar bg-warning" role="progressbar" style="width:${usedPct}%">${usedPct}%</div></div></div>`;
+          diskList.appendChild(row);
+        } else {
+          const row = document.createElement('div'); row.textContent = k + ': ' + JSON.stringify(d);
+          diskList.appendChild(row);
+        }
+      }
+    }
+
+    // Checksum file
+    const cf = data.checksum_file || {};
+    const checksumInfo = document.getElementById('checksumInfo');
+    if(cf.path){
+      checksumInfo.innerHTML = `<div><strong>Path:</strong> ${cf.path}</div><div><strong>Size:</strong> ${cf.size_bytes?formatBytes(cf.size_bytes):'–'}</div><div><strong>Modified:</strong> ${cf.modified||'–'}</div><div><strong>Created:</strong> ${cf.created||'–'}</div>`;
+    } else if(data.checksum_file_error){
+      checksumInfo.textContent = data.checksum_file_error;
+    } else {
+      checksumInfo.textContent = 'No checksum file present.';
+    }
+
+    // Quick scan
+    const q = data.quick_scan || {};
+    const quickEl = document.getElementById('quickScanInfo');
+    if(q.error){ quickEl.innerHTML = `<div class="text-danger">${q.error}</div>`; }
+    else if(q.note){ quickEl.textContent = q.note; }
+    else {
+      let out = `<div><strong>Scanned at:</strong> ${q.scanned_at||'–'} <strong class="ms-3">Duration:</strong> ${q.duration_seconds?q.duration_seconds+'s':'–'}</div>`;
+      out += `<div class="mt-2"><strong>Modified count:</strong> ${q.modified_count==null?'–':q.modified_count}</div>`;
+      if(Array.isArray(q.examples) && q.examples.length){
+        out += '<ul class="mb-0 mt-2">';
+        q.examples.forEach(e=>{ out += `<li><code>${e}</code></li>`; });
+        out += '</ul>';
+      }
+      quickEl.innerHTML = out;
+    }
+
+  }catch(e){
+    document.getElementById('alerts').innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
+  }
+}
+
+document.getElementById('refreshBtn').addEventListener('click', ()=>fetchStatus(false));
+document.getElementById('scanBtn').addEventListener('click', ()=>{
+  if(!confirm('Full scan can be slow. Run it?')) return;
+  fetchStatus(true);
+});
+
+// initial
+fetchStatus(false);
+</script>
+{% endblock %}
+
+{% endblock %}

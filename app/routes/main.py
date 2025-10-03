@@ -118,6 +118,13 @@ def sponsors():
     """Sponsors page to thank site sponsors"""
     return render_template('sponsors.html', **get_theme_context())
 
+
+# Developer helper: show the 500 error page at /500 for visual testing (returns status 500)
+@bp.route('/500')
+def show_500():
+    """Render the 500 error template for testing and return HTTP 500."""
+    return render_template('errors/500.html', **get_theme_context()), 500
+
 @bp.route('/config')
 @login_required
 def config():
@@ -319,6 +326,33 @@ def save_config():
     except Exception as e:
         flash(f'Error updating configuration: {str(e)}', 'danger')
         return redirect(url_for('main.edit_config'))
+
+
+@bp.route('/notifications/recent')
+@login_required
+def notifications_recent():
+    """Return recent site notifications as JSON for the topbar."""
+    notif_file = os.path.join(current_app.instance_path, 'notifications.json')
+    notifications = []
+    try:
+        if os.path.exists(notif_file):
+            with open(notif_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # Expect file structure { "notifications": [ { id, title, message, level } ] }
+                notifications = data.get('notifications', []) or []
+                # Normalize minimal fields
+                normalized = []
+                for n in notifications:
+                    try:
+                        nid = n.get('id') or (n.get('level','') + '-' + (n.get('message','') or '')[:12])
+                        normalized.append({ 'id': nid, 'title': n.get('title') or n.get('level') or 'Notice', 'message': n.get('message','') })
+                    except Exception:
+                        continue
+                notifications = normalized
+    except Exception:
+        notifications = []
+
+    return jsonify({ 'notifications': notifications })
 
 def save_simple_config():
     """Save configuration from the simple editor"""
