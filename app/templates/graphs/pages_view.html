@@ -74,6 +74,8 @@
               <button class="btn btn-sm btn-primary viewer-refresh" data-widget-index="{{ loop.index0 }}">Refresh</button>
             </div>
           </div>
+            <!-- Persistent container for generated plots so viewer-controls remain visible -->
+            <div class="viewer-plots" data-widget-index="{{ loop.index0 }}"></div>
         {% endif %}
         {% if widget.config.type == 'text' %}
           <div class="widget-text-content">
@@ -211,28 +213,28 @@
                   <h5><i class="fas fa-trophy me-2"></i>Match Prediction</h5>
                   <div class="prediction-display">
                     {% if widget.config.prediction_style == 'compact' %}
-                      <p class="mb-0"><strong>Predicted Winner:</strong> <span class="badge bg-{{ 'danger' if widget.prediction_data.predicted_winner == 'red' else 'primary' if widget.prediction_data.predicted_winner == 'blue' else 'secondary' }}">{{ widget.prediction_data.predicted_winner|upper }}</span></p>
+                      <p class="mb-0"><strong>Predicted Winner:</strong> <span class="badge bg-{{ 'danger' if widget.prediction_data['predicted_winner'] == 'red' else 'primary' if widget.prediction_data['predicted_winner'] == 'blue' else 'secondary' }}">{{ widget.prediction_data['predicted_winner']|upper }}</span></p>
                     {% elif widget.config.prediction_style == 'detailed' %}
                       <div class="row">
                         <div class="col-md-6">
                           <h6>Red Alliance</h6>
-                          <p>Win Probability: {{ (widget.prediction_data.probabilities.red * 100)|round(1) }}%</p>
-                          <p>Predicted Score: {{ widget.prediction_data.red_alliance.predicted_score }}</p>
+                          <p>Win Probability: {{ (widget.prediction_data['probabilities']['red'] * 100)|round(1) }}%</p>
+                          <p>Predicted Score: {{ widget.prediction_data['red_alliance']['predicted_score'] }}</p>
                         </div>
                         <div class="col-md-6">
                           <h6>Blue Alliance</h6>
-                          <p>Win Probability: {{ (widget.prediction_data.probabilities.blue * 100)|round(1) }}%</p>
-                          <p>Predicted Score: {{ widget.prediction_data.blue_alliance.predicted_score }}</p>
+                          <p>Win Probability: {{ (widget.prediction_data['probabilities']['blue'] * 100)|round(1) }}%</p>
+                          <p>Predicted Score: {{ widget.prediction_data['blue_alliance']['predicted_score'] }}</p>
                         </div>
                       </div>
                     {% else %}
                       <div class="text-center">
                         <h6>Win Probability</h6>
                         <div class="progress mb-2" style="height: 30px;">
-                          <div class="progress-bar bg-danger" style="width: {{ widget.prediction_data.probabilities.red * 100 }}%">Red {{ (widget.prediction_data.probabilities.red * 100)|round(1) }}%</div>
-                          <div class="progress-bar bg-primary" style="width: {{ widget.prediction_data.probabilities.blue * 100 }}%">Blue {{ (widget.prediction_data.probabilities.blue * 100)|round(1) }}%</div>
+                          <div class="progress-bar bg-danger" style="width: {{ widget.prediction_data['probabilities']['red'] * 100 }}%">Red {{ (widget.prediction_data['probabilities']['red'] * 100)|round(1) }}%</div>
+                          <div class="progress-bar bg-primary" style="width: {{ widget.prediction_data['probabilities']['blue'] * 100 }}%">Blue {{ (widget.prediction_data['probabilities']['blue'] * 100)|round(1) }}%</div>
                         </div>
-                        <p class="mb-0">Predicted: Red {{ widget.prediction_data.red_alliance.predicted_score }} - {{ widget.prediction_data.blue_alliance.predicted_score }} Blue</p>
+                        <p class="mb-0">Predicted: Red {{ widget.prediction_data['red_alliance']['predicted_score'] }} - {{ widget.prediction_data['blue_alliance']['predicted_score'] }} Blue</p>
                       </div>
                     {% endif %}
                   </div>
@@ -743,30 +745,20 @@
         const matchSel = document.querySelector('.viewer-prediction-match[data-widget-index="' + idx + '"]');
         const eventId = this.value;
         if (matchSel && eventId) {
-          // Clear existing matches
-          matchSel.innerHTML = '<option value="">Loading matches...</option>';
-          fetch(`/api/v1/matches?event_id=${eventId}&limit=200`)
-            .then(r => r.json())
-            .then(data => {
-              matchSel.innerHTML = '<option value="">Select Match...</option>';
-              // Filter matches from server-side data
-              const eventMatches = PAGE_VIEWER_MATCHES.filter(m => m.event_id == eventId);
-              eventMatches.forEach(match => {
-                const opt = document.createElement('option');
-                opt.value = match.id;
-                opt.textContent = `${match.match_type} ${match.match_number}`;
-                matchSel.appendChild(opt);
-              });
-            })
-            .catch(err => {
-              console.error('Failed to load matches:', err);
-              matchSel.innerHTML = '<option value="">Error loading matches</option>';
-            });
+          // Filter matches from server-side data (already available in PAGE_VIEWER_MATCHES)
+          matchSel.innerHTML = '<option value="">Select Match...</option>';
+          const eventMatches = PAGE_VIEWER_MATCHES.filter(m => m.event_id == eventId);
+          eventMatches.forEach(match => {
+            const opt = document.createElement('option');
+            opt.value = match.id;
+            opt.textContent = `${match.match_type} ${match.match_number}`;
+            matchSel.appendChild(opt);
+          });
         }
       });
     });
 
-    // Wire up match prediction refresh
+    // Wire up match prediction refresh (AJAX - no page reload)
     document.querySelectorAll('.viewer-refresh-prediction').forEach(function(btn) {
       btn.addEventListener('click', function() {
         const idx = btn.dataset.widgetIndex;
@@ -776,12 +768,41 @@
           alert('Please select a match');
           return;
         }
-        // Reload the page with match_id parameter
-        window.location.href = window.location.pathname + '?prediction_' + idx + '=' + matchId;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+        
+        // POST to widget render endpoint with prediction parameters
+        fetch("{{ url_for('graphs.pages_widget_render', page_id=page.id, widget_index=0) }}".replace('/0', '/'+idx), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prediction_match: matchId })
+        }).then(r => r.json()).then(data => {
+          if (data && data.html) {
+            const card = btn.closest('.card');
+            const widgetContent = card.querySelector('.widget-match-prediction-content');
+            if (widgetContent) {
+              const tempDiv = document.createElement('div');
+              tempDiv.innerHTML = data.html;
+              const newContent = tempDiv.querySelector('.match-prediction-widget') || tempDiv.firstChild;
+              const existingWidget = widgetContent.querySelector('.match-prediction-widget');
+              if (existingWidget && newContent) {
+                existingWidget.replaceWith(newContent);
+              }
+            }
+          }
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>Load Prediction';
+        }).catch(err => {
+          console.error('Failed to load prediction:', err);
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>Load Prediction';
+          alert('Failed to load prediction data');
+        });
       });
     });
 
-    // Wire up team comparison refresh
+    // Wire up team comparison refresh (AJAX - no page reload)
     document.querySelectorAll('.viewer-refresh-comparison').forEach(function(btn) {
       btn.addEventListener('click', function() {
         const idx = btn.dataset.widgetIndex;
@@ -793,23 +814,81 @@
           alert('Please enter both team numbers');
           return;
         }
-        // Reload the page with team parameters
-        window.location.href = window.location.pathname + '?comparison_' + idx + '_team1=' + team1 + '&comparison_' + idx + '_team2=' + team2;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Comparing...';
+        
+        fetch("{{ url_for('graphs.pages_widget_render', page_id=page.id, widget_index=0) }}".replace('/0', '/'+idx), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comparison_team1: parseInt(team1), comparison_team2: parseInt(team2) })
+        }).then(r => r.json()).then(data => {
+          if (data && data.html) {
+            const card = btn.closest('.card');
+            const widgetContent = card.querySelector('.widget-team-comparison-content');
+            if (widgetContent) {
+              const tempDiv = document.createElement('div');
+              tempDiv.innerHTML = data.html;
+              // Replace the comparison display (everything after the controls)
+              const existingDisplay = widgetContent.querySelector('.row, .alert');
+              const newDisplay = tempDiv.querySelector('.row, .alert');
+              if (existingDisplay && newDisplay) {
+                existingDisplay.replaceWith(newDisplay);
+              } else if (newDisplay) {
+                const controls = widgetContent.querySelector('.viewer-controls');
+                if (controls) {
+                  controls.insertAdjacentElement('afterend', newDisplay);
+                } else {
+                  widgetContent.appendChild(newDisplay);
+                }
+              }
+            }
+          }
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>Compare Teams';
+        }).catch(err => {
+          console.error('Failed to load comparison:', err);
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>Compare Teams';
+          alert('Failed to load comparison data');
+        });
       });
     });
 
-    // Wire up rankings refresh
+    // Wire up rankings refresh (AJAX - no page reload)
     document.querySelectorAll('.viewer-refresh-rankings').forEach(function(btn) {
       btn.addEventListener('click', function() {
         const idx = btn.dataset.widgetIndex;
         const eventSel = document.querySelector('.viewer-rankings-event[data-widget-index="' + idx + '"]');
         const eventId = eventSel ? eventSel.value : '';
-        // Reload the page with event parameter
-        window.location.href = window.location.pathname + '?rankings_' + idx + '_event=' + (eventId || 'all');
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+        
+        fetch("{{ url_for('graphs.pages_widget_render', page_id=page.id, widget_index=0) }}".replace('/0', '/'+idx), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rankings_event: eventId || 'all' })
+        }).then(r => r.json()).then(data => {
+            if (data && data.html) {
+              const card = btn.closest('.card');
+              const widgetContent = card.querySelector('.widget-team-rankings-content');
+              if (widgetContent) {
+                widgetContent.innerHTML = data.html;
+              }
+            }
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>Load Rankings';
+        }).catch(err => {
+          console.error('Failed to load rankings:', err);
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>Load Rankings';
+          alert('Failed to load rankings data');
+        });
       });
     });
 
-    // Wire up recent matches refresh
+    // Wire up recent matches refresh (AJAX - no page reload)
     document.querySelectorAll('.viewer-refresh-matches').forEach(function(btn) {
       btn.addEventListener('click', function() {
         const idx = btn.dataset.widgetIndex;
@@ -819,8 +898,43 @@
           alert('Please select an event');
           return;
         }
-        // Reload the page with event parameter
-        window.location.href = window.location.pathname + '?matches_' + idx + '_event=' + eventId;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+        
+        fetch("{{ url_for('graphs.pages_widget_render', page_id=page.id, widget_index=0) }}".replace('/0', '/'+idx), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ matches_event: eventId })
+        }).then(r => r.json()).then(data => {
+          if (data && data.html) {
+            const card = btn.closest('.card');
+            const widgetContent = card.querySelector('.widget-recent-matches-content');
+            if (widgetContent) {
+              const tempDiv = document.createElement('div');
+              tempDiv.innerHTML = data.html;
+              const existingDisplay = widgetContent.querySelector('h5, .list-group, .alert');
+              const newDisplay = tempDiv.querySelector('h5, .list-group, .alert');
+              if (existingDisplay && newDisplay) {
+                existingDisplay.replaceWith(newDisplay);
+              } else if (newDisplay) {
+                const controls = widgetContent.querySelector('.viewer-controls');
+                if (controls) {
+                  controls.insertAdjacentElement('afterend', newDisplay);
+                } else {
+                  widgetContent.appendChild(newDisplay);
+                }
+              }
+            }
+          }
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>Load Matches';
+        }).catch(err => {
+          console.error('Failed to load matches:', err);
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>Load Matches';
+          alert('Failed to load matches data');
+        });
       });
     });
 
@@ -894,18 +1008,8 @@
             // Append any remaining keys that weren't matched by preferences
             keys.forEach(function(k){ if (orderedKeys.indexOf(k) === -1) orderedKeys.push(k); });
 
-            // Remove existing plot elements in the card so we can insert the new set
-            var cardBody = card.querySelector('.card-body') || card;
-            // Remove columns that contain existing plotly figures
-            card.querySelectorAll('.plotly-figure').forEach(function(el){
-              var col = el.closest('.col-md-6') || el.closest('.col-md-12');
-              if (col) col.remove(); else el.remove();
-            });
-            // Remove any empty rows we previously created
-            cardBody.querySelectorAll('.row').forEach(function(r){
-              if (!r.querySelector('.col-md-6') && !r.querySelector('.col-md-12')) r.remove();
-            });
-
+            // Prefer rendering into the persistent viewer-plots container (so viewer-controls stay visible)
+            var plotsContainer = card.querySelector('.viewer-plots[data-widget-index="'+idx+'"]');
             // Create a new row to hold all returned plots
             var containerRow = document.createElement('div');
             containerRow.className = 'row';
@@ -938,10 +1042,29 @@
               }
             });
 
-            // Insert after viewer-controls if present, else append to card body
-            var vc = card.querySelector('.viewer-controls');
-            if (vc && vc.parentNode) vc.parentNode.insertBefore(containerRow, vc.nextSibling);
-            else cardBody.appendChild(containerRow);
+            // Insert into the persistent plots container if present, else fallback to previous behavior
+            if (plotsContainer) {
+              // Clear previous plots only inside this container
+              plotsContainer.innerHTML = '';
+              plotsContainer.appendChild(containerRow);
+              // Smoothly scroll the new plots into view
+              try { containerRow.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(e) {}
+            } else {
+              // Fallback: remove existing plot elements in the card so we can insert the new set
+              var cardBody = card.querySelector('.card-body') || card;
+              // Remove columns that contain existing plotly figures
+              card.querySelectorAll('.plotly-figure').forEach(function(el){
+                var col = el.closest('.col-md-6') || el.closest('.col-md-12');
+                if (col) col.remove(); else el.remove();
+              });
+              // Remove any empty rows we previously created
+              cardBody.querySelectorAll('.row').forEach(function(r){
+                if (!r.querySelector('.col-md-6') && !r.querySelector('.col-md-12')) r.remove();
+              });
+              var vc = card.querySelector('.viewer-controls');
+              if (vc && vc.parentNode) vc.parentNode.insertBefore(containerRow, vc.nextSibling);
+              else cardBody.appendChild(containerRow);
+            }
 
             // After inserting new plots, trigger dynamic layout reflow
             setTimeout(function() {
