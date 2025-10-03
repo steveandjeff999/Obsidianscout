@@ -577,6 +577,12 @@ def register_chat_history_routes(app):
 def create_app(test_config=None):
     # Create and configure the app
     app = Flask(__name__, instance_relative_config=True)
+    # Record application start time for uptime diagnostics
+    try:
+        from datetime import datetime
+        app.start_time = datetime.utcnow()
+    except Exception:
+        app.start_time = None
     
     # Set default configuration
     app.config.from_mapping(

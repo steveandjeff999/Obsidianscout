@@ -155,7 +155,17 @@
     <div class="col-lg-8" id="canvasColumn">
       <div class="card" id="canvasCard">
         <div class="card-header d-flex justify-content-between align-items-center">
-          <span>Canvas</span>
+          <div class="d-flex align-items-center gap-2">
+            <span>Canvas</span>
+            <!-- Export / Import controls -->
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="exportJsonBtn" title="Export page as JSON">
+              <i class="fas fa-file-export"></i> Export JSON
+            </button>
+            <label class="btn btn-sm btn-outline-secondary mb-0" for="importJsonInput" id="importJsonLabel" title="Import page JSON">
+              <i class="fas fa-file-import"></i> Import JSON
+            </label>
+            <input type="file" id="importJsonInput" accept="application/json" style="display:none" />
+          </div>
           <button type="button" class="btn btn-sm btn-outline-primary" id="toggleFullscreenBtn" title="Toggle Fullscreen">
             <i class="fas fa-expand"></i> <span id="fullscreenBtnText">Fullscreen</span>
           </button>
@@ -2123,6 +2133,100 @@ document.addEventListener('keydown', function(e){
     removeFloatingToolbox();
   }
 });
+
+  // Export / Import JSON functionality
+  const exportJsonBtn = document.getElementById('exportJsonBtn');
+  const importJsonInput = document.getElementById('importJsonInput');
+
+  function safeFilename(base) {
+    const ts = new Date().toISOString().replace(/[:.]/g,'-');
+    return `${base}-${ts}.json`;
+  }
+
+  function downloadObjectAsJson(obj, filename) {
+    try {
+      const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=> URL.revokeObjectURL(url), 5000);
+    } catch (err) {
+      alert('Failed to create JSON export: ' + err.message);
+    }
+  }
+
+  if (exportJsonBtn) {
+    exportJsonBtn.addEventListener('click', function(e){
+      e.preventDefault();
+      // Build export payload
+      const title = document.getElementById('page_title_input') ? document.getElementById('page_title_input').value : '';
+      const widgets = buildWidgetsJson();
+      const exportObj = { title: title || null, widgets: widgets };
+      const filenameBase = title ? `page-${title.replace(/[^a-z0-9-_]/gi,'_')}` : 'page-export';
+      downloadObjectAsJson(exportObj, safeFilename(filenameBase));
+    });
+  }
+
+  if (importJsonInput) {
+    importJsonInput.addEventListener('change', function(e){
+      const file = importJsonInput.files && importJsonInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        try {
+          const parsed = JSON.parse(ev.target.result);
+          // Accept either { widgets: [...] } or an array directly
+          let widgets = [];
+          if (Array.isArray(parsed)) {
+            widgets = parsed;
+          } else if (parsed && Array.isArray(parsed.widgets)) {
+            widgets = parsed.widgets;
+            // If title present, populate
+            if (parsed.title && document.getElementById('page_title_input')) {
+              document.getElementById('page_title_input').value = parsed.title;
+            }
+          } else {
+            throw new Error('JSON must be an array of widgets or an object with a "widgets" array');
+          }
+
+          // Basic validation of widget objects
+          if (!widgets.every(w => w && typeof w.type === 'string')) {
+            throw new Error('Invalid widget format: each widget must be an object with a string "type" property');
+          }
+
+          // Clear existing canvas
+          canvas.querySelectorAll('.widget-card').forEach(n => n.remove());
+          if (canvasEmpty) canvasEmpty.style.display = widgets.length ? 'none' : 'block';
+
+          // Recreate widgets via addWidgetToCanvas which wires up controls
+          widgets.forEach(w => {
+            try {
+              addWidgetToCanvas(w.type || 'graph', w);
+            } catch (err) {
+              console.warn('Failed to add widget from import', err, w);
+            }
+          });
+
+          // Update hidden field so submit uses imported widgets
+          try {
+            hiddenField.value = JSON.stringify(widgets);
+          } catch (err) { /* ignore */ }
+
+          alert('Import successful: ' + widgets.length + ' widgets loaded. Review and click Create/Update to save.');
+        } catch (err) {
+          alert('Failed to import JSON: ' + err.message);
+        }
+      };
+      reader.onerror = function(err){ alert('Failed to read file'); };
+      reader.readAsText(file);
+      // reset input so same file can be chosen again if needed
+      importJsonInput.value = '';
+    });
+  }
 
 });
 </script>

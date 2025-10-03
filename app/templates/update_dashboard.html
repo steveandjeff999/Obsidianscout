@@ -6,9 +6,13 @@
 <style>
     .update-card {
         margin-bottom: 20px;
-        border: 1px solid #ddd;
+        background: var(--card-bg, #ffffff);
+        border: 1px solid var(--bs-border-color, #dee2e6);
         border-radius: 8px;
         padding: 15px;
+        color: var(--bs-body-color);
+        background-clip: padding-box;
+        overflow: hidden;
     }
     
     .server-header {
@@ -64,14 +68,16 @@
     .status-log {
         max-height: 200px;
         overflow-y: auto;
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
+        background: var(--card-bg, #f8f9fa);
+        border: 1px solid var(--bs-border-color, #dee2e6);
         border-radius: 4px;
         padding: 10px;
         font-family: monospace;
         font-size: 12px;
         margin-top: 10px;
         display: none;
+        color: var(--bs-body-color);
+        background-clip: padding-box;
     }
     
     .status-log.active {
@@ -121,9 +127,12 @@
     #globalControls {
         margin-bottom: 30px;
         padding: 20px;
-        background-color: #f8f9fa;
+        background: var(--card-bg, #f8f9fa);
         border-radius: 8px;
-        border: 1px solid #dee2e6;
+        border: 1px solid var(--bs-border-color, #dee2e6);
+        color: var(--bs-body-color);
+        background-clip: padding-box;
+        overflow: hidden;
     }
     
     .summary-stats {
@@ -133,12 +142,15 @@
     }
     
     .stat-card {
-        background: white;
+        background: var(--card-bg, #ffffff);
         padding: 15px;
         border-radius: 6px;
-        border: 1px solid #dee2e6;
+        border: 1px solid var(--bs-border-color, #dee2e6);
         text-align: center;
         min-width: 120px;
+        color: var(--bs-body-color);
+        background-clip: padding-box;
+        overflow: hidden;
     }
     
     .stat-number {

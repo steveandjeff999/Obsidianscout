@@ -392,6 +392,76 @@ html body.modern-layout.dark-mode .alert.alert-info i {
     color: #9feafc !important;
 }
 
+/* Shared error page styles (404/500) */
+.site-error-hero {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    align-items: center;
+    padding: 28px;
+}
+
+.site-error-panel {
+    background: var(--card-bg, #ffffff) !important;
+    border: 1px solid var(--bs-border-color, rgba(0,0,0,0.08)) !important;
+    border-radius: 12px !important;
+    padding: 28px !important;
+    color: var(--bs-body-color, #222) !important;
+    box-shadow: 0 8px 28px rgba(2,6,23,0.06) !important;
+    background-clip: padding-box !important;
+    overflow: hidden !important;
+}
+
+.site-error-code {
+    font-size: 96px !important;
+    line-height: 1 !important;
+    font-weight: 700 !important;
+    margin: 0 0 8px 0 !important;
+    color: var(--bs-body-color, #222) !important;
+    opacity: 0.95 !important;
+}
+
+.site-error-title { font-size: 22px !important; margin-bottom: 8px !important; font-weight:700 !important; }
+.site-error-desc { color: var(--bs-secondary, #6c757d) !important; margin-bottom: 14px !important; }
+.site-error-actions { display:flex !important; gap:12px !important; flex-wrap:wrap !important; margin-top:12px !important; }
+.site-error-illustration { width:220px; max-width:40vw; }
+
+@media (max-width:720px) {
+    .site-error-hero { grid-template-columns: 1fr !important; }
+    .site-error-illustration { justify-self:center !important; }
+    .site-error-code { font-size:72px !important; }
+}
+
+/* Responsive scaling rules so the error hero fits the page gracefully */
+.site-error-hero {
+    /* use fluid padding and gap that scale with viewport width */
+    padding: clamp(12px, 2.6vw, 40px) !important;
+    gap: clamp(12px, 2vw, 32px) !important;
+}
+
+.site-error-panel {
+    /* make font sizes scale smoothly between small and large screens */
+    font-size: clamp(0.9rem, 1vw + 0.2rem, 1.05rem) !important;
+}
+
+.site-error-code {
+    /* scale the big numeric code responsively while keeping it prominent */
+    font-size: clamp(48px, 9vw, 120px) !important;
+}
+
+.site-error-title { font-size: clamp(18px, 2.2vw, 26px) !important; }
+.site-error-desc { font-size: clamp(0.9rem, 1vw, 1.05rem) !important; }
+
+/* Ensure actions compress on narrow screens and buttons wrap nicely */
+.site-error-actions { gap:8px !important; justify-content:flex-start !important; }
+.site-error-actions .btn { min-width:unset !important; }
+
+@media (max-width:480px) {
+    .site-error-illustration { display:none !important; }
+    .site-error-code { font-size: clamp(42px, 14vw, 78px) !important; }
+    .site-error-panel { padding: 16px !important; }
+}
+
 body.modern-layout.dark-mode .alert.alert-info strong,
 html body.modern-layout.dark-mode .alert.alert-info strong {
     color: #ffffff !important;
@@ -402,5 +472,185 @@ html body.modern-layout.dark-mode .alert.alert-info a {
     color: #cdefff !important;
     text-decoration: underline !important;
 }
+
+/* Modern semi-transparent card surfaces for a darker, glassy look */
+html body.modern-layout.dark-mode .card,
+html body.modern-layout.dark-mode .card .card-body,
+body.modern-layout.dark-mode .dashboard-card,
+body.modern-layout.dark-mode .stat-card,
+body.modern-layout.dark-mode .stat-card.card-interactive,
+body.modern-layout.dark-mode .data-card,
+body.modern-layout.dark-mode .team-card,
+body.modern-layout.dark-mode .match-card,
+body.modern-layout.dark-mode .list-group-item,
+body.modern-layout.dark-mode .dropdown-menu,
+body.modern-layout.dark-mode .badge {
+    /* slightly darker, semi-transparent surface */
+    /* slightly lighter, neutral glass surface so cards sit above the background (no blue tint) */
+    background-color: rgba(24, 24, 26, 0.78) !important;
+    /* subtle glass blur (works on modern browsers) */
+    backdrop-filter: blur(3px) !important;
+    -webkit-backdrop-filter: blur(3px) !important;
+    /* use a neutral darker border to avoid faint light seams at rounded corners */
+    border: 1px solid rgba(0,0,0,0.5) !important;
+    /* ensure background does not show seams at the rounded corners */
+    background-clip: padding-box !important;
+    overflow: hidden !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.45) !important;
+    color: #e6e6e6 !important;
+}
+
+/* Card headers slightly darker for contrast and stronger separation */
+html body.modern-layout.dark-mode .card-header,
+body.modern-layout.dark-mode .card .card-header {
+    background-color: rgba(22, 22, 24, 0.76) !important;
+    border-bottom-color: rgba(0,0,0,0.45) !important;
+    color: #e6e6e6 !important;
+}
+
+/* Hover state: lift the surface subtly by brightening background slightly */
+html body.modern-layout.dark-mode .card:hover,
+html body.modern-layout.dark-mode .stat-card:hover,
+html body.modern-layout.dark-mode .list-group-item:hover,
+html body.modern-layout.dark-mode .dropdown-item:hover {
+    background-color: rgba(30, 30, 32, 0.82) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* Gradient header accents are preserved (no glass) - no override here so gradients remain intact */
+
+/* Mirror the modern-layout rules for plain .dark-mode body classes so both variants are covered */
+html body.dark-mode .card,
+html body.dark-mode .card .card-body,
+body.dark-mode .dashboard-card,
+body.dark-mode .stat-card,
+body.dark-mode .stat-card.card-interactive,
+body.dark-mode .data-card,
+body.dark-mode .team-card,
+body.dark-mode .match-card,
+body.dark-mode .list-group-item,
+body.dark-mode .dropdown-menu,
+body.dark-mode .badge {
+    background-color: rgba(24, 24, 26, 0.78) !important;
+    backdrop-filter: blur(3px) !important;
+    -webkit-backdrop-filter: blur(3px) !important;
+    border: 1px solid rgba(0,0,0,0.5) !important;
+    background-clip: padding-box !important;
+    overflow: hidden !important;
+    border-color: rgba(255, 255, 255, 0.04) !important;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.35) !important;
+    color: #e6e6e6 !important;
+}
+
+html body.dark-mode .card-header,
+body.dark-mode .card .card-header {
+    background-color: rgba(22, 22, 24, 0.76) !important;
+    border-bottom-color: rgba(0,0,0,0.45) !important;
+    color: #e6e6e6 !important;
+}
+
+html body.dark-mode .card:hover,
+html body.dark-mode .stat-card:hover,
+html body.dark-mode .list-group-item:hover,
+html body.dark-mode .dropdown-item:hover {
+    background-color: rgba(30, 30, 32, 0.82) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* Gradient header accents are preserved for plain .dark-mode as well */
+
+/* Final override: highest specificity and !important to ensure visual effect */
+html body.modern-layout.dark-mode .card, html body.dark-mode .card,
+html body.modern-layout.dark-mode .card .card-body, html body.dark-mode .card .card-body,
+html body.modern-layout.dark-mode .widget-view-card, html body.dark-mode .widget-view-card,
+html body.modern-layout.dark-mode .widget-view-card .card-body, html body.dark-mode .widget-view-card .card-body {
+    background-image: none !important;
+    background: rgba(10,12,15,0.62) !important;
+    background-color: rgba(10,12,15,0.62) !important;
+    border-color: rgba(255,255,255,0.04) !important;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.35) !important;
+    color: #e6e6e6 !important;
+}
+
+/* Also force any inline-card background overrides to use the glass color in dark mode */
+html body.modern-layout.dark-mode [style*="background-color:"], html body.dark-mode [style*="background-color:"] {
+    color: inherit !important;
+}
+
+/* Inputs, selects, and search fields - slightly lighter surfaces for contrast */
+html body.modern-layout.dark-mode .form-control,
+html body.dark-mode .form-control,
+html body.modern-layout.dark-mode .form-select,
+html body.dark-mode .form-select,
+html body.modern-layout.dark-mode .select2-container--default .select2-selection--single,
+html body.dark-mode .select2-container--default .select2-selection--single {
+    background-color: rgba(255,255,255,0.03) !important;
+    border-color: rgba(255,255,255,0.06) !important;
+    color: #e6e6e6 !important;
+    box-shadow: none !important;
+}
+
+html body.modern-layout.dark-mode .select2-container--default .select2-selection--single .select2-selection__rendered,
+html body.dark-mode .select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: #e6e6e6 !important;
+}
+
+/* Select2 dropdown background and border */
+html body.modern-layout.dark-mode .select2-container--default .select2-dropdown,
+html body.dark-mode .select2-container--default .select2-dropdown {
+    background-color: rgba(10,12,15,0.82) !important;
+    border-color: rgba(255,255,255,0.06) !important;
+    color: #e6e6e6 !important;
+}
+
+/* Match the search input wrapper contrast to the new card surface */
+html body.modern-layout.dark-mode .search-input-wrapper,
+html body.dark-mode .search-input-wrapper {
+    background-color: rgba(255,255,255,0.02) !important;
+    border-color: rgba(255,255,255,0.06) !important;
+}
+
+/* viewer-controls that used .bg-light should be subtle but discernible in dark mode */
+html body.modern-layout.dark-mode .viewer-controls.bg-light,
+html body.dark-mode .viewer-controls.bg-light {
+    background-color: rgba(255,255,255,0.02) !important;
+    border-color: rgba(255,255,255,0.04) !important;
+    color: #e6e6e6 !important;
+}
+
+/* Ensure horizontal rules and thin dividers are visible */
+html body.modern-layout.dark-mode .card hr,
+html body.dark-mode .card hr,
+html body.modern-layout.dark-mode hr,
+html body.dark-mode hr {
+    border-top-color: rgba(255,255,255,0.04) !important;
+}
+
+/* Placeholder color for inputs in dark mode */
+html body.modern-layout.dark-mode ::placeholder,
+html body.dark-mode ::placeholder {
+    color: #9aa0a6 !important;
+    opacity: 1 !important;
+}
+
+/* Make nested cards, stat-cards and dashboard cards match the neutral card background
+   so small panels inside a larger card don't show a different tint. */
+html body.modern-layout.dark-mode .card .card,
+html body.dark-mode .card .card,
+html body.modern-layout.dark-mode .stat-card,
+html body.dark-mode .stat-card,
+html body.modern-layout.dark-mode .dashboard-card,
+html body.dark-mode .dashboard-card {
+    background: var(--card-bg) !important;
+    background-color: var(--card-bg) !important;
+    border: 1px solid rgba(0,0,0,0.45) !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.45) !important;
+    color: #e6e6e6 !important;
+    background-clip: padding-box !important;
+    overflow: hidden !important;
+}
+
+
+
 
 
