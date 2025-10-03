@@ -5,8 +5,13 @@ import random
 from app.utils.config_manager import get_current_game_config
 from app.utils.team_isolation import filter_scouting_data_by_scouting_team, get_current_scouting_team_number
 
-def calculate_team_metrics(team_id):
-    """Calculate key performance metrics for a team based on their scouting data using dynamic period calculations"""
+def calculate_team_metrics(team_id, event_id=None):
+    """Calculate key performance metrics for a team based on their scouting data using dynamic period calculations
+    
+    Args:
+        team_id: The ID of the team to calculate metrics for
+        event_id: Optional event ID to filter scouting data by event
+    """
     # Get the team object to log the team number
     team = Team.query.get(team_id)
     team_number = team.team_number if team else team_id
@@ -14,7 +19,7 @@ def calculate_team_metrics(team_id):
     # Get all scouting data for this team.
     # If the team is currently in alliance-mode, use scouting data shared by alliance members.
     # Otherwise, respect the normal scouting team isolation rules.
-    def _get_scouting_data_for_team(team_obj):
+    def _get_scouting_data_for_team(team_obj, event_filter=None):
         """Return a list of ScoutingData objects to use for analytics for the given Team object or id."""
         # Accept either Team instance or team id
         if isinstance(team_obj, int):
@@ -29,8 +34,12 @@ def calculate_team_metrics(team_id):
                 if alliance:
                     member_numbers = alliance.get_member_team_numbers()
                     # Use scouting entries contributed by alliance members for this team
-                    return ScoutingData.query.filter(ScoutingData.team_id == team_obj.id,
-                                                     ScoutingData.scouting_team_number.in_(member_numbers)).all()
+                    query = ScoutingData.query.filter(ScoutingData.team_id == team_obj.id,
+                                                     ScoutingData.scouting_team_number.in_(member_numbers))
+                    # Apply event filter if provided
+                    if event_filter:
+                        query = query.join(Match).filter(Match.event_id == event_filter)
+                    return query.all()
         except Exception:
             # Fall back to normal isolation if alliance lookup fails
             pass
@@ -38,10 +47,19 @@ def calculate_team_metrics(team_id):
         # Default behavior: respect current user's scouting team isolation
         scouting_team_number = get_current_scouting_team_number()
         if scouting_team_number is not None:
-            return filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team_obj.id).all()
-        return ScoutingData.query.filter_by(team_id=team_obj.id, scouting_team_number=None).all()
+            query = filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team_obj.id)
+            # Apply event filter if provided
+            if event_filter:
+                query = query.join(Match).filter(Match.event_id == event_filter)
+            return query.all()
+        
+        query = ScoutingData.query.filter_by(team_id=team_obj.id, scouting_team_number=None)
+        # Apply event filter if provided
+        if event_filter:
+            query = query.join(Match).filter(Match.event_id == event_filter)
+        return query.all()
     
-    scouting_data = _get_scouting_data_for_team(team)
+    scouting_data = _get_scouting_data_for_team(team, event_id)
 
     if not scouting_data:
         print(f"    No scouting data found for team {team_number} (ID: {team_id})")

@@ -1022,7 +1022,12 @@ def pages_edit(page_id):
 @analytics_required
 def pages_widget_render(page_id, widget_index):
     """Render a single widget for a page with optional overrides (used by user-selectable controls).
-    Expects JSON body with overrides for fields like 'metric' or 'teams'. Returns JSON mapping plot_key -> plot_json."""
+    Expects JSON body with overrides for fields like 'metric' or 'teams'. 
+    For graph widgets: Returns JSON mapping plot_key -> plot_json.
+    For other widgets: Returns JSON with HTML fragment."""
+    from flask import render_template_string
+    from app.utils.analysis import predict_match_outcome, get_match_details_with_teams, calculate_team_metrics
+    
     page = CustomPage.query.get_or_404(page_id)
     if page.owner_team != current_user.scouting_team_number:
         abort(403)
@@ -1051,7 +1056,7 @@ def pages_widget_render(page_id, widget_index):
 
     # helpful debug logging when rendering widgets dynamically
     try:
-        current_app.logger.debug('pages_widget_render: overrides=%s, resolved_graph_types=%s, metric=%s', overrides, widget.get('graph_types'), widget.get('metric'))
+        current_app.logger.debug('pages_widget_render: overrides=%s, resolved_graph_types=%s, metric=%s, type=%s', overrides, widget.get('graph_types'), widget.get('metric'), widget.get('type'))
     except Exception:
         pass
 
@@ -1145,6 +1150,350 @@ def pages_widget_render(page_id, widget_index):
                 widget_plots.update(_create_area_chart(team_data, metric, data_view))
             elif gt == 'radar':
                 widget_plots.update(_create_radar_chart(team_data, metric, data_view))
+
+    elif wtype == 'match_prediction':
+        # Handle match prediction widget - return HTML fragment
+        match_id = overrides.get('prediction_match')
+        prediction_data = None
+        if match_id:
+            try:
+                match_details = get_match_details_with_teams(int(match_id))
+                if match_details and match_details.get('prediction'):
+                    # Get the prediction dict which already has the proper structure
+                    prediction = match_details['prediction']
+                    # Build a complete prediction_data structure for the template
+                    prediction_data = {
+                        'red_alliance': prediction.get('red_alliance', {}),
+                        'blue_alliance': prediction.get('blue_alliance', {}),
+                        'predicted_winner': prediction.get('predicted_winner', 'unknown'),
+                        'probabilities': prediction.get('probabilities', {'red': 0, 'blue': 0, 'tie': 0}),
+                        'confidence': prediction.get('confidence', 0),
+                        'match': match_details.get('match'),
+                        'match_completed': match_details.get('match_completed', False),
+                        'actual_winner': match_details.get('actual_winner')
+                    }
+            except Exception as e:
+                current_app.logger.error(f"Error fetching match prediction: {e}")
+                import traceback
+                current_app.logger.error(traceback.format_exc())
+        
+        prediction_style = widget.get('prediction_style', 'default')
+        html_template = '''
+        <div class="match-prediction-widget">
+        {% if prediction_data %}
+          <div class="alert alert-info">
+            <h5><i class="fas fa-trophy me-2"></i>Match Prediction</h5>
+            <div class="prediction-display">
+              {% if prediction_style == 'compact' %}
+                <p class="mb-0"><strong>Predicted Winner:</strong> <span class="badge bg-{{ 'danger' if prediction_data['predicted_winner'] == 'red' else 'primary' if prediction_data['predicted_winner'] == 'blue' else 'secondary' }}">{{ prediction_data['predicted_winner']|upper }}</span></p>
+              {% elif prediction_style == 'detailed' %}
+                <div class="row">
+                  <div class="col-md-6">
+                    <h6>Red Alliance</h6>
+                    <p>Win Probability: {{ (prediction_data['probabilities']['red'] * 100)|round(1) }}%</p>
+                    <p>Predicted Score: {{ prediction_data['red_alliance']['predicted_score'] }}</p>
+                  </div>
+                  <div class="col-md-6">
+                    <h6>Blue Alliance</h6>
+                    <p>Win Probability: {{ (prediction_data['probabilities']['blue'] * 100)|round(1) }}%</p>
+                    <p>Predicted Score: {{ prediction_data['blue_alliance']['predicted_score'] }}</p>
+                  </div>
+                </div>
+              {% else %}
+                <div class="text-center">
+                  <h6>Win Probability</h6>
+                  <div class="progress mb-2" style="height: 30px;">
+                    <div class="progress-bar bg-danger" style="width: {{ prediction_data['probabilities']['red'] * 100 }}%">Red {{ (prediction_data['probabilities']['red'] * 100)|round(1) }}%</div>
+                    <div class="progress-bar bg-primary" style="width: {{ prediction_data['probabilities']['blue'] * 100 }}%">Blue {{ (prediction_data['probabilities']['blue'] * 100)|round(1) }}%</div>
+                  </div>
+                  <p class="mb-0">Predicted: Red {{ prediction_data['red_alliance']['predicted_score'] }} - {{ prediction_data['blue_alliance']['predicted_score'] }} Blue</p>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        {% else %}
+          <div class="alert alert-warning">
+            <i class="fas fa-info-circle me-2"></i>Select a match to view prediction
+          </div>
+        {% endif %}
+        </div>
+        '''
+        html = render_template_string(html_template, prediction_data=prediction_data, prediction_style=prediction_style)
+        return jsonify({'html': html})
+
+    elif wtype == 'team_comparison':
+        # Handle team comparison widget - return HTML fragment
+        team1_num = overrides.get('comparison_team1')
+        team2_num = overrides.get('comparison_team2')
+        event_filter = overrides.get('comparison_event', 'all')
+        metrics_list = widget.get('metrics', []) or widget.get('comparison_metrics', [])
+        # If no metrics specified, use default ones
+        if not metrics_list:
+            metrics_list = ['total_points', 'auto_points', 'teleop_points', 'endgame_points']
+        comparison_data = None
+        
+        if team1_num and team2_num:
+            try:
+                team1 = Team.query.filter_by(team_number=int(team1_num)).first()
+                team2 = Team.query.filter_by(team_number=int(team2_num)).first()
+                
+                if team1 and team2:
+                    # Parse event_id for filtering
+                    event_id = None
+                    if event_filter and event_filter != 'all':
+                        try:
+                            event_id = int(event_filter)
+                        except ValueError:
+                            pass
+                    
+                    team1_analytics = calculate_team_metrics(team1.id, event_id=event_id)
+                    team2_analytics = calculate_team_metrics(team2.id, event_id=event_id)
+                    
+                    comparison_data = {
+                        'team1': {
+                            'team_number': team1.team_number,
+                            'team_name': team1.team_name or f'Team {team1.team_number}',
+                            'metrics': team1_analytics.get('metrics', {})
+                        },
+                        'team2': {
+                            'team_number': team2.team_number,
+                            'team_name': team2.team_name or f'Team {team2.team_number}',
+                            'metrics': team2_analytics.get('metrics', {})
+                        },
+                        'selected_metrics': metrics_list
+                    }
+                else:
+                    current_app.logger.warning(f"One or both teams not found: {team1_num}, {team2_num}")
+            except Exception as e:
+                current_app.logger.error(f"Error fetching team comparison: {e}")
+                import traceback
+                current_app.logger.error(traceback.format_exc())
+        
+        html_template = '''
+        {% if comparison_data %}
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                  <h5>{{ comparison_data.team1.team_name }}</h5>
+                  <small>#{{ comparison_data.team1.team_number }}</small>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                  <h5>{{ comparison_data.team2.team_name }}</h5>
+                  <small>#{{ comparison_data.team2.team_number }}</small>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-striped table-sm">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th class="text-center">{{ comparison_data.team1.team_name }}</th>
+                  <th class="text-center">{{ comparison_data.team2.team_name }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for metric_id in comparison_data.selected_metrics %}
+                <tr>
+                  <td>{{ metric_id|replace('_', ' ')|title }}</td>
+                  <td class="text-center">{% set val = comparison_data.team1.metrics.get(metric_id) %}{{ val|round(2) if val is number else (val if val else 'N/A') }}</td>
+                  <td class="text-center">{% set val = comparison_data.team2.metrics.get(metric_id) %}{{ val|round(2) if val is number else (val if val else 'N/A') }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>Enter team numbers to compare statistics
+          </div>
+        {% endif %}
+        '''
+        html = render_template_string(html_template, comparison_data=comparison_data)
+        return jsonify({'html': html})
+
+    elif wtype == 'team_rankings':
+        # Handle team rankings widget - return HTML fragment
+        event_filter = overrides.get('rankings_event', 'all')
+        count = int(widget.get('count', 10) or widget.get('rankings_count', 10))
+        sort_by = widget.get('sort_by', 'points') or widget.get('rankings_sort', 'points')
+        show_stats = widget.get('show_stats', False) or widget.get('rankings_show_stats', False)
+        rankings_data = None
+        
+        try:
+            # Build event filter if specified
+            event_id = None
+            if event_filter and event_filter != 'all':
+                try:
+                    event_id = int(event_filter)
+                except ValueError:
+                    pass
+            
+            teams_query = Team.query.order_by(Team.team_number).all()
+            team_rankings = []
+            for team in teams_query:
+                # Pass event_id to calculate_team_metrics to filter data by event
+                analytics_result = calculate_team_metrics(team.id, event_id=event_id)
+                metrics = analytics_result.get('metrics', {})
+                
+                if sort_by == 'points' or sort_by == 'score':
+                    sort_value = metrics.get('total_points') or metrics.get('tot') or 0
+                elif sort_by == 'wins':
+                    sort_value = metrics.get('wins') or 0
+                elif sort_by == 'RP':
+                    sort_value = metrics.get('ranking_points') or 0
+                else:
+                    sort_value = metrics.get(sort_by) or 0
+                
+                team_rankings.append({
+                    'team_number': team.team_number,
+                    'team_name': team.team_name or f'Team {team.team_number}',
+                    'sort_value': sort_value,
+                    'metrics': metrics if show_stats else {}
+                })
+            
+            team_rankings.sort(key=lambda x: x['sort_value'], reverse=True)
+            team_rankings = team_rankings[:count]
+            
+            for idx, ranking in enumerate(team_rankings):
+                ranking['rank'] = idx + 1
+            
+            rankings_data = {
+                'rankings': team_rankings,
+                'sort_by': sort_by,
+                'show_stats': show_stats,
+                'event_filter': event_filter if event_id else 'all'
+            }
+        except Exception as e:
+            current_app.logger.error(f"Error calculating team rankings: {e}")
+            import traceback
+            current_app.logger.error(traceback.format_exc())
+        
+        html_template = '''
+        {% if rankings_data %}
+          <h5 class="mb-3"><i class="fas fa-list-ol me-2"></i>Team Rankings{% if rankings_data.event_filter != 'all' %} (Event){% endif %} ({{ rankings_data.sort_by|title }})</h5>
+          <div class="table-responsive">
+            <table class="table table-hover table-sm">
+              <thead class="table-light">
+                <tr>
+                  <th>Rank</th>
+                  <th>Team</th>
+                  <th class="text-end">{{ rankings_data.sort_by|replace('_', ' ')|title }}</th>
+                  {% if rankings_data.show_stats %}
+                  <th class="text-end">Avg Points</th>
+                  {% endif %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for team in rankings_data.rankings %}
+                <tr>
+                  <td><span class="badge bg-{{ 'warning' if team.rank <= 3 else 'secondary' }}">{{ team.rank }}</span></td>
+                  <td><strong>{{ team.team_number }}</strong> - {{ team.team_name }}</td>
+                  <td class="text-end">{{ team.sort_value|round(2) }}</td>
+                  {% if rankings_data.show_stats %}
+                  <td class="text-end">{{ team.metrics.get('total_points', team.metrics.get('tot', 'N/A')) }}</td>
+                  {% endif %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>No ranking data available
+          </div>
+        {% endif %}
+        '''
+        html = render_template_string(html_template, rankings_data=rankings_data)
+        return jsonify({'html': html})
+
+    elif wtype == 'recent_matches':
+        # Handle recent matches widget - return HTML fragment
+        event_filter = overrides.get('matches_event')
+        filter_type = widget.get('filter', 'all') or widget.get('matches_filter', 'all')
+        count = int(widget.get('count', 10) or widget.get('matches_count', 10))
+        show_scores = widget.get('show_scores', True) if widget.get('show_scores') is not None else widget.get('matches_show_scores', True)
+        matches_data = None
+        
+        try:
+            matches_query = Match.query
+            
+            if event_filter:
+                try:
+                    event_id = int(event_filter)
+                    matches_query = matches_query.filter_by(event_id=event_id)
+                except ValueError:
+                    pass
+            
+            matches_query = matches_query.order_by(Match.timestamp.desc()).limit(count)
+            matches = matches_query.all()
+            
+            matches_list = []
+            for match in matches:
+                match_data = {
+                    'match_id': match.id,
+                    'match_type': match.match_type,
+                    'match_number': match.match_number,
+                    'red_alliance': match.red_alliance,
+                    'blue_alliance': match.blue_alliance,
+                    'timestamp': match.timestamp
+                }
+                
+                if show_scores and match.red_score is not None and match.blue_score is not None:
+                    match_data['red_score'] = match.red_score
+                    match_data['blue_score'] = match.blue_score
+                    match_data['winner'] = 'red' if match.red_score > match.blue_score else 'blue' if match.blue_score > match.red_score else 'tie'
+                
+                matches_list.append(match_data)
+            
+            matches_data = {
+                'matches': matches_list,
+                'show_scores': show_scores
+            }
+        except Exception as e:
+            current_app.logger.error(f"Error fetching recent matches: {e}")
+        
+        html_template = '''
+        {% if matches_data %}
+          <h5 class="mb-3"><i class="fas fa-history me-2"></i>Recent Matches</h5>
+          <div class="list-group">
+            {% for match in matches_data.matches %}
+            <div class="list-group-item">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <strong>{{ match.match_type }} {{ match.match_number }}</strong>
+                  {% if match.timestamp %}
+                  <small class="text-muted ms-2">{{ match.timestamp.strftime('%m/%d %H:%M') }}</small>
+                  {% endif %}
+                </div>
+                {% if matches_data.show_scores and match.get('red_score') is not none %}
+                <div>
+                  <span class="badge bg-{{ 'danger' if match.get('winner') == 'red' else 'secondary' }}">Red: {{ match.red_score }}</span>
+                  <span class="badge bg-{{ 'primary' if match.get('winner') == 'blue' else 'secondary' }} ms-1">Blue: {{ match.blue_score }}</span>
+                </div>
+                {% endif %}
+              </div>
+              <div class="mt-1">
+                <small class="text-danger">Red: {{ match.red_alliance }}</small>
+                <small class="text-primary ms-3">Blue: {{ match.blue_alliance }}</small>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>No match data available
+          </div>
+        {% endif %}
+        '''
+        html = render_template_string(html_template, matches_data=matches_data)
+        return jsonify({'html': html})
 
     else:
         # no dynamic plots for other widget types
@@ -1294,13 +1643,22 @@ def pages_view(page_id):
                 try:
                     match_details = get_match_details_with_teams(int(match_id))
                     if match_details and match_details.get('prediction'):
-                        prediction_data = match_details['prediction']
-                        # Add match info for display
-                        prediction_data['match'] = match_details['match']
-                        prediction_data['match_completed'] = match_details.get('match_completed', False)
-                        prediction_data['actual_winner'] = match_details.get('actual_winner')
+                        # Structure the data the same way as the AJAX endpoint
+                        prediction = match_details['prediction']
+                        prediction_data = {
+                            'red_alliance': prediction.get('red_alliance', {}),
+                            'blue_alliance': prediction.get('blue_alliance', {}),
+                            'predicted_winner': prediction.get('predicted_winner', 'unknown'),
+                            'probabilities': prediction.get('probabilities', {'red': 0, 'blue': 0, 'tie': 0}),
+                            'confidence': prediction.get('confidence', 0),
+                            'match': match_details.get('match'),
+                            'match_completed': match_details.get('match_completed', False),
+                            'actual_winner': match_details.get('actual_winner')
+                        }
                 except Exception as e:
                     current_app.logger.error(f"Error fetching match prediction for widget {i}: {e}")
+                    import traceback
+                    current_app.logger.error(traceback.format_exc())
             plots[wkey] = {'config': widget, 'plots': {}, 'prediction_data': prediction_data}
 
         elif wtype == 'team_comparison':
@@ -1319,15 +1677,28 @@ def pages_view(page_id):
             metrics = widget.get('metrics', []) or widget.get('comparison_metrics', [])
             comparison_data = None
             
-            if team1_num and team2_num and metrics:
+            if team1_num and team2_num:
                 try:
                     team1 = Team.query.filter_by(team_number=int(team1_num)).first()
                     team2 = Team.query.filter_by(team_number=int(team2_num)).first()
                     
                     if team1 and team2:
                         from app.utils.analysis import calculate_team_metrics
-                        team1_analytics = calculate_team_metrics(team1.id)
-                        team2_analytics = calculate_team_metrics(team2.id)
+                        # Support event filtering on initial load
+                        event_filter = widget.get('event', 'all') or widget.get('comparison_event', 'all')
+                        event_id = None
+                        if event_filter and event_filter != 'all' and event_filter != 'user_select':
+                            try:
+                                event_id = int(event_filter)
+                            except ValueError:
+                                pass
+                        
+                        team1_analytics = calculate_team_metrics(team1.id, event_id=event_id)
+                        team2_analytics = calculate_team_metrics(team2.id, event_id=event_id)
+                        
+                        # Use default metrics if none specified
+                        if not metrics:
+                            metrics = ['total_points', 'auto_points', 'teleop_points', 'endgame_points']
                         
                         comparison_data = {
                             'team1': {
@@ -1363,17 +1734,22 @@ def pages_view(page_id):
             try:
                 from app.utils.analysis import calculate_team_metrics
                 
-                # Get teams based on event filter
-                if event_filter and event_filter != 'all':
-                    # Filter teams by event (would need event-team relationship)
-                    teams_query = Team.query.order_by(Team.team_number).all()
-                else:
-                    teams_query = Team.query.order_by(Team.team_number).all()
+                # Parse event_id for filtering
+                event_id = None
+                if event_filter and event_filter != 'all' and event_filter != 'user_select':
+                    try:
+                        event_id = int(event_filter)
+                    except ValueError:
+                        pass
+                
+                # Get all teams
+                teams_query = Team.query.order_by(Team.team_number).all()
                 
                 # Calculate metrics for each team
                 team_rankings = []
                 for team in teams_query:
-                    analytics_result = calculate_team_metrics(team.id)
+                    # Pass event_id to filter metrics by event
+                    analytics_result = calculate_team_metrics(team.id, event_id=event_id)
                     metrics = analytics_result.get('metrics', {})
                     
                     # Determine sort value based on sort_by parameter
