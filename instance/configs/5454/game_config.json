@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "alliance_size": 3,
   "scouting_stations": 6,
-  "current_event_code": "arsea",
+  "current_event_code": "okok",
   "match_types": [
     "Practice",
     "Qualification",
@@ -209,8 +209,8 @@
     ]
   },
   "api_settings": {
-    "username": "",
-    "auth_token": "",
+    "username": "jeffstumps",
+    "auth_token": "1dd5bcdb-5b9e-4269-a45d-234af783813a",
     "base_url": "https://frc-api.firstinspires.org"
   },
   "tba_api_settings": {
