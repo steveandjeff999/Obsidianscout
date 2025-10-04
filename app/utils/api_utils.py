@@ -325,84 +325,155 @@ def get_teams(event_code):
     # If we got here, raise the last error we encountered
     raise ApiError(f"Error getting teams: {last_error}")
 
+def fetch_from_endpoint(api_url, headers, timeout=15):
+    """Helper function to fetch data from a single endpoint"""
+    try:
+        print(f"Trying endpoint: {api_url}")
+        response = requests.get(api_url, headers=headers, timeout=timeout)
+        print(f"Response status: {response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            # Check different response formats
+            if 'Schedule' in data:
+                return data.get('Schedule', [])
+            elif 'schedule' in data:
+                return data.get('schedule', [])
+            elif 'Matches' in data:
+                return data.get('Matches', [])
+            elif 'matches' in data:
+                return data.get('matches', [])
+            else:
+                print(f"Warning: Unknown data format. Keys: {data.keys()}")
+                return list(data.values())[0] if data else []
+        else:
+            try:
+                error_data = response.json()
+                error_msg = error_data.get('message', f"HTTP {response.status_code}")
+            except:
+                error_msg = f"HTTP {response.status_code}"
+            print(f"Endpoint failed: {error_msg}")
+            if response.status_code == 401:
+                print("Authentication failed (401)")
+                print(f"Authorization header present: {'Authorization' in headers}")
+            return None
+    except Exception as e:
+        print(f"Endpoint exception: {str(e)}")
+        return None
+
+def merge_match_lists(matches_list1, matches_list2):
+    """Merge two match lists, removing duplicates based on match number and tournament level"""
+    if not matches_list1:
+        return matches_list2 or []
+    if not matches_list2:
+        return matches_list1 or []
+    
+    # Create a dictionary to track unique matches
+    # Key format: "tournamentLevel_matchNumber" or "matchType_matchNumber"
+    unique_matches = {}
+    
+    # Add all matches from first list
+    for match in matches_list1:
+        match_number = match.get('matchNumber') or match.get('match_number')
+        tournament_level = match.get('tournamentLevel') or match.get('match_type', 'Unknown')
+        
+        if match_number is not None:
+            key = f"{tournament_level}_{match_number}"
+            unique_matches[key] = match
+    
+    # Add matches from second list, avoiding duplicates
+    for match in matches_list2:
+        match_number = match.get('matchNumber') or match.get('match_number')
+        tournament_level = match.get('tournamentLevel') or match.get('match_type', 'Unknown')
+        
+        if match_number is not None:
+            key = f"{tournament_level}_{match_number}"
+            # Only add if not already present, or if the new one has more data
+            if key not in unique_matches:
+                unique_matches[key] = match
+            else:
+                # Prefer the match with more complete data (e.g., has teams array)
+                existing = unique_matches[key]
+                if match.get('teams') and not existing.get('teams'):
+                    unique_matches[key] = match
+                elif match.get('startTime') and not existing.get('startTime'):
+                    # Prefer matches with scheduled times
+                    unique_matches[key] = match
+    
+    return list(unique_matches.values())
+
 def get_matches(event_code):
-    """Get matches from FIRST API for a specific event"""
+    """Get matches from FIRST API for a specific event with redundancy
+    
+    Fetches from multiple endpoints and merges results:
+    - /schedule/{event_code}/qual, playoff, practice for scheduled matches
+    - /matches/{event_code} for match results
+    
+    This ensures we get both scheduled (upcoming) and completed matches.
+    """
     base_url = current_app.config.get('API_BASE_URL', 'https://frc-api.firstinspires.org')
     season = get_current_game_config().get('season', 2026)
+    headers = get_api_headers()
     
-    # FIRST API has multiple endpoint formats for match schedules
-    # Try them in sequence until one works
-    endpoints_to_try = [
-        f"/v2.0/{season}/schedule/{event_code}",                 # Basic endpoint for all matches
-        f"/v2.0/{season}/matches/{event_code}",                  # Alternative endpoint for all matches
-        f"/v2.0/{season}/schedule/{event_code}?tournamentLevel=all",  # Explicitly request all tournament levels
-        f"/v2.0/{season}/scores/{event_code}/all",              # Scores endpoint for all match types
-        # Fall back to qualification-specific endpoints if others fail
-        f"/v2.0/{season}/schedule/{event_code}?tournamentLevel=qual",
-        f"/v2.0/{season}/scores/{event_code}/qual",
+    print(f"Fetching matches with redundancy for event {event_code}")
+    print(f"Using headers: {list(headers.keys())}")
+    
+    all_matches = []
+    
+    # Priority 1: Fetch schedule endpoints (includes future matches)
+    # These endpoints include matches that haven't been played yet
+    schedule_endpoints = [
+        f"/v2.0/{season}/schedule/{event_code}/qual",      # Qualification matches
+        f"/v2.0/{season}/schedule/{event_code}/playoff",   # Playoff matches
+        f"/v2.0/{season}/schedule/{event_code}/practice",  # Practice matches
     ]
     
-    last_error = None
-    
-    for endpoint in endpoints_to_try:
+    print("=== Fetching from /schedule endpoints (includes upcoming matches) ===")
+    for endpoint in schedule_endpoints:
         api_url = f"{base_url}{endpoint}"
-        try:
-            print(f"Trying endpoint: {api_url}")
-            headers = get_api_headers()
-            print(f"Using headers: {list(headers.keys())}")
-
-            response = requests.get(
-                api_url,
-                headers=headers,
-                timeout=15  # Increased timeout for potentially slow API responses
-            )
-            
-            # Log response info for debugging
-            print(f"Response status: {response.status_code}")
-            
-            if response.status_code == 200:
-                print("Success! API returned data.")
-                data = response.json()
-                
-                # Check different response formats
-                if 'Schedule' in data:
-                    return data.get('Schedule', [])
-                elif 'schedule' in data:
-                    return data.get('schedule', [])
-                elif 'Matches' in data:
-                    return data.get('Matches', [])
-                elif 'matches' in data:
-                    return data.get('matches', [])
-                else:
-                    print(f"Warning: Successful response but unknown data format. Keys: {data.keys()}")
-                    # If this endpoint worked but data format is unknown, just return the data
-                    # and let the converter function handle it
-                    return list(data.values())[0] if data else []
-            else:
-                # Store error for later if this endpoint doesn't work
-                try:
-                    error_data = response.json()
-                    error_msg = error_data.get('message', f"HTTP {response.status_code}")
-                except:
-                    error_msg = f"HTTP {response.status_code}"
-                last_error = f"API Error: {error_msg}"
-                print(f"Endpoint {api_url} failed: {last_error}")
-                if response.status_code == 401:
-                    print("Authentication failed (401) when contacting FIRST API for matches.")
-                    print(f"Authorization header present: {'Authorization' in headers}")
-                    try:
-                        print(f"Response body: {response.text}")
-                    except Exception:
-                        pass
-                # Continue to try the next endpoint
+        matches = fetch_from_endpoint(api_url, headers)
+        if matches:
+            print(f"  Found {len(matches)} matches from {endpoint}")
+            all_matches = merge_match_lists(all_matches, matches)
+        else:
+            print(f"  No data from {endpoint}")
+    
+    # Priority 2: Fetch from /matches endpoint (may have results for completed matches)
+    matches_endpoint = f"/v2.0/{season}/matches/{event_code}"
+    print(f"=== Fetching from /matches endpoint (completed matches with results) ===")
+    api_url = f"{base_url}{matches_endpoint}"
+    matches_results = fetch_from_endpoint(api_url, headers)
+    if matches_results:
+        print(f"  Found {len(matches_results)} matches from /matches")
+        all_matches = merge_match_lists(all_matches, matches_results)
+    else:
+        print(f"  No data from /matches endpoint")
+    
+    # Priority 3: Fallback to old-style endpoints if nothing worked
+    if not all_matches:
+        print("=== No matches found, trying fallback endpoints ===")
+        fallback_endpoints = [
+            f"/v2.0/{season}/schedule/{event_code}",                 # Basic endpoint for all matches
+            f"/v2.0/{season}/schedule/{event_code}?tournamentLevel=all",  # Explicitly request all tournament levels
+            f"/v2.0/{season}/scores/{event_code}/all",              # Scores endpoint for all match types
+            f"/v2.0/{season}/scores/{event_code}/qual",
+        ]
         
-        except Exception as e:
-            last_error = f"Request error: {str(e)}"
-            print(f"Endpoint {api_url} exception: {last_error}")
-            # Continue to try the next endpoint
+        for endpoint in fallback_endpoints:
+            api_url = f"{base_url}{endpoint}"
+            matches = fetch_from_endpoint(api_url, headers)
+            if matches:
+                print(f"  Found {len(matches)} matches from fallback {endpoint}")
+                all_matches = merge_match_lists(all_matches, matches)
+                break  # Stop at first successful fallback
+    
+    # Check if we got any matches
+    if all_matches:
+        print(f"=== Total unique matches retrieved: {len(all_matches)} ===")
+        return all_matches
     
     # If we get here, all endpoints failed
-    print(f"All API endpoints failed. Last error: {last_error}")
+    print("All API endpoints failed to return match data")
     
     # Check if the event code looks valid
     if not event_code or len(event_code) < 3:
@@ -412,8 +483,9 @@ def get_matches(event_code):
     if season < 2000 or season > 2050:
         raise ApiError(f"Season value ({season}) appears invalid. Check your configuration.")
     
-    # If we got here, raise the last error we encountered
-    raise ApiError(f"Error getting matches: {last_error}")
+    # Return empty list if no errors but no data - event may just not have matches scheduled yet
+    print("No matches found - event may not have matches scheduled yet")
+    return []
 
 def api_to_db_team_conversion(api_team):
     """Convert API team format to database format"""
@@ -480,9 +552,15 @@ def get_match_type(api_match):
     return 'Qualification'
 
 def api_to_db_match_conversion(api_match, event_id):
-    """Convert API match format to database format"""
-    # Extract match details
-    match_number = api_match.get('matchNumber')
+    """Convert API match format to database format
+    
+    Handles multiple API formats:
+    - FIRST API /schedule endpoint: matchNumber, tournamentLevel, teams array, startTime
+    - FIRST API /matches endpoint: matchNumber, tournamentLevel, teams array, scoreRedFinal, scoreBlueFinal
+    - TBA API format: comp_level, match_number, alliances object
+    """
+    # Extract match details - handle different field name formats
+    match_number = api_match.get('matchNumber') or api_match.get('match_number')
     
     # Get the standardized match type from our helper function
     match_type = get_match_type(api_match)
@@ -493,42 +571,70 @@ def api_to_db_match_conversion(api_match, event_id):
     
     # Handle different API response formats
     if 'teams' in api_match:
-        # New API format with teams array
+        # FIRST API format with teams array (both /schedule and /matches endpoints)
+        # Format: [{"teamNumber": 323, "station": "Red1", "surrogate": false}, ...]
         for team in api_match.get('teams', []):
-            if team.get('station', '').startswith('Red'):
-                # Extract just the team number from the team key (e.g., "frc254" -> "254")
-                team_number = team.get('teamNumber')
-                if team_number:
+            station = team.get('station', '')
+            team_number = team.get('teamNumber')
+            
+            if team_number:
+                if station.startswith('Red'):
                     red_alliance.append(str(team_number))
-            elif team.get('station', '').startswith('Blue'):
-                team_number = team.get('teamNumber')
-                if team_number:
+                elif station.startswith('Blue'):
                     blue_alliance.append(str(team_number))
     elif 'alliances' in api_match:
         # TBA API format with alliances object
-        if 'red' in api_match.get('alliances', {}):
-            for team in api_match.get('alliances', {}).get('red', {}).get('team_keys', []):
+        # Format: {"red": {"team_keys": ["frc254", ...]}, "blue": {...}}
+        alliances = api_match.get('alliances', {})
+        if 'red' in alliances:
+            for team in alliances.get('red', {}).get('team_keys', []):
                 red_alliance.append(team.replace('frc', ''))
-        if 'blue' in api_match.get('alliances', {}):
-            for team in api_match.get('alliances', {}).get('blue', {}).get('team_keys', []):
+        if 'blue' in alliances:
+            for team in alliances.get('blue', {}).get('team_keys', []):
                 blue_alliance.append(team.replace('frc', ''))
     
-    # Extract scores if available
+    # Extract scores if available (for completed matches)
     red_score = None
     blue_score = None
     winner = None
     
+    # FIRST API uses scoreRedFinal and scoreBlueFinal
     if 'scoreRedFinal' in api_match and 'scoreBlueFinal' in api_match:
         red_score = api_match.get('scoreRedFinal')
         blue_score = api_match.get('scoreBlueFinal')
         
-        # Determine winner
-        if red_score > blue_score:
-            winner = 'red'
-        elif blue_score > red_score:
-            winner = 'blue'
-        else:
-            winner = 'tie'
+        # Determine winner (only if both scores are present and not null)
+        if red_score is not None and blue_score is not None:
+            if red_score > blue_score:
+                winner = 'red'
+            elif blue_score > red_score:
+                winner = 'blue'
+            else:
+                winner = 'tie'
+    
+    # TBA API uses alliances.red.score and alliances.blue.score
+    elif 'alliances' in api_match:
+        alliances = api_match.get('alliances', {})
+        red_score = alliances.get('red', {}).get('score')
+        blue_score = alliances.get('blue', {}).get('score')
+        
+        # Determine winner (TBA uses winning_alliance field, but we can also calculate)
+        if red_score is not None and blue_score is not None and red_score >= 0 and blue_score >= 0:
+            winning_alliance = api_match.get('winning_alliance', '')
+            if winning_alliance == 'red':
+                winner = 'red'
+            elif winning_alliance == 'blue':
+                winner = 'blue'
+            elif winning_alliance == '':
+                winner = 'tie'
+            else:
+                # Calculate from scores if winning_alliance not present
+                if red_score > blue_score:
+                    winner = 'red'
+                elif blue_score > red_score:
+                    winner = 'blue'
+                else:
+                    winner = 'tie'
     
     # Build match data dictionary
     match_data = {
@@ -541,6 +647,10 @@ def api_to_db_match_conversion(api_match, event_id):
         'blue_score': blue_score,
         'winner': winner
     }
+    
+    # Note: scheduled_time is available in API responses (startTime, predicted_time, time)
+    # but not currently stored in the Match model. This could be added in a future migration
+    # to enable better scheduling features and display of upcoming matches.
     
     return match_data
 
