@@ -4,13 +4,13 @@
   "version": "1.0.0",
   "alliance_size": 3,
   "scouting_stations": 6,
-  "current_event_code": "aroz",
+  "current_event_code": "arsea",
   "match_types": [
     "Practice",
     "Qualification",
     "Playoff"
   ],
-  "preferred_api_source": "tba",
+  "preferred_api_source": "first",
   "auto_period": {
     "duration_seconds": 15,
     "scoring_elements": [
@@ -92,8 +92,8 @@
     "duration_seconds": 135,
     "scoring_elements": [
       {
-        "id": "elem_teleop_2",
-        "perm_id": "elem_teleop_2",
+        "id": "elem_teleop_6",
+        "perm_id": "elem_teleop_6",
         "name": "CORAL (L1)",
         "type": "counter",
         "default": 0,
@@ -134,7 +134,7 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
-        "points": 6.0
+        "points": 7.0
       },
       {
         "id": "elem_teleop_5",
