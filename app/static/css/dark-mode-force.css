@@ -572,6 +572,81 @@ html body.modern-layout.dark-mode .widget-view-card .card-body, html body.dark-m
     color: #e6e6e6 !important;
 }
 
+/* Explicit exception: team selection modal should be solid, high-contrast dark in dark mode */
+html body.modern-layout.dark-mode #teamSelectionModal .modal-content,
+html body.dark-mode #teamSelectionModal .modal-content,
+html body.modern-layout.dark-mode #teamSelectionModal .list-group-item,
+html body.dark-mode #teamSelectionModal .list-group-item,
+html body.modern-layout.dark-mode #teamSelectionModal .team-selection-item,
+html body.dark-mode #teamSelectionModal .team-selection-item {
+    /* Use a solid dark card inside dark mode but ensure full opacity and readable text */
+    background-color: #2d3338 !important;
+    background-image: none !important;
+    background: #2d3338 !important;
+    color: #e6e6e6 !important;
+    border: 1px solid #444 !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.35) !important;
+    /* Ensure no glass blur so items don't appear faded */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    opacity: 1 !important;
+}
+
+/* Muted/smaller text inside the modal should be visible */
+html body.modern-layout.dark-mode #teamSelectionModal .small.text-muted,
+html body.dark-mode #teamSelectionModal .small.text-muted {
+    color: #b0b0b0 !important;
+    opacity: 1 !important;
+}
+
+/* Ensure the modal header retains its blue style and is readable */
+html body.modern-layout.dark-mode #teamSelectionModal .modal-header.bg-primary,
+html body.dark-mode #teamSelectionModal .modal-header.bg-primary {
+    background-color: #1976d2 !important;
+    color: #fff !important;
+}
+
+/* Hover states inside the modal should be a slightly lighter dark */
+html body.modern-layout.dark-mode #teamSelectionModal .list-group-item:hover,
+html body.dark-mode #teamSelectionModal .list-group-item:hover {
+    background-color: #3a4147 !important;
+}
+
+/* Use spaced, rounded item cards inside the team selection modal in dark mode
+   so list rows don't look like a continuous set of thin dividers. These rules
+   intentionally override the general list-group styles above for the modal. */
+html body.modern-layout.dark-mode #teamSelectionModal .list-group-item,
+html body.dark-mode #teamSelectionModal .list-group-item,
+html body.modern-layout.dark-mode #teamSelectionModal .team-selection-item,
+html body.dark-mode #teamSelectionModal .team-selection-item {
+    border-radius: 0.5rem !important;
+    margin: 0.45rem 0 !important; /* vertical gap between items */
+    padding: 0.85rem 0.9rem !important; /* comfortable tappable area (increased vertical padding) */
+    background-clip: padding-box !important;
+    box-shadow: none !important;
+    /* subtle framed card look per item rather than a full-width divider */
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    background-color: rgba(45,51,56,1) !important; /* solid dark surface */
+    min-height: 56px !important; /* ensure enough vertical room for two-line content */
+    line-height: 1.2 !important;
+}
+
+/* Improve line-height so text doesn't look clipped */
+html body.modern-layout.dark-mode #teamSelectionModal .list-group-item .fw-bold,
+html body.dark-mode #teamSelectionModal .list-group-item .fw-bold {
+    line-height: 1.1 !important;
+}
+
+/* Ensure the left and right columns align (prevent wrapping into badge area) */
+html body.modern-layout.dark-mode #teamSelectionModal .team-selection-item > div:first-child {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+html body.modern-layout.dark-mode #teamSelectionModal .team-selection-item > .text-end {
+    flex: 0 0 auto !important;
+    margin-left: 8px !important;
+}
+
 /* Also force any inline-card background overrides to use the glass color in dark mode */
 html body.modern-layout.dark-mode [style*="background-color:"], html body.dark-mode [style*="background-color:"] {
     color: inherit !important;
@@ -601,6 +676,138 @@ html body.dark-mode .select2-container--default .select2-dropdown {
     background-color: rgba(10,12,15,0.82) !important;
     border-color: rgba(255,255,255,0.06) !important;
     color: #e6e6e6 !important;
+}
+
+/* Final safety: ensure team selection modal styling is preserved as intended */
+html body.modern-layout.dark-mode #teamSelectionModal .modal-content,
+html body.dark-mode #teamSelectionModal .modal-content,
+html body.modern-layout.dark-mode #teamSelectionModal .modal-body,
+html body.dark-mode #teamSelectionModal .modal-body {
+    background: #2d3338 !important;
+    background-color: #2d3338 !important;
+    background-image: none !important;
+    color: #e6e6e6 !important;
+    border: 1px solid #444 !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.45) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    opacity: 1 !important;
+}
+
+/* Ensure the team selection modal header and footer remain visible by
+   constraining the dialog to the viewport and making the body scrollable. */
+html body.modern-layout.dark-mode #teamSelectionModal .modal-dialog,
+html body.dark-mode #teamSelectionModal .modal-dialog {
+    /* leave a small margin from viewport top/bottom */
+    max-height: calc(100vh - 48px) !important;
+    margin: 24px auto !important;
+}
+
+html body.modern-layout.dark-mode #teamSelectionModal .modal-content,
+html body.dark-mode #teamSelectionModal .modal-content {
+    display: flex !important;
+    flex-direction: column !important;
+    max-height: calc(100vh - 48px) !important;
+}
+
+html body.modern-layout.dark-mode #teamSelectionModal .modal-body,
+html body.dark-mode #teamSelectionModal .modal-body {
+    overflow-y: auto !important;
+    flex: 1 1 auto !important;
+}
+
+html body.modern-layout.dark-mode #teamSelectionModal .modal-header,
+html body.dark-mode #teamSelectionModal .modal-header,
+html body.modern-layout.dark-mode #teamSelectionModal .modal-footer,
+html body.dark-mode #teamSelectionModal .modal-footer {
+    flex: 0 0 auto !important;
+}
+
+/* Small-screen tweak: increase top/bottom margin if needed */
+@media (max-height: 640px) {
+    html body.modern-layout.dark-mode #teamSelectionModal .modal-dialog,
+    html body.dark-mode #teamSelectionModal .modal-dialog {
+        max-height: calc(100vh - 32px) !important;
+        margin: 16px auto !important;
+    }
+}
+
+/* Wider modal layout in dark mode to match light-mode sizing */
+html body.modern-layout.dark-mode #teamSelectionModal .modal-dialog,
+html body.dark-mode #teamSelectionModal .modal-dialog {
+    max-width: 900px !important;
+    width: 92% !important;
+}
+
+html body.modern-layout.dark-mode #teamSelectionModal .modal-content,
+html body.dark-mode #teamSelectionModal .modal-content {
+    padding: 0 !important;
+}
+
+html body.modern-layout.dark-mode #teamSelectionModal .modal-body,
+html body.dark-mode #teamSelectionModal .modal-body {
+    padding: 1rem 1.25rem !important;
+}
+
+/* Allow list to occupy more horizontal space for names and scores */
+html body.modern-layout.dark-mode #teamSelectionModal #teamSelectionList,
+html body.dark-mode #teamSelectionModal #teamSelectionList {
+    max-height: 640px !important;
+}
+
+/* Responsive adjustments */
+@media (min-width: 1200px) {
+    html body.modern-layout.dark-mode #teamSelectionModal .modal-dialog,
+    html body.dark-mode #teamSelectionModal .modal-dialog {
+        max-width: 1200px !important;
+        width: 72% !important;
+    }
+}
+
+@media (min-width: 1600px) {
+    html body.modern-layout.dark-mode #teamSelectionModal .modal-dialog,
+    html body.dark-mode #teamSelectionModal .modal-dialog {
+        max-width: 1400px !important;
+        width: 58% !important;
+    }
+}
+
+/* Rounded corners for modal and list edges */
+html body.modern-layout.dark-mode #teamSelectionModal .modal-content,
+html body.dark-mode #teamSelectionModal .modal-content {
+    border-radius: 12px !important;
+    overflow: hidden !important;
+}
+
+/* Round the top corners of the first list item and bottom corners of the last item */
+html body.modern-layout.dark-mode #teamSelectionModal .list-group-item:first-child,
+html body.dark-mode #teamSelectionModal .list-group-item:first-child {
+    border-top-left-radius: 0 !important; /* header handles rounding */
+    border-top-right-radius: 0 !important;
+}
+
+html body.modern-layout.dark-mode #teamSelectionModal .list-group-item:last-child,
+html body.dark-mode #teamSelectionModal .list-group-item:last-child {
+    border-bottom-left-radius: 12px !important;
+    border-bottom-right-radius: 12px !important;
+    border-bottom: none !important; /* avoid double border with footer */
+}
+
+/* Keep list items visually flat in normal cards (we intentionally exclude
+   the team selection modal so modal items can use the spaced, rounded look) */
+html body.modern-layout.dark-mode .card .list-group-item,
+html body.dark-mode .card .list-group-item {
+    border-radius: 0 !important;
+}
+
+html body.modern-layout.dark-mode #teamSelectionModal .list-group-item .fw-bold,
+html body.dark-mode #teamSelectionModal .list-group-item .fw-bold {
+    color: #e6e6e6 !important;
+}
+
+html body.modern-layout.dark-mode #teamSelectionModal .list-group-item .text-primary,
+html body.dark-mode #teamSelectionModal .list-group-item .text-primary {
+    color: #3d8bfd !important;
 }
 
 /* Match the search input wrapper contrast to the new card surface */

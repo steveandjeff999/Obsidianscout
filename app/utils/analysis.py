@@ -2,10 +2,10 @@ from app.models import ScoutingData, Team, Match, TeamAllianceStatus
 import statistics
 from flask import current_app
 import random
-from app.utils.config_manager import get_current_game_config
+from app.utils.config_manager import get_current_game_config, load_game_config
 from app.utils.team_isolation import filter_scouting_data_by_scouting_team, get_current_scouting_team_number
 
-def calculate_team_metrics(team_id, event_id=None):
+def calculate_team_metrics(team_id, event_id=None, game_config=None):
     """Calculate key performance metrics for a team based on their scouting data using dynamic period calculations
     
     Args:
@@ -74,8 +74,9 @@ def calculate_team_metrics(team_id, event_id=None):
     # Initialize metrics dictionary
     metrics = {}
     
-    # Get game configuration
-    game_config = get_current_game_config()
+    # Get game configuration (use provided game_config if given, otherwise fall back to current user's config)
+    if game_config is None:
+        game_config = get_current_game_config()
     
     # Calculate dynamic period-based metrics
     auto_values = []
@@ -123,10 +124,28 @@ def calculate_team_metrics(team_id, event_id=None):
     endgame_field_id = None
     
     # Find endgame position field dynamically from config
-    for element in game_config.get('endgame_period', {}).get('scoring_elements', []):
-        if element.get('type') == 'select' and 'position' in element.get('name', '').lower():
+    # Respect show/display_in_predictions flag: prefer only elements where they're True (default True for backward compatibility)
+    def element_visible(el):
+        return el.get('show_in_predictions', el.get('display_in_predictions', True))
+
+    # Treat a variety of choice-like element types as selectable endgame position fields
+    choice_types = {'select', 'multiple_choice', 'multiple-choice', 'single_choice', 'single-choice', 'choice', 'multiplechoice'}
+
+    scoring_elements = game_config.get('endgame_period', {}).get('scoring_elements', [])
+    for element in scoring_elements:
+        if not element_visible(element):
+            continue
+        if element.get('type') and element.get('type').lower() in choice_types and 'position' in element.get('name', '').lower():
             endgame_field_id = element.get('id')
             break
+    # If not found with 'position' in name, pick the first visible choice-like element
+    if not endgame_field_id:
+        for element in scoring_elements:
+            if not element_visible(element):
+                continue
+            if element.get('type') and element.get('type').lower() in choice_types:
+                endgame_field_id = element.get('id')
+                break
     
     if endgame_field_id:
         for data in scouting_data:
@@ -136,9 +155,22 @@ def calculate_team_metrics(team_id, event_id=None):
     # Calculate endgame capability from positions
     if endgame_positions:
         position_points = {}
-        for element in game_config.get('endgame_period', {}).get('scoring_elements', []):
-            if element.get('type') == 'select' and 'position' in element.get('name', '').lower():
-                position_points = element.get('points', {})
+        # Build a points mapping from the chosen element; support both dict-style 'points' and list-style 'options'
+        position_points = {}
+        for element in scoring_elements:
+            if not element_visible(element):
+                continue
+            if element.get('type') and element.get('type').lower() in choice_types and 'position' in element.get('name', '').lower():
+                if isinstance(element.get('points'), dict) and element.get('points'):
+                    position_points = element.get('points', {})
+                elif isinstance(element.get('options'), list):
+                    for opt in element.get('options', []):
+                        # options may be dicts with 'name' and 'points'
+                        if isinstance(opt, dict):
+                            name = opt.get('name')
+                            pts = opt.get('points', 0)
+                            if name:
+                                position_points[name] = pts
                 break
         
         highest_position = "None"
@@ -332,7 +364,12 @@ def predict_match_outcome(match_id):
     print("\nRED ALLIANCE METRICS:")
     for team in red_teams:
         print(f"  Calculating metrics for red team {team.team_number} (ID: {team.id})")
-        analytics_result = calculate_team_metrics(team.id)
+        # Load the specific team's config so we respect their endgame elements
+        try:
+            team_config = load_game_config(team_number=team.team_number)
+        except Exception:
+            team_config = None
+        analytics_result = calculate_team_metrics(team.id, game_config=team_config)
         metrics = analytics_result.get('metrics', {})
         
         if metrics:
@@ -351,7 +388,11 @@ def predict_match_outcome(match_id):
     print("\nBLUE ALLIANCE METRICS:")
     for team in blue_teams:
         print(f"  Calculating metrics for blue team {team.team_number} (ID: {team.id})")
-        analytics_result = calculate_team_metrics(team.id)
+        try:
+            team_config = load_game_config(team_number=team.team_number)
+        except Exception:
+            team_config = None
+        analytics_result = calculate_team_metrics(team.id, game_config=team_config)
         metrics = analytics_result.get('metrics', {})
         
         if metrics:
@@ -1067,15 +1108,19 @@ def _get_team_endgame_capabilities(team_data, game_config):
     
     # Find the endgame position element using dynamic ID from config
     position_element = None
-    for element in endgame_elements:
-        if element.get('type') == 'select' and 'position' in element.get('name', '').lower():
+    def element_visible(el):
+        return el.get('show_in_predictions', el.get('display_in_predictions', True))
+    choice_types = {'select', 'multiple_choice', 'multiple-choice', 'single_choice', 'single-choice', 'choice', 'multiplechoice'}
+    visible_elements = [e for e in endgame_elements if element_visible(e)]
+    for element in visible_elements:
+        if element.get('type') and element.get('type').lower() in choice_types and 'position' in element.get('name', '').lower():
             position_element = element
             break
-    
-    # If not found by name, try to find the first select element in endgame
+
+    # If not found by name, try to find the first choice-like element in visible elements
     if not position_element:
-        for element in endgame_elements:
-            if element.get('type') == 'select':
+        for element in visible_elements:
+            if element.get('type') and element.get('type').lower() in choice_types:
                 position_element = element
                 break
     
@@ -1119,7 +1164,14 @@ def _get_team_endgame_capabilities(team_data, game_config):
         # Calculate endgame points for this match using the points mapping
         endgame_points = 0
         if position and position != position_element.get('default', 'None'):
-            points_map = position_element.get('points', {})
+            # Support points described either as dict or list of options
+            points_map = {}
+            if isinstance(position_element.get('points'), dict) and position_element.get('points'):
+                points_map = position_element.get('points', {})
+            elif isinstance(position_element.get('options'), list):
+                for opt in position_element.get('options', []):
+                    if isinstance(opt, dict):
+                        points_map[opt.get('name')] = opt.get('points', 0)
             endgame_points = points_map.get(position, 0)
         
         total_endgame_points += endgame_points
@@ -1166,9 +1218,18 @@ def _get_team_endgame_capabilities(team_data, game_config):
     
     # Create detailed positioning data
     positioning_data = {}
+    # Build points_map once
+    points_map = {}
+    if isinstance(position_element.get('points'), dict) and position_element.get('points'):
+        points_map = position_element.get('points', {})
+    elif isinstance(position_element.get('options'), list):
+        for opt in position_element.get('options', []):
+            if isinstance(opt, dict):
+                points_map[opt.get('name')] = opt.get('points', 0)
+
     for position, count in position_counts.items():
         percentage = (count / total_matches * 100) if total_matches > 0 else 0
-        points = position_element.get('points', {}).get(position, 0)
+        points = points_map.get(position, 0)
         positioning_data[position] = {
             'count': count,
             'percentage': round(percentage, 1),
@@ -1210,18 +1271,21 @@ def _analyze_alliance_endgame_coordination(alliance_data, game_config):
     # Check for strategy conflicts using dynamic endgame options from config
     endgame_config = game_config.get('endgame_period', {})
     endgame_elements = endgame_config.get('scoring_elements', [])
-    
-    # Find endgame position element to get available options
+
+    def element_visible(el):
+        return el.get('show_in_predictions', el.get('display_in_predictions', True))
+    choice_types = {'select', 'multiple_choice', 'multiple-choice', 'single_choice', 'single-choice', 'choice', 'multiplechoice'}
+
+    # Find endgame position element among visible choice-like elements
     position_element = None
-    for element in endgame_elements:
-        if element.get('type') == 'select' and 'position' in element.get('name', '').lower():
+    visible_elements = [e for e in endgame_elements if element_visible(e)]
+    for element in visible_elements:
+        if element.get('type') and element.get('type').lower() in choice_types and 'position' in element.get('name', '').lower():
             position_element = element
             break
-    
-    # If not found by name, try to find the first select element in endgame
     if not position_element:
-        for element in endgame_elements:
-            if element.get('type') == 'select':
+        for element in visible_elements:
+            if element.get('type') and element.get('type').lower() in choice_types:
                 position_element = element
                 break
     
@@ -1242,7 +1306,20 @@ def _analyze_alliance_endgame_coordination(alliance_data, game_config):
     
     # Identify positions that might have limited capacity based on their names or points
     if position_element:
-        for option in position_element.get('options', []):
+        # Build options list (support both dict and list formats)
+        options_list = []
+        if isinstance(position_element.get('options'), dict):
+            options_list = list(position_element.get('options').keys())
+        elif isinstance(position_element.get('options'), list):
+            # options may be list of strings or list of {name, points}
+            for opt in position_element.get('options', []):
+                if isinstance(opt, str):
+                    options_list.append(opt)
+                elif isinstance(opt, dict):
+                    if opt.get('name'):
+                        options_list.append(opt.get('name'))
+
+        for option in options_list:
             if 'cage' in option.lower() or 'hang' in option.lower() or 'climb' in option.lower():
                 limited_capacity_positions.append(option)
     

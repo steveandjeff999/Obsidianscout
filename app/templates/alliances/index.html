@@ -829,10 +829,149 @@ function updateAllianceStrengths() {
     transition: all 0.3s ease;
 }
 
+
+/* Add comfortable spacing between team rows in dark mode only.
+   Use high-specificity selectors so this wins over global dark-mode rules. */
+.dark-mode #teamSelectionList .team-selection-item,
+body.modern-layout.dark-mode #teamSelectionList .team-selection-item {
+    display: flex !important; /* keep layout consistent */
+    align-items: flex-start !important;
+    padding: 0.95rem 1rem !important; /* increase tappable area (more vertical room) */
+    margin: 0.45rem 0 !important; /* vertical gap between items */
+    border-radius: 0.5rem !important; /* slight rounding for separated cards */
+    border: 1px solid rgba(255,255,255,0.06) !important; /* subtle separation in dark mode */
+    background-clip: padding-box !important;
+    min-height: 56px !important;
+}
+
+/* Remove old full-width bottom borders that visually merged items when we use spacing */
+body.modern-layout.dark-mode .modal-content .list-group-item,
+body.modern-layout.dark-mode .modal-content .team-selection-item {
+    border-bottom: none !important;
+}
+
 /* Improve focus indicator for search input */
 #teamSearchInput:focus {
     box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
     border-color: #86b7fe;
+}
+
+/* Remove dark-mode overrides for alliance selection cards and modal items
+   so team selection remains light/consistent regardless of global theme. */
+.dark-mode .alliance-card,
+.dark-mode .alliance-card .card-header,
+.dark-mode .alliance-card .card-body,
+.dark-mode .team-slot,
+.dark-mode .team-slot-empty,
+.dark-mode .team-selection-item,
+.dark-mode #teamSelectionList .list-group-item {
+    background-color: #2d3338 !important;
+    color: #e6e6e6 !important;
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.35) !important;
+}
+
+.dark-mode .alliance-card .team-role i,
+.dark-mode .alliance-card .team-info .badge {
+    color: inherit !important;
+}
+
+.dark-mode .team-selection-item .small.text-muted,
+.dark-mode .alliance-card .small.text-muted {
+    color: #6c757d !important;
+}
+
+/* Modal-specific dark-mode fixes for the team selection modal */
+.dark-mode .modal-content {
+    background-color: #2d3338 !important;
+    color: #e6e6e6 !important;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.35) !important;
+}
+
+.dark-mode .modal-header.bg-primary {
+    background-color: #1976d2 !important; /* keep a strong blue header */
+    color: #ffffff !important;
+}
+
+.dark-mode .input-group .form-control,
+.dark-mode .input-group .input-group-text,
+.dark-mode .input-group .btn {
+    background-color: rgba(255,255,255,0.03) !important;
+    color: #e6e6e6 !important;
+    border-color: rgba(255,255,255,0.06) !important;
+}
+
+.dark-mode .team-selection-item {
+    background-color: #2d3338 !important;
+    color: #e6e6e6 !important;
+    border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+}
+
+.dark-mode .team-selection-item .fw-bold.text-primary {
+    color: #3d8bfd !important; /* keep the blue score color */
+}
+
+.dark-mode .team-selection-item .small.text-muted {
+    color: #6c757d !important;
+}
+
+.dark-mode .team-selection-item:hover {
+    background-color: #3a4147 !important;
+}
+
+/* Scrollbar styling for modal list to be visible on dark backgrounds */
+.dark-mode #teamSelectionList::-webkit-scrollbar {
+    width: 10px;
+}
+.dark-mode #teamSelectionList::-webkit-scrollbar-thumb {
+    background-color: #bfc7ce;
+    border-radius: 10px;
+}
+.dark-mode #teamSelectionList::-webkit-scrollbar-track {
+    background: #f1f3f5;
+}
+
+/* Ensure cancel button is visible */
+.dark-mode .modal-footer .btn-secondary {
+    background-color: #6c757d !important;
+    color: #fff !important;
+    border-color: #6c757d !important;
+}
+
+/* High-specificity dark-mode overrides to ensure modal/list stay dark and
+   our spaced team items render correctly (avoid forcing white panels). */
+body.modern-layout.dark-mode .modal-content {
+    background-color: #2d3338 !important;
+    color: #e6e6e6 !important;
+    opacity: 1 !important;
+}
+
+/* Make sure list items inside the modal (except our spaced .team-selection-item)
+   use subtle separators appropriate for dark backgrounds. We intentionally
+   exclude #teamSelectionList .team-selection-item here so our spacing/borders
+   apply without being overridden. */
+body.modern-layout.dark-mode .modal-content .list-group-item {
+    background-color: transparent !important;
+    color: inherit !important;
+    border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+}
+
+body.modern-layout.dark-mode .modal-content .list-group-item .small.text-muted,
+body.modern-layout.dark-mode .modal-content .team-selection-item .small.text-muted {
+    color: #9aa1a6 !important;
+    opacity: 1 !important;
+}
+
+/* Ensure header remains visible and buttons are correctly colored */
+body.modern-layout.dark-mode .modal-header.bg-primary {
+    background-color: #1976d2 !important;
+    color: #fff !important;
+}
+
+/* Make sure list hover/focus states are light and clear */
+body.modern-layout.dark-mode .modal-content .list-group-item-action:hover,
+body.modern-layout.dark-mode .modal-content .list-group-item-action:focus {
+    background-color: #f8f9fa !important;
 }
 </style>
 {% endblock %}
