@@ -165,13 +165,22 @@ def get_tba_teams_at_event(event_key):
         raise TBAApiError(f"Error getting teams from TBA: {str(e)}")
 
 def get_tba_event_matches(event_key):
-    """Get matches from TBA API for a specific event"""
+    """Get matches from TBA API for a specific event
+    
+    TBA API includes both scheduled (upcoming) and completed matches in the
+    /event/{event_key}/matches endpoint. Matches that haven't been played
+    yet will have null values for scores and alliances may be tentative.
+    
+    According to TBA API docs, this endpoint returns all matches regardless
+    of whether they've been played, so it already includes future matches.
+    """
     base_url = 'https://www.thebluealliance.com/api/v3'
     
     api_url = f"{base_url}/event/{event_key}/matches"
     
     try:
         print(f"Fetching matches from TBA: {api_url}")
+        print("  (TBA includes both scheduled and completed matches)")
         
         headers = get_tba_api_headers()
         print(f"Using headers: {list(headers.keys())} for TBA matches request")
@@ -186,7 +195,15 @@ def get_tba_event_matches(event_key):
         
         if response.status_code == 200:
             matches_data = response.json()
+            
+            # Count scheduled vs completed matches for logging
+            completed = sum(1 for m in matches_data if m.get('alliances', {}).get('red', {}).get('score', -1) >= 0)
+            scheduled = len(matches_data) - completed
+            
             print(f"Successfully fetched {len(matches_data)} matches from TBA")
+            print(f"  - {completed} completed matches (with scores)")
+            print(f"  - {scheduled} scheduled matches (not yet played)")
+            
             return matches_data
         elif response.status_code == 304:
             print("TBA matches data not modified (304)")
