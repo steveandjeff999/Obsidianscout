@@ -3,7 +3,7 @@ import statistics
 from flask import current_app
 import random
 from app.utils.config_manager import get_current_game_config, load_game_config
-from app.utils.team_isolation import filter_scouting_data_by_scouting_team, get_current_scouting_team_number
+from app.utils.team_isolation import filter_scouting_data_by_scouting_team, get_current_scouting_team_number, filter_scouting_data_only_by_scouting_team
 
 def calculate_team_metrics(team_id, event_id=None, game_config=None):
     """Calculate key performance metrics for a team based on their scouting data using dynamic period calculations
@@ -44,19 +44,28 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
             # Fall back to normal isolation if alliance lookup fails
             pass
 
-        # Default behavior: respect current user's scouting team isolation
+        # Default behavior: Use EXACT same filter as /data/manage for consistency
+        # This ensures predictions see exactly the same data that appears in /data/manage
         scouting_team_number = get_current_scouting_team_number()
+        print(f"    DEBUG: Current scouting_team_number = {scouting_team_number}")
         if scouting_team_number is not None:
-            query = filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team_obj.id)
+            # Use exact match filter (same as /data/manage) - no NULL entries
+            query = ScoutingData.query.filter_by(team_id=team_obj.id, scouting_team_number=scouting_team_number)
             # Apply event filter if provided
             if event_filter:
                 query = query.join(Match).filter(Match.event_id == event_filter)
-            return query.all()
+            results = query.all()
+            print(f"    DEBUG: Found {len(results)} scouting entries for team {team_obj.team_number} with scouting_team {scouting_team_number} and event_filter={event_filter}")
+            return results
         
         query = ScoutingData.query.filter_by(team_id=team_obj.id, scouting_team_number=None)
-        # Apply event filter if provided
+        # Apply event filter if provided - get match IDs first to avoid JOIN issues
         if event_filter:
-            query = query.join(Match).filter(Match.event_id == event_filter)
+            match_ids = [m.id for m in Match.query.filter_by(event_id=event_filter).all()]
+            if match_ids:
+                query = query.filter(ScoutingData.match_id.in_(match_ids))
+            else:
+                return []
         return query.all()
     
     scouting_data = _get_scouting_data_for_team(team, event_id)
@@ -369,7 +378,8 @@ def predict_match_outcome(match_id):
             team_config = load_game_config(team_number=team.team_number)
         except Exception:
             team_config = None
-        analytics_result = calculate_team_metrics(team.id, game_config=team_config)
+        # Pass event_id so we only use data from the match's event
+        analytics_result = calculate_team_metrics(team.id, event_id=match.event_id, game_config=team_config)
         metrics = analytics_result.get('metrics', {})
         
         if metrics:
@@ -392,7 +402,8 @@ def predict_match_outcome(match_id):
             team_config = load_game_config(team_number=team.team_number)
         except Exception:
             team_config = None
-        analytics_result = calculate_team_metrics(team.id, game_config=team_config)
+        # Pass event_id so we only use data from the match's event
+        analytics_result = calculate_team_metrics(team.id, event_id=match.event_id, game_config=team_config)
         metrics = analytics_result.get('metrics', {})
         
         if metrics:
@@ -580,7 +591,8 @@ def generate_match_strategy_analysis(match_id):
     # Calculate detailed metrics for each team
     red_alliance_data = []
     for team in red_teams:
-        analytics_result = calculate_team_metrics(team.id)
+        # Pass event_id so we only use data from the match's event
+        analytics_result = calculate_team_metrics(team.id, event_id=match.event_id)
         team_metrics = analytics_result.get('metrics', {})
         # Use alliance-aware scouting data retrieval (mirror calculate_team_metrics behavior)
         try:
@@ -588,18 +600,27 @@ def generate_match_strategy_analysis(match_id):
                 alliance = TeamAllianceStatus.get_active_alliance_for_team(team.team_number)
                 if alliance:
                     member_numbers = alliance.get_member_team_numbers()
+                    match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
                     scouting_records = ScoutingData.query.filter(ScoutingData.team_id == team.id,
-                                                                 ScoutingData.scouting_team_number.in_(member_numbers)).all()
+                                                                 ScoutingData.scouting_team_number.in_(member_numbers),
+                                                                 ScoutingData.match_id.in_(match_ids)).all() if match_ids else []
                 else:
-                    scouting_records = ScoutingData.query.filter_by(team_id=team.id).all()
+                    match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
+                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=get_current_scouting_team_number()).filter(ScoutingData.match_id.in_(match_ids)).all() if match_ids else []
             else:
                 scouting_team_number = get_current_scouting_team_number()
                 if scouting_team_number is not None:
-                    scouting_records = filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team.id).all()
+                    # Use exact match filter (same as /data/manage) with match_ids instead of JOIN
+                    match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
+                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=scouting_team_number).filter(ScoutingData.match_id.in_(match_ids)).all() if match_ids else []
+                    print(f"    DEBUG RED: Team {team.team_number} - Found {len(scouting_records)} records with scouting_team={scouting_team_number}, event={match.event_id}")
                 else:
-                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=None).all()
-        except Exception:
-            scouting_records = ScoutingData.query.filter_by(team_id=team.id).all()
+                    match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
+                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=None).filter(ScoutingData.match_id.in_(match_ids)).all() if match_ids else []
+        except Exception as e:
+            print(f"    DEBUG RED ERROR: Team {team.team_number} - Exception: {e}")
+            match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
+            scouting_records = ScoutingData.query.filter_by(team_id=team.id).filter(ScoutingData.match_id.in_(match_ids)).all() if match_ids else []
 
         team_data = {
             'team': team,
@@ -610,25 +631,35 @@ def generate_match_strategy_analysis(match_id):
     
     blue_alliance_data = []
     for team in blue_teams:
-        analytics_result = calculate_team_metrics(team.id)
+        # Pass event_id so we only use data from the match's event
+        analytics_result = calculate_team_metrics(team.id, event_id=match.event_id)
         team_metrics = analytics_result.get('metrics', {})
         try:
             if TeamAllianceStatus.is_alliance_mode_active_for_team(team.team_number):
                 alliance = TeamAllianceStatus.get_active_alliance_for_team(team.team_number)
                 if alliance:
                     member_numbers = alliance.get_member_team_numbers()
+                    match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
                     scouting_records = ScoutingData.query.filter(ScoutingData.team_id == team.id,
-                                                                 ScoutingData.scouting_team_number.in_(member_numbers)).all()
+                                                                 ScoutingData.scouting_team_number.in_(member_numbers),
+                                                                 ScoutingData.match_id.in_(match_ids)).all() if match_ids else []
                 else:
-                    scouting_records = ScoutingData.query.filter_by(team_id=team.id).all()
+                    match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
+                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=get_current_scouting_team_number()).filter(ScoutingData.match_id.in_(match_ids)).all() if match_ids else []
             else:
                 scouting_team_number = get_current_scouting_team_number()
                 if scouting_team_number is not None:
-                    scouting_records = filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team.id).all()
+                    # Use exact match filter (same as /data/manage) with match_ids instead of JOIN
+                    match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
+                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=scouting_team_number).filter(ScoutingData.match_id.in_(match_ids)).all() if match_ids else []
+                    print(f"    DEBUG BLUE: Team {team.team_number} - Found {len(scouting_records)} records with scouting_team={scouting_team_number}, event={match.event_id}")
                 else:
-                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=None).all()
-        except Exception:
-            scouting_records = ScoutingData.query.filter_by(team_id=team.id).all()
+                    match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
+                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=None).filter(ScoutingData.match_id.in_(match_ids)).all() if match_ids else []
+        except Exception as e:
+            print(f"    DEBUG BLUE ERROR: Team {team.team_number} - Exception: {e}")
+            match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
+            scouting_records = ScoutingData.query.filter_by(team_id=team.id).filter(ScoutingData.match_id.in_(match_ids)).all() if match_ids else []
 
         team_data = {
             'team': team,

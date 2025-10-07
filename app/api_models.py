@@ -265,6 +265,36 @@ def deactivate_api_key(api_key_id, team_number):
         api_db.close_session(session)
 
 
+def reactivate_api_key(api_key_id, team_number):
+    """Reactivate a previously deactivated API key"""
+    session = api_db.get_session()
+    try:
+        api_key = session.query(ApiKey).filter_by(id=api_key_id, team_number=team_number).first()
+        if not api_key:
+            return False
+
+        api_key.is_active = True
+        session.commit()
+        return True
+    finally:
+        api_db.close_session(session)
+
+
+def delete_api_key_permanently(api_key_id, team_number):
+    """Permanently delete an API key record from the apis.db database."""
+    session = api_db.get_session()
+    try:
+        api_key = session.query(ApiKey).filter_by(id=api_key_id, team_number=team_number).first()
+        if not api_key:
+            return False
+
+        session.delete(api_key)
+        session.commit()
+        return True
+    finally:
+        api_db.close_session(session)
+
+
 def record_api_usage(api_key_id, endpoint, method, status_code, ip_address=None, user_agent=None, 
                     request_size=0, response_size=0, response_time_ms=0, error_message=None):
     """Record API usage for analytics and monitoring"""

@@ -371,34 +371,62 @@ def merge_match_lists(matches_list1, matches_list2):
     # Create a dictionary to track unique matches
     # Key format: "tournamentLevel_matchNumber" or "matchType_matchNumber"
     unique_matches = {}
-    
+
+    def _has_scores(m):
+        """Return True if the match object contains final/recorded scores."""
+        if not m or not isinstance(m, dict):
+            return False
+        # FIRST API fields
+        if m.get('scoreRedFinal') is not None or m.get('scoreBlueFinal') is not None:
+            return True
+        # Converted/internal fields
+        if m.get('red_score') is not None or m.get('blue_score') is not None:
+            return True
+        # TBA style
+        alliances = m.get('alliances')
+        if isinstance(alliances, dict):
+            red = alliances.get('red', {}).get('score')
+            blue = alliances.get('blue', {}).get('score')
+            if red is not None or blue is not None:
+                return True
+        return False
+
     # Add all matches from first list
     for match in matches_list1:
         match_number = match.get('matchNumber') or match.get('match_number')
         tournament_level = match.get('tournamentLevel') or match.get('match_type', 'Unknown')
-        
+
         if match_number is not None:
             key = f"{tournament_level}_{match_number}"
             unique_matches[key] = match
-    
-    # Add matches from second list, avoiding duplicates
+
+    # Add matches from second list, avoiding duplicates and preferring scored records
     for match in matches_list2:
         match_number = match.get('matchNumber') or match.get('match_number')
         tournament_level = match.get('tournamentLevel') or match.get('match_type', 'Unknown')
-        
+
         if match_number is not None:
             key = f"{tournament_level}_{match_number}"
-            # Only add if not already present, or if the new one has more data
             if key not in unique_matches:
                 unique_matches[key] = match
             else:
-                # Prefer the match with more complete data (e.g., has teams array)
                 existing = unique_matches[key]
-                if match.get('teams') and not existing.get('teams'):
+                new_has_scores = _has_scores(match)
+                existing_has_scores = _has_scores(existing)
+
+                # Prefer records that have final scores
+                if new_has_scores and not existing_has_scores:
                     unique_matches[key] = match
-                elif match.get('startTime') and not existing.get('startTime'):
-                    # Prefer matches with scheduled times
-                    unique_matches[key] = match
+                elif existing_has_scores and not new_has_scores:
+                    # keep existing (it has scores)
+                    pass
+                else:
+                    # If neither or both have scores, use other heuristics
+                    if match.get('teams') and not existing.get('teams'):
+                        unique_matches[key] = match
+                    elif match.get('startTime') and not existing.get('startTime'):
+                        unique_matches[key] = match
+                    # otherwise keep existing
     
     return list(unique_matches.values())
 
@@ -417,17 +445,27 @@ def get_matches(event_code):
     
     print(f"Fetching matches with redundancy for event {event_code}")
     print(f"Using headers: {list(headers.keys())}")
-    
+
     all_matches = []
-    
-    # Priority 1: Fetch schedule endpoints (includes future matches)
-    # These endpoints include matches that haven't been played yet
+
+    # Priority 1: Fetch /matches endpoint first because it contains final scores
+    matches_endpoint = f"/v2.0/{season}/matches/{event_code}"
+    print(f"=== Fetching from /matches endpoint first (completed matches with results) ===")
+    api_url = f"{base_url}{matches_endpoint}"
+    matches_results = fetch_from_endpoint(api_url, headers)
+    if matches_results:
+        print(f"  Found {len(matches_results)} matches from /matches")
+        all_matches = merge_match_lists(all_matches, matches_results)
+    else:
+        print(f"  No data from /matches endpoint")
+
+    # Priority 2: Fetch schedule endpoints (includes future/upcoming matches)
     schedule_endpoints = [
         f"/v2.0/{season}/schedule/{event_code}/qual",      # Qualification matches
         f"/v2.0/{season}/schedule/{event_code}/playoff",   # Playoff matches
         f"/v2.0/{season}/schedule/{event_code}/practice",  # Practice matches
     ]
-    
+
     print("=== Fetching from /schedule endpoints (includes upcoming matches) ===")
     for endpoint in schedule_endpoints:
         api_url = f"{base_url}{endpoint}"
@@ -437,17 +475,6 @@ def get_matches(event_code):
             all_matches = merge_match_lists(all_matches, matches)
         else:
             print(f"  No data from {endpoint}")
-    
-    # Priority 2: Fetch from /matches endpoint (may have results for completed matches)
-    matches_endpoint = f"/v2.0/{season}/matches/{event_code}"
-    print(f"=== Fetching from /matches endpoint (completed matches with results) ===")
-    api_url = f"{base_url}{matches_endpoint}"
-    matches_results = fetch_from_endpoint(api_url, headers)
-    if matches_results:
-        print(f"  Found {len(matches_results)} matches from /matches")
-        all_matches = merge_match_lists(all_matches, matches_results)
-    else:
-        print(f"  No data from /matches endpoint")
     
     # Priority 3: Fallback to old-style endpoints if nothing worked
     if not all_matches:
@@ -795,14 +822,33 @@ def get_matches_dual_api(event_code):
             print(f"Using FIRST API for matches at event {event_code}")
             # Use existing FIRST API function
             api_matches = get_matches(event_code)
-            
+
+            # If FIRST returned nothing, try TBA fallback immediately (don't wait for exception)
+            if not api_matches:
+                try:
+                    print("FIRST API returned no matches; attempting TBA fallback")
+                    game_config = get_current_game_config()
+                    season = game_config.get('season', 2026)
+                    tba_event_key = construct_tba_event_key(event_code, season)
+
+                    tba_matches = get_tba_event_matches(tba_event_key)
+                    matches_db_format = []
+                    for tba_match in tba_matches:
+                        match_data = tba_match_to_db_format(tba_match, None)
+                        if match_data:
+                            matches_db_format.append(match_data)
+                    return matches_db_format
+                except Exception:
+                    # Fall through to convert whatever FIRST returned (likely empty)
+                    pass
+
             # Convert to database format
             matches_db_format = []
             for api_match in api_matches:
                 match_data = api_to_db_match_conversion(api_match, None)  # event_id will be set later
                 if match_data:
                     matches_db_format.append(match_data)
-            
+
             return matches_db_format
     
     except (ApiError, TBAApiError) as e:

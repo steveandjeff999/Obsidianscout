@@ -4,7 +4,6 @@ from app.routes.auth import analytics_required
 from app.models import Match, Event, Team, ScoutingData
 from app import db
 from app.utils.api_utils import get_matches, ApiError, api_to_db_match_conversion, get_matches_dual_api
-from app.utils.analysis import predict_match_outcome, get_match_details_with_teams
 from datetime import datetime
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_effective_game_config
@@ -20,6 +19,7 @@ from app.utils.team_isolation import (
     filter_matches_by_scouting_team, filter_events_by_scouting_team,
     filter_teams_by_scouting_team, assign_scouting_team_to_model, get_event_by_code
 )
+from sqlalchemy import or_
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -65,13 +65,38 @@ def index():
             'playoff': 3,
             'elimination': 3,  # Alternative name for playoff matches
         }
-        
-        # Get all matches for this event (filtered by scouting team)
-        matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
-        
-        # Sort matches by type (using our custom order) and then by match number
+        # Build base query for this event (filtered by scouting team)
+        query = filter_matches_by_scouting_team().filter(Match.event_id == event.id)
+
+        # Apply optional filters from the request
+        q = (request.args.get('q') or '').strip()
+        match_type = (request.args.get('match_type') or '').strip()
+
+        if match_type:
+            # Case-insensitive match type filtering
+            try:
+                query = query.filter(Match.match_type.ilike(match_type))
+            except Exception:
+                # Fallback to exact compare if ilike not available
+                query = query.filter(Match.match_type == match_type)
+
+        if q:
+            # If numeric, allow matching by match number OR team numbers in alliances
+            if q.isdigit():
+                try:
+                    qnum = int(q)
+                    query = query.filter(or_(Match.match_number == qnum,
+                                              Match.red_alliance.like(f"%{q}%"),
+                                              Match.blue_alliance.like(f"%{q}%")))
+                except Exception:
+                    query = query.filter(or_(Match.red_alliance.ilike(f"%{q}%"), Match.blue_alliance.ilike(f"%{q}%")))
+            else:
+                query = query.filter(or_(Match.red_alliance.ilike(f"%{q}%"), Match.blue_alliance.ilike(f"%{q}%")))
+
+        # Execute query and sort in Python using our custom ordering
+        matches = query.all()
         matches = sorted(matches, key=lambda m: (
-            match_type_order.get(m.match_type.lower(), 99),  # Unknown types go to the end
+            match_type_order.get((m.match_type or '').lower(), 99),
             m.match_number
         ))
     else:
@@ -79,7 +104,77 @@ def index():
         matches = []
         flash("No current event selected. Use the dropdown to select an event or configure a default event code.", "warning")
     
-    return render_template('matches/index.html', matches=matches, events=events, selected_event=event, **get_theme_context())
+    # Compute display scores: prefer API (match.red_score/blue_score) and fall back to local scouting data
+    display_scores = {}
+    try:
+        # Only attempt local fallback if we have an authenticated user with a scouting team
+        scouting_team_number = current_user.scouting_team_number if getattr(current_user, 'is_authenticated', False) else None
+    except Exception:
+        scouting_team_number = None
+
+    def _compute_local_scores_for_match(m):
+        # Gather scouting entries for this match and scouting team
+        if not scouting_team_number:
+            return (None, None)
+        entries = ScoutingData.query.filter_by(match_id=m.id, scouting_team_number=scouting_team_number).all()
+        if not entries:
+            return (None, None)
+
+        # Keep the latest entry per team_id to avoid duplicate scouts
+        latest_by_team = {}
+        for e in entries:
+            tid = e.team_id
+            if tid not in latest_by_team or (getattr(e, 'timestamp', None) and e.timestamp and e.timestamp > latest_by_team[tid].timestamp):
+                latest_by_team[tid] = e
+
+        red_sum = 0
+        blue_sum = 0
+        any_points = False
+        red_team_numbers = set(m.red_teams)
+        blue_team_numbers = set(m.blue_teams)
+
+        for e in latest_by_team.values():
+            try:
+                pts = int(e.calculate_metric('tot') or 0)
+            except Exception:
+                pts = 0
+            tn = None
+            try:
+                tn = e.team.team_number if e.team else None
+            except Exception:
+                tn = None
+
+            if tn in red_team_numbers:
+                red_sum += pts
+                any_points = any_points or pts > 0
+            elif tn in blue_team_numbers:
+                blue_sum += pts
+                any_points = any_points or pts > 0
+
+        if not any_points:
+            return (None, None)
+        return (red_sum, blue_sum)
+
+    for match in matches:
+        # If API-provided scores exist (not None), use them; otherwise try local scouting data
+        if match.red_score is not None or match.blue_score is not None:
+            display_scores[match.id] = {
+                'red_score': match.red_score,
+                'blue_score': match.blue_score,
+                'source': 'api'
+            }
+        else:
+            r, b = _compute_local_scores_for_match(match)
+            if r is not None or b is not None:
+                display_scores[match.id] = {
+                    'red_score': r,
+                    'blue_score': b,
+                    'source': 'local'
+                }
+            else:
+                display_scores[match.id] = {'red_score': None, 'blue_score': None, 'source': None}
+
+    return render_template('matches/index.html', matches=matches, events=events, selected_event=event, display_scores=display_scores, **get_theme_context())
 
 @bp.route('/sync_from_config')
 def sync_from_config():
@@ -195,9 +290,54 @@ def view(match_id):
     
     # Get game configuration
     game_config = get_effective_game_config()
-    
+    # Compute display score for this match (prefer API, fallback to local scouting data)
+    display_score = {'red_score': None, 'blue_score': None, 'source': None}
+    if match.red_score is not None or match.blue_score is not None:
+        display_score = {'red_score': match.red_score, 'blue_score': match.blue_score, 'source': 'api'}
+    else:
+        try:
+            scouting_team_number = current_user.scouting_team_number if getattr(current_user, 'is_authenticated', False) else None
+        except Exception:
+            scouting_team_number = None
+
+        if scouting_team_number:
+            entries = ScoutingData.query.filter_by(match_id=match.id, scouting_team_number=scouting_team_number).all()
+            if entries:
+                latest_by_team = {}
+                for e in entries:
+                    tid = e.team_id
+                    if tid not in latest_by_team or (getattr(e, 'timestamp', None) and e.timestamp and e.timestamp > latest_by_team[tid].timestamp):
+                        latest_by_team[tid] = e
+
+                red_sum = 0
+                blue_sum = 0
+                any_points = False
+                red_team_numbers = set(match.red_teams)
+                blue_team_numbers = set(match.blue_teams)
+
+                for e in latest_by_team.values():
+                    try:
+                        pts = int(e.calculate_metric('tot') or 0)
+                    except Exception:
+                        pts = 0
+                    tn = None
+                    try:
+                        tn = e.team.team_number if e.team else None
+                    except Exception:
+                        tn = None
+
+                    if tn in red_team_numbers:
+                        red_sum += pts
+                        any_points = any_points or pts > 0
+                    elif tn in blue_team_numbers:
+                        blue_sum += pts
+                        any_points = any_points or pts > 0
+
+                if any_points:
+                    display_score = {'red_score': red_sum, 'blue_score': blue_sum, 'source': 'local'}
+
     return render_template('matches/view.html', match=match, 
-                          scouting_data=scouting_data, game_config=game_config, **get_theme_context())
+                          scouting_data=scouting_data, game_config=game_config, display_score=display_score, **get_theme_context())
 
 @bp.route('/add', methods=['GET', 'POST'])
 def add():
@@ -398,144 +538,6 @@ def delete(match_id):
     flash(f'Match deleted successfully!', 'success')
     return redirect(url_for('matches.index'))
 
-@bp.route('/predict', methods=['GET', 'POST'])
-def predict():
-    """Predict the outcome of a match based on team performance"""
-    # Get event code from config
-    game_config = get_effective_game_config()
-    
-    # Get the current event
-    event = None
-    selected_match = None
-    prediction = None
-    
-    # Get all events for the dropdown (filtered by scouting team)
-    events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
-    
-    # Get event from URL parameter or form
-    event_id = request.args.get('event_id', type=int) or request.form.get('event_id', type=int)
-    
-    if event_id:
-        # If a specific event ID is requested, use that (filtered by scouting team)
-        event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
-        if not event:
-            flash("Event not found or not accessible.", "error")
-            return redirect(url_for('matches.predict'))
-        
-        # Get all matches for this event (filtered by scouting team)
-        matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).order_by(Match.match_type, Match.match_number).all()
-        
-        # Check if a specific match is requested
-        match_id = request.args.get('match_id', type=int) or request.form.get('match_id', type=int)
-        
-        if match_id:
-            # Get the match (filtered by scouting team)
-            selected_match = filter_matches_by_scouting_team().filter(Match.id == match_id).first()
-            if not selected_match:
-                flash("Match not found or not accessible.", "error")
-                return redirect(url_for('matches.predict', event_id=event_id))
-            
-            # Get match details with prediction
-            match_details = get_match_details_with_teams(match_id)
-            if match_details:
-                prediction = match_details['prediction']
-    else:
-        matches = []
-    
-    return render_template(
-        'matches/predict.html',
-        events=events,
-        selected_event=event,
-        matches=matches,
-        selected_match=selected_match,
-        prediction=prediction,
-        game_config=game_config, **get_theme_context()
-    )
-
-
-@bp.route('/predict_all')
-def predict_all():
-    """Predict every match in the event and list them sequentially"""
-    game_config = get_effective_game_config()
-
-    # Resolve event_id from params or current config
-    event = None
-    event_id = request.args.get('event_id', type=int) or request.form.get('event_id', type=int)
-    if event_id:
-        event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
-    else:
-        current_event_code = game_config.get('current_event_code')
-        if current_event_code:
-            event = get_event_by_code(current_event_code)
-
-    if not event:
-        flash('No event selected or event not accessible for predictions.', 'warning')
-        return redirect(url_for('matches.predict'))
-
-    # Get matches for this event
-    matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).order_by(Match.match_type, Match.match_number).all()
-
-    # Collect predictions for each match (use get_match_details_with_teams)
-    predictions = []
-    for m in matches:
-        try:
-            details = get_match_details_with_teams(m.id)
-            pred = details.get('prediction') if details else None
-        except Exception as e:
-            pred = None
-        predictions.append({
-            'match': m,
-            'prediction': pred
-        })
-
-    return render_template(
-        'matches/predict_all.html',
-        selected_event=event,
-        predictions=predictions,
-        game_config=game_config,
-        **get_theme_context()
-    )
-
-@bp.route('/api/predict/<int:match_id>')
-def api_predict(match_id):
-    """API endpoint to get match prediction data"""
-    match_details = get_match_details_with_teams(match_id)
-    if not match_details:
-        return jsonify({'error': 'Match not found'}), 404
-        
-    return jsonify({'match_details': match_details})
-
-@bp.route('/predict/<int:match_id>/print')
-@login_required
-def predict_print(match_id):
-    """Display a printable version of the match prediction"""
-    from datetime import datetime
-    
-    # Get the match
-    selected_match = Match.query.get_or_404(match_id)
-    selected_event = Event.query.get(selected_match.event_id)
-    
-    # Get match details with prediction
-    match_details = get_match_details_with_teams(match_id)
-    if not match_details:
-        flash('Unable to generate prediction for this match.', 'warning')
-        return redirect(url_for('matches.predict'))
-    
-    # Get game configuration
-    game_config = get_effective_game_config()
-    game_config = get_effective_game_config()
-    game_config = get_effective_game_config()
-    
-    # Render the printable template with the prediction data
-    return render_template(
-        'matches/predict_printable.html',
-        selected_match=selected_match,
-        selected_event=selected_event,
-        prediction=match_details['prediction'],
-        game_config=game_config,
-        now=datetime.now(), **get_theme_context()
-    )
-
 @bp.route('/strategy')
 @analytics_required
 def strategy():
@@ -576,13 +578,189 @@ def strategy():
     # Get game configuration
     game_config = current_app.config.get('GAME_CONFIG', {})
     
+    # Allow an optional preselected match id so other pages can link directly to an analysis
+    preselected_match_id = request.args.get('match_id', type=int)
+
     return render_template(
         'matches/strategy.html',
         events=events,
         selected_event=event,
         matches=matches,
-        game_config=game_config, **get_theme_context()
+        game_config=game_config,
+        preselected_match_id=preselected_match_id,
+        **get_theme_context()
     )
+
+
+@bp.route('/strategy/all')
+@analytics_required
+def strategy_all():
+    """Show a compact strategy summary card for every match in an event."""
+    # Get all events for the dropdown
+    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+
+    # Get event from URL parameter or form
+    event_id = request.args.get('event_id', type=int) or request.form.get('event_id', type=int)
+    event = None
+    matches = []
+    summaries = []
+
+    if event_id:
+        event = Event.query.get_or_404(event_id)
+        matches = Match.query.filter_by(event_id=event.id).all()
+        # Keep same ordering as other strategy pages
+        match_type_order = {
+            'practice': 1,
+            'qualification': 2,
+            'qualifier': 2,
+            'quarterfinal': 3,
+            'quarterfinals': 3,
+            'semifinal': 4,
+            'semifinals': 4,
+            'final': 5,
+            'finals': 5
+        }
+        def match_sort_key(m):
+            return (
+                match_type_order.get(m.match_type.lower(), 99),
+                m.match_number
+            )
+        matches = sorted(matches, key=match_sort_key)
+
+    # Get game configuration
+    game_config = current_app.config.get('GAME_CONFIG', {})
+
+    # Attempt to generate compact summaries for each match. If analysis fails for a match,
+    # include minimal info and continue so the page always renders.
+    if matches:
+        from app.utils.analysis import generate_match_strategy_analysis
+        # Prepare display scores (prefer API-provided scores, fall back to local scouting data)
+        try:
+            scouting_team_number = current_user.scouting_team_number if getattr(current_user, 'is_authenticated', False) else None
+        except Exception:
+            scouting_team_number = None
+
+        def _compute_local_scores_for_match(m):
+            if not scouting_team_number:
+                return (None, None)
+            entries = ScoutingData.query.filter_by(match_id=m.id, scouting_team_number=scouting_team_number).all()
+            if not entries:
+                return (None, None)
+
+            latest_by_team = {}
+            for e in entries:
+                tid = e.team_id
+                if tid not in latest_by_team or (getattr(e, 'timestamp', None) and e.timestamp and e.timestamp > latest_by_team[tid].timestamp):
+                    latest_by_team[tid] = e
+
+            red_sum = 0
+            blue_sum = 0
+            any_points = False
+            # m.red_alliance/blue_alliance stored as comma-separated strings of team numbers
+            red_team_numbers = set([t.strip() for t in str(m.red_alliance or '').split(',') if t.strip()])
+            blue_team_numbers = set([t.strip() for t in str(m.blue_alliance or '').split(',') if t.strip()])
+
+            for e in latest_by_team.values():
+                try:
+                    pts = int(e.calculate_metric('tot') or 0)
+                except Exception:
+                    pts = 0
+                tn = None
+                try:
+                    tn = str(e.team.team_number) if e.team else None
+                except Exception:
+                    tn = None
+
+                if tn in red_team_numbers:
+                    red_sum += pts
+                    any_points = any_points or pts > 0
+                elif tn in blue_team_numbers:
+                    blue_sum += pts
+                    any_points = any_points or pts > 0
+
+            if not any_points:
+                return (None, None)
+            return (red_sum, blue_sum)
+        for m in matches:
+            try:
+                data = generate_match_strategy_analysis(m.id)
+                pred = data.get('predicted_outcome', {}) if isinstance(data, dict) else {}
+                winner = pred.get('predicted_winner') if isinstance(pred, dict) else None
+                # Confidence may be named differently across versions; try common keys
+                confidence = None
+                if isinstance(pred, dict):
+                    confidence = pred.get('confidence') or pred.get('confidence_level') or pred.get('win_probability')
+
+                # Determine display scores (prefer API-defined match scores)
+                red_score = m.red_score if m.red_score is not None else None
+                blue_score = m.blue_score if m.blue_score is not None else None
+                if red_score is None and blue_score is None:
+                    rloc, bloc = _compute_local_scores_for_match(m)
+                    red_score = rloc if rloc is not None else None
+                    blue_score = bloc if bloc is not None else None
+
+                # Parse alliance team strings into structured lists with optional team lookup
+                def _parse_alliance(alliance_str):
+                    teams_out = []
+                    if not alliance_str:
+                        return teams_out
+                    for tn in [t.strip() for t in str(alliance_str).split(',') if t.strip()]:
+                        team_obj = None
+                        try:
+                            tn_int = int(tn)
+                            team_obj = filter_teams_by_scouting_team().filter(Team.team_number == tn_int).first()
+                        except Exception:
+                            team_obj = None
+                        teams_out.append({
+                            'team_number': tn,
+                            'team_id': team_obj.id if team_obj else None,
+                            'team_name': team_obj.team_name if team_obj and getattr(team_obj, 'team_name', None) else None
+                        })
+                    return teams_out
+
+                summaries.append({
+                    'match_id': m.id,
+                    'match_type': m.match_type,
+                    'match_number': m.match_number,
+                    'red_alliance': m.red_alliance,
+                    'blue_alliance': m.blue_alliance,
+                    'red_teams': _parse_alliance(m.red_alliance),
+                    'blue_teams': _parse_alliance(m.blue_alliance),
+                    'red_score': red_score,
+                    'blue_score': blue_score,
+                    'predicted_winner': winner,
+                    'confidence': confidence,
+                    'error': None
+                })
+            except Exception as e:
+                # Keep a minimal fallback so UI can at least show match and teams
+                # Attempt to at least include parsed team lists and any available scores
+                r_score = m.red_score if m.red_score is not None else None
+                b_score = m.blue_score if m.blue_score is not None else None
+                if r_score is None and b_score is None:
+                    rloc, bloc = _compute_local_scores_for_match(m)
+                    r_score = rloc if rloc is not None else None
+                    b_score = bloc if bloc is not None else None
+
+                def _parse_alliance_safe(alliance_str):
+                    return [ {'team_number': t.strip(), 'team_id': None, 'team_name': None} for t in str(alliance_str or '').split(',') if t.strip() ]
+
+                summaries.append({
+                    'match_id': m.id,
+                    'match_type': m.match_type,
+                    'match_number': m.match_number,
+                    'red_alliance': m.red_alliance,
+                    'blue_alliance': m.blue_alliance,
+                    'red_teams': _parse_alliance_safe(m.red_alliance),
+                    'blue_teams': _parse_alliance_safe(m.blue_alliance),
+                    'red_score': r_score,
+                    'blue_score': b_score,
+                    'predicted_winner': None,
+                    'confidence': None,
+                    'error': str(e)
+                })
+
+    return render_template('matches/strategy_all.html', events=events, selected_event=event, matches=matches, game_config=game_config, summaries=summaries, **get_theme_context())
 
 @bp.route('/strategy/analyze/<int:match_id>')
 @login_required

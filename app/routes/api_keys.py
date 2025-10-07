@@ -2,18 +2,27 @@
 API Key Management Routes
 Handles creation, viewing, and management of API keys for team admins
 """
-from flask import Blueprint, request, jsonify, current_app, render_template
+from flask import Blueprint, request, jsonify, current_app, render_template, abort
 from flask_login import login_required, current_user
 from datetime import datetime
 import traceback
 
 from app.api_models import (
     api_db, create_api_key, get_team_api_keys, count_team_api_keys, 
-    deactivate_api_key, get_api_usage_stats
+    deactivate_api_key, get_api_usage_stats, reactivate_api_key, delete_api_key_permanently
 )
+from app.models import Team, Event, Match, ScoutingData
+from app import db
 from app.routes.auth import admin_required
 
 bp = Blueprint('api_keys', __name__, url_prefix='/api/keys')
+
+def system_only():
+    # Allow only requests with X-System-Internal header or from localhost
+    internal_header = request.headers.get('X-System-Internal', '').lower() == 'true'
+    is_localhost = request.remote_addr in ['127.0.0.1', '::1']
+    if not (internal_header or is_localhost):
+        abort(403)
 
 
 @bp.route('/manage')
@@ -221,12 +230,21 @@ def delete_api_key(api_key_id):
         team_number = current_user.scouting_team_number
         if not team_number:
             return jsonify({'error': 'User not associated with a team'}), 400
-        
+
+        # If caller provided ?permanent=1, delete permanently
+        permanent = request.args.get('permanent', '0') in ['1', 'true', 'True']
+
+        if permanent:
+            success = delete_api_key_permanently(api_key_id, team_number)
+            if not success:
+                return jsonify({'error': 'API key not found'}), 404
+            return jsonify({'success': True, 'message': 'API key permanently deleted'})
+
         success = deactivate_api_key(api_key_id, team_number)
-        
+
         if not success:
             return jsonify({'error': 'API key not found'}), 404
-        
+
         return jsonify({
             'success': True,
             'message': 'API key deactivated successfully'
@@ -324,3 +342,105 @@ def test_api_key_system():
     except Exception as e:
         current_app.logger.error(f"Error testing API key system: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'error': f'API key system test failed: {str(e)}'}), 500
+
+
+@bp.route('/<int:api_key_id>/reactivate', methods=['POST'])
+@login_required
+@admin_required
+def reactivate_key(api_key_id):
+    """Reactivate a previously deactivated API key"""
+    try:
+        team_number = current_user.scouting_team_number
+        if not team_number:
+            return jsonify({'error': 'User not associated with a team'}), 400
+
+        success = reactivate_api_key(api_key_id, team_number)
+
+        if not success:
+            return jsonify({'error': 'API key not found'}), 404
+
+        return jsonify({'success': True, 'message': 'API key reactivated successfully'})
+    except Exception as e:
+        current_app.logger.error(f"Error reactivating API key: {str(e)}")
+        return jsonify({'error': 'Failed to reactivate API key'}), 500
+
+
+@bp.route('/all', methods=['GET'])
+@login_required
+@admin_required
+def dump_all_team_data():
+    """Dump all database data for the current admin's scouting team.
+
+    Returns JSON with teams, events, matches, and scouting_data scoped to
+    the current_user.scouting_team_number.
+    """
+    try:
+        team_number = current_user.scouting_team_number
+        if team_number is None:
+            return jsonify({'error': 'User not associated with a scouting team'}), 400
+
+        # Teams
+        teams = Team.query.filter(Team.scouting_team_number == team_number).all()
+        teams_data = []
+        for t in teams:
+            teams_data.append({
+                'id': t.id,
+                'team_number': t.team_number,
+                'team_name': t.team_name,
+                'location': t.location
+            })
+
+        # Events
+        events = Event.query.filter(Event.scouting_team_number == team_number).all()
+        events_data = []
+        for e in events:
+            events_data.append({
+                'id': e.id,
+                'name': e.name,
+                'code': e.code,
+                'location': getattr(e, 'location', None),
+                'start_date': e.start_date.isoformat() if getattr(e, 'start_date', None) else None,
+                'end_date': e.end_date.isoformat() if getattr(e, 'end_date', None) else None
+            })
+
+        # Matches
+        matches = Match.query.filter(Match.scouting_team_number == team_number).all()
+        matches_data = []
+        for m in matches:
+            matches_data.append({
+                'id': m.id,
+                'match_number': m.match_number,
+                'match_type': m.match_type,
+                'event_id': m.event_id,
+                'red_alliance': m.red_alliance,
+                'blue_alliance': m.blue_alliance,
+                'red_score': m.red_score,
+                'blue_score': m.blue_score,
+                'winner': m.winner
+            })
+
+        # Scouting data
+        scouting = ScoutingData.query.filter(ScoutingData.scouting_team_number == team_number).all()
+        scouting_list = []
+        for s in scouting:
+            scouting_list.append({
+                'id': s.id,
+                'team_id': s.team_id,
+                'match_id': s.match_id,
+                'data': s.data,
+                'scout': s.scout,
+                'timestamp': s.timestamp.isoformat() if getattr(s, 'timestamp', None) else None
+            })
+
+        return jsonify({
+            'success': True,
+            'team_number': team_number,
+            'teams': teams_data,
+            'events': events_data,
+            'matches': matches_data,
+            'scouting_data': scouting_list
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error dumping team data: {e}")
+        return jsonify({'error': 'Failed to dump team data'}), 500

@@ -36,6 +36,12 @@
                             </select>
                         </div>
                     </form>
+                    
+                    <div class="mt-2">
+                        <a href="{{ url_for('matches.strategy_all') }}?event_id={{ selected_event.id if selected_event else '' }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-th-large me-1"></i>View All Summaries
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -127,11 +133,14 @@
         <div class="row mb-4">
             <div class="col-md-6">
                 <div class="card border-danger">
-                    <div class="card-header bg-danger text-white">
-                        <h5 class="mb-0">
-                            <i class="fas fa-chess-queen me-2"></i>Red Alliance Strategy
-                        </h5>
-                    </div>
+                        <div class="card-header bg-danger text-white d-flex align-items-center justify-content-between">
+                            <h5 class="mb-0 d-flex align-items-center">
+                                <i class="fas fa-chess-queen me-2"></i>Red Alliance Strategy
+                            </h5>
+                            <div>
+                                <span id="redAllianceScore" class="badge bg-light text-dark">--</span>
+                            </div>
+                        </div>
                     <div class="card-body">
                         <div id="redAllianceStrategy">
                             <!-- Content will be populated by JavaScript -->
@@ -142,11 +151,14 @@
             
             <div class="col-md-6">
                 <div class="card border-primary">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0">
-                            <i class="fas fa-chess-king me-2"></i>Blue Alliance Strategy
-                        </h5>
-                    </div>
+                        <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
+                            <h5 class="mb-0 d-flex align-items-center">
+                                <i class="fas fa-chess-king me-2"></i>Blue Alliance Strategy
+                            </h5>
+                            <div>
+                                <span id="blueAllianceScore" class="badge bg-light text-dark">--</span>
+                            </div>
+                        </div>
                     <div class="card-body">
                         <div id="blueAllianceStrategy">
                             <!-- Content will be populated by JavaScript -->
@@ -414,7 +426,33 @@ function displayPredictedOutcome(prediction) {
 
 function displayAllianceStrategy(allianceData, color) {
     const container = document.getElementById(`${color}AllianceStrategy`);
-    
+    // Update alliance score badge if available
+    try {
+        if (color === 'red') {
+            const redBadge = document.getElementById('redAllianceScore');
+            let score = null;
+            if (strategyData && strategyData.predicted_outcome) score = strategyData.predicted_outcome.red_score || null;
+            if (!score && allianceData.predicted_score) score = allianceData.predicted_score;
+            if (score !== null && score !== undefined && !isNaN(Number(score))) {
+                redBadge.textContent = `${Math.round(Number(score))} pts`;
+            } else {
+                redBadge.textContent = '--';
+            }
+        } else if (color === 'blue') {
+            const blueBadge = document.getElementById('blueAllianceScore');
+            let score = null;
+            if (strategyData && strategyData.predicted_outcome) score = strategyData.predicted_outcome.blue_score || null;
+            if (!score && allianceData.predicted_score) score = allianceData.predicted_score;
+            if (score !== null && score !== undefined && !isNaN(Number(score))) {
+                blueBadge.textContent = `${Math.round(Number(score))} pts`;
+            } else {
+                blueBadge.textContent = '--';
+            }
+        }
+    } catch (e) {
+        console.warn('Failed to update alliance score badge', e);
+    }
+
     container.innerHTML = `
         <div class="mb-4">
             <h6>Team Composition:</h6>
@@ -851,7 +889,15 @@ function printStrategyReport() {
 }
 
 function exportToPDF() {
-    alert('PDF export functionality coming soon!');
+    // Open the browser print dialog so user can select "Save as PDF"
+    // If no strategy results are visible, warn the user.
+    var element = document.getElementById('strategyResults');
+    if (!element || element.style.display === 'none') {
+        alert('No strategy report to export. Please analyze a match first.');
+        return;
+    }
+    // Use the browser print dialog. The page has print-specific styles to improve output.
+    window.print();
 }
 
 function shareStrategy() {
@@ -944,6 +990,21 @@ document.addEventListener('DOMContentLoaded', function() {
         currentMatchId = window.PUBLIC_SHARED_MATCH_ID;
         analyzeSelectedMatch();
     }
+
+    // If server provided a preselected match id, select it in the dropdown and analyze
+    {% if preselected_match_id is defined and preselected_match_id %}
+    try {
+        const sel = document.getElementById('match_id');
+        if (sel) {
+            sel.value = {{ preselected_match_id }};
+            loadMatchStrategy({{ preselected_match_id }});
+            // auto-start analysis for authorized users
+            analyzeSelectedMatch();
+        }
+    } catch (e) {
+        console.warn('Failed to auto-select match:', e);
+    }
+    {% endif %}
 
     // Any additional initialization code here
 });

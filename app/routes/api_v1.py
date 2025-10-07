@@ -5,6 +5,7 @@ Provides comprehensive API endpoints for accessing team data, sync operations, a
 from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime, timedelta
 import traceback
+import json
 
 from app.utils.api_auth import (
     team_data_access_required, scouting_data_read_required, scouting_data_write_required,
@@ -727,3 +728,127 @@ def health_check():
         'version': '1.0',
         'team_number': get_current_api_team()
     })
+
+
+@bp.route('/all', methods=['GET'])
+@team_data_access_required
+def api_dump_all():
+    """Dump all data for the API key's associated scouting team.
+
+    This endpoint is intended for administrative exports. It respects API key
+    team scoping (get_current_api_team()). Supports api_key via header or
+    query param (GET) as other API endpoints do.
+    """
+    try:
+        team_number = get_current_api_team()
+        if team_number is None:
+            return jsonify({'error': 'API key not associated with a scouting team'}), 403
+        # Use column-only queries to avoid lazy-loading relationships (which may pull User records)
+        # Teams - select only scalar columns
+        teams_rows = db.session.query(
+            Team.id, Team.team_number, Team.team_name, Team.location
+        ).filter(Team.scouting_team_number == team_number).all()
+        teams_data = [
+            {
+                'id': row.id,
+                'team_number': row.team_number,
+                'team_name': row.team_name,
+                'location': row.location
+            }
+            for row in teams_rows
+        ]
+
+        # Events - build a safe column list (only InstrumentedAttribute columns) to avoid passing property objects
+        from sqlalchemy.orm.attributes import InstrumentedAttribute
+
+        events_data = []
+        event_cols = [Event.id, Event.name, Event.code]
+        # helper to append if real column
+        def add_if_column(attr_name):
+            attr = getattr(Event, attr_name, None)
+            if isinstance(attr, InstrumentedAttribute):
+                event_cols.append(attr)
+
+        add_if_column('location')
+        add_if_column('start_date')
+        add_if_column('end_date')
+
+        query = db.session.query(*event_cols)
+        # filter by scouting_team_number if it exists as a real column
+        st_attr = getattr(Event, 'scouting_team_number', None)
+        if isinstance(st_attr, InstrumentedAttribute):
+            query = query.filter(st_attr == team_number)
+
+        events_rows = query.all()
+        for row in events_rows:
+            # row is a KeyedTuple; access attributes by name when possible
+            rowdict = {}
+            for col in event_cols:
+                col_name = col.key if hasattr(col, 'key') else None
+                val = getattr(row, col_name) if col_name and hasattr(row, col_name) else None
+                # if dates, isoformat
+                if hasattr(val, 'isoformat'):
+                    val = val.isoformat()
+                rowdict[col_name or 'unknown'] = val
+            events_data.append(rowdict)
+
+        # Matches - column-only
+        matches_rows = db.session.query(
+            Match.id, Match.match_number, Match.match_type, Match.event_id, Match.red_alliance, Match.blue_alliance, Match.red_score, Match.blue_score, Match.winner
+        ).filter(Match.scouting_team_number == team_number).all()
+        matches_data = [
+            {
+                'id': row.id,
+                'match_number': row.match_number,
+                'match_type': row.match_type,
+                'event_id': row.event_id,
+                'red_alliance': row.red_alliance,
+                'blue_alliance': row.blue_alliance,
+                'red_score': row.red_score,
+                'blue_score': row.blue_score,
+                'winner': row.winner
+            }
+            for row in matches_rows
+        ]
+
+        # Scouting data - column-only
+        # Use underlying JSON column and scout_name to avoid property access that triggers User lookups
+        scouting_rows = db.session.query(
+            ScoutingData.id, ScoutingData.team_id, ScoutingData.match_id, ScoutingData.data_json, ScoutingData.scout_name, ScoutingData.timestamp
+        ).filter(ScoutingData.scouting_team_number == team_number).all()
+        scouting_list = []
+        for row in scouting_rows:
+            # row may be a KeyedTuple or tuple
+            data_json_val = getattr(row, 'data_json', None) if hasattr(row, 'data_json') else (row[3] if len(row) > 3 else None)
+            scout_name_val = getattr(row, 'scout_name', None) if hasattr(row, 'scout_name') else (row[4] if len(row) > 4 else None)
+            timestamp_val = getattr(row, 'timestamp', None) if hasattr(row, 'timestamp') else (row[5] if len(row) > 5 else None)
+            # parse JSON safely
+            parsed_data = None
+            try:
+                parsed_data = json.loads(data_json_val) if data_json_val else None
+            except Exception:
+                parsed_data = data_json_val
+
+            scouting_list.append({
+                'id': getattr(row, 'id', row[0]),
+                'team_id': getattr(row, 'team_id', row[1]),
+                'match_id': getattr(row, 'match_id', row[2]),
+                'data': parsed_data,
+                'scout_name': scout_name_val,
+                'timestamp': timestamp_val.isoformat() if timestamp_val is not None and hasattr(timestamp_val, 'isoformat') else None
+            })
+
+        return jsonify({
+            'success': True,
+            'team_number': team_number,
+            'teams': teams_data,
+            'events': events_data,
+            'matches': matches_data,
+            'scouting_data': scouting_list
+        })
+    except Exception as e:
+        # Log full traceback for debugging
+        tb = traceback.format_exc()
+        current_app.logger.error(f"Error in api_dump_all: {e}\n{tb}")
+        # Return a helpful but concise error message for local debugging
+        return jsonify({'error': 'Failed to dump data', 'details': str(e)}), 500

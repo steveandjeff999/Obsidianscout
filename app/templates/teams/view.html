@@ -178,9 +178,7 @@
                                         <a href="{{ url_for('scouting.scouting_form', team_id=team.id, match_id=data.match.id) }}" class="btn btn-sm btn-info">
                                             <i class="fas fa-edit me-1"></i> Edit
                                         </a>
-                                        <a href="{{ url_for('scouting.qr_code', team_id=team.id, match_id=data.match.id) }}" class="btn btn-sm btn-secondary">
-                                            <i class="fas fa-qrcode me-1"></i> QR
-                                        </a>
+                                        {# QR button removed per request #}
                                     </div>
                                 </td>
                             </tr>

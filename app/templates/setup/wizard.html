@@ -45,11 +45,6 @@
                             <div class="step-line"></div>
                             <div class="step" data-step="4">
                                 <div class="step-number">4</div>
-                                <div class="step-label">Theme</div>
-                            </div>
-                            <div class="step-line"></div>
-                            <div class="step" data-step="5">
-                                <div class="step-number">5</div>
                                 <div class="step-label">Complete</div>
                             </div>
                         </div>
@@ -221,38 +216,10 @@
                             </div>
                         </div>
                         
-                        <!-- Step 4: Theme -->
-                        <div class="wizard-step" id="step-4">
-                            <div class="text-center mb-4">
-                                <i class="fas fa-palette fa-3x text-info mb-3"></i>
-                                <h5>Theme & Appearance</h5>
-                                <p class="text-muted">Customize how ObsidianScout looks</p>
-                            </div>
-                            
-                            <div class="row">
-                                {% for theme_id, theme in themes.items() %}
-                                <div class="col-md-4 mb-3">
-                                    <div class="card theme-preview" data-theme="{{ theme_id }}">
-                                        <div class="card-body text-center">
-                                            <div class="theme-preview-colors mb-3">
-                                                <div class="color-swatch" style="background-color: {{ theme['colors']['primary'] }}"></div>
-                                                <div class="color-swatch" style="background-color: {{ theme['colors']['secondary'] }}"></div>
-                                                <div class="color-swatch" style="background-color: {{ theme['colors']['success'] }}"></div>
-                                            </div>
-                                            <h6>{{ theme['name'] }}</h6>
-                                            <p class="small text-muted">{{ theme['description'] }}</p>
-                                            <button class="btn btn-outline-primary btn-sm" onclick="selectTheme('{{ theme_id }}')">
-                                                Select
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        </div>
+                        <!-- Step 4: Complete (moved up after removing Theme step) -->
                         
                         <!-- Step 5: Complete -->
-                        <div class="wizard-step" id="step-5">
+                        <div class="wizard-step" id="step-4">
                             <div class="text-center">
                                 <i class="fas fa-check-circle fa-4x text-success mb-4"></i>
                                 <h4>Setup Complete!</h4>
@@ -304,7 +271,7 @@
                         </button>
                         
                         <div class="text-muted">
-                            <small>Step <span id="current-step">1</span> of 5</small>
+                            <small>Step <span id="current-step">1</span> of 4</small>
                         </div>
                         
                         <button class="btn btn-primary" id="next-btn" onclick="nextStep()">
@@ -355,12 +322,12 @@ function showStep(step) {
     
     // Update navigation
     document.getElementById('prev-btn').disabled = (step === 1);
-    document.getElementById('next-btn').style.display = (step === 5) ? 'none' : 'inline-block';
+    document.getElementById('next-btn').style.display = (step === 4) ? 'none' : 'inline-block';
     document.getElementById('current-step').textContent = step;
 }
 
 function nextStep() {
-    if (currentStep < 5) {
+    if (currentStep < 4) {
         saveCurrentStep();
         currentStep++;
         showStep(currentStep);
@@ -392,7 +359,8 @@ function saveCurrentStep() {
             stepData.events = events;
             break;
         case 4:
-            stepData.selectedTheme = document.querySelector('.theme-preview.selected')?.dataset.theme;
+            // Final step - mark completion
+            stepData.completed = true;
             break;
     }
     

@@ -70,6 +70,25 @@ def filter_scouting_data_by_scouting_team(query=None):
     return query.filter(ScoutingData.scouting_team_number.is_(None))  # Show unassigned data if no team set
 
 
+def filter_scouting_data_only_by_scouting_team(query=None):
+    """Strict filter: only return scouting data that matches the current user's scouting team.
+
+    This differs from `filter_scouting_data_by_scouting_team` which also returns
+    unassigned (NULL) entries when a scouting team is set. For prediction and
+    analytics use-cases we want to avoid accidentally including NULL/unassigned
+    entries from other teams, so analytics should call this stricter helper.
+    """
+    scouting_team_number = get_current_scouting_team_number()
+    if query is None:
+        query = ScoutingData.query
+
+    if scouting_team_number is not None:
+        return query.filter(ScoutingData.scouting_team_number == scouting_team_number)
+
+    # If no scouting team configured, only return unassigned entries (legacy behavior)
+    return query.filter(ScoutingData.scouting_team_number.is_(None))
+
+
 def filter_alliance_selections_by_scouting_team(query=None):
     """Filter alliance selections by current user's scouting team number."""
     scouting_team_number = get_current_scouting_team_number()
