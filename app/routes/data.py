@@ -2105,13 +2105,208 @@ def validate_data():
     except Exception as e:
         flash(f'Could not fetch official match data from API: {str(e)}', 'danger')
         return redirect(url_for('data.index'))
-    # Build a lookup for API scores: (match_type, match_number) -> {red_score, blue_score}
+    # Additionally, for validation we want the detailed breakdowns (penalties/fouls)
+    # which may not be present in the generic helpers. Fetch detailed match JSON
+    # directly from FIRST API (preferred) and TBA (fallback) and use those
+    # objects to extract penalty points.
+    def fetch_detailed_matches(event_code):
+        """Attempt to fetch detailed match objects from FIRST API, fallback to TBA.
+
+        Returns a dict keyed by (match_type_lower, match_number_str) -> match_obj
+        """
+        detailed = {}
+        from flask import current_app
+        import requests
+
+        # FIRST direct fetch
+        try:
+            base = current_app.config.get('API_BASE_URL', 'https://frc-api.firstinspires.org')
+            season = game_config.get('season', None) or game_config.get('year', None) or 0
+            # Try the /matches endpoint first
+            first_url = f"{base}/v2.0/{season}/matches/{event_code}"
+            headers = None
+            try:
+                from app.utils.api_utils import get_api_headers
+                headers = get_api_headers()
+            except Exception:
+                headers = {'Accept': 'application/json'}
+
+            resp = requests.get(first_url, headers=headers, timeout=15)
+            if resp.status_code == 200:
+                data = resp.json()
+                # FIRST often wraps matches under 'Matches' or returns list directly
+                matches_list = None
+                if isinstance(data, dict) and 'Matches' in data:
+                    matches_list = data.get('Matches')
+                elif isinstance(data, list):
+                    matches_list = data
+                elif isinstance(data, dict):
+                    # find the first list value
+                    for v in data.values():
+                        if isinstance(v, list):
+                            matches_list = v
+                            break
+
+                if matches_list:
+                    for m in matches_list:
+                        m_type = str(m.get('tournamentLevel', m.get('matchType', 'Qualification'))).lower()
+                        m_num = str(m.get('matchNumber', m.get('match_number', 0)))
+                        detailed[(m_type, m_num)] = m
+                    return detailed
+        except Exception:
+            pass
+
+        # TBA fallback
+        try:
+            from app.utils.tba_api_utils import get_tba_api_headers, construct_tba_event_key
+            base = 'https://www.thebluealliance.com/api/v3'
+            # construct event key using game config season
+            season = game_config.get('season', None) or game_config.get('year', None)
+            try:
+                tba_key = construct_tba_event_key(event_code, season)
+            except Exception:
+                tba_key = event_code
+
+            tba_url = f"{base}/event/{tba_key}/matches"
+            headers = get_tba_api_headers()
+            resp = requests.get(tba_url, headers=headers, timeout=15)
+            if resp.status_code == 200:
+                matches_list = resp.json()
+                for m in matches_list:
+                    # TBA uses comp_level/match_number
+                    m_type = str(m.get('comp_level', m.get('tournamentLevel', 'qualification'))).lower()
+                    # normalize match number (handle set/number combos)
+                    m_num = str(m.get('match_number', m.get('matchNumber', 0)))
+                    detailed[(m_type, m_num)] = m
+                return detailed
+        except Exception:
+            pass
+
+        return detailed
+
+    detailed_lookup = fetch_detailed_matches(event.code)
+    # Build a lookup for API scores and penalty breakdowns.
+    # We'll try to detect common penalty/foul fields in the API response and
+    # subtract any penalty points that were awarded to an alliance so that
+    # scouting (which commonly records only on-field scoring) compares more
+    # accurately against the API's reported totals.
+    def _extract_penalty_points(match_obj, side):
+        # side: 'red' or 'blue'
+        if not match_obj:
+            return 0
+
+        # Helper: attempt to coerce values to int if possible
+        def _to_int(val):
+            try:
+                if val is None:
+                    return None
+                if isinstance(val, (int, float)):
+                    return int(val)
+                s = str(val).strip()
+                if s == '':
+                    return None
+                return int(float(s))
+            except Exception:
+                return None
+
+        # Recursive search: collect candidate numeric values whose key names
+        # indicate fouls/penalties and attempt to associate them with a side
+        candidates = []  # tuples of (path, key, value)
+
+        def _walk(obj, path=None):
+            if path is None:
+                path = []
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    key_lower = k.lower()
+                    cur_path = path + [k]
+                    # If v is a number-like and key name suggests penalty/foul
+                    if isinstance(v, (int, float)) or (isinstance(v, str) and v.strip() != ''):
+                        num = _to_int(v)
+                        if num is not None and ('foul' in key_lower or 'penal' in key_lower or 'penalty' in key_lower):
+                            candidates.append(('/'.join(cur_path), k, num))
+                    # If nested dict/list, recurse
+                    if isinstance(v, dict):
+                        _walk(v, cur_path)
+                    elif isinstance(v, list):
+                        for i, item in enumerate(v):
+                            _walk(item, cur_path + [str(i)])
+            elif isinstance(obj, list):
+                for i, item in enumerate(obj):
+                    _walk(item, path + [str(i)])
+
+        _walk(match_obj)
+
+        # Prefer candidates that mention the side in their path or key
+        for path, key, val in candidates:
+            lk = (path + '/' + key).lower()
+            if side in lk or lk.endswith(side):
+                return val
+
+        # Next prefer candidates where key contains 'red'/'blue' markers
+        for path, key, val in candidates:
+            if key.lower().endswith('red') and side == 'red':
+                return val
+            if key.lower().endswith('blue') and side == 'blue':
+                return val
+
+        # If multiple candidates found and none explicitly matched side,
+        # attempt to heuristically choose one: if only one candidate, return it.
+        if len(candidates) == 1:
+            return candidates[0][2]
+
+        # Fallback: check for known FIRST API keys like scoreRedFoul / scoreBlueFoul
+        first_keys = {
+            'red': ['scoreRedFoul', 'score_red_foul', 'red_foul', 'scoreRedPenalty', 'scoreRedPenaltyPoints'],
+            'blue': ['scoreBlueFoul', 'score_blue_foul', 'blue_foul', 'scoreBluePenalty', 'scoreBluePenaltyPoints']
+        }
+        for fk in first_keys.get(side, []):
+            if fk in match_obj:
+                v = _to_int(match_obj.get(fk))
+                if v is not None:
+                    return v
+
+        # No explicit penalty info found for this side
+        return 0
+
     api_score_lookup = {}
     for m in api_matches:
         key = (str(m.get('match_type', m.get('matchType', 'Qualification'))).lower(), str(m.get('match_number', m.get('matchNumber', 0))))
+        # Prefer detailed match object from direct fetch when available
+        detailed_m = detailed_lookup.get(key)
+        if detailed_m:
+            # FIRST style
+            raw_red = detailed_m.get('scoreRedFinal', detailed_m.get('score_red_final', m.get('red_score', m.get('scoreRedFinal'))))
+            raw_blue = detailed_m.get('scoreBlueFinal', detailed_m.get('score_blue_final', m.get('blue_score', m.get('scoreBlueFinal'))))
+            # FIRST foul keys
+            red_pen = _extract_penalty_points(detailed_m, 'red') if detailed_m else _extract_penalty_points(m, 'red')
+            blue_pen = _extract_penalty_points(detailed_m, 'blue') if detailed_m else _extract_penalty_points(m, 'blue')
+        else:
+            raw_red = m.get('red_score', m.get('scoreRedFinal'))
+            raw_blue = m.get('blue_score', m.get('scoreBlueFinal'))
+            red_pen = _extract_penalty_points(m, 'red')
+            blue_pen = _extract_penalty_points(m, 'blue')
+        try:
+            red_pen = int(red_pen or 0)
+        except Exception:
+            red_pen = 0
+        try:
+            blue_pen = int(blue_pen or 0)
+        except Exception:
+            blue_pen = 0
+
+        # Adjust API scores by subtracting penalty points that were awarded
+        # to the alliance (so scouting points can be compared to on-field scoring)
+        adj_red = None if raw_red is None else (int(raw_red) - red_pen)
+        adj_blue = None if raw_blue is None else (int(raw_blue) - blue_pen)
+
         api_score_lookup[key] = {
-            'red_score': m.get('red_score', m.get('scoreRedFinal')),
-            'blue_score': m.get('blue_score', m.get('scoreBlueFinal'))
+            'red_score_raw': raw_red,
+            'blue_score_raw': raw_blue,
+            'red_penalty': red_pen,
+            'blue_penalty': blue_pen,
+            'red_score': adj_red,
+            'blue_score': adj_blue
         }
     # Get tolerance from query params (default 15)
     try:
@@ -2140,15 +2335,27 @@ def validate_data():
             elif sd.alliance == 'blue':
                 blue_total += pts
     # Consider data valid if within +/-tolerance points of the official API score
+        # Pull API values (raw, penalty, adjusted) from lookup
+        red_api_raw = api_scores.get('red_score_raw') if api_scores else None
+        blue_api_raw = api_scores.get('blue_score_raw') if api_scores else None
+        red_pen = api_scores.get('red_penalty', 0) if api_scores else 0
+        blue_pen = api_scores.get('blue_penalty', 0) if api_scores else 0
+        red_api_adj = api_scores.get('red_score') if api_scores else None
+        blue_api_adj = api_scores.get('blue_score') if api_scores else None
+
         results.append({
             'match_number': match.match_number,
             'match_type': match.match_type,
-            'red_api': api_scores['red_score'],
-            'blue_api': api_scores['blue_score'],
+            'red_api_raw': red_api_raw,
+            'blue_api_raw': blue_api_raw,
+            'red_penalty': red_pen,
+            'blue_penalty': blue_pen,
+            'red_api': red_api_adj,
+            'blue_api': blue_api_adj,
             'red_scout': red_total,
             'blue_scout': blue_total,
-            'discrepancy_red': (api_scores['red_score'] is not None and abs((red_total or 0) - (api_scores['red_score'] or 0)) > tolerance),
-            'discrepancy_blue': (api_scores['blue_score'] is not None and abs((blue_total or 0) - (api_scores['blue_score'] or 0)) > tolerance)
+            'discrepancy_red': (red_api_adj is not None and abs((red_total or 0) - (red_api_adj or 0)) > tolerance),
+            'discrepancy_blue': (blue_api_adj is not None and abs((blue_total or 0) - (blue_api_adj or 0)) > tolerance)
         })
     # Custom sort order: practice, qualification, semifinals, finals
     match_type_order = {

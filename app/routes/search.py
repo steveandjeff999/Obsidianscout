@@ -438,9 +438,9 @@ def search_pages(query):
         },
         {
             'title': 'Matches',
-            'description': 'View match information and predictions',
+            'description': 'View match information',
             'url': '/matches',
-            'keywords': ['matches', 'match', 'games', 'predictions', 'schedule']
+            'keywords': ['matches', 'match', 'games', 'schedule']
         },
         {
             'title': 'User Management',
@@ -607,7 +607,8 @@ def api_suggestions():
                             'relevance': 1.0,
                             'subtitle': exact_team.location or 'No location',
                             'team_number': exact_team.team_number,
-                            'search_query': str(exact_team.team_number)
+                            'search_query': str(exact_team.team_number),
+                            'url': f'/teams/{exact_team.team_number}/view'
                         })
             
             # Priority 2: Direct numeric matches (if query is purely numeric)
@@ -623,7 +624,8 @@ def api_suggestions():
                         'relevance': 1.0,
                         'subtitle': exact_team.location or 'No location',
                         'team_number': exact_team.team_number,
-                        'search_query': str(exact_team.team_number)
+                        'search_query': str(exact_team.team_number),
+                        'url': f'/teams/{exact_team.team_number}/view'
                     })
                 
                 # Partial number matches
@@ -641,7 +643,8 @@ def api_suggestions():
                         'relevance': 0.9,
                         'subtitle': team.location or 'No location',
                         'team_number': team.team_number,
-                        'search_query': str(team.team_number)
+                        'search_query': str(team.team_number),
+                        'url': f'/teams/{team.team_number}/view'
                     })
             
             # Priority 3: Name and location matches
@@ -673,7 +676,8 @@ def api_suggestions():
                         'relevance': relevance,
                         'subtitle': team.location or 'No location',
                         'team_number': team.team_number,
-                        'search_query': str(team.team_number)
+                        'search_query': str(team.team_number),
+                        'url': f'/teams/{team.team_number}/view'
                     })
             
             # Priority 4: Fuzzy matching (if we don't have enough suggestions)
@@ -692,7 +696,8 @@ def api_suggestions():
                             'relevance': fuzzy_score * 0.7,  # Lower relevance for fuzzy
                             'subtitle': f"{team.location or 'No location'} (similar)",
                             'team_number': team.team_number,
-                            'search_query': str(team.team_number)
+                            'search_query': str(team.team_number),
+                            'url': f'/teams/{team.team_number}/view'
                         })
                         existing_team_numbers.add(team.team_number)
             
@@ -718,7 +723,8 @@ def api_suggestions():
                     'type': 'user',
                     'relevance': 1.0,
                     'subtitle': f"Team {user.team_number}" if hasattr(user, 'team_number') and user.team_number else 'User',
-                    'search_query': user.username
+                    'search_query': user.username,
+                    'url': f'/auth/users/{user.id}'
                 })
             
             # Partial matches
@@ -739,7 +745,8 @@ def api_suggestions():
                         'type': 'user',
                         'relevance': relevance,
                         'subtitle': f"Team {user.team_number}" if hasattr(user, 'team_number') and user.team_number else 'User',
-                        'search_query': user.username
+                        'search_query': user.username,
+                        'url': f'/auth/users/{user.id}'
                     })
                     existing_usernames.add(user.username)
             
@@ -761,8 +768,9 @@ def api_suggestions():
                                 'text': user.username,
                                 'type': 'user',
                                 'relevance': best_score * 0.7,
-                                'subtitle': f"Team {user.team_number} (similar)" if hasattr(user, 'team_number') and user.team_number else 'User (similar)',
-                                'search_query': user.username
+                                    'subtitle': f"Team {user.team_number} (similar)" if hasattr(user, 'team_number') and user.team_number else 'User (similar)',
+                                    'search_query': user.username,
+                                    'url': f'/auth/users/{user.id}'
                             })
                             existing_usernames.add(user.username)
                             

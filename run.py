@@ -180,106 +180,181 @@ if __name__ == '__main__':
                 print("Starting periodic API data sync...")
                 
                 # Import here to avoid circular imports
-                from app.utils.config_manager import get_effective_game_config
+                from app.utils.config_manager import load_game_config
                 from app.utils.api_utils import get_teams_dual_api, get_matches_dual_api
-                from app.models import Team, Match, Event, db
-                from app.utils.team_isolation import get_event_by_code, assign_scouting_team_to_model, filter_teams_by_scouting_team, filter_matches_by_scouting_team
+                from app.models import Team, Match, Event, User, ScoutingTeamSettings, db
                 
                 with app.app_context():
                     try:
-                        # Get current event from config
-                        game_config = get_effective_game_config()
-                        event_code = game_config.get('current_event_code')
-                        
-                        if not event_code:
-                            print("No event code configured, skipping API sync")
-                            continue
-                        
-                        # Get or create event
-                        event = get_event_by_code(event_code)
-                        if not event:
-                            print(f"Event {event_code} not found in database, skipping API sync")
-                            continue
-                        
-                        # Sync teams
+                        # Build a set of scouting team numbers to run sync for
+                        team_numbers = set()
+
                         try:
-                            team_data_list = get_teams_dual_api(event_code)
-                            teams_added = 0
-                            teams_updated = 0
-                            
-                            for team_data in team_data_list:
-                                if not team_data or not team_data.get('team_number'):
-                                    continue
-                                
-                                team_number = team_data.get('team_number')
-                                team = filter_teams_by_scouting_team().filter(Team.team_number == team_number).first()
-                                
-                                if team:
-                                    # Update existing team
-                                    team.team_name = team_data.get('team_name', team.team_name)
-                                    team.location = team_data.get('location', team.location)
-                                    teams_updated += 1
-                                else:
-                                    # Add new team
-                                    team = Team(**team_data)
-                                    assign_scouting_team_to_model(team)
-                                    db.session.add(team)
-                                    teams_added += 1
-                                
-                                # Associate with event if not already associated
-                                if event not in team.events:
-                                    team.events.append(event)
-                            
-                            print(f"Teams sync: {teams_added} added, {teams_updated} updated")
-                        except Exception as e:
-                            print(f"Error syncing teams: {str(e)}")
-                        
-                        # Sync matches
+                            # Collect from ScoutingTeamSettings
+                            for rec in ScoutingTeamSettings.query.with_entities(ScoutingTeamSettings.scouting_team_number).all():
+                                if rec[0] is not None:
+                                    team_numbers.add(rec[0])
+                        except Exception:
+                            pass
+
                         try:
-                            match_data_list = get_matches_dual_api(event_code)
-                            matches_added = 0
-                            matches_updated = 0
-                            
-                            for match_data in match_data_list:
-                                if not match_data:
-                                    continue
-                                
-                                match_data['event_id'] = event.id
-                                match_number = match_data.get('match_number')
-                                match_type = match_data.get('match_type')
-                                
-                                if not match_number or not match_type:
-                                    continue
-                                
-                                match = filter_matches_by_scouting_team().filter(
-                                    Match.event_id == event.id,
-                                    Match.match_number == match_number,
-                                    Match.match_type == match_type
-                                ).first()
-                                
-                                if match:
-                                    # Update existing match
-                                    match.red_alliance = match_data.get('red_alliance', match.red_alliance)
-                                    match.blue_alliance = match_data.get('blue_alliance', match.blue_alliance)
-                                    match.winner = match_data.get('winner', match.winner)
-                                    match.red_score = match_data.get('red_score', match.red_score)
-                                    match.blue_score = match_data.get('blue_score', match.blue_score)
-                                    matches_updated += 1
+                            # Collect from Users
+                            for rec in User.query.with_entities(User.scouting_team_number).filter(User.scouting_team_number.isnot(None)).distinct().all():
+                                if rec[0] is not None:
+                                    team_numbers.add(rec[0])
+                        except Exception:
+                            pass
+
+                        try:
+                            # As a fallback, collect any team.scouting_team_number values
+                            for rec in Team.query.with_entities(Team.scouting_team_number).filter(Team.scouting_team_number.isnot(None)).distinct().all():
+                                if rec[0] is not None:
+                                    team_numbers.add(rec[0])
+                        except Exception:
+                            pass
+
+                        # If no team numbers discovered, still attempt a single run with None (legacy behavior)
+                        if not team_numbers:
+                            team_numbers.add(None)
+
+                        # Iterate each scouting team and run sync scoped to that team
+                        for scouting_team_number in sorted(team_numbers, key=lambda x: (x is None, x)):
+                            try:
+                                if scouting_team_number is None:
+                                    print("Running API sync for unassigned/default scope")
                                 else:
-                                    # Add new match
-                                    match = Match(**match_data)
-                                    assign_scouting_team_to_model(match)
-                                    db.session.add(match)
-                                    matches_added += 1
-                            
-                            print(f"Matches sync: {matches_added} added, {matches_updated} updated")
-                        except Exception as e:
-                            print(f"Error syncing matches: {str(e)}")
-                        
-                        # Commit all changes
-                        db.session.commit()
-                        print("API data sync completed successfully")
-                        
+                                    print(f"Running API sync for scouting team: {scouting_team_number}")
+
+                                # Load game config for this team and make it available to helpers
+                                # so background threads behave like UI requests (which set GAME_CONFIG)
+                                game_config = load_game_config(team_number=scouting_team_number)
+                                try:
+                                    # Ensure helper functions that call get_current_game_config()
+                                    # will see the team-scoped config when running in a background thread.
+                                    app.config['GAME_CONFIG'] = game_config
+                                except Exception:
+                                    pass
+                                # Check team's auto-sync setting (default True)
+                                api_settings = game_config.get('api_settings') or {}
+                                auto_sync_enabled = api_settings.get('auto_sync_enabled', True)
+                                if not auto_sync_enabled:
+                                    print(f"  Auto-sync disabled for team {scouting_team_number}, skipping")
+                                    continue
+
+                                event_code = game_config.get('current_event_code')
+
+                                if not event_code:
+                                    print(f"  No event code configured for team {scouting_team_number}, skipping")
+                                    continue
+
+                                # Get or create event for this team and event code
+                                event = Event.query.filter_by(code=event_code, scouting_team_number=scouting_team_number).first()
+                                if not event:
+                                    print(f"  Event {event_code} not found for team {scouting_team_number}, creating placeholder event")
+                                    try:
+                                        event = Event(name=event_code, code=event_code, year=game_config.get('season', None) or game_config.get('year', 0), scouting_team_number=scouting_team_number)
+                                        db.session.add(event)
+                                        db.session.commit()
+                                    except Exception as e:
+                                        db.session.rollback()
+                                        print(f"  Failed to create event {event_code} for team {scouting_team_number}: {e}")
+                                        continue
+
+                                # Sync teams for this scouting team + event
+                                try:
+                                    team_data_list = get_teams_dual_api(event_code)
+                                    teams_added = 0
+                                    teams_updated = 0
+
+                                    for team_data in team_data_list:
+                                        if not team_data or not team_data.get('team_number'):
+                                            continue
+
+                                        team_number = team_data.get('team_number')
+                                        team = Team.query.filter_by(team_number=team_number, scouting_team_number=scouting_team_number).first()
+
+                                        if team:
+                                            # Update existing team
+                                            team.team_name = team_data.get('team_name', team.team_name)
+                                            team.location = team_data.get('location', team.location)
+                                            teams_updated += 1
+                                        else:
+                                            # Add new team and assign scouting team
+                                            team = Team(team_number=team_number,
+                                                        team_name=team_data.get('team_name'),
+                                                        location=team_data.get('location'),
+                                                        scouting_team_number=scouting_team_number)
+                                            db.session.add(team)
+                                            teams_added += 1
+
+                                        # Associate with event if not already associated
+                                        if event not in team.events:
+                                            try:
+                                                team.events.append(event)
+                                            except Exception:
+                                                pass
+
+                                    print(f"  Teams sync for {scouting_team_number}: {teams_added} added, {teams_updated} updated")
+                                except Exception as e:
+                                    print(f"  Error syncing teams for {scouting_team_number}: {str(e)}")
+
+                                # Sync matches for this scouting team + event
+                                try:
+                                    match_data_list = get_matches_dual_api(event_code)
+                                    matches_added = 0
+                                    matches_updated = 0
+
+                                    for match_data in match_data_list:
+                                        if not match_data:
+                                            continue
+
+                                        match_data['event_id'] = event.id
+                                        match_number = match_data.get('match_number')
+                                        match_type = match_data.get('match_type')
+
+                                        if not match_number or not match_type:
+                                            continue
+
+                                        match = Match.query.filter_by(event_id=event.id, match_number=match_number, match_type=match_type, scouting_team_number=scouting_team_number).first()
+
+                                        if match:
+                                            # Update existing match
+                                            match.red_alliance = match_data.get('red_alliance', match.red_alliance)
+                                            match.blue_alliance = match_data.get('blue_alliance', match.blue_alliance)
+                                            match.winner = match_data.get('winner', match.winner)
+                                            match.red_score = match_data.get('red_score', match.red_score)
+                                            match.blue_score = match_data.get('blue_score', match.blue_score)
+                                            matches_updated += 1
+                                        else:
+                                            # Add new match and assign scouting team
+                                            match = Match(match_number=match_number,
+                                                          match_type=match_type,
+                                                          event_id=event.id,
+                                                          red_alliance=match_data.get('red_alliance'),
+                                                          blue_alliance=match_data.get('blue_alliance'),
+                                                          red_score=match_data.get('red_score'),
+                                                          blue_score=match_data.get('blue_score'),
+                                                          winner=match_data.get('winner'),
+                                                          scouting_team_number=scouting_team_number)
+                                            db.session.add(match)
+                                            matches_added += 1
+
+                                    print(f"  Matches sync for {scouting_team_number}: {matches_added} added, {matches_updated} updated")
+                                except Exception as e:
+                                    print(f"  Error syncing matches for {scouting_team_number}: {str(e)}")
+
+                                # Commit changes for this team scope
+                                try:
+                                    db.session.commit()
+                                except Exception as e:
+                                    db.session.rollback()
+                                    print(f"  Failed to commit changes for team {scouting_team_number}: {e}")
+
+                            except Exception as e:
+                                print(f"  Error processing scouting team {scouting_team_number}: {e}")
+
+                        print("API data sync completed for all teams")
+
                     except Exception as e:
                         print(f"Error in API sync: {str(e)}")
                         db.session.rollback()

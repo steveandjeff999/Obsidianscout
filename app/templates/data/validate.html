@@ -49,7 +49,9 @@
                   <th>Match #</th>
                   <th>Type</th>
                   <th>Alliance</th>
-                  <th>API Points</th>
+                  <th>API Points<br/><small class="text-muted">(raw)</small></th>
+                  <th>Penalties<br/><small class="text-muted">(awarded to alliance)</small></th>
+                  <th>API Adjusted<br/><small class="text-muted">(raw - penalties)</small></th>
                   <th>Scouting Points</th>
                   <th>Discrepancy</th>
                 </tr>
@@ -60,6 +62,8 @@
                     <td rowspan="2" class="fw-bold">{{ row.match_number }}</td>
                     <td rowspan="2">{{ row.match_type }}</td>
                     <td><span class="badge bg-danger">Red</span></td>
+                    <td>{{ row.red_api_raw if row.red_api_raw is not none else 'N/A' }}</td>
+                    <td>{{ row.red_penalty if row.red_penalty else 0 }}</td>
                     <td>{{ row.red_api if row.red_api is not none else 'N/A' }}</td>
                     <td>{{ row.red_scout }}</td>
                     <td class="text-center {% if row.discrepancy_red %}table-danger fw-bold text-danger{% else %}table-success text-success{% endif %}">
@@ -68,6 +72,8 @@
                   </tr>
                   <tr>
                     <td><span class="badge bg-primary">Blue</span></td>
+                    <td>{{ row.blue_api_raw if row.blue_api_raw is not none else 'N/A' }}</td>
+                    <td>{{ row.blue_penalty if row.blue_penalty else 0 }}</td>
                     <td>{{ row.blue_api if row.blue_api is not none else 'N/A' }}</td>
                     <td>{{ row.blue_scout }}</td>
                     <td class="text-center {% if row.discrepancy_blue %}table-danger fw-bold text-danger{% else %}table-success text-success{% endif %}">

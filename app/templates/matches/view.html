@@ -32,9 +32,10 @@
                         {% endfor %}
                     </ul>
                     
-                    {% if match.red_score is not none %}
+                    {% set ds = display_score if display_score is defined else None %}
+                    {% if ds and ds.red_score is not none %}
                     <div class="alert alert-danger">
-                        <strong>Final Score:</strong> {{ match.red_score }}
+                        <strong>Final Score:</strong> {{ ds.red_score }} {% if ds.source == 'local' %}<small class="text-muted">(from local scouting)</small>{% endif %}
                     </div>
                     {% endif %}
                 </div>
@@ -62,9 +63,10 @@
                         {% endfor %}
                     </ul>
                     
-                    {% if match.blue_score is not none %}
+                    {% set ds = display_score if display_score is defined else None %}
+                    {% if ds and ds.blue_score is not none %}
                     <div class="alert alert-primary">
-                        <strong>Final Score:</strong> {{ match.blue_score }}
+                        <strong>Final Score:</strong> {{ ds.blue_score }} {% if ds.source == 'local' %}<small class="text-muted">(from local scouting)</small>{% endif %}
                     </div>
                     {% endif %}
                 </div>

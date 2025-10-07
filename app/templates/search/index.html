@@ -688,7 +688,7 @@ document.addEventListener('DOMContentLoaded', function() {
                              data-index="${globalIndex}" 
                              data-type="${suggestion.type}" 
                              data-value="${escapeHtml(suggestion.text)}"
-                             onclick="selectSuggestionFromClick(this)">
+                             data-url="${suggestion.url ? escapeHtml(suggestion.url) : ''}">
                             <div class="suggestion-icon">
                                 <i class="${iconClass}"></i>
                             </div>
@@ -706,6 +706,16 @@ document.addEventListener('DOMContentLoaded', function() {
         suggestions.classList.add('show');
         selectedIndex = -1;
     }
+
+    // Delegate clicks on suggestion items to the in-scope handler
+    suggestions.addEventListener('click', function(e) {
+        const item = e.target.closest('.suggestion-item');
+        if (item) {
+            // Prevent the blur/hide timeout interfering when clicking
+            e.preventDefault();
+            selectSuggestionFromClick(item);
+        }
+    });
 
     // Show no results
     function showNoResults() {
@@ -759,14 +769,21 @@ document.addEventListener('DOMContentLoaded', function() {
     // Select suggestion from click
     function selectSuggestionFromClick(element) {
         const text = element.dataset.value;
+        const url = element.dataset.url;
+        // If a URL is provided by the suggestion, navigate directly
+        if (url) {
+            window.location.href = url;
+            return;
+        }
+
         searchInput.value = text;
         hideSuggestions();
-        
+
         // Visual feedback
         element.style.background = 'var(--bs-primary)';
         element.style.color = 'white';
         element.style.transform = 'scale(0.98)';
-        
+
         // Submit after brief delay
         setTimeout(() => {
             searchInput.form.submit();
@@ -775,6 +792,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Select suggestion from keyboard
     function selectSuggestion(element) {
+        const url = element.dataset.url;
+        if (url) {
+            window.location.href = url;
+            return;
+        }
+
         searchInput.value = element.dataset.value;
         hideSuggestions();
         searchInput.form.submit();

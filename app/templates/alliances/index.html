@@ -46,7 +46,7 @@
                 <div class="row g-3">
                     {% for alliance in alliances %}
                     <div class="col-lg-6">
-                        <div class="card border-primary alliance-card" data-alliance-id="{{ alliance.id }}">
+                        <div class="card border-primary alliance-card" data-alliance-id="{{ alliance.id }}" data-alliance-number="{{ alliance.alliance_number }}">
                             <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
                                 <h6 class="mb-0 fw-bold">Alliance {{ alliance.alliance_number }}</h6>
                                 <div class="alliance-strength">
@@ -190,7 +190,7 @@
         </div>
     </div>
     
-    <div class="col-md-4">
+    <div class="col-md-4 alliances-sidebar">
         <div class="card">
             <div class="card-header bg-success text-white">
                 <h5 class="mb-0">
@@ -253,6 +253,8 @@ let currentAllianceId = null;
 let currentPosition = null;
 let teamRecommendations = [];
 let socket;
+// Expose current event id for client-side metric queries
+const currentEventId = {{ current_event.id|tojson }};
 
 document.addEventListener('DOMContentLoaded', function() {
     initializeSocketIO();
@@ -350,6 +352,12 @@ function updateAllianceUI(data) {
     
     // Show notification
     showNotification(data);
+    // After any UI change, recalculate alliance strengths so the badge reflects current assignments
+    try {
+        updateAllianceStrengths();
+    } catch (e) {
+        console.warn('Failed to update alliance strengths after UI update:', e);
+    }
 }
 
 function getPositionBadgeClass(position) {
@@ -724,8 +732,38 @@ function assignTeamToAlliance(allianceId, position, teamNumber) {
     .then(data => {
         if (!data.success) {
             alert('Error: ' + data.message);
+            return;
         }
-        // UI will be updated via SocketIO, no need to reload
+
+        // Optimistically update the UI immediately for the actor (no refresh required)
+        try {
+            const allianceCard = document.querySelector(`[data-alliance-id="${allianceId}"]`);
+            const allianceNumber = allianceCard ? allianceCard.dataset.allianceNumber : null;
+            const uiData = {
+                alliance_id: allianceId,
+                alliance_number: allianceNumber,
+                position: position,
+                team_id: teamNumber,
+                team_number: teamNumber,
+                team_name: `Team ${teamNumber}`,
+                action: 'assign'
+            };
+            updateAllianceUI(uiData);
+            
+            // Remove the assigned team from local recommendations immediately
+            try {
+                const idx = teamRecommendations.findIndex(t => t.team_number == teamNumber || t.team_id == teamNumber);
+                if (idx !== -1) {
+                    teamRecommendations.splice(idx, 1);
+                    displayRecommendations();
+                    updateAllianceStrengths();
+                }
+            } catch (e) {
+                console.warn('Failed to update recommendations optimistically:', e);
+            }
+        } catch (e) {
+            console.warn('Failed to perform optimistic UI update for assign:', e);
+        }
     })
     .catch(error => {
         console.error('Error:', error);
@@ -748,8 +786,33 @@ function removeTeamFromAlliance(allianceId, position) {
     .then(data => {
         if (!data.success) {
             alert('Error: ' + data.message);
+            return;
         }
-        // UI will be updated via SocketIO, no need to reload
+
+        // Optimistically update UI immediately for the actor
+        try {
+            const allianceCard = document.querySelector(`[data-alliance-id="${allianceId}"]`);
+            const allianceNumber = allianceCard ? allianceCard.dataset.allianceNumber : null;
+            const uiData = {
+                alliance_id: allianceId,
+                alliance_number: allianceNumber,
+                position: position,
+                team_id: null,
+                team_number: null,
+                team_name: null,
+                action: 'remove'
+            };
+            updateAllianceUI(uiData);
+        
+            // After removal, refresh recommendations from the server so the freed team reappears
+            try {
+                loadRecommendations();
+            } catch (e) {
+                console.warn('Failed to reload recommendations after removal:', e);
+            }
+        } catch (e) {
+            console.warn('Failed to perform optimistic UI update for remove:', e);
+        }
     })
     .catch(error => {
         console.error('Error:', error);
@@ -758,12 +821,64 @@ function removeTeamFromAlliance(allianceId, position) {
 }
 
 function updateAllianceStrengths() {
-    // This would calculate and display alliance strengths based on team metrics
-    // For now, we'll keep it simple
+    // Build a lookup of team_number -> total_points from the loaded recommendations
+    const scoreByTeamNumber = {};
+    try {
+        teamRecommendations.forEach(t => {
+            // team_number may be numeric or string; normalize to string for safe keying
+            const key = String(t.team_number);
+            scoreByTeamNumber[key] = Number(t.total_points) || 0;
+        });
+    } catch (e) {
+        console.warn('Failed to build recommendations lookup for alliance strengths:', e);
+    }
+
+    // For each alliance card, sum assigned teams' scores and update the badge
     document.querySelectorAll('.alliance-card').forEach(card => {
         const allianceId = card.dataset.allianceId;
         const strengthBadge = document.getElementById(`alliance-${allianceId}-strength`);
-        // Calculate total strength here if needed
+        if (!strengthBadge) return;
+
+        // Find assigned team badges inside this card
+        const assignedBadges = card.querySelectorAll('.team-info .badge');
+        let total = 0;
+        const missingTeamNumbers = [];
+        assignedBadges.forEach(b => {
+            const txt = (b.textContent || '').trim();
+            // Some badges may include extra text; extract digits
+            const teamNumMatch = txt.match(/\d+/);
+            const teamNum = teamNumMatch ? String(teamNumMatch[0]) : txt;
+            if (teamNum) {
+                // Try lookup by team number; fallback to treating as 0
+                const val = scoreByTeamNumber[teamNum];
+                if (typeof val !== 'undefined') {
+                    total += Number(val) || 0;
+                } else {
+                    // If recommendations not loaded or team missing, we'll fetch it from the server
+                    missingTeamNumbers.push(teamNum);
+                }
+            }
+        });
+        if (missingTeamNumbers.length === 0) {
+            strengthBadge.textContent = `${total.toFixed(1)} pts`;
+        } else {
+            // Fetch metrics for missing teams in parallel
+            const fetches = missingTeamNumbers.map(tn => fetch(`/alliances/api/team_metrics?team_number=${encodeURIComponent(tn)}&event_id=${currentEventId}`)
+                .then(r => r.json()).catch(() => null));
+
+            Promise.all(fetches).then(results => {
+                results.forEach(res => {
+                    if (res && typeof res.total_points !== 'undefined') {
+                        total += Number(res.total_points) || 0;
+                    }
+                });
+
+                strengthBadge.textContent = `${total.toFixed(1)} pts`;
+            }).catch(e => {
+                console.warn('Failed to fetch team metrics for alliance badge:', e);
+                strengthBadge.textContent = `${total.toFixed(1)} pts`;
+            });
+        }
     });
 }
 </script>
@@ -954,6 +1069,41 @@ body.modern-layout.dark-mode .modal-content .list-group-item {
     background-color: transparent !important;
     color: inherit !important;
     border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+}
+
+/* Sticky/scrolling sidebar for recommendations on wide screens.
+   Keeps the Team Recommendations card visible while the alliance list scrolls. */
+@media (min-width: 992px) {
+    .alliances-sidebar .card {
+        position: sticky;
+        top: 80px; /* leave room for fixed header / spacing */
+        max-height: calc(100vh - 96px);
+        overflow: hidden; /* hide overflow on the card itself */
+    }
+
+    /* Make only the card-body scrollable so header stays visible */
+    .alliances-sidebar .card .card-body {
+        max-height: calc(100vh - 160px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* Make the recommendations list itself scrollable so users can reach items
+   further down regardless of screen size. Keep a reasonable max-height so
+   it doesn't push page content on small screens. */
+#team-recommendations {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 0.25rem; /* slight spacing to avoid overlaying scrollbar */
+}
+
+/* On very small screens, allow the recommendations area to expand naturally
+   but keep internal scrolling if the list gets long. */
+@media (max-width: 576px) {
+    #team-recommendations {
+        max-height: 50vh;
+    }
 }
 
 body.modern-layout.dark-mode .modal-content .list-group-item .small.text-muted,

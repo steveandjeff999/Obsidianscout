@@ -1060,8 +1060,8 @@ function renderApiKeys() {
                     <p class="text-muted mb-2">${key.description ? escapeHtml(key.description) : 'No description'}</p>
                     <p class="mb-2">
                         <strong>Key:</strong> <span class="api-key-prefix">${escapeHtml(key.key_prefix)}...</span>
-                        <button class="btn btn-sm btn-outline-primary btn-copy" 
-                                data-action="copy" data-target="key-prefix-${key.id}">Copy Prefix</button>
+            <button class="btn btn-sm btn-outline-primary btn-copy" 
+                data-action="copy" data-target="key-prefix-${key.id}" onclick="copyToClipboard('key-prefix-${key.id}')">Copy Prefix</button>
                         <span id="key-prefix-${key.id}" style="display: none;">${escapeHtml(key.key_prefix)}</span>
                     </p>
                     
@@ -1098,18 +1098,20 @@ function renderApiKeys() {
                     </small>
                 </div>
                 
-                <div class="btn-group-vertical ml-3">
-                    <button class="btn btn-sm btn-info" data-action="viewUsage" data-key-id="${key.id}">
+                    <div class="btn-group-vertical ml-3">
+                    <button class="btn btn-sm btn-info" data-action="viewUsage" data-key-id="${key.id}" onclick="viewUsage(${key.id})">
                         View Usage
                     </button>
-                    <button class="btn btn-sm btn-warning" data-action="editKey" data-key-id="${key.id}" 
+                    <button class="btn btn-sm btn-warning" data-action="editKey" data-key-id="${key.id}" onclick="editKey(${key.id})" 
                             ${!key.is_active ? 'disabled' : ''}>
                         Edit
                     </button>
-                    <button class="btn btn-sm btn-danger" data-action="deleteKey" data-key-id="${key.id}" 
-                            ${!key.is_active ? 'disabled' : ''}>
-                        ${key.is_active ? 'Deactivate' : 'Inactive'}
-                    </button>
+                    ${key.is_active ? `
+                        <button class="btn btn-sm btn-danger" data-action="deleteKey" data-key-id="${key.id}" onclick="deleteKey(${key.id})">Deactivate</button>
+                    ` : `
+                        <button class="btn btn-sm btn-success" data-action="reactivateKey" data-key-id="${key.id}" onclick="reactivateKey(${key.id})">Reactivate</button>
+                        <button class="btn btn-sm btn-danger" data-action="deleteKeyPermanent" data-key-id="${key.id}" onclick="deleteKeyPermanent(${key.id})">Delete Permanently</button>
+                    `}
                 </div>
             </div>
         </div>
@@ -1131,13 +1133,15 @@ function setupApiKeyEventListeners() {
 }
 
 function handleApiKeyActions(event) {
-    const target = event.target;
-    const action = target.getAttribute('data-action');
-    
+    // Find the nearest element that contains a data-action attribute (handles clicks on icons/text)
+    const actionEl = event.target.closest('[data-action]');
+    if (!actionEl) return;
+
+    const action = actionEl.getAttribute('data-action');
     if (!action) return;
-    
-    const keyId = target.getAttribute('data-key-id');
-    const targetId = target.getAttribute('data-target');
+
+    const keyId = actionEl.getAttribute('data-key-id');
+    const targetId = actionEl.getAttribute('data-target');
     
     switch (action) {
         case 'copy':
@@ -1155,6 +1159,11 @@ function handleApiKeyActions(event) {
                 editKey(parseInt(keyId));
             }
             break;
+        case 'reactivateKey':
+            if (keyId) {
+                reactivateKey(parseInt(keyId));
+            }
+            break;
         case 'deleteKey':
             if (keyId) {
                 deleteKey(parseInt(keyId));
@@ -1165,6 +1174,40 @@ function handleApiKeyActions(event) {
 
 async function handleCreateKey(event) {
     console.log('handleCreateKey called', event);
+
+    async function reactivateKey(keyId) {
+        if (!confirm('Reactivate this API key? It will immediately allow requests again.')) return;
+        try {
+            const response = await fetch(`/api/keys/${keyId}/reactivate`, { method: 'POST' });
+            const result = await response.json();
+            if (result.success) {
+                showAlert('success', 'API key reactivated');
+                await loadApiKeys();
+            } else {
+                showAlert('error', result.error || 'Failed to reactivate API key');
+            }
+        } catch (err) {
+            console.error('Error reactivating key:', err);
+            showAlert('error', 'Failed to reactivate API key');
+        }
+    }
+
+    async function deleteKeyPermanent(keyId) {
+        if (!confirm('Permanently delete this API key? This cannot be undone.')) return;
+        try {
+            const response = await fetch(`/api/keys/${keyId}?permanent=1`, { method: 'DELETE' });
+            const result = await response.json();
+            if (result.success) {
+                showAlert('success', 'API key permanently deleted');
+                await loadApiKeys();
+            } else {
+                showAlert('error', result.error || 'Failed to delete API key permanently');
+            }
+        } catch (err) {
+            console.error('Error deleting key permanently:', err);
+            showAlert('error', 'Failed to delete API key permanently');
+        }
+    }
     event.preventDefault();
     
     const form = event.target;

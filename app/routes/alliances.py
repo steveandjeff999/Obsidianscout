@@ -535,6 +535,44 @@ def add_to_list():
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
 
+
+@bp.route('/api/team_metrics')
+def team_metrics():
+    """Return basic metrics for a team_number (useful for client-side UI updates).
+
+    Query params:
+      - team_number (required)
+      - event_id (optional)
+    """
+    team_number = request.args.get('team_number')
+    event_id = request.args.get('event_id', type=int)
+
+    if not team_number:
+        return jsonify({'error': 'team_number required'}), 400
+
+    # Find the team
+    team = Team.query.filter_by(team_number=team_number).first()
+    if not team:
+        return jsonify({'error': 'Team not found'}), 404
+
+    try:
+        analytics_result = calculate_team_metrics(team.id, event_id=event_id)
+        metrics = analytics_result.get('metrics', {}) or {}
+
+        # Prefer 'total_points' then 'tot' or sum components as a fallback
+        total = 0
+        if 'total_points' in metrics:
+            total = metrics.get('total_points', 0) or 0
+        elif 'tot' in metrics:
+            total = metrics.get('tot', 0) or 0
+        else:
+            # fallback to common component ids
+            total = (metrics.get('apt', 0) or 0) + (metrics.get('tpt', 0) or 0) + (metrics.get('ept', 0) or 0)
+
+        return jsonify({'team_number': team.team_number, 'total_points': round(float(total), 1)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @bp.route('/api/remove_from_list', methods=['POST'])
 def remove_from_list():
     """Remove a team from avoid or do not pick list"""

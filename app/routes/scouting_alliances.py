@@ -1036,36 +1036,81 @@ def get_alliance_sync_stats(alliance_id, current_team):
 @socketio.on('join_alliance_room')
 def on_join_alliance_room(data):
     """Join alliance room for real-time updates"""
-    alliance_id = data['alliance_id']
+    # Accept either an alliance-specific join (alliance_id) or an event-level join (event_id)
+    data = data or {}
+    alliance_id = data.get('alliance_id')
+    event_id = data.get('event_id')
     current_team = get_current_scouting_team_number()
-    
-    # Verify membership
-    member = ScoutingAllianceMember.query.filter_by(
-        alliance_id=alliance_id,
-        team_number=current_team,
-        status='accepted'
-    ).first()
-    
-    if member:
-        join_room(f'alliance_{alliance_id}')
-        emit('joined_alliance_room', {'alliance_id': alliance_id})
+
+    # If client provided an alliance_id, verify membership and join the alliance room
+    if alliance_id is not None:
+        try:
+            member = ScoutingAllianceMember.query.filter_by(
+                alliance_id=alliance_id,
+                team_number=current_team,
+                status='accepted'
+            ).first()
+        except Exception:
+            member = None
+
+        if member:
+            join_room(f'alliance_{alliance_id}')
+            emit('joined_alliance_room', {'alliance_id': alliance_id})
+        else:
+            # Do not raise if verification fails; emit a status for debugging
+            emit('joined_alliance_room', {'alliance_id': alliance_id, 'joined': False})
+        return
+
+    # If client provided an event_id, join the broader event room used by alliance selection
+    if event_id is not None:
+        join_room(f'alliance_event_{event_id}')
+        emit('status', {'msg': f'Joined alliance_event room for event {event_id}'})
+        return
+
+    # No valid identifier provided - emit a helpful status
+    emit('status', {'msg': 'join_alliance_room called without alliance_id or event_id'})
 
 @socketio.on('leave_alliance_room')
 def on_leave_alliance_room(data):
     """Leave alliance room"""
-    alliance_id = data['alliance_id']
-    leave_room(f'alliance_{alliance_id}')
+    # Accept either { 'alliance_id': ... } to join an alliance-specific room
+    # or { 'event_id': ... } to join the event-wide alliance selection room.
+    # Be defensive about missing keys to avoid raising exceptions when other
+    # modules emit the same event name with a different payload shape.
+    alliance_id = None
+    event_id = None
+    if isinstance(data, dict):
+        alliance_id = data.get('alliance_id')
+        event_id = data.get('event_id')
 
-@socketio.on('join_team_room')
-def on_join_team_room():
-    """Join team-specific room for notifications"""
     current_team = get_current_scouting_team_number()
-    if current_team:
-        join_room(f'team_{current_team}')
-        emit('joined_team_room', {'team_number': current_team})
 
-@socketio.on('alliance_auto_sync_received')
-def on_alliance_auto_sync_received(data):
+    # If caller asked to join an alliance room (scouting alliance view)
+    if alliance_id:
+        # Verify membership
+        member = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance_id,
+            team_number=current_team,
+            status='accepted'
+        ).first()
+
+        if member:
+            join_room(f'alliance_{alliance_id}')
+            emit('joined_alliance_room', {'alliance_id': alliance_id})
+        return
+
+    # If caller asked to join the event-wide alliance selection room
+    if event_id:
+        try:
+            join_room(f'alliance_event_{event_id}')
+            emit('status', {'msg': f'Joined alliance event room for event {event_id}'})
+        except Exception:
+            # Fail silently - joining a room is non-critical for functionality
+            pass
+        return
+
+    # If payload didn't include either key, ignore gracefully.
+    return
     """Handle receipt of automatic sync data from alliance members"""
     current_team = get_current_scouting_team_number()
     from_team = data.get('from_team')

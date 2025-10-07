@@ -10,9 +10,17 @@ from typing import Dict, List, Any, Tuple, Optional
 import matplotlib
 matplotlib.use('Agg')  # Use Agg backend to avoid requiring a display
 import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-import numpy as np
+# Optional heavy plotting/data libs - import lazily and handle missing packages gracefully
+try:
+    import seaborn as sns
+    import pandas as pd
+    import numpy as np
+    HAS_SEABORN = True
+except Exception:
+    sns = None
+    pd = None
+    np = None
+    HAS_SEABORN = False
 from app.models import Team, ScoutingData, Match, Event
 from app.utils.analysis import calculate_team_metrics
 import logging
@@ -30,7 +38,14 @@ class Visualizer:
     
     def setup_plot_style(self):
         """Set up the default styling for all plots"""
-        sns.set_theme(style="whitegrid")
+        # If seaborn isn't available, fall back to matplotlib defaults and warn
+        if HAS_SEABORN and sns is not None:
+            try:
+                sns.set_theme(style="whitegrid")
+            except Exception:
+                # Non-fatal - continue with matplotlib defaults
+                pass
+
         plt.rcParams['figure.figsize'] = (10, 6)
         plt.rcParams['font.size'] = 12
         
@@ -44,13 +59,20 @@ class Visualizer:
         }
         
         # Color palettes for multi-team visualizations
-        self.palette = sns.color_palette([
-            self.colors['primary'],
-            self.colors['secondary'],
-            '#00A651',  # Green
-            '#FF8200',  # Orange
-            '#8A2BE2',  # Purple
-        ])
+        if HAS_SEABORN and sns is not None:
+            try:
+                self.palette = sns.color_palette([
+                    self.colors['primary'],
+                    self.colors['secondary'],
+                    '#00A651',  # Green
+                    '#FF8200',  # Orange
+                    '#8A2BE2',  # Purple
+                ])
+            except Exception:
+                self.palette = [self.colors['primary'], self.colors['secondary'], '#00A651', '#FF8200', '#8A2BE2']
+        else:
+            # Minimal palette fallback
+            self.palette = [self.colors['primary'], self.colors['secondary'], '#00A651', '#FF8200', '#8A2BE2']
     
     def generate_visualization(self, vis_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -81,6 +103,10 @@ class Visualizer:
                 "message": f"Unsupported visualization type: {vis_type}"
             }
         
+        # Ensure required optional libraries are present before attempting heavy plotting
+        if not HAS_SEABORN:
+            return {"error": True, "message": "Optional visualization dependencies (seaborn/pandas/numpy) are not installed on this server."}
+
         try:
             # Call the appropriate visualization method
             figure = visualization_methods[vis_type](data)

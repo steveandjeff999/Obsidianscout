@@ -165,7 +165,7 @@
                             
                             <h6 class="mt-4"><i class="fas fa-star text-info me-2"></i>Advanced Pages & Features</h6>
                             <div class="row">
-                                <div class="col-md-6">
+                                <div class="col-md-5">
                                     <div class="card border-info">
                                         <div class="card-body">
                                             <h6 class="card-title"><i class="fas fa-chart-bar text-primary me-2"></i>Analytics & Graphs</h6>
@@ -179,7 +179,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-7">
                                     <div class="card border-warning">
                                         <div class="card-body">
                                             <h6 class="card-title"><i class="fas fa-handshake text-warning me-2"></i>Alliance Selection</h6>
@@ -313,8 +313,8 @@
                                             <i class="fas fa-up-right-from-square me-1"></i>Open in new tab
                                         </a>
                                     </div>
-                                    <div class="ratio ratio-16x9 border rounded bg-body-secondary demo-frame">
-                                        <iframe id="navDemoFrame" class="rounded" src="about:blank" title="Navigation Live Demo" style="border:0;"></iframe>
+                                    <div class="border rounded bg-body-secondary demo-frame demo-frame-large">
+                                        <iframe id="navDemoFrame" class="rounded" src="about:blank" title="Navigation Live Demo"></iframe>
                                     </div>
                                     <div class="form-text mt-2">
                                         <strong>💡 Next Step:</strong> Try clicking the navigation menu in the iframe above to explore different sections.
@@ -403,8 +403,8 @@
                                                 <span id="scoutHintText">Hover over buttons to learn more!</span>
                                             </div>
                                             
-                                            <div class="ratio ratio-16x9 border rounded bg-body-secondary demo-frame">
-                                                <iframe id="scoutDemoFrame" class="rounded" src="about:blank" title="Scouting Live Demo" style="border:0;"></iframe>
+                                            <div class="border rounded bg-body-secondary demo-frame demo-frame-large">
+                                                <iframe id="scoutDemoFrame" class="rounded" src="about:blank" title="Scouting Live Demo"></iframe>
                                             </div>
                                             <div class="form-text mt-2">
                                                 <strong>🚀 Pro Tip:</strong> Data you enter here will appear in the analytics section in the next step!
@@ -499,8 +499,8 @@
                                                 <span id="analyticsHintText">Hover over buttons to learn what each tool does!</span>
                                             </div>
                                             
-                                            <div class="ratio ratio-16x9 border rounded bg-body-secondary demo-frame">
-                                                <iframe id="analyticsDemoFrame" class="rounded" src="about:blank" title="Analytics Live Demo" style="border:0;"></iframe>
+                                            <div class="border rounded bg-body-secondary demo-frame demo-frame-large">
+                                                <iframe id="analyticsDemoFrame" class="rounded" src="about:blank" title="Analytics Live Demo"></iframe>
                                             </div>
                                             <div class="form-text mt-2">
                                                 <strong>🔍 Try This:</strong> Look for filter controls and team selectors on the analytics pages.
@@ -596,8 +596,8 @@
                                                 <span id="configHintText">Hover over buttons to see what each configuration area covers!</span>
                                             </div>
                                             
-                                            <div class="ratio ratio-16x9 border rounded bg-body-secondary demo-frame">
-                                                <iframe id="configDemoFrame" class="rounded" src="about:blank" title="Configuration Live Demo" style="border:0;"></iframe>
+                                            <div class="border rounded bg-body-secondary demo-frame demo-frame-large">
+                                                <iframe id="configDemoFrame" class="rounded" src="about:blank" title="Configuration Live Demo"></iframe>
                                             </div>
                                             <div class="form-text mt-2">
                                                 <strong>🛡️ Note:</strong> Some configuration options require admin permissions for your team.
@@ -1029,6 +1029,20 @@ document.addEventListener('DOMContentLoaded', function() {
         width: 35px;
         height: 35px;
     }
+}
+
+/* Larger demo frame for scouting step to show form more clearly */
+.demo-frame-large {
+    padding: 0.5rem;
+    height: 520px; /* taller to better show the scouting form */
+    overflow: hidden;
+    display: flex;
+}
+.demo-frame-large iframe {
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    border: 0;
 }
 </style>
 {% endblock %}

@@ -777,9 +777,8 @@
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') %}active{% endif %}" href="{{ url_for('graphs.index') }}"><i class="fas fa-chart-line"></i><span>Graphs</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') and 'side-by-side' in request.endpoint %}active{% endif %}" href="{{ url_for('graphs.side_by_side') }}"><i class="fas fa-columns"></i><span>Comparison</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs.pages') %}active{% endif %}" href="{{ url_for('graphs.pages_index') }}"><i class="fas fa-file-alt"></i><span>Custom Pages</span></a>
-                <a class="nav-link {% if request.endpoint == 'matches.predict' %}active{% endif %}" href="{{ url_for('matches.predict') }}"><i class="fas fa-chart-area"></i><span>Predictions</span></a>
-                <a class="nav-link {% if request.endpoint == 'matches.predict_all' %}active{% endif %}" href="{{ url_for('matches.predict_all') }}"><i class="fas fa-list"></i><span>All Predictions</span></a>
                 <a class="nav-link {% if request.endpoint == 'matches.strategy' %}active{% endif %}" href="{{ url_for('matches.strategy') }}"><i class="fas fa-chess"></i><span>Strategy</span></a>
+                <a class="nav-link {% if request.endpoint == 'matches.strategy_all' %}active{% endif %}" href="{{ url_for('matches.strategy_all') }}"><i class="fas fa-th-large"></i><span>Strategy — All Matches</span></a>
                 <a class="nav-link {% if request.endpoint == 'matches.strategy_draw' %}active{% endif %}" href="{{ url_for('matches.strategy_draw') }}"><i class="fas fa-pen-ruler"></i><span>Strategy Draw</span></a>
                 <a class="nav-link {% if request.endpoint == 'graphs.my_shares' %}active{% endif %}" href="{{ url_for('graphs.my_shares') }}"><i class="fas fa-share-alt"></i><span>My Graph Shares</span></a>
                 <a class="nav-link {% if request.endpoint == 'teams.my_ranks_shares' %}active{% endif %}" href="{{ url_for('teams.my_ranks_shares') }}"><i class="fas fa-trophy"></i><span>My Ranking Shares</span></a>
@@ -3405,6 +3404,12 @@
             searchSuggestions.addEventListener('click', function(e) {
                 const suggestionItem = e.target.closest('.suggestion-item');
                 if (suggestionItem) {
+                    const url = suggestionItem.getAttribute('data-url');
+                    if (url) {
+                        window.location.href = url;
+                        return;
+                    }
+
                     const text = suggestionItem.getAttribute('data-value');
                     const type = suggestionItem.getAttribute('data-type');
                     const searchQuery = suggestionItem.getAttribute('data-search-query');
@@ -3593,6 +3598,7 @@
                                  data-type="${suggestion.type}" 
                                  data-value="${escapeHtml(suggestion.text)}"
                                  data-search-query="${escapeHtml(suggestion.search_query || suggestion.text)}"
+                                 data-url="${escapeHtml(suggestion.url || '')}"
                                  role="option">
                                 <div class="suggestion-icon">
                                     <i class="${iconClass}"></i>

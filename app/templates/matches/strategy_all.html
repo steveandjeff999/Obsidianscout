@@ -1,0 +1,188 @@
+{% extends 'base.html' %}
+
+{% block title %}All Match Strategy Summaries{% endblock %}
+
+{% block heading %}All Matches - Strategy Summary{% endblock %}
+{% block subheading %}Compact cards showing predicted winner, confidence and teams for each match{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Select Event</h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="{{ url_for('matches.strategy_all') }}">
+                        <div class="mb-3">
+                            <label for="event_id" class="form-label">Event</label>
+                            <select class="form-select" id="event_id" name="event_id" onchange="this.form.submit()">
+                                <option value="">Select an event...</option>
+                                {% for event in events %}
+                                <option value="{{ event.id }}" {% if selected_event and event.id == selected_event.id %}selected{% endif %}>
+                                    {{ event.name }} ({{ event.year }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 d-flex align-items-center">
+            <div>
+                <p class="mb-0 text-muted">Showing {{ matches|length }} matches for selected event.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row" id="matchCards">
+        {% if summaries and summaries|length > 0 %}
+            {% for s in summaries %}
+            <div class="col-sm-6 col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ s.match_type }} {{ s.match_number }}</strong>
+                        </div>
+                        <div>
+                            {% if s.predicted_winner == 'red' %}
+                                <span class="badge bg-danger">Red</span>
+                            {% elif s.predicted_winner == 'blue' %}
+                                <span class="badge bg-primary">Blue</span>
+                            {% else %}
+                                <span class="badge bg-secondary">TBD</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2 small text-muted">Alliances</div>
+                        <div class="mb-3 d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="d-flex align-items-center">
+                                    <span class="badge bg-danger me-2">Red</span>
+                                    <div class="fw-semibold me-2">{% if s.red_score is not none %}{{ s.red_score }}{% else %}<span class="text-muted">--</span>{% endif %}</div>
+                                </div>
+                                <div class="mt-2 small">
+                                    {% if s.red_teams and s.red_teams|length > 0 %}
+                                        {% for t in s.red_teams %}
+                                            {# Compose a display label combining number and optional name #}
+                                            {% set label = t.team_number %}
+                                            {% if t.team_name %}
+                                                {% set label = label ~ ' — ' ~ t.team_name %}
+                                            {% endif %}
+                                            <span class="badge bg-light text-dark border me-1 team-badge" title="{{ label }}">
+                                                {% if t.team_number %}
+                                                    <a href="{{ url_for('teams.view', team_number=t.team_number|int) }}" class="text-decoration-none text-dark team-badge-link">{{ t.team_number }}</a>
+                                                {% else %}
+                                                    <span class="team-badge-text">{{ t.team_number }}</span>
+                                                {% endif %}
+                                                {% if t.team_name %}
+                                                    <span class="team-badge-sub small text-muted d-inline-block ms-1">— {{ t.team_name }}</span>
+                                                {% endif %}
+                                            </span>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="text-muted small">No teams</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div>
+                                <div class="d-flex align-items-center">
+                                    <span class="badge bg-primary me-2">Blue</span>
+                                    <div class="fw-semibold me-2">{% if s.blue_score is not none %}{{ s.blue_score }}{% else %}<span class="text-muted">--</span>{% endif %}</div>
+                                </div>
+                                <div class="mt-2 small">
+                                    {% if s.blue_teams and s.blue_teams|length > 0 %}
+                                        {% for t in s.blue_teams %}
+                                            {% set label = t.team_number %}
+                                            {% if t.team_name %}
+                                                {% set label = label ~ ' — ' ~ t.team_name %}
+                                            {% endif %}
+                                            <span class="badge bg-light text-dark border me-1 team-badge" title="{{ label }}">
+                                                {% if t.team_number %}
+                                                    <a href="{{ url_for('teams.view', team_number=t.team_number|int) }}" class="text-decoration-none text-dark team-badge-link">{{ t.team_number }}</a>
+                                                {% else %}
+                                                    <span class="team-badge-text">{{ t.team_number }}</span>
+                                                {% endif %}
+                                                {% if t.team_name %}
+                                                    <span class="team-badge-sub small text-muted d-inline-block ms-1">— {{ t.team_name }}</span>
+                                                {% endif %}
+                                            </span>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="text-muted small">No teams</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-2">
+                            <strong>Confidence:</strong>
+                            {% if s.confidence is not none %}
+                                {% set pct = (s.confidence * 100) if s.confidence is number else None %}
+                                {% if pct is not none %}
+                                    <span>{{ pct|round(0) }}%</span>
+                                {% else %}
+                                    <span>{{ s.confidence }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">--</span>
+                            {% endif %}
+                        </div>
+
+                        {% if s.error %}
+                        <div class="text-danger small">Analysis error</div>
+                        {% endif %}
+                    </div>
+                    <div class="card-footer">
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('matches.strategy') }}?match_id={{ s.match_id }}&event_id={{ selected_event.id if selected_event else '' }}" class="btn btn-sm btn-outline-primary">View</a>
+                            <a href="/matches/{{ s.match_id }}" class="btn btn-sm btn-outline-secondary">Match</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <p class="mb-0 text-muted">No match summaries available. Select an event to generate strategy summaries.</p>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function openMatchStrategy(matchId) {
+    // If this page was opened via a public share, attempt to use public analyze endpoint
+    const publicToken = window.PUBLIC_SHARE_TOKEN || null;
+    if (publicToken) {
+        window.open(`/matches/strategy/public/${publicToken}?event_id={{ selected_event.id if selected_event else '' }}#match=${matchId}`);
+        return;
+    }
+    // Otherwise open the detailed strategy view for the single match
+    window.location = `/matches/strategy?event_id={{ selected_event.id if selected_event else '' }}`;
+    // Optionally pre-select match in the destination page using hash or query params - the detailed page currently expects users to pick a match.
+}
+</script>
+
+<style>
+.card-header strong { font-size: 1rem; }
+/* Truncate long team labels in badges and make them responsive */
+.team-badge { max-width: 10.5rem; display: inline-block; vertical-align: middle; }
+.team-badge-link, .team-badge-text { display: inline-block; max-width: 6rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.team-badge-sub { max-width: 4rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+
+@media (max-width: 768px) {
+    .team-badge { max-width: 8.5rem; }
+    .team-badge-link, .team-badge-text { max-width: 5rem; }
+    .team-badge-sub { max-width: 3.5rem; }
+}
+</style>
+{% endblock %}

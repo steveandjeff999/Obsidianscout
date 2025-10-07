@@ -63,10 +63,10 @@
                     <div class="col-12">
                         <label class="form-label mb-1 mt-2">Match Type</label>
                         <select name="match_type" class="form-select">
-                            <option value="">All</option>
-                            <option value="Practice">Practice</option>
-                            <option value="Qualification">Qualification</option>
-                            <option value="Playoff">Playoff</option>
+                            <option value="" {% if not request.args.get('match_type') %}selected{% endif %}>All</option>
+                            <option value="Practice" {% if request.args.get('match_type') == 'Practice' %}selected{% endif %}>Practice</option>
+                            <option value="Qualification" {% if request.args.get('match_type') == 'Qualification' %}selected{% endif %}>Qualification</option>
+                            <option value="Playoff" {% if request.args.get('match_type') == 'Playoff' %}selected{% endif %}>Playoff</option>
                         </select>
                     </div>
                     <div class="col-12">
@@ -124,8 +124,12 @@
                                     {% endfor %}
                                 </td>
                                 <td>
-                                    {% if match.red_score is not none and match.blue_score is not none %}
-                                    <div><span class="fw-bold text-danger">{{ match.red_score }}</span> - <span class="fw-bold text-primary">{{ match.blue_score }}</span></div>
+                                    {% set ds = display_scores.get(match.id) if display_scores is defined else None %}
+                                    {% if ds and ds.red_score is not none and ds.blue_score is not none %}
+                                    <div>
+                                        <span class="fw-bold text-danger">{{ ds.red_score }}</span> - <span class="fw-bold text-primary">{{ ds.blue_score }}</span>
+                                        {% if ds.source == 'local' %}<small class="text-muted ms-2">(from local scouting)</small>{% endif %}
+                                    </div>
                                     {% else %}
                                     <span class="text-muted">Not scored</span>
                                     {% endif %}

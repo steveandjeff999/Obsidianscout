@@ -784,6 +784,14 @@ def save_simple_config():
                 'auth_key': request.form.get('tba_auth_key', ''),
                 'base_url': request.form.get('tba_base_url', 'https://www.thebluealliance.com/api/v3')
             }
+        # Persist auto sync toggle (checkbox named 'auto_sync_enabled')
+        try:
+            updated_config.setdefault('api_settings', {})
+            updated_config['api_settings']['auto_sync_enabled'] = True if request.form.get('auto_sync_enabled') else False
+        except Exception:
+            # default to True if anything goes wrong
+            updated_config.setdefault('api_settings', {})
+            updated_config['api_settings']['auto_sync_enabled'] = True
         
         # Save the configuration
         if save_game_config(updated_config):
@@ -1356,7 +1364,7 @@ def api_sync_status():
     status = {
         'current_event_code': current_event_code,
         'current_event_name': current_event.name if current_event else None,
-        'api_sync_enabled': True,  # Auto-sync is always enabled now
+        'api_sync_enabled': bool(game_config.get('api_settings', {}).get('auto_sync_enabled', True)),
         'statistics': {
             'total_teams': total_teams,
             'total_matches': total_matches,
