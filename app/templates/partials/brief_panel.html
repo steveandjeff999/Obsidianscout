@@ -130,13 +130,183 @@
 }
 
 /* Dark mode support */
-[data-bs-theme="dark"] .brief-panel {
-    background-color: #212529;
-    border-color: #495057;
+[data-bs-theme="dark"] .brief-panel,
+body.modern-layout.dark-mode .brief-panel,
+body.dark-mode .brief-panel {
+    background-color: #000;
+    border-color: #111;
 }
 
-[data-bs-theme="dark"] .brief-bg-alt {
-    background-color: #2b3035;
+/* Strong overrides to eliminate any remaining white panels inside the brief panel */
+[data-bs-theme="dark"] .brief-panel .card-body,
+[data-bs-theme="dark"] .brief-panel .card,
+[data-bs-theme="dark"] .brief-panel .brief-stats,
+[data-bs-theme="dark"] .brief-panel .brief-section,
+[data-bs-theme="dark"] .brief-panel .section-header,
+[data-bs-theme="dark"] .brief-panel .brief-recent-activity,
+[data-bs-theme="dark"] .brief-panel .brief-upcoming-matches,
+[data-bs-theme="dark"] .brief-panel .brief-top-performers,
+[data-bs-theme="dark"] .brief-panel .activity-item,
+[data-bs-theme="dark"] .brief-panel .match-card,
+[data-bs-theme="dark"] .brief-panel .performer-item {
+    background-color: #000 !important;
+    color: #e6eef3 !important;
+}
+
+/* Override Bootstrap utility bg-light on footer/header inside the panel */
+[data-bs-theme="dark"] .brief-panel .card-footer.bg-light,
+[data-bs-theme="dark"] .brief-panel .brief-stats.brief-bg-alt,
+[data-bs-theme="dark"] .brief-panel .brief-stats.brief-bg-alt * {
+    background-color: #000 !important;
+    color: #e6eef3 !important;
+}
+
+/* Make sure any nested placeholders don't show white */
+[data-bs-theme="dark"] .brief-panel .text-center.p-3,
+[data-bs-theme="dark"] .brief-panel .text-center.p-3 * {
+    background-color: transparent !important;
+    color: #d6dee3 !important;
+}
+
+/* Buttons and outlines should blend */
+[data-bs-theme="dark"] .brief-panel .btn.btn-outline-primary,
+[data-bs-theme="dark"] .brief-panel .btn.btn-outline-success,
+[data-bs-theme="dark"] .brief-panel .btn.btn-outline-info,
+[data-bs-theme="dark"] .brief-panel .btn.btn-outline-danger {
+    background-color: transparent !important;
+    color: #d6dee3 !important;
+    border-color: rgba(255,255,255,0.08) !important;
+}
+
+/* Ensure small badges/time labels are dark-friendly */
+[data-bs-theme="dark"] .brief-panel .time-badge,
+[data-bs-theme="dark"] .brief-panel .prediction-badge {
+    background-color: #212529 !important;
+    color: #cbd5da !important;
+}
+
+/* Comprehensive dark override: force all descendants of brief-panel to pure black backgrounds/text
+   This is intentionally broad to eliminate any remaining white panels injected by utilities. */
+[data-bs-theme="dark"] .brief-panel *,
+body.modern-layout.dark-mode .brief-panel *,
+body.dark-mode .brief-panel * {
+    background-color: #000 !important;
+    color: #d6dee3 !important;
+    border-color: #111 !important;
+    box-shadow: none !important;
+}
+
+/* Restore header gradient and its text/icons (exclude header from the global override) */
+[data-bs-theme="dark"] .brief-panel .brief-header,
+[data-bs-theme="dark"] .brief-panel .brief-header *,
+body.modern-layout.dark-mode .brief-panel .brief-header,
+body.modern-layout.dark-mode .brief-panel .brief-header *,
+body.dark-mode .brief-panel .brief-header,
+body.dark-mode .brief-panel .brief-header * {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: white !important;
+}
+
+/* Also ensure the card-header container itself is styled (prevents white gap at top) */
+[data-bs-theme="dark"] .brief-panel .card-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: #fff !important;
+}
+
+/* Keep alliance/team badges readable and distinct */
+[data-bs-theme="dark"] .alliance-red .team-badge,
+body.modern-layout.dark-mode .alliance-red .team-badge,
+body.dark-mode .alliance-red .team-badge {
+    background-color: rgba(220, 53, 69, 0.12) !important;
+    color: #ffc9cb !important;
+    border-color: rgba(220,53,69,0.25) !important;
+}
+
+[data-bs-theme="dark"] .alliance-blue .team-badge,
+body.modern-layout.dark-mode .alliance-blue .team-badge,
+body.dark-mode .alliance-blue .team-badge {
+    background-color: rgba(13, 110, 253, 0.12) !important;
+    color: #dbe9ff !important;
+    border-color: rgba(13,110,253,0.25) !important;
+}
+
+/* Keep predicted winner styling visible */
+[data-bs-theme="dark"] .predicted-winner,
+body.modern-layout.dark-mode .predicted-winner,
+body.dark-mode .predicted-winner {
+    background: rgba(255, 215, 0, 0.12) !important;
+    border: 2px solid #b38600 !important;
+    color: #fff !important;
+}
+
+/* Restore small interactive elements' padding/appearance so they don't look flattened */
+[data-bs-theme="dark"] .brief-panel .btn,
+[data-bs-theme="dark"] .brief-panel .section-header .btn {
+    background-color: transparent !important;
+    border-color: rgba(255,255,255,0.06) !important;
+    color: #dfe8ec !important;
+}
+
+[data-bs-theme="dark"] .brief-bg-alt,
+body.modern-layout.dark-mode .brief-bg-alt,
+body.dark-mode .brief-bg-alt {
+    background-color: #000;
+}
+
+/* Stronger dark backgrounds to avoid white panels showing through */
+[data-bs-theme="dark"] .brief-recent-activity,
+[data-bs-theme="dark"] .brief-upcoming-matches,
+[data-bs-theme="dark"] .brief-top-performers,
+[data-bs-theme="dark"] .section-header,
+[data-bs-theme="dark"] .brief-stats,
+[data-bs-theme="dark"] .card-footer {
+    background-color: #000 !important;
+}
+
+[data-bs-theme="dark"] .brief-recent-activity > div,
+[data-bs-theme="dark"] .brief-upcoming-matches > div,
+[data-bs-theme="dark"] .brief-top-performers > div {
+    background-color: transparent;
+    color: #e9ecef;
+}
+
+/* Explicitly set backgrounds for individual items to prevent inherited white */
+[data-bs-theme="dark"] .activity-item,
+[data-bs-theme="dark"] .match-card,
+[data-bs-theme="dark"] .performer-item,
+[data-bs-theme="dark"] .strategy-card,
+[data-bs-theme="dark"] .brief-recent-activity,
+[data-bs-theme="dark"] .brief-upcoming-matches,
+[data-bs-theme="dark"] .brief-top-performers,
+[data-bs-theme="dark"] .section-header {
+    background-color: #000 !important;
+    color: #e9ecef !important;
+}
+
+[data-bs-theme="dark"] .activity-item,
+[data-bs-theme="dark"] .performer-item,
+[data-bs-theme="dark"] .strategy-card {
+    border-bottom: 1px solid #2e3338 !important;
+}
+
+[data-bs-theme="dark"] .performer-rank.rank-other {
+    background-color: #2b3035 !important;
+    color: #adb5bd !important;
+}
+
+/* Buttons in headers - make them blend in */
+[data-bs-theme="dark"] .section-header .btn,
+[data-bs-theme="dark"] .card-footer .btn {
+    background-color: transparent !important;
+    border-color: rgba(255,255,255,0.08) !important;
+    color: #dbe3e8 !important;
+}
+
+/* Spinner and small helper blocks */
+[data-bs-theme="dark"] .brief-recent-activity .spinner-border,
+[data-bs-theme="dark"] .brief-upcoming-matches .spinner-border,
+[data-bs-theme="dark"] .brief-top-performers .spinner-border {
+    color: #adb5bd;
 }
 
 [data-bs-theme="dark"] .brief-text-muted {
@@ -153,32 +323,36 @@
 }
 
 [data-bs-theme="dark"] .activity-item:hover {
-    background-color: #2b3035;
+    background-color: #0a0a0a !important; /* ensure hover is black */
 }
 
 [data-bs-theme="dark"] .match-card {
-    border-bottom-color: #495057;
+    border-bottom-color: #2e3338;
+    background-color: #000 !important;
 }
 
 [data-bs-theme="dark"] .match-card:hover {
-    background-color: #2b3035;
+    background-color: #0a0a0a !important;
+    transform: translateX(4px);
 }
 
 [data-bs-theme="dark"] .strategy-card {
-    border-bottom-color: #495057;
+    border-bottom-color: #2e3338;
+    background-color: #000 !important;
 }
 
 [data-bs-theme="dark"] .strategy-card:hover {
-    background-color: #2b3035;
+    background-color: #0a0a0a !important;
 }
 
 [data-bs-theme="dark"] .performer-item {
-    border-bottom-color: #495057;
+    border-bottom-color: #2e3338;
+    background-color: #000 !important;
 }
 
 [data-bs-theme="dark"] .time-badge {
-    background-color: #495057;
-    color: #adb5bd;
+    background-color: #343a40;
+    color: #cbd5da;
 }
 
 [data-bs-theme="dark"] .alliance-red .team-badge {
@@ -192,15 +366,15 @@
 }
 
 [data-bs-theme="dark"] .brief-section::-webkit-scrollbar-track {
-    background: #2b3035;
+    background: #1b1e21;
 }
 
 [data-bs-theme="dark"] .brief-section::-webkit-scrollbar-thumb {
-    background: #495057;
+    background: #343a40;
 }
 
 [data-bs-theme="dark"] .brief-section::-webkit-scrollbar-thumb:hover {
-    background: #6c757d;
+    background: #495057;
 }
 
 .brief-stats .stat-icon {
