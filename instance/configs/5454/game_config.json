@@ -12,7 +12,7 @@
   ],
   "preferred_api_source": "first",
   "auto_period": {
-    "duration_seconds": 15,
+    "duration_seconds": 5,
     "scoring_elements": [
       {
         "id": "elem_auto_1",

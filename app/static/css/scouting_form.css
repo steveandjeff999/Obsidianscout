@@ -51,6 +51,57 @@
 /* Accessibility focus styles */
 button:focus, input:focus, select:focus, textarea:focus{box-shadow:0 0 0 4px rgba(91,59,255,.12);outline:none}
 
+/* Auto Period Timer Reminder Banner Styles */
+#auto-period-reminder-banner {
+    border-left: 6px solid #f59e0b;
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border-radius: 0;
+    border-bottom: 2px solid #f59e0b;
+    padding: 1rem 1.25rem;
+    width: 100%;
+    max-width: 100vw;
+}
+
+#auto-period-reminder-banner .alert-heading {
+    color: #92400e;
+    font-size: 1.1rem;
+}
+
+#auto-period-reminder-banner p {
+    color: #78350f;
+}
+
+#auto-period-reminder-banner .fa-exclamation-triangle {
+    color: #f59e0b;
+}
+
+/* Pulse animation for the reminder banner */
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.02);
+        opacity: 0.95;
+    }
+}
+
+/* Counter pulse animation for visual feedback */
+.counter-pulse {
+    animation: counterPulse 0.3s ease;
+}
+
+@keyframes counterPulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+        background-color: rgba(91, 59, 255, 0.1);
+    }
+}
+
 /* Search inputs for team and match selectors */
 .input-group .form-control-sm{height:40px}
 #team-search, #match-search{font-size:.95rem}

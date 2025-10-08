@@ -41,6 +41,27 @@
                 </div>
                 <div class="form-text">If left blank the system will display your account name ({{ current_user.username }}) while keeping your account ID with the entry.</div>
             </div>
+            <div class="col-md-6">
+                <label class="form-label">Auto Period Timer</label>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="auto_period_timer_enabled" role="switch">
+                    <label class="form-check-label" for="auto_period_timer_enabled">
+                        <i class="fas fa-stopwatch me-1"></i> Enable Auto → Teleop Reminder
+                    </label>
+                </div>
+                <div class="form-text">When enabled, a reminder will appear after {{ game_config.auto_period.duration_seconds }} seconds once you make your first auto entry.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auto Period Timer Reminder Banner (initially hidden) -->
+    <div id="auto-period-reminder-banner" class="alert alert-warning alert-dismissible fade d-none" role="alert" style="position: fixed; top: 0; left: 0; right: 0; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin: 0;">
+        <div class="d-flex align-items-center">
+            <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
+            <div class="flex-grow-1">
+                <h5 class="alert-heading mb-1"><strong>Auto Period Complete!</strong></h5>
+                <p class="mb-0">Remember to switch to the <strong>Teleop</strong> tab to continue scouting.</p>
+            </div>
         </div>
     </div>
     
@@ -111,7 +132,7 @@
     </div>
     
     <!-- Auto Period -->
-    <div class="form-section match-period-section" id="auto-section">
+    <div class="form-section match-period-section" id="auto-section" data-auto-duration="{{ game_config.auto_period.duration_seconds }}">
         <div class="form-section-header d-flex align-items-center">
             <div class="me-3">
                 <span class="badge bg-danger fs-5">AUTO</span>
