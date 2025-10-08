@@ -820,12 +820,60 @@ function initializeAutoPeriodTimer() {
         
         console.log('Showing auto period reminder');
         window.autoPeriodTimerState.reminderShown = true;
-        
+        // Position banner so it sits below topbar and does not cover the sidebar
+        function positionBanner() {
+            try {
+                const topbar = document.querySelector('.topbar');
+                const sidebar = document.getElementById('appSidebar');
+                const isSidebarVisible = sidebar && window.getComputedStyle(sidebar).display !== 'none';
+
+                // Determine top offset (height of topbar) and left offset (width of sidebar when visible)
+                const topOffset = topbar ? topbar.offsetHeight : 0;
+                let leftOffset = 0;
+
+                if (isSidebarVisible) {
+                    // use bounding rect to account for collapsed or fixed sidebars
+                    const rect = sidebar.getBoundingClientRect();
+                    leftOffset = rect.width || 0;
+                }
+
+                // On small screens don't offset by sidebar
+                if (window.innerWidth < 900) {
+                    leftOffset = 0;
+                }
+
+                // Apply styles to banner
+                reminderBanner.style.top = topOffset + 'px';
+                reminderBanner.style.left = leftOffset + 'px';
+                reminderBanner.style.right = '0';
+                reminderBanner.style.width = `calc(100% - ${leftOffset}px)`;
+                reminderBanner.style.margin = '0';
+                reminderBanner.style.borderRadius = '0';
+            } catch (e) {
+                console.warn('Could not position reminder banner', e);
+            }
+        }
+
+        // Initially position and then show
+        positionBanner();
+
         reminderBanner.classList.remove('d-none');
         reminderBanner.classList.add('show');
-        
+
         // Add pulsing animation
         reminderBanner.style.animation = 'pulse 2s ease-in-out 3';
+
+        // Reposition on window resize to adapt to responsive layout
+        window.addEventListener('resize', positionBanner);
+
+        // Reposition when sidebar toggles (if a toggle exists)
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        if (sidebarToggle) {
+            sidebarToggle.addEventListener('click', function() {
+                // Slight delay while sidebar animates/collapses
+                setTimeout(positionBanner, 260);
+            });
+        }
         
         // Play a subtle beep if browser supports it (optional)
         try {

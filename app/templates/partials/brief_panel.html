@@ -1,0 +1,637 @@
+<!-- Now Brief Panel - Samsung-style overview of scouting data and upcoming matches -->
+<div class="brief-panel card shadow-lg mb-4">
+    <div class="card-header brief-header text-white d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+            <i class="fas fa-newspaper fa-lg"></i>
+            <h5 class="mb-0">Now Brief</h5>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-light" id="briefToggleTopBtn" aria-label="Toggle brief">
+                <i class="fas fa-chevron-up"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-light" id="briefRefreshBtn" aria-label="Refresh brief">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+        </div>
+    </div>
+    <div class="card-body p-0" id="briefContent">
+        <!-- Quick Stats Overview -->
+        <div class="brief-stats p-3 brief-bg-alt border-bottom">
+            <div class="row g-2">
+                <div class="col-4 text-center">
+                    <div class="stat-icon text-primary mb-1"><i class="fas fa-clipboard-check fa-2x"></i></div>
+                    <div class="small brief-text-muted">Today's Scouts</div>
+                    <div class="h5 mb-0" id="briefTodayScouts">0</div>
+                </div>
+                <div class="col-4 text-center brief-border-side">
+                    <div class="stat-icon text-success mb-1"><i class="fas fa-gamepad fa-2x"></i></div>
+                    <div class="small brief-text-muted">Upcoming Matches</div>
+                    <div class="h5 mb-0" id="briefUpcomingMatchesCount">0</div>
+                </div>
+                <div class="col-4 text-center">
+                    <div class="stat-icon text-warning mb-1"><i class="fas fa-users fa-2x"></i></div>
+                    <div class="small brief-text-muted">Teams Analyzed</div>
+                    <div class="h5 mb-0" id="briefTeamsAnalyzed">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Scouting Activity -->
+        <div class="brief-section">
+            <div class="section-header p-3 pb-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 text-primary"><i class="fas fa-clock me-2"></i>Recent Activity</h6>
+                    <a href="{{ url_for('scouting.list_data') }}" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+            </div>
+            <div class="brief-recent-activity" id="briefRecentActivity">
+                <div class="text-center p-3 text-muted">
+                    <div class="spinner-border spinner-border-sm" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div class="small mt-2">Loading recent activity...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upcoming Matches Section -->
+        <div class="brief-section border-top">
+            <div class="section-header p-3 pb-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 text-success"><i class="fas fa-calendar-alt me-2"></i>Next 5 Matches</h6>
+                    <a href="{{ url_for('matches.index') }}" class="btn btn-sm btn-outline-success">All Matches</a>
+                </div>
+            </div>
+            <div class="brief-upcoming-matches" id="briefUpcomingMatches">
+                <div class="text-center p-3 brief-text-muted">
+                    <div class="spinner-border spinner-border-sm" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div class="small mt-2">Loading upcoming matches...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Strategy Insights removed per user request -->
+
+        <!-- Top Performers -->
+        <div class="brief-section border-top">
+            <div class="section-header p-3 pb-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 text-info"><i class="fas fa-trophy me-2"></i>Top Performers</h6>
+                    <a href="{{ url_for('graphs.index') }}" class="btn btn-sm btn-outline-info">Analytics</a>
+                </div>
+            </div>
+            <div class="brief-top-performers" id="briefTopPerformers">
+                <div class="text-center p-3 text-muted">
+                    <div class="spinner-border spinner-border-sm" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div class="small mt-2">Loading top performers...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Expand/Collapse Toggle -->
+    <div class="card-footer text-center bg-light">
+        <button class="btn btn-sm btn-outline-secondary" id="briefToggleBtn" data-expanded="true">
+            <i class="fas fa-chevron-up me-1"></i>
+            <span>Collapse Brief</span>
+        </button>
+    </div>
+</div>
+
+<style>
+/* Brief Panel Styles with Dark Mode Support */
+.brief-panel {
+    border-radius: 16px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.brief-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+}
+
+/* Light mode backgrounds */
+.brief-bg-alt {
+    background-color: #f8f9fa;
+}
+
+.brief-text-muted {
+    color: #6c757d;
+}
+
+.brief-border-side {
+    border-left: 1px solid #dee2e6;
+    border-right: 1px solid #dee2e6;
+}
+
+/* Dark mode support */
+[data-bs-theme="dark"] .brief-panel {
+    background-color: #212529;
+    border-color: #495057;
+}
+
+[data-bs-theme="dark"] .brief-bg-alt {
+    background-color: #2b3035;
+}
+
+[data-bs-theme="dark"] .brief-text-muted {
+    color: #adb5bd;
+}
+
+[data-bs-theme="dark"] .brief-border-side {
+    border-left-color: #495057;
+    border-right-color: #495057;
+}
+
+[data-bs-theme="dark"] .activity-item {
+    border-bottom-color: #495057;
+}
+
+[data-bs-theme="dark"] .activity-item:hover {
+    background-color: #2b3035;
+}
+
+[data-bs-theme="dark"] .match-card {
+    border-bottom-color: #495057;
+}
+
+[data-bs-theme="dark"] .match-card:hover {
+    background-color: #2b3035;
+}
+
+[data-bs-theme="dark"] .strategy-card {
+    border-bottom-color: #495057;
+}
+
+[data-bs-theme="dark"] .strategy-card:hover {
+    background-color: #2b3035;
+}
+
+[data-bs-theme="dark"] .performer-item {
+    border-bottom-color: #495057;
+}
+
+[data-bs-theme="dark"] .time-badge {
+    background-color: #495057;
+    color: #adb5bd;
+}
+
+[data-bs-theme="dark"] .alliance-red .team-badge {
+    background-color: rgba(220, 53, 69, 0.2);
+    border-color: #dc3545;
+}
+
+[data-bs-theme="dark"] .alliance-blue .team-badge {
+    background-color: rgba(13, 110, 253, 0.2);
+    border-color: #0d6efd;
+}
+
+[data-bs-theme="dark"] .brief-section::-webkit-scrollbar-track {
+    background: #2b3035;
+}
+
+[data-bs-theme="dark"] .brief-section::-webkit-scrollbar-thumb {
+    background: #495057;
+}
+
+[data-bs-theme="dark"] .brief-section::-webkit-scrollbar-thumb:hover {
+    background: #6c757d;
+}
+
+.brief-stats .stat-icon {
+    animation: pulse-icon 2s infinite;
+}
+
+@keyframes pulse-icon {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.brief-section {
+    /* No max-height or scrolling - show all content */
+    box-sizing: border-box;
+}
+
+.brief-section.collapsed {
+    max-height: 0;
+    overflow: hidden;
+}
+
+.activity-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e9ecef;
+    transition: background-color 0.2s ease;
+}
+
+.activity-item:last-child {
+    border-bottom: none;
+}
+
+.activity-item:hover {
+    background-color: #f8f9fa;
+}
+
+.match-card {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e9ecef;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.match-card:hover {
+    background-color: #f8f9fa;
+    transform: translateX(4px);
+}
+
+.match-card:last-child {
+    border-bottom: none;
+}
+
+.team-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin: 2px;
+}
+
+.alliance-red .team-badge {
+    background-color: #fee;
+    color: #dc3545;
+    border: 1px solid #dc3545;
+}
+
+.alliance-blue .team-badge {
+    background-color: #e7f1ff;
+    color: #0d6efd;
+    border: 1px solid #0d6efd;
+}
+
+.predicted-winner {
+    position: relative;
+    padding: 6px;
+    border-radius: 8px;
+    background: rgba(255, 215, 0, 0.15);
+    border: 2px solid #FFD700;
+}
+
+/* Crown emoji removed per user request */
+
+[data-bs-theme="dark"] .predicted-winner {
+    background: rgba(255, 215, 0, 0.25);
+}
+
+.prediction-badge {
+    padding: 4px 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 6px;
+    text-align: center;
+    margin-top: 8px;
+}
+
+.strategy-card {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e9ecef;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.strategy-card:hover {
+    background-color: #f8f9fa;
+}
+
+.strategy-card:last-child {
+    border-bottom: none;
+}
+
+.performer-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.performer-item:hover {
+    background-color: #f8f9fa;
+}
+
+[data-bs-theme="dark"] .performer-item:hover {
+    background-color: #2b3035;
+}
+
+.performer-item:last-child {
+    border-bottom: none;
+}
+
+.performer-rank {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.performer-rank.rank-1 {
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    color: white;
+}
+
+.performer-rank.rank-2 {
+    background: linear-gradient(135deg, #C0C0C0, #808080);
+    color: white;
+}
+
+.performer-rank.rank-3 {
+    background: linear-gradient(135deg, #CD7F32, #8B4513);
+    color: white;
+}
+
+.performer-rank.rank-other {
+    background-color: #e9ecef;
+    color: #6c757d;
+}
+
+[data-bs-theme="dark"] .performer-rank.rank-other {
+    background-color: #495057;
+    color: #adb5bd;
+}
+
+.time-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    background-color: #e9ecef;
+    color: #6c757d;
+}
+
+/* Scrollbar styling */
+.brief-section::-webkit-scrollbar {
+    width: 6px;
+}
+
+.brief-section::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.brief-section::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
+}
+
+.brief-section::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Brief Panel functionality
+    const briefPanel = {
+        init: function() {
+            this.bindEvents();
+            this.loadBriefData();
+            // Refresh every 60 seconds
+            setInterval(() => this.loadBriefData(), 60000);
+        },
+
+        bindEvents: function() {
+            const refreshBtn = document.getElementById('briefRefreshBtn');
+            const toggleTopBtn = document.getElementById('briefToggleTopBtn');
+            const toggleBottomBtn = document.getElementById('briefToggleBtn');
+
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', () => {
+                    refreshBtn.querySelector('i').classList.add('fa-spin');
+                    this.loadBriefData().finally(() => {
+                        setTimeout(() => {
+                            refreshBtn.querySelector('i').classList.remove('fa-spin');
+                        }, 500);
+                    });
+                });
+            }
+
+            const toggleBrief = () => {
+                const content = document.getElementById('briefContent');
+                const isCollapsed = content.style.display === 'none';
+                
+                if (isCollapsed) {
+                    content.style.display = 'block';
+                    if (toggleTopBtn) toggleTopBtn.querySelector('i').className = 'fas fa-chevron-up';
+                    if (toggleBottomBtn) {
+                        toggleBottomBtn.querySelector('i').className = 'fas fa-chevron-up me-1';
+                        toggleBottomBtn.querySelector('span').textContent = 'Collapse Brief';
+                    }
+                } else {
+                    content.style.display = 'none';
+                    if (toggleTopBtn) toggleTopBtn.querySelector('i').className = 'fas fa-chevron-down';
+                    if (toggleBottomBtn) {
+                        toggleBottomBtn.querySelector('i').className = 'fas fa-chevron-down me-1';
+                        toggleBottomBtn.querySelector('span').textContent = 'Expand Brief';
+                    }
+                }
+            };
+
+            if (toggleTopBtn) {
+                toggleTopBtn.addEventListener('click', toggleBrief);
+            }
+
+            if (toggleBottomBtn) {
+                toggleBottomBtn.addEventListener('click', toggleBrief);
+            }
+        },
+
+        loadBriefData: function() {
+            return fetch('/api/brief-data', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Brief data received:', data);
+                if (data.success) {
+                    this.updateStats(data);
+                    this.renderRecentActivity(data.recent_activity || []);
+                    this.renderUpcomingMatches(data.upcoming_matches || []);
+                    this.renderTopPerformers(data.top_performers || []);
+                } else {
+                    console.error('Brief data fetch failed:', data.error);
+                    // Show error in sections
+                    ['briefRecentActivity', 'briefUpcomingMatches', 'briefStrategyInsights', 'briefTopPerformers'].forEach(id => {
+                        const elem = document.getElementById(id);
+                        if (elem) elem.innerHTML = '<div class="text-center p-3 text-danger small">Failed to load data</div>';
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error loading brief data:', error);
+                // Show error in sections
+                ['briefRecentActivity', 'briefUpcomingMatches', 'briefStrategyInsights', 'briefTopPerformers'].forEach(id => {
+                    const elem = document.getElementById(id);
+                    if (elem) elem.innerHTML = '<div class="text-center p-3 text-danger small">Error: ' + error.message + '</div>';
+                });
+            });
+        },
+
+        updateStats: function(data) {
+            const todayScouts = document.getElementById('briefTodayScouts');
+            const upcomingMatchesCount = document.getElementById('briefUpcomingMatchesCount');
+            const teamsAnalyzed = document.getElementById('briefTeamsAnalyzed');
+
+            if (todayScouts) todayScouts.textContent = data.today_scouts || 0;
+            if (upcomingMatchesCount) upcomingMatchesCount.textContent = data.upcoming_count || 0;
+            if (teamsAnalyzed) teamsAnalyzed.textContent = data.teams_analyzed || 0;
+        },
+
+        renderRecentActivity: function(activities) {
+            const container = document.getElementById('briefRecentActivity');
+            if (!container) return;
+
+            if (activities.length === 0) {
+                container.innerHTML = '<div class="text-center p-3 brief-text-muted small">No recent activity</div>';
+                return;
+            }
+
+            container.innerHTML = activities.map(activity => `
+                <div class="activity-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="fw-medium">
+                                <i class="fas fa-user-circle me-1 text-primary"></i>
+                                ${this.escapeHtml(activity.scout_name)}
+                            </div>
+                            <div class="small brief-text-muted">
+                                Scouted Team ${activity.team_number} in Match ${activity.match_number}
+                            </div>
+                        </div>
+                        <span class="time-badge">${this.formatTimeAgo(activity.timestamp)}</span>
+                    </div>
+                </div>
+            `).join('');
+        },
+
+        renderUpcomingMatches: function(matches) {
+            const container = document.getElementById('briefUpcomingMatches');
+            if (!container) return;
+
+            if (matches.length === 0) {
+                container.innerHTML = '<div class="text-center p-3 brief-text-muted small">No upcoming matches</div>';
+                return;
+            }
+
+            container.innerHTML = matches.map(match => `
+                <div class="match-card" onclick="window.location.href='/matches/${match.id}'">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="fw-bold">${this.escapeHtml(match.match_type)} ${match.match_number}</div>
+                        ${match.scheduled_time ? `<span class="time-badge">${this.formatMatchTime(match.scheduled_time)}</span>` : ''}
+                    </div>
+                    <div class="row g-1">
+                        <div class="col-6">
+                            <div class="small brief-text-muted mb-1">
+                                Red Alliance
+                                ${match.prediction && match.prediction.red_score > 0 ? `<span class="ms-1 text-danger fw-bold">${match.prediction.red_score}</span>` : ''}
+                            </div>
+                            <div class="alliance-red ${match.prediction && match.prediction.winner === 'red' ? 'predicted-winner' : ''}">
+                                ${match.red_teams.map(team => `<span class="team-badge">${team}</span>`).join('')}
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="small brief-text-muted mb-1">
+                                Blue Alliance
+                                ${match.prediction && match.prediction.blue_score > 0 ? `<span class="ms-1 text-primary fw-bold">${match.prediction.blue_score}</span>` : ''}
+                            </div>
+                            <div class="alliance-blue ${match.prediction && match.prediction.winner === 'blue' ? 'predicted-winner' : ''}">
+                                ${match.blue_teams.map(team => `<span class="team-badge">${team}</span>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    ${match.prediction && match.prediction.winner ? `
+                        <div class="mt-2 small prediction-badge">
+                            <i class="fas fa-chart-line me-1"></i>
+                            <strong>Predicted: ${match.prediction.winner === 'red' ? 'Red' : match.prediction.winner === 'blue' ? 'Blue' : 'Tie'}</strong>
+                            ${match.prediction.confidence > 0 ? ` (${match.prediction.confidence}% confidence)` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        },
+
+        renderTopPerformers: function(performers) {
+            const container = document.getElementById('briefTopPerformers');
+            if (!container) return;
+
+            if (performers.length === 0) {
+                container.innerHTML = '<div class="text-center p-3 brief-text-muted small">No performance data available</div>';
+                return;
+            }
+
+            container.innerHTML = performers.map((performer, index) => {
+                const rank = index + 1;
+                const rankClass = rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : 'rank-other';
+                
+                return `
+                    <div class="performer-item" onclick="window.location.href='/teams/${performer.team_number}/view'">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="performer-rank ${rankClass}">${rank}</div>
+                            <div>
+                                <div class="fw-medium">Team ${performer.team_number}</div>
+                                <div class="small brief-text-muted">${this.escapeHtml(performer.team_name || '')}</div>
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <div class="fw-bold text-primary">${performer.avg_score.toFixed(1)}</div>
+                            <div class="small brief-text-muted">Avg Score</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        },
+
+        formatTimeAgo: function(timestamp) {
+            const now = new Date();
+            const time = new Date(timestamp);
+            const diff = Math.floor((now - time) / 1000); // seconds
+
+            if (diff < 60) return 'Just now';
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            return `${Math.floor(diff / 86400)}d ago`;
+        },
+
+        formatMatchTime: function(timestamp) {
+            const time = new Date(timestamp);
+            return time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        },
+
+        escapeHtml: function(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    };
+
+    // Initialize the brief panel
+    briefPanel.init();
+});
+</script>
