@@ -51,15 +51,35 @@
 /* Accessibility focus styles */
 button:focus, input:focus, select:focus, textarea:focus{box-shadow:0 0 0 4px rgba(91,59,255,.12);outline:none}
 
-/* Auto Period Timer Reminder Banner Styles */
+/* Auto Period Timer Reminder Banner Styles - force-visible in all themes */
+.scouting-form #auto-period-reminder-banner,
 #auto-period-reminder-banner {
-    border-left: 6px solid #f59e0b;
-    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-    border-radius: 0;
-    border-bottom: 2px solid #f59e0b;
-    padding: 1rem 1.25rem;
-    width: 100%;
-    max-width: 100vw;
+    /* solid true yellow for strong visibility (non-transparent) */
+    background: #FFD400 !important; /* vivid yellow */
+    /* remove glass blur for solid appearance */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid #E6B800 !important;
+    padding: 1rem 1.25rem !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    color: rgba(20,20,20,0.95) !important; /* dark text for contrast */
+}
+
+/* Ensure the icon color contrasts on translucent background */
+.scouting-form #auto-period-reminder-banner .fa-exclamation-triangle,
+#auto-period-reminder-banner .fa-exclamation-triangle {
+    color: rgba(245,158,11,0.98) !important;
+}
+
+/* Dark mode specific override - make sure theme's .dark-mode selectors don't force greys */
+body.dark-mode .scouting-form #auto-period-reminder-banner,
+body.dark-mode #auto-period-reminder-banner {
+    /* match same solid yellow in dark mode */
+    background: #FFD400 !important;
+    color: rgba(12,12,12,0.95) !important;
+    border-bottom-color: #E6B800 !important;
 }
 
 #auto-period-reminder-banner .alert-heading {

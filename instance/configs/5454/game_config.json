@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "alliance_size": 3,
   "scouting_stations": 6,
-  "current_event_code": "camb",
+  "current_event_code": "arsea",
   "match_types": [
     "Practice",
     "Qualification",
@@ -12,7 +12,7 @@
   ],
   "preferred_api_source": "first",
   "auto_period": {
-    "duration_seconds": 5,
+    "duration_seconds": 15,
     "scoring_elements": [
       {
         "id": "elem_auto_1",

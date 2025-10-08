@@ -5,7 +5,7 @@ import os
 import copy
 from functools import wraps
 from flask_socketio import emit, join_room
-from app import socketio
+from app import socketio, db
 import markdown2
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import (get_current_game_config, get_effective_game_config, save_game_config, 
@@ -1382,6 +1382,287 @@ def api_sync_status():
     }
     
     return jsonify(status)
+
+
+@bp.route('/api/brief-data', methods=['GET'])
+@login_required
+def api_brief_data():
+    """Get data for the Now Brief panel"""
+    from app.models import Team, Match, ScoutingData, Event, StrategyDrawing
+    from datetime import datetime, timedelta
+    from sqlalchemy import func, desc
+    
+    try:
+        # Get current scouting team number
+        scouting_team_number = current_user.scouting_team_number
+        
+        # Today's scouts count (unique scouts today)
+        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_scouts = db.session.query(func.count(func.distinct(ScoutingData.scout_name)))\
+            .filter(ScoutingData.scouting_team_number == scouting_team_number)\
+            .filter(ScoutingData.timestamp >= today)\
+            .scalar() or 0
+        
+        # Teams analyzed (teams with at least one scouting entry)
+        teams_analyzed = db.session.query(func.count(func.distinct(ScoutingData.team_id)))\
+            .filter(ScoutingData.scouting_team_number == scouting_team_number)\
+            .scalar() or 0
+        
+        # Recent activity (last 10 entries)
+        recent_activity = []
+        recent_entries = ScoutingData.query\
+            .filter_by(scouting_team_number=scouting_team_number)\
+            .order_by(ScoutingData.timestamp.desc())\
+            .limit(10).all()
+        
+        for entry in recent_entries:
+            recent_activity.append({
+                'scout_name': entry.scout_name or entry.scout or 'Unknown',
+                'team_number': entry.team.team_number if entry.team else 'N/A',
+                'match_number': entry.match.match_number if entry.match else 'N/A',
+                'timestamp': entry.timestamp.isoformat() if entry.timestamp else datetime.utcnow().isoformat()
+            })
+        
+        # Get current event
+        game_config = get_effective_game_config()
+        current_event_code = game_config.get('current_event_code')
+        current_event = None
+        if current_event_code:
+            current_event = get_event_by_code(current_event_code)
+        
+        # Upcoming matches (next 5 matches)
+        upcoming_matches = []
+        if current_event:
+            # Try to get last completed match from API to determine starting point
+            last_completed_match_num = None
+            try:
+                from app.utils.api_utils import get_matches_dual_api
+                api_matches = get_matches_dual_api(current_event_code)
+                
+                # Find the highest match number with scores
+                for api_match in api_matches:
+                    match_num = api_match.get('match_number')
+                    red_score = api_match.get('red_score')
+                    blue_score = api_match.get('blue_score')
+                    
+                    # Check if this match has been scored
+                    if match_num and red_score is not None and blue_score is not None:
+                        if last_completed_match_num is None or match_num > last_completed_match_num:
+                            last_completed_match_num = match_num
+                
+                if last_completed_match_num:
+                    current_app.logger.info(f"Last completed match from API: {last_completed_match_num}")
+            except Exception as e:
+                current_app.logger.warning(f"Could not fetch matches from API, using local DB: {e}")
+            
+            # Query matches starting after the last completed match (or all if no API data)
+            if last_completed_match_num:
+                # Get matches after the last completed one
+                matches = filter_matches_by_scouting_team()\
+                    .filter(Match.event_id == current_event.id)\
+                    .filter(Match.match_number > last_completed_match_num)\
+                    .order_by(Match.match_type, Match.match_number)\
+                    .limit(5).all()
+            else:
+                # Fallback to local DB logic - find last match with scores in our DB
+                last_local_match = filter_matches_by_scouting_team()\
+                    .filter(Match.event_id == current_event.id)\
+                    .filter(Match.red_score.isnot(None))\
+                    .filter(Match.blue_score.isnot(None))\
+                    .order_by(Match.match_number.desc())\
+                    .first()
+                
+                if last_local_match:
+                    matches = filter_matches_by_scouting_team()\
+                        .filter(Match.event_id == current_event.id)\
+                        .filter(Match.match_number > last_local_match.match_number)\
+                        .order_by(Match.match_type, Match.match_number)\
+                        .limit(5).all()
+                else:
+                    # No completed matches found, show first 5
+                    matches = filter_matches_by_scouting_team()\
+                        .filter(Match.event_id == current_event.id)\
+                        .order_by(Match.match_type, Match.match_number)\
+                        .limit(5).all()
+            
+            # If we didn't find any upcoming matches (e.g., event just started or API/DB indicates none),
+            # fall back to showing the 5 most recently played matches from the local DB.
+            if not matches:
+                matches = filter_matches_by_scouting_team()\
+                    .filter(Match.event_id == current_event.id)\
+                    .order_by(Match.match_number.desc())\
+                    .limit(5).all()
+
+            for match in matches:
+                # Calculate scout coverage
+                total_teams = len(match.red_teams) + len(match.blue_teams)
+                all_teams = match.red_teams + match.blue_teams
+                scouted_count = 0
+                
+                for team_num in all_teams:
+                    team = Team.query.filter_by(team_number=int(team_num)).first()
+                    if team:
+                        has_scout = ScoutingData.query.filter_by(
+                            match_id=match.id,
+                            team_id=team.id,
+                            scouting_team_number=scouting_team_number
+                        ).first() is not None
+                        if has_scout:
+                            scouted_count += 1
+                
+                # Calculate predicted winner based on average team scores
+                red_score = 0
+                blue_score = 0
+                red_count = 0
+                blue_count = 0
+                
+                for team_num in match.red_teams:
+                    team = Team.query.filter_by(team_number=int(team_num)).first()
+                    if team:
+                        entries = ScoutingData.query.filter_by(
+                            team_id=team.id, 
+                            scouting_team_number=scouting_team_number
+                        ).all()
+                        if entries:
+                            scores = []
+                            for entry in entries:
+                                try:
+                                    score = entry.calculate_metric('tot')
+                                    if score and score > 0:
+                                        scores.append(score)
+                                except:
+                                    pass
+                            if scores:
+                                red_score += sum(scores) / len(scores)
+                                red_count += 1
+                
+                for team_num in match.blue_teams:
+                    team = Team.query.filter_by(team_number=int(team_num)).first()
+                    if team:
+                        entries = ScoutingData.query.filter_by(
+                            team_id=team.id, 
+                            scouting_team_number=scouting_team_number
+                        ).all()
+                        if entries:
+                            scores = []
+                            for entry in entries:
+                                try:
+                                    score = entry.calculate_metric('tot')
+                                    if score and score > 0:
+                                        scores.append(score)
+                                except:
+                                    pass
+                            if scores:
+                                blue_score += sum(scores) / len(scores)
+                                blue_count += 1
+                
+                # Determine predicted winner
+                predicted_winner = None
+                confidence = 0
+                if red_count > 0 and blue_count > 0:
+                    if red_score > blue_score:
+                        predicted_winner = 'red'
+                        confidence = min(((red_score - blue_score) / blue_score) * 100, 99)
+                    elif blue_score > red_score:
+                        predicted_winner = 'blue'
+                        confidence = min(((blue_score - red_score) / red_score) * 100, 99)
+                    else:
+                        predicted_winner = 'tie'
+                        confidence = 0
+                
+                upcoming_matches.append({
+                    'id': match.id,
+                    'match_type': match.match_type.title(),
+                    'match_number': match.match_number,
+                    'scheduled_time': match.scheduled_time.isoformat() if hasattr(match, 'scheduled_time') and match.scheduled_time else None,
+                    'red_teams': match.red_teams,
+                    'blue_teams': match.blue_teams,
+                    'scout_coverage': {
+                        'scouted': scouted_count,
+                        'total': total_teams
+                    },
+                    'prediction': {
+                        'winner': predicted_winner,
+                        'red_score': round(red_score, 1) if red_count > 0 else 0,
+                        'blue_score': round(blue_score, 1) if blue_count > 0 else 0,
+                        'confidence': round(confidence, 0)
+                    }
+                })
+        
+        # Strategy insights removed per UI simplification
+        
+        # Top performers (teams with highest average scores)
+        top_performers = []
+        if current_event:
+            # Get all teams in the event
+            teams = filter_teams_by_scouting_team()\
+                .join(Team.events)\
+                .filter(Event.id == current_event.id)\
+                .all()
+            
+            team_scores = []
+            for team in teams:
+                # Calculate average score from scouting data using the model's calculate_metric method
+                entries = ScoutingData.query\
+                    .filter_by(team_id=team.id, scouting_team_number=scouting_team_number)\
+                    .all()
+                
+                if entries:
+                    scores = []
+                    for entry in entries:
+                        try:
+                            # Try to use calculate_metric for total points
+                            score = entry.calculate_metric('tot')
+                            if score is not None and score > 0:
+                                scores.append(score)
+                            else:
+                                # Fallback: try to get from data directly
+                                data = entry.data if isinstance(entry.data, dict) else json.loads(entry.data or '{}')
+                                # Look for various field names
+                                total = (
+                                    data.get('total_points', 0) or
+                                    data.get('tot', 0) or
+                                    (data.get('auto_points', 0) or 0) + 
+                                    (data.get('teleop_points', 0) or 0) + 
+                                    (data.get('endgame_points', 0) or 0) or
+                                    (data.get('apt', 0) or 0) + 
+                                    (data.get('tpt', 0) or 0) + 
+                                    (data.get('ept', 0) or 0)
+                                )
+                                if total > 0:
+                                    scores.append(total)
+                        except Exception as e:
+                            current_app.logger.warning(f"Error calculating score for entry {entry.id}: {e}")
+                            pass
+                    
+                    if scores:
+                        avg_score = sum(scores) / len(scores)
+                        team_scores.append({
+                            'team_number': team.team_number,
+                            'team_name': team.team_name or '',
+                            'avg_score': avg_score
+                        })
+            
+            # Sort by average score and take top 5
+            team_scores.sort(key=lambda x: x['avg_score'], reverse=True)
+            top_performers = team_scores[:5]
+        
+        return jsonify({
+            'success': True,
+            'today_scouts': today_scouts,
+            'upcoming_count': len(upcoming_matches),
+            'teams_analyzed': teams_analyzed,
+            'recent_activity': recent_activity,
+            'upcoming_matches': upcoming_matches,
+            'top_performers': top_performers
+        })
+    
+    except Exception as e:
+        current_app.logger.exception('Error fetching brief data')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 @bp.route('/api/sync-event', methods=['POST'])
