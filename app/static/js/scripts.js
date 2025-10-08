@@ -66,6 +66,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Match period tabs with smooth transitions
     initializeMatchPeriodTabs();
     
+    // Initialize auto period timer feature
+    initializeAutoPeriodTimer();
+    
     // Form validation with better user feedback
     validateForms();
     
@@ -736,6 +739,198 @@ function initializeMatchPeriodTabs() {
                 activateTab(tab, targetId);
             }
         });
+    });
+}
+
+/**
+ * Initialize Auto Period Timer functionality
+ * Tracks first auto entry and shows reminder after auto period duration
+ */
+function initializeAutoPeriodTimer() {
+    const timerToggle = document.getElementById('auto_period_timer_enabled');
+    const reminderBanner = document.getElementById('auto-period-reminder-banner');
+    const autoSection = document.getElementById('auto-section');
+    const teleopTab = document.querySelector('.match-period-tab[data-target="teleop-section"]');
+    
+    if (!timerToggle || !reminderBanner || !autoSection) return;
+    
+    // Load saved preference from localStorage
+    const savedPreference = localStorage.getItem('auto_period_timer_enabled');
+    if (savedPreference === 'true') {
+        timerToggle.checked = true;
+    }
+    
+    // Save preference when toggle changes
+    timerToggle.addEventListener('change', function() {
+        localStorage.setItem('auto_period_timer_enabled', this.checked);
+        if (!this.checked) {
+            // If disabled, hide banner and reset timer state
+            hideAutoPeriodReminder();
+            window.autoPeriodTimerState = null;
+        }
+    });
+    
+    // Get auto period duration from data attribute (in seconds)
+    const autoDurationSeconds = parseInt(autoSection.getAttribute('data-auto-duration')) || 15;
+    const autoDurationMs = autoDurationSeconds * 1000;
+    
+    console.log(`Auto period timer initialized: ${autoDurationSeconds} seconds (${autoDurationMs}ms)`);
+    
+    // State object to track timer
+    window.autoPeriodTimerState = {
+        timerStarted: false,
+        timerCompleted: false,
+        reminderShown: false,
+        autoPeriodDuration: autoDurationMs
+    };
+    
+    /**
+     * Start the auto period timer when first scoring entry is made
+     */
+    function startAutoPeriodTimer() {
+        if (!timerToggle.checked) return;
+        if (window.autoPeriodTimerState.timerStarted) return;
+        
+        const durationMs = window.autoPeriodTimerState.autoPeriodDuration;
+        console.log(`Auto period timer started - will fire in ${durationMs}ms (${durationMs/1000} seconds)`);
+        window.autoPeriodTimerState.timerStarted = true;
+        
+        // Set timeout for auto period duration
+        setTimeout(() => {
+            console.log('Auto period timer completed - showing reminder');
+            window.autoPeriodTimerState.timerCompleted = true;
+            
+            // Only show reminder if still on auto tab
+            const autoTab = document.querySelector('.match-period-tab[data-target="auto-section"]');
+            const teleopSection = document.getElementById('teleop-section');
+            
+            if (autoTab && autoTab.classList.contains('active') && 
+                teleopSection && teleopSection.classList.contains('d-none')) {
+                showAutoPeriodReminder();
+            }
+        }, window.autoPeriodTimerState.autoPeriodDuration);
+    }
+    
+    /**
+     * Show the auto period reminder banner
+     */
+    function showAutoPeriodReminder() {
+        if (window.autoPeriodTimerState.reminderShown) return;
+        if (!timerToggle.checked) return;
+        
+        console.log('Showing auto period reminder');
+        window.autoPeriodTimerState.reminderShown = true;
+        
+        reminderBanner.classList.remove('d-none');
+        reminderBanner.classList.add('show');
+        
+        // Add pulsing animation
+        reminderBanner.style.animation = 'pulse 2s ease-in-out 3';
+        
+        // Play a subtle beep if browser supports it (optional)
+        try {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 800;
+            oscillator.type = 'sine';
+            gainNode.gain.value = 0.1;
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.2);
+        } catch (e) {
+            // Audio not supported or blocked
+            console.log('Audio notification not available');
+        }
+    }
+    
+    /**
+     * Hide the auto period reminder banner
+     */
+    function hideAutoPeriodReminder() {
+        reminderBanner.classList.remove('show');
+        reminderBanner.classList.add('d-none');
+    }
+    
+    // Expose hide function globally so tab switching can use it
+    window.hideAutoPeriodReminder = hideAutoPeriodReminder;
+    
+    /**
+     * Monitor auto period inputs for first entry
+     */
+    function monitorAutoInputs() {
+        if (!autoSection) return;
+        
+        // Get all auto period inputs that add points (counters and checkboxes with points)
+        const autoInputs = autoSection.querySelectorAll('input[type="number"], input[type="checkbox"]');
+        
+        autoInputs.forEach(input => {
+            // For counters, check if value increases from 0
+            if (input.type === 'number') {
+                let lastValue = parseInt(input.value) || 0;
+                
+                input.addEventListener('change', function() {
+                    const currentValue = parseInt(this.value) || 0;
+                    
+                    // Start timer if value increased from 0 or changed to positive
+                    if (currentValue > 0 && lastValue === 0) {
+                        startAutoPeriodTimer();
+                    }
+                    lastValue = currentValue;
+                });
+                
+                // Also monitor increment button clicks
+                const container = input.closest('.counter-container');
+                if (container) {
+                    const incrementBtn = container.querySelector('.btn-increment');
+                    if (incrementBtn) {
+                        incrementBtn.addEventListener('click', function() {
+                            const currentValue = parseInt(input.value) || 0;
+                            if (currentValue === 0) {
+                                // Will be 1 after increment
+                                setTimeout(() => startAutoPeriodTimer(), 50);
+                            }
+                        });
+                    }
+                }
+            }
+            // For checkboxes with points, check if they get checked
+            else if (input.type === 'checkbox') {
+                // Check if this checkbox adds points by looking at parent card
+                const cardBody = input.closest('.card-body');
+                if (cardBody) {
+                    input.addEventListener('change', function() {
+                        if (this.checked) {
+                            startAutoPeriodTimer();
+                        }
+                    });
+                }
+            }
+        });
+    }
+    
+    // Initialize input monitoring
+    monitorAutoInputs();
+    
+    // Hide reminder when switching to teleop tab
+    if (teleopTab) {
+        teleopTab.addEventListener('click', function() {
+            hideAutoPeriodReminder();
+        });
+    }
+    
+    // Also hide when teleop tab is activated via keyboard
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            const focused = document.activeElement;
+            if (focused && focused.classList.contains('teleop-tab')) {
+                hideAutoPeriodReminder();
+            }
+        }
     });
 }
 
