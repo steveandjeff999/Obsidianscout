@@ -22,14 +22,32 @@ const STATIC_ASSETS = [
   '/static/offline.html'
 ];
 
+// Common image fallbacks to pre-cache so we can serve a reliable placeholder
+// when individual icon requests fail. Add any frequently used icons here.
+STATIC_ASSETS.push('/static/img/avatars/default.png');
+STATIC_ASSETS.push('/static/img/obsidian.png');
+STATIC_ASSETS.push('/static/assets/obsidian.png');
+
 // Install event: pre-cache site shell
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(STATIC_ASSETS.map(normalizeUrlForCache))
-        .catch(err => {
-          console.warn('Some assets failed to cache during install:', err);
-        });
+    caches.open(CACHE_NAME).then(async cache => {
+      const toCache = STATIC_ASSETS.map(normalizeUrlForCache);
+      // Try addAll first for speed, but fall back to individual caching so
+      // one failure doesn't prevent other assets from being cached.
+      try {
+        await cache.addAll(toCache);
+      } catch (err) {
+        console.warn('cache.addAll failed, attempting individual asset caching', err);
+        await Promise.all(toCache.map(async url => {
+          try {
+            await cache.add(url);
+          } catch (e) {
+            // Log and continue - individual assets may 404 during build-time
+            console.warn('Failed to cache asset during install:', url, e);
+          }
+        }));
+      }
     })
   );
   // Activate new service worker immediately
@@ -81,7 +99,12 @@ self.addEventListener('fetch', event => {
 async function cacheFirst(req) {
   try {
     const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(req);
+    // For images we often see cache-miss differences caused by query strings
+    // (cache-busting). Ignore search when matching image requests to improve
+    // hit-rate for icons and avatars.
+    const reqUrl = new URL(req.url);
+    const isImage = /\.(?:png|jpg|jpeg|svg|gif|webp)$/.test(reqUrl.pathname);
+    const cached = isImage ? await cache.match(req, { ignoreSearch: true }) : await cache.match(req);
     if (cached) {
       return cached;
     }
@@ -90,6 +113,22 @@ async function cacheFirst(req) {
     return fresh;
   } catch (error) {
     console.warn('Cache-first failed:', error);
+    // If the request was for an image, attempt to return a sensible fallback
+    // (pre-cached default avatar) so the UI doesn't show broken icons.
+    try {
+      const reqUrl = new URL(req.url);
+      if (/\.(?:png|jpg|jpeg|svg|gif|webp)$/.test(reqUrl.pathname) || req.destination === 'image') {
+        const cache = await caches.open(CACHE_NAME);
+        const fallback = await cache.match('/static/img/avatars/default.png');
+        if (fallback) return fallback;
+        // As a last resort return a tiny transparent SVG so the layout stays intact.
+        return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"></svg>', {
+          headers: { 'Content-Type': 'image/svg+xml' }
+        });
+      }
+    } catch (e) {
+      console.warn('Error while trying to serve image fallback:', e);
+    }
     return fetch(req);
   }
 }

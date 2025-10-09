@@ -1,7 +1,8 @@
 {# Notification banner include - expects `site_notifications` in context #}
 {# Only show notifications that apply to the current viewer (site-wide, their team, or their username) #}
 {% if site_notifications %}
-  <div id="site-notification-wrapper" class="site-notification-container"> 
+  {# Hide wrapper initially to avoid flashes of banners that have been dismissed in localStorage. #}
+  <div id="site-notification-wrapper" class="site-notification-container" style="display:none;"> 
     {% for n in site_notifications %}
       {%- set show = False -%}
       {# Site-wide always shows #}
@@ -74,5 +75,30 @@
   }
   /* no empty rules here */
   </style>
+  <!-- Synchronous early script: remove locally-dismissed notifications before wrapper is revealed -->
+  <script>
+    (function(){
+      try {
+        var wrapper = document.getElementById('site-notification-wrapper');
+        if (!wrapper) return;
+        var dismissed = null;
+        try { dismissed = JSON.parse(localStorage.getItem('dismissed_notifications') || '[]'); } catch(e){ dismissed = []; }
+        if (dismissed && dismissed.length) {
+          dismissed.forEach(function(id){
+            try {
+              var btn = wrapper.querySelector('[data-notif-id="' + id + '"]');
+              if (btn) {
+                var parent = btn.closest('.site-notification');
+                if (parent && parent.parentNode) parent.parentNode.removeChild(parent);
+              }
+            } catch(e){}
+          });
+        }
+        // If there are any notifications remaining, reveal the wrapper; otherwise keep it hidden.
+        var any = wrapper.querySelector('.site-notification');
+        if (any) wrapper.style.display = '';
+      } catch (e) { /* fail silently */ }
+    })();
+  </script>
   <script src="{{ url_for('static', filename='js/notification-banner.js') }}"></script>
 {% endif %}

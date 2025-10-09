@@ -1,6 +1,31 @@
 <!doctype html>
 <html lang="en">
 <head>
+    <!-- Early theme detection: apply dark-mode class to <html> before CSS loads to prevent white flash -->
+    <script>
+        (function(){
+            try {
+                var stored = null;
+                try { stored = localStorage.getItem('darkMode'); } catch (e) { stored = null; }
+                var prefersDark = false;
+                try { prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; } catch(e) { prefersDark = false; }
+                var useDark = null;
+                if (stored === 'true') useDark = true;
+                else if (stored === 'false') useDark = false;
+                else useDark = prefersDark;
+
+                if (useDark) {
+                    document.documentElement.classList.add('dark-mode');
+                    var css = 'html.dark-mode, html.dark-mode body { background: #0b0b0d; color: #e6e6e6; }';
+                    var s = document.createElement('style');
+                    s.setAttribute('data-ob-theme','early');
+                    s.appendChild(document.createTextNode(css));
+                    var head = document.getElementsByTagName('head')[0];
+                    if (head) head.insertBefore(s, head.firstChild);
+                }
+            } catch (e) { /* fail silently */ }
+        })();
+    </script>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}ObsidianScout{% endblock %}</title>
