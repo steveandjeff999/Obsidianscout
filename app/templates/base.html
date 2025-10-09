@@ -781,7 +781,7 @@
                 <a class="nav-link {% if request.endpoint == 'matches.strategy_all' %}active{% endif %}" href="{{ url_for('matches.strategy_all') }}"><i class="fas fa-th-large"></i><span>Strategy — All Matches</span></a>
                 <a class="nav-link {% if request.endpoint == 'matches.strategy_draw' %}active{% endif %}" href="{{ url_for('matches.strategy_draw') }}"><i class="fas fa-pen-ruler"></i><span>Strategy Draw</span></a>
                 <a class="nav-link {% if request.endpoint == 'graphs.my_shares' %}active{% endif %}" href="{{ url_for('graphs.my_shares') }}"><i class="fas fa-share-alt"></i><span>My Graph Shares</span></a>
-                <a class="nav-link {% if request.endpoint == 'teams.my_ranks_shares' %}active{% endif %}" href="{{ url_for('teams.my_ranks_shares') }}"><i class="fas fa-trophy"></i><span>My Ranking Shares</span></a>
+                    <a class="nav-link {% if request.endpoint == 'teams.my_ranks_shares' %}active{% endif %}" href="{{ url_for('teams.my_ranks_shares') }}"><i class="fas fa-trophy"></i><span>My Ranking Shares</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('data') %}active{% endif %}" href="{{ url_for('data.index') }}"><i class="fas fa-database"></i><span>Data</span></a>
                 </div>
             </div>
@@ -794,6 +794,7 @@
                 <a class="nav-link {% if request.endpoint == 'main.users_page' %}active{% endif %}" href="{{ url_for('main.users_page') }}"><i class="fas fa-users"></i><span>Users</span></a>
                 <a class="nav-link {% if request.endpoint == 'main.chat_page' %}active{% endif %}" href="{{ url_for('main.chat_page') }}"><i class="fas fa-comments"></i><span>Chat <span id="chatUnreadBadge" class="badge bg-danger ms-1" style="display:none;">0</span></span></a>
                 <a class="nav-link {% if request.endpoint == 'main.sponsors' %}active{% endif %}" href="{{ url_for('main.sponsors') }}"><i class="fas fa-handshake"></i><span>Sponsors</span></a>
+                <a class="nav-link {% if request.endpoint == 'graphs.scout_leaderboard' %}active{% endif %}" href="{{ url_for('graphs.scout_leaderboard') }}"><i class="fas fa-medal"></i><span>Scout Leaderboard</span></a>
                 </div>
             </div>
             <div class="nav-group" id="group-help">

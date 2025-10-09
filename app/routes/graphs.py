@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, current_app, request, jsonify, url_for, redirect, flash, abort
 from flask_login import login_required, current_user
-from app.routes.auth import analytics_required
+from app.routes.auth import analytics_required, role_required
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -498,6 +498,154 @@ def index():
                           team_event_mapping=team_event_mapping,
                           team_metrics=team_metrics,
                           **get_theme_context())
+
+
+@bp.route('/scout-leaderboard')
+@role_required('scout', 'analytics', 'admin')
+def scout_leaderboard():
+    """Leaderboard of scouts: counts of scouted matches and prediction accuracy.
+
+    Accuracy is computed only for scouting entries where:
+      - the related Match has completed scores (red_score and blue_score present), and
+      - the scouting entry contains a prediction value we can interpret (several keys checked).
+
+    The leaderboard groups by scout_id when available, otherwise by scout_name.
+    """
+    from app.models import ScoutingData, Match, User
+
+    # Respect team isolation (use current user's scouting_team_number)
+    scouting_team_number = getattr(current_user, 'scouting_team_number', None)
+
+    q = ScoutingData.query
+    if scouting_team_number is not None:
+        q = q.filter_by(scouting_team_number=scouting_team_number)
+
+    entries = q.all()
+
+    # Aggregate per-scout
+    leaders = {}
+
+    def normalize_pred(pred, match):
+        """Normalize a prediction value to 'red'|'blue'|'tie' or None."""
+        if pred is None:
+            return None
+        try:
+            # If numeric string or int -> treat as team number and map to alliance
+            if isinstance(pred, (int,)) or (isinstance(pred, str) and pred.isdigit()):
+                team_num = int(pred)
+                if match and match.red_alliance:
+                    if str(team_num) in (match.red_alliance or '').split(','):
+                        return 'red'
+                    if str(team_num) in (match.blue_alliance or '').split(','):
+                        return 'blue'
+                return None
+
+            s = str(pred).strip().lower()
+            if not s:
+                return None
+            if 'red' in s:
+                return 'red'
+            if 'blue' in s:
+                return 'blue'
+            if 'tie' in s or 'draw' in s:
+                return 'tie'
+            # If it's a team name like '254' already handled; otherwise unknown
+            return None
+        except Exception:
+            return None
+
+    for e in entries:
+        key = e.scout_id if e.scout_id else (e.scout_name or 'Unknown')
+        if key not in leaders:
+            # Try to resolve username if we have id
+            username = None
+            if e.scout_id:
+                try:
+                    u = User.query.get(e.scout_id)
+                    username = u.username if u else None
+                except Exception:
+                    username = None
+            leaders[key] = {
+                'scout_id': e.scout_id,
+                'scout_name': username or e.scout_name or 'Unknown',
+                'total': 0,
+                'evaluated': 0,
+                'correct': 0,
+                'last_scouted': None
+            }
+
+        rec = leaders[key]
+        rec['total'] += 1
+        # update last scouted
+        if not rec['last_scouted'] or (e.timestamp and e.timestamp > rec['last_scouted']):
+            rec['last_scouted'] = e.timestamp
+
+        # Only evaluate accuracy when match has completed scores
+        match = None
+        try:
+            match = e.match
+        except Exception:
+            match = None
+
+        if match and match.red_score is not None and match.blue_score is not None:
+            # Attempt to find prediction value in the scouting data
+            data = {}
+            try:
+                data = e.data or {}
+            except Exception:
+                data = {}
+
+            pred_candidates = [
+                data.get('predicted_winner'),
+                data.get('prediction'),
+                data.get('predicted'),
+                data.get('winner_prediction'),
+                data.get('predicted_winner_choice'),
+                data.get('predicted_winner_team'),
+            ]
+
+            pred_val = None
+            for p in pred_candidates:
+                if p is not None:
+                    pred_val = p
+                    break
+
+            norm = normalize_pred(pred_val, match)
+            if norm is not None:
+                rec['evaluated'] += 1
+                actual = 'red' if match.red_score > match.blue_score else 'blue' if match.blue_score > match.red_score else 'tie'
+                if norm == actual:
+                    rec['correct'] += 1
+
+    # Determine sort mode from query parameter. Supported: 'total' (matches scouted) or 'accuracy'
+    sort_mode = request.args.get('sort', 'total') or 'total'
+
+    leader_list = list(leaders.values())
+    if sort_mode == 'accuracy':
+        # Sort by accuracy desc (evaluated==0 go last), then by total desc
+        leader_list.sort(key=lambda it: ((it['correct'] / it['evaluated']) if it['evaluated'] > 0 else -1, it['total']), reverse=True)
+    else:
+        # Default: sort by total scouted desc
+        leader_list.sort(key=lambda it: it['total'], reverse=True)
+
+    # Add rank and formatted accuracy
+    ranked = []
+    rank = 1
+    for it in leader_list:
+        accuracy = (it['correct'] / it['evaluated']) if it['evaluated'] > 0 else None
+        ranked.append({
+            'rank': rank,
+            'scout_id': it['scout_id'],
+            'scout_name': it['scout_name'],
+            'total': it['total'],
+            'evaluated': it['evaluated'],
+            'correct': it['correct'],
+            'accuracy': round(accuracy*100,2) if accuracy is not None else None,
+            'last_scouted': it['last_scouted']
+        })
+        rank += 1
+
+    return render_template('graphs/scout_leaderboard.html', leaders=ranked, sort_mode=sort_mode, **get_theme_context())
 
 @bp.route('/data')
 @analytics_required
