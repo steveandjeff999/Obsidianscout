@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+
+{% block title %}Team Trends{% endblock %}
+
+{% block content %}
+<h1>Team Trends</h1>
+<p>Select a team to view historical points and a simple prediction.</p>
+<ul>
+  {% for team in teams %}
+    <li><a href="{{ url_for('trends.team_trends', team_number=team.team_number) }}">Team {{ team.team_number }} - {{ team.team_name }}</a></li>
+  {% endfor %}
+</ul>
+{% endblock %}

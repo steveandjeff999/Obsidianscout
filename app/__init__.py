@@ -727,6 +727,11 @@ def create_app(test_config=None):
 
     # Import and register blueprints
     from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, assistant, integrity, pit_scouting, scouting_alliances, setup, search, db_admin, sync_api, update_monitor
+    # Register new team trends route (lightweight analytics + prediction)
+    try:
+        from app.routes import team_trends
+    except Exception:
+        team_trends = None
     
     # Register template filters
     from app.utils import template_filters
@@ -748,6 +753,12 @@ def create_app(test_config=None):
     app.register_blueprint(setup.bp)
     app.register_blueprint(search.bp)
     app.register_blueprint(db_admin.db_admin_bp)
+    # Register team_trends blueprint if available
+    if team_trends:
+        try:
+            app.register_blueprint(team_trends.bp)
+        except Exception:
+            pass
     
     # Register sync API (keeping normal sync API, removing superadmin management)
     app.register_blueprint(sync_api.sync_api)

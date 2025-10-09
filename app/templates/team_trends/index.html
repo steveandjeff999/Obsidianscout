@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block title %}Team Trends{% endblock %}
+
+{% block content %}
+<div class="container">
+  <h1>Team Trends</h1>
+  <p>Enter a team number to view recent trends and a simple prediction.</p>
+  {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+  <form method="post" action="{{ url_for('team_trends.analyze_post') }}">
+    <div class="form-group">
+      <label for="team_number">Team Number</label>
+      <input class="form-control" type="text" name="team_number" id="team_number" placeholder="e.g. 254">
+    </div>
+    <button class="btn btn-primary" type="submit">Analyze</button>
+  </form>
+</div>
+{% endblock %}
