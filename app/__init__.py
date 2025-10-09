@@ -707,6 +707,14 @@ def create_app(test_config=None):
     
     # Initialize concurrent database manager
     concurrent_db_manager.init_app(app)
+
+    # Initialize lightweight in-process firewall
+    try:
+        from app.security.firewall import Firewall
+        fw = Firewall(app, socketio=socketio)
+        app.logger.info('✅ Firewall initialized')
+    except Exception as e:
+        app.logger.error(f'❌ Failed to initialize firewall: {e}')
     
     # Initialize ConfigManager
     config_manager.init_app(app)
