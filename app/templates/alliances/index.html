@@ -13,6 +13,12 @@
                 <h5 class="mb-0">
                     <i class="fas fa-handshake me-2"></i>Alliance Selection - {{ current_event.name }}
                 </h5>
+                <div class="d-flex align-items-center">
+                    <!-- Real-time connection indicator -->
+                    <span id="socketStatus" class="badge bg-secondary me-2" style="font-size: 0.7rem;" title="Socket.IO connection status">
+                        <i class="fas fa-circle"></i> Connecting...
+                    </span>
+                </div>
                 <div class="btn-group" role="group">
                     <div class="dropdown d-inline-block me-2">
                         <button class="btn btn-light btn-sm dropdown-toggle" type="button" id="eventDropdown" data-bs-toggle="dropdown" aria-expanded="false">
@@ -30,6 +36,11 @@
                     <button class="btn btn-light btn-sm" id="refresh-recommendations">
                         <i class="fas fa-sync me-1"></i> Refresh
                     </button>
+                    <!-- Trend toggle: default ON -->
+                    <div class="form-check form-switch align-self-center ms-2">
+                        <input class="form-check-input" type="checkbox" id="trend-toggle" checked>
+                        <label class="form-check-label small text-muted" for="trend-toggle">Use recent trends</label>
+                    </div>
                     <a href="{{ url_for('alliances.manage_lists', event_id=current_event.id) }}" 
                        class="btn btn-info btn-sm">
                         <i class="fas fa-list me-1"></i> Manage Lists
@@ -252,113 +263,203 @@
 let currentAllianceId = null;
 let currentPosition = null;
 let teamRecommendations = [];
-let socket;
 // Expose current event id for client-side metric queries
 const currentEventId = {{ current_event.id|tojson }};
 
+// Reliable polling mechanism - checks database every 2 seconds
+let pollingInterval = null;
+const POLLING_INTERVAL_MS = 2000; // Poll every 2 seconds for real-time feel
+let lastAllianceState = {};
+let isPolling = false;
+
 document.addEventListener('DOMContentLoaded', function() {
-    initializeSocketIO();
     loadRecommendations();
+    loadAlliances();
     setupEventListeners();
+    startPolling();
 });
 
-function initializeSocketIO() {
-    socket = io();
+function startPolling() {
+    console.log('Starting database polling (every 2 seconds)');
+    updateSocketStatus(true); // Show as "Live" since polling is active
     
-    // Join the alliance room for this event
-    // Get the event ID from a global variable set by the server
-    const currentEventId = {{ current_event.id|tojson }};
-    socket.emit('join_alliance_room', { event_id: currentEventId });
-    
-    // Listen for alliance updates
-    socket.on('alliance_updated', function(data) {
-        updateAllianceUI(data);
-    });
-    
-    // Listen for recommendations updates
-    socket.on('recommendations_updated', function(data) {
-        if (data.event_id === currentEventId) {
-            loadRecommendations();
+    // Poll immediately, then every 2 seconds
+    pollingInterval = setInterval(() => {
+        if (!isPolling) {
+            pollForUpdates();
         }
-    });
-    
-    // Listen for alliance reset
-    socket.on('alliances_reset', function(data) {
-        if (data.event_id === currentEventId) {
-            location.reload();
-        }
-    });
-    
-    // Listen for list updates
-    socket.on('lists_updated', function(data) {
-        if (data.event_id === currentEventId) {
-            loadRecommendations(); // Refresh recommendations when lists change
-        }
-    });
+    }, POLLING_INTERVAL_MS);
 }
 
-function updateAllianceUI(data) {
-    const allianceCard = document.querySelector(`[data-alliance-id="${data.alliance_id}"]`);
-    if (!allianceCard) return;
-    
-    const teamSlot = allianceCard.querySelector(`[data-position="${data.position}"]`);
-    if (!teamSlot) return;
-    
-    const teamAssignment = teamSlot.querySelector('.team-assignment');
-    
-    if (data.action === 'assign') {
-        // Update UI to show assigned team
-        teamAssignment.innerHTML = `
-            <div class="team-info">
-                <span class="badge ${getPositionBadgeClass(data.position)}">${data.team_number}</span>
-                <small class="text-muted">${data.team_name.substring(0, 20)}...</small>
-                <button class="btn btn-sm btn-outline-danger ms-2 remove-team" 
-                        data-alliance-id="${data.alliance_id}" 
-                        data-position="${data.position}">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-        `;
+function stopPolling() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+        console.log('Polling stopped');
+        updateSocketStatus(false);
+    }
+}
+
+async function pollForUpdates() {
+    isPolling = true;
+    try {
+        // Poll for alliance changes
+        await loadAlliancesQuietly();
+        // Poll for recommendations (less frequently - only if visible changes)
+    } catch (error) {
+        console.error('Error polling for updates:', error);
+    } finally {
+        isPolling = false;
+    }
+}
+
+// Load alliance data from server
+async function loadAlliances() {
+    try {
+        const response = await fetch(`/alliances/api/get_alliances/{{ current_event.id }}`);
+        const data = await response.json();
         
-        // Add event listener to the new remove button
-        const removeBtn = teamAssignment.querySelector('.remove-team');
-        removeBtn.addEventListener('click', function() {
-            if (confirm('Are you sure you want to remove this team from the alliance?')) {
-                removeTeamFromAlliance(this.dataset.allianceId, this.dataset.position);
+        if (data.success) {
+            // Update UI with alliance data
+            updateAlliancesUI(data.alliances);
+            // Store current state for comparison
+            lastAllianceState = JSON.stringify(data.alliances);
+        }
+    } catch (error) {
+        console.error('Error loading alliances:', error);
+    }
+}
+
+// Quietly load alliances without showing loading indicators (for polling)
+async function loadAlliancesQuietly() {
+    try {
+        const response = await fetch(`/alliances/api/get_alliances/{{ current_event.id }}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const newState = JSON.stringify(data.alliances);
+            
+            // Only update UI if something changed
+            if (newState !== lastAllianceState) {
+                console.log('Alliance changes detected, updating UI');
+                updateAlliancesUI(data.alliances);
+                lastAllianceState = newState;
+                
+                // Also refresh recommendations when alliances change
+                loadRecommendations();
+            }
+        }
+    } catch (error) {
+        console.error('Error polling alliances:', error);
+    }
+}
+
+function updateAlliancesUI(alliances) {
+    alliances.forEach(alliance => {
+        const allianceCard = document.querySelector(`[data-alliance-id="${alliance.id}"]`);
+        if (!allianceCard) return;
+        
+        // Update each position
+        ['captain', 'first_pick', 'second_pick', 'third_pick'].forEach(position => {
+            const teamSlot = allianceCard.querySelector(`[data-position="${position}"]`);
+            if (!teamSlot) return;
+            
+            const teamAssignment = teamSlot.querySelector('.team-assignment');
+            const teamData = alliance[position];
+            
+            if (teamData && teamData.team_number) {
+                // Team is assigned
+                teamAssignment.innerHTML = `
+                    <div class="team-info">
+                        <span class="badge ${getPositionBadgeClass(position)}">${teamData.team_number}</span>
+                        <small class="text-muted">${(teamData.team_name || '').substring(0, 20)}...</small>
+                        <button class="btn btn-sm btn-outline-danger ms-2 remove-team" 
+                                data-alliance-id="${alliance.id}" 
+                                data-position="${position}">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                
+                // Add event listener to remove button
+                const removeBtn = teamAssignment.querySelector('.remove-team');
+                if (removeBtn) {
+                    removeBtn.addEventListener('click', function() {
+                        if (confirm('Are you sure you want to remove this team from the alliance?')) {
+                            removeTeamFromAlliance(this.dataset.allianceId, this.dataset.position);
+                        }
+                    });
+                }
+            } else {
+                // Slot is empty
+                teamAssignment.innerHTML = `
+                    <div class="team-slot-empty">
+                        <span class="text-muted">Click to assign</span>
+                        <button class="btn btn-sm btn-outline-primary assign-team" 
+                                data-alliance-id="${alliance.id}" 
+                                data-position="${position}">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                `;
+                
+                // Add event listener to assign button
+                const assignBtn = teamAssignment.querySelector('.assign-team');
+                if (assignBtn) {
+                    assignBtn.addEventListener('click', function() {
+                        currentAllianceId = this.dataset.allianceId;
+                        currentPosition = this.dataset.position;
+                        showTeamSelectionModal();
+                    });
+                }
             }
         });
         
-    } else if (data.action === 'remove') {
-        // Update UI to show empty slot
-        teamAssignment.innerHTML = `
-            <div class="team-slot-empty">
-                <span class="text-muted">Click to assign</span>
-                <button class="btn btn-sm btn-outline-primary assign-team" 
-                        data-alliance-id="${data.alliance_id}" 
-                        data-position="${data.position}">
-                    <i class="fas fa-plus"></i>
-                </button>
-            </div>
-        `;
-        
-        // Add event listener to the new assign button
-        const assignBtn = teamAssignment.querySelector('.assign-team');
-        assignBtn.addEventListener('click', function() {
-            currentAllianceId = this.dataset.allianceId;
-            currentPosition = this.dataset.position;
-            showTeamSelectionModal();
-        });
-    }
+        // Update alliance strength
+        updateAllianceStrength(alliance.id);
+    });
+}
+
+function updateAllianceStrength(allianceId) {
+    const allianceCard = document.querySelector(`[data-alliance-id="${allianceId}"]`);
+    if (!allianceCard) return;
     
-    // Show notification
-    showNotification(data);
-    // After any UI change, recalculate alliance strengths so the badge reflects current assignments
-    try {
-        updateAllianceStrengths();
-    } catch (e) {
-        console.warn('Failed to update alliance strengths after UI update:', e);
+    const strengthBadge = document.getElementById(`alliance-${allianceId}-strength`);
+    if (!strengthBadge) return;
+    
+    // Calculate total points from assigned teams
+    let total = 0;
+    const assignedBadges = allianceCard.querySelectorAll('.team-info .badge');
+    
+    assignedBadges.forEach(badge => {
+        const teamNumber = badge.textContent.trim();
+        const teamInfo = teamRecommendations.find(t => t.team_number == teamNumber);
+        if (teamInfo) {
+            total += parseFloat(teamInfo.total_points) || 0;
+        }
+    });
+    
+    strengthBadge.textContent = `${total.toFixed(1)} pts`;
+}
+
+function updateSocketStatus(connected) {
+    const statusElement = document.getElementById('socketStatus');
+    if (!statusElement) return;
+    
+    if (connected) {
+        statusElement.className = 'badge bg-success me-2';
+        statusElement.style.fontSize = '0.7rem';
+        statusElement.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Live';
+        statusElement.title = 'Auto-refreshing every 2 seconds';
+    } else {
+        statusElement.className = 'badge bg-danger text-white me-2';
+        statusElement.style.fontSize = '0.7rem';
+        statusElement.innerHTML = '<i class="fas fa-exclamation-circle"></i> Paused';
+        statusElement.title = 'Auto-refresh paused';
     }
 }
+
+// No longer needed - polling handles all UI updates
 
 function getPositionBadgeClass(position) {
     switch(position) {
@@ -428,12 +529,26 @@ function setupEventListeners() {
         });
     });
     
-    // Refresh recommendations
-    document.getElementById('refresh-recommendations').addEventListener('click', loadRecommendations);
+    // Refresh button - refresh both alliances AND recommendations
+    document.getElementById('refresh-recommendations').addEventListener('click', function() {
+        console.log('Manual refresh triggered');
+        loadAlliances();
+        loadRecommendations();
+    });
+    
+    // When the trend toggle changes, refresh recommendations
+    const trendToggle = document.getElementById('trend-toggle');
+    if (trendToggle) {
+        trendToggle.addEventListener('change', function() {
+            loadRecommendations();
+        });
+    }
 }
 
 function loadRecommendations() {
-    fetch(`/alliances/recommendations/{{ current_event.id }}`)
+    // Read the toggle state and send as query param
+    const useTrends = document.getElementById('trend-toggle') ? document.getElementById('trend-toggle').checked : true;
+    fetch(`/alliances/recommendations/{{ current_event.id }}?use_trends=${useTrends ? 1 : 0}`)
         .then(response => response.json())
         .then(data => {
             teamRecommendations = data.recommendations;
@@ -717,6 +832,8 @@ function filterTeams() {
 }
 
 function assignTeamToAlliance(allianceId, position, teamNumber) {
+    console.log('Assigning team', teamNumber, 'to alliance', allianceId, 'position', position);
+    
     fetch('/alliances/api/update', {
         method: 'POST',
         headers: {
@@ -730,48 +847,27 @@ function assignTeamToAlliance(allianceId, position, teamNumber) {
     })
     .then(response => response.json())
     .then(data => {
+        console.log('Server response:', data);
+        
         if (!data.success) {
             alert('Error: ' + data.message);
             return;
         }
 
-        // Optimistically update the UI immediately for the actor (no refresh required)
-        try {
-            const allianceCard = document.querySelector(`[data-alliance-id="${allianceId}"]`);
-            const allianceNumber = allianceCard ? allianceCard.dataset.allianceNumber : null;
-            const uiData = {
-                alliance_id: allianceId,
-                alliance_number: allianceNumber,
-                position: position,
-                team_id: teamNumber,
-                team_number: teamNumber,
-                team_name: `Team ${teamNumber}`,
-                action: 'assign'
-            };
-            updateAllianceUI(uiData);
-            
-            // Remove the assigned team from local recommendations immediately
-            try {
-                const idx = teamRecommendations.findIndex(t => t.team_number == teamNumber || t.team_id == teamNumber);
-                if (idx !== -1) {
-                    teamRecommendations.splice(idx, 1);
-                    displayRecommendations();
-                    updateAllianceStrengths();
-                }
-            } catch (e) {
-                console.warn('Failed to update recommendations optimistically:', e);
-            }
-        } catch (e) {
-            console.warn('Failed to perform optimistic UI update for assign:', e);
-        }
+        // Force immediate refresh after assignment
+        console.log('Assignment successful, refreshing data');
+        loadAlliancesQuietly();
+        loadRecommendations();
     })
     .catch(error => {
-        console.error('Error:', error);
-        alert('Network error occurred');
+        console.error('Error assigning team:', error);
+        alert('Network error occurred: ' + error.message);
     });
 }
 
 function removeTeamFromAlliance(allianceId, position) {
+    console.log('Removing team from alliance', allianceId, 'position', position);
+    
     fetch('/alliances/api/remove', {
         method: 'POST',
         headers: {
@@ -784,39 +880,21 @@ function removeTeamFromAlliance(allianceId, position) {
     })
     .then(response => response.json())
     .then(data => {
+        console.log('Server response:', data);
+        
         if (!data.success) {
             alert('Error: ' + data.message);
             return;
         }
 
-        // Optimistically update UI immediately for the actor
-        try {
-            const allianceCard = document.querySelector(`[data-alliance-id="${allianceId}"]`);
-            const allianceNumber = allianceCard ? allianceCard.dataset.allianceNumber : null;
-            const uiData = {
-                alliance_id: allianceId,
-                alliance_number: allianceNumber,
-                position: position,
-                team_id: null,
-                team_number: null,
-                team_name: null,
-                action: 'remove'
-            };
-            updateAllianceUI(uiData);
-        
-            // After removal, refresh recommendations from the server so the freed team reappears
-            try {
-                loadRecommendations();
-            } catch (e) {
-                console.warn('Failed to reload recommendations after removal:', e);
-            }
-        } catch (e) {
-            console.warn('Failed to perform optimistic UI update for remove:', e);
-        }
+        // Force immediate refresh after removal
+        console.log('Removal successful, refreshing data');
+        loadAlliancesQuietly();
+        loadRecommendations();
     })
     .catch(error => {
-        console.error('Error:', error);
-        alert('Network error occurred');
+        console.error('Error removing team:', error);
+        alert('Network error occurred: ' + error.message);
     });
 }
 
@@ -956,7 +1034,57 @@ body.modern-layout.dark-mode #teamSelectionList .team-selection-item {
     border-radius: 0.5rem !important; /* slight rounding for separated cards */
     border: 1px solid rgba(255,255,255,0.06) !important; /* subtle separation in dark mode */
     background-clip: padding-box !important;
-    min-height: 56px !important;
+    min-height: 76px !important; /* Increased for mobile - prevents text cutoff */
+}
+
+/* Mobile-specific fixes for team selection items - ensure adequate height on all screen sizes */
+.team-selection-item {
+    min-height: 76px !important; /* Ensure enough height for all content */
+    padding: 1rem !important; /* Comfortable padding for mobile */
+    display: flex !important;
+    align-items: flex-start !important; /* Align to top to prevent vertical centering issues */
+    flex-wrap: nowrap !important; /* Prevent wrapping */
+}
+
+/* Ensure the content containers within team items have proper spacing */
+.team-selection-item > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem; /* Space between lines */
+    overflow: visible !important; /* Prevent content from being hidden */
+    min-height: fit-content !important;
+}
+
+/* Fix for the specific data display in team items */
+.team-selection-item .text-end {
+    text-align: right;
+    white-space: normal !important; /* Allow wrapping if needed */
+    overflow: visible !important;
+}
+
+.team-selection-item .small {
+    line-height: 1.4 !important; /* Better line spacing for readability */
+    display: block !important; /* Ensure proper block display */
+    margin-top: 0.15rem !important;
+}
+
+/* Mobile-specific adjustments for smaller screens */
+@media (max-width: 768px) {
+    .team-selection-item {
+        min-height: 80px !important; /* Extra height for mobile to prevent any cutoff */
+        padding: 1.1rem 0.9rem !important;
+    }
+    
+    #teamSelectionList {
+        max-height: 60vh !important; /* Ensure scrollable on mobile */
+    }
+    
+    /* Make text slightly smaller on very small screens if needed */
+    @media (max-width: 380px) {
+        .team-selection-item .small {
+            font-size: 0.8rem !important;
+        }
+    }
 }
 
 /* Remove old full-width bottom borders that visually merged items when we use spacing */

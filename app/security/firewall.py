@@ -22,7 +22,9 @@ class Firewall:
         self.banned = {}
         # Default configuration - can be overridden via app.config
         self.default_config = {
-            'FIREWALL_ENABLED': True,
+            # Default to disabled in this deployment; enable explicitly via
+            # application config or at runtime with Firewall.enable().
+            'FIREWALL_ENABLED': False,
             # Default rate limit: allow a healthy burst of requests per minute.
             # Increased from 20 to 1000 to accommodate page loads + assets.
             'FIREWALL_RATE_LIMIT': 1000,   # requests
@@ -39,6 +41,40 @@ class Firewall:
         self.app = None
         if app is not None:
             self.init_app(app, socketio)
+
+    # Runtime control helpers -------------------------------------------------
+    def enable(self):
+        """Enable the in-process firewall at runtime.
+
+        This flips the app config value if an app was provided and logs the
+        transition. It is safe to call from application code that holds
+        appropriate privileges.
+        """
+        if self.app is not None:
+            self.app.config['FIREWALL_ENABLED'] = True
+            try:
+                self.app.logger.info('Firewall: enabled at runtime')
+            except Exception:
+                pass
+
+    def disable(self):
+        """Disable the in-process firewall at runtime.
+
+        Use this when testing or when an external firewall is protecting the
+        deployment and the in-process limiter is not desired.
+        """
+        if self.app is not None:
+            self.app.config['FIREWALL_ENABLED'] = False
+            try:
+                self.app.logger.info('Firewall: disabled at runtime')
+            except Exception:
+                pass
+
+    def is_enabled(self):
+        """Return whether the firewall is currently enabled (bool)."""
+        if self.app is None:
+            return bool(self.default_config.get('FIREWALL_ENABLED', False))
+        return bool(self.app.config.get('FIREWALL_ENABLED', False))
 
     def _now(self):
         return time.monotonic()

@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+
+{% block title %}Team {{ team_number }} Trends{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+    <div>
+      <h2 style="margin:0">Team {{ team_number }} Trends</h2>
+      {% if team %}
+        <div style="font-size:0.95rem;color:var(--muted-color, #999)">{{ team.team_name }}</div>
+      {% endif %}
+    </div>
+    <div style="text-align:right;min-width:220px;">
+      <div>Data points: <strong>{{ data_points }}</strong></div>
+      <div>Overall: <strong>{{ overall_classification }}</strong></div>
+      <div>Recent: <strong>{{ recent_classification }}</strong></div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:20px;align-items:flex-start;margin-top:12px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:320px;max-width:720px;">
+      <div style="max-width:700px; margin-bottom:6px;"><canvas id="pointsChart" width="700" height="260"></canvas></div>
+    </div>
+    <div style="width:260px;min-width:200px;">
+      <div><strong>Mean:</strong> {{ '%.1f'|format(overall_mean) if overall_mean is not none else 'N/A' }}</div>
+      <div><strong>Stddev:</strong> {{ '%.1f'|format(overall_stddev) if overall_stddev is not none else 'N/A' }}</div>
+      <div><strong>CV:</strong> {{ '%.2f'|format(overall_cv) if overall_cv is not none else 'N/A' }}</div>
+      <div style="margin-top:8px"><strong>Predicted next:</strong> {{ '%.1f'|format(predicted_next) }}</div>
+    </div>
+  </div>
+
+  <h3>Timeline</h3>
+  {% if timeline %}
+    <div style="max-width:700px; margin-bottom:20px;">
+      <canvas id="pointsChart" width="700" height="300"></canvas>
+    </div>
+    <table class="table table-sm table-striped">
+      <thead><tr><th>#</th><th>Timestamp</th><th>Total Points</th></tr></thead>
+      <tbody>
+        {% for item in timeline %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ item.timestamp }}</td>
+            <td>{{ item.total_points }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No scouting records found for this team.</p>
+  {% endif %}
+
+  <a class="btn btn-secondary" href="{{ url_for('team_trends.index') }}">New Search</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <!-- Chart.js for trend visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script>
+    try {
+      const chartData = {{ timeline | tojson | safe }};
+      const labels = chartData.map((t, i) => `#${i+1} ${t.timestamp.split('T')[0]}`);
+      const values = chartData.map(t => t.total_points);
+      // include predicted next point as dashed point on chart
+      const predictedVal = {{ predicted_next | float }};
+      const ctx = document.getElementById('pointsChart')?.getContext('2d');
+      const data = {
+        labels: labels.concat(['Predicted']),
+        datasets: [
+          {
+            label: 'Total Points',
+            data: values.concat([predictedVal]),
+            borderColor: 'rgba(54, 162, 235, 1)',
+            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+            tension: 0.2,
+            fill: false,
+            pointRadius: 4,
+          }
+        ]
+      };
+      const config = {
+        type: 'line',
+        data: data,
+        options: {
+          scales: {
+            y: { beginAtZero: true }
+          },
+          plugins: {
+            legend: { display: true }
+          }
+        }
+      };
+      new Chart(ctx, config);
+    } catch(e) {
+      console.warn('Chart render failed', e);
+    }
+  </script>
+{% endblock %}

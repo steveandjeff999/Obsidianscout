@@ -99,6 +99,8 @@ def index():
 def get_recommendations(event_id):
     """Get team recommendations based on points scored"""
     try:
+        # Check whether client requested trend-aware ranking (default true)
+        use_trends = request.args.get('use_trends', '1') not in ('0', 'false', 'False')
         event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
         if not event:
             return jsonify({'error': 'Event not found or not accessible'}), 404
@@ -228,14 +230,77 @@ def get_recommendations(event_id):
                         'has_no_data': True
                     })
         
-        # Sort regular teams by total points (descending)
-        # Penalize avoided teams by reducing their effective score
+        # Optionally apply a small trend adjustment to the sort key.
+        # If two teams are very close in average points, prefer the one trending up.
+        def _compute_recent_trend(team_obj, event_filter=None, recent_n=3):
+            """Compute a simple recent trend slope (points per match) for a team using the most recent scouting entries.
+            Returns slope (float)."""
+            try:
+                # Query recent scouting entries for this team limited to recent_n, ordered by match id/time
+                from app.models import Match
+                q = ScoutingData.query.filter(ScoutingData.team_id == team_obj.id)
+                if event_filter:
+                    q = q.join(Match).filter(Match.event_id == event_filter)
+                records = q.order_by(desc(ScoutingData.id)).limit(recent_n).all()
+                if not records:
+                    return 0.0
+                # Build y values = total points per record using same dynamic calc as analysis.calculate_team_metrics does
+                y = []
+                x = []
+                for idx, rec in enumerate(reversed(records)):
+                    try:
+                        auto_pts = rec._calculate_auto_points_dynamic(rec.data, game_config)
+                        teleop_pts = rec._calculate_teleop_points_dynamic(rec.data, game_config)
+                        endgame_pts = rec._calculate_endgame_points_dynamic(rec.data, game_config)
+                        total_pts = auto_pts + teleop_pts + endgame_pts
+                    except Exception:
+                        # Fallback: try numeric sum of known keys
+                        total_pts = 0.0
+                        if isinstance(rec.data, dict):
+                            for v in rec.data.values():
+                                if isinstance(v, (int, float)):
+                                    total_pts += v
+                    y.append(float(total_pts))
+                    x.append(float(idx))
+                # If less than 2 points, trend is 0
+                if len(x) < 2:
+                    return 0.0
+                # Simple linear slope on indices
+                n = len(x)
+                mean_x = sum(x) / n
+                mean_y = sum(y) / n
+                num = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x, y))
+                den = sum((xi - mean_x) ** 2 for xi in x) or 1.0
+                slope = num / den
+                return slope
+            except Exception:
+                return 0.0
+
+        # Sort regular teams by total points (descending), but adjust by a small trend factor when use_trends is True
         def get_sort_key(team_data):
             base_score = team_data['total_points']
+            # Avoid penalty for avoided teams at this stage (handled separately by badge)
+            trend_adj = 0.0
+            if use_trends:
+                try:
+                    team_obj = team if False else Team.query.get(team_data['team'].id if isinstance(team_data.get('team'), Team) else team_data['team_id'])
+                except Exception:
+                    team_obj = None
+                # NB: team_obj may be None when team_data originates from teams_with_no_data path
+                if team_obj:
+                    try:
+                        slope = _compute_recent_trend(team_obj, event_filter=event_id, recent_n=3)
+                        # Convert slope (points per match) to a small score adjustment. Weight low so it only flips very close ties.
+                        trend_adj = slope * 0.5
+                    except Exception:
+                        trend_adj = 0.0
+
+            effective = base_score + trend_adj
+            # Penalize avoided teams slightly
             if team_data['is_avoided']:
-                return base_score * 0.7  # Reduce score by 30% for avoided teams
-            return base_score
-        
+                return effective * 0.7  # Reduce score by 30% for avoided teams
+            return effective
+
         team_recommendations.sort(key=get_sort_key, reverse=True)
         
         # Sort do not pick teams separately
@@ -252,6 +317,48 @@ def get_recommendations(event_id):
         for rec in all_recommendations:
             # Build component metrics display string
             component_display_parts = []
+            def _resolve_metric(metrics_dict, metric_id):
+                """Resolve a metric value from metrics_dict using common aliases and case-insensitive matches."""
+                if not metrics_dict:
+                    return 0
+                # Direct match
+                if metric_id in metrics_dict:
+                    return metrics_dict.get(metric_id) or 0
+
+                # Common aliases
+                alias_map = {
+                    'apt': 'auto_points',
+                    'tpt': 'teleop_points',
+                    'ept': 'endgame_points',
+                    'auto': 'auto_points',
+                    'teleop': 'teleop_points',
+                    'endgame': 'endgame_points',
+                    'tot': 'total_points'
+                }
+                low = metric_id.lower()
+                if low in alias_map and alias_map[low] in metrics_dict:
+                    return metrics_dict.get(alias_map[low]) or 0
+
+                # Try case-insensitive key match and substring matches
+                for k, v in metrics_dict.items():
+                    if not k:
+                        continue
+                    if k.lower() == low:
+                        return v or 0
+                for k, v in metrics_dict.items():
+                    if low in k.lower() or k.lower() in low:
+                        return v or 0
+
+                # Last resort: if metric_id looks like a short code (1-4 chars), try mapping by known prefixes
+                if low.startswith('a') and 'auto_points' in metrics_dict:
+                    return metrics_dict.get('auto_points') or 0
+                if low.startswith('t') and 'teleop_points' in metrics_dict:
+                    return metrics_dict.get('teleop_points') or 0
+                if low.startswith('e') and 'endgame_points' in metrics_dict:
+                    return metrics_dict.get('endgame_points') or 0
+
+                return 0
+
             for i, metric_id in enumerate(component_metric_ids):
                 if i == 0:
                     prefix = "A:"  # Auto
@@ -264,10 +371,9 @@ def get_recommendations(event_id):
                     metric_name = metric_info.get(metric_id, {}).get('name', metric_id)
                     prefix = f"{metric_name[0]}:"
 
-                # Use 0 default if metric missing or falsy; allow explicit 0 values
-                raw_val = rec['metrics'].get(metric_id, 0)
+                raw_val = _resolve_metric(rec.get('metrics', {}), metric_id)
                 try:
-                    value = round(raw_val, 1)
+                    value = round(float(raw_val), 1)
                 except Exception:
                     value = 0
 
@@ -535,6 +641,47 @@ def add_to_list():
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'})
 
+
+@bp.route('/api/get_alliances/<int:event_id>')
+def get_alliances(event_id):
+    """Get current state of all alliances for an event"""
+    try:
+        alliances = filter_alliance_selections_by_scouting_team().filter(
+            AllianceSelection.event_id == event_id
+        ).order_by(AllianceSelection.alliance_number).all()
+        
+        alliance_data = []
+        for alliance in alliances:
+            alliance_info = {
+                'id': alliance.id,
+                'alliance_number': alliance.alliance_number,
+                'captain': None,
+                'first_pick': None,
+                'second_pick': None,
+                'third_pick': None
+            }
+            
+            # Get team info for each position
+            for position in ['captain', 'first_pick', 'second_pick', 'third_pick']:
+                team_id = getattr(alliance, position)
+                if team_id:
+                    team = Team.query.get(team_id)
+                    if team:
+                        alliance_info[position] = {
+                            'team_id': team.id,
+                            'team_number': team.team_number,
+                            'team_name': team.team_name or f'Team {team.team_number}'
+                        }
+            
+            alliance_data.append(alliance_info)
+        
+        return jsonify({
+            'success': True,
+            'alliances': alliance_data
+        })
+    except Exception as e:
+        print(f"Error in get_alliances: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @bp.route('/api/team_metrics')
 def team_metrics():
