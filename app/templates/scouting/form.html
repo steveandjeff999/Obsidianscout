@@ -53,6 +53,7 @@
                                 {% endfor %}
                             </select>
                         </div>
+                        <!-- Quick prediction UI removed -->
                     </div>
                 </form>
             </div>
@@ -331,66 +332,106 @@
                 exportBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Exporting...';
                 
                 try {
-                    // Get the form data
+                    // Build the same flat JSON object as used for QR codes
                     const formData = new FormData(form);
-                    const jsonData = {};
-                    
-                    // Convert form data to JSON object
-                    for (let [key, value] of formData.entries()) {
-                        if (jsonData[key]) {
-                            // Handle multiple values (like checkboxes with same name)
-                            if (Array.isArray(jsonData[key])) {
-                                jsonData[key].push(value);
-                            } else {
-                                jsonData[key] = [jsonData[key], value];
-                            }
-                        } else {
-                            jsonData[key] = value;
+                    const jsonObj = {};
+
+                    // Process form entries preserving booleans and numbers
+                    formData.forEach((value, key) => {
+                        const element = form.elements[key];
+
+                        // Handle checkboxes (use checked boolean)
+                        if (element && element.type === 'checkbox') {
+                            jsonObj[key] = element.checked;
+                            return;
                         }
-                    }
-                    
-                    // Add metadata
-                    const metadata = {
-                        export_timestamp: new Date().toISOString(),
-                        form_type: 'scouting_data',
-                        team_number: jsonData.team_id || 'unknown',
-                        match_number: jsonData.match_id || 'unknown',
-                        scout_name: jsonData.scout_name || 'unknown'
-                    };
-                    
-                    const exportData = {
-                        metadata: metadata,
-                        form_data: jsonData
-                    };
-                    
-                    // Create and download the JSON file
-                    const jsonString = JSON.stringify(exportData, null, 2);
+
+                        // If the element is a number input, convert to Number
+                        if (element && element.type === 'number') {
+                            jsonObj[key] = value === '' ? 0 : Number(value);
+                            return;
+                        }
+
+                        // If value looks numeric, convert to Number
+                        if (value !== '' && !isNaN(value)) {
+                            // But preserve arrays and multiple-valued inputs below
+                            jsonObj[key] = Number(value);
+                            return;
+                        }
+
+                        // Handle multiple values (checkbox groups, multi-selects)
+                        if (jsonObj.hasOwnProperty(key)) {
+                            if (Array.isArray(jsonObj[key])) jsonObj[key].push(value);
+                            else jsonObj[key] = [jsonObj[key], value];
+                        } else {
+                            jsonObj[key] = value;
+                        }
+                    });
+
+                    // Ensure unchecked checkboxes are present with false (use id if available)
+                    const allCheckboxes = form.querySelectorAll('input[type="checkbox"]');
+                    allCheckboxes.forEach(cb => {
+                        const key = cb.name || cb.id || null;
+                        if (!key) return;
+                        if (!jsonObj.hasOwnProperty(key)) {
+                            jsonObj[key] = false;
+                        }
+                    });
+
+                    // Add calculated points similar to QR logic
+                    const pointsElements = document.querySelectorAll('.points-display');
+                    pointsElements.forEach(element => {
+                        const metricId = element.dataset.metricId;
+                        if (metricId) {
+                            const pointsValue = element.querySelector('.points-value');
+                            if (pointsValue) {
+                                jsonObj[metricId + '_points'] = parseInt(pointsValue.textContent || '0');
+                            }
+                        }
+                    });
+
+                    // Ensure scout_name fallback
+                    try {
+                        const scoutField = form.elements['scout_name'] || document.getElementById('scout_name');
+                        const fallbackScout = (scoutField && scoutField.placeholder) ? scoutField.placeholder : (scoutField && scoutField.value) ? scoutField.value : 'unknown';
+                        if (!jsonObj.scout_name || (typeof jsonObj.scout_name === 'string' && jsonObj.scout_name.trim() === '')) {
+                            jsonObj.scout_name = fallbackScout;
+                        }
+                    } catch (e) { /* ignore */ }
+
+                    // Add generated_at and offline_generated to match QR payload
+                    jsonObj.generated_at = new Date().toISOString();
+                    jsonObj.offline_generated = true;
+
+                    // Create and download flat JSON file
+                    const jsonString = JSON.stringify(jsonObj, null, 2);
                     const blob = new Blob([jsonString], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
-                    
-                    // Create download link
+
                     const a = document.createElement('a');
                     a.href = url;
                     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('.')[0];
-                    a.download = `scouting-data-team-${metadata.team_number}-match-${metadata.match_number}-${timestamp}.json`;
+                    const teamPart = (jsonObj.team_id || jsonObj.team_number || 'unknown');
+                    const matchPart = (jsonObj.match_id || jsonObj.match_number || 'unknown');
+                    a.download = `scouting-data-team-${teamPart}-match-${matchPart}-${timestamp}.json`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
-                    
+
                     // Reset button state
                     exportBtn.disabled = false;
                     exportBtn.innerHTML = originalText;
-                    
+
                     showToast('Scouting data exported successfully!', 'success');
-                    
+
                 } catch (error) {
                     console.error('Error exporting data:', error);
-                    
+
                     // Reset button state
                     exportBtn.disabled = false;
                     exportBtn.innerHTML = originalText;
-                    
+
                     showToast('Error exporting data. Please try again.', 'error');
                 }
             });
@@ -754,6 +795,21 @@
                         // Initialize form components AFTER the form is loaded and restore previous scroll/focus
                         setTimeout(() => {
                             initializeFormComponents();
+
+                            // Copy quick prediction (if set) into loaded form's predicted_winner input
+                            try {
+                                const quick = document.querySelector('input[name="predicted_winner_select"]:checked');
+                                if (quick) {
+                                    const val = quick.value;
+                                    // Find target radios in loaded form and set
+                                    const target = document.querySelector('#form-content input[name="predicted_winner"]');
+                                    if (target) {
+                                        // If the loaded form uses radios, set the matching one
+                                        const radios = document.querySelectorAll('#form-content input[name="predicted_winner"]');
+                                        radios.forEach(r => { r.checked = (r.value === val); });
+                                    }
+                                }
+                            } catch (e) { console.warn('Could not copy quick prediction into loaded form', e); }
 
                             // Restore scroll position
                                 try {

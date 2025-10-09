@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}Scout Leaderboard{% endblock %}
+
+{% block content %}
+<div class="container">
+  <h1>Scout Leaderboard</h1>
+  <p class="text-muted">Ranks scouts by prediction accuracy (when available) or by total matches scouted. Use the controls to change sorting.</p>
+
+  <div class="mb-3">
+    <div class="btn-group" role="group" aria-label="Sort leaderboard">
+      <a href="{{ url_for('graphs.scout_leaderboard', sort='total') }}" class="btn btn-sm {% if sort_mode != 'accuracy' %}btn-primary{% else %}btn-outline-primary{% endif %}">Most Matches Scouted</a>
+      <a href="{{ url_for('graphs.scout_leaderboard', sort='accuracy') }}" class="btn btn-sm {% if sort_mode == 'accuracy' %}btn-primary{% else %}btn-outline-primary{% endif %}">Prediction Accuracy</a>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-striped table-hover">
+      <thead class="table-light">
+        <tr>
+          <th>Rank</th>
+          <th>Scout</th>
+          <th class="text-end">Total Scouted</th>
+          <th class="text-end">Accuracy</th>
+          <th>Last Scouted</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in leaders %}
+        <tr>
+          <td><span class="badge bg-{{ 'warning' if s.rank <= 3 else 'secondary' }}">{{ s.rank }}</span></td>
+          <td>{{ s.scout_name }}{% if s.scout_id %} <small class="text-muted">(#{{ s.scout_id }})</small>{% endif %}</td>
+          <td class="text-end">{{ s.total }}</td>
+          <td class="text-end">{% if s.accuracy is not none %}{{ s.accuracy }}%{% else %}-{% endif %}</td>
+          <td>{% if s.last_scouted %}{{ s.last_scouted.strftime('%Y-%m-%d %H:%M') }}{% else %}-{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
