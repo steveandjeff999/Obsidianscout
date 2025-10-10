@@ -47,7 +47,7 @@
                             <select class="form-select" id="match-selector" name="match_id" required aria-required="true" aria-label="Match selector">
                                 <option value="">-- Select Match --</option>
                                 {% for match_option in matches %}
-                                <option value="{{ match_option.id }}" data-match-type="{{ match_option.match_type }}" data-match-number="{{ match_option.match_number }}" {% if match and match.id == match_option.id %}selected{% endif %}>
+                                <option value="{{ match_option.id }}" data-match-type="{{ match_option.match_type }}" data-match-number="{{ match_option.match_number }}" data-red-alliance="{{ match_option.red_alliance }}" data-blue-alliance="{{ match_option.blue_alliance }}" {% if match and match.id == match_option.id %}selected{% endif %}>
                                     {{ match_option.match_type }} {{ match_option.match_number }}
                                 </option>
                                 {% endfor %}
@@ -164,6 +164,13 @@
 
             formContent.innerHTML = formHTML;
             
+            // Determine alliance color from match schedule
+            const alliance = determineAlliance(team.team_number, match);
+            console.log('[Offline Mode] Determined alliance:', alliance);
+            
+            // Update alliance indicator
+            updateAllianceIndicator(alliance, team, match);
+            
             // Update hidden fields with correct team/match data
             const scoutingForm = document.getElementById('scouting-form');
             if (scoutingForm) {
@@ -175,6 +182,7 @@
                 updateOrCreateHiddenField(scoutingForm, 'team_number', team.team_number);
                 updateOrCreateHiddenField(scoutingForm, 'match_number', match.match_number);
                 updateOrCreateHiddenField(scoutingForm, 'match_type', match.match_type);
+                updateOrCreateHiddenField(scoutingForm, 'alliance', alliance);
             }
             
             // Initialize form components immediately after DOM update
@@ -232,6 +240,94 @@
                 form.appendChild(field);
             }
             field.value = value;
+        }
+        
+        // Determine alliance color from match schedule data
+        function determineAlliance(teamNumber, match) {
+            const teamNumStr = String(teamNumber);
+            
+            // Check red alliance
+            if (match.red_alliance) {
+                const redTeams = match.red_alliance.split(',').map(t => t.trim());
+                if (redTeams.includes(teamNumStr)) {
+                    return 'red';
+                }
+            }
+            
+            // Check blue alliance
+            if (match.blue_alliance) {
+                const blueTeams = match.blue_alliance.split(',').map(t => t.trim());
+                if (blueTeams.includes(teamNumStr)) {
+                    return 'blue';
+                }
+            }
+            
+            return 'unknown';
+        }
+        
+        // Update the alliance indicator UI
+        function updateAllianceIndicator(alliance, team, match) {
+            const indicator = document.querySelector('.alliance-indicator');
+            if (!indicator) return;
+            
+            // Remove existing alliance classes
+            indicator.classList.remove('bg-danger', 'bg-primary', 'bg-warning', 'alliance-unknown');
+            
+            // Set alliance-specific styling
+            if (alliance === 'red') {
+                indicator.classList.add('bg-danger');
+                indicator.querySelector('.alliance-icon i')?.classList.remove('fa-tint');
+                indicator.querySelector('.alliance-icon i')?.classList.add('fa-fire');
+                indicator.querySelector('.alliance-details h4').textContent = 'Red Alliance';
+                
+                // Update text colors for red alliance
+                const h4 = indicator.querySelector('.alliance-details h4');
+                const teamDiv = indicator.querySelector('.alliance-details > div:last-child');
+                if (h4) h4.classList.add('text-white');
+                if (teamDiv) {
+                    teamDiv.classList.remove('text-muted', 'text-dark');
+                    teamDiv.classList.add('text-white-50');
+                }
+                indicator.querySelector('.alliance-icon i')?.classList.add('text-white');
+            } else if (alliance === 'blue') {
+                indicator.classList.add('bg-primary');
+                indicator.querySelector('.alliance-icon i')?.classList.remove('fa-fire');
+                indicator.querySelector('.alliance-icon i')?.classList.add('fa-tint');
+                indicator.querySelector('.alliance-details h4').textContent = 'Blue Alliance';
+                
+                // Update text colors for blue alliance
+                const h4 = indicator.querySelector('.alliance-details h4');
+                const teamDiv = indicator.querySelector('.alliance-details > div:last-child');
+                if (h4) h4.classList.add('text-white');
+                if (teamDiv) {
+                    teamDiv.classList.remove('text-muted', 'text-dark');
+                    teamDiv.classList.add('text-white-50');
+                }
+                indicator.querySelector('.alliance-icon i')?.classList.add('text-white');
+            } else {
+                indicator.classList.add('bg-warning', 'alliance-unknown');
+                indicator.querySelector('.alliance-icon i')?.classList.remove('fa-fire');
+                indicator.querySelector('.alliance-icon i')?.classList.add('fa-tint');
+                indicator.querySelector('.alliance-details h4').textContent = 'Unknown Alliance';
+                
+                // Update text colors for unknown alliance
+                const h4 = indicator.querySelector('.alliance-details h4');
+                const teamDiv = indicator.querySelector('.alliance-details > div:last-child');
+                if (h4) h4.classList.add('text-dark');
+                if (teamDiv) {
+                    teamDiv.classList.remove('text-white-50');
+                    teamDiv.classList.add('text-muted');
+                }
+                indicator.querySelector('.alliance-icon i')?.classList.add('text-dark');
+            }
+            
+            // Update team info
+            const teamInfoDiv = indicator.querySelector('.alliance-details > div:last-child');
+            if (teamInfoDiv) {
+                teamInfoDiv.textContent = `Team ${team.team_number} - ${team.team_name}`;
+            }
+            
+            console.log('[Offline Mode] Alliance indicator updated to:', alliance);
         }
 
         // Ensure auto-period-timer toggle state persists across form injections
