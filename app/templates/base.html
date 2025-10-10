@@ -870,7 +870,7 @@
     </div>
 
     <!-- Sidebar -->
-    <aside id="appSidebar" class="sidebar glass">
+    <aside id="appSidebar" class="sidebar glass" role="navigation" aria-label="Main sidebar">
         <div class="sidebar-header d-flex align-items-center justify-content-between">
             <a class="brand d-flex align-items-center text-decoration-none" href="{% if user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics') %}{{ url_for('scouting.index') }}{% else %}{{ url_for('main.index') }}{% endif %}">
                 <i class="fas fa-robot brand-icon me-2"></i>
@@ -1209,6 +1209,75 @@
         const toggle = document.getElementById('sidebarToggle');
         if(toggle) toggle.addEventListener('click', ()=>{ setTimeout(()=>{ document.dispatchEvent(new CustomEvent('obsidian:sidebar:toggled')); }, 250); });
     })();
+    </script>
+    <style>
+    /* Tooltip-like labels when sidebar is collapsed (lightweight, non-JS fallback via title is also applied) */
+    .sidebar-collapsed .sidebar-nav a.nav-link {
+        position: relative;
+        padding-left: 0.75rem; /* compact spacing when collapsed */
+    }
+    .sidebar-collapsed .sidebar-nav a.nav-link::after {
+        content: attr(data-label);
+        position: absolute;
+        left: 100%;
+        margin-left: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
+        padding: 6px 8px;
+        border-radius: 6px;
+        white-space: nowrap;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+        display: none;
+        z-index: 2000;
+        font-size: 0.85rem;
+    }
+    .sidebar-collapsed .sidebar-nav a.nav-link:hover::after,
+    .sidebar-collapsed .sidebar-nav a.nav-link:focus::after {
+        display: block;
+    }
+    /* Slightly emphasize active link for better contrast */
+    .sidebar .nav-link.active {
+        background: linear-gradient(90deg, rgba(var(--bs-primary-rgb),0.06), transparent);
+        border-radius: 6px;
+    }
+    </style>
+
+    <script>
+    // Accessibility helpers for sidebar: set aria-current on active links,
+    // provide title attributes and keep the toggle button's pressed state in sync.
+    document.addEventListener('DOMContentLoaded', function(){
+        const sidebar = document.getElementById('appSidebar');
+        const toggle = document.getElementById('sidebarToggle');
+
+        function refreshSidebarA11y(){
+            if(!sidebar) return;
+            const collapsed = document.body.classList.contains('sidebar-collapsed');
+
+            // Update toggle pressed/expanded states
+            if(toggle){
+                try{ toggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false'); }catch(e){}
+                try{ toggle.setAttribute('aria-expanded', (!collapsed && window.innerWidth >= 992) ? 'true' : 'false'); }catch(e){}
+            }
+
+            // Update links: aria-current for screen readers and title for hover fallback
+            sidebar.querySelectorAll('a.nav-link').forEach(a=>{
+                if(a.classList.contains('active')){
+                    a.setAttribute('aria-current','page');
+                } else {
+                    a.removeAttribute('aria-current');
+                }
+                // Keep a pragmatic title attribute so tooltip works on platforms without CSS support
+                const lbl = a.getAttribute('data-label');
+                if(lbl) a.setAttribute('title', lbl);
+            });
+        }
+
+        refreshSidebarA11y();
+        document.addEventListener('obsidian:sidebar:toggled', refreshSidebarA11y);
+        window.addEventListener('resize', refreshSidebarA11y);
+    });
     </script>
     <script>
     // Sidebar nav-group collapse/expand behavior with simple persistence

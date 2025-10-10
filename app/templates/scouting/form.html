@@ -106,8 +106,482 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Inject game config into page for offline use -->
+<script>
+    window.gameConfig = {{ game_config | tojson | safe }};
+</script>
+
+<!-- Offline scouting form manager -->
+<script src="{{ url_for('static', filename='js/scouting_form_offline.js') }}"></script>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Load form offline using cached data
+        function loadFormOffline(offlineData, savedScrollY, savedActiveId) {
+            console.log('[Offline Mode] Loading form from cached data...');
+            
+            const formContent = document.getElementById('form-content');
+            const { team, match, html, cached, needsReset } = offlineData;
+            
+            // Update subheading
+            document.getElementById('form-subheading').textContent = 
+                `${team.team_number} - ${team.team_name} | ${match.match_type} ${match.match_number}`;
+            
+            let formHTML;
+            
+            // If we have cached server-rendered HTML, use it directly
+            if (cached && html) {
+                console.log('[Offline Mode] Using cached universal form template');
+                
+                // Add offline indicator banner
+                const offlineBanner = `
+                    <div class="alert alert-info alert-dismissible fade show mb-3">
+                        <i class="fas fa-wifi-slash me-2"></i>
+                        <strong>Offline Mode</strong> - Form loaded from cache. 
+                        Data will be saved locally and synced when connection is restored.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                `;
+                
+                formHTML = offlineBanner + html;
+            } else {
+                // Fallback: generate form from game config
+                console.log('[Offline Mode] Generating form from game config');
+                formHTML = generateOfflineFormHTML(team, match, offlineData.gameConfig);
+            }
+            
+            // Preserve current auto timer toggle state (if user toggled before load) so it isn't lost when we overwrite the form
+            try {
+                const existingToggle = document.getElementById('auto-period-timer-toggle');
+                if (existingToggle) {
+                    localStorage.setItem('scouting_auto_timer_state', existingToggle.checked ? 'true' : 'false');
+                    console.log('[Offline Mode] Preserved existing auto timer toggle state before injecting form HTML');
+                }
+            } catch (e) {
+                // ignore
+            }
+
+            formContent.innerHTML = formHTML;
+            
+            // Update hidden fields with correct team/match data
+            const scoutingForm = document.getElementById('scouting-form');
+            if (scoutingForm) {
+                scoutingForm.dataset.offline = 'true';
+                
+                // Update or create hidden fields
+                updateOrCreateHiddenField(scoutingForm, 'team_id', team.id);
+                updateOrCreateHiddenField(scoutingForm, 'match_id', match.id);
+                updateOrCreateHiddenField(scoutingForm, 'team_number', team.team_number);
+                updateOrCreateHiddenField(scoutingForm, 'match_number', match.match_number);
+                updateOrCreateHiddenField(scoutingForm, 'match_type', match.match_type);
+            }
+            
+            // Initialize form components immediately after DOM update
+            setTimeout(() => {
+                initializeFormComponents();
+
+                // Reset all form values to defaults if using cached template
+                if (needsReset) {
+                    console.log('[Offline Mode] Resetting form values to defaults');
+                    resetFormToDefaults();
+                }
+
+                // Ensure the auto-period-timer toggle is restored and persists across loads
+                try {
+                    setupAutoTimerTogglePersistence();
+                } catch (e) {
+                    console.warn('Could not setup auto timer toggle persistence', e);
+                }
+
+                // Enable save button in offline mode
+                const saveBtn = document.getElementById('save-button');
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                }
+
+                // Restore scroll and focus
+                try {
+                    if (typeof window.safeRestoreScroll === 'function') {
+                        window.safeRestoreScroll(savedScrollY, { behavior: 'auto', timeout: 300 });
+                    }
+                } catch (e) {
+                    console.warn('Could not restore scroll position', e);
+                }
+
+                if (savedActiveId) {
+                    try {
+                        const prev = document.getElementById(savedActiveId);
+                        if (prev && typeof prev.focus === 'function') {
+                            prev.focus({ preventScroll: true });
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
+                }
+            }, 50);
+        }
+        
+        // Helper function to update or create hidden field
+        function updateOrCreateHiddenField(form, name, value) {
+            let field = form.querySelector(`input[name="${name}"]`);
+            if (!field) {
+                field = document.createElement('input');
+                field.type = 'hidden';
+                field.name = name;
+                form.appendChild(field);
+            }
+            field.value = value;
+        }
+
+        // Ensure auto-period-timer toggle state persists across form injections
+        function setupAutoTimerTogglePersistence() {
+            const toggle = document.getElementById('auto-period-timer-toggle');
+            if (!toggle) return;
+
+            // Restore state from localStorage if present
+            const saved = localStorage.getItem('scouting_auto_timer_state');
+            if (saved !== null) {
+                toggle.checked = (saved === 'true');
+            }
+
+            // Attach listener to persist user changes
+            // Remove any existing listener marker to avoid duplicate handlers
+            if (!toggle._scoutingAutoTimerListenerAttached) {
+                toggle.addEventListener('change', function() {
+                    try {
+                        localStorage.setItem('scouting_auto_timer_state', toggle.checked ? 'true' : 'false');
+                        console.log('[Offline Mode] Auto timer toggle state saved:', toggle.checked);
+                    } catch (e) {
+                        console.warn('Could not persist auto timer toggle state', e);
+                    }
+                });
+                toggle._scoutingAutoTimerListenerAttached = true;
+            }
+        }
+        
+        // Reset form to default values
+        function resetFormToDefaults() {
+            const form = document.getElementById('scouting-form');
+            if (!form) return;
+            
+            // Read saved auto timer state from localStorage (persisted across form injections)
+            const savedAutoTimerState = (localStorage.getItem('scouting_auto_timer_state') === 'true');
+            
+            // Reset all inputs to their default values
+            const inputs = form.querySelectorAll('input:not([type="hidden"]), select, textarea');
+            inputs.forEach(input => {
+                // Skip the auto period timer toggle
+                if (input.id === 'auto-period-timer-toggle') {
+                    return;
+                }
+                
+                if (input.type === 'checkbox' || input.type === 'radio') {
+                    input.checked = false;
+                } else if (input.type === 'number' || input.classList.contains('counter-input')) {
+                    input.value = 0;
+                } else if (input.tagName === 'SELECT') {
+                    input.selectedIndex = 0;
+                } else {
+                    input.value = '';
+                }
+            });
+            
+            // Restore the auto period timer toggle state
+            const autoTimerToggle = document.getElementById('auto-period-timer-toggle');
+            if (autoTimerToggle) {
+                autoTimerToggle.checked = savedAutoTimerState;
+            }
+            
+            // Update points displays to 0
+            const pointsDisplays = form.querySelectorAll('.points-display .points-value');
+            pointsDisplays.forEach(display => {
+                display.textContent = '0';
+            });
+            
+            // Clear scout name but keep it enabled
+            const scoutNameInput = form.querySelector('#scout_name, input[name="scout_name"]');
+            if (scoutNameInput) {
+                scoutNameInput.value = '';
+            }
+            
+            console.log('[Offline Mode] Form reset to default values (auto timer toggle preserved)');
+        }
+        
+        // Generate complete offline form HTML matching online structure
+        function generateOfflineFormHTML(team, match, gameConfig) {
+            return `
+                <!-- Offline Mode Indicator -->
+                <div class="alert alert-info alert-dismissible fade show mb-3">
+                    <i class="fas fa-wifi-slash me-2"></i>
+                    <strong>Offline Mode</strong> - Form loaded from cached data. 
+                    Data will be saved locally and synced when connection is restored.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                
+                <!-- Scouting Form -->
+                <form id="scouting-form" class="scouting-form" data-offline="true">
+                    <input type="hidden" name="team_id" value="${team.id}">
+                    <input type="hidden" name="match_id" value="${match.id}">
+                    <input type="hidden" name="team_number" value="${team.team_number}">
+                    <input type="hidden" name="match_number" value="${match.match_number}">
+                    <input type="hidden" name="match_type" value="${match.match_type}">
+                    
+                    ${generateFormFieldsFromConfig(gameConfig)}
+                    
+                    <!-- Action Buttons -->
+                    <div class="form-section mb-4">
+                        <div class="d-grid gap-2">
+                            <button type="button" id="save-button" class="btn btn-primary btn-lg">
+                                <i class="fas fa-save me-2"></i>Save Offline
+                            </button>
+                            <button type="button" id="generateQR" class="btn btn-success btn-lg">
+                                <i class="fas fa-qrcode me-2"></i>Generate QR Code
+                            </button>
+                            <button type="button" id="export-json-button" class="btn btn-info btn-lg">
+                                <i class="fas fa-file-export me-2"></i>Export JSON
+                            </button>
+                            <button type="button" id="reset-form" class="btn btn-outline-secondary">
+                                <i class="fas fa-redo me-2"></i>Reset Form
+                            </button>
+                        </div>
+                        <div class="mt-2 text-center small text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Offline mode: Data will be saved locally
+                        </div>
+                    </div>
+                </form>
+            `;
+        }
+        
+        // Generate form fields from game config - matches online structure
+        function generateFormFieldsFromConfig(config) {
+            if (!config) return '<div class="alert alert-warning">No game configuration available</div>';
+            
+            let html = '';
+            
+            // Scout info section
+            html += `
+                <div class="card mb-3 navbar-glass">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Scout Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="scout_name" class="form-label">Scout Name</label>
+                            <input type="text" class="form-control" id="scout_name" name="scout_name" 
+                                   placeholder="Enter your name" required>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Generate match period tabs
+            const periods = [
+                { key: 'auto_period', icon: 'robot', color: 'primary' },
+                { key: 'teleop_period', icon: 'gamepad', color: 'success' },
+                { key: 'endgame_period', icon: 'flag-checkered', color: 'warning' }
+            ];
+            
+            const availablePeriods = periods.filter(p => config[p.key] && config[p.key].scoring_elements && config[p.key].scoring_elements.length > 0);
+            
+            if (availablePeriods.length > 0) {
+                // Tab navigation
+                html += `
+                    <ul class="nav nav-tabs mb-3" role="tablist">
+                `;
+                
+                availablePeriods.forEach((period, index) => {
+                    const periodData = config[period.key];
+                    const periodName = periodData.name || period.key.replace('_period', '').replace('_', ' ');
+                    const isActive = index === 0 ? 'active' : '';
+                    
+                    html += `
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link ${isActive}" id="${period.key}-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#${period.key}" type="button" role="tab">
+                                <i class="fas fa-${period.icon} me-2"></i>${periodName}
+                            </button>
+                        </li>
+                    `;
+                });
+                
+                html += `</ul>`;
+                
+                // Tab content
+                html += `<div class="tab-content">`;
+                
+                availablePeriods.forEach((period, index) => {
+                    const periodData = config[period.key];
+                    const isActive = index === 0 ? 'show active' : '';
+                    
+                    html += `
+                        <div class="tab-pane fade ${isActive}" id="${period.key}" role="tabpanel">
+                            <div class="card mb-3 navbar-glass">
+                                <div class="card-body">
+                    `;
+                    
+                    // Generate scoring elements for this period
+                    if (periodData.scoring_elements && periodData.scoring_elements.length > 0) {
+                        periodData.scoring_elements.forEach(element => {
+                            html += generateFormElement(element, period.key);
+                        });
+                    }
+                    
+                    html += `
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `</div>`;
+            }
+            
+            // Post-match section
+            if (config.post_match) {
+                html += `
+                    <div class="card mb-3 navbar-glass">
+                        <div class="card-header bg-secondary text-white">
+                            <h5 class="mb-0"><i class="fas fa-clipboard-check me-2"></i>Post-Match</h5>
+                        </div>
+                        <div class="card-body">
+                `;
+                
+                // Rating elements
+                if (config.post_match.rating_elements && config.post_match.rating_elements.length > 0) {
+                    config.post_match.rating_elements.forEach(element => {
+                        html += generateFormElement(element, 'post_match');
+                    });
+                }
+                
+                // Text elements
+                if (config.post_match.text_elements && config.post_match.text_elements.length > 0) {
+                    config.post_match.text_elements.forEach(element => {
+                        html += generateFormElement(element, 'post_match');
+                    });
+                }
+                
+                // Boolean elements
+                if (config.post_match.boolean_elements && config.post_match.boolean_elements.length > 0) {
+                    config.post_match.boolean_elements.forEach(element => {
+                        html += generateFormElement(element, 'post_match');
+                    });
+                }
+                
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+            
+            return html;
+        }
+        
+        // Generate individual form element matching online styling
+        function generateFormElement(element, periodKey) {
+            const id = element.id || element.name || 'element_' + Math.random();
+            const label = element.name || element.label || id;
+            const type = element.type || 'text';
+            const defaultValue = element.default !== undefined ? element.default : '';
+            const description = element.description || '';
+            
+            let html = `<div class="mb-4 form-element" data-element-type="${type}" data-period="${periodKey}">`;
+            
+            switch (type) {
+                case 'counter':
+                    const pointsValue = element.points_value || 0;
+                    html += `
+                        <label class="form-label fw-bold">${label}</label>
+                        ${description ? `<div class="form-text mb-2">${description}</div>` : ''}
+                        <div class="input-group counter-control">
+                            <button type="button" class="btn btn-outline-danger counter-btn" data-action="decrement" data-target="${id}">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <input type="number" class="form-control counter-input text-center fs-4 fw-bold" 
+                                   id="${id}" name="${id}" value="${defaultValue}" min="0" 
+                                   data-points="${pointsValue}">
+                            <button type="button" class="btn btn-outline-success counter-btn" data-action="increment" data-target="${id}">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    `;
+                    if (pointsValue > 0) {
+                        html += `
+                            <div class="points-display mt-2 text-end small text-muted" data-metric-id="${id}">
+                                <span class="points-value">0</span> points (${pointsValue} each)
+                            </div>
+                        `;
+                    }
+                    break;
+                    
+                case 'boolean':
+                case 'checkbox':
+                    html += `
+                        <div class="form-check form-switch">
+                            <input type="checkbox" class="form-check-input" id="${id}" name="${id}" 
+                                   role="switch" ${defaultValue ? 'checked' : ''}>
+                            <label class="form-check-label fw-bold" for="${id}">${label}</label>
+                            ${description ? `<div class="form-text">${description}</div>` : ''}
+                        </div>
+                    `;
+                    break;
+                    
+                case 'select':
+                case 'dropdown':
+                    html += `
+                        <label for="${id}" class="form-label fw-bold">${label}</label>
+                        ${description ? `<div class="form-text mb-2">${description}</div>` : ''}
+                        <select class="form-select" id="${id}" name="${id}">
+                    `;
+                    if (element.options && element.options.length > 0) {
+                        element.options.forEach(option => {
+                            const value = typeof option === 'object' ? (option.value || option) : option;
+                            const optionLabel = typeof option === 'object' ? (option.label || value) : option;
+                            html += `<option value="${value}" ${value == defaultValue ? 'selected' : ''}>${optionLabel}</option>`;
+                        });
+                    }
+                    html += `</select>`;
+                    break;
+                    
+                case 'rating':
+                    html += `
+                        <label class="form-label fw-bold">${label}</label>
+                        ${description ? `<div class="form-text mb-2">${description}</div>` : ''}
+                        <div class="rating-group d-flex gap-2" data-rating-id="${id}">
+                    `;
+                    for (let i = 1; i <= 5; i++) {
+                        html += `
+                            <input type="radio" class="btn-check" id="${id}_${i}" name="${id}" value="${i}" 
+                                   ${i == defaultValue ? 'checked' : ''}>
+                            <label class="btn btn-outline-warning" for="${id}_${i}">
+                                <i class="fas fa-star"></i> ${i}
+                            </label>
+                        `;
+                    }
+                    html += `</div>`;
+                    break;
+                    
+                case 'textarea':
+                    html += `
+                        <label for="${id}" class="form-label fw-bold">${label}</label>
+                        ${description ? `<div class="form-text mb-2">${description}</div>` : ''}
+                        <textarea class="form-control" id="${id}" name="${id}" rows="3">${defaultValue}</textarea>
+                    `;
+                    break;
+                    
+                case 'text':
+                default:
+                    html += `
+                        <label for="${id}" class="form-label fw-bold">${label}</label>
+                        ${description ? `<div class="form-text mb-2">${description}</div>` : ''}
+                        <input type="text" class="form-control" id="${id}" name="${id}" value="${defaultValue}">
+                    `;
+            }
+            
+            html += `</div>`;
+            return html;
+        }
+
         // Initialize form components in one place for easier updates
         function initializeFormComponents() {
             // Show QR code in modal when generated
@@ -233,6 +707,89 @@
                 // Visual feedback - change button state
                 const originalText = saveBtn.innerHTML;
                 saveBtn.disabled = true;
+                
+                // Check if we're in offline mode
+                const isOfflineForm = form.dataset.offline === 'true';
+                const isOffline = !navigator.onLine;
+                
+                if (isOffline || isOfflineForm) {
+                    // Save offline
+                    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving Offline...';
+                    
+                    try {
+                        // Collect form data
+                        const formData = new FormData(form);
+                        const formObj = {};
+                        
+                        formData.forEach((value, key) => {
+                            const element = form.elements[key];
+                            
+                            // Handle checkboxes
+                            if (element && element.type === 'checkbox') {
+                                formObj[key] = element.checked;
+                                return;
+                            }
+                            
+                            // Handle numbers
+                            if (element && (element.type === 'number' || element.classList.contains('counter-input'))) {
+                                formObj[key] = value === '' ? 0 : Number(value);
+                                return;
+                            }
+                            
+                            // Handle everything else
+                            formObj[key] = value;
+                        });
+                        
+                        // Add timestamp
+                        formObj.timestamp = new Date().toISOString();
+                        formObj.offline = true;
+                        
+                        // Save using offline manager
+                        if (window.ScoutingOfflineManager) {
+                            const saved = window.ScoutingOfflineManager.saveFormOffline(formObj);
+                            
+                            if (saved) {
+                                saveBtn.disabled = false;
+                                saveBtn.innerHTML = originalText;
+                                
+                                showToast('Data saved offline successfully! Will sync when connection is restored.', 'success');
+                                
+                                // Add save indicator
+                                const saveTimeIndicator = document.createElement('div');
+                                saveTimeIndicator.className = 'save-indicator';
+                                saveTimeIndicator.innerHTML = `
+                                    <div class="small text-success mt-2 text-end">
+                                        <i class="fas fa-check-circle me-1"></i>
+                                        Saved offline at ${new Date().toLocaleTimeString()}
+                                    </div>
+                                `;
+                                
+                                const existingIndicator = document.querySelector('.save-indicator');
+                                if (existingIndicator) {
+                                    existingIndicator.replaceWith(saveTimeIndicator);
+                                } else {
+                                    const buttonContainer = saveBtn.closest('.form-section');
+                                    if (buttonContainer) {
+                                        buttonContainer.appendChild(saveTimeIndicator);
+                                    }
+                                }
+                            } else {
+                                throw new Error('Failed to save offline');
+                            }
+                        } else {
+                            throw new Error('Offline manager not available');
+                        }
+                    } catch (error) {
+                        console.error('Error saving offline:', error);
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = originalText;
+                        showToast('Error saving offline. Try generating a QR code instead.', 'error');
+                    }
+                    
+                    return;
+                }
+                
+                // Online save
                 saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
                 
                 // Get the form data
@@ -300,6 +857,20 @@
                 .catch(error => {
                     console.error('Error saving data:', error);
                     
+                    // If it's a network error, save offline instead
+                    if (error.message.includes('Network') || error.message.includes('Failed to fetch')) {
+                        console.log('Network error, falling back to offline save...');
+                        
+                        // Reset button and try offline save
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = originalText;
+                        
+                        // Mark form as offline and trigger save again
+                        form.dataset.offline = 'true';
+                        saveBtn.click();
+                        return;
+                    }
+                    
                     // Reset button state
                     saveBtn.disabled = false;
                     saveBtn.innerHTML = originalText;
@@ -308,7 +879,7 @@
                     showToast('Error saving data. Please try again or generate a QR code instead.', 'error');
                     
                     // If offline or connection error, suggest QR code
-                    if (!navigator.onLine || error.message.includes('Network')) {
+                    if (!navigator.onLine) {
                         showToast('You appear to be offline. Try generating a QR code instead.', 'info');
                     }
                 });
@@ -740,14 +1311,36 @@
                     console.warn("Unable to save to localStorage:", e);
                 }
                 
+                // Capture scroll/focus state before AJAX request so we can restore after DOM replacement
+                const __savedScrollY = window.scrollY || 0;
+                const __savedActiveId = (document.activeElement && document.activeElement.id) ? document.activeElement.id : null;
+
+                // Check if we're offline and should use cached data
+                if (!navigator.onLine && window.ScoutingOfflineManager) {
+                    console.log('[Offline Mode] Loading form from cache...');
+                    const offlineData = window.ScoutingOfflineManager.generateFormOffline(teamId, matchId);
+                    
+                    if (offlineData) {
+                        // Generate form using cached data
+                        loadFormOffline(offlineData, __savedScrollY, __savedActiveId);
+                        return;
+                    } else {
+                        formContent.innerHTML = `
+                            <div class="alert alert-warning">
+                                <i class="fas fa-wifi-slash me-2"></i>
+                                <strong>Offline Mode</strong><br>
+                                Unable to load form - no cached data available.
+                                Please connect to the internet to load the form for the first time.
+                            </div>
+                        `;
+                        return;
+                    }
+                }
+
                 // Create form data for the AJAX request
                 const formData = new FormData();
                 formData.append('team_id', teamId);
                 formData.append('match_id', matchId);
-                
-                // Capture scroll/focus state before AJAX request so we can restore after DOM replacement
-                const __savedScrollY = window.scrollY || 0;
-                const __savedActiveId = (document.activeElement && document.activeElement.id) ? document.activeElement.id : null;
 
                 // Make AJAX request
                 fetch('{{ url_for("scouting.scouting_form") }}', {
@@ -775,6 +1368,11 @@
                     if (data.success) {
                         // Update form content
                         formContent.innerHTML = data.html;
+                        
+                        // Cache this rendered HTML for offline use
+                        if (window._scoutingFormLoadHandler && typeof window._scoutingFormLoadHandler === 'function') {
+                            window._scoutingFormLoadHandler(data.team_id, data.match_id, data.html);
+                        }
 
                         // Show warning if there was data corruption
                         if (data.warning) {
@@ -846,14 +1444,36 @@
                 .catch(error => {
                     console.error('Error loading form:', error);
                     
+                    // If offline or network error, try to load from cache
+                    if (!navigator.onLine || error.message.includes('Network') || error.message.includes('Failed to fetch')) {
+                        console.log('[Offline Mode] Network error, attempting to load from cache...');
+                        
+                        if (window.ScoutingOfflineManager) {
+                            const offlineData = window.ScoutingOfflineManager.generateFormOffline(teamId, matchId);
+                            
+                            if (offlineData) {
+                                loadFormOffline(offlineData, __savedScrollY, __savedActiveId);
+                                return;
+                            }
+                        }
+                        
+                        formContent.innerHTML = `
+                            <div class="alert alert-warning">
+                                <i class="fas fa-wifi-slash me-2"></i>
+                                <strong>Offline Mode</strong><br>
+                                Unable to connect to server and no cached data available.
+                                Please connect to the internet or wait for the connection to be restored.
+                            </div>
+                        `;
+                        return;
+                    }
+                    
                     let errorMessage = 'Error loading form. Please try again.';
                     
                     if (error.message.includes('HTTP 500')) {
                         errorMessage = 'Server error occurred. Please check the server logs or try again later.';
                     } else if (error.message.includes('non-JSON response')) {
                         errorMessage = 'Server returned an unexpected response. There may be a server error.';
-                    } else if (error.message.includes('Network')) {
-                        errorMessage = 'Network error. Please check your connection and try again.';
                     }
                     
                     formContent.innerHTML = `
