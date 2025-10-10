@@ -1,6 +1,6 @@
 {
-  "game_name": "REEFSCAPE",
-  "season": 2025,
+  "game_name": "REBUILT",
+  "season": 2026,
   "version": "1.0.0",
   "alliance_size": 3,
   "scouting_stations": 6,
@@ -17,7 +17,7 @@
       {
         "id": "elem_auto_1",
         "perm_id": "elem_auto_1",
-        "name": "Leave Strating Zone",
+        "name": "Leave Strating Line",
         "type": "boolean",
         "default": false,
         "display_in_predictions": true,
