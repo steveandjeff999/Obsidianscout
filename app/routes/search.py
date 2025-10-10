@@ -344,23 +344,63 @@ def search_scouting_data(query):
     
     try:
         # Search by joining with Match and Team tables
-        scouting_entries = ScoutingData.query\
+        # Note: match_number and team_number may be stored as integers; using
+        # .ilike on integer columns causes errors. Cast numeric columns to
+        # string for ilike comparisons and also support exact numeric matches
+        # when the query contains digits.
+        scouting_query = ScoutingData.query\
             .join(Match, ScoutingData.match_id == Match.id)\
-            .join(Team, ScoutingData.team_id == Team.id)\
-            .filter(
+            .join(Team, ScoutingData.team_id == Team.id)
+
+        # Extract any numbers from the query (e.g., match or team numbers)
+        extracted_numbers = extract_team_numbers_from_text(query)
+
+        if extracted_numbers:
+            # If query contains numbers, prefer exact numeric matches on
+            # match_number or team_number (limit the list for safety)
+            nums = list({int(n) for n in extracted_numbers})[:5]
+            scouting_entries = scouting_query.filter(
                 or_(
-                    Match.match_number.ilike(f'%{query}%'),
-                    Team.team_number.ilike(f'%{query}%'),
+                    Match.match_number.in_(nums),
+                    Team.team_number.in_(nums)
+                )
+            ).limit(15).all()
+        else:
+            # Otherwise use ilike/case-insensitive text matching. Cast numeric
+            # columns to string before using ilike to avoid SQLAlchemy errors.
+            scouting_entries = scouting_query.filter(
+                or_(
+                    func.cast(Match.match_number, db.String).ilike(f'%{query}%'),
+                    func.cast(Team.team_number, db.String).ilike(f'%{query}%'),
                     Team.team_name.ilike(f'%{query}%'),
                     ScoutingData.scout_name.ilike(f'%{query}%')
                 )
             ).limit(15).all()
-        
+
         for entry in scouting_entries:
+            # Some entries may not have related objects loaded; defensively
+            # access attributes.
+            match_num = getattr(getattr(entry, 'match', None), 'match_number', 'Unknown')
+            team_num = getattr(getattr(entry, 'team', None), 'team_number', 'Unknown')
+
+            # Include event code/name for clarity when available
+            event_obj = getattr(getattr(entry, 'match', None), 'event', None)
+            event_name = getattr(event_obj, 'name', None) if event_obj else None
+            event_code = getattr(event_obj, 'code', None) if event_obj else None
+            event_part = ''
+            if event_name and event_code:
+                event_part = f"Event: {event_name} ({event_code}) | "
+            elif event_name:
+                event_part = f"Event: {event_name} | "
+            elif event_code:
+                event_part = f"Event: {event_code} | "
+
             results.append({
-                'type': 'scouting_data',
-                'title': f"Match {entry.match.match_number} - Team {entry.team.team_number}",
-                'subtitle': f"Scout: {entry.scout_name or 'Unknown'} | Alliance: {entry.alliance or 'Unknown'}",
+                'type': 'scouting',
+                'title': f"Match {match_num} - Team {team_num}",
+                'subtitle': f"{event_part}Scout: {entry.scout_name or 'Unknown'} | Alliance: {entry.alliance or 'Unknown'}",
+                'event_name': event_name,
+                'event_code': event_code,
                 'url': f'/scouting/view/{entry.id}',
                 'icon': 'fas fa-clipboard-list',
                 'relevance': 0.6
@@ -370,6 +410,11 @@ def search_scouting_data(query):
         current_app.logger.error(f"Error searching scouting data: {e}")
     
     return results
+
+
+def search_matches(query):
+    """Placeholder removed; implementation defined later."""
+    return []
 
 def search_events(query):
     """Search events by name or code"""
@@ -398,6 +443,65 @@ def search_events(query):
         current_app.logger.error(f"Error searching events: {e}")
     
     return results
+
+
+def search_matches(query):
+    """Search matches by number, type, event, or participating teams"""
+    results = []
+    try:
+        query_str = (query or '').strip()
+        extracted_numbers = extract_team_numbers_from_text(query_str)
+
+        # Prefer numeric match number searches when numbers are present
+        if extracted_numbers:
+            nums = list({int(n) for n in extracted_numbers})[:5]
+            matches = Match.query.filter(Match.match_number.in_(nums)).limit(25).all()
+        elif query_str.isdigit():
+            matches = Match.query.filter(Match.match_number == int(query_str)).limit(25).all()
+        else:
+            # Text search across match_type, event name, and alliance strings
+            matches = Match.query.join(Event, Match.event_id == Event.id).filter(
+                or_(
+                    Match.match_type.ilike(f'%{query}%'),
+                    Event.name.ilike(f'%{query}%'),
+                    Match.red_alliance.ilike(f'%{query}%'),
+                    Match.blue_alliance.ilike(f'%{query}%'),
+                    func.cast(Match.match_number, db.String).ilike(f'%{query}%')
+                )
+            ).limit(25).all()
+
+        for m in matches:
+            title = f"{(m.match_type or '').capitalize()} {m.match_number}"
+            # Include event code (if available) alongside event name
+            event_name = getattr(getattr(m, 'event', None), 'name', None)
+            event_code = getattr(getattr(m, 'event', None), 'code', None)
+            if event_name and event_code:
+                event_part = f"Event: {event_name} ({event_code})"
+            elif event_name:
+                event_part = f"Event: {event_name}"
+            elif event_code:
+                event_part = f"Event: {event_code}"
+            else:
+                event_part = "Event: Unknown"
+
+            subtitle = f"{event_part} | Red: {m.red_alliance or 'N/A'} | Blue: {m.blue_alliance or 'N/A'}"
+            relevance = 1.0 if query_str.isdigit() and str(m.match_number) == query_str else 0.8
+            results.append({
+                'type': 'match',
+                'title': title,
+                'subtitle': subtitle,
+                'event_name': event_name,
+                'event_code': event_code,
+                'url': f'/matches/{m.id}',
+                'icon': 'fas fa-gamepad',
+                'relevance': relevance
+            })
+    except Exception as e:
+        current_app.logger.error(f"Error searching matches: {e}")
+
+    # sort and limit
+    results.sort(key=lambda x: x.get('relevance', 0), reverse=True)
+    return results[:12]
 
 def search_pages(query):
     """Search for pages/routes within the application"""
@@ -556,6 +660,7 @@ def search_page():
     all_results.extend(search_users(query))
     all_results.extend(search_events(query))
     all_results.extend(search_scouting_data(query))
+    all_results.extend(search_matches(query))
     all_results.extend(search_pages(query))
     
     # Sort by relevance
@@ -577,7 +682,7 @@ def search_page():
 def api_suggestions():
     """Enhanced API endpoint for search suggestions with fuzzy matching"""
     query = request.args.get('q', '').strip()
-    types_filter = request.args.get('types', 'team,user,page')  # Default to teams, users, and pages
+    types_filter = request.args.get('types', 'team,user,page,match,scouting')  # Default includes matches and scouting
     
     if len(query) < 1:  # Allow single character searches for better UX
         return jsonify({'suggestions': []})
@@ -798,7 +903,40 @@ def api_suggestions():
     
     # Sort by relevance and limit total results
     suggestions.sort(key=lambda x: x.get('relevance', 0), reverse=True)
-    
+
+    # Also include quick scouting/match suggestions if query contains numbers or keywords
+    try:
+        if any(ch.isdigit() for ch in query) or 'match' in query.lower() or 'scout' in query.lower():
+            # Include up to 2 match suggestions
+            match_sugs = search_matches(query)[:2]
+            for m in match_sugs:
+                suggestions.append({
+                    'text': m['title'],
+                    'type': 'match',
+                    'relevance': m.get('relevance', 0.7),
+                    'subtitle': m.get('subtitle', ''),
+                    'event_name': m.get('event_name'),
+                    'event_code': m.get('event_code'),
+                    'search_query': query,
+                    'url': m.get('url')
+                })
+
+            # Include up to 2 scouting suggestions
+            scouting_sugs = search_scouting_data(query)[:2]
+            for s in scouting_sugs:
+                suggestions.append({
+                    'text': s['title'],
+                    'type': 'scouting',
+                    'relevance': s.get('relevance', 0.6),
+                    'subtitle': s.get('subtitle', ''),
+                    'event_name': s.get('event_name'),
+                    'event_code': s.get('event_code'),
+                    'search_query': query,
+                    'url': s.get('url')
+                })
+    except Exception as e:
+        current_app.logger.error(f"Error adding match/scouting suggestions: {e}")
+
     return jsonify({'suggestions': suggestions[:8]})
 
 @bp.route('/api/quick-search')
@@ -810,11 +948,13 @@ def api_quick_search():
     if len(query) < 2:
         return jsonify([])
     
-    # Get top results from teams and users only
+    # Get top results from teams, users, matches, scouting and pages
     results = []
-    results.extend(search_teams(query)[:5])
-    results.extend(search_users(query)[:3])
-    results.extend(search_pages(query)[:3])
+    results.extend(search_teams(query)[:4])
+    results.extend(search_users(query)[:2])
+    results.extend(search_matches(query)[:3])
+    results.extend(search_scouting_data(query)[:3])
+    results.extend(search_pages(query)[:2])
     
     # Sort by relevance and limit
     results.sort(key=lambda x: x.get('relevance', 0), reverse=True)

@@ -327,6 +327,8 @@
 .type-user { background: #f3e5f5; color: #7b1fa2; }
 .type-event { background: #e8f5e8; color: #388e3c; }
 .type-scouting_data { background: #fff3e0; color: #f57c00; }
+.type-scouting { background: #fff3e0; color: #f57c00; }
+.type-match { background: #eaf2ff; color: #0d6efd; }
 
 .no-results {
     text-align: center;
@@ -422,9 +424,16 @@
                             </div>
                             <div class="result-content">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <a href="{{ result.url }}" class="result-title h6 mb-0">
-                                        {{ result.title }}
-                                    </a>
+                                    <div>
+                                        <a href="{{ result.url }}" class="result-title h6 mb-0">
+                                            {{ result.title }}
+                                        </a>
+                                        {% if result.event_code or result.event_name %}
+                                            <small class="text-muted ms-2">
+                                                {{ (result.event_name + ' (' + result.event_code + ')') if result.event_name and result.event_code else (result.event_name or result.event_code) }}
+                                            </small>
+                                        {% endif %}
+                                    </div>
                                     <span class="result-type type-{{ result.type }}">
                                         {{ result.type.replace('_', ' ') }}
                                     </span>
@@ -630,7 +639,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Fetch suggestions with error handling
     function fetchSuggestions(query) {
-        fetch(`{{ url_for('search.api_suggestions') }}?q=${encodeURIComponent(query)}&types=team,user,event`)
+        // Request the same suggestion types as the global/topbar search so matches and scouting
+        // appear on the main /search page as well.
+        fetch(`{{ url_for('search.api_suggestions') }}?q=${encodeURIComponent(query)}&types=team,user,match,scouting,event,page`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
@@ -667,10 +678,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }, {});
 
         let html = '';
-        const categoryOrder = ['team', 'user', 'event'];
+        // Show matches and scouting alongside teams/users/events
+        const categoryOrder = ['team', 'user', 'match', 'scouting', 'event'];
         const categoryLabels = {
             'team': 'Teams',
             'user': 'Users',
+            'match': 'Matches',
+            'scouting': 'Scouting',
             'event': 'Events'
         };
 
@@ -693,7 +707,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <i class="${iconClass}"></i>
                             </div>
                             <div class="suggestion-content">
-                                <div class="suggestion-title">${escapeHtml(suggestion.text)}</div>
+                                <div class="suggestion-title">
+                                    ${escapeHtml(suggestion.text)}
+                                    ${suggestion.event_name || suggestion.event_code ? `<small class="text-muted ms-2">${escapeHtml((suggestion.event_name && suggestion.event_code) ? `${suggestion.event_name} (${suggestion.event_code})` : (suggestion.event_name || suggestion.event_code))}</small>` : ''}
+                                </div>
                                 <div class="suggestion-type">${suggestion.type}</div>
                             </div>
                         </div>
@@ -705,6 +722,20 @@ document.addEventListener('DOMContentLoaded', function() {
         suggestions.innerHTML = html;
         suggestions.classList.add('show');
         selectedIndex = -1;
+        // Enforce dark mode colors for the suggestions dropdown when dark-mode is active
+        try {
+            if (document.documentElement.classList.contains('dark-mode')) {
+                suggestions.style.setProperty('background', '#0b0b0d', 'important');
+                suggestions.style.setProperty('color', '#ffffff', 'important');
+                suggestions.style.setProperty('border-color', 'rgba(255,255,255,0.04)', 'important');
+                suggestions.querySelectorAll('.suggestion-item').forEach(it => {
+                    it.style.setProperty('background', 'transparent', 'important');
+                    it.style.setProperty('color', '#ffffff', 'important');
+                    const title = it.querySelector('.suggestion-title'); if (title) title.style.setProperty('color', '#ffffff', 'important');
+                    const st = it.querySelector('.suggestion-type'); if (st) st.style.setProperty('color', '#bfbfbf', 'important');
+                });
+            }
+        } catch (e) { console && console.debug && console.debug('apply dark suggestion styles error', e); }
     }
 
     // Delegate clicks on suggestion items to the in-scope handler
@@ -810,7 +841,8 @@ document.addEventListener('DOMContentLoaded', function() {
             'user': 'fas fa-user',
             'event': 'fas fa-calendar',
             'match': 'fas fa-trophy',
-            'scouting_data': 'fas fa-clipboard-list'
+            'scouting_data': 'fas fa-clipboard-list',
+            'scouting': 'fas fa-clipboard-list'
         };
         return icons[type] || 'fas fa-search';
     }

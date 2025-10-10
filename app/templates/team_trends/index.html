@@ -11,10 +11,56 @@
   {% endif %}
   <form method="post" action="{{ url_for('team_trends.analyze_post') }}">
     <div class="form-group">
-      <label for="team_number">Team Number</label>
-      <input class="form-control" type="text" name="team_number" id="team_number" placeholder="e.g. 254">
+      <label for="team_number">Select Team</label>
+      <div class="input-group mb-1">
+        <span class="input-group-text"><i class="fas fa-search"></i></span>
+        <input type="search" id="team-search" class="form-control form-control-sm" placeholder="Search teams by number or name" aria-label="Search teams">
+      </div>
+      <select class="form-select" id="team_number" name="team_number" required>
+        <option value="">-- Select Team --</option>
+        {% for t in teams %}
+        <option value="{{ t.team_number }}">{{ t.team_number }} - {{ t.team_name or 'Unknown' }}</option>
+        {% endfor %}
+      </select>
     </div>
     <button class="btn btn-primary" type="submit">Analyze</button>
   </form>
 </div>
+  <script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const search = document.getElementById('team-search');
+    const select = document.getElementById('team_number');
+    if (!search || !select) return;
+
+    function normalize(s) { return (s || '').toString().toLowerCase().trim(); }
+
+    function filterOptions() {
+      const q = normalize(search.value);
+      const options = Array.from(select.options);
+      options.forEach(opt => {
+        if (!opt.value) return; // keep placeholder
+        const txt = normalize(opt.textContent || opt.innerText);
+        const parts = txt.split('-');
+        const num = parts[0] ? parts[0].trim() : '';
+        const name = parts[1] ? parts[1].trim() : '';
+        const match = !q || num.includes(q) || name.includes(q) || txt.includes(q);
+        opt.hidden = !match;
+        opt.style.display = match ? '' : 'none';
+      });
+
+      // If selected option was hidden by the filter, reset
+      const current = select.options[select.selectedIndex];
+      if (current && current.hidden) select.value = '';
+
+      // Auto-select if exactly one visible option
+      const visible = options.filter(o => o.value && !o.hidden);
+      if (visible.length === 1) {
+        select.value = visible[0].value;
+      }
+    }
+
+    function debounce(fn, wait) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), wait); }; }
+    search.addEventListener('input', debounce(filterOptions, 150));
+  });
+  </script>
 {% endblock %}

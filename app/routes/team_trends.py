@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, current_app, jsonify
-from app.models import Team, ScoutingData
+from app.models import Team, ScoutingData, Event
 from app.utils.config_manager import get_current_game_config
+from app.utils.team_isolation import filter_teams_by_scouting_team, get_event_by_code
 from statistics import mean
 import math
 
@@ -25,8 +26,25 @@ def _simple_linear_regression(x_vals, y_vals):
 
 @bp.route('/')
 def index():
-    # Simple page with a form to enter a team number
-    return render_template('team_trends/index.html')
+    # Provide a team selection dropdown populated from the current event code.
+    # If a current_event_code is configured in the game config, only teams linked
+    # to that event (and filtered by scouting team isolation) will be shown.
+    teams = []
+    try:
+        game_config = get_current_game_config() or {}
+        event_code = game_config.get('current_event_code')
+        if event_code:
+            # Use the team isolation helper to respect multi-tenant filtering
+            q = filter_teams_by_scouting_team(Team.query)
+            # Join to events and filter by code, use distinct to avoid duplicates
+            teams = q.join(Team.events).filter(Event.code == event_code).order_by(Team.team_number).distinct(Team.team_number).all()
+        else:
+            # Fallback: show all teams visible to this scouting team
+            teams = filter_teams_by_scouting_team().order_by(Team.team_number).all()
+    except Exception:
+        teams = []
+
+    return render_template('team_trends/index.html', teams=teams)
 
 
 @bp.route('/analyze', methods=['POST'])

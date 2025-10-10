@@ -30,6 +30,54 @@
             } catch (e) { /* fail silently - don't block page */ }
         })();
     </script>
+    <script>
+    // Ensure suggestion dropdowns use dark background when the app is in dark mode.
+    (function(){
+        function applyDarkToSuggestions(root){
+            try{
+                const els = (root || document).querySelectorAll('.enhanced-search-suggestions, .enhanced-search-suggestions-main, #suggestions, #searchSuggestionsTop');
+                els.forEach(el => {
+                    // Use setProperty with priority 'important' to overwrite inline !important styles
+                    el.style.setProperty('background', '#0b0b0d', 'important');
+                    el.style.setProperty('color', '#ffffff', 'important');
+                    el.style.setProperty('border-color', 'rgba(255,255,255,0.04)', 'important');
+                });
+            }catch(e){console && console.warn && console.warn('applyDarkToSuggestions error', e);}    
+        }
+
+        function init() {
+            if (document.documentElement.classList.contains('dark-mode')) {
+                applyDarkToSuggestions(document);
+
+                // Watch for new suggestion elements being added dynamically
+                const bodyObs = new MutationObserver(mutations => {
+                    mutations.forEach(m => {
+                        m.addedNodes && m.addedNodes.forEach(node => {
+                            if (node.nodeType === 1) {
+                                if (node.matches && (node.matches('.enhanced-search-suggestions') || node.matches('.enhanced-search-suggestions-main') || node.id === 'searchSuggestionsTop' || node.id === 'suggestions')) {
+                                    applyDarkToSuggestions(node.parentNode || document);
+                                }
+                            }
+                        });
+                    });
+                });
+                bodyObs.observe(document.body, { childList: true, subtree: true });
+
+                // Also observe html element class changes (theme toggles)
+                const htmlObs = new MutationObserver(mutations => {
+                    mutations.forEach(m => {
+                        if (m.attributeName === 'class') {
+                            if (document.documentElement.classList.contains('dark-mode')) applyDarkToSuggestions(document);
+                        }
+                    });
+                });
+                htmlObs.observe(document.documentElement, { attributes: true });
+            }
+        }
+
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+    })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
     <title>{% block title %}ObsidianScout{% endblock %}</title>
@@ -251,6 +299,37 @@
         
         .search-submit-btn:active {
             transform: scale(0.95);
+        }
+
+        /* Dark-mode overrides for navbar/main search so input is dark and text is white */
+        body.dark-mode .search-input-wrapper,
+        body.dark-mode .enhanced-search-input,
+        body.dark-mode .search-input-wrapper .enhanced-search-input {
+            background: #121212 !important;
+            border-color: rgba(255,255,255,0.06) !important;
+            color: #ffffff !important;
+        }
+
+        body.dark-mode .search-input-wrapper .search-icon,
+        body.dark-mode .search-input-wrapper .search-clear-btn,
+        body.dark-mode .search-input-wrapper .search-submit-btn {
+            color: #ececec !important;
+        }
+
+        body.dark-mode .enhanced-search-input::placeholder {
+            color: #bfbfbf !important;
+            opacity: 1;
+        }
+
+        /* Make suggestions dropdown dark as well in dark mode */
+        body.dark-mode .enhanced-search-suggestions,
+        body.dark-mode .enhanced-search-suggestions.show,
+        body.dark-mode .enhanced-search-suggestions-main,
+        body.dark-mode .enhanced-search-suggestions-main.show,
+        body.dark-mode #suggestions {
+            background: #0b0b0d !important;
+            color: #ffffff !important;
+            border-color: rgba(255,255,255,0.04) !important;
         }
         
         /* Enhanced Search Suggestions */
@@ -811,6 +890,7 @@
                 <a class="nav-link {% if request.endpoint == 'matches.strategy_draw' %}active{% endif %}" href="{{ url_for('matches.strategy_draw') }}"><i class="fas fa-pen-ruler"></i><span>Strategy Draw</span></a>
                 <a class="nav-link {% if request.endpoint == 'graphs.my_shares' %}active{% endif %}" href="{{ url_for('graphs.my_shares') }}"><i class="fas fa-share-alt"></i><span>My Graph Shares</span></a>
                     <a class="nav-link {% if request.endpoint == 'teams.my_ranks_shares' %}active{% endif %}" href="{{ url_for('teams.my_ranks_shares') }}"><i class="fas fa-trophy"></i><span>My Ranking Shares</span></a>
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('team_trends') %}active{% endif %}" href="{{ url_for('team_trends.index') }}"><i class="fas fa-chart-line"></i><span>Trends</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('data') %}active{% endif %}" href="{{ url_for('data.index') }}"><i class="fas fa-database"></i><span>Data</span></a>
                 </div>
             </div>
@@ -3234,7 +3314,9 @@
     // Enhanced Search functionality
     // Global function for hiding suggestions
     window.hideSuggestions = function() {
-    const searchSuggestions = document.getElementById('searchSuggestionsTop') || document.getElementById('searchSuggestions');
+    // Support multiple suggestion containers: topbar (searchSuggestionsTop), navbar (searchSuggestions),
+    // and main search page (suggestions)
+    const searchSuggestions = document.getElementById('searchSuggestionsTop') || document.getElementById('searchSuggestions') || document.getElementById('suggestions');
     const searchInput = document.getElementById('quickSearchInputTop') || document.getElementById('quickSearchInput');
         
         if (searchSuggestions) {
@@ -3561,8 +3643,11 @@
         // Enhanced fetch suggestions with categorization
         function fetchSuggestions(query) {
             console.log('Fetching suggestions for:', query); // Debug log
-            
-            fetch(`/search/api/suggestions?q=${encodeURIComponent(query)}&types=team,user`)
+
+            // Request all suggestion types including matches and scouting to ensure broad coverage
+            const typesParam = 'team,user,match,scouting,page';
+
+            fetch(`/search/api/suggestions?q=${encodeURIComponent(query)}&types=${encodeURIComponent(typesParam)}`)
                 .then(response => {
                     console.log('Response received:', response.status); // Debug log
                     return response.json();
@@ -3606,10 +3691,12 @@
             let html = '';
             
             // Define category order and labels
-            const categoryOrder = ['team', 'user'];
+            const categoryOrder = ['team', 'user', 'match', 'scouting'];
             const categoryLabels = {
                 'team': 'Teams',
-                'user': 'Users'
+                'user': 'Users',
+                'match': 'Matches',
+                'scouting': 'Scouting'
             };
             
             // Build HTML with categories
@@ -3634,7 +3721,10 @@
                                     <i class="${iconClass}"></i>
                                 </div>
                                 <div class="suggestion-content">
-                                    <div class="suggestion-title">${escapeHtml(suggestion.text)}</div>
+                                    <div class="suggestion-title">
+                                        ${escapeHtml(suggestion.text)}
+                                        ${suggestion.event_name || suggestion.event_code ? `<small class="text-muted ms-2">${escapeHtml((suggestion.event_name && suggestion.event_code) ? `${suggestion.event_name} (${suggestion.event_code})` : (suggestion.event_name || suggestion.event_code))}</small>` : ''}
+                                    </div>
                                     <div class="suggestion-type">${suggestion.type}</div>
                                 </div>
                             </div>
@@ -3651,6 +3741,22 @@
             console.log('Show class added, checking visibility:', getComputedStyle(searchSuggestions).display);
             positionSearchSuggestions();
             selectedIndex = -1;
+            // If dark mode is active, enforce dark colors on the suggestion container
+            try {
+                if (document.documentElement.classList.contains('dark-mode')) {
+                    searchSuggestions.style.setProperty('background', '#0b0b0d', 'important');
+                    searchSuggestions.style.setProperty('color', '#ffffff', 'important');
+                    searchSuggestions.style.setProperty('border-color', 'rgba(255,255,255,0.04)', 'important');
+                    // Ensure individual suggestion items inherit readable colors
+                    const items = searchSuggestions.querySelectorAll('.suggestion-item');
+                    items.forEach(it => {
+                        it.style.setProperty('background', 'transparent', 'important');
+                        it.style.setProperty('color', '#ffffff', 'important');
+                        const title = it.querySelector('.suggestion-title'); if (title) title.style.setProperty('color', '#ffffff', 'important');
+                        const st = it.querySelector('.suggestion-type'); if (st) st.style.setProperty('color', '#bfbfbf', 'important');
+                    });
+                }
+            } catch (e) { console && console.debug && console.debug('apply dark suggestion styles error', e); }
             
             // Debug: Check element dimensions and position
             const rect = searchSuggestions.getBoundingClientRect();
@@ -3706,7 +3812,8 @@
                 'team': 'fas fa-users',
                 'user': 'fas fa-user',
                 'event': 'fas fa-calendar',
-                'match': 'fas fa-trophy',
+                'match': 'fas fa-gamepad',
+                'scouting': 'fas fa-clipboard-list',
                 'scouting_data': 'fas fa-clipboard-list'
             };
             return icons[type] || 'fas fa-search';
