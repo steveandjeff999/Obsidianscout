@@ -73,7 +73,7 @@
                 console.log(`[Offline Manager] Cached ${teams.length} teams`);
             }
 
-            // Cache matches data
+            // Cache matches data with alliance information
             const matchesSelect = document.getElementById('match-selector');
             if (matchesSelect) {
                 const matches = Array.from(matchesSelect.options)
@@ -82,11 +82,13 @@
                         id: opt.value,
                         match_type: opt.getAttribute('data-match-type'),
                         match_number: opt.getAttribute('data-match-number'),
+                        red_alliance: opt.getAttribute('data-red-alliance') || '',
+                        blue_alliance: opt.getAttribute('data-blue-alliance') || '',
                         text: opt.textContent
                     }));
                 
                 localStorage.setItem(CACHE_KEYS.MATCHES, JSON.stringify(matches));
-                console.log(`[Offline Manager] Cached ${matches.length} matches`);
+                console.log(`[Offline Manager] Cached ${matches.length} matches with alliance data`);
             }
 
             // Cache game config if available in the page
