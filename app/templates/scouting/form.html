@@ -152,9 +152,10 @@
             
             // Preserve current auto timer toggle state (if user toggled before load) so it isn't lost when we overwrite the form
             try {
-                const existingToggle = document.getElementById('auto-period-timer-toggle');
+                const existingToggle = document.getElementById('auto_period_timer_enabled');
                 if (existingToggle) {
-                    localStorage.setItem('scouting_auto_timer_state', existingToggle.checked ? 'true' : 'false');
+                    // Use the same key as the main scripts to keep behavior consistent
+                    localStorage.setItem('auto_period_timer_enabled', existingToggle.checked ? 'true' : 'false');
                     console.log('[Offline Mode] Preserved existing auto timer toggle state before injecting form HTML');
                 }
             } catch (e) {
@@ -235,21 +236,20 @@
 
         // Ensure auto-period-timer toggle state persists across form injections
         function setupAutoTimerTogglePersistence() {
-            const toggle = document.getElementById('auto-period-timer-toggle');
+            const toggle = document.getElementById('auto_period_timer_enabled');
             if (!toggle) return;
 
-            // Restore state from localStorage if present
-            const saved = localStorage.getItem('scouting_auto_timer_state');
+            // Restore state from localStorage if present (use same key as scripts.js)
+            const saved = localStorage.getItem('auto_period_timer_enabled');
             if (saved !== null) {
                 toggle.checked = (saved === 'true');
             }
 
-            // Attach listener to persist user changes
-            // Remove any existing listener marker to avoid duplicate handlers
+            // Attach listener to persist user changes if scripts.js didn't already; avoid duplicates
             if (!toggle._scoutingAutoTimerListenerAttached) {
                 toggle.addEventListener('change', function() {
                     try {
-                        localStorage.setItem('scouting_auto_timer_state', toggle.checked ? 'true' : 'false');
+                        localStorage.setItem('auto_period_timer_enabled', toggle.checked ? 'true' : 'false');
                         console.log('[Offline Mode] Auto timer toggle state saved:', toggle.checked);
                     } catch (e) {
                         console.warn('Could not persist auto timer toggle state', e);
@@ -264,14 +264,14 @@
             const form = document.getElementById('scouting-form');
             if (!form) return;
             
-            // Read saved auto timer state from localStorage (persisted across form injections)
-            const savedAutoTimerState = (localStorage.getItem('scouting_auto_timer_state') === 'true');
+            // Read saved auto timer state from localStorage (use same key as scripts.js)
+            const savedAutoTimerState = (localStorage.getItem('auto_period_timer_enabled') === 'true');
             
             // Reset all inputs to their default values
             const inputs = form.querySelectorAll('input:not([type="hidden"]), select, textarea');
             inputs.forEach(input => {
                 // Skip the auto period timer toggle
-                if (input.id === 'auto-period-timer-toggle') {
+                if (input.id === 'auto_period_timer_enabled') {
                     return;
                 }
                 
@@ -287,7 +287,7 @@
             });
             
             // Restore the auto period timer toggle state
-            const autoTimerToggle = document.getElementById('auto-period-timer-toggle');
+            const autoTimerToggle = document.getElementById('auto_period_timer_enabled');
             if (autoTimerToggle) {
                 autoTimerToggle.checked = savedAutoTimerState;
             }
