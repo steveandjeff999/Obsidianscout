@@ -78,6 +78,43 @@
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
     })();
     </script>
+    <script>
+    // Aggressive short-duration re-apply to catch suggestion elements created very early
+    (function(){
+        function reapplyDark() {
+            try {
+                if (!document.documentElement.classList.contains('dark-mode')) return;
+                const sel = ['.enhanced-search-suggestions', '.enhanced-search-suggestions-main', '#suggestions', '#searchSuggestionsTop'];
+                sel.forEach(s => {
+                    document.querySelectorAll(s).forEach(el => {
+                        el.style.setProperty('background', '#0b0b0d', 'important');
+                        el.style.setProperty('color', '#ffffff', 'important');
+                        el.style.setProperty('border-color', 'rgba(255,255,255,0.04)', 'important');
+                        el.querySelectorAll('.suggestion-item').forEach(it => {
+                            it.style.setProperty('background', 'transparent', 'important');
+                            it.style.setProperty('color', '#ffffff', 'important');
+                        });
+                    });
+                });
+            } catch (e) { console && console.debug && console.debug('reapplyDark error', e); }
+        }
+
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            // Run immediately and schedule short repeated attempts
+            reapplyDark();
+        } else {
+            document.addEventListener('DOMContentLoaded', reapplyDark);
+        }
+
+        // Run repeatedly for a short window to catch dynamically added inline-styled elements
+        let tries = 0;
+        const id = setInterval(() => {
+            reapplyDark();
+            tries += 1;
+            if (tries > 20) clearInterval(id); // ~2 seconds at 100ms intervals
+        }, 100);
+    })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
     <title>{% block title %}ObsidianScout{% endblock %}</title>

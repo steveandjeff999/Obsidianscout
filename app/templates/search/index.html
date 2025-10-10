@@ -336,6 +336,65 @@
     color: #6c757d;
 }
 
+/* Dark mode overrides for main search results */
+body.dark-mode .search-container {
+    background: transparent !important;
+}
+
+body.dark-mode .result-item {
+    background: var(--card-bg, #0b0b0d) !important;
+    color: #ffffff !important;
+    border-color: rgba(255,255,255,0.03) !important;
+    box-shadow: none !important;
+}
+
+body.dark-mode .result-icon {
+    background: rgba(13,110,253,0.12) !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .result-title {
+    color: #e6eefc !important;
+}
+
+body.dark-mode .result-subtitle,
+body.dark-mode .search-stats,
+body.dark-mode .spelling-suggestion,
+body.dark-mode .no-results {
+    color: #bfbfbf !important;
+}
+
+body.dark-mode .result-type {
+    background: rgba(255,255,255,0.04) !important;
+    color: #dcdcdc !important;
+    border: none !important;
+}
+
+/* Ensure suggestion dropdown items on this page inherit dark colors */
+body.dark-mode .enhanced-search-suggestions-main,
+body.dark-mode #suggestions {
+    background: var(--card-bg, #0b0b0d) !important;
+    color: #ffffff !important;
+    border-color: rgba(255,255,255,0.04) !important;
+}
+
+body.dark-mode .enhanced-search-suggestions-main .suggestion-item,
+body.dark-mode #suggestions .suggestion-item {
+    background: transparent !important;
+    color: #ffffff !important;
+}
+
+/* Dark-mode override for the search stats bar (Found X results) */
+body.dark-mode .search-stats {
+    background: rgba(255,255,255,0.02) !important;
+    color: #e6eefc !important;
+    border-left-color: rgba(13,110,253,0.6) !important;
+}
+
+body.dark-mode .search-stats i {
+    color: #9fc5ff !important;
+}
+
 .search-stats {
     margin-bottom: 20px;
     padding: 15px;
