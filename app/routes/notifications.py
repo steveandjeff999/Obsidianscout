@@ -126,24 +126,27 @@ def subscribe():
         if not target_team_number:
             return jsonify({'error': 'Team number is required'}), 400
         
-        # Check if subscription already exists
+        # Check if exact same subscription already exists (same type, team, timing, and delivery methods)
         existing = NotificationSubscription.query.filter_by(
             user_id=current_user.id,
             notification_type=notification_type,
             target_team_number=target_team_number,
-            event_code=event_code
+            event_code=event_code,
+            minutes_before=minutes_before,
+            email_enabled=email_enabled,
+            push_enabled=push_enabled
         ).first()
         
         if existing:
-            # Update existing subscription
-            existing.email_enabled = email_enabled
-            existing.push_enabled = push_enabled
-            existing.minutes_before = minutes_before
-            existing.is_active = True
-            existing.updated_at = datetime.utcnow()
-            subscription = existing
+            # Reactivate if it was deactivated
+            if not existing.is_active:
+                existing.is_active = True
+                existing.updated_at = datetime.utcnow()
+                subscription = existing
+            else:
+                return jsonify({'error': 'This exact subscription already exists'}), 400
         else:
-            # Create new subscription
+            # Create new subscription (allow multiple subscriptions for same team with different types/timing)
             subscription = NotificationSubscription(
                 user_id=current_user.id,
                 scouting_team_number=current_user.scouting_team_number,

@@ -34,76 +34,72 @@ def get_team_performance_stats(team_id, scouting_team_number):
     Returns dict with auto_avg, teleop_avg, total_avg, match_count
     """
     from app.models import ScoutingData
+    from app.utils.config_manager import get_current_game_config
+    from sqlalchemy import or_
     
-    team_data = ScoutingData.query.filter_by(
-        team_id=team_id,
-        scouting_team_number=scouting_team_number
-    ).all()
+    # Use proper team isolation filter (include both scouting_team_number and NULL entries)
+    team_data_query = ScoutingData.query.filter(ScoutingData.team_id == team_id)
+    
+    if scouting_team_number is not None:
+        team_data_query = team_data_query.filter(
+            or_(
+                ScoutingData.scouting_team_number == scouting_team_number,
+                ScoutingData.scouting_team_number.is_(None)
+            )
+        )
+    else:
+        team_data_query = team_data_query.filter(ScoutingData.scouting_team_number.is_(None))
+    
+    team_data = team_data_query.all()
     
     if not team_data:
+        print(f"  No scouting data found for team_id={team_id}, scouting_team={scouting_team_number}")
         return None
     
-    # Try to calculate metrics using the calculate_metric method
+    print(f"  Found {len(team_data)} scouting entries for team_id={team_id}")
+    
+    # Get game config for dynamic calculations
+    game_config = get_current_game_config()
+    
+    # Use dynamic calculation methods directly (most reliable approach)
     auto_scores = []
     teleop_scores = []
+    endgame_scores = []
     total_scores = []
     
     for entry in team_data:
         try:
-            # Try standard metric IDs first
-            auto = entry.calculate_metric('apt')  # Auto Points Total
-            if auto is not None:
-                auto_scores.append(float(auto))
-        except:
-            pass
-        
-        try:
-            teleop = entry.calculate_metric('tpt')  # Teleop Points Total
-            if teleop is not None:
-                teleop_scores.append(float(teleop))
-        except:
-            pass
-        
-        try:
-            total = entry.calculate_metric('tot')  # Total Points
-            if total is not None:
-                total_scores.append(float(total))
-        except:
-            pass
+            # Use the dynamic period calculation methods
+            auto_pts = entry._calculate_auto_points_dynamic(entry.data, game_config)
+            teleop_pts = entry._calculate_teleop_points_dynamic(entry.data, game_config)
+            endgame_pts = entry._calculate_endgame_points_dynamic(entry.data, game_config)
+            total_pts = auto_pts + teleop_pts + endgame_pts
+            
+            # Include ALL entries (even zeros are valid scores)
+            auto_scores.append(float(auto_pts))
+            teleop_scores.append(float(teleop_pts))
+            endgame_scores.append(float(endgame_pts))
+            total_scores.append(float(total_pts))
+        except Exception as e:
+            print(f"  Warning: Could not calculate scores for scouting entry ID {entry.id}: {e}")
+            import traceback
+            traceback.print_exc()
+            continue
     
     # If we got scores, calculate averages
-    if total_scores:
-        return {
-            'auto_avg': sum(auto_scores) / len(auto_scores) if auto_scores else 0,
-            'teleop_avg': sum(teleop_scores) / len(teleop_scores) if teleop_scores else 0,
+    if len(total_scores) > 0:
+        result = {
+            'auto_avg': sum(auto_scores) / len(auto_scores),
+            'teleop_avg': sum(teleop_scores) / len(teleop_scores),
+            'endgame_avg': sum(endgame_scores) / len(endgame_scores),
             'total_avg': sum(total_scores) / len(total_scores),
-            'match_count': len(team_data)
+            'match_count': len(total_scores)
         }
+        print(f"  Stats calculated: {result['match_count']} matches, avg={result['total_avg']:.1f} pts")
+        return result
     
-    # Fallback: Try to sum numeric values from data_json
-    # This is a rough estimate when metrics aren't configured
-    fallback_totals = []
-    for entry in team_data:
-        try:
-            data = entry.data
-            total = 0
-            for key, value in data.items():
-                if isinstance(value, (int, float)) and value > 0:
-                    total += value
-            if total > 0:
-                fallback_totals.append(total)
-        except:
-            pass
-    
-    if fallback_totals:
-        avg = sum(fallback_totals) / len(fallback_totals)
-        return {
-            'auto_avg': avg * 0.33,  # Rough estimate: 33% auto
-            'teleop_avg': avg * 0.67,  # Rough estimate: 67% teleop
-            'total_avg': avg,
-            'match_count': len(team_data)
-        }
-    
+    # If dynamic calculations didn't work, the team truly has no valid scouting data
+    print(f"  No valid scores calculated from {len(team_data)} entries")
     return None
 
 
@@ -246,21 +242,7 @@ def create_match_prediction_html(match, target_team_number, message):
     </div>
 """
     
-    # Add action button
-    match_url = f"/matches/{match.id}"
-    html_content += f"""
-    <div style="text-align: center; margin-top: 28px; padding-top: 20px; border-top: 2px solid #e0e0e0;">
-        <a href="{match_url}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 6px; font-weight: 600; font-size: 15px; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
-            📋 View Full Match Details
-        </a>
-    </div>
-    
-    <div style="margin-top: 24px; padding: 16px; background: #f0f4ff; border-radius: 6px; text-align: center;">
-        <div style="font-size: 13px; color: #666; line-height: 1.5;">
-            💡 <strong>Pro Tip:</strong> Review your alliance partners' strengths and coordinate your strategy before the match!
-        </div>
-    </div>
-"""
+    # Email content complete (removed external links per user request)
     
     return html_content
 
@@ -466,7 +448,6 @@ def send_notification_for_subscription(subscription, match):
                 email_body = message
                 if event:
                     email_body += f"\n\nEvent: {event.name} ({event.code})"
-                email_body += f"\n\nView match details: {current_app.config.get('SERVER_URL', 'http://localhost:8080')}/matches/{match.id}"
                 
                 # Send with HTML version
                 success, error = send_email(
