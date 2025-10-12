@@ -1,0 +1,771 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications - FRC Scouting{% endblock %}
+
+{% block head %}
+{{ super() }}
+<style>
+    .notification-card {
+        background: var(--card-bg, white);
+        border: 1px solid var(--border-color, #e0e0e0);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .subscription-item {
+        background: var(--card-bg, white);
+        border: 1px solid var(--border-color, #e0e0e0);
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .subscription-info {
+        flex: 1;
+    }
+    
+    .subscription-actions {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .device-item {
+        background: var(--card-bg, white);
+        border: 1px solid var(--border-color, #e0e0e0);
+        border-radius: 8px;
+        padding: 12px 15px;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .device-info {
+        flex: 1;
+    }
+    
+    .device-status {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 8px;
+    }
+    
+    .device-status.active {
+        background: #28a745;
+    }
+    
+    .device-status.inactive {
+        background: #dc3545;
+    }
+    
+    .history-item {
+        background: var(--card-bg, white);
+        border-left: 3px solid var(--primary-color, #007bff);
+        padding: 12px 15px;
+        margin-bottom: 8px;
+        border-radius: 4px;
+    }
+    
+    .history-item.email-sent {
+        border-left-color: #28a745;
+    }
+    
+    .history-item.push-sent {
+        border-left-color: #17a2b8;
+    }
+    
+    .badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.85em;
+        font-weight: 500;
+    }
+    
+    .badge.badge-success {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .badge.badge-info {
+        background: #d1ecf1;
+        color: #0c5460;
+    }
+    
+    .badge.badge-warning {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .test-button {
+        padding: 6px 12px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9em;
+        transition: all 0.2s;
+    }
+    
+    .test-button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .btn-primary {
+        background: #007bff;
+        color: white;
+    }
+    
+    .btn-danger {
+        background: #dc3545;
+        color: white;
+    }
+    
+    .btn-success {
+        background: #28a745;
+        color: white;
+    }
+    
+    .btn-warning {
+        background: #ffc107;
+        color: #000;
+    }
+    
+    .form-control {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid var(--border-color, #ccc);
+        border-radius: 4px;
+        background: var(--input-bg, white);
+        color: var(--text-color, black);
+    }
+    
+    .form-group {
+        margin-bottom: 15px;
+    }
+    
+    .form-label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+    }
+    
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1>🔔 Notifications <span class="badge badge-warning" style="font-size:1em;vertical-align:middle;">Beta</span></h1>
+            <p class="text-muted">Manage your match strategy notifications and devices<br><span style="color:#ffc107;font-weight:500;">Notification features are in beta and may change.</span></p>
+        </div>
+    </div>
+
+    <!-- Create Subscription Form -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="notification-card">
+                <h3>➕ Create Notification</h3>
+                <form id="subscription-form">
+                    <div class="form-group">
+                        <label class="form-label" for="target_team_number">Team Number *</label>
+                        <select class="form-control" id="target_team_number" name="target_team_number" required>
+                            <option value="">Select a team...</option>
+                            {% for team in available_teams %}
+                            <option value="{{ team.team_number }}">{{ team.team_number }} - {{ team.team_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="notification_type">Notification Type</label>
+                        <select class="form-control" id="notification_type" name="notification_type">
+                            <option value="match_strategy">Match Strategy Reminder</option>
+                            <option value="match_reminder">Match Reminder</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="minutes_before">Notify Before Match (minutes)</label>
+                        <input type="number" class="form-control" id="minutes_before" name="minutes_before" value="20" min="5" max="120">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="email_enabled" name="email_enabled" checked>
+                            <span>Email Notifications {% if current_user.email %}({{ current_user.email }}){% else %}(No email set){% endif %}</span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="push_enabled" name="push_enabled" checked>
+                            <span>Push Notifications</span>
+                        </label>
+                    </div>
+                    
+                    <button type="submit" class="test-button btn-primary">Create Subscription</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Subscriptions -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="notification-card">
+                <h3>📋 Active Subscriptions</h3>
+                {% if subscriptions %}
+                <div id="subscriptions-list">
+                    {% for sub in subscriptions %}
+                    {% if sub.is_active %}
+                    <div class="subscription-item" data-subscription-id="{{ sub.id }}">
+                        <div class="subscription-info">
+                            <strong>Team {{ sub.target_team_number }}</strong> - {{ sub.notification_type.replace('_', ' ').title() }}
+                            <br>
+                            <small class="text-muted">
+                                {{ sub.minutes_before }} min before | 
+                                {% if sub.email_enabled %}📧 Email {% endif %}
+                                {% if sub.push_enabled %}📱 Push {% endif %}
+                            </small>
+                        </div>
+                        <div class="subscription-actions">
+                            <button class="test-button btn-warning" onclick="testSubscription({{ sub.id }})">
+                                Test
+                            </button>
+                            <button class="test-button btn-danger" onclick="removeSubscription({{ sub.id }})">
+                                Remove
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">No active subscriptions. Create one above to get started!</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Registered Devices -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="notification-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0;">📱 Registered Devices</h3>
+                    <button id="register-device-btn" class="test-button btn-primary" onclick="registerThisDevice()">
+                        ➕ Register This Device
+                    </button>
+                </div>
+                {% if devices %}
+                <div id="devices-list">
+                    {% for device in devices %}
+                    <div class="device-item" data-device-id="{{ device.id }}">
+                        <div class="device-info">
+                            <span class="device-status {% if device.is_active %}active{% else %}inactive{% endif %}"></span>
+                            <strong>{{ device.device_name or 'Unknown Device' }}</strong>
+                            <br>
+                            <small class="text-muted">
+                                Registered: {{ device.created_at.strftime('%Y-%m-%d %I:%M %p') }}
+                                {% if device.last_success %}| Last success: {{ device.last_success.strftime('%Y-%m-%d %I:%M %p') }}{% endif %}
+                            </small>
+                        </div>
+                        <div>
+                            <button class="test-button btn-danger btn-sm" onclick="removeDevice({{ device.id }})">
+                                Remove
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">No devices registered. Click the button above to register this device.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Scheduled Notifications -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="notification-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0;">📅 Scheduled Notifications</h3>
+                    <button id="refresh-schedule-btn" class="test-button btn-primary" onclick="refreshSchedule()">
+                        🔄 Refresh Schedule
+                    </button>
+                </div>
+                {% if pending_notifications %}
+                <div id="pending-list">
+                    {% for queue, subscription, match in pending_notifications %}
+                    <div class="history-item" style="border-left-color: #17a2b8;">
+                        <strong>Team {{ subscription.target_team_number }} - Match #{{ match.match_number }}</strong>
+                        <br>
+                        <small>{{ subscription.notification_type.replace('_', ' ').title() }}</small>
+                        <br>
+                        <small class="text-muted">
+                            ⏰ Will send: {{ queue.scheduled_for.strftime('%Y-%m-%d %I:%M %p') }}
+                            {% if match.scheduled_time %}
+                            | 🏆 Match time: {{ match.scheduled_time.strftime('%I:%M %p') }}
+                            {% endif %}
+                            | Status: <span class="badge badge-info">{{ queue.status }}</span>
+                        </small>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">No notifications scheduled. Create a subscription and wait for upcoming matches!</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="notification-card">
+                <h3>🧪 Test Notifications</h3>
+                <p>Send test notifications to verify your setup</p>
+                <div class="d-flex gap-2">
+                    <button class="test-button btn-success" onclick="testEmail()">
+                        Test Email
+                    </button>
+                    <button class="test-button btn-success" onclick="testPush()">
+                        Test Push
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification History -->
+    <div class="row">
+        <div class="col-12">
+            <div class="notification-card">
+                <h3>📜 Notification History</h3>
+                {% if history %}
+                <div id="history-list">
+                    {% for log in history %}
+                    <div class="history-item {% if log.email_sent %}email-sent{% endif %} {% if log.push_sent_count > 0 %}push-sent{% endif %}">
+                        <strong>{{ log.title }}</strong>
+                        {% if log.team_number %}
+                        <span class="badge badge-info" style="margin-left: 8px;">Team {{ log.team_number }}</span>
+                        {% endif %}
+                        <br>
+                        <small>{{ log.message[:100] }}{% if log.message|length > 100 %}...{% endif %}</small>
+                        <br>
+                        <small class="text-muted">
+                            ⏰ Sent: {{ log.sent_at.strftime('%Y-%m-%d %I:%M %p') }}
+                            {% if log.email_sent %} | <span class="badge badge-success">📧 Email</span>{% endif %}
+                            {% if log.push_sent_count > 0 %} | <span class="badge badge-info">📱 Push ({{ log.push_sent_count }})</span>{% endif %}
+                            {% if log.push_failed_count > 0 %} | <span class="badge badge-warning">⚠️ {{ log.push_failed_count }} failed</span>{% endif %}
+                        </small>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">No notification history yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// VAPID public key from server
+const VAPID_PUBLIC_KEY = '{{ vapid_public_key }}';
+
+// Check push notification support and permission
+async function checkPushSupport() {
+    const statusDiv = document.getElementById('push-permission-status');
+    const enableBtn = document.getElementById('enable-push-btn');
+    const disableBtn = document.getElementById('disable-push-btn');
+    const testBtn = document.getElementById('test-push-btn');
+    
+    console.log('Checking push support...');
+    
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        statusDiv.innerHTML = '<div class="alert alert-warning">⚠️ Push notifications are not supported in this browser.</div>';
+        return;
+    }
+    
+    const permission = Notification.permission;
+    console.log('Notification permission:', permission);
+    
+    if (permission === 'granted') {
+        // Check if actually subscribed
+        try {
+            // Wait a bit for service worker to be ready
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const registration = await navigator.serviceWorker.getRegistration();
+            
+            if (registration) {
+                const subscription = await registration.pushManager.getSubscription();
+                console.log('Subscription status:', subscription ? 'subscribed' : 'not subscribed');
+                
+                if (subscription) {
+                    statusDiv.innerHTML = '<div class="alert alert-success">✅ Push notifications are enabled and active</div>';
+                    disableBtn.style.display = 'inline-block';
+                    testBtn.style.display = 'inline-block';
+                    console.log('Showing disable and test buttons');
+                } else {
+                    statusDiv.innerHTML = '<div class="alert alert-warning">⚠️ Push permission granted but not registered. Click to enable.</div>';
+                    enableBtn.style.display = 'inline-block';
+                    console.log('Showing enable button');
+                }
+            } else {
+                statusDiv.innerHTML = '<div class="alert alert-warning">⚠️ Service worker not registered. Click to enable.</div>';
+                enableBtn.style.display = 'inline-block';
+                console.log('No service worker, showing enable button');
+            }
+        } catch (error) {
+            console.error('Error checking subscription:', error);
+            statusDiv.innerHTML = '<div class="alert alert-warning">⚠️ Could not check subscription status. Click to enable.</div>';
+            enableBtn.style.display = 'inline-block';
+            console.log('Error checking, showing enable button');
+        }
+    } else if (permission === 'denied') {
+        statusDiv.innerHTML = '<div class="alert alert-danger">❌ Push notifications are blocked. Please enable them in your browser settings.</div>';
+    } else {
+        statusDiv.innerHTML = '<div class="alert alert-info">ℹ️ Push notifications are not enabled yet.</div>';
+        enableBtn.style.display = 'inline-block';
+        console.log('Permission not granted, showing enable button');
+    }
+}
+
+// Register this device for push notifications
+async function registerThisDevice() {
+    await enablePush();
+}
+
+// Enable push notifications
+async function enablePush() {
+    try {
+        const permission = await Notification.requestPermission();
+        
+        if (permission !== 'granted') {
+            alert('Push notification permission was denied');
+            return;
+        }
+        
+        // Register service worker
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.ready;
+        
+        // Subscribe to push notifications
+        const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+        
+        // Get device name from user agent
+        const ua = navigator.userAgent;
+        let deviceName = 'Unknown Device';
+        if (ua.includes('Chrome')) deviceName = 'Chrome Browser';
+        else if (ua.includes('Firefox')) deviceName = 'Firefox Browser';
+        else if (ua.includes('Safari')) deviceName = 'Safari Browser';
+        else if (ua.includes('Edge')) deviceName = 'Edge Browser';
+        
+        // Build payload with subscription and device info
+        const payload = {
+            ...subscription.toJSON(),
+            device_name: deviceName
+        };
+        
+        // Send subscription to server
+        const response = await fetch('/notifications/register-device', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✅ Push notifications enabled successfully!');
+            location.reload();
+        } else {
+            alert('❌ Failed to register device: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error enabling push:', error);
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+// Disable push notifications
+async function disablePush() {
+    if (!confirm('Disable push notifications on this device?')) return;
+    
+    try {
+        // Get service worker registration
+        const registration = await navigator.serviceWorker.ready;
+        
+        // Get current subscription
+        const subscription = await registration.pushManager.getSubscription();
+        
+        if (subscription) {
+            // Unsubscribe from push
+            await subscription.unsubscribe();
+            console.log('Unsubscribed from push notifications');
+        }
+        
+        alert('✅ Push notifications disabled on this device');
+        location.reload();
+    } catch (error) {
+        console.error('Error disabling push:', error);
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+// Helper function to convert VAPID key
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+        .replace(/\-/g, '+')
+        .replace(/_/g, '/');
+    
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+// Create subscription
+document.getElementById('subscription-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const data = {
+        target_team_number: formData.get('target_team_number'),
+        notification_type: formData.get('notification_type'),
+        minutes_before: formData.get('minutes_before'),
+        email_enabled: formData.get('email_enabled') === 'on',
+        push_enabled: formData.get('push_enabled') === 'on',
+        event_code: '{{ event_code }}'
+    };
+    
+    try {
+        const response = await fetch('/notifications/subscribe', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✅ Subscription created successfully!');
+            location.reload();
+        } else {
+            alert('❌ Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    }
+});
+
+// Remove subscription
+async function removeSubscription(subscriptionId) {
+    if (!confirm('Remove this subscription?')) return;
+    
+    try {
+        const response = await fetch(`/notifications/unsubscribe/${subscriptionId}`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✅ Subscription removed');
+            location.reload();
+        } else {
+            alert('❌ Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+// Remove device
+async function removeDevice(deviceId) {
+    if (!confirm('Remove this device?')) return;
+    try {
+        const response = await fetch(`/notifications/remove-device/${deviceId}`, {
+            method: 'POST'
+        });
+        const result = await response.json();
+        if (result.success) {
+            alert('✅ Device removed');
+            // Remove device from DOM instantly
+            const deviceElem = document.querySelector(`.device-item[data-device-id='${deviceId}']`);
+            if (deviceElem) deviceElem.remove();
+            // Optionally show register button if no devices left
+            const devicesList = document.getElementById('devices-list');
+            if (devicesList && devicesList.children.length === 0) {
+                const registerBtn = document.getElementById('register-device-btn');
+                if (registerBtn) registerBtn.style.display = 'inline-block';
+            }
+        } else {
+            alert('❌ Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+// Test email
+async function testEmail() {
+    try {
+        const response = await fetch('/notifications/test-email', {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✅ ' + result.message);
+        } else {
+            alert('❌ Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+// Test push
+async function testPush() {
+    try {
+        const response = await fetch('/notifications/test-push', {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✅ ' + result.message);
+        } else {
+            alert('❌ Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+// Refresh notification schedule from FRC APIs
+async function refreshSchedule() {
+    const btn = document.getElementById('refresh-schedule-btn');
+    const originalText = btn.innerHTML;
+    
+    try {
+        // Show loading state
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Refreshing...';
+        
+        const response = await fetch('/notifications/refresh-schedule', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('✅ ' + result.message);
+            // Reload page to show updated schedule
+            window.location.reload();
+        } else {
+            alert('❌ ' + (result.error || 'Failed to refresh schedule'));
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    } catch (error) {
+        console.error('Error refreshing schedule:', error);
+        alert('❌ Error refreshing schedule: ' + error.message);
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+// Test subscription
+async function testSubscription(subscriptionId) {
+    try {
+        const response = await fetch(`/notifications/test-subscription/${subscriptionId}`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            let message = '✅ Test notification sent!\n\n';
+            if (result.email_sent) message += '📧 Email sent\n';
+            if (result.push_sent_count > 0) message += `📱 Push sent to ${result.push_sent_count} device(s)\n`;
+            if (result.email_error) message += `\n❌ Email error: ${result.email_error}`;
+            if (result.push_error) message += `\n❌ Push error: ${result.push_error}`;
+            alert(message);
+        } else {
+            alert('❌ Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('❌ Error: ' + error.message);
+    }
+}
+
+// Check if device should show register button
+async function updateRegisterButton() {
+    const registerBtn = document.getElementById('register-device-btn');
+    if (!registerBtn) return;
+    
+    try {
+        const permission = Notification.permission;
+        if (permission === 'granted') {
+            const registration = await navigator.serviceWorker.getRegistration();
+            if (registration) {
+                const subscription = await registration.pushManager.getSubscription();
+                if (!subscription) {
+                    // Permission granted but not subscribed - show register button
+                    registerBtn.style.display = 'inline-block';
+                }
+            } else {
+                // No service worker - show register button
+                registerBtn.style.display = 'inline-block';
+            }
+        } else if (permission === 'default') {
+            // Not asked yet - show register button
+            registerBtn.style.display = 'inline-block';
+        }
+    } catch (error) {
+        console.error('Error checking register button status:', error);
+        registerBtn.style.display = 'inline-block';
+    }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    // Register button is always visible, no need to check
+    console.log('Notifications page loaded');
+});
+</script>
+{% endblock %}

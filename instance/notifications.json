@@ -1,16 +1,1 @@
-{
-  "notifications": [
-    {
-      "id": 1756700121403,
-      "message": "test",
-      "level": "info",
-      "audience": "site",
-      "teams": [],
-      "users": [
-        "Seth Herod"
-      ],
-      "created": "2025-08-31T23:15:21.403898",
-      "expires": null
-    }
-  ]
-}
+{"notifications": []}

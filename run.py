@@ -81,6 +81,48 @@ if __name__ == '__main__':
             print("Attempting to initialize database...")
             initialize_database()
         
+        # Auto-create missing tables for all databases
+        try:
+            print("Checking for missing database tables...")
+            
+            # Create all tables for main database
+            db.create_all()
+            print("✅ Main database tables verified/created")
+            
+            # Create tables for misc database (notifications)
+            try:
+                from app.models_misc import NotificationSubscription, DeviceToken, NotificationLog, NotificationQueue
+                db.create_all(bind_key='misc')
+                print("✅ Misc database (notifications) tables verified/created")
+            except Exception as misc_error:
+                print(f"⚠️  Warning: Could not create misc database tables: {misc_error}")
+            
+            # Create tables for users database if using separate bind
+            try:
+                db.create_all(bind_key='users')
+                print("✅ Users database tables verified/created")
+            except Exception as users_error:
+                print(f"⚠️  Warning: Could not create users database tables: {users_error}")
+            
+            # Create tables for pages database if using separate bind
+            try:
+                db.create_all(bind_key='pages')
+                print("✅ Pages database tables verified/created")
+            except Exception as pages_error:
+                print(f"⚠️  Warning: Could not create pages database tables: {pages_error}")
+            
+            # Create tables for APIs database if using separate bind
+            try:
+                db.create_all(bind_key='apis')
+                print("✅ APIs database tables verified/created")
+            except Exception as apis_error:
+                print(f"⚠️  Warning: Could not create APIs database tables: {apis_error}")
+            
+            print("Database table verification complete!")
+            
+        except Exception as table_error:
+            print(f"⚠️  Warning: Error during table verification: {table_error}")
+        
         # Clear old failed login attempts on startup (especially important after updates)
         try:
             from app.models import LoginAttempt, db
@@ -395,6 +437,14 @@ if __name__ == '__main__':
     security_maintenance_thread = threading.Thread(target=security_maintenance_worker, daemon=True)
     security_maintenance_thread.start()
     print("Started security maintenance thread (1-hour intervals)")
+    
+    # Start notification worker thread
+    try:
+        from app.utils.notification_worker import start_notification_worker
+        notification_worker_thread = start_notification_worker(app)
+        print("🔔 Started notification worker thread (processes every minute, updates every 5-10 min)")
+    except Exception as e:
+        print(f"Warning: Could not start notification worker: {e}")
     
     # Multi-server sync services removed - keeping only normal user functionality
     

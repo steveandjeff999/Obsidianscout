@@ -198,6 +198,16 @@ body.topbar-fixed main { padding-top: 0.75rem; }
 .dark-mode .sidebar .nav-link.active { background: rgba(255,255,255,.12); color: var(--bs-primary); }
 .dark-mode .user-mini { background: rgba(255,255,255,.03); color: rgba(255,255,255,.9); }
 
+/* Make category headers (group titles / toggle buttons) behave like nav links on hover in dark mode
+   Some theme variables can make the default .btn-toggle:hover background too bright in dark themes.
+   Explicitly override here so hover uses the same subtle white tint as nav links. */
+.dark-mode .btn-toggle:hover,
+.dark-mode .nav-group-title:hover,
+.dark-mode .sidebar .btn-toggle:hover {
+	background: rgba(255,255,255,.06) !important;
+	color: rgba(255,255,255,.92) !important;
+}
+
 /* Topbar dark mode adjustments so the sidebar toggle affects the top bar */
 .dark-mode .topbar {
 	background: var(--card-bg);

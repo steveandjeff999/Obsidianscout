@@ -1,10 +1,10 @@
 {
   "game_name": "REBUILT",
-  "season": 2026,
+  "season": 2025,
   "version": "1.0.0",
   "alliance_size": 3,
   "scouting_stations": 6,
-  "current_event_code": "arsea",
+  "current_event_code": "MIBRO1",
   "match_types": [
     "Practice",
     "Qualification",

@@ -224,6 +224,8 @@ class Match(ConcurrentModelMixin, db.Model):
     blue_score = db.Column(db.Integer)
     winner = db.Column(db.String(10))  # 'red', 'blue', or 'tie'
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    scheduled_time = db.Column(db.DateTime, nullable=True, index=True)  # Scheduled match start time from API
+    predicted_time = db.Column(db.DateTime, nullable=True)  # Predicted start time from TBA
     scouting_team_number = db.Column(db.Integer, nullable=True)
     scouting_data = db.relationship('ScoutingData', backref='match', lazy=True)
     
