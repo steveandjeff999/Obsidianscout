@@ -193,3 +193,106 @@ function isStaticAsset(url) {
   const pathname = url.pathname;
   return /\.(?:js|css|png|jpg|jpeg|svg|gif|webp|woff2?|ttf|eot|json|map)$/.test(pathname) || pathname.startsWith('/static/');
 }
+
+// Push Notification handlers
+self.addEventListener('push', event => {
+  console.log('Push notification received:', event);
+  
+  let notificationData = {
+    title: 'ObsidianScout Notification',
+    body: 'You have a new notification',
+    icon: '/static/img/icon-192.png',
+    badge: '/static/img/badge-72.png',
+    data: {}
+  };
+  
+  // Parse notification data from push event
+  if (event.data) {
+    try {
+      const payload = event.data.json();
+      notificationData = {
+        title: payload.title || notificationData.title,
+        body: payload.body || notificationData.body,
+        icon: payload.icon || notificationData.icon,
+        badge: payload.badge || notificationData.badge,
+        data: payload.data || {},
+        tag: payload.data?.type || 'general',
+        requireInteraction: false,
+        timestamp: payload.timestamp ? new Date(payload.timestamp).getTime() : Date.now()
+      };
+    } catch (error) {
+      console.error('Error parsing push data:', error);
+    }
+  }
+  
+  event.waitUntil(
+    self.registration.showNotification(notificationData.title, {
+      body: notificationData.body,
+      icon: notificationData.icon,
+      badge: notificationData.badge,
+      data: notificationData.data,
+      tag: notificationData.tag,
+      requireInteraction: notificationData.requireInteraction,
+      timestamp: notificationData.timestamp,
+      vibrate: [200, 100, 200]
+    })
+  );
+});
+
+// Handle notification click
+self.addEventListener('notificationclick', event => {
+  console.log('Notification clicked:', event.notification);
+  
+  event.notification.close();
+  
+  // Get the URL to open from notification data
+  let urlToOpen = '/';
+  
+  if (event.notification.data) {
+    const data = event.notification.data;
+    
+    // Build URL based on notification type
+    if (data.type === 'match_notification' && data.match_id) {
+      urlToOpen = `/matches/${data.match_id}`;
+    } else if (data.url) {
+      urlToOpen = data.url;
+    }
+  }
+  
+  // Open or focus the app window
+  event.waitUntil(
+    clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true
+    }).then(clientList => {
+      // Check if there's already a window open
+      for (let i = 0; i < clientList.length; i++) {
+        const client = clientList[i];
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          // Navigate to the URL and focus the window
+          return client.focus().then(focusedClient => {
+            return focusedClient.navigate(urlToOpen);
+          });
+        }
+      }
+      
+      // No window found, open a new one
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
+});
+
+// Handle notification close
+self.addEventListener('notificationclose', event => {
+  console.log('Notification closed:', event.notification);
+  
+  // Could send analytics data here if needed
+  // event.waitUntil(
+  //   fetch('/analytics/notification-closed', {
+  //     method: 'POST',
+  //     body: JSON.stringify({ tag: event.notification.tag })
+  //   })
+  // );
+});

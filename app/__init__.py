@@ -592,7 +592,9 @@ def create_app(test_config=None):
         SQLALCHEMY_BINDS={
             'users': 'sqlite:///' + os.path.join(app.instance_path, 'users.db'),
             # Dedicated database for user-created pages/widgets
-            'pages': 'sqlite:///' + os.path.join(app.instance_path, 'pages.db')
+            'pages': 'sqlite:///' + os.path.join(app.instance_path, 'pages.db'),
+            # Dedicated database for notifications and misc features
+            'misc': 'sqlite:///' + os.path.join(app.instance_path, 'misc.db')
         },
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SQLALCHEMY_ENGINE_OPTIONS={
@@ -726,7 +728,7 @@ def create_app(test_config=None):
     # Universal sync system removed - keeping only normal user features
 
     # Import and register blueprints
-    from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, assistant, integrity, pit_scouting, scouting_alliances, setup, search, db_admin, sync_api, update_monitor
+    from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, assistant, integrity, pit_scouting, scouting_alliances, setup, search, db_admin, sync_api, update_monitor, notifications
     # Register new team trends route (lightweight analytics + prediction)
     try:
         from app.routes import team_trends
@@ -753,6 +755,7 @@ def create_app(test_config=None):
     app.register_blueprint(setup.bp)
     app.register_blueprint(search.bp)
     app.register_blueprint(db_admin.db_admin_bp)
+    app.register_blueprint(notifications.bp)
     # Register team_trends blueprint if available
     if team_trends:
         try:
@@ -794,11 +797,24 @@ def create_app(test_config=None):
     def service_worker():
         # Prefer a root-level sw.js (project root) so service worker can be placed at repo root.
         # Fall back to static folder if root-level sw.js is not present.
-        possible_root = os.path.join(app.root_path, 'sw.js')
+        import os.path
+        root_path = os.path.abspath(os.path.join(app.root_path, '..'))
+        possible_root = os.path.join(root_path, 'sw.js')
+        
         if os.path.exists(possible_root):
-            response = send_from_directory(app.root_path, 'sw.js')
+            response = send_from_directory(root_path, 'sw.js')
         else:
-            response = send_from_directory(app.static_folder, 'sw.js')
+            # Check in static folder
+            static_sw = os.path.join(app.static_folder, 'sw.js')
+            if os.path.exists(static_sw):
+                response = send_from_directory(app.static_folder, 'sw.js')
+            else:
+                # Last resort - return error
+                from flask import abort
+                abort(404)
+        
+        # Set proper MIME type for JavaScript
+        response.headers['Content-Type'] = 'application/javascript; charset=utf-8'
         # Prevent caching of service worker to ensure updates are loaded
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'

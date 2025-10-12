@@ -939,6 +939,7 @@
                 <div class="nav-group-items" id="group-community-items">
                 <a class="nav-link {% if request.endpoint == 'main.users_page' %}active{% endif %}" href="{{ url_for('main.users_page') }}"><i class="fas fa-users"></i><span>Users</span></a>
                 <a class="nav-link {% if request.endpoint == 'main.chat_page' %}active{% endif %}" href="{{ url_for('main.chat_page') }}"><i class="fas fa-comments"></i><span>Chat <span id="chatUnreadBadge" class="badge bg-danger ms-1" style="display:none;">0</span></span></a>
+                <a class="nav-link {% if request.endpoint == 'notifications.index' %}active{% endif %}" href="{{ url_for('notifications.index') }}"><i class="fas fa-bell"></i><span>Notifications</span></a>
                 <a class="nav-link {% if request.endpoint == 'main.sponsors' %}active{% endif %}" href="{{ url_for('main.sponsors') }}"><i class="fas fa-handshake"></i><span>Sponsors</span></a>
                 <a class="nav-link {% if request.endpoint == 'graphs.scout_leaderboard' %}active{% endif %}" href="{{ url_for('graphs.scout_leaderboard') }}"><i class="fas fa-medal"></i><span>Scout Leaderboard</span></a>
                 </div>
