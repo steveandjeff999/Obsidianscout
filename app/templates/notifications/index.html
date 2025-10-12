@@ -174,6 +174,16 @@
         </div>
     </div>
 
+    <!-- HTTPS Disclaimer for Push Notifications -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="alert alert-info alert-dismissible fade show" role="alert">
+                <strong>Note:</strong> Push notifications require a secure (HTTPS) connection in most browsers and will not work on plain HTTP. For full push functionality, access this site over HTTPS. Email notifications require that you have a valid email address set in your profile.
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
     <!-- Create Subscription Form -->
     <div class="row mb-4">
         <div class="col-12">
@@ -243,10 +253,10 @@
                             </small>
                         </div>
                         <div class="subscription-actions">
-                            <button class="test-button btn-warning" onclick="testSubscription({{ sub.id }})">
+                            <button class="test-button btn-warning" onclick="testSubscription('{{ sub.id }}')">
                                 Test
                             </button>
-                            <button class="test-button btn-danger" onclick="removeSubscription({{ sub.id }})">
+                            <button class="test-button btn-danger" onclick="removeSubscription('{{ sub.id }}')">
                                 Remove
                             </button>
                         </div>
@@ -285,7 +295,7 @@
                             </small>
                         </div>
                         <div>
-                            <button class="test-button btn-danger btn-sm" onclick="removeDevice({{ device.id }})">
+                            <button class="test-button btn-danger btn-sm" onclick="removeDevice('{{ device.id }}')">
                                 Remove
                             </button>
                         </div>
