@@ -5,7 +5,7 @@
 {% block content %}
 <div class="container">
   <h1>Team Trends</h1>
-  <p>Enter a team number to view recent trends and a simple prediction.</p>
+  <p>Enter one or more team numbers (comma-separated) to overlay multiple teams for comparison.</p>
   {% if error %}
     <div class="alert alert-danger">{{ error }}</div>
   {% endif %}
@@ -16,20 +16,20 @@
         <span class="input-group-text"><i class="fas fa-search"></i></span>
         <input type="search" id="team-search" class="form-control form-control-sm" placeholder="Search teams by number or name" aria-label="Search teams">
       </div>
-      <select class="form-select" id="team_number" name="team_number" required>
-        <option value="">-- Select Team --</option>
+      <select class="form-select team-select" id="teams" name="teams" multiple size="8">
         {% for t in teams %}
-        <option value="{{ t.team_number }}">{{ t.team_number }} - {{ t.team_name or 'Unknown' }}</option>
+        <option value="{{ t.team_number }}" {% if selected_team_numbers and t.team_number in selected_team_numbers %}selected{% endif %}>{{ t.team_number }} - {{ t.team_name or 'Unknown' }}</option>
         {% endfor %}
       </select>
+      <div class="form-text">Tip: hold Ctrl/Cmd to select multiple. You can also paste comma-separated values into the search box and press Analyze.</div>
     </div>
     <button class="btn btn-primary" type="submit">Analyze</button>
   </form>
 </div>
   <script>
   document.addEventListener('DOMContentLoaded', function() {
-    const search = document.getElementById('team-search');
-    const select = document.getElementById('team_number');
+  const search = document.getElementById('team-search');
+  const select = document.getElementById('teams');
     if (!search || !select) return;
 
     function normalize(s) { return (s || '').toString().toLowerCase().trim(); }
@@ -38,7 +38,6 @@
       const q = normalize(search.value);
       const options = Array.from(select.options);
       options.forEach(opt => {
-        if (!opt.value) return; // keep placeholder
         const txt = normalize(opt.textContent || opt.innerText);
         const parts = txt.split('-');
         const num = parts[0] ? parts[0].trim() : '';
@@ -48,9 +47,8 @@
         opt.style.display = match ? '' : 'none';
       });
 
-      // If selected option was hidden by the filter, reset
-      const current = select.options[select.selectedIndex];
-      if (current && current.hidden) select.value = '';
+  // If selected option(s) were hidden by the filter, deselect them
+  Array.from(select.options).forEach(o => { if (o.hidden) o.selected = false; });
 
       // Auto-select if exactly one visible option
       const visible = options.filter(o => o.value && !o.hidden);
@@ -61,6 +59,60 @@
 
     function debounce(fn, wait) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), wait); }; }
     search.addEventListener('input', debounce(filterOptions, 150));
+
+    // Allow pasted comma-separated values to pre-select options
+    search.addEventListener('paste', function(e) {
+      setTimeout(() => {
+        const text = (search.value || '').trim();
+        if (text.includes(',')) {
+          const parts = text.split(',').map(s => s.trim()).filter(Boolean);
+          const selectEl = document.getElementById('teams');
+          if (!selectEl) return;
+          Array.from(selectEl.options).forEach(opt => {
+            opt.selected = parts.includes(String(opt.value));
+          });
+          // If Select2 is initialized, notify it of the change
+          try { if (window.$ && typeof window.$ === 'function') { window.$(selectEl).trigger('change'); } } catch (e) {}
+        }
+      }, 50);
+    });
   });
   </script>
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Initialize Select2 for #teams to match /graphs behavior (searchable, dropdown multi-select)
+  try {
+    const teamConfig = {
+      placeholder: 'Search and select teams...',
+      allowClear: true,
+      closeOnSelect: false,
+      dropdownCssClass: 'select2-dropdown-large',
+      selectionCssClass: 'select2-selection-large',
+      templateResult: function(team) {
+        if (!team.id) return team.text;
+        const parts = (team.text || '').split(' - ');
+        return $('<span><strong class="text-primary">' + (parts[0] || '') + '</strong>' + (parts[1] ? ' - ' + parts[1] : '') + '</span>');
+      },
+      templateSelection: function(team) {
+        if (!team.id) return team.text;
+        const teamNumber = (team.text || '').split(' - ')[0];
+        if (window.innerWidth < 768) return teamNumber;
+        return team.text;
+      },
+      sorter: function(data) { return data.sort(function(a, b) { return (a.text > b.text) ? 1 : -1; }); }
+    };
+
+    if (typeof window.initSelect2Mobile === 'function') {
+      window.initSelect2Mobile('#teams', teamConfig);
+    } else if (window.$ && window.$.fn && window.$.fn.select2) {
+      window.$('#teams').select2($.extend({theme: 'bootstrap-5', width: '100%'}, teamConfig));
+    }
+  } catch (e) {
+    console.warn('Select2 init failed on team_trends:', e);
+  }
+});
+</script>
+{% endblock %}
 {% endblock %}

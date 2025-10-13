@@ -232,47 +232,75 @@ def get_recommendations(event_id):
         
         # Optionally apply a small trend adjustment to the sort key.
         # If two teams are very close in average points, prefer the one trending up.
-        def _compute_recent_trend(team_obj, event_filter=None, recent_n=3):
-            """Compute a simple recent trend slope (points per match) for a team using the most recent scouting entries.
-            Returns slope (float)."""
+        def _compute_recent_trend(team_obj, event_filter=None, max_history=12):
+            """Compute a trend slope (points per match) for a team by combining slopes from
+            multiple historical windows. This avoids overreacting to a single last-match
+            value and captures both recent form and longer-term trends.
+
+            Approach:
+              - Collect up to `max_history` recent records (by timestamp).
+              - Compute simple linear slope on multiple windows (recent, mid, long).
+              - Combine slopes with weights favoring recent data but including longer history.
+
+            Returns combined slope (float).
+            """
             try:
-                # Query recent scouting entries for this team limited to recent_n, ordered by match id/time
                 from app.models import Match
+                # Fetch recent records ordered by timestamp ascending so x indexes map to time
                 q = ScoutingData.query.filter(ScoutingData.team_id == team_obj.id)
                 if event_filter:
                     q = q.join(Match).filter(Match.event_id == event_filter)
-                records = q.order_by(desc(ScoutingData.id)).limit(recent_n).all()
+                records = q.order_by(ScoutingData.timestamp).all()
                 if not records:
                     return 0.0
-                # Build y values = total points per record using same dynamic calc as analysis.calculate_team_metrics does
-                y = []
-                x = []
-                for idx, rec in enumerate(reversed(records)):
+
+                # Limit to most recent max_history entries
+                records = records[-max_history:]
+                n = len(records)
+                if n < 2:
+                    return 0.0
+
+                # Helper: compute slope for a list of numeric y values (x is implicit indices)
+                def _slope_from_ys(ys):
+                    m = len(ys)
+                    if m < 2:
+                        return 0.0
+                    xs = list(range(m))
+                    mean_x = sum(xs) / m
+                    mean_y = sum(ys) / m
+                    num = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(xs, ys))
+                    den = sum((xi - mean_x) ** 2 for xi in xs) or 1.0
+                    return num / den
+
+                # Build total points timeline
+                totals = []
+                for rec in records:
                     try:
                         auto_pts = rec._calculate_auto_points_dynamic(rec.data, game_config)
                         teleop_pts = rec._calculate_teleop_points_dynamic(rec.data, game_config)
                         endgame_pts = rec._calculate_endgame_points_dynamic(rec.data, game_config)
                         total_pts = auto_pts + teleop_pts + endgame_pts
                     except Exception:
-                        # Fallback: try numeric sum of known keys
                         total_pts = 0.0
                         if isinstance(rec.data, dict):
                             for v in rec.data.values():
                                 if isinstance(v, (int, float)):
                                     total_pts += v
-                    y.append(float(total_pts))
-                    x.append(float(idx))
-                # If less than 2 points, trend is 0
-                if len(x) < 2:
-                    return 0.0
-                # Simple linear slope on indices
-                n = len(x)
-                mean_x = sum(x) / n
-                mean_y = sum(y) / n
-                num = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x, y))
-                den = sum((xi - mean_x) ** 2 for xi in x) or 1.0
-                slope = num / den
-                return slope
+                    totals.append(float(total_pts))
+
+                # Define windows: recent (last 3-5), mid (last ~8), long (up to max_history)
+                recent_w = min(5, n)
+                mid_w = min(8, n)
+                long_w = n
+
+                recent_slope = _slope_from_ys(totals[-recent_w:]) if recent_w >= 2 else 0.0
+                mid_slope = _slope_from_ys(totals[-mid_w:]) if mid_w >= 2 else 0.0
+                long_slope = _slope_from_ys(totals[-long_w:]) if long_w >= 2 else 0.0
+
+                # Weighted combination (favor recent but include longer-term): Tunable weights
+                combined = (0.6 * recent_slope) + (0.3 * mid_slope) + (0.1 * long_slope)
+
+                return combined
             except Exception:
                 return 0.0
 
@@ -289,9 +317,11 @@ def get_recommendations(event_id):
                 # NB: team_obj may be None when team_data originates from teams_with_no_data path
                 if team_obj:
                     try:
-                        slope = _compute_recent_trend(team_obj, event_filter=event_id, recent_n=3)
-                        # Convert slope (points per match) to a small score adjustment. Weight low so it only flips very close ties.
-                        trend_adj = slope * 0.5
+                        # Use a longer history for stability
+                        slope = _compute_recent_trend(team_obj, event_filter=event_id, max_history=12)
+                        # Convert slope (points per match) to a score adjustment. Use a modest weight
+                        # and cap to avoid extreme influence from noisy data.
+                        trend_adj = max(min(slope * 1.0, 8.0), -8.0)  # cap adjustment to +/-8 points
                     except Exception:
                         trend_adj = 0.0
 

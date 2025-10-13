@@ -77,32 +77,15 @@
                                 <a href="{{ url_for('scouting.scouting_form', team_id=data.team_id, match_id=data.match_id) }}" class="btn btn-sm btn-warning" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </a>
-                                <button type="button" class="btn btn-sm btn-danger" title="Delete" 
-                                        data-bs-toggle="modal" data-bs-target="#deleteModal{{ data.id }}">
+                                <button type="button" class="btn btn-sm btn-danger double-confirm-delete" title="Delete" data-entry-id="{{ data.id }}">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
                             
-                            <!-- Delete Confirmation Modal -->
-                            <div class="modal fade" id="deleteModal{{ data.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ data.id }}" aria-hidden="true">
-                                <div class="modal-dialog">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title" id="deleteModalLabel{{ data.id }}">Confirm Delete</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                        </div>
-                                        <div class="modal-body">
-                                            Are you sure you want to delete scouting data for Team {{ data.team.team_number }} in {{ data.match.match_type }} {{ data.match.match_number }}?
-                                        </div>
-                                        <div class="modal-footer">
-                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                            <form action="{{ url_for('scouting.delete_data', id=data.id) }}" method="post">
-                                                <button type="submit" class="btn btn-danger">Delete</button>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            <!-- Hidden form for double-confirm delete behavior (scripts.js will submit on second click) -->
+                            <form id="delete-form-{{ data.id }}" action="{{ url_for('scouting.delete_data', id=data.id) }}" method="post" style="display:none;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            </form>
                         </td>
                     </tr>
                     {% endfor %}

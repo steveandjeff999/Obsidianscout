@@ -44,19 +44,56 @@ def index():
     except Exception:
         teams = []
 
-    return render_template('team_trends/index.html', teams=teams)
+    # Support pre-selection via query param ?teams=254&teams=118 or ?teams=254,118
+    selected_team_numbers = []
+    try:
+        # getlist will return multiple query params like ?teams=1&teams=2
+        qlist = request.args.getlist('teams')
+        if not qlist:
+            # fallback to comma-separated single param
+            qval = request.args.get('teams')
+            if qval:
+                qlist = [p.strip() for p in qval.split(',') if p.strip()]
+        for p in qlist:
+            try:
+                selected_team_numbers.append(int(p))
+            except Exception:
+                continue
+    except Exception:
+        selected_team_numbers = []
+
+    return render_template('team_trends/index.html', teams=teams, selected_team_numbers=selected_team_numbers)
 
 
 @bp.route('/analyze', methods=['POST'])
 def analyze_post():
-    team_number = request.form.get('team_number')
-    if not team_number:
-        return render_template('team_trends/index.html', error='Please provide a team number')
-    try:
-        team_number = int(team_number)
-    except Exception:
-        return render_template('team_trends/index.html', error='Invalid team number')
-    return _analyze_team(team_number)
+    # Accept multiple teams via multi-select named 'teams' or legacy 'team_number' comma-separated input
+    form_list = request.form.getlist('teams')
+    if not form_list:
+        # fallback to legacy single field
+        team_numbers = request.form.get('team_number')
+        if team_numbers:
+            form_list = [p.strip() for p in str(team_numbers).split(',') if p.strip()]
+
+    if not form_list:
+        return render_template('team_trends/index.html', error='Please provide at least one team number')
+
+    nums = []
+    for part in form_list:
+        try:
+            nums.append(int(part))
+        except Exception:
+            continue
+
+    if not nums:
+        return render_template('team_trends/index.html', error='No valid team numbers provided')
+
+    # If only one team, keep backward-compatible single-team analyze
+    if len(nums) == 1:
+        return _analyze_team(nums[0])
+
+    # For multiple teams, compute combined context
+    return _analyze_multiple_teams(nums)
 
 
 @bp.route('/analyze/<int:team_number>')
@@ -320,6 +357,114 @@ def _analyze_team(team_number):
     context['recent_classification'] = recent_classification
 
     return render_template('team_trends/analyze.html', **context)
+
+
+def _analyze_multiple_teams(team_numbers):
+    # Build per-team timelines and summary stats for overlaying on a single chart
+    datasets = []
+    combined_context = {
+        'team_numbers': team_numbers,
+        'datasets': [],
+        'data_points': 0
+    }
+
+    colors = ['rgba(54,162,235,1)','rgba(255,99,132,1)','rgba(75,192,192,1)','rgba(255,159,64,1)','rgba(153,102,255,1)','rgba(201,203,207,1)']
+
+    for idx, tn in enumerate(team_numbers):
+        try:
+            # Reuse the single-team analyzer to get timeline
+            # But avoid rendering templates; instead extract timeline and stats
+            team = Team.query.filter_by(team_number=tn).first()
+        except Exception:
+            team = None
+
+        try:
+            if team:
+                entries = ScoutingData.query.filter_by(team_id=team.id).order_by(ScoutingData.timestamp).all()
+            else:
+                entries = ScoutingData.query.join(Team).filter(Team.team_number == tn).order_by(ScoutingData.timestamp).all()
+        except Exception:
+            entries = []
+
+        timeline = []
+        x_vals = []
+        y_vals = []
+        for idx, entry in enumerate(entries):
+            try:
+                data = entry.data
+                total_points = None
+                if isinstance(data, dict):
+                    total_points = data.get('total_points') or data.get('tot') or data.get('points')
+                if total_points is None:
+                    numeric_values = [v for v in (data.values() if isinstance(data, dict) else []) if isinstance(v, (int, float))]
+                    total_points = sum(numeric_values) if numeric_values else 0
+                tp = float(total_points)
+                timeline.append({'timestamp': entry.timestamp.isoformat(), 'total_points': tp})
+                x_vals.append(idx)
+                y_vals.append(tp)
+            except Exception:
+                continue
+
+        # Compute simple regression and basic stats for this team's timeline
+        try:
+            slope, intercept = _simple_linear_regression(x_vals, y_vals)
+            next_x = len(x_vals)
+            predicted = slope * next_x + intercept if x_vals else 0
+        except Exception:
+            slope, intercept, predicted = 0, 0, 0
+
+        mean_val = None
+        stddev_val = None
+        cv_val = None
+        try:
+            if y_vals:
+                mean_val = mean(y_vals)
+                diffsq = [(v - mean_val) ** 2 for v in y_vals]
+                stddev_val = math.sqrt(sum(diffsq) / max(1, (len(y_vals) - 1))) if len(y_vals) > 1 else 0
+                cv_val = (stddev_val / mean_val) if mean_val else 0
+        except Exception:
+            pass
+
+        dataset = {
+            'team_number': tn,
+            'team_name': team.team_name if team else None,
+            'timeline': timeline,
+            'color': colors[idx % len(colors)],
+            'slope': slope,
+            'intercept': intercept,
+            'predicted_next': predicted,
+            'mean': mean_val,
+            'stddev': stddev_val,
+            'cv': cv_val
+        }
+        combined_context['datasets'].append(dataset)
+        combined_context['data_points'] = max(combined_context['data_points'], len(timeline))
+
+        # Log per-team computed stats for debugging/verification
+        try:
+            # Use INFO so it's visible in typical server logs; also print to stdout
+            msg = f"team_trends: team={tn} predicted_next={dataset.get('predicted_next')} mean={dataset.get('mean')} stddev={dataset.get('stddev')}"
+            current_app.logger.info(msg)
+            try:
+                print(msg)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    # Provide fallback summary keys expected by the single-team template
+    # so the analyze template can render without undefined errors when
+    # datasets (multi-team overlay) is present.
+    combined_context.setdefault('team_number', None)
+    combined_context.setdefault('team', None)
+    combined_context.setdefault('overall_mean', None)
+    combined_context.setdefault('overall_stddev', None)
+    combined_context.setdefault('overall_cv', None)
+    combined_context.setdefault('overall_classification', 'multiple teams')
+    combined_context.setdefault('recent_classification', 'multiple teams')
+    combined_context.setdefault('predicted_next', 0)
+
+    return render_template('team_trends/analyze.html', **combined_context)
 
 
 # Lightweight JSON endpoint for programmatic use

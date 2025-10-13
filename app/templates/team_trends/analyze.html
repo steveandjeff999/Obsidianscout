@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
 
-{% block title %}Team {{ team_number }} Trends{% endblock %}
+{% block title %}
+{% if datasets %}Team Trends - Multiple Teams{% else %}Team {{ team_number }} Trends{% endif %}
+{% endblock %}
 
 {% block content %}
 <div class="container">
@@ -22,33 +24,86 @@
     <div style="flex:1;min-width:320px;max-width:720px;">
       <div style="max-width:700px; margin-bottom:6px;"><canvas id="pointsChart" width="700" height="260"></canvas></div>
     </div>
+    {% if not datasets %}
     <div style="width:260px;min-width:200px;">
       <div><strong>Mean:</strong> {{ '%.1f'|format(overall_mean) if overall_mean is not none else 'N/A' }}</div>
       <div><strong>Stddev:</strong> {{ '%.1f'|format(overall_stddev) if overall_stddev is not none else 'N/A' }}</div>
       <div><strong>CV:</strong> {{ '%.2f'|format(overall_cv) if overall_cv is not none else 'N/A' }}</div>
-      <div style="margin-top:8px"><strong>Predicted next:</strong> {{ '%.1f'|format(predicted_next) }}</div>
+      <div style="margin-top:8px"><strong>Prediction:</strong> {{ '%.1f'|format(predicted_next) }}</div>
     </div>
+    {% endif %}
   </div>
 
   <h3>Timeline</h3>
-  {% if timeline %}
-    <div style="max-width:700px; margin-bottom:20px;">
-      <canvas id="pointsChart" width="700" height="300"></canvas>
+  {% if datasets %}
+    <div style="max-width:900px; margin-bottom:20px;">
+      <canvas id="pointsChart" width="900" height="300"></canvas>
     </div>
-    <table class="table table-sm table-striped">
-      <thead><tr><th>#</th><th>Timestamp</th><th>Total Points</th></tr></thead>
-      <tbody>
-        {% for item in timeline %}
-          <tr>
-            <td>{{ loop.index }}</td>
-            <td>{{ item.timestamp }}</td>
-            <td>{{ item.total_points }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="mb-3">
+      <strong>Overlaid Teams:</strong>
+      {% for ds in datasets %}
+        <span class="badge" style="background-color:{{ ds.color }}; color:#fff; margin-right:6px;">
+          {{ ds.team_number }}{% if ds.team_name %} - {{ ds.team_name }}{% endif %}
+          <small style="margin-left:6px;opacity:0.9">(prediction: {{ '%.1f'|format(ds.predicted_next | default(0)) }})</small>
+        </span>
+      {% endfor %}
+    </div>
+    <div class="mb-3">
+      <table class="table table-sm table-bordered" style="max-width:800px">
+        <thead><tr><th>Team</th><th>Prediction</th><th>Mean</th><th>Stddev</th></tr></thead>
+        <tbody>
+          {% for ds in datasets %}
+            <tr>
+              <td>{{ ds.team_number }}{% if ds.team_name %} - {{ ds.team_name }}{% endif %}</td>
+                <td>{{ '%.1f'|format(ds.predicted_next | default(0)) }}</td>
+              <td>{{ '%.1f'|format(ds.mean | default(0)) }}</td>
+              <td>{{ '%.1f'|format(ds.stddev | default(0)) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div>
+      {% for ds in datasets %}
+        <h5>Team {{ ds.team_number }} Timeline</h5>
+        {% if ds.timeline %}
+          <table class="table table-sm table-striped">
+            <thead><tr><th>#</th><th>Timestamp</th><th>Total Points</th></tr></thead>
+            <tbody>
+              {% for item in ds.timeline %}
+                <tr>
+                  <td>{{ loop.index }}</td>
+                  <td>{{ item.timestamp }}</td>
+                  <td>{{ item.total_points }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p>No scouting records found for Team {{ ds.team_number }}.</p>
+        {% endif %}
+      {% endfor %}
+    </div>
   {% else %}
-    <p>No scouting records found for this team.</p>
+    {% if timeline %}
+      <div style="max-width:700px; margin-bottom:20px;">
+        <canvas id="pointsChart" width="700" height="300"></canvas>
+      </div>
+      <table class="table table-sm table-striped">
+        <thead><tr><th>#</th><th>Timestamp</th><th>Total Points</th></tr></thead>
+        <tbody>
+          {% for item in timeline %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>{{ item.timestamp }}</td>
+              <td>{{ item.total_points }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No scouting records found for this team.</p>
+    {% endif %}
   {% endif %}
 
   <a class="btn btn-secondary" href="{{ url_for('team_trends.index') }}">New Search</a>
@@ -61,39 +116,136 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script>
     try {
-      const chartData = {{ timeline | tojson | safe }};
-      const labels = chartData.map((t, i) => `#${i+1} ${t.timestamp.split('T')[0]}`);
-      const values = chartData.map(t => t.total_points);
-      // include predicted next point as dashed point on chart
-      const predictedVal = {{ predicted_next | float }};
       const ctx = document.getElementById('pointsChart')?.getContext('2d');
-      const data = {
-        labels: labels.concat(['Predicted']),
-        datasets: [
-          {
-            label: 'Total Points',
-            data: values.concat([predictedVal]),
-            borderColor: 'rgba(54, 162, 235, 1)',
-            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+      if (!ctx) throw new Error('Chart canvas not found');
+
+      // Multi-team overlay
+      {% if datasets %}
+        // Multi-team overlay: place each team's predicted_next at its own next index
+        const datasets = {{ datasets | tojson | safe }};
+        // Determine the maximum timeline length across teams
+        let maxLen = 0;
+        datasets.forEach(d => { maxLen = Math.max(maxLen, (d.timeline || []).length); });
+        // Labels will run from #1 ... #maxLen and one extra 'Predicted' index at the end
+        const labels = [];
+        for (let i = 0; i <= maxLen; i++) {
+          let lbl = (i === maxLen) ? 'Prediction' : `#${i+1}`;
+          // Try to attach a date if any dataset has a timestamp for this index
+          if (i < maxLen) {
+            for (let d of datasets) {
+              if (d.timeline && d.timeline[i]) { lbl = `#${i+1} ${d.timeline[i].timestamp.split('T')[0]}`; break; }
+            }
+          }
+          labels.push(lbl);
+        }
+
+        // Build chart datasets with null padding and predicted value placed at index = timeline.length
+        const chartDatasets = [];
+        datasets.forEach((d, i) => {
+          const tl = d.timeline || [];
+          const dataArr = new Array(maxLen + 1).fill(null);
+          for (let j = 0; j < tl.length && j < maxLen; j++) dataArr[j] = tl[j].total_points;
+          // shared prediction index at the end
+          const predIdx = maxLen;
+
+          // main (historical) dataset: do not include prediction value here
+          const mainPointRadii = new Array(maxLen + 1).fill(3);
+          const mainPointBgs = new Array(maxLen + 1).fill(d.color || 'rgba(54,162,235,1)');
+          const mainPointBorders = new Array(maxLen + 1).fill(d.color || 'rgba(54,162,235,1)');
+          // ensure prediction slot is null for main dataset
+          const mainData = dataArr.slice();
+          mainData[predIdx] = null;
+
+          chartDatasets.push({
+            label: `Team ${d.team_number}` + (d.team_name ? ` - ${d.team_name}` : ''),
+            data: mainData,
+            borderColor: d.color || 'rgba(54,162,235,1)',
+            backgroundColor: (d.color || 'rgba(54,162,235,1)').replace('1)', '0.2)'),
             tension: 0.2,
             fill: false,
-            pointRadius: 4,
+            pointRadius: mainPointRadii,
+            pointBackgroundColor: mainPointBgs,
+            pointBorderColor: mainPointBorders,
+            pointBorderWidth: 1
+          });
+
+          // prediction connector dataset: connect last real point to prediction with dashed line
+          if (tl.length > 0) {
+            const predData = new Array(maxLen + 1).fill(null);
+            const lastIdx = Math.min(tl.length - 1, maxLen - 1);
+            predData[lastIdx] = tl[lastIdx].total_points;
+            predData[predIdx] = d.predicted_next !== undefined && d.predicted_next !== null ? d.predicted_next : null;
+
+            // styling: small/hidden point at lastIdx, highlighted point at predIdx
+            const predPointRadii = new Array(maxLen + 1).fill(0);
+            const predPointBgs = new Array(maxLen + 1).fill('rgba(0,0,0,0)');
+            const predPointBorders = new Array(maxLen + 1).fill('rgba(0,0,0,0)');
+            predPointRadii[predIdx] = 6;
+            predPointBgs[predIdx] = d.color || 'rgba(54,162,235,1)';
+            predPointBorders[predIdx] = '#ffffff';
+
+            chartDatasets.push({
+              label: `Prediction ${d.team_number}`,
+              data: predData,
+              borderColor: d.color || 'rgba(54,162,235,1)',
+              backgroundColor: 'transparent',
+              tension: 0.2,
+              fill: false,
+              spanGaps: true,
+              borderDash: [6,4],
+              pointRadius: predPointRadii,
+              pointBackgroundColor: predPointBgs,
+              pointBorderColor: predPointBorders,
+              pointBorderWidth: 2,
+              // keep prediction datasets out of the main legend by giving them empty labels
+              // but Chart.js will still show them; you can filter legend separately if desired
+            });
           }
-        ]
-      };
-      const config = {
-        type: 'line',
-        data: data,
-        options: {
-          scales: {
-            y: { beginAtZero: true }
-          },
-          plugins: {
-            legend: { display: true }
+        });
+
+        const config = {
+          type: 'line',
+          data: { labels: labels, datasets: chartDatasets },
+          options: {
+            scales: { y: { beginAtZero: true } },
+            plugins: { legend: { display: true } }
           }
-        }
-      };
-      new Chart(ctx, config);
+        };
+        new Chart(ctx, config);
+      {% else %}
+        const chartData = {{ timeline | tojson | safe }};
+        const labels = chartData.map((t, i) => `#${i+1} ${t.timestamp.split('T')[0]}`);
+        const values = chartData.map(t => t.total_points);
+        // include predicted next point as dashed point on chart
+        const predictedVal = {{ predicted_next | float if predicted_next is defined else 0 }};
+        const data = {
+          labels: labels.concat(['Predicted']),
+          datasets: [
+            {
+              label: 'Total Points',
+              data: values.concat([predictedVal]),
+              borderColor: 'rgba(54, 162, 235, 1)',
+              backgroundColor: 'rgba(54, 162, 235, 0.2)',
+              tension: 0.2,
+              fill: false,
+              pointRadius: 4,
+            }
+          ]
+        };
+        const config = {
+          type: 'line',
+          data: data,
+          options: {
+            scales: {
+              y: { beginAtZero: true }
+            },
+            plugins: {
+              legend: { display: true }
+            }
+          }
+        };
+        new Chart(ctx, config);
+      {% endif %}
     } catch(e) {
       console.warn('Chart render failed', e);
     }
