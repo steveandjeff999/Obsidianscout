@@ -684,13 +684,17 @@ def delete_data(id):
         return redirect(url_for('scouting.index'))
         
     scouting_data = ScoutingData.query.filter_by(id=id, scouting_team_number=current_user.scouting_team_number).first_or_404()
-    
+
     team_number = scouting_data.team.team_number
     match_number = scouting_data.match.match_number
-    
+
     db.session.delete(scouting_data)
     db.session.commit()
-    
+
+    # If request is AJAX or expects JSON, return JSON response
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+        return jsonify({'success': True, 'message': f'Scouting data for Team {team_number} in Match {match_number} deleted!'})
+
     flash(f'Scouting data for Team {team_number} in Match {match_number} deleted!', 'success')
     return redirect(url_for('scouting.list_data'))
 

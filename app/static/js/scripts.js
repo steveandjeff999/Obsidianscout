@@ -3005,7 +3005,48 @@ function showDeleteConfirmNotification(btn, entryId) {
         toast.querySelector('.toast-body').textContent = 'Click again to confirm delete.';
         new bootstrap.Toast(toast).show();
     } else {
-        alert('Click again to confirm delete.');
+        // Create a temporary non-blocking toast if Bootstrap is available, otherwise a console message
+        if (window.bootstrap) {
+            // Create toast container if needed
+            let container = document.getElementById('global-toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'global-toast-container';
+                container.className = 'position-fixed bottom-0 end-0 p-3';
+                container.style.zIndex = 9999;
+                document.body.appendChild(container);
+            }
+
+            const toastEl = document.createElement('div');
+            toastEl.className = 'toast align-items-center text-bg-warning border-0';
+            toastEl.setAttribute('role', 'alert');
+            toastEl.setAttribute('aria-live', 'assertive');
+            toastEl.setAttribute('aria-atomic', 'true');
+            toastEl.style.minWidth = '200px';
+
+            const toastBody = document.createElement('div');
+            toastBody.className = 'd-flex';
+            toastBody.innerHTML = `<div class="toast-body">Click again to confirm delete.</div>`;
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn-close btn-close-white me-2 m-auto';
+            btn.setAttribute('data-bs-dismiss', 'toast');
+            btn.setAttribute('aria-label', 'Close');
+
+            toastBody.appendChild(btn);
+            toastEl.appendChild(toastBody);
+            container.appendChild(toastEl);
+
+            const bsToast = new bootstrap.Toast(toastEl, { autohide: true, delay: 4000 });
+            bsToast.show();
+            // Remove element after hidden
+            toastEl.addEventListener('hidden.bs.toast', () => {
+                toastEl.remove();
+            });
+        } else {
+            console.log('Click again to confirm delete.');
+        }
     }
 }
 
