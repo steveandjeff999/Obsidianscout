@@ -29,7 +29,7 @@
       <div><strong>Mean:</strong> {{ '%.1f'|format(overall_mean) if overall_mean is not none else 'N/A' }}</div>
       <div><strong>Stddev:</strong> {{ '%.1f'|format(overall_stddev) if overall_stddev is not none else 'N/A' }}</div>
       <div><strong>CV:</strong> {{ '%.2f'|format(overall_cv) if overall_cv is not none else 'N/A' }}</div>
-      <div style="margin-top:8px"><strong>Prediction:</strong> {{ '%.1f'|format(predicted_next) }}</div>
+  <div style="margin-top:8px"><strong>Prediction:</strong> {{ '%.1f'|format(predicted_next) if predicted_next is not none else 'N/A' }}</div>
     </div>
     {% endif %}
   </div>
@@ -44,7 +44,7 @@
       {% for ds in datasets %}
         <span class="badge" style="background-color:{{ ds.color }}; color:#fff; margin-right:6px;">
           {{ ds.team_number }}{% if ds.team_name %} - {{ ds.team_name }}{% endif %}
-          <small style="margin-left:6px;opacity:0.9">(prediction: {{ '%.1f'|format(ds.predicted_next | default(0)) }})</small>
+          <small style="margin-left:6px;opacity:0.9">(prediction: {{ '%.1f'|format(ds.predicted_next if ds.predicted_next is not none else 0) }})</small>
         </span>
       {% endfor %}
     </div>
@@ -55,9 +55,9 @@
           {% for ds in datasets %}
             <tr>
               <td>{{ ds.team_number }}{% if ds.team_name %} - {{ ds.team_name }}{% endif %}</td>
-                <td>{{ '%.1f'|format(ds.predicted_next | default(0)) }}</td>
-              <td>{{ '%.1f'|format(ds.mean | default(0)) }}</td>
-              <td>{{ '%.1f'|format(ds.stddev | default(0)) }}</td>
+                <td>{{ '%.1f'|format(ds.predicted_next if ds.predicted_next is not none else 0) }}</td>
+              <td>{{ '%.1f'|format(ds.mean if ds.mean is not none else 0) }}</td>
+              <td>{{ '%.1f'|format(ds.stddev if ds.stddev is not none else 0) }}</td>
             </tr>
           {% endfor %}
         </tbody>
