@@ -589,6 +589,16 @@ function displayRecommendations() {
             warningIcon = '<i class="fas fa-exclamation-triangle text-warning me-1" title="Avoid"></i>';
         }
         
+        // Trend arrow and predicted score
+        let trendHtml = '';
+        if (team.trend_direction === 'up') {
+            trendHtml = '<i class="fas fa-arrow-up text-success me-1" title="Trending up"></i>';
+        } else if (team.trend_direction === 'down') {
+            trendHtml = '<i class="fas fa-arrow-down text-danger me-1" title="Trending down"></i>';
+        } else {
+            trendHtml = '<i class="fas fa-minus text-muted me-1" title="No recent trend"></i>';
+        }
+        const predictedHtml = team.predicted_points ? `<small class="text-muted d-block">Next: ${team.predicted_points} pts</small>` : '';
         return `
             <div class="recommendation-item border-bottom pb-2 mb-2" data-team-id="${team.team_id}">
                 <div class="d-flex justify-content-between align-items-start">
@@ -596,7 +606,8 @@ function displayRecommendations() {
                         <div class="fw-bold ${badgeClass}">${warningIcon}${rankText} - Team ${team.team_number}</div>
                         <div class="small text-muted">${team.team_name}</div>
                     </div>
-                    <div class="text-end">                    <div class="fw-bold">${team.total_points} pts</div>
+                    <div class="text-end">                    <div class="fw-bold">${trendHtml}${team.total_points} pts</div>
+                    ${predictedHtml}
                     <div class="small text-muted">
                         ${team.component_metrics_display}
                     </div>
@@ -628,15 +639,26 @@ function displayRecommendations() {
             warningIcon = '<i class="fas fa-exclamation-triangle text-warning me-1" title="Avoid"></i>';
         }
         
+        // Show flat trend for no-data teams (unless slope provided)
+        let trendHtml = '';
+        if (team.trend_direction === 'up') {
+            trendHtml = '<i class="fas fa-arrow-up text-success me-1" title="Trending up"></i>';
+        } else if (team.trend_direction === 'down') {
+            trendHtml = '<i class="fas fa-arrow-down text-danger me-1" title="Trending down"></i>';
+        } else {
+            trendHtml = '<i class="fas fa-minus text-muted me-1" title="No recent trend"></i>';
+        }
+        const predictedHtml = team.predicted_points ? `<div class="small text-muted mt-1">Next: ${team.predicted_points} pts</div>` : '';
         return `
             <div class="recommendation-item border-bottom pb-2 mb-2" data-team-id="${team.team_id}">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <div class="fw-bold ${badgeClass}">${warningIcon}Team ${team.team_number}</div>
+                        <div class="fw-bold ${badgeClass}">${warningIcon}${trendHtml}Team ${team.team_number}</div>
                         <div class="small text-muted">${team.team_name}</div>
                     </div>
                     <div class="text-end">
                         <div class="badge bg-secondary">No Data</div>
+                        ${predictedHtml}
                     </div>
                 </div>
             </div>
@@ -768,6 +790,7 @@ function populateTeamSelectionList() {
                 </div>
                 <div class="text-end">
                     <div class="fw-bold text-primary">${team.total_points} pts</div>
+                    ${team.predicted_points ? `<div class="small text-muted">Next: ${team.predicted_points} pts</div>` : ''}
                     <div class="small text-muted">${team.component_metrics_display}</div>
                     ${team.is_avoided || team.is_do_not_pick ? `<span class="badge ${badgeClass} mt-1">${team.is_do_not_pick ? 'Do Not Pick' : 'Avoid'}</span>` : ''}
                 </div>
@@ -1066,6 +1089,21 @@ body.modern-layout.dark-mode #teamSelectionList .team-selection-item {
     line-height: 1.4 !important; /* Better line spacing for readability */
     display: block !important; /* Ensure proper block display */
     margin-top: 0.15rem !important;
+}
+
+/* Trend icon sizing and alignment for recommendation list */
+.recommendation-item .fa-arrow-up,
+.recommendation-item .fa-arrow-down,
+.recommendation-item .fa-minus {
+    width: 1.1em;
+    text-align: center;
+}
+
+/* Slightly larger for modal list to increase tap target */
+.team-selection-item .fa-arrow-up,
+.team-selection-item .fa-arrow-down,
+.team-selection-item .fa-minus {
+    font-size: 1.05rem;
 }
 
 /* Mobile-specific adjustments for smaller screens */
