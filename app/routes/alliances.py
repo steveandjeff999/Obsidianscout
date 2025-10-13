@@ -441,6 +441,29 @@ def get_recommendations(event_id):
                 'is_do_not_pick': rec['is_do_not_pick'],
                 'has_no_data': rec.get('has_no_data', False)
             }
+            # Compute recent trend (slope) for client display (small, robust indicator)
+            try:
+                slope = _compute_recent_trend(rec['team'], event_filter=event_id, max_history=12)
+            except Exception:
+                slope = 0.0
+
+            # Small threshold to avoid noisy up/down flips
+            THRESHOLD = 0.05
+            if slope > THRESHOLD:
+                direction = 'up'
+            elif slope < -THRESHOLD:
+                direction = 'down'
+            else:
+                direction = 'flat'
+
+            team_data['trend_slope'] = round(float(slope), 2)
+            team_data['trend_direction'] = direction
+            # Predict next match score using average total_points plus recent slope
+            try:
+                predicted = float(team_data.get('total_points', 0)) + float(slope)
+            except Exception:
+                predicted = float(team_data.get('total_points', 0))
+            team_data['predicted_points'] = round(predicted, 1)
             result_recommendations.append(team_data)
         
         return jsonify({

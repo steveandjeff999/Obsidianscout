@@ -1,18 +1,18 @@
 {
-    "sync_server": {
-        "enabled": false,
-        "use_websocket_sync": true,
-        "base_url": "",
-        "endpoints": {
-            "upload": "/pit-scouting/upload",
-            "download": "/pit-scouting/download",
-            "sync": "/pit-scouting/sync"
-        },
-        "auth": {
-            "api_key": "",
-            "team_key": "5454"
-        },
-        "timeout": 30,
-        "retry_attempts": 3
-    }
+  "sync_server": {
+    "enabled": false,
+    "use_websocket_sync": true,
+    "base_url": "",
+    "endpoints": {
+      "upload": "/pit-scouting/upload",
+      "download": "/pit-scouting/download",
+      "sync": "/pit-scouting/sync"
+    },
+    "auth": {
+      "api_key": "[REDACTED_api_key]",
+      "team_key": "5454"
+    },
+    "timeout": 30,
+    "retry_attempts": 3
+  }
 }

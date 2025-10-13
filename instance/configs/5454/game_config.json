@@ -210,7 +210,7 @@
   },
   "api_settings": {
     "username": "jeffstumps",
-    "auth_token": "1dd5bcdb-5b9e-4269-a45d-234af783813a",
+    "auth_token": "[REDACTED_auth_token]",
     "base_url": "https://frc-api.firstinspires.org",
     "auto_sync_enabled": true
   },
