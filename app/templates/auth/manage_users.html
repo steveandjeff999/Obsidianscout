@@ -49,6 +49,7 @@
                                 <th>Username</th>
                                 <th>Team</th>
                                 <th>Roles</th>
+                                <th>Last Used</th>
                                 <th>New Password</th>
                                 <th>Status</th>
                                 <th>Actions</th>
@@ -76,6 +77,15 @@
                                             {% endfor %}
                                         </select>
                                     </td>
+                                    <td class="align-middle">
+                                        {# Display last login time or 'Never' if null. Use simple formatting to avoid introducing new filters. #}
+                                        {% if user.last_login %}
+                                            {{ user.last_login.strftime('%Y-%m-%d %H:%M:%S') }}
+                                        {% else %}
+                                            <span class="text-muted">Never</span>
+                                        {% endif %}
+                                    </td>
+
                                     <td>
                                         <input type="password" name="password" class="form-control form-control-sm" placeholder="New password..." {% if not current_user.has_role('superadmin') %}readonly{% endif %}>
                                     </td>

@@ -103,41 +103,74 @@ def ask_question():
         return jsonify({"error": "Question is required"}), 400
     # Log the question for analytics (optional)
     current_app.logger.info(f"Assistant question from {current_user.email}: {question}")
-    # Get answer from assistant
-    assistant = get_assistant()
-    answer = assistant.answer_question(question)
-    # Save both user question and assistant reply to chat history
-    from app import save_chat_message
-    import uuid
-    username = current_user.username
-    user_msg = {
-        'id': str(uuid.uuid4()),
-        'sender': username,
-        'recipient': 'assistant',
-        'text': question,
-        'timestamp': datetime.utcnow().isoformat(),
-        'owner': username,
-        'reactions': []
-    }
-    assistant_msg = {
-        'id': str(uuid.uuid4()),
-        'sender': 'assistant',
-        'recipient': username,
-        'text': answer.get('text', ''),
-        'timestamp': datetime.utcnow().isoformat(),
-        'owner': username,
-        'reactions': []
-    }
-    save_chat_message(user_msg)
-    save_chat_message(assistant_msg)
-    # Include AI config information for admin users
-    if current_user.has_role('admin'):
+    
+    try:
+        # Get answer from assistant
+        assistant = get_assistant()
+        answer = assistant.answer_question(question)
+        
+        # Ensure answer is valid
+        if answer is None:
+            answer = {
+                "text": "I apologize, but I couldn't process your question. Please try rephrasing it.",
+                "error": True
+            }
+        
+        # If answer already indicates an error, return it immediately
+        if answer.get('error'):
+            current_app.logger.warning(f"Assistant error for question '{question}': {answer.get('text')}")
+            return jsonify(answer), 200  # Return 200 with error in JSON
+        
+        # Save both user question and assistant reply to chat history
         try:
-            from app.utils.ai_helper import get_ai_config
-            answer['ai_config'] = get_ai_config()
-        except ImportError:
-            pass
-    return jsonify(answer)
+            from app import save_chat_message
+            import uuid
+            username = current_user.username
+            user_msg = {
+                'id': str(uuid.uuid4()),
+                'sender': username,
+                'recipient': 'assistant',
+                'text': question,
+                'timestamp': datetime.utcnow().isoformat(),
+                'owner': username,
+                'reactions': []
+            }
+            assistant_msg = {
+                'id': str(uuid.uuid4()),
+                'sender': 'assistant',
+                'recipient': username,
+                'text': answer.get('text', ''),
+                'timestamp': datetime.utcnow().isoformat(),
+                'owner': username,
+                'reactions': []
+            }
+            save_chat_message(user_msg)
+            save_chat_message(assistant_msg)
+        except Exception as e:
+            # Don't fail the whole request if chat history fails
+            current_app.logger.error(f"Error saving chat history: {e}")
+        
+        # Include AI config information for admin users
+        if current_user.has_role('admin'):
+            try:
+                from app.utils.ai_helper import get_ai_config
+                answer['ai_config'] = get_ai_config()
+            except ImportError:
+                pass
+        
+        return jsonify(answer)
+        
+    except Exception as e:
+        # Catch all exceptions and return JSON error
+        error_message = f"I encountered an error processing your question: {str(e)}"
+        current_app.logger.error(f"Assistant error for '{question}': {str(e)}", exc_info=True)
+        
+        return jsonify({
+            "text": error_message,
+            "error": True,
+            "error_type": type(e).__name__,
+            "suggestion": "Please try asking your question in a different way, or ask about team stats, matches, or scouting information."
+        }), 200  # Return 200 status with error in JSON, not 500
 
 @bp.route('/visualize', methods=['POST'])
 @login_required

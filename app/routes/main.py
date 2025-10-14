@@ -93,10 +93,20 @@ def index():
     else:
         matches = []  # No matches if no current event is set
     
-    scout_entries = ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).order_by(ScoutingData.timestamp.desc()).limit(5).all()
-    
-    # Get total count of scouting entries for the dashboard
-    total_scout_entries = ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).count()
+    # Only show scouting entries associated with the current event
+    if current_event:
+        # Start with entries for matches in the current event
+        base_q = ScoutingData.query.join(Match).filter(Match.event_id == current_event.id)
+        # Keep the original behavior of scoping to the user's scouting_team_number (may be None)
+        base_q = base_q.filter(ScoutingData.scouting_team_number == current_user.scouting_team_number)
+        scout_entries = base_q.order_by(ScoutingData.timestamp.desc()).limit(5).all()
+
+        # Get total count of scouting entries for the current event
+        total_scout_entries = base_q.count()
+    else:
+        # No configured event -> show no entries
+        scout_entries = []
+        total_scout_entries = 0
     
     return render_template('index.html', 
                           game_config=game_config,
