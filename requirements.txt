@@ -54,6 +54,7 @@ wsproto==1.2.0
 GitPython==3.1.44
 markdown2
 fuzzywuzzy
+scikit-learn  # optional: enables TF-IDF semantic search in doc summarizer
 waitress==3.0.1
 eventlet
 Flask-Mail>=0.9.1
