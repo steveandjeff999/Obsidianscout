@@ -110,6 +110,24 @@ EXAMPLES = [
     ('qual 42', 'match_results'),
     ('playoff 5', 'match_results'),
     ('practice 2', 'match_results'),
+    
+    # Trend analysis
+    ('trends for team 5454', 'team_trends'),
+    ('is team 254 improving', 'team_trends'),
+    ('team 1234 performance over time', 'team_trends'),
+    ('trajectory of team 118', 'team_trends'),
+    
+    # Predictions
+    ('predict team 5454 performance', 'team_prediction'),
+    ('will team 254 win', 'match_prediction'),
+    ('who will win match 5', 'match_prediction'),
+    ('forecast for team 118', 'team_prediction'),
+    
+    # Advanced analytics
+    ('consistency of team 5454', 'consistency_analysis'),
+    ('peak performance for team 254', 'peak_analysis'),
+    ('weaknesses of team 1234', 'weakness_analysis'),
+    ('strengths of team 118', 'strength_analysis'),
     ('qualification match 42', 'match_results'),
     ('playoff match 5', 'match_results'),
     ('practice match 1', 'match_results'),

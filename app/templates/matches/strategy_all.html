@@ -49,11 +49,11 @@
                         </div>
                         <div>
                             {% if s.predicted_winner == 'red' %}
-                                <span class="badge bg-danger">Red</span>
+                                <span class="badge bg-danger winner-badge"><i class="fas fa-flag me-1" aria-hidden="true"></i>Red</span>
                             {% elif s.predicted_winner == 'blue' %}
-                                <span class="badge bg-primary">Blue</span>
+                                <span class="badge bg-primary winner-badge"><i class="fas fa-flag me-1" aria-hidden="true"></i>Blue</span>
                             {% else %}
-                                <span class="badge bg-secondary">TBD</span>
+                                <span class="badge bg-secondary winner-badge"><i class="fas fa-question me-1" aria-hidden="true"></i>TBD</span>
                             {% endif %}
                         </div>
                     </div>
@@ -178,6 +178,18 @@ function openMatchStrategy(matchId) {
 .team-badge { max-width: 10.5rem; display: inline-block; vertical-align: middle; }
 .team-badge-link, .team-badge-text { display: inline-block; max-width: 6rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 .team-badge-sub { max-width: 4rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+
+/* Winner badge styling: ensure high contrast in dark mode and add an icon for quick scanning */
+.winner-badge { font-weight: 600; }
+.winner-badge .fa-flag { transform: translateY(0.04em); }
+
+/* Strong dark-mode overrides for the winner badge so it remains readable even when theme variables change */
+body.dark-mode .winner-badge.bg-danger { background-color: #b12d2d !important; color: #fff !important; box-shadow: 0 1px 0 rgba(0,0,0,0.4) inset; }
+body.dark-mode .winner-badge.bg-primary { background-color: #1f6fb8 !important; color: #fff !important; box-shadow: 0 1px 0 rgba(0,0,0,0.4) inset; }
+body.dark-mode .winner-badge.bg-secondary { background-color: #5a5a5a !important; color: #fff !important; }
+
+/* Make the small light badges used for team numbers darker on dark mode so text remains readable */
+body.dark-mode .team-badge.bg-light { background-color: rgba(255,255,255,0.06) !important; color: #e6e6e6 !important; border-color: rgba(255,255,255,0.06) !important; }
 
 @media (max-width: 768px) {
     .team-badge { max-width: 8.5rem; }

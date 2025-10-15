@@ -51,6 +51,7 @@ class Assistant:
             'blue alliance': 'The Blue Alliance is a popular FRC data platform providing match schedules, results, and team statistics.',
             'chief delphi': 'Chief Delphi is the primary online forum and community hub for FRC teams worldwide.'
         }
+        
         # Define common question patterns and their handler methods
         self.patterns = [
             # PRIMARY COMPARISON - Must be first to catch short formats like "5454 and 16"
@@ -83,6 +84,30 @@ class Assistant:
             # Short forms like 'qual 5' or 'playoff 3' (without the word 'match')
             (r'^(?:(practice|qual|qualification|playoff|elim|elimination)\s+)(\d+)$', self._handle_match_results),
             
+            # Trend analysis patterns
+            (r'(?:trend|trends|trajectory|progression|improvement)\s+(?:for\s+)?(?:team\s+)?(\d+)', self.analyze_team_trends),
+            (r'(?:is|are)\s+(?:team\s+)?(\d+)\s+(?:improving|getting better|declining|getting worse)', self.analyze_team_trends),
+            (r'(?:team\s+)?(\d+)\s+(?:over time|performance history|historical)', self.analyze_team_trends),
+            
+            # Prediction patterns
+            (r'(?:predict|prediction|forecast)\s+(?:for\s+)?(?:team\s+)?(\d+)', self.predict_team_performance),
+            (r'(?:will|can)\s+(?:team\s+)?(\d+)\s+(?:win|beat|defeat)', self.predict_match_outcome),
+            (r'(?:who will win|winner prediction|match prediction)\s+(?:match\s+)?(\d+)', self.predict_match_winner),
+            
+            # Historical comparison patterns
+            (r'(?:compare|contrast)\s+(?:team\s+)?(\d+)\s+(?:to\s+)?(?:last\s+)?(year|season|event)', self.compare_historical),
+            (r'(?:team\s+)?(\d+)\s+(?:vs|versus)\s+(?:last\s+)?(year|season|event)', self.compare_historical),
+            
+            # Advanced analytics patterns
+            (r'(?:consistency|reliable|reliability)\s+(?:of\s+)?(?:team\s+)?(\d+)', self.analyze_consistency),
+            (r'(?:peak|best|optimal)\s+(?:performance|match)\s+(?:for\s+)?(?:team\s+)?(\d+)', self.find_peak_performance),
+            (r'(?:weak|weakness|weaknesses)\s+(?:of\s+)?(?:team\s+)?(\d+)', self.analyze_weaknesses),
+            (r'(?:strength|strengths)\s+(?:of\s+)?(?:team\s+)?(\d+)', self.analyze_strengths),
+            
+            # What-if and scenario patterns
+            (r'(?:what if|if)\s+(?:team\s+)?(\d+)\s+(?:and|&)\s+(?:team\s+)?(\d+)\s+(?:team up|alliance|together)', self.predict_alliance),
+            (r'(?:alliance|team up)\s+(?:with|between)\s+(?:team\s+)?(\d+)\s+(?:and|&)\s+(?:team\s+)?(\d+)', self.predict_alliance),
+            
             # Event stats patterns
             (r'(?:event|competition|tournament)\s+(?:stats|statistics|data|info|results)(?:\s+for\s+(.+))?', self.get_event_stats),
             (r'(?:how is|how was) the (?:event|competition|tournament)(?:\s+(.+))?', self.get_event_stats),
@@ -106,6 +131,14 @@ class Assistant:
             (['api', 'api docs', 'explain api', 'how api works'], self.explain_api_docs),
             (['role', 'roles', 'user roles', 'user role', 'permissions'], self.get_user_roles)
         ]
+    
+    def _get_scouting_team_number(self):
+        """Safely get scouting team number - returns None if not in user context (e.g., during testing)."""
+        try:
+            from flask_login import current_user
+            return current_user.scouting_team_number if hasattr(current_user, 'scouting_team_number') else None
+        except:
+            return None
     
     def _get_context(self):
         """
@@ -222,7 +255,14 @@ class Assistant:
                     'match_results': self.get_match_results,
                     'team_comparison': self.compare_teams,
                     'best_teams': self.get_best_teams_for_metric,
-                    'team_last_match': self.get_team_last_match
+                    'team_last_match': self.get_team_last_match,
+                    'team_trends': self.analyze_team_trends,
+                    'team_prediction': self.predict_team_performance,
+                    'match_prediction': self.predict_match_winner,
+                    'consistency_analysis': self.analyze_consistency,
+                    'peak_analysis': self.find_peak_performance,
+                    'weakness_analysis': self.analyze_weaknesses,
+                    'strength_analysis': self.analyze_strengths
                 }
                 handler = intent_map.get(intent)
                 if handler:
@@ -293,6 +333,23 @@ class Assistant:
                         if m:
                             team_num = m.group(1) or m.group(2)
                             ans = handler(team_num)
+                            self._update_context(original_question, ans, team_numbers, mentioned_metrics)
+                            return ans
+                    elif intent in ['team_trends', 'team_prediction', 'consistency_analysis', 
+                                   'peak_analysis', 'weakness_analysis', 'strength_analysis']:
+                        # Extract team number for single-team analysis
+                        m = re.search(r'team\s*(\d{1,4})|(?:^|\s)(\d{1,4})(?:\s|$)', question)
+                        if m:
+                            team_num = m.group(1) or m.group(2)
+                            ans = handler(team_num)
+                            self._update_context(original_question, ans, team_numbers, mentioned_metrics)
+                            return ans
+                    elif intent == 'match_prediction':
+                        # Extract match number
+                        m = re.search(r'match\s*(\d{1,4})|(?:^|\s)(\d{1,4})(?:\s|$)', question)
+                        if m:
+                            match_num = m.group(1) or m.group(2)
+                            ans = handler(match_num)
                             self._update_context(original_question, ans, team_numbers, mentioned_metrics)
                             return ans
                     else:
@@ -964,6 +1021,515 @@ class Assistant:
             "team's administrator or refer to the USER_ROLES_AND_PERMISSIONS.md documentation."
         )
         return {"text": text, "topic": "user_roles", "formatted": True}
+    
+    def analyze_team_trends(self, team_number: str) -> Dict[str, Any]:
+        """Analyze performance trends and trajectory for a team over time."""
+        try:
+            team = Team.query.filter_by(team_number=int(team_number)).first()
+            if not team:
+                return {"text": f"Team {team_number} not found in the database."}
+            
+            # Get all scouting entries ordered by match
+            scouting_team_num = self._get_scouting_team_number()
+            query = ScoutingData.query.filter_by(team_id=team.id)
+            if scouting_team_num:
+                query = query.filter_by(scouting_team_number=scouting_team_num)
+            entries = query.join(Match).order_by(Match.match_number).all()
+            
+            if len(entries) < 3:
+                return {"text": f"Not enough data to analyze trends for Team {team_number}. Need at least 3 matches."}
+            
+            # Calculate trends over time
+            match_scores = []
+            for entry in entries:
+                # Use calculate_metric to get point values
+                auto = entry.calculate_metric('apt') or 0
+                teleop = entry.calculate_metric('tpt') or 0
+                endgame = entry.calculate_metric('ept') or 0
+                total = entry.calculate_metric('tot') or (auto + teleop + endgame)
+                match_scores.append({
+                    'match': entry.match_id,
+                    'match_number': entry.match.match_number if entry.match else 0,
+                    'total': total,
+                    'score': total,  # Add for visualizer compatibility
+                    'auto': auto,
+                    'teleop': teleop,
+                    'endgame': endgame
+                })
+            
+            # Analyze trend direction
+            first_half_avg = sum(m['total'] for m in match_scores[:len(match_scores)//2]) / (len(match_scores)//2)
+            second_half_avg = sum(m['total'] for m in match_scores[len(match_scores)//2:]) / (len(match_scores) - len(match_scores)//2)
+            
+            trend_diff = second_half_avg - first_half_avg
+            trend_pct = (trend_diff / max(first_half_avg, 1)) * 100
+            
+            # Build response
+            response_text = f"📈 **Trend Analysis for Team {team_number}**\n\n"
+            
+            if trend_pct > 15:
+                response_text += f"✅ **Trajectory:** Strongly improving (+{trend_pct:.1f}%)\n"
+                response_text += f"Team {team_number} is showing significant improvement over their matches. "
+                response_text += f"Average score increased from {first_half_avg:.1f} to {second_half_avg:.1f} points.\n\n"
+            elif trend_pct > 5:
+                response_text += f"📊 **Trajectory:** Steadily improving (+{trend_pct:.1f}%)\n"
+                response_text += f"Team {team_number} is getting better with each match. "
+                response_text += f"Average score increased from {first_half_avg:.1f} to {second_half_avg:.1f} points.\n\n"
+            elif trend_pct > -5:
+                response_text += f"➡️ **Trajectory:** Stable ({trend_pct:+.1f}%)\n"
+                response_text += f"Team {team_number} is performing consistently across matches with minimal variation.\n\n"
+            elif trend_pct > -15:
+                response_text += f"⚠️ **Trajectory:** Declining ({trend_pct:.1f}%)\n"
+                response_text += f"Team {team_number} performance has decreased from {first_half_avg:.1f} to {second_half_avg:.1f} points.\n\n"
+            else:
+                response_text += f"❌ **Trajectory:** Significantly declining ({trend_pct:.1f}%)\n"
+                response_text += f"Team {team_number} is showing concerning performance drop.\n\n"
+            
+            # Recent performance
+            recent = match_scores[-3:]
+            recent_avg = sum(m['total'] for m in recent) / len(recent)
+            response_text += f"🔍 **Recent Form (Last 3 Matches):** {recent_avg:.1f} avg points\n\n"
+            
+            # Component analysis
+            auto_trend = sum(m['auto'] for m in match_scores[len(match_scores)//2:]) / (len(match_scores) - len(match_scores)//2) - \
+                        sum(m['auto'] for m in match_scores[:len(match_scores)//2]) / (len(match_scores)//2)
+            teleop_trend = sum(m['teleop'] for m in match_scores[len(match_scores)//2:]) / (len(match_scores) - len(match_scores)//2) - \
+                          sum(m['teleop'] for m in match_scores[:len(match_scores)//2]) / (len(match_scores)//2)
+            
+            response_text += "**Component Trends:**\n"
+            if auto_trend > 2:
+                response_text += f"  • Autonomous: Improving significantly (+{auto_trend:.1f})\n"
+            elif auto_trend > 0:
+                response_text += f"  • Autonomous: Slightly improving (+{auto_trend:.1f})\n"
+            else:
+                response_text += f"  • Autonomous: Declining ({auto_trend:.1f})\n"
+            
+            if teleop_trend > 5:
+                response_text += f"  • Teleoperated: Major improvement (+{teleop_trend:.1f})\n"
+            elif teleop_trend > 0:
+                response_text += f"  • Teleoperated: Improving (+{teleop_trend:.1f})\n"
+            else:
+                response_text += f"  • Teleoperated: Declining ({teleop_trend:.1f})\n"
+            
+            # Calculate linear regression for trend line
+            x_vals = list(range(len(match_scores)))
+            y_vals = [m['total'] for m in match_scores]
+            
+            # Simple linear regression
+            n = len(x_vals)
+            x_mean = sum(x_vals) / n
+            y_mean = sum(y_vals) / n
+            
+            numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_vals, y_vals))
+            denominator = sum((x - x_mean) ** 2 for x in x_vals)
+            
+            slope = numerator / denominator if denominator != 0 else 0
+            intercept = y_mean - slope * x_mean
+            
+            return {
+                "text": response_text,
+                "trend_data": {
+                    "team_number": team_number,
+                    "matches_analyzed": len(match_scores),
+                    "trend_percentage": trend_pct,
+                    "first_half_avg": first_half_avg,
+                    "second_half_avg": second_half_avg,
+                    "recent_avg": recent_avg
+                },
+                # Frontend expects a list of visualization option keys; include the type name
+                "visualization_options": ["trend_chart"],
+                # Provide the actual visualization payload in a predictable key so the
+                # frontend will POST the full response object to /assistant/visualize
+                "visualization_data": {
+                    "team_number": team_number,
+                    "match_scores": match_scores,
+                    "slope": slope,
+                    "intercept": intercept
+                }
+            }
+        except Exception as e:
+            logger.error(f"Error analyzing trends for team {team_number}: {e}")
+            return {"text": f"Error analyzing trends: {str(e)}", "error": True}
+    
+    def predict_team_performance(self, team_number: str) -> Dict[str, Any]:
+        """Predict future performance based on historical trends."""
+        try:
+            # Get trend analysis first
+            trend_result = self.analyze_team_trends(team_number)
+            if trend_result.get('error'):
+                return trend_result
+            
+            trend_data = trend_result.get('trend_data', {})
+            trend_pct = trend_data.get('trend_percentage', 0)
+            recent_avg = trend_data.get('recent_avg', 0)
+            
+            # Make prediction
+            predicted_score = recent_avg * (1 + trend_pct / 200)  # Conservative prediction
+            
+            response_text = f"🔮 **Performance Prediction for Team {team_number}**\n\n"
+            response_text += f"**Predicted Next Match Score:** {predicted_score:.1f} points\n\n"
+            
+            confidence = min(95, 50 + abs(trend_pct) * 2)
+            response_text += f"**Confidence Level:** {confidence:.0f}%\n\n"
+            
+            if trend_pct > 10:
+                response_text += "📈 **Outlook:** Based on their improving trend, expect strong performance. "
+                response_text += f"Team {team_number} is likely to score around {predicted_score:.0f} points.\n\n"
+            elif trend_pct < -10:
+                response_text += "📉 **Outlook:** Recent decline suggests caution. "
+                response_text += f"Performance may drop to around {predicted_score:.0f} points.\n\n"
+            else:
+                response_text += "➡️ **Outlook:** Consistent performance expected. "
+                response_text += f"Team {team_number} should score around {predicted_score:.0f} points.\n\n"
+            
+            response_text += "**Recommendation:** "
+            if predicted_score > 70:
+                response_text += "High-value alliance pick. Strong scoring potential."
+            elif predicted_score > 40:
+                response_text += "Solid mid-tier performer. Reliable for balanced alliances."
+            else:
+                response_text += "Developing team. Consider role specialization."
+            
+            return {
+                "text": response_text,
+                "prediction": {
+                    "team_number": team_number,
+                    "predicted_score": predicted_score,
+                    "confidence": confidence,
+                    "trend_pct": trend_pct
+                }
+            }
+        except Exception as e:
+            logger.error(f"Error predicting performance for team {team_number}: {e}")
+            return {"text": f"Error making prediction: {str(e)}", "error": True}
+    
+    def predict_match_outcome(self, team_number: str) -> Dict[str, Any]:
+        """Predict if a team will win their next match."""
+        return self.predict_team_performance(team_number)
+    
+    def predict_match_winner(self, match_number: str) -> Dict[str, Any]:
+        """Predict the winner of a specific match."""
+        try:
+            match = Match.query.filter_by(match_number=int(match_number)).first()
+            if not match:
+                return {"text": f"Match {match_number} not found."}
+            
+            # Get teams in match
+            red_teams = match.red_teams
+            blue_teams = match.blue_teams
+            
+            if not red_teams or not blue_teams:
+                return {"text": f"Match {match_number} does not have complete alliance information."}
+            
+            # Calculate alliance strengths
+            from app.utils.analytics import calculate_team_metrics
+            
+            red_strength = 0
+            for team_num in red_teams:
+                team = Team.query.filter_by(team_number=int(team_num)).first()
+                if team:
+                    metrics = calculate_team_metrics(team.id).get('metrics', {})
+                    red_strength += metrics.get('total_points', 0) or 0
+            
+            blue_strength = 0
+            for team_num in blue_teams:
+                team = Team.query.filter_by(team_number=int(team_num)).first()
+                if team:
+                    metrics = calculate_team_metrics(team.id).get('metrics', {})
+                    blue_strength += metrics.get('total_points', 0) or 0
+            
+            # Make prediction
+            total_strength = red_strength + blue_strength
+            red_probability = (red_strength / max(total_strength, 1)) * 100 if total_strength > 0 else 50
+            blue_probability = 100 - red_probability
+            
+            response_text = f"🎯 **Match {match_number} Prediction**\n\n"
+            response_text += f"**Red Alliance:** {', '.join(map(str, red_teams))}\n"
+            response_text += f"**Blue Alliance:** {', '.join(map(str, blue_teams))}\n\n"
+            
+            if red_probability > 60:
+                response_text += f"🔴 **Predicted Winner:** Red Alliance ({red_probability:.0f}% confidence)\n"
+                response_text += f"**Predicted Score:** Red {red_strength:.0f} - Blue {blue_strength:.0f}\n"
+            elif blue_probability > 60:
+                response_text += f"🔵 **Predicted Winner:** Blue Alliance ({blue_probability:.0f}% confidence)\n"
+                response_text += f"**Predicted Score:** Blue {blue_strength:.0f} - Red {red_strength:.0f}\n"
+            else:
+                response_text += f"⚖️ **Prediction:** Close match! Too close to call confidently.\n"
+                response_text += f"**Estimated Scores:** Red {red_strength:.0f} - Blue {blue_strength:.0f}\n"
+            
+            return {
+                "text": response_text,
+                "prediction": {
+                    "match_number": match_number,
+                    "red_probability": red_probability,
+                    "blue_probability": blue_probability,
+                    "red_strength": red_strength,
+                    "blue_strength": blue_strength
+                }
+            }
+        except Exception as e:
+            logger.error(f"Error predicting match {match_number}: {e}")
+            return {"text": f"Error making prediction: {str(e)}", "error": True}
+    
+    def compare_historical(self, team_number: str, timeframe: str) -> Dict[str, Any]:
+        """Compare current performance to historical data."""
+        return {"text": f"Historical comparison for Team {team_number} vs {timeframe} coming soon! This feature requires historical event data."}
+    
+    def analyze_consistency(self, team_number: str) -> Dict[str, Any]:
+        """Analyze how consistent a team's performance is."""
+        try:
+            team = Team.query.filter_by(team_number=int(team_number)).first()
+            if not team:
+                return {"text": f"Team {team_number} not found."}
+            
+            scouting_team_num = self._get_scouting_team_number()
+            query = ScoutingData.query.filter_by(team_id=team.id)
+            if scouting_team_num:
+                query = query.filter_by(scouting_team_number=scouting_team_num)
+            entries = query.all()
+            
+            if len(entries) < 3:
+                return {"text": f"Not enough data to analyze consistency for Team {team_number}."}
+            
+            # Calculate scores using metrics
+            scores = [e.calculate_metric('tot') or 0 for e in entries]
+            avg = sum(scores) / len(scores)
+            variance = sum((s - avg) ** 2 for s in scores) / len(scores)
+            std_dev = variance ** 0.5
+            coefficient_of_variation = (std_dev / max(avg, 1)) * 100
+            
+            response_text = f"🎯 **Consistency Analysis for Team {team_number}**\n\n"
+            response_text += f"**Average Score:** {avg:.1f} points\n"
+            response_text += f"**Standard Deviation:** {std_dev:.1f}\n"
+            response_text += f"**Coefficient of Variation:** {coefficient_of_variation:.1f}%\n\n"
+            
+            if coefficient_of_variation < 15:
+                response_text += "✅ **Rating:** Extremely consistent - very reliable performer\n"
+                response_text += "This team delivers predictable results match after match."
+            elif coefficient_of_variation < 25:
+                response_text += "✓ **Rating:** Consistent - dependable team\n"
+                response_text += "This team usually performs close to their average."
+            elif coefficient_of_variation < 40:
+                response_text += "⚠️ **Rating:** Somewhat inconsistent - variable performance\n"
+                response_text += "This team can have good matches but also struggles sometimes."
+            else:
+                response_text += "❌ **Rating:** Highly inconsistent - unpredictable\n"
+                response_text += "This team's performance varies significantly between matches."
+            
+            return {
+                "text": response_text,
+                "consistency": {
+                    "team_number": team_number,
+                    "avg_score": avg,
+                    "std_dev": std_dev,
+                    "cv": coefficient_of_variation,
+                    "matches_analyzed": len(scores)
+                }
+            }
+        except Exception as e:
+            logger.error(f"Error analyzing consistency for team {team_number}: {e}")
+            return {"text": f"Error analyzing consistency: {str(e)}", "error": True}
+    
+    def find_peak_performance(self, team_number: str) -> Dict[str, Any]:
+        """Find the team's best match and optimal conditions."""
+        try:
+            team = Team.query.filter_by(team_number=int(team_number)).first()
+            if not team:
+                return {"text": f"Team {team_number} not found."}
+            
+            entries = ScoutingData.query.filter_by(
+                team_id=team.id,
+                scouting_team_number=current_user.scouting_team_number
+            ).join(Match).order_by(Match.match_number).all()
+            
+            if not entries:
+                return {"text": f"No scouting data for Team {team_number}."}
+            
+            # Find peak performance
+            best_entry = max(entries, key=lambda e: e.calculate_metric('tot') or 0)
+            best_score = best_entry.calculate_metric('tot') or 0
+            
+            response_text = f"⭐ **Peak Performance for Team {team_number}**\n\n"
+            response_text += f"**Best Match:** Match {best_entry.match_id}\n"
+            response_text += f"**Peak Score:** {best_score:.0f} points\n\n"
+            response_text += f"**Breakdown:**\n"
+            response_text += f"  • Autonomous: {best_entry.calculate_metric('apt') or 0:.0f} pts\n"
+            response_text += f"  • Teleoperated: {best_entry.calculate_metric('tpt') or 0:.0f} pts\n"
+            response_text += f"  • Endgame: {best_entry.calculate_metric('ept') or 0:.0f} pts\n\n"
+            
+            avg_score = sum(e.calculate_metric('tot') or 0 for e in entries) / len(entries)
+            improvement_potential = best_score - avg_score
+            
+            response_text += f"**Analysis:** This team's peak is {improvement_potential:.0f} points above their average. "
+            if improvement_potential > 20:
+                response_text += "They have high ceiling potential when performing optimally!"
+            else:
+                response_text += "They perform consistently near their peak."
+            
+            return {"text": response_text}
+        except Exception as e:
+            logger.error(f"Error finding peak for team {team_number}: {e}")
+            return {"text": f"Error finding peak performance: {str(e)}", "error": True}
+    
+    def analyze_weaknesses(self, team_number: str) -> Dict[str, Any]:
+        """Identify team weaknesses based on data."""
+        try:
+            team = Team.query.filter_by(team_number=int(team_number)).first()
+            if not team:
+                return {"text": f"Team {team_number} not found."}
+            
+            analytics_result = calculate_team_metrics(team.id)
+            stats = analytics_result.get('metrics', {})
+            
+            if not stats:
+                return {"text": f"No data available for Team {team_number}."}
+            
+            response_text = f"🔍 **Weakness Analysis for Team {team_number}**\n\n"
+            
+            weaknesses = []
+            auto = stats.get('auto_points', 0) or 0
+            teleop = stats.get('teleop_points', 0) or 0
+            endgame = stats.get('endgame_points', 0) or 0
+            total = auto + teleop + endgame
+            
+            if auto < 10:
+                weaknesses.append(f"⚠️ **Weak Autonomous** ({auto:.1f} pts avg) - Limited auto scoring ability")
+            if teleop < 20:
+                weaknesses.append(f"⚠️ **Low Teleoperated Output** ({teleop:.1f} pts avg) - Struggles during driver control")
+            if endgame < 5:
+                weaknesses.append(f"⚠️ **Minimal Endgame** ({endgame:.1f} pts avg) - Missing endgame opportunities")
+            if total < 30:
+                weaknesses.append(f"⚠️ **Overall Low Scoring** ({total:.1f} pts avg) - Needs improvement across all phases")
+            
+            if weaknesses:
+                response_text += "\n".join(weaknesses)
+                response_text += "\n\n**Recommendation:** Focus scouting efforts on how they can improve these areas or pair with alliance partners who excel here."
+            else:
+                response_text += "✅ No significant weaknesses detected! Team {team_number} is performing well across all game phases."
+            
+            return {"text": response_text}
+        except Exception as e:
+            logger.error(f"Error analyzing weaknesses for team {team_number}: {e}")
+            return {"text": f"Error analyzing weaknesses: {str(e)}", "error": True}
+    
+    def analyze_strengths(self, team_number: str) -> Dict[str, Any]:
+        """Identify team strengths based on data."""
+        try:
+            team = Team.query.filter_by(team_number=int(team_number)).first()
+            if not team:
+                return {"text": f"Team {team_number} not found."}
+            
+            analytics_result = calculate_team_metrics(team.id)
+            stats = analytics_result.get('metrics', {})
+            
+            if not stats:
+                return {"text": f"No data available for Team {team_number}."}
+            
+            response_text = f"💪 **Strength Analysis for Team {team_number}**\n\n"
+            
+            strengths = []
+            auto = stats.get('auto_points', 0) or 0
+            teleop = stats.get('teleop_points', 0) or 0
+            endgame = stats.get('endgame_points', 0) or 0
+            total = auto + teleop + endgame
+            
+            if auto > 20:
+                strengths.append(f"⭐ **Excellent Autonomous** ({auto:.1f} pts avg) - Strong auto scorer")
+            elif auto > 10:
+                strengths.append(f"✓ **Good Autonomous** ({auto:.1f} pts avg) - Reliable auto points")
+            
+            if teleop > 50:
+                strengths.append(f"⭐ **Dominant Teleoperated** ({teleop:.1f} pts avg) - Elite driver control")
+            elif teleop > 30:
+                strengths.append(f"✓ **Strong Teleoperated** ({teleop:.1f} pts avg) - Good scoring during driver period")
+            
+            if endgame > 20:
+                strengths.append(f"⭐ **Elite Endgame** ({endgame:.1f} pts avg) - Consistent endgame execution")
+            elif endgame > 10:
+                strengths.append(f"✓ **Solid Endgame** ({endgame:.1f} pts avg) - Reliable endgame points")
+            
+            if total > 80:
+                strengths.append(f"🏆 **Elite Overall Scorer** ({total:.1f} pts avg) - Top-tier performance")
+            elif total > 50:
+                strengths.append(f"✓ **Strong Overall Performance** ({total:.1f} pts avg) - Solid all-around team")
+            
+            if strengths:
+                response_text += "\n".join(strengths)
+                response_text += f"\n\n**Alliance Value:** Excellent pick for alliances needing "
+                if auto > teleop and auto > endgame:
+                    response_text += "autonomous points."
+                elif teleop > auto and teleop > endgame:
+                    response_text += "consistent teleoperated scoring."
+                elif endgame > auto and endgame > teleop:
+                    response_text += "endgame specialists."
+                else:
+                    response_text += "balanced, versatile performers."
+            else:
+                response_text += "📊 Team is developing - strengths not yet clearly defined. Monitor for emerging capabilities."
+            
+            return {"text": response_text}
+        except Exception as e:
+            logger.error(f"Error analyzing strengths for team {team_number}: {e}")
+            return {"text": f"Error analyzing strengths: {str(e)}", "error": True}
+    
+    def predict_alliance(self, team1: str, team2: str) -> Dict[str, Any]:
+        """Predict how well two teams would work together in an alliance."""
+        try:
+            from app.utils.analytics import calculate_team_metrics
+            
+            t1 = Team.query.filter_by(team_number=int(team1)).first()
+            t2 = Team.query.filter_by(team_number=int(team2)).first()
+            
+            if not t1 or not t2:
+                return {"text": f"One or both teams not found."}
+            
+            metrics1 = calculate_team_metrics(t1.id).get('metrics', {})
+            metrics2 = calculate_team_metrics(t2.id).get('metrics', {})
+            
+            # Calculate combined potential
+            combined_score = (metrics1.get('total_points', 0) or 0) + (metrics2.get('total_points', 0) or 0)
+            
+            # Analyze synergy
+            auto1 = metrics1.get('auto_points', 0) or 0
+            auto2 = metrics2.get('auto_points', 0) or 0
+            teleop1 = metrics1.get('teleop_points', 0) or 0
+            teleop2 = metrics2.get('teleop_points', 0) or 0
+            
+            response_text = f"🤝 **Alliance Prediction: Team {team1} + Team {team2}**\n\n"
+            response_text += f"**Combined Scoring Potential:** {combined_score:.0f} points\n\n"
+            
+            synergies = []
+            if auto1 > 15 or auto2 > 15:
+                synergies.append("✓ Strong autonomous coverage")
+            if teleop1 + teleop2 > 60:
+                synergies.append("✓ Excellent teleoperated scoring")
+            if combined_score > 100:
+                synergies.append("✓ Elite total output - championship-caliber alliance")
+            
+            if synergies:
+                response_text += "**Synergies:**\n" + "\n".join(f"  {s}" for s in synergies) + "\n\n"
+            
+            if combined_score > 120:
+                response_text += "🏆 **Rating:** Exceptional alliance - strong contender for elimination rounds"
+            elif combined_score > 80:
+                response_text += "✅ **Rating:** Solid alliance - good playoff potential"
+            elif combined_score > 50:
+                response_text += "➡️ **Rating:** Moderate alliance - can compete effectively"
+            else:
+                response_text += "⚠️ **Rating:** Developing alliance - may struggle in competitive matches"
+            
+            return {
+                "text": response_text,
+                "alliance_prediction": {
+                    "team1": team1,
+                    "team2": team2,
+                    "combined_score": combined_score,
+                    "synergy_level": len(synergies)
+                }
+            }
+        except Exception as e:
+            logger.error(f"Error predicting alliance {team1} + {team2}: {e}")
+            return {"text": f"Error predicting alliance: {str(e)}", "error": True}
     
     def _generate_team_insights(self, stats: Dict[str, Any], entries: List) -> str:
         """Generate intelligent insights about team performance."""
