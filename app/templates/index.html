@@ -254,7 +254,10 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(r=>r.json()).then(data=>{
                 if (data && data.success) {
                     // show a simple toast (base template has toasts)
-                    const t = document.createElement('div'); t.className='toast show'; t.innerHTML=`<div class="toast-header"><strong class="me-auto">Sync</strong><small>Now</small><button type="button" class="btn-close" data-bs-dismiss="toast"></button></div><div class="toast-body">Sync started/completed.</div>`; document.body.appendChild(t); setTimeout(()=>{ try{ t.remove(); }catch(e){} },4000);
+                    const t = document.createElement('div'); t.className='toast show'; t.innerHTML=`<div class="toast-header"><strong class="me-auto">Sync</strong><small>Now</small><button type="button" class="btn-close" data-bs-dismiss="toast"></button></div><div class="toast-body">Sync started/completed. Refreshing...</div>`; document.body.appendChild(t);
+                    // Wait briefly so user sees the toast, then reload to show new data
+                    setTimeout(()=>{ try{ t.remove(); }catch(e){} },2000);
+                    setTimeout(()=>{ window.location.reload(); },2200);
                 } else {
                     const err = (data && data.error) ? data.error : 'Sync failed';
                     const t = document.createElement('div'); t.className='toast show'; t.innerHTML=`<div class="toast-header"><strong class="me-auto">Sync</strong><small>Now</small><button type="button" class="btn-close" data-bs-dismiss="toast"></button></div><div class="toast-body">${err}</div>`; document.body.appendChild(t); setTimeout(()=>{ try{ t.remove(); }catch(e){} },5000);
