@@ -5,7 +5,7 @@ Investigates why superadmin and other users are sometimes rejected during login
 """
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 def debug_superadmin_login():
     """Debug superadmin login specifically to identify the issue"""
@@ -58,7 +58,7 @@ def debug_superadmin_login():
             # Check recent login attempts for superadmin
             recent_attempts = LoginAttempt.query.filter(
                 LoginAttempt.username == 'superadmin',
-                LoginAttempt.attempt_time >= datetime.utcnow() - timedelta(hours=24)
+                LoginAttempt.attempt_time >= datetime.now(timezone.utc) - timedelta(hours=24)
             ).order_by(LoginAttempt.attempt_time.desc()).limit(10).all()
             
             print(f"\n📊 RECENT LOGIN ATTEMPTS (Last 24 hours)")
@@ -75,7 +75,7 @@ def debug_superadmin_login():
             print("-" * 40)
             
             # Get all IPs that have failed attempts in last 15 minutes
-            cutoff_time = datetime.utcnow() - timedelta(minutes=15)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=15)
             blocked_ips = db.session.query(LoginAttempt.ip_address).filter(
                 LoginAttempt.success == False,
                 LoginAttempt.attempt_time >= cutoff_time
@@ -147,7 +147,7 @@ def debug_superadmin_login():
                 print(f"   Total users in database: {user_count}")
                 
                 # Test if we can update the user
-                superadmin.last_login = datetime.utcnow()
+                superadmin.last_login = datetime.now(timezone.utc)
                 db.session.commit()
                 print("   ✅ Database write test successful")
                 
@@ -168,7 +168,7 @@ def debug_superadmin_login():
             very_recent = LoginAttempt.query.filter(
                 LoginAttempt.username == 'superadmin',
                 LoginAttempt.success == False,
-                LoginAttempt.attempt_time >= datetime.utcnow() - timedelta(minutes=1)
+                LoginAttempt.attempt_time >= datetime.now(timezone.utc) - timedelta(minutes=1)
             ).count()
             
             if very_recent > 0:

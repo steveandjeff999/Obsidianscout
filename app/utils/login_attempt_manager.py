@@ -5,7 +5,7 @@ Provides automatic cleanup and better control over failed login attempts
 """
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from flask import current_app
 from app.models import LoginAttempt, db
 import logging
@@ -63,7 +63,7 @@ class LoginAttemptManager:
             if minutes_old is None:
                 minutes_old = self.cleanup_interval // 60
                 
-            cutoff_time = datetime.utcnow() - timedelta(minutes=minutes_old)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=minutes_old)
             
             # Count how many we're about to delete
             count_query = LoginAttempt.query.filter(
@@ -132,14 +132,14 @@ class LoginAttemptManager:
             successful_attempts = LoginAttempt.query.filter_by(success=True).count()
             
             # Recent failed attempts (last hour)
-            recent_cutoff = datetime.utcnow() - timedelta(hours=1)
+            recent_cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
             recent_failed = LoginAttempt.query.filter(
                 LoginAttempt.success == False,
                 LoginAttempt.attempt_time >= recent_cutoff
             ).count()
             
             # Currently blocked IPs/users (last 15 minutes with 10+ failures)
-            block_cutoff = datetime.utcnow() - timedelta(minutes=self.lockout_duration)
+            block_cutoff = datetime.now(timezone.utc) - timedelta(minutes=self.lockout_duration)
             blocked_query = db.session.query(
                 LoginAttempt.ip_address,
                 LoginAttempt.username,

@@ -7,7 +7,7 @@ No more sync needed - all databases stay synchronized automatically
 import requests
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional
 from flask import current_app, request
 from sqlalchemy import event
@@ -66,7 +66,7 @@ class RealTimeReplicator:
                 'table': table_name,
                 'data': record_data,
                 'record_id': record_id,
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'source_server': self._get_server_id()
             }
             
@@ -143,7 +143,7 @@ class RealTimeReplicator:
             payload = {
                 'operation': operation,
                 'source_server_id': self._get_server_id(),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
             
             response = requests.post(

@@ -4,7 +4,7 @@ from app.routes.auth import analytics_required
 from app.models import Match, Event, Team, ScoutingData
 from app import db
 from app.utils.api_utils import get_matches, ApiError, api_to_db_match_conversion, get_matches_dual_api
-from datetime import datetime
+from datetime import datetime, timezone
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_effective_game_config
 from flask_socketio import emit, join_room, leave_room
@@ -192,11 +192,27 @@ def sync_from_config():
         current_year = game_config.get('season', 2026)
         event = get_event_by_code(event_code)
         if not event:
-            event = Event(
-                name=f"Event {event_code}",  # Placeholder name until we get more data
-                code=event_code,
-                year=current_year
-            )
+            # Try to fetch full event details including timezone from API
+            from app.utils.api_utils import get_event_details_dual_api
+            event_details = get_event_details_dual_api(event_code)
+            
+            if event_details:
+                event = Event(
+                    name=event_details.get('name', f"Event {event_code}"),
+                    code=event_code,
+                    timezone=event_details.get('timezone'),  # Store timezone from API
+                    location=event_details.get('location'),
+                    start_date=event_details.get('start_date'),
+                    end_date=event_details.get('end_date'),
+                    year=event_details.get('year', current_year)
+                )
+            else:
+                # Fallback to placeholder
+                event = Event(
+                    name=f"Event {event_code}",
+                    code=event_code,
+                    year=current_year
+                )
             assign_scouting_team_to_model(event)  # Assign current scouting team
             db.session.add(event)
             db.session.flush()  # Get the ID without committing yet
@@ -252,6 +268,15 @@ def sync_from_config():
             # Commit all changes
             db.session.commit()
         
+        # Update match times from API after syncing matches
+        try:
+            from app.utils.match_time_fetcher import update_match_times
+            times_updated = update_match_times(event_code, current_app.config.get('TEAM_NUMBER'))
+            if times_updated > 0:
+                print(f"✅ Updated scheduled times for {times_updated} matches")
+        except Exception as e:
+            print(f"⚠️  Could not update match times: {e}")
+        
         # After bulk sync, queue a single replication event for the match sync
         if matches_added > 0 or matches_updated > 0:
             from app.utils.real_time_replication import real_time_replicator
@@ -264,7 +289,7 @@ def sync_from_config():
                     'matches_updated': matches_updated,
                     'total_matches': len(match_data_list),
                     'sync_type': 'bulk_sync',
-                    'sync_timestamp': datetime.utcnow().isoformat()
+                    'sync_timestamp': datetime.now(timezone.utc).isoformat()
                 }, 
                 f"sync_summary_{event_code}"
             )
@@ -279,6 +304,34 @@ def sync_from_config():
         flash(f"Error syncing matches: {str(e)}", 'danger')
     
     return redirect(url_for('matches.index'))
+
+
+@bp.route('/update_times')
+def update_times():
+    """Update match scheduled times from API for the current event"""
+    try:
+        # Get event code from config
+        game_config = get_effective_game_config()
+        event_code = game_config.get('current_event_code')
+        
+        if not event_code:
+            flash("No event code found in configuration.", 'danger')
+            return redirect(url_for('matches.index'))
+        
+        # Update match times
+        from app.utils.match_time_fetcher import update_match_times
+        times_updated = update_match_times(event_code, current_app.config.get('TEAM_NUMBER'))
+        
+        if times_updated > 0:
+            flash(f"✅ Updated scheduled times for {times_updated} matches!", 'success')
+        else:
+            flash("No match times needed updating.", 'info')
+        
+    except Exception as e:
+        flash(f"Error updating match times: {str(e)}", 'danger')
+    
+    return redirect(url_for('matches.index'))
+
 
 @bp.route('/<int:match_id>')
 def view(match_id):
@@ -699,22 +752,45 @@ def strategy_all():
                     red_score = rloc if rloc is not None else None
                     blue_score = bloc if bloc is not None else None
 
-                # If we still don't have any scores, prefer predicted outcome scores from analysis
-                if (red_score is None or blue_score is None) and isinstance(pred, dict):
+                # Track whether we used predicted scores from analysis
+                predicted_scores_used = False
+
+                # Pull predicted scores from analysis (always include for comparison when available)
+                predicted_red_score = None
+                predicted_blue_score = None
+                if isinstance(pred, dict):
                     # Predicted outcome commonly provides 'red_score' and 'blue_score'
                     p_red = pred.get('red_score') or pred.get('predicted_red') or pred.get('predicted_score')
                     p_blue = pred.get('blue_score') or pred.get('predicted_blue') or pred.get('predicted_score')
                     try:
-                        if red_score is None and p_red is not None:
-                            red_score = int(round(float(p_red)))
+                        if p_red is not None:
+                            predicted_red_score = int(round(float(p_red)))
                     except Exception:
-                        # keep raw value if conversion fails
-                        red_score = p_red if red_score is None else red_score
+                        predicted_red_score = p_red if p_red is not None else None
                     try:
-                        if blue_score is None and p_blue is not None:
-                            blue_score = int(round(float(p_blue)))
+                        if p_blue is not None:
+                            predicted_blue_score = int(round(float(p_blue)))
                     except Exception:
-                        blue_score = p_blue if blue_score is None else blue_score
+                        predicted_blue_score = p_blue if p_blue is not None else None
+
+                    # If we still don't have any actual/local scores, prefer predicted outcome scores from analysis
+                    if (red_score is None or blue_score is None):
+                        try:
+                            if red_score is None and predicted_red_score is not None:
+                                red_score = int(predicted_red_score)
+                                predicted_scores_used = True
+                        except Exception:
+                            if red_score is None and predicted_red_score is not None:
+                                red_score = predicted_red_score
+                                predicted_scores_used = True
+                        try:
+                            if blue_score is None and predicted_blue_score is not None:
+                                blue_score = int(predicted_blue_score)
+                                predicted_scores_used = True
+                        except Exception:
+                            if blue_score is None and predicted_blue_score is not None:
+                                blue_score = predicted_blue_score
+                                predicted_scores_used = True
 
                 # Parse alliance team strings into structured lists with optional team lookup
                 def _parse_alliance(alliance_str):
@@ -745,8 +821,11 @@ def strategy_all():
                     'blue_teams': _parse_alliance(m.blue_alliance),
                     'red_score': red_score,
                     'blue_score': blue_score,
+                    'predicted_red_score': predicted_red_score,
+                    'predicted_blue_score': predicted_blue_score,
                     'predicted_winner': winner,
                     'confidence': confidence,
+                    'predicted_scores_used': predicted_scores_used,
                     'error': None
                 })
             except Exception as e:
@@ -883,7 +962,7 @@ def create_strategy_share():
     shares[token] = {
         'match_id': match_id,
         'created_by': current_user.id if current_user.is_authenticated else None,
-        'created_at': datetime.utcnow().isoformat(),
+        'created_at': datetime.now(timezone.utc).isoformat(),
         'revoked': False
     }
 
@@ -916,7 +995,7 @@ def create_strategy_share():
                 strategy_data['blue_alliance']['teams'] = [serialize_team_data(td) for td in strategy_data['blue_alliance']['teams']]
 
             shares[token]['data'] = strategy_data
-            shares[token]['data_generated_at'] = datetime.utcnow().isoformat()
+            shares[token]['data_generated_at'] = datetime.now(timezone.utc).isoformat()
     except Exception:
         # If analysis generation fails, continue without preloaded data
         pass

@@ -10,7 +10,7 @@ import time
 import threading
 import requests
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 from flask import current_app, jsonify
@@ -258,8 +258,8 @@ class MultiServerSyncManager:
             
             # Mark sync as completed
             sync_log.status = 'completed'
-            sync_log.completed_at = datetime.utcnow()
-            server.last_sync = datetime.utcnow()
+            sync_log.completed_at = datetime.now(timezone.utc)
+            server.last_sync = datetime.now(timezone.utc)
             
             db.session.commit()
             
@@ -268,7 +268,7 @@ class MultiServerSyncManager:
                 'server_id': server.id,
                 'server_name': server.name,
                 'sync_type': sync_type,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }, namespace='/sync')
             
             logger.info(f"Successfully synced with server {server.name}")
@@ -276,7 +276,7 @@ class MultiServerSyncManager:
         except Exception as e:
             sync_log.status = 'failed'
             sync_log.error_message = str(e)
-            sync_log.completed_at = datetime.utcnow()
+            sync_log.completed_at = datetime.now(timezone.utc)
             db.session.commit()
             
             logger.error(f"Failed to sync with server {server.name}: {e}")
@@ -308,7 +308,7 @@ class MultiServerSyncManager:
                 payload = {
                     'changes': local_changes,
                     'server_id': self.server_id,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
                 
                 response = requests.post(url, json=payload, 
@@ -699,7 +699,7 @@ class MultiServerSyncManager:
                                 'record_id': str(record.id),
                                 'operation': operation,
                                 'data': record_data,
-                                'timestamp': datetime.utcnow().isoformat()
+                                'timestamp': datetime.now(timezone.utc).isoformat()
                             })
                         
                         logger.info(f"Found {len(modified_records)} changes in {table_name} since {cutoff_time}")
@@ -856,7 +856,7 @@ class MultiServerSyncManager:
                                 existing_record.is_active = False
                                 # Also update any timestamp fields
                                 if hasattr(existing_record, 'updated_at'):
-                                    existing_record.updated_at = datetime.utcnow()
+                                    existing_record.updated_at = datetime.now(timezone.utc)
                                 
                                 record_info = f"{getattr(existing_record, 'username', getattr(existing_record, 'name', str(record_id)))}"
                                 logger.info(f"✅ Soft deleted {table_name} record {record_id} ({record_info})")
@@ -874,7 +874,7 @@ class MultiServerSyncManager:
                                 existing_record.is_active = True
                                 # Also update any timestamp fields
                                 if hasattr(existing_record, 'updated_at'):
-                                    existing_record.updated_at = datetime.utcnow()
+                                    existing_record.updated_at = datetime.now(timezone.utc)
                                 
                                 record_info = f"{getattr(existing_record, 'username', getattr(existing_record, 'name', str(record_id)))}"
                                 logger.info(f"✅ Reactivated {table_name} record {record_id} ({record_info})")
@@ -967,7 +967,7 @@ class MultiServerSyncManager:
                     'file_path': file_path,
                     'folder_type': folder_type,
                     'server_name': server.name,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }, namespace='/sync')
                 
             except Exception as e:

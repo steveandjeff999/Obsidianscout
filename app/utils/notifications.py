@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 NOTIFICATIONS_FILE = os.path.join('instance', 'notifications.json')
 DISMISSED_FILE = os.path.join('instance', 'dismissed_notifications.json')
@@ -30,14 +30,14 @@ def save_notifications(notifs):
 def add_notification(message, level='info', audience='site', teams=None, users=None, expires=None):
     notifs = load_notifications()
     notif = {
-        'id': int(datetime.utcnow().timestamp() * 1000),
+        'id': int(datetime.now(timezone.utc).timestamp() * 1000),
         'message': message,
         'level': level,  # info, important, urgent
         'audience': audience,  # site, teams, users
     # If teams/users are provided as a single string, keep as single entry (don't split on @ or other chars)
     'teams': teams if isinstance(teams, (list, tuple)) else ([teams] if teams is not None and teams != '' else []),
     'users': users if isinstance(users, (list, tuple)) else ([users] if users is not None and users != '' else []),
-        'created': datetime.utcnow().isoformat(),
+        'created': datetime.now(timezone.utc).isoformat(),
         'expires': expires
     }
     notifs.append(notif)

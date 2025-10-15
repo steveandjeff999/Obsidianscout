@@ -13,7 +13,7 @@ def debug_user_sync():
         from app import create_app, db
         from app.models import User, DatabaseChange, SyncServer, SyncLog
         from app.utils.simplified_sync import simplified_sync_manager
-        from datetime import datetime, timedelta
+        from datetime import datetime, timezone, timedelta
         
         app = create_app()
         
@@ -148,7 +148,7 @@ def debug_user_sync():
                             print(f"✅ Remote server {server.name} is responding")
                             
                             # Check if remote has changes to send back
-                            since_time = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+                            since_time = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
                             changes_url = f"{server.protocol}://{server.host}:{server.port}/api/sync/changes"
                             params = {'since': since_time, 'server_id': 'debug_test'}
                             

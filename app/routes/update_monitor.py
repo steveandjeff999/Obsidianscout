@@ -10,7 +10,7 @@ from app.models import SyncServer
 import requests
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import json
 from functools import wraps
@@ -135,13 +135,13 @@ class UpdateMonitor:
         self.status = 'initializing'
         self.progress = 0
         self.messages = []
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc)
         self.completed_at = None
         self.error = None
         
     def add_message(self, message, level='info'):
         """Add a status message"""
-        timestamp = datetime.utcnow().strftime('%H:%M:%S')
+        timestamp = datetime.now(timezone.utc).strftime('%H:%M:%S')
         msg = {
             'timestamp': timestamp,
             'message': message,
@@ -194,7 +194,7 @@ class UpdateMonitor:
                         data = resp.json()
                         self.add_message(f"✅ Server is reachable - Version: {data.get('version', 'Unknown')}", 'success')
                         self.update_status('connected', 15)
-                        self.last_contact = datetime.utcnow()
+                        self.last_contact = datetime.now(timezone.utc)
                     else:
                         raise Exception(f"Server returned HTTP {resp.status_code}: {resp.text[:200]}")
                 except requests.exceptions.ConnectTimeout:
@@ -330,10 +330,10 @@ class UpdateMonitor:
                 # This is a basic check - the full verification happens on the remote server
                 self.add_message("✅ Update completed successfully!", 'success')
                 self.update_status('completed', 100)
-                self.completed_at = datetime.utcnow()
+                self.completed_at = datetime.now(timezone.utc)
                 
                 # Update server's last sync time
-                self.server.last_sync = datetime.utcnow()
+                self.server.last_sync = datetime.now(timezone.utc)
                 self.server.error_count = 0
                 self.server.last_error = None
                 db.session.commit()
@@ -341,11 +341,11 @@ class UpdateMonitor:
             except Exception as e:
                 self.add_message(f"⚠️  Update completed but verification failed: {e}", 'warning')
                 self.update_status('completed_with_warnings', 100)
-                self.completed_at = datetime.utcnow()
+                self.completed_at = datetime.now(timezone.utc)
         else:
             self.add_message("❌ Server didn't come back online within expected time", 'error')
             self.update_status('timeout', 100)
-            self.completed_at = datetime.utcnow()
+            self.completed_at = datetime.now(timezone.utc)
             self.error = "Server didn't come back online"
 
 @update_monitor_bp.route('/dashboard')

@@ -10,7 +10,7 @@ from flask_login import login_required, current_user
 from app import db
 from app.utils.database_manager import concurrent_db_manager
 from app.utils.concurrent_models import with_concurrent_db
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import os
 import logging
@@ -156,7 +156,7 @@ def export_database():
         
         # Collect all data from all tables
         export_data = {
-            'export_timestamp': datetime.utcnow().isoformat(),
+            'export_timestamp': datetime.now(timezone.utc).isoformat(),
             'version': '1.0',
             'tables': {}
         }
@@ -244,7 +244,7 @@ def export_database():
             export_data['tables']['team_event'] = []
         
         # Generate filename with timestamp
-        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         filename = f'database_export_{timestamp}.json'
         
         # Create JSON string
@@ -464,10 +464,10 @@ def import_database():
                                                 value = datetime.strptime(value, '%Y-%m-%d %H:%M:%S.%f')
                                             else:
                                                 # Fallback to current time if parsing fails
-                                                value = datetime.utcnow()
+                                                value = datetime.now(timezone.utc)
                                         except (ValueError, TypeError):
                                             # If parsing fails, set to current time
-                                            value = datetime.utcnow()
+                                            value = datetime.now(timezone.utc)
                                 
                                 # Skip ID field to avoid conflicts - let database auto-generate
                                 if key != 'id':

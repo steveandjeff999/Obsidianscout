@@ -5,7 +5,7 @@ Command line interface for managing login attempts and brute force protection
 """
 import argparse
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 def show_login_stats():
     """Show current login attempt statistics"""
@@ -33,7 +33,7 @@ def show_login_stats():
                 print(f"Success rate: {success_rate:.1f}%")
             
             # Recent activity (last 24 hours)
-            recent_cutoff = datetime.utcnow() - timedelta(hours=24)
+            recent_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
             recent_total = LoginAttempt.query.filter(LoginAttempt.attempt_time >= recent_cutoff).count()
             recent_failed = LoginAttempt.query.filter(
                 LoginAttempt.attempt_time >= recent_cutoff,
@@ -45,7 +45,7 @@ def show_login_stats():
             print(f"Failed attempts: {recent_failed}")
             
             # Currently blocked users/IPs
-            block_cutoff = datetime.utcnow() - timedelta(minutes=15)
+            block_cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
             blocked_query = db.session.query(
                 LoginAttempt.ip_address,
                 LoginAttempt.username,
@@ -107,7 +107,7 @@ def cleanup_failed_attempts(minutes_old=10, username=None, ip_address=None):
                 ).delete()
             else:
                 print(f"🧹 Clearing failed attempts older than {minutes_old} minutes")
-                cutoff_time = datetime.utcnow() - timedelta(minutes=minutes_old)
+                cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=minutes_old)
                 deleted_count = LoginAttempt.query.filter(
                     LoginAttempt.success == False,
                     LoginAttempt.attempt_time < cutoff_time
@@ -136,7 +136,7 @@ def test_brute_force_status():
             from datetime import datetime, timedelta
             
             # Check recent activity that would trigger blocks
-            cutoff_time = datetime.utcnow() - timedelta(minutes=15)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=15)
             
             suspicious_activity = db.session.query(
                 LoginAttempt.ip_address,

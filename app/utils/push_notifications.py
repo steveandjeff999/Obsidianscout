@@ -7,7 +7,7 @@ import base64
 from pywebpush import webpush, WebPushException
 from flask import current_app
 from app import db
-from datetime import datetime
+from datetime import datetime, timezone
 from cryptography.hazmat.primitives import serialization
 
 
@@ -117,7 +117,7 @@ def send_push_notification(device_token, title, message, data=None):
             'icon': '/static/img/icon-192.png',
             'badge': '/static/img/badge-72.png',
             'data': data or {},
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
         
         # Ensure payload is JSON serializable
@@ -159,7 +159,7 @@ def send_push_notification(device_token, title, message, data=None):
             raise
         
         # Update device token success timestamp
-        device_token.last_success = datetime.utcnow()
+        device_token.last_success = datetime.now(timezone.utc)
         device_token.failure_count = 0
         db.session.commit()
         
@@ -295,7 +295,7 @@ def register_device(user_id, endpoint, p256dh_key, auth_key, user_agent=None, de
         device.user_agent = user_agent
         device.is_active = True
         device.failure_count = 0
-        device.updated_at = datetime.utcnow()
+        device.updated_at = datetime.now(timezone.utc)
         if device_name:
             device.device_name = device_name
     else:

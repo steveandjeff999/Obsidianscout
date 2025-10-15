@@ -3,7 +3,7 @@
 from app import create_app
 from app.models import DatabaseChange, SyncServer
 from app.utils.simplified_sync import simplified_sync_manager
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 
 app = create_app()
@@ -39,7 +39,7 @@ def track_missing_user_deletions():
                         'scouting_team_number': user['team'],
                         'is_active': False
                     }),
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     sync_status='pending',
                     created_by_server='local'
                 )

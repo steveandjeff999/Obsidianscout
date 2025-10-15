@@ -2,7 +2,7 @@
 Multi-Server Synchronization Models
 Handles sync configuration and tracking for multiple scouting servers
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from app import db
 from app.utils.concurrent_models import ConcurrentModelMixin
 import json
@@ -22,7 +22,7 @@ class SyncServer(ConcurrentModelMixin, db.Model):
     last_sync = db.Column(db.DateTime, nullable=True)
     last_ping = db.Column(db.DateTime, nullable=True)
     sync_priority = db.Column(db.Integer, default=1)  # 1 = highest priority
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     created_by = db.Column(db.Integer, nullable=True)
     
     # Server metadata
@@ -56,14 +56,16 @@ class SyncServer(ConcurrentModelMixin, db.Model):
             return False
         if self.last_ping:
             # If we haven't pinged in 5 minutes, consider unhealthy
-            time_since_ping = datetime.utcnow() - self.last_ping
+            # Ensure last_ping is timezone-aware for comparison
+            last_ping_aware = self.last_ping if self.last_ping.tzinfo else self.last_ping.replace(tzinfo=timezone.utc)
+            time_since_ping = datetime.now(timezone.utc) - last_ping_aware
             if time_since_ping.total_seconds() > 300:
                 return False
         return True
     
     def update_ping(self, success=True, error_message=None):
         """Update last ping time and error tracking"""
-        self.last_ping = datetime.utcnow()
+        self.last_ping = datetime.now(timezone.utc)
         if success:
             self.error_count = max(0, self.error_count - 1)  # Decrease error count on success
             self.last_error = None
@@ -110,7 +112,7 @@ class SyncLog(ConcurrentModelMixin, db.Model):
     sync_type = db.Column(db.String(50), nullable=False)  # 'database', 'files', 'config', 'full'
     direction = db.Column(db.String(10), nullable=False)  # 'push', 'pull', 'bidirectional'
     status = db.Column(db.String(20), nullable=False)  # 'pending', 'in_progress', 'completed', 'failed'
-    started_at = db.Column(db.DateTime, default=datetime.utcnow)
+    started_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = db.Column(db.DateTime, nullable=True)
     error_message = db.Column(db.Text, nullable=True)
     
@@ -167,7 +169,7 @@ class FileChecksum(ConcurrentModelMixin, db.Model):
     checksum = db.Column(db.String(64), nullable=False)  # SHA256 hash
     file_size = db.Column(db.BigInteger, nullable=False)
     last_modified = db.Column(db.DateTime, nullable=False)
-    last_checked = db.Column(db.DateTime, default=datetime.utcnow)
+    last_checked = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     sync_status = db.Column(db.String(20), default='synced')  # 'synced', 'modified', 'new', 'deleted'
     
     @classmethod
@@ -181,7 +183,7 @@ class FileChecksum(ConcurrentModelMixin, db.Model):
             existing.checksum = checksum
             existing.file_size = file_size
             existing.last_modified = last_modified
-            existing.last_checked = datetime.utcnow()
+            existing.last_checked = datetime.now(timezone.utc)
             return existing
         else:
             # Create new record
@@ -216,7 +218,7 @@ class SyncConfig(ConcurrentModelMixin, db.Model):
     value = db.Column(db.Text, nullable=True)
     data_type = db.Column(db.String(20), default='string')  # 'string', 'integer', 'boolean', 'json'
     description = db.Column(db.String(255), nullable=True)
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
+    last_updated = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_by = db.Column(db.Integer, nullable=True)
     
     @classmethod
@@ -257,7 +259,7 @@ class SyncConfig(ConcurrentModelMixin, db.Model):
         config.data_type = data_type
         if description:
             config.description = description
-        config.last_updated = datetime.utcnow()
+        config.last_updated = datetime.now(timezone.utc)
         config.updated_by = user_id
         
         db.session.commit()

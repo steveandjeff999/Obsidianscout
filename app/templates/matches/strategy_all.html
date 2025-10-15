@@ -63,7 +63,16 @@
                             <div>
                                 <div class="d-flex align-items-center">
                                     <span class="badge bg-danger me-2">Red</span>
-                                    <div class="fw-semibold me-2">{% if s.red_score is not none %}{{ s.red_score }}{% else %}<span class="text-muted">--</span>{% endif %}</div>
+                                    <div class="fw-semibold me-2">
+                                        {% if s.red_score is not none %}
+                                            {{ s.red_score }}
+                                        {% else %}
+                                            <span class="text-muted">--</span>
+                                        {% endif %}
+                                        {% if s.predicted_red_score is not none %}
+                                            <div class="small text-muted predicted-label">Predicted: <span class="fw-semibold">{{ s.predicted_red_score }}</span></div>
+                                        {% endif %}
+                                    </div>
                                 </div>
                                 <div class="mt-2 small">
                                     {% if s.red_teams and s.red_teams|length > 0 %}
@@ -92,7 +101,16 @@
                             <div>
                                 <div class="d-flex align-items-center">
                                     <span class="badge bg-primary me-2">Blue</span>
-                                    <div class="fw-semibold me-2">{% if s.blue_score is not none %}{{ s.blue_score }}{% else %}<span class="text-muted">--</span>{% endif %}</div>
+                                    <div class="fw-semibold me-2">
+                                        {% if s.blue_score is not none %}
+                                            {{ s.blue_score }}
+                                        {% else %}
+                                            <span class="text-muted">--</span>
+                                        {% endif %}
+                                        {% if s.predicted_blue_score is not none %}
+                                            <div class="small text-muted predicted-label">Predicted: <span class="fw-semibold">{{ s.predicted_blue_score }}</span></div>
+                                        {% endif %}
+                                    </div>
                                 </div>
                                 <div class="mt-2 small">
                                     {% if s.blue_teams and s.blue_teams|length > 0 %}
@@ -190,6 +208,12 @@ body.dark-mode .winner-badge.bg-secondary { background-color: #5a5a5a !important
 
 /* Make the small light badges used for team numbers darker on dark mode so text remains readable */
 body.dark-mode .team-badge.bg-light { background-color: rgba(255,255,255,0.06) !important; color: #e6e6e6 !important; border-color: rgba(255,255,255,0.06) !important; }
+
+/* Predicted score label styling */
+.predicted-label { margin-top: 2px; color: rgba(255,255,255,0.7); }
+@media (prefers-color-scheme: light) {
+    .predicted-label { color: #6c757d; }
+}
 
 @media (max-width: 768px) {
     .team-badge { max-width: 8.5rem; }

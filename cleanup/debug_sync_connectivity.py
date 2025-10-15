@@ -4,7 +4,7 @@ from app import create_app
 from app.models import SyncServer, DatabaseChange
 import requests
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 app = create_app()
 
@@ -37,7 +37,7 @@ def test_remote_connectivity():
             # Test changes endpoint
             try:
                 changes_url = f"{server.base_url}/api/sync/changes"
-                since_time = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+                since_time = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
                 params = {'since': since_time, 'server_id': 'local'}
                 print(f"   Testing changes: {changes_url}")
                 response = requests.get(changes_url, params=params, timeout=10, verify=False)
@@ -59,7 +59,7 @@ def test_remote_connectivity():
                 test_payload = {
                     'changes': [],
                     'server_id': 'local',
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
                 print(f"   Testing receive-changes: {receive_url}")
                 response = requests.post(receive_url, json=test_payload, timeout=10, verify=False)

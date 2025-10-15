@@ -5,9 +5,8 @@ from flask_socketio import SocketIO, join_room
 from flask_login import LoginManager
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from app.utils.config_manager import ConfigManager, get_current_game_config, load_game_config
-import threading
 import threading
 
 # Initialize extensions
@@ -303,14 +302,14 @@ def handle_assistant_chat_message(data):
     sender = data.get('sender') or (user.username if user and hasattr(user, 'username') else 'Anonymous')
     recipient = data.get('recipient', 'assistant')
     text = data.get('text', '')
-    timestamp = datetime.utcnow().isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
     # If chatting with assistant, make it private per user
     if recipient == 'assistant':
         message = {'sender': sender, 'recipient': 'assistant', 'text': text, 'timestamp': timestamp, 'owner': sender}
         save_chat_message(message)
         socketio.emit('assistant_chat_message', message, room=sender)
         # Simple auto-reply from assistant
-        reply = {'sender': 'assistant', 'recipient': sender, 'text': f"Hello {sender}, how can I help you?", 'timestamp': datetime.utcnow().isoformat(), 'owner': sender}
+        reply = {'sender': 'assistant', 'recipient': sender, 'text': f"Hello {sender}, how can I help you?", 'timestamp': datetime.now(timezone.utc).isoformat(), 'owner': sender}
         save_chat_message(reply)
         socketio.emit('assistant_chat_message', reply, room=sender)
     else:
@@ -496,7 +495,7 @@ def handle_group_chat_message(data):
             'group': group,
             'team': team_number,
             'text': text,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'reactions': []
         }
 
@@ -579,8 +578,7 @@ def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     # Record application start time for uptime diagnostics
     try:
-        from datetime import datetime
-        app.start_time = datetime.utcnow()
+        app.start_time = datetime.now(timezone.utc)
     except Exception:
         app.start_time = None
     

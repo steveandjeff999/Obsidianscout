@@ -15,7 +15,7 @@ import json
 import re
 import shutil
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -106,7 +106,7 @@ def scrub_json_from_scan(root: Path, scan_results: Dict[str, Dict[str, str]], ba
         new_content = walk_and_replace(content)
         target.write_text(json.dumps(new_content, indent=2), encoding="utf-8")
 
-    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     if backup_file is None:
         downloads = downloads_folder()
         backup_file = downloads / f"obsidian_secrets_backup_{ts}.json"
@@ -313,7 +313,7 @@ import json
 import re
 import shutil
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -447,7 +447,7 @@ def scrub_from_scan(root: Path, scan_results: Dict[str, Dict[str, str]], backup_
             if changed:
                 target.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     if backup_file is None:
         downloads = downloads_folder()
         backup_file = downloads / f"obsidian_secrets_backup_{ts}.json"
@@ -808,7 +808,7 @@ def scan_and_scrub(root: Path) -> Tuple[Path, Dict[str, Dict[str, str]]]:
             print(f"Scrubbed secrets in {rel}")
 
     # write backup to Downloads
-    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     downloads = downloads_folder()
     backup_file = downloads / f"obsidian_secrets_backup_{ts}.json"
     backup_file.write_text(json.dumps(backup, indent=2), encoding="utf-8")

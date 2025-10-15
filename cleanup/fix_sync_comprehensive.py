@@ -12,7 +12,7 @@ def fix_change_tracking():
         from app import create_app, db
         from app.models import User, DatabaseChange
         from app.utils.change_tracking import setup_change_tracking
-        from datetime import datetime
+        from datetime import datetime, timezone
         import json
         
         app = create_app()
@@ -73,7 +73,7 @@ def fix_change_tracking():
                         'scouting_team_number': test_user.scouting_team_number,
                         'created_at': test_user.created_at.isoformat() if test_user.created_at else None
                     }),
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     sync_status='pending',
                     created_by_server='local_fix'
                 )

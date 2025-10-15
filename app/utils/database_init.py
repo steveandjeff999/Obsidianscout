@@ -5,7 +5,7 @@ Handles automatic database setup and seeding with default data.
 
 import os
 import json
-from datetime import datetime, date
+from datetime import datetime, timezone, date
 from app import db
 from app.models import User, Role, Team, Event, Match
 
@@ -230,7 +230,7 @@ def create_default_pit_config(config_path):
 
 def create_default_game_config(config_path):
     """Create default game configuration"""
-    current_year = datetime.now().year
+    current_year = datetime.now(timezone.utc).year
     default_config = {
         "season": current_year,
         "game_name": f"FRC {current_year} Game",

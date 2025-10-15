@@ -5,7 +5,7 @@ Automatically runs catch-up synchronization for offline servers
 import threading
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from flask import current_app
 
 logger = logging.getLogger(__name__)
@@ -95,14 +95,14 @@ class CatchupSyncScheduler:
             return True
         
         # Check if enough time has passed since last check
-        time_since_last = datetime.utcnow() - self.last_check
+        time_since_last = datetime.now(timezone.utc) - self.last_check
         return time_since_last.total_seconds() >= self.check_interval
     
     def _run_catchup_scan(self):
         """
         Run catch-up synchronization scan
         """
-        self.last_check = datetime.utcnow()
+        self.last_check = datetime.now(timezone.utc)
         
         try:
             logger.info("🔍 Running scheduled catch-up scan...")

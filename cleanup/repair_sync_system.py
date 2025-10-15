@@ -8,7 +8,7 @@ import os
 import sys
 import json
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 def repair_sync_system():
     """Main repair function"""
@@ -86,7 +86,7 @@ def repair_sync_system():
                     log.sync_details = json.dumps({
                         'file_path': file_path,
                         'repaired': True,
-                        'repair_date': datetime.utcnow().isoformat()
+                        'repair_date': datetime.now(timezone.utc).isoformat()
                     })
             
             db.session.commit()
@@ -109,7 +109,7 @@ def repair_sync_system():
                     
                     # Test changes endpoint
                     try:
-                        since_time = (datetime.utcnow() - timedelta(minutes=10)).isoformat()
+                        since_time = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
                         url = f"{server.protocol}://{server.host}:{server.port}/api/sync/changes"
                         params = {'since': since_time, 'server_id': 'repair_test'}
                         response = requests.get(url, params=params, timeout=10, verify=False)
@@ -131,9 +131,9 @@ def repair_sync_system():
                 test_change = DatabaseChange(
                     table_name='sync_test',
                     operation='test_repair',
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     sync_status='pending',
-                    data_hash='repair_test_' + datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+                    data_hash='repair_test_' + datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
                 )
                 db.session.add(test_change)
                 db.session.commit()

@@ -9,7 +9,7 @@ import sys
 import json
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 # Add the app directory to the path
@@ -362,7 +362,7 @@ def test_periodic_sync_functionality():
             db.session.commit()
 
             # Create recent scouting data (within last 5 minutes)
-            recent_time = datetime.utcnow() - timedelta(minutes=2)
+            recent_time = datetime.now(timezone.utc) - timedelta(minutes=2)
             scouting_data = ScoutingData(
                 match_id=match.id,
                 team_id=Team.query.filter_by(team_number=4444).first().id,
@@ -614,7 +614,7 @@ def test_alliance_invitation_system():
 
             # Test invitation acceptance
             invitation.status = "accepted"
-            invitation.responded_at = datetime.utcnow()
+            invitation.responded_at = datetime.now(timezone.utc)
 
             # Create new member from invitation
             new_member = ScoutingAllianceMember(
@@ -644,7 +644,7 @@ def test_alliance_invitation_system():
             db.session.commit()
 
             decline_invitation.status = "declined"
-            decline_invitation.responded_at = datetime.utcnow()
+            decline_invitation.responded_at = datetime.now(timezone.utc)
             db.session.commit()
 
             assert decline_invitation.status == "declined"

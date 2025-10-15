@@ -14,7 +14,7 @@ from app.utils.notification_service import (
 )
 from app.utils.push_notifications import register_device, get_vapid_keys, send_push_to_user
 from app.utils.emailer import send_email
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 bp = Blueprint('notifications', __name__, url_prefix='/notifications')
 
@@ -51,7 +51,7 @@ def index():
         ).filter(
             NotificationSubscription.user_id == current_user.id,
             NotificationQueue.status == 'pending',
-            NotificationQueue.scheduled_for > datetime.utcnow()
+            NotificationQueue.scheduled_for > datetime.now(timezone.utc)
         ).order_by(NotificationQueue.scheduled_for.asc()).limit(50).all()
         
         # Join with Match data from main database
@@ -141,7 +141,7 @@ def subscribe():
             # Reactivate if it was deactivated
             if not existing.is_active:
                 existing.is_active = True
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = datetime.now(timezone.utc)
                 subscription = existing
             else:
                 return jsonify({'error': 'This exact subscription already exists'}), 400
@@ -221,7 +221,7 @@ def unsubscribe(subscription_id):
     
     # Deactivate instead of delete to preserve history
     subscription.is_active = False
-    subscription.updated_at = datetime.utcnow()
+    subscription.updated_at = datetime.now(timezone.utc)
     db.session.commit()
     
     flash('Subscription removed successfully!', 'success')
@@ -299,7 +299,7 @@ This is a test notification from the ObsidianScout notification system.
 If you received this email, your email notifications are working correctly.
 
 Team: {current_user.scouting_team_number}
-Sent: {datetime.utcnow().strftime('%Y-%m-%d %I:%M %p UTC')}
+Sent: {datetime.now(timezone.utc).strftime('%Y-%m-%d %I:%M %p UTC')}
 
 """
         
@@ -392,7 +392,7 @@ def test_push():
         
         data = {
             'type': 'test',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
         
         success_count, failed_count, errors = send_push_to_user(

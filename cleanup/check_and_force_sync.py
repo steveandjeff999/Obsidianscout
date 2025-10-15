@@ -3,7 +3,7 @@
 from app import create_app
 from app.models import DatabaseChange, SyncServer, User
 from app.utils.simplified_sync import simplified_sync_manager
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 import json
 
 app = create_app()
@@ -14,7 +14,7 @@ def check_and_sync_recent_changes():
         print("=" * 50)
         
         # Check recent user changes (last 2 hours)
-        since_time = datetime.utcnow() - timedelta(hours=2)
+        since_time = datetime.now(timezone.utc) - timedelta(hours=2)
         recent_changes = DatabaseChange.query.filter(
             DatabaseChange.table_name == 'user',
             DatabaseChange.timestamp > since_time

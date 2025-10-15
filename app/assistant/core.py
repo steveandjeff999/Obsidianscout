@@ -7,7 +7,7 @@ import re
 from typing import Dict, List, Any, Tuple, Optional
 import difflib
 import string
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models import Team, ScoutingData, Match, Event, User
 from app import db
 from flask_login import current_user
@@ -631,7 +631,7 @@ class Assistant:
             cached = self.conversation_memory['knowledge_cache'][cache_key]
             if cached.get('timestamp'):
                 # Use cache if less than 1 hour old
-                age = (datetime.now() - cached['timestamp']).seconds
+                age = (datetime.now(timezone.utc) - cached['timestamp']).seconds
                 if age < 3600:
                     return cached['response']
         
@@ -641,7 +641,7 @@ class Assistant:
             # Cache the response
             self.conversation_memory['knowledge_cache'][cache_key] = {
                 'response': wiki_response,
-                'timestamp': datetime.now()
+                'timestamp': datetime.now(timezone.utc)
             }
             return wiki_response
         

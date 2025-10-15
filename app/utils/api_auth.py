@@ -4,7 +4,7 @@ Handles authentication and authorization for API requests using API keys
 """
 from functools import wraps
 from flask import request, jsonify, current_app, g
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 import hashlib
 
@@ -58,7 +58,7 @@ def authenticate_api_key(api_key):
                 return None, "Invalid API key"
             
             # Check if expired
-            if api_key_record.expires_at and api_key_record.expires_at < datetime.utcnow():
+            if api_key_record.expires_at and api_key_record.expires_at < datetime.now(timezone.utc):
                 return None, "API key has expired"
             
             return api_key_record, None

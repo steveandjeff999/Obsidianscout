@@ -5,7 +5,7 @@ Deep investigation into login issues beyond just failed attempt accumulation
 """
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 def comprehensive_login_diagnosis():
     """Comprehensive diagnosis of login issues"""
@@ -118,7 +118,7 @@ def comprehensive_login_diagnosis():
             print("-" * 40)
             
             # Recent failed attempts for superadmin
-            recent_cutoff = datetime.utcnow() - timedelta(hours=1)
+            recent_cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
             recent_failed = LoginAttempt.query.filter(
                 LoginAttempt.username == 'superadmin',
                 LoginAttempt.success == False,
@@ -135,7 +135,7 @@ def comprehensive_login_diagnosis():
             from app.utils.brute_force_protection import get_login_status
             
             # We can't call get_login_status without request context, so check database directly
-            block_cutoff = datetime.utcnow() - timedelta(minutes=15)
+            block_cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
             blocking_attempts = LoginAttempt.query.filter(
                 LoginAttempt.username == 'superadmin',
                 LoginAttempt.success == False,

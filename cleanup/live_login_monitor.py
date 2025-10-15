@@ -5,7 +5,7 @@ Monitor login attempts in real-time and provide detailed diagnostic information
 """
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 def live_login_monitor():
     """Monitor login attempts and provide diagnostic info"""
@@ -46,7 +46,7 @@ def live_login_monitor():
                 return
             
             # Check current login attempt status
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
             
             # All attempts
             all_attempts = LoginAttempt.query.filter_by(username='superadmin').count()

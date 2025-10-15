@@ -14,7 +14,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app import create_app, db
 from app.models import User, DatabaseChange, SyncServer, Role
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 import json
 import requests
 
@@ -78,7 +78,7 @@ def test_complete_autonomous_sync():
         
         print(f"\n🔄 Recent pending changes:")
         for change in recent_changes:
-            age = datetime.utcnow() - change.timestamp
+            age = datetime.now(timezone.utc) - change.timestamp
             print(f"   - {change.table_name}.{change.operation} "
                   f"(ID: {change.record_id}, age: {age.total_seconds():.1f}s)")
         

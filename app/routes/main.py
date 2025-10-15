@@ -13,7 +13,7 @@ from app.utils.config_manager import (get_current_game_config, get_effective_gam
 from flask import request, jsonify
 from app import load_chat_history
 from app.models import User
-from datetime import datetime
+from datetime import datetime, timezone
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
     filter_events_by_scouting_team, get_event_by_code, validate_user_in_same_team
@@ -371,7 +371,7 @@ def save_simple_config():
         try:
             debug_path = os.path.join(current_app.instance_path, 'config_save_debug.log')
             with open(debug_path, 'a', encoding='utf-8') as dbg:
-                dbg.write(f"--- Save attempt at {datetime.utcnow().isoformat()} by {getattr(current_user, 'username', 'unknown')} ---\n")
+                dbg.write(f"--- Save attempt at {datetime.now(timezone.utc).isoformat()} by {getattr(current_user, 'username', 'unknown')} ---\n")
                 dbg.write("Form keys:\n")
                 for k in request.form.keys():
                     dbg.write(f"  {k}\n")
@@ -900,7 +900,7 @@ def send_dm():
         'sender': sender,
         'recipient': recipient,
         'text': text,
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'reactions': []
     }
     save_chat_message(message)
@@ -945,7 +945,7 @@ def edit_message():
     history = message_info['history']
     history[message_info['index']]['text'] = new_text
     history[message_info['index']]['edited'] = True
-    history[message_info['index']]['edited_timestamp'] = datetime.utcnow().isoformat()
+    history[message_info['index']]['edited_timestamp'] = datetime.now(timezone.utc).isoformat()
     
     # Save the updated history
     message_info['save_func'](history)
@@ -1104,7 +1104,7 @@ def toggle_reaction(reactions, username, emoji):
         reactions.append({
             'user': username,
             'emoji': emoji,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
     
     return reactions
@@ -1367,7 +1367,7 @@ def api_sync_status():
     
     # Get recent sync activity (last 10 minutes)
     from datetime import datetime, timedelta
-    recent_time = datetime.utcnow() - timedelta(minutes=10)
+    recent_time = datetime.now(timezone.utc) - timedelta(minutes=10)
     recent_teams = filter_teams_by_scouting_team().filter(Team.created_at >= recent_time).count() if hasattr(Team, 'created_at') else 0
     recent_matches = filter_matches_by_scouting_team().filter(Match.created_at >= recent_time).count() if hasattr(Match, 'created_at') else 0
     
@@ -1387,7 +1387,7 @@ def api_sync_status():
         'sync_info': {
             'alliance_sync_interval': '30 seconds',
             'api_sync_interval': '3 minutes',
-            'last_check': datetime.utcnow().isoformat()
+            'last_check': datetime.now(timezone.utc).isoformat()
         }
     }
     
@@ -1407,7 +1407,7 @@ def api_brief_data():
         scouting_team_number = current_user.scouting_team_number
         
         # Today's scouts count (unique scouts today)
-        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         today_scouts = db.session.query(func.count(func.distinct(ScoutingData.scout_name)))\
             .filter(ScoutingData.scouting_team_number == scouting_team_number)\
             .filter(ScoutingData.timestamp >= today)\
@@ -1430,7 +1430,7 @@ def api_brief_data():
                 'scout_name': entry.scout_name or entry.scout or 'Unknown',
                 'team_number': entry.team.team_number if entry.team else 'N/A',
                 'match_number': entry.match.match_number if entry.match else 'N/A',
-                'timestamp': entry.timestamp.isoformat() if entry.timestamp else datetime.utcnow().isoformat()
+                'timestamp': entry.timestamp.isoformat() if entry.timestamp else datetime.now(timezone.utc).isoformat()
             })
         
         # Get current event

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import current_app
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -31,8 +31,8 @@ class User(UserMixin, ConcurrentModelMixin, db.Model):
     password_hash = db.Column(db.String(128))
     scouting_team_number = db.Column(db.Integer, nullable=True)
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     last_login = db.Column(db.DateTime)
     profile_picture = db.Column(db.String(256), nullable=True, default='img/avatars/default.png')
     must_change_password = db.Column(db.Boolean, default=False)
@@ -128,8 +128,8 @@ class ScoutingTeamSettings(db.Model):
     account_creation_locked = db.Column(db.Boolean, default=False, nullable=False)
     locked_by_user_id = db.Column(db.Integer, nullable=True)
     locked_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Accessor for the User who locked/unlocked accounts. We avoid an ORM
     # relationship here because User lives in a separate DB bind; instead
@@ -159,8 +159,8 @@ class ScoutingTeamSettings(db.Model):
         """Lock account creation for this team"""
         self.account_creation_locked = True
         self.locked_by_user_id = user.id
-        self.locked_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.locked_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
         db.session.commit()
     
     def unlock_account_creation(self, user):
@@ -168,7 +168,7 @@ class ScoutingTeamSettings(db.Model):
         self.account_creation_locked = False
         self.locked_by_user_id = user.id
         self.locked_at = None
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         db.session.commit()
 
 class Team(ConcurrentModelMixin, db.Model):
@@ -204,6 +204,7 @@ class Event(db.Model):
     name = db.Column(db.String(100), nullable=False)
     code = db.Column(db.String(20))  # Event code like "CALA" or "NYRO" - not unique anymore since multiple teams can have same event
     location = db.Column(db.String(100))
+    timezone = db.Column(db.String(50), nullable=True)  # IANA timezone like 'America/Denver' or 'America/New_York'
     start_date = db.Column(db.Date)
     end_date = db.Column(db.Date)
     year = db.Column(db.Integer, nullable=False)
@@ -223,9 +224,9 @@ class Match(ConcurrentModelMixin, db.Model):
     red_score = db.Column(db.Integer)
     blue_score = db.Column(db.Integer)
     winner = db.Column(db.String(10))  # 'red', 'blue', or 'tie'
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    scheduled_time = db.Column(db.DateTime, nullable=True, index=True)  # Scheduled match start time from API
-    predicted_time = db.Column(db.DateTime, nullable=True)  # Predicted start time from TBA
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    scheduled_time = db.Column(db.DateTime, nullable=True, index=True)  # Scheduled match start time from API (stored in UTC)
+    predicted_time = db.Column(db.DateTime, nullable=True)  # Predicted start time from TBA (stored in UTC)
     scouting_team_number = db.Column(db.Integer, nullable=True)
     scouting_data = db.relationship('ScoutingData', backref='match', lazy=True)
     
@@ -258,7 +259,7 @@ class StrategyShare(db.Model):
     match_id = db.Column(db.Integer, db.ForeignKey('match.id'), nullable=False)
     token = db.Column(db.String(128), unique=True, nullable=False, index=True)
     created_by = db.Column(db.Integer, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     revoked = db.Column(db.Boolean, default=False)
     # Relationship to match for convenient access
     match = db.relationship('Match', backref=db.backref('strategy_shares', lazy=True))
@@ -275,7 +276,7 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
     scout_name = db.Column(db.String(50))
     scout_id = db.Column(db.Integer, nullable=True)
     scouting_station = db.Column(db.Integer)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     alliance = db.Column(db.String(10))  # 'red' or 'blue'
     data_json = db.Column(db.Text, nullable=False)  # JSON data based on game config
 
@@ -860,7 +861,7 @@ class TeamListEntry(db.Model):
     event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=False)
     event = db.relationship('Event')
     reason = db.Column(db.Text)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     type = db.Column(db.String(50))  # For tracking entry type (do_not_pick or avoid)
     scouting_team_number = db.Column(db.Integer, nullable=True)
 
@@ -889,7 +890,7 @@ class AllianceSelection(db.Model):
     second_pick = db.Column(db.Integer, db.ForeignKey('team.id'))  # Second pick
     third_pick = db.Column(db.Integer, db.ForeignKey('team.id'))  # Third pick (backup)
     event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     scouting_team_number = db.Column(db.Integer, nullable=True)
     
     # Relationships
@@ -936,7 +937,7 @@ class PitScoutingData(db.Model):
     scouting_team_number = db.Column(db.Integer, nullable=True)
     scout_name = db.Column(db.String(50), nullable=False)
     scout_id = db.Column(db.Integer, nullable=True)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     data_json = db.Column(db.Text, nullable=False)  # JSON data based on pit config
     
     # Local storage and sync fields
@@ -1024,8 +1025,8 @@ class StrategyDrawing(db.Model):
     match_id = db.Column(db.Integer, db.ForeignKey('match.id'), nullable=False, unique=True)
     scouting_team_number = db.Column(db.Integer, nullable=True)
     data_json = db.Column(db.Text, nullable=False)  # JSON-encoded drawing data
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_updated = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     background_image = db.Column(db.String(256), nullable=True)  # Path or filename of custom background
 
     match = db.relationship('Match', backref=db.backref('strategy_drawing', uselist=False))
@@ -1054,8 +1055,8 @@ class ScoutingAlliance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     alliance_name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     is_active = db.Column(db.Boolean, default=True)
     
     # Configuration sync settings
@@ -1123,7 +1124,7 @@ class ScoutingAllianceMember(db.Model):
     team_name = db.Column(db.String(100))
     role = db.Column(db.String(50), default='member')  # 'admin', 'member'
     status = db.Column(db.String(50), default='pending')  # 'pending', 'accepted', 'declined'
-    joined_at = db.Column(db.DateTime, default=datetime.utcnow)
+    joined_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     invited_by = db.Column(db.Integer, nullable=True)  # Team number that sent the invite
     
     def __repr__(self):
@@ -1139,7 +1140,7 @@ class ScoutingAllianceInvitation(db.Model):
     to_team_number = db.Column(db.Integer, nullable=False)
     message = db.Column(db.Text)
     status = db.Column(db.String(50), default='pending')  # 'pending', 'accepted', 'declined'
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     responded_at = db.Column(db.DateTime)
     
     # Relationship to alliance
@@ -1157,7 +1158,7 @@ class ScoutingAllianceEvent(db.Model):
     event_code = db.Column(db.String(20), nullable=False)
     event_name = db.Column(db.String(100))
     is_active = db.Column(db.Boolean, default=True)
-    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    added_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     # Team number that added this event (nullable for older records)
     added_by = db.Column(db.Integer, nullable=True)
     
@@ -1174,7 +1175,7 @@ class ScoutingAllianceSync(db.Model):
     to_team_number = db.Column(db.Integer, nullable=False)
     data_type = db.Column(db.String(50), nullable=False)  # 'scouting_data', 'pit_data', 'chat'
     data_count = db.Column(db.Integer, default=0)
-    last_sync = db.Column(db.DateTime, default=datetime.utcnow)
+    last_sync = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     sync_status = db.Column(db.String(50), default='pending')  # 'pending', 'synced', 'failed'
     
     # Relationship to alliance
@@ -1193,7 +1194,7 @@ class ScoutingAllianceChat(db.Model):
     from_username = db.Column(db.String(80), nullable=False)
     message = db.Column(db.Text, nullable=False)
     message_type = db.Column(db.String(50), default='text')  # 'text', 'system', 'data_share'
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     is_read = db.Column(db.Boolean, default=False)
     
     # Relationship to alliance
@@ -1257,11 +1258,11 @@ class TeamAllianceStatus(db.Model):
         # Check if team is trying to activate a different alliance
         if status.is_alliance_mode_active and status.active_alliance_id != alliance_id:
             # Automatically deactivate current alliance and switch to new one
-            status.deactivated_at = datetime.utcnow()
+            status.deactivated_at = datetime.now(timezone.utc)
         
         status.active_alliance_id = alliance_id
         status.is_alliance_mode_active = True
-        status.activated_at = datetime.utcnow()
+        status.activated_at = datetime.now(timezone.utc)
         status.deactivated_at = None
         db.session.commit()
         return status
@@ -1272,7 +1273,7 @@ class TeamAllianceStatus(db.Model):
         status = cls.query.filter_by(team_number=team_number).first()
         if status:
             status.is_alliance_mode_active = False
-            status.deactivated_at = datetime.utcnow()
+            status.deactivated_at = datetime.now(timezone.utc)
             db.session.commit()
         return status
     
@@ -1316,7 +1317,7 @@ class SharedGraph(db.Model):
     # Metadata
     created_by_team = db.Column(db.Integer, nullable=False)  # Team number that created the share
     created_by_user = db.Column(db.String(80), nullable=False)  # Username that created the share
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     expires_at = db.Column(db.DateTime, nullable=True)  # Optional expiration
     view_count = db.Column(db.Integer, default=0)
     is_active = db.Column(db.Boolean, default=True)
@@ -1361,7 +1362,7 @@ class SharedGraph(db.Model):
         """Check if this shared graph has expired"""
         if not self.expires_at:
             return False
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
     
     def get_teams(self):
         """Get Team objects for the teams in this shared graph"""
@@ -1410,7 +1411,7 @@ class SharedGraph(db.Model):
         expires_at = None
         if expires_in_days:
             from datetime import timedelta
-            expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+            expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
         
         shared_graph = cls(
             share_id=share_id,
@@ -1460,7 +1461,7 @@ class SharedTeamRanks(db.Model):
     # Metadata
     created_by_team = db.Column(db.Integer, nullable=False)  # Team number that created the share
     created_by_user = db.Column(db.String(80), nullable=False)  # Username that created the share
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     expires_at = db.Column(db.DateTime, nullable=True)  # Optional expiration
     view_count = db.Column(db.Integer, default=0)
     is_active = db.Column(db.Boolean, default=True)
@@ -1479,7 +1480,7 @@ class SharedTeamRanks(db.Model):
         """Check if this shared ranking has expired"""
         if not self.expires_at:
             return False
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
     
     def increment_view_count(self):
         """Increment the view count for this shared ranking"""
@@ -1518,7 +1519,7 @@ class SharedTeamRanks(db.Model):
         expires_at = None
         if expires_in_days:
             from datetime import timedelta
-            expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+            expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
         
         shared_ranks = cls(
             share_id=share_id,
@@ -1563,8 +1564,8 @@ class CustomPage(db.Model):
     owner_team = db.Column(db.Integer, nullable=False)
     owner_user = db.Column(db.String(80), nullable=False)
     widgets_json = db.Column(db.Text, nullable=False)  # JSON array of widget configs
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     is_active = db.Column(db.Boolean, default=True)
 
     def __repr__(self):
@@ -1598,7 +1599,7 @@ class SyncServer(ConcurrentModelMixin, db.Model):
     last_sync = db.Column(db.DateTime, nullable=True)
     last_ping = db.Column(db.DateTime, nullable=True)
     sync_priority = db.Column(db.Integer, default=1)  # 1 = highest priority
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     created_by = db.Column(db.Integer, nullable=True)
     
     # Server metadata
@@ -1632,14 +1633,16 @@ class SyncServer(ConcurrentModelMixin, db.Model):
             return False
         if self.last_ping:
             # If we haven't pinged in 5 minutes, consider unhealthy
-            time_since_ping = datetime.utcnow() - self.last_ping
+            # Ensure last_ping is timezone-aware for comparison
+            last_ping_aware = self.last_ping if self.last_ping.tzinfo else self.last_ping.replace(tzinfo=timezone.utc)
+            time_since_ping = datetime.now(timezone.utc) - last_ping_aware
             if time_since_ping.total_seconds() > 300:
                 return False
         return True
     
     def update_ping(self, success=True, error_message=None):
         """Update last ping time and error tracking"""
-        self.last_ping = datetime.utcnow()
+        self.last_ping = datetime.now(timezone.utc)
         if success:
             self.error_count = max(0, self.error_count - 1)  # Decrease error count on success
             self.last_error = None
@@ -1686,7 +1689,7 @@ class SyncLog(ConcurrentModelMixin, db.Model):
     sync_type = db.Column(db.String(50), nullable=False)  # 'database', 'files', 'config', 'full'
     direction = db.Column(db.String(10), nullable=False)  # 'push', 'pull', 'bidirectional'
     status = db.Column(db.String(20), nullable=False)  # 'pending', 'in_progress', 'completed', 'failed'
-    started_at = db.Column(db.DateTime, default=datetime.utcnow)
+    started_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = db.Column(db.DateTime, nullable=True)
     error_message = db.Column(db.Text, nullable=True)
     
@@ -1761,7 +1764,7 @@ class FileChecksum(ConcurrentModelMixin, db.Model):
     checksum = db.Column(db.String(64), nullable=False)  # SHA256 hash
     file_size = db.Column(db.BigInteger, nullable=False)
     last_modified = db.Column(db.DateTime, nullable=False)
-    last_checked = db.Column(db.DateTime, default=datetime.utcnow)
+    last_checked = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     sync_status = db.Column(db.String(20), default='synced')  # 'synced', 'modified', 'new', 'deleted'
     
     @classmethod
@@ -1775,7 +1778,7 @@ class FileChecksum(ConcurrentModelMixin, db.Model):
             existing.checksum = checksum
             existing.file_size = file_size
             existing.last_modified = last_modified
-            existing.last_checked = datetime.utcnow()
+            existing.last_checked = datetime.now(timezone.utc)
             return existing
         else:
             # Create new record
@@ -1810,7 +1813,7 @@ class SyncConfig(ConcurrentModelMixin, db.Model):
     value = db.Column(db.Text, nullable=True)
     data_type = db.Column(db.String(20), default='string')  # 'string', 'integer', 'boolean', 'json'
     description = db.Column(db.String(255), nullable=True)
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
+    last_updated = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_by = db.Column(db.Integer, nullable=True)
     
     @classmethod
@@ -1851,7 +1854,7 @@ class SyncConfig(ConcurrentModelMixin, db.Model):
         config.data_type = data_type
         if description:
             config.description = description
-        config.last_updated = datetime.utcnow()
+        config.last_updated = datetime.now(timezone.utc)
         config.updated_by = user_id
         
         db.session.commit()
@@ -1868,7 +1871,7 @@ class DatabaseChange(ConcurrentModelMixin, db.Model):
     operation = db.Column(db.String(20), nullable=False)  # 'insert', 'update', 'delete', 'soft_delete'
     change_data = db.Column(db.Text, nullable=True)  # JSON of the record data
     old_data = db.Column(db.Text, nullable=True)  # JSON of previous record data (for updates)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
     sync_status = db.Column(db.String(20), default='pending')  # 'pending', 'synced', 'failed'
     created_by_server = db.Column(db.String(100), nullable=True)  # Which server created this change
     
@@ -1916,7 +1919,7 @@ class LoginAttempt(db.Model):
     ip_address = db.Column(db.String(45), nullable=False)  # Support IPv6
     username = db.Column(db.String(80), nullable=True)  # Can be null for non-existent users
     team_number = db.Column(db.Integer, nullable=True)
-    attempt_time = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    attempt_time = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     success = db.Column(db.Boolean, default=False, nullable=False)
     user_agent = db.Column(db.String(500), nullable=True)
     
@@ -1950,7 +1953,7 @@ class LoginAttempt(db.Model):
         """Get count of failed attempts for IP/username in the last X minutes"""
         from datetime import timedelta
         
-        cutoff_time = datetime.utcnow() - timedelta(minutes=since_minutes)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=since_minutes)
         
         from sqlalchemy.exc import OperationalError
         try:
@@ -2015,7 +2018,7 @@ class LoginAttempt(db.Model):
         """Clean up old login attempts to prevent table bloat"""
         from datetime import timedelta
         
-        cutoff_time = datetime.utcnow() - timedelta(days=days_old)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days_old)
         
         from sqlalchemy.exc import OperationalError
         try:

@@ -1,14 +1,16 @@
 """
 Notification Scheduler and Sender Service
 Handles scheduling and sending notifications for matches and events
+Properly handles event timezones to ensure notifications are sent at correct local times
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from flask import current_app
 from app import db
 from app.models import Match, Team, Event, User
 from app.models_misc import NotificationSubscription, NotificationLog, NotificationQueue, DeviceToken
 from app.utils.emailer import send_email, _build_html_email
 from app.utils.push_notifications import send_push_to_user
+from app.utils.timezone_utils import convert_utc_to_local, format_time_with_timezone
 import traceback
 
 
@@ -279,7 +281,13 @@ def create_strategy_notification_message(match, target_team_number):
     
     match_time = get_match_time(match)
     if match_time:
-        message += f"\nScheduled: {match_time.strftime('%I:%M %p')}\n"
+        # Get event to determine timezone
+        event = Event.query.get(match.event_id) if match.event_id else None
+        event_tz = event.timezone if event else None
+        
+        # Format time in event's local timezone
+        formatted_time = format_time_with_timezone(match_time, event_tz, '%I:%M %p')
+        message += f"\nScheduled: {formatted_time}\n"
     
     # Add match predictions based on scouting data
     message += "\n--- MATCH ANALYSIS ---\n"
@@ -406,7 +414,7 @@ def send_notification_for_subscription(subscription, match):
             match_id=match.id,
             team_number=subscription.target_team_number,
             event_code=subscription.event_code,
-            sent_at=datetime.utcnow()
+            sent_at=datetime.now(timezone.utc)
         )
         
         # Send email if enabled
@@ -546,6 +554,7 @@ def send_notification_for_subscription(subscription, match):
 def schedule_notifications_for_match(match):
     """
     Schedule notifications for a match based on active subscriptions
+    Properly handles event timezones to send notifications at the correct local time
     
     Returns:
         Number of notifications scheduled
@@ -557,6 +566,15 @@ def schedule_notifications_for_match(match):
     if not match_time:
         print(f"⚠️  Match {match.id} has no scheduled/predicted time, skipping notification scheduling")
         return 0
+    
+    # Get event for timezone information
+    event = Event.query.get(match.event_id) if match.event_id else None
+    event_tz = event.timezone if event else None
+    
+    if event_tz:
+        # Log for debugging: show what time the match is in local timezone
+        local_time = convert_utc_to_local(match_time, event_tz)
+        print(f"🕐 Match time in {event_tz}: {local_time.strftime('%I:%M %p %Z')}")
     
     # Get all teams in this match
     all_teams = match.red_teams + match.blue_teams
@@ -572,10 +590,12 @@ def schedule_notifications_for_match(match):
     
     for subscription in subscriptions:
         # Calculate when to send notification
+        # match_time is in UTC, so subtracting minutes gives us the correct UTC time to send
+        # This ensures notification is sent X minutes before match starts in LOCAL time
         send_time = match_time - timedelta(minutes=subscription.minutes_before)
         
         # Don't schedule if already past
-        if send_time < datetime.utcnow():
+        if send_time < datetime.now(timezone.utc):
             continue
         
         # Check if already scheduled
@@ -589,7 +609,7 @@ def schedule_notifications_for_match(match):
             # Update scheduled time if changed
             if existing.scheduled_for != send_time:
                 existing.scheduled_for = send_time
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = datetime.now(timezone.utc)
         else:
             # Create new queue entry
             queue_entry = NotificationQueue(
@@ -612,7 +632,7 @@ def process_pending_notifications():
     Returns:
         (sent_count, failed_count)
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     
     # Get all pending notifications that are due
     pending = NotificationQueue.query.filter(
@@ -687,7 +707,7 @@ def process_pending_notifications():
 
 def cleanup_old_queue_entries(days=7):
     """Remove old queue entries to keep database clean"""
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     
     deleted = NotificationQueue.query.filter(
         NotificationQueue.created_at < cutoff,

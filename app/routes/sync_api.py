@@ -5,7 +5,7 @@ Provides API endpoints for server-to-server synchronization
 import os
 import json
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from flask import Blueprint, request, jsonify, send_file, current_app
 from werkzeug.utils import secure_filename
 from app import db
@@ -81,7 +81,7 @@ class FallbackSyncManager:
             success = response.status_code == 200
             
             server.ping_success = success
-            server.last_ping = datetime.utcnow()
+            server.last_ping = datetime.now(timezone.utc)
             if not success:
                 server.last_error = f"HTTP {response.status_code}"
             else:
@@ -91,7 +91,7 @@ class FallbackSyncManager:
             return success
         except Exception as e:
             server.ping_success = False
-            server.last_ping = datetime.utcnow()
+            server.last_ping = datetime.now(timezone.utc)
             server.last_error = str(e)
             db.session.commit()
             return False
@@ -114,7 +114,7 @@ def ping():
     """Health check endpoint for server availability"""
     return jsonify({
         'status': 'ok',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'version': '1.0.0',
         'server_id': getattr(sync_manager, 'server_id', 'unknown')
     })
@@ -163,7 +163,7 @@ def get_changes():
         return jsonify({
             'changes': change_data,
             'count': len(change_data),
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'server_id': getattr(sync_manager, 'server_id', 'unknown')
         })
         
@@ -211,7 +211,7 @@ def receive_changes():
             response_data = {
                 'success': True,
                 'applied_count': applied_count,
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'catchup_mode': catchup_mode
             }
             
@@ -386,7 +386,7 @@ def get_enhanced_sync_status():
         
         enhanced_status = {
             'overall_health': overall_health,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'active_servers': active_servers,
             'database_sync': database_status,
             'file_sync': file_sync_status,
@@ -406,7 +406,7 @@ def get_enhanced_sync_status():
         logger.error(f"Failed to get enhanced sync status: {e}")
         return jsonify({
             'error': str(e),
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'overall_health': 'error'
         }), 500
 
@@ -730,7 +730,7 @@ def get_database_changes():
         
         return jsonify({
             'changes': changes,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'count': len(changes)
         })
         
@@ -848,7 +848,7 @@ def trigger_remote_update():
         
         # Spawn detached background process with logging
         with open(log_file, 'w') as f:
-            f.write(f"Update started at {datetime.utcnow()}\n")
+            f.write(f"Update started at {datetime.now(timezone.utc)}\n")
             f.write(f"Command: {' '.join(cmd)}\n")
             f.write(f"Working directory: {repo_root}\n")
             f.write("=" * 50 + "\n")
@@ -887,7 +887,7 @@ def trigger_catchup_scan():
             'message': 'Catch-up scan completed',
             'servers_processed': len(results) if results else 0,
             'results': results or [],
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -906,7 +906,7 @@ def get_catchup_status():
         
         # Get recent sync logs for catch-up operations
         recent_logs = SyncLog.query.filter(
-            SyncLog.created_at >= datetime.utcnow() - timedelta(hours=24)
+            SyncLog.created_at >= datetime.now(timezone.utc) - timedelta(hours=24)
         ).order_by(SyncLog.created_at.desc()).limit(50).all()
         
         catchup_logs = [log for log in recent_logs if 'catch-up' in log.operation.lower()]
@@ -930,7 +930,7 @@ def get_catchup_status():
                 'created_at': log.created_at.isoformat(),
                 'details': log.details
             } for log in catchup_logs[:10]],
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -1063,7 +1063,7 @@ def universal_sync_receive():
             'total_changes': len(changes),
             'successful': success_count,
             'errors': error_count,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
         
         if success_count > 0:
@@ -1345,7 +1345,7 @@ def fast_sync_receive():
             'batch_size': batch_size,
             'successful': success_count,
             'errors': error_count,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
         
         if success_count > 0:
@@ -1763,9 +1763,9 @@ def get_sqlite3_optimized_changes():
             try:
                 since_time = datetime.fromisoformat(since)
             except:
-                since_time = datetime.now() - timedelta(hours=24)
+                since_time = datetime.now(timezone.utc) - timedelta(hours=24)
         else:
-            since_time = datetime.now() - timedelta(hours=24)
+            since_time = datetime.now(timezone.utc) - timedelta(hours=24)
         
         # Use automatic capture for zero data loss
         changes = automatic_sqlite3_sync._capture_all_changes_sqlite3()
@@ -1880,7 +1880,7 @@ def sqlite3_full_sync_send():
             'tables_included': len(automatic_sqlite3_sync.table_database_map),
             'sync_type': sync_type,
             'checksum': checksum,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'server_id': automatic_sqlite3_sync.server_id,
             'zero_data_loss': True
         }), 200

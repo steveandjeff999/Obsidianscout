@@ -1,7 +1,7 @@
 """
 Notification system models stored in misc.db database
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from app import db
 
 class NotificationSubscription(db.Model):
@@ -27,8 +27,8 @@ class NotificationSubscription(db.Model):
     
     # Status
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     def __repr__(self):
         return f'<NotificationSubscription user={self.user_id} type={self.notification_type} team={self.target_team_number}>'
@@ -55,8 +55,8 @@ class DeviceToken(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     last_success = db.Column(db.DateTime, nullable=True)  # Last successful push
     failure_count = db.Column(db.Integer, default=0, nullable=False)  # Track failures to remove dead endpoints
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     def __repr__(self):
         return f'<DeviceToken user={self.user_id} device={self.device_name}>'
@@ -88,7 +88,7 @@ class NotificationLog(db.Model):
     push_failed_count = db.Column(db.Integer, default=0)
     push_error = db.Column(db.Text, nullable=True)
     
-    sent_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    sent_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
     
     def __repr__(self):
         return f'<NotificationLog user={self.user_id} type={self.notification_type} sent={self.sent_at}>'
@@ -112,8 +112,8 @@ class NotificationQueue(db.Model):
     last_attempt = db.Column(db.DateTime, nullable=True)
     error_message = db.Column(db.Text, nullable=True)
     
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     def __repr__(self):
         return f'<NotificationQueue match={self.match_id} scheduled={self.scheduled_for} status={self.status}>'

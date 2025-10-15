@@ -16,7 +16,7 @@ from io import BytesIO
 import base64
 import zipfile
 import tempfile
-from datetime import datetime, date
+from datetime import datetime, timezone, date
 from sqlalchemy.exc import IntegrityError
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_effective_game_config
@@ -1442,7 +1442,7 @@ def export_portable():
                 z.writestr(f"{name}.json", json.dumps(content, ensure_ascii=False, indent=2))
 
         buf.seek(0)
-        filename = f'portable_export_{datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")}.zip'
+        filename = f'portable_export_{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}.zip'
         return send_file(buf, as_attachment=True, download_name=filename, mimetype='application/zip')
 
     except Exception as e:

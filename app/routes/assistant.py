@@ -4,7 +4,7 @@ Routes for the Scout Assistant feature
 
 from flask import Blueprint, render_template, request, jsonify, current_app, abort
 from flask_login import login_required, current_user
-from datetime import datetime
+from datetime import datetime, timezone
 from app.assistant import get_assistant, get_visualizer
 from functools import wraps
 import os
@@ -131,7 +131,7 @@ def ask_question():
                 'sender': username,
                 'recipient': 'assistant',
                 'text': question,
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'owner': username,
                 'reactions': []
             }
@@ -140,7 +140,7 @@ def ask_question():
                 'sender': 'assistant',
                 'recipient': username,
                 'text': answer.get('text', ''),
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'owner': username,
                 'reactions': []
             }

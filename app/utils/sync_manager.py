@@ -1,7 +1,7 @@
 import requests
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import current_app
 import uuid
 import hashlib
@@ -75,7 +75,7 @@ class SyncManager:
         
         # Prepare data for upload
         upload_data = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'device_id': self.get_device_id(),
             'data': [item.to_dict() for item in pit_data_list]
         }
@@ -259,7 +259,7 @@ class SyncManager:
     def update_last_sync_timestamp(self, timestamp=None):
         """Update the last sync timestamp"""
         if timestamp is None:
-            timestamp = datetime.utcnow().isoformat()
+            timestamp = datetime.now(timezone.utc).isoformat()
         
         try:
             sync_log_path = os.path.join(os.getcwd(), 'instance', 'last_sync.json')

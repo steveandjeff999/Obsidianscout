@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Add the root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
@@ -65,7 +65,7 @@ def backup_sync_server_config():
         backup_data = {
             'servers': server_data,
             'config': config_data,
-            'backup_time': datetime.utcnow().isoformat()
+            'backup_time': datetime.now(timezone.utc).isoformat()
         }
         
         # Save to instance folder

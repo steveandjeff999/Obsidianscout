@@ -4,7 +4,7 @@ Replaces existing sync with zero data loss SQLite3 bidirectional sync
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
 from flask import current_app
 from app import db
@@ -115,7 +115,7 @@ class AutomaticSQLite3Sync:
                 logger.info(f"✅ Automatic SQLite3 sync completed successfully with {server.name}")
                 
                 # Update server status
-                server.last_sync = datetime.utcnow()
+                server.last_sync = datetime.now(timezone.utc)
                 server.status = 'online'
                 db.session.commit()
                 
@@ -179,7 +179,7 @@ class AutomaticSQLite3Sync:
                             if has_updated_at or has_created_at:
                                 # Get recent changes
                                 timestamp_field = 'updated_at' if has_updated_at else 'created_at'
-                                cutoff_time = datetime.now() - timedelta(hours=24)
+                                cutoff_time = datetime.now(timezone.utc) - timedelta(hours=24)
                                 
                                 query = f"SELECT * FROM {table_name} WHERE {timestamp_field} > ? ORDER BY {timestamp_field}"
                                 cursor.execute(query, (cutoff_time.isoformat(),))
@@ -200,7 +200,7 @@ class AutomaticSQLite3Sync:
                                     'record_id': str(row_dict.get('id', '')),
                                     'operation': 'upsert',
                                     'data': row_dict,
-                                    'timestamp': datetime.now().isoformat(),
+                                    'timestamp': datetime.now(timezone.utc).isoformat(),
                                     'change_hash': self._calculate_change_hash(row_dict),
                                     'server_id': self.server_id
                                 }
@@ -266,7 +266,7 @@ class AutomaticSQLite3Sync:
                                     'record_id': str(row_dict.get('id', '')),
                                     'operation': 'upsert',
                                     'data': row_dict,
-                                    'timestamp': datetime.now().isoformat(),
+                                    'timestamp': datetime.now(timezone.utc).isoformat(),
                                     'change_hash': self._calculate_change_hash(row_dict),
                                     'server_id': self.server_id,
                                     'sync_type': 'full_sync'
@@ -405,7 +405,7 @@ class AutomaticSQLite3Sync:
                     operations.append(f"❌ Failed to apply remote data")
             
             # Step 6: Update sync timestamp
-            server.last_sync = datetime.utcnow()
+            server.last_sync = datetime.now(timezone.utc)
             db.session.commit()
             operations.append("✅ Full sync completed successfully")
             
@@ -449,7 +449,7 @@ class AutomaticSQLite3Sync:
                 url = f"{server.protocol}://{server.host}:{server.port}/api/sync/sqlite3/optimized-changes"
                 
                 params = {
-                    'since': (server.last_sync or datetime.now() - timedelta(hours=24)).isoformat(),
+                    'since': (server.last_sync or datetime.now(timezone.utc) - timedelta(hours=24)).isoformat(),
                     'server_id': self.server_id,
                     'format': 'sqlite3_zero_loss'
                 }
@@ -495,7 +495,7 @@ class AutomaticSQLite3Sync:
                 payload = {
                     'changes': changes,
                     'server_id': self.server_id,
-                    'timestamp': datetime.now().isoformat(),
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
                     'format': 'sqlite3_zero_loss',
                     'total_count': len(changes),
                     'checksum': self._calculate_batch_checksum(changes)

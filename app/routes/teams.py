@@ -5,7 +5,7 @@ from app.models import Team, Event, ScoutingData, team_event
 from app import db
 from app.utils.api_utils import get_teams, ApiError, api_to_db_team_conversion, get_event_details, get_teams_dual_api, get_event_details_dual_api
 from app.utils.tba_api_utils import get_tba_team_events, TBAApiError
-from datetime import datetime
+from datetime import datetime, timezone
 import statistics
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_current_game_config, get_effective_game_config
@@ -222,7 +222,7 @@ def sync_from_config():
                     'teams_updated': teams_updated,
                     'total_teams': len(team_data_list),
                     'sync_type': 'bulk_sync',
-                    'sync_timestamp': datetime.utcnow().isoformat()
+                    'sync_timestamp': datetime.now(timezone.utc).isoformat()
                 }, 
                 f"sync_summary_teams_{event_code}"
             )

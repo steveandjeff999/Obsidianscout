@@ -682,7 +682,10 @@ def api_to_db_match_conversion(api_match, event_id):
     return match_data
 
 def get_event_details(event_code):
-    """Get event details from FIRST API"""
+    """
+    Get event details from FIRST API
+    Note: FIRST API does not provide timezone directly, so we'll need to infer or get from TBA
+    """
     base_url = current_app.config.get('API_BASE_URL', 'https://frc-api.firstinspires.org')
     season = get_current_game_config().get('season', 2026)
     
@@ -710,7 +713,60 @@ def get_event_details(event_code):
         # Get the first event from the response
         events = response.json().get('Events', [])
         if events:
-            return events[0]
+            first_event = events[0]
+            
+            # Convert FIRST API format to database format
+            # FIRST API provides venue details we can use to infer timezone
+            db_format = {
+                'name': first_event.get('name', ''),
+                'code': first_event.get('code', event_code),
+                'location': first_event.get('address', ''),
+                'start_date': None,
+                'end_date': None,
+                'year': season,
+                'timezone': None
+            }
+            
+            # Parse dates if available
+            if first_event.get('dateStart'):
+                try:
+                    from datetime import datetime
+                    db_format['start_date'] = datetime.fromisoformat(first_event['dateStart'].replace('Z', '+00:00')).date()
+                except:
+                    pass
+            
+            if first_event.get('dateEnd'):
+                try:
+                    from datetime import datetime
+                    db_format['end_date'] = datetime.fromisoformat(first_event['dateEnd'].replace('Z', '+00:00')).date()
+                except:
+                    pass
+            
+            # Try to infer timezone from FIRST API venue information
+            # FIRST API provides: city, stateprov, country in the event object
+            city = first_event.get('city')
+            state = first_event.get('stateprov')
+            country = first_event.get('country')
+            
+            if city or state or country:
+                from app.utils.timezone_utils import infer_timezone_from_location
+                inferred_tz = infer_timezone_from_location(city, state, country)
+                if inferred_tz:
+                    db_format['timezone'] = inferred_tz
+                    print(f"✅ Inferred timezone from location ({city}, {state}, {country}): {inferred_tz}")
+            
+            # If we couldn't infer from FIRST API, try TBA as fallback
+            if not db_format['timezone']:
+                try:
+                    tba_event_key = construct_tba_event_key(event_code, season)
+                    tba_event = get_tba_event_details(tba_event_key)
+                    if tba_event and tba_event.get('timezone'):
+                        db_format['timezone'] = tba_event['timezone']
+                        print(f"✅ Got timezone from TBA fallback: {db_format['timezone']}")
+                except:
+                    print("⚠️  Could not fetch timezone from TBA, will use UTC as default")
+            
+            return db_format
         else:
             raise ApiError(f"Event {event_code} not found")
         

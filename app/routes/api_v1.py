@@ -3,7 +3,7 @@ Main API Routes for Data Access and Operations
 Provides comprehensive API endpoints for accessing team data, sync operations, and actions
 """
 from flask import Blueprint, request, jsonify, current_app
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 import traceback
 import json
 
@@ -44,7 +44,7 @@ def api_info():
             'created_at': api_key.created_at.isoformat(),
             'last_used_at': api_key.last_used_at.isoformat() if api_key.last_used_at else None
         },
-        'server_time': datetime.utcnow().isoformat(),
+        'server_time': datetime.now(timezone.utc).isoformat(),
         'endpoints': {
             'teams': '/api/v1/teams',
             'team_details': '/api/v1/teams/{team_id}',
@@ -642,7 +642,7 @@ def sync_status():
             'success': True,
             'sync_status': {
                 'team_number': team_number,
-                'last_check': datetime.utcnow().isoformat(),
+                'last_check': datetime.now(timezone.utc).isoformat(),
                 'data_counts': {
                     'teams': team_count,
                     'matches': match_count,
@@ -675,8 +675,8 @@ def trigger_sync():
         return jsonify({
             'success': True,
             'message': f'{sync_type.title()} sync triggered successfully',
-            'sync_id': f'sync_{int(datetime.utcnow().timestamp())}',
-            'estimated_completion': (datetime.utcnow() + timedelta(minutes=5)).isoformat()
+            'sync_id': f'sync_{int(datetime.now(timezone.utc).timestamp())}',
+            'estimated_completion': (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
         })
         
     except Exception as e:
@@ -724,7 +724,7 @@ def health_check():
     return jsonify({
         'success': True,
         'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'version': '1.0',
         'team_number': get_current_api_team()
     })

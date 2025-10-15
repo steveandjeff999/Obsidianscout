@@ -5,7 +5,7 @@ Safe to re-run; generates unique username each execution.
 from app import create_app, db
 from app.models import User, DatabaseChange, SyncServer
 from app.utils.simplified_sync import simplified_sync_manager
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 
 app = create_app()
@@ -13,7 +13,7 @@ app = create_app()
 USERNAME_PREFIX = "sync_test_user"
 
 def create_test_user():
-    ts = datetime.utcnow().strftime('%H%M%S')
+    ts = datetime.now(timezone.utc).strftime('%H%M%S')
     username = f"{USERNAME_PREFIX}_{ts}"
     user = User(username=username, scouting_team_number=9999)
     user.set_password('TempPass123!')

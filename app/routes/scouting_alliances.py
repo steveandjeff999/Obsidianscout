@@ -16,7 +16,7 @@ from app.routes.auth import admin_required
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import load_game_config, load_pit_config
 from app.utils.team_isolation import get_current_scouting_team_number
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 import json
 import uuid
 
@@ -589,7 +589,7 @@ def respond_invitation(invitation_id):
         
         # Update invitation status
         invitation.status = 'accepted'
-        invitation.responded_at = datetime.utcnow()
+        invitation.responded_at = datetime.now(timezone.utc)
         
         # Send notification to alliance members
         socketio.emit('alliance_member_joined', {
@@ -600,7 +600,7 @@ def respond_invitation(invitation_id):
         
     else:
         invitation.status = 'declined'
-        invitation.responded_at = datetime.utcnow()
+        invitation.responded_at = datetime.now(timezone.utc)
     
     db.session.commit()
     
@@ -927,7 +927,7 @@ def receive_sync_data():
     sync_record = ScoutingAllianceSync.query.get(sync_id)
     if sync_record:
         sync_record.sync_status = 'synced'
-        sync_record.last_sync = datetime.utcnow()
+        sync_record.last_sync = datetime.now(timezone.utc)
     
     db.session.commit()
     
@@ -1194,7 +1194,7 @@ def on_leave_alliance_room(data):
         sync_record = ScoutingAllianceSync.query.get(sync_id)
         if sync_record:
             sync_record.sync_status = 'synced'
-            sync_record.last_sync = datetime.utcnow()
+            sync_record.last_sync = datetime.now(timezone.utc)
     
     if imported_count > 0:
         db.session.commit()
@@ -1312,10 +1312,10 @@ def api_toggle_alliance_mode():
             team_status.active_alliance_id = alliance_id if is_active else None
             team_status.is_alliance_mode_active = is_active
             if is_active:
-                team_status.activated_at = datetime.utcnow()
+                team_status.activated_at = datetime.now(timezone.utc)
                 team_status.deactivated_at = None
             else:
-                team_status.deactivated_at = datetime.utcnow()
+                team_status.deactivated_at = datetime.now(timezone.utc)
         
         db.session.commit()
         
@@ -1414,7 +1414,7 @@ def api_sync_alliance_data():
                     data_type='manual_sync',
                     data_count=len(scouting_data) + len(pit_data),
                     sync_status='sent',
-                    last_sync=datetime.utcnow()
+                    last_sync=datetime.now(timezone.utc)
                 )
                 db.session.add(sync_record)
                 sync_count += 1
@@ -1511,7 +1511,7 @@ def api_leave_alliance():
         if alliance_status:
             alliance_status.is_alliance_mode_active = False
             alliance_status.active_alliance_id = None
-            alliance_status.last_updated = datetime.utcnow()
+            alliance_status.last_updated = datetime.now(timezone.utc)
         
         # Remove the member from the alliance
         db.session.delete(member)
@@ -1808,7 +1808,7 @@ def save_game_config(alliance_id):
         
         # Validate and save the configuration
         alliance.shared_game_config = json.dumps(config_data, indent=2)
-        alliance.updated_at = datetime.utcnow()
+        alliance.updated_at = datetime.now(timezone.utc)
         
         db.session.commit()
         
@@ -1973,7 +1973,7 @@ def save_pit_config(alliance_id):
         
         # Validate and save the configuration
         alliance.shared_pit_config = json.dumps(config_data, indent=2)
-        alliance.updated_at = datetime.utcnow()
+        alliance.updated_at = datetime.now(timezone.utc)
         
         db.session.commit()
         
@@ -2030,7 +2030,7 @@ def copy_scouting_team_config(alliance_id, config_type):
         else:
             return jsonify({'success': False, 'error': 'Invalid configuration type.'}), 400
         
-        alliance.updated_at = datetime.utcnow()
+        alliance.updated_at = datetime.now(timezone.utc)
         db.session.commit()
         
         # Emit Socket.IO event to notify alliance members
@@ -2227,7 +2227,7 @@ def perform_periodic_alliance_sync():
                         continue
                     
                     # Get recent scouting data (last 5 minutes) to avoid re-syncing old data
-                    recent_time = datetime.utcnow() - timedelta(minutes=5)
+                    recent_time = datetime.now(timezone.utc) - timedelta(minutes=5)
                     
                     # Get recent scouting data for this team
                     recent_scouting = ScoutingData.query.join(Match).filter(
@@ -2282,7 +2282,7 @@ def perform_periodic_alliance_sync():
                                 data_type='periodic_sync',
                                 data_count=len(scouting_data) + len(pit_data),
                                 sync_status='sent',
-                                last_sync=datetime.utcnow()
+                                last_sync=datetime.now(timezone.utc)
                             )
                             db.session.add(sync_record)
                             sync_count += 1
