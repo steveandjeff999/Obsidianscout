@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app
 from flask_socketio import emit, join_room, leave_room
-from app.models import AllianceSelection, Team, Event, ScoutingData, DoNotPickEntry, AvoidEntry, db, team_event
+from app.models import AllianceSelection, Team, Event, ScoutingData, DoNotPickEntry, AvoidEntry, db, team_event, DeclinedEntry
 from app.utils.analysis import calculate_team_metrics
 from flask_login import current_user
 from app import socketio
@@ -13,6 +13,7 @@ from app.utils.team_isolation import (
     filter_avoid_entries_by_scouting_team, assign_scouting_team_to_model,
     get_current_scouting_team_number
 )
+from app.utils.team_isolation import filter_declined_entries_by_scouting_team
 
 bp = Blueprint('alliances', __name__, url_prefix='/alliances')
 
@@ -175,6 +176,10 @@ def get_recommendations(event_id):
         do_not_pick_teams = set(entry.team_id for entry in filter_do_not_pick_by_scouting_team().filter(
             DoNotPickEntry.event_id == event_id
         ).all())
+        # Get declined list for this event (filtered by scouting team)
+        declined_teams = set(entry.team_id for entry in filter_declined_entries_by_scouting_team().filter(
+            DeclinedEntry.event_id == event_id
+        ).all())
         
         # Calculate metrics for available teams
         team_recommendations = []
@@ -196,8 +201,12 @@ def get_recommendations(event_id):
                             'endgame_points': metrics.get('endgame_points', 0),
                             'is_avoided': team.id in avoid_teams,
                             'is_do_not_pick': team.id in do_not_pick_teams
+                        
                         }
                         
+                        # Mark declined flag for client to decide visibility
+                        team_data['is_declined'] = team.id in declined_teams
+
                         if team.id in do_not_pick_teams:
                             do_not_pick_recommendations.append(team_data)
                         else:
@@ -213,6 +222,7 @@ def get_recommendations(event_id):
                             'endgame_points': 0,
                             'is_avoided': team.id in avoid_teams,
                             'is_do_not_pick': team.id in do_not_pick_teams,
+                            'is_declined': team.id in declined_teams,
                             'has_no_data': True
                         })
                 except Exception as e:
@@ -227,6 +237,7 @@ def get_recommendations(event_id):
                         'endgame_points': 0,
                         'is_avoided': team.id in avoid_teams,
                         'is_do_not_pick': team.id in do_not_pick_teams,
+                        'is_declined': team.id in declined_teams,
                         'has_no_data': True
                     })
         
@@ -439,6 +450,7 @@ def get_recommendations(event_id):
                 'endgame_points': round(metrics_dict.get(component_metric_ids[2], metrics_dict.get('endgame_points', 0)) or 0, 1) if len(component_metric_ids) > 2 else 0,
                 'is_avoided': rec['is_avoided'],
                 'is_do_not_pick': rec['is_do_not_pick'],
+                'is_declined': rec.get('is_declined', False),
                 'has_no_data': rec.get('has_no_data', False)
             }
             # Compute recent trend (slope) for client display (small, robust indicator)
@@ -613,6 +625,7 @@ def manage_lists(event_id):
     # Get current lists
     avoid_entries = AvoidEntry.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).join(Team).all()
     do_not_pick_entries = DoNotPickEntry.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).join(Team).all()
+    declined_entries = DeclinedEntry.query.filter_by(event_id=event_id, scouting_team_number=current_user.scouting_team_number).join(Team).all()
     
     # Get all teams for this event from team_event relationship
     all_teams = db.session.query(Team).join(
@@ -634,6 +647,7 @@ def manage_lists(event_id):
                          event=event,
                          avoid_entries=avoid_entries,
                          do_not_pick_entries=do_not_pick_entries,
+                         declined_entries=declined_entries,
                          all_teams=all_teams,
                          **get_theme_context())
 
@@ -650,7 +664,7 @@ def add_to_list():
     if not all([team_number, event_id, list_type]):
         return jsonify({'success': False, 'message': 'Missing required fields'})
     
-    if list_type not in ['avoid', 'do_not_pick']:
+    if list_type not in ['avoid', 'do_not_pick', 'declined']:
         return jsonify({'success': False, 'message': 'Invalid list type'})
     
     # Get the team
@@ -665,12 +679,17 @@ def add_to_list():
             return jsonify({'success': False, 'message': 'Team already in avoid list'})
         
         entry = AvoidEntry(team_id=team.id, event_id=event_id, reason=reason, scouting_team_number=current_user.scouting_team_number)
-    else:  # do_not_pick
-        existing = DoNotPickEntry.query.filter_by(team_id=team.id, event_id=event_id, scouting_team_number=current_user.scouting_team_number).first()
-        if existing:
-            return jsonify({'success': False, 'message': 'Team already in do not pick list'})
-        
-        entry = DoNotPickEntry(team_id=team.id, event_id=event_id, reason=reason, scouting_team_number=current_user.scouting_team_number)
+    else:  # do_not_pick or declined
+        if list_type == 'do_not_pick':
+            existing = DoNotPickEntry.query.filter_by(team_id=team.id, event_id=event_id, scouting_team_number=current_user.scouting_team_number).first()
+            if existing:
+                return jsonify({'success': False, 'message': 'Team already in do not pick list'})
+            entry = DoNotPickEntry(team_id=team.id, event_id=event_id, reason=reason, scouting_team_number=current_user.scouting_team_number)
+        else:  # declined
+            existing = DeclinedEntry.query.filter_by(team_id=team.id, event_id=event_id, scouting_team_number=current_user.scouting_team_number).first()
+            if existing:
+                return jsonify({'success': False, 'message': 'Team already in declined list'})
+            entry = DeclinedEntry(team_id=team.id, event_id=event_id, reason=reason, scouting_team_number=current_user.scouting_team_number)
     
     try:
         db.session.add(entry)
@@ -785,14 +804,17 @@ def remove_from_list():
     if not all([team_id, event_id, list_type]):
         return jsonify({'success': False, 'message': 'Missing required fields'})
     
-    if list_type not in ['avoid', 'do_not_pick']:
+    if list_type not in ['avoid', 'do_not_pick', 'declined']:
         return jsonify({'success': False, 'message': 'Invalid list type'})
     
     # Find and remove the entry
     if list_type == 'avoid':
         entry = AvoidEntry.query.filter_by(team_id=team_id, event_id=event_id, scouting_team_number=current_user.scouting_team_number).first()
-    else:  # do_not_pick
-        entry = DoNotPickEntry.query.filter_by(team_id=team_id, event_id=event_id, scouting_team_number=current_user.scouting_team_number).first()
+    else:  # do_not_pick or declined
+        if list_type == 'do_not_pick':
+            entry = DoNotPickEntry.query.filter_by(team_id=team_id, event_id=event_id, scouting_team_number=current_user.scouting_team_number).first()
+        else:
+            entry = DeclinedEntry.query.filter_by(team_id=team_id, event_id=event_id, scouting_team_number=current_user.scouting_team_number).first()
     
     if not entry:
         return jsonify({'success': False, 'message': 'Entry not found'})

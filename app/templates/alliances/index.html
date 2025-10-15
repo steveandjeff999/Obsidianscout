@@ -7,6 +7,8 @@
 
 {% block content %}
 <div class="row mb-4">
+    <!-- Hidden holder for server-side values to avoid embedding Jinja directly in JS -->
+    <div id="current-event-id-holder" data-event-id="{{ current_event.id }}" style="display:none"></div>
     <div class="col-md-8">
         <div class="card">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
@@ -263,8 +265,13 @@
 let currentAllianceId = null;
 let currentPosition = null;
 let teamRecommendations = [];
-// Expose current event id for client-side metric queries
-const currentEventId = {{ current_event.id|tojson }};
+// Full list used for selection modal (includes declined teams)
+let allTeamsForSelection = [];
+// Expose current event id for client-side metric queries (read from DOM to avoid inline Jinja in script)
+const currentEventId = (function(){
+    const holder = document.getElementById('current-event-id-holder');
+    return holder ? holder.dataset.eventId : null;
+})();
 
 // Reliable polling mechanism - checks database every 2 seconds
 let pollingInterval = null;
@@ -316,7 +323,7 @@ async function pollForUpdates() {
 // Load alliance data from server
 async function loadAlliances() {
     try {
-        const response = await fetch(`/alliances/api/get_alliances/{{ current_event.id }}`);
+    const response = await fetch(`/alliances/api/get_alliances/${currentEventId}`);
         const data = await response.json();
         
         if (data.success) {
@@ -333,7 +340,7 @@ async function loadAlliances() {
 // Quietly load alliances without showing loading indicators (for polling)
 async function loadAlliancesQuietly() {
     try {
-        const response = await fetch(`/alliances/api/get_alliances/{{ current_event.id }}`);
+    const response = await fetch(`/alliances/api/get_alliances/${currentEventId}`);
         const data = await response.json();
         
         if (data.success) {
@@ -548,10 +555,12 @@ function setupEventListeners() {
 function loadRecommendations() {
     // Read the toggle state and send as query param
     const useTrends = document.getElementById('trend-toggle') ? document.getElementById('trend-toggle').checked : true;
-    fetch(`/alliances/recommendations/{{ current_event.id }}?use_trends=${useTrends ? 1 : 0}`)
+    fetch(`/alliances/recommendations/${currentEventId}?use_trends=${useTrends ? 1 : 0}`)
         .then(response => response.json())
         .then(data => {
-            teamRecommendations = data.recommendations;
+            teamRecommendations = data.recommendations || [];
+            // Keep a separate full copy for the team selection modal so we can show declined teams there
+            allTeamsForSelection = Array.isArray(data.recommendations) ? data.recommendations.slice() : [];
             displayRecommendations();
             updateAllianceStrengths();
         })
@@ -570,9 +579,9 @@ function displayRecommendations() {
         return;
     }
     
-    // Separate teams into those with data and those without
-    const teamsWithData = teamRecommendations.filter(team => !team.has_no_data);
-    const teamsWithoutData = teamRecommendations.filter(team => team.has_no_data);
+    // Separate teams into those with data and those without, excluding declined teams from recommendations
+    const teamsWithData = teamRecommendations.filter(team => !team.has_no_data && !team.is_declined);
+    const teamsWithoutData = teamRecommendations.filter(team => team.has_no_data && !team.is_declined);
     
     // Build HTML for teams with data (ranked)
     let html = teamsWithData.map((team, index) => {
@@ -611,6 +620,12 @@ function displayRecommendations() {
                     <div class="small text-muted">
                         ${team.component_metrics_display}
                     </div>
+                    </div>
+                    <div class="ms-2">
+                        <button class="btn btn-sm btn-outline-secondary" title="Decline" onclick="declineTeam(${team.team_number})">
+                            <i class="fas fa-user-times d-inline d-md-none"></i>
+                            <span class="d-none d-md-inline"><i class="fas fa-user-times me-1"></i>Declined</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -659,6 +674,12 @@ function displayRecommendations() {
                     <div class="text-end">
                         <div class="badge bg-secondary">No Data</div>
                         ${predictedHtml}
+                    </div>
+                    <div class="ms-2">
+                        <button class="btn btn-sm btn-outline-secondary" title="Decline" onclick="declineTeam(${team.team_number})">
+                            <i class="fas fa-user-times d-inline d-md-none"></i>
+                            <span class="d-none d-md-inline"><i class="fas fa-user-times me-1"></i>Declined</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -764,12 +785,12 @@ function handleSearchKeyup(event) {
 function populateTeamSelectionList() {
     const list = document.getElementById('teamSelectionList');
     
-    if (teamRecommendations.length === 0) {
+    if (allTeamsForSelection.length === 0) {
         list.innerHTML = '<div class="alert alert-warning">No teams available for selection</div>';
         return;
     }
     
-    const html = teamRecommendations.map(team => {
+    const html = allTeamsForSelection.map(team => {
         let warningIcon = '';
         let badgeClass = 'bg-primary';
         
@@ -792,7 +813,7 @@ function populateTeamSelectionList() {
                     <div class="fw-bold text-primary">${team.total_points} pts</div>
                     ${team.predicted_points ? `<div class="small text-muted">Next: ${team.predicted_points} pts</div>` : ''}
                     <div class="small text-muted">${team.component_metrics_display}</div>
-                    ${team.is_avoided || team.is_do_not_pick ? `<span class="badge ${badgeClass} mt-1">${team.is_do_not_pick ? 'Do Not Pick' : 'Avoid'}</span>` : ''}
+                    ${team.is_avoided || team.is_do_not_pick || team.is_declined ? `<span class="badge ${badgeClass} mt-1">${team.is_declined ? 'Declined' : (team.is_do_not_pick ? 'Do Not Pick' : 'Avoid')}</span>` : ''}
                 </div>
             </button>
         `;
@@ -922,65 +943,83 @@ function removeTeamFromAlliance(allianceId, position) {
 }
 
 function updateAllianceStrengths() {
-    // Build a lookup of team_number -> total_points from the loaded recommendations
-    const scoreByTeamNumber = {};
     try {
+        // Build a lookup of team_number -> total_points from the loaded recommendations
+        const scoreByTeamNumber = {};
         teamRecommendations.forEach(t => {
-            // team_number may be numeric or string; normalize to string for safe keying
             const key = String(t.team_number);
             scoreByTeamNumber[key] = Number(t.total_points) || 0;
+        });
+
+        // For each alliance card, sum assigned teams' scores and update the badge
+        document.querySelectorAll('.alliance-card').forEach(card => {
+            const allianceId = card.dataset.allianceId;
+            const strengthBadge = document.getElementById(`alliance-${allianceId}-strength`);
+            if (!strengthBadge) return;
+
+            // Find assigned team badges inside this card
+            const assignedBadges = card.querySelectorAll('.team-info .badge');
+            let total = 0;
+            const missingTeamNumbers = [];
+
+            assignedBadges.forEach(b => {
+                const txt = (b.textContent || '').trim();
+                const teamNumMatch = txt.match(/\d+/);
+                const teamNum = teamNumMatch ? String(teamNumMatch[0]) : txt;
+                if (teamNum) {
+                    const val = scoreByTeamNumber[teamNum];
+                    if (typeof val !== 'undefined') {
+                        total += Number(val) || 0;
+                    } else {
+                        missingTeamNumbers.push(teamNum);
+                    }
+                }
+            });
+
+            if (missingTeamNumbers.length === 0) {
+                strengthBadge.textContent = `${total.toFixed(1)} pts`;
+            } else {
+                // Fetch metrics for missing teams in parallel
+                const fetches = missingTeamNumbers.map(tn => fetch(`/alliances/api/team_metrics?team_number=${encodeURIComponent(tn)}&event_id=${currentEventId}`)
+                    .then(r => r.json()).catch(() => null));
+
+                Promise.all(fetches).then(results => {
+                    results.forEach(res => {
+                        if (res && typeof res.total_points !== 'undefined') {
+                            total += Number(res.total_points) || 0;
+                        }
+                    });
+
+                    strengthBadge.textContent = `${total.toFixed(1)} pts`;
+                }).catch(e => {
+                    console.warn('Failed to fetch team metrics for alliance badge:', e);
+                    strengthBadge.textContent = `${total.toFixed(1)} pts`;
+                });
+            }
         });
     } catch (e) {
         console.warn('Failed to build recommendations lookup for alliance strengths:', e);
     }
+}
 
-    // For each alliance card, sum assigned teams' scores and update the badge
-    document.querySelectorAll('.alliance-card').forEach(card => {
-        const allianceId = card.dataset.allianceId;
-        const strengthBadge = document.getElementById(`alliance-${allianceId}-strength`);
-        if (!strengthBadge) return;
+function declineTeam(teamNumber) {
+    if (!confirm(`Decline Team ${teamNumber} from recommendations?`)) return;
 
-        // Find assigned team badges inside this card
-        const assignedBadges = card.querySelectorAll('.team-info .badge');
-        let total = 0;
-        const missingTeamNumbers = [];
-        assignedBadges.forEach(b => {
-            const txt = (b.textContent || '').trim();
-            // Some badges may include extra text; extract digits
-            const teamNumMatch = txt.match(/\d+/);
-            const teamNum = teamNumMatch ? String(teamNumMatch[0]) : txt;
-            if (teamNum) {
-                // Try lookup by team number; fallback to treating as 0
-                const val = scoreByTeamNumber[teamNum];
-                if (typeof val !== 'undefined') {
-                    total += Number(val) || 0;
-                } else {
-                    // If recommendations not loaded or team missing, we'll fetch it from the server
-                    missingTeamNumbers.push(teamNum);
-                }
-            }
-        });
-        if (missingTeamNumbers.length === 0) {
-            strengthBadge.textContent = `${total.toFixed(1)} pts`;
-        } else {
-            // Fetch metrics for missing teams in parallel
-            const fetches = missingTeamNumbers.map(tn => fetch(`/alliances/api/team_metrics?team_number=${encodeURIComponent(tn)}&event_id=${currentEventId}`)
-                .then(r => r.json()).catch(() => null));
-
-            Promise.all(fetches).then(results => {
-                results.forEach(res => {
-                    if (res && typeof res.total_points !== 'undefined') {
-                        total += Number(res.total_points) || 0;
-                    }
-                });
-
-                strengthBadge.textContent = `${total.toFixed(1)} pts`;
-            }).catch(e => {
-                console.warn('Failed to fetch team metrics for alliance badge:', e);
-                strengthBadge.textContent = `${total.toFixed(1)} pts`;
-            });
+    fetch('/alliances/api/add_to_list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team_number: teamNumber, event_id: currentEventId, list_type: 'declined', reason: '' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) {
+            alert('Error: ' + data.message);
+            return;
         }
-    });
+        // Refresh recommendations to remove the declined team
+        loadRecommendations();
+    })
+    .catch(e => { console.error('Error declining team:', e); alert('Network error'); });
 }
 </script>
 
