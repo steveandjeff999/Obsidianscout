@@ -21,6 +21,7 @@ def notification_worker(app):
     # Use timezone-aware datetime.min to avoid mixing naive and aware datetimes
     last_match_time_update = datetime.min.replace(tzinfo=timezone.utc)
     last_schedule_check = datetime.min.replace(tzinfo=timezone.utc)
+    last_schedule_adjustment = datetime.min.replace(tzinfo=timezone.utc)
     last_cleanup = datetime.min.replace(tzinfo=timezone.utc)
     
     while True:
@@ -39,6 +40,26 @@ def notification_worker(app):
                         last_match_time_update = now
                     except Exception as e:
                         print(f"❌ Error updating match times: {e}")
+                
+                # Check for schedule adjustments every 15 minutes
+                if (now - last_schedule_adjustment).total_seconds() >= 900:
+                    try:
+                        print("\n⏱️  Checking for schedule delays/advances...")
+                        from app.utils.schedule_adjuster import update_all_active_events_schedule
+                        results = update_all_active_events_schedule()
+                        
+                        # Log significant adjustments
+                        for result in results:
+                            if result.get('success') and result.get('adjusted_matches', 0) > 0:
+                                offset = result.get('analysis', {}).get('recent_offset_minutes', 0)
+                                print(f"⚠️  Event {result['event_code']} is {abs(offset):.0f} min "
+                                      f"{'behind' if offset > 0 else 'ahead of'} schedule")
+                        
+                        last_schedule_adjustment = now
+                    except Exception as e:
+                        print(f"❌ Error checking schedule adjustments: {e}")
+                        import traceback
+                        traceback.print_exc()
                 
                 # Schedule notifications for upcoming matches every 5 minutes
                 if (now - last_schedule_check).total_seconds() >= 300:

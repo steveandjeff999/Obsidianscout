@@ -11,11 +11,53 @@
     </h1>
     
     {% if match.scheduled_time or match.predicted_time %}
-    <div class="alert alert-info mb-4">
+    <div class="alert {% if match.scheduled_time and match.predicted_time and match.event.schedule_offset %}alert-warning{% else %}alert-info{% endif %} mb-4">
         <h5 class="alert-heading mb-2">
             <i class="fas fa-clock me-2"></i>Match Schedule
+            {% if match.event.schedule_offset and match.event.schedule_offset != 0 %}
+            <span class="badge bg-warning text-dark ms-2">
+                Event {{ match.event.schedule_offset|abs }}m {{ 'behind' if match.event.schedule_offset > 0 else 'ahead' }}
+            </span>
+            {% endif %}
         </h5>
-        {% if match.scheduled_time %}
+        {% if match.scheduled_time and match.predicted_time %}
+            {# Show both scheduled and adjusted time when schedule offset exists #}
+            {% if match.event and match.event.timezone %}
+                <p class="mb-1">
+                    <strong>Original Schedule:</strong> 
+                    <span style="text-decoration: line-through;" class="text-muted">
+                        {{ match.scheduled_time | format_time_tz(match.event.timezone, '%A, %B %d at %I:%M %p') }}
+                    </span>
+                </p>
+                <p class="mb-1">
+                    <strong class="text-warning">Adjusted Time:</strong> 
+                    <span class="text-warning fw-bold">
+                        ~{{ match.predicted_time | format_time_tz(match.event.timezone, '%A, %B %d at %I:%M %p') }}
+                    </span>
+                </p>
+                <p class="mb-0 small text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})
+                    {% if match.event.schedule_offset %}
+                    <br>The event is running {{ match.event.schedule_offset|abs }} minutes {{ 'behind schedule 🐌' if match.event.schedule_offset > 0 else 'ahead of schedule ⚡' }}
+                    {% endif %}
+                </p>
+            {% else %}
+                <p class="mb-1">
+                    <strong>Original Schedule:</strong> 
+                    <span style="text-decoration: line-through;" class="text-muted">
+                        {{ match.scheduled_time.strftime('%A, %B %d at %I:%M %p') }} UTC
+                    </span>
+                </p>
+                <p class="mb-0">
+                    <strong class="text-warning">Adjusted Time:</strong> 
+                    <span class="text-warning fw-bold">
+                        ~{{ match.predicted_time.strftime('%A, %B %d at %I:%M %p') }} UTC
+                    </span>
+                </p>
+            {% endif %}
+        {% elif match.scheduled_time %}
+            {# Only scheduled time, no adjustment #}
             {% if match.event and match.event.timezone %}
                 <p class="mb-1">
                     <strong>Scheduled:</strong> 
@@ -30,6 +72,7 @@
                 </p>
             {% endif %}
         {% elif match.predicted_time %}
+            {# Only predicted time #}
             {% if match.event and match.event.timezone %}
                 <p class="mb-1">
                     <strong>Predicted:</strong> 

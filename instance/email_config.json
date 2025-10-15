@@ -2,7 +2,7 @@
   "host": "smtp.gmail.com",
   "port": "465",
   "username": "obsidianscoutfrc@gmail.com",
-  "password": "[REDACTED_password]",
+  "password": "fdxrrjiywhmtkrhk",
   "use_tls": false,
   "use_ssl": true,
   "default_from": "obsidianscoutfrc@gmail.com"

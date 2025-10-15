@@ -120,13 +120,37 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if match.scheduled_time %}
+                                    {% if match.scheduled_time and match.predicted_time %}
+                                        {# Show both scheduled and adjusted time when schedule offset exists #}
+                                        {% if match.event and match.event.timezone %}
+                                            <div class="text-nowrap">
+                                                <span class="text-muted" style="text-decoration: line-through; font-size: 0.85em;">{{ match.scheduled_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
+                                            </div>
+                                            <div class="text-nowrap">
+                                                <span class="text-warning fw-bold">~{{ match.predicted_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
+                                                {% if match.event.schedule_offset %}
+                                                <span class="badge bg-warning text-dark ms-1" title="Event is {{ match.event.schedule_offset|abs }} min {{ 'behind' if match.event.schedule_offset > 0 else 'ahead' }}">
+                                                    {{ match.event.schedule_offset|abs }}m {{ '🐌' if match.event.schedule_offset > 0 else '⚡' }}
+                                                </span>
+                                                {% endif %}
+                                            </div>
+                                        {% else %}
+                                            <div class="text-nowrap">
+                                                <span class="text-muted" style="text-decoration: line-through; font-size: 0.85em;">{{ match.scheduled_time.strftime('%I:%M %p') }} UTC</span>
+                                            </div>
+                                            <div class="text-nowrap">
+                                                <span class="text-warning fw-bold">~{{ match.predicted_time.strftime('%I:%M %p') }} UTC</span>
+                                            </div>
+                                        {% endif %}
+                                    {% elif match.scheduled_time %}
+                                        {# Only scheduled time, no adjustment #}
                                         {% if match.event and match.event.timezone %}
                                             <span class="text-nowrap">{{ match.scheduled_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
                                         {% else %}
                                             <span class="text-nowrap">{{ match.scheduled_time.strftime('%I:%M %p') }} UTC</span>
                                         {% endif %}
                                     {% elif match.predicted_time %}
+                                        {# Only predicted time #}
                                         {% if match.event and match.event.timezone %}
                                             <span class="text-nowrap text-muted">~{{ match.predicted_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
                                         {% else %}
