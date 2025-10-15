@@ -5,7 +5,7 @@ Single atomic sync operation that works reliably both ways
 
 import json
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 from flask import current_app
 from app import db
@@ -90,7 +90,7 @@ class SimplifiedSyncManager:
             sync_type='bidirectional',
             direction='bidirectional',
             status='in_progress',
-            started_at=datetime.utcnow()
+            started_at=datetime.now(timezone.utc)
         )
         db.session.add(sync_log)
         db.session.commit()
@@ -122,11 +122,11 @@ class SimplifiedSyncManager:
             results.update(sync_result)
             
             # Step 3: Update server last sync time
-            server.last_sync = datetime.utcnow()
+            server.last_sync = datetime.now(timezone.utc)
             server.status = 'online'
             
             sync_log.status = 'completed'
-            sync_log.completed_at = datetime.utcnow()
+            sync_log.completed_at = datetime.now(timezone.utc)
             sync_log.items_synced = results['stats']['sent_to_remote'] + results['stats']['received_from_remote']
             
             db.session.commit()
@@ -141,7 +141,7 @@ class SimplifiedSyncManager:
             
             sync_log.status = 'failed'
             sync_log.error_message = str(e)
-            sync_log.completed_at = datetime.utcnow()
+            sync_log.completed_at = datetime.now(timezone.utc)
             
             server.status = 'error'
             
@@ -191,7 +191,7 @@ class SimplifiedSyncManager:
         cutoff_time = server.last_sync
         if not cutoff_time:
             from datetime import timedelta
-            cutoff_time = datetime.utcnow() - timedelta(hours=24)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=24)
         
         # Step 1: Get local changes to send
         local_changes = self._get_local_changes_since(cutoff_time)
@@ -335,7 +335,7 @@ class SimplifiedSyncManager:
             payload = {
                 'changes': changes,
                 'server_id': self.server_id,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
             
             response = requests.post(url, json=payload, timeout=self.connection_timeout, verify=False)
@@ -452,7 +452,7 @@ class SimplifiedSyncManager:
         if record and hasattr(record, 'is_active'):
             record.is_active = False
             if hasattr(record, 'updated_at'):
-                record.updated_at = datetime.utcnow()
+                record.updated_at = datetime.now(timezone.utc)
     
     def _apply_hard_delete(self, model_class, record_id):
         """Apply hard delete operation"""
@@ -466,7 +466,7 @@ class SimplifiedSyncManager:
         if record and hasattr(record, 'is_active'):
             record.is_active = True
             if hasattr(record, 'updated_at'):
-                record.updated_at = datetime.utcnow()
+                record.updated_at = datetime.now(timezone.utc)
     
     def _mark_changes_as_synced(self, changes: List[Dict]):
         """Mark local changes as synced"""

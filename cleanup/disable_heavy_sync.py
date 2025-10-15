@@ -57,7 +57,7 @@ import sys
 import os
 import time
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 class SimpleSyncSystem:
@@ -89,7 +89,7 @@ class SimpleSyncSystem:
                 'table': table_name,
                 'operation': operation,
                 'data': record_data,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
             
             # Send to each server
@@ -104,7 +104,7 @@ class SimpleSyncSystem:
             
             if success_count > 0:
                 print(f"✅ Synced to {success_count}/{len(servers)} servers")
-                self.last_sync = datetime.utcnow()
+                self.last_sync = datetime.now(timezone.utc)
             
         except Exception as e:
             print(f"❌ Sync error: {e}")

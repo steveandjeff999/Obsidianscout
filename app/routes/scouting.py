@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from app.models import Match, Team, ScoutingData, Event
 from app import db, socketio
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 import qrcode
 from io import BytesIO
 import base64
@@ -373,7 +373,7 @@ def scouting_form():
             existing_data.scout_id = scout_id
             existing_data.scouting_station = scouting_station
             existing_data.alliance = alliance
-            existing_data.timestamp = datetime.utcnow()
+            existing_data.timestamp = datetime.now(timezone.utc)
             flash('Scouting data updated successfully!', 'success')
         else:
             new_data = ScoutingData(
@@ -791,7 +791,7 @@ def submit_offline_data():
             existing_data.scout_name = scout_name
             existing_data.scout_id = scout_id
             existing_data.alliance = alliance
-            existing_data.timestamp = datetime.utcnow()
+            existing_data.timestamp = datetime.now(timezone.utc)
             db.session.commit()
             return jsonify({'success': True, 'message': 'Offline data updated successfully'})
         else:
@@ -877,7 +877,7 @@ def save_scouting_data():
             existing_data.scout_id = scout_id
             existing_data.scouting_station = scouting_station
             existing_data.alliance = alliance
-            existing_data.timestamp = datetime.utcnow()
+            existing_data.timestamp = datetime.now(timezone.utc)
             message = 'Scouting data updated successfully!'
             saved_entry = existing_data
         else:
@@ -980,7 +980,7 @@ def api_save():
             existing_data.scout_id = scout_id
             existing_data.scouting_station = scouting_station
             existing_data.alliance = alliance
-            existing_data.timestamp = datetime.utcnow()
+            existing_data.timestamp = datetime.now(timezone.utc)
             message = 'Scouting data updated successfully!'
             action = 'updated'
             saved_entry = existing_data

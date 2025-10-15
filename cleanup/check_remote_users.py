@@ -54,12 +54,12 @@ def check_remote_users():
             
         # Let's manually send our user changes again to see what happens
         from app.models import DatabaseChange
-        from datetime import datetime, timedelta
+        from datetime import datetime, timezone, timedelta
         
         # Get recent user changes
         user_changes = DatabaseChange.query.filter(
             DatabaseChange.table_name == 'user',
-            DatabaseChange.timestamp > datetime.utcnow() - timedelta(hours=1)
+            DatabaseChange.timestamp > datetime.now(timezone.utc) - timedelta(hours=1)
         ).all()
         
         if user_changes:
@@ -74,7 +74,7 @@ def check_remote_users():
                 payload = {
                     'changes': changes_data,
                     'server_id': 'local',
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
                 response = requests.post(send_url, json=payload, timeout=30, verify=False)
                 print(f"   Send response: {response.status_code}")

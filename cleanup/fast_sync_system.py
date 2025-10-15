@@ -16,7 +16,7 @@ import threading
 import queue
 import time
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Global sync queue - lightweight
 fast_sync_queue = queue.Queue(maxsize=100)  # Limit queue size to prevent memory issues
@@ -154,7 +154,7 @@ class FastSyncSystem:
                 'table': table_name,
                 'id': str(getattr(target, 'id', 'unknown')),
                 'data': record_data,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
             
             fast_sync_queue.put_nowait(change)
@@ -328,7 +328,7 @@ class FastSyncSystem:
             payload = {
                 'changes': changes,
                 'batch_size': len(changes),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
             
             response = requests.post(

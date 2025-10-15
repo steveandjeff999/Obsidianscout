@@ -97,6 +97,7 @@
                                 <th style="width:110px">Match #</th>
                                 <th>Type</th>
                                 <th>Event</th>
+                                <th>Scheduled Time</th>
                                 <th>Red</th>
                                 <th>Blue</th>
                                 <th style="width:160px">Score</th>
@@ -112,7 +113,29 @@
                                         {{ match.match_type }}
                                     </span>
                                 </td>
-                                <td>{{ match.event.name if match.event else 'N/A' }}</td>
+                                <td>
+                                    {{ match.event.name if match.event else 'N/A' }}
+                                    {% if match.event and match.event.timezone %}
+                                    <br><small class="text-muted">{{ match.event.timezone.split('/')[-1].replace('_', ' ') }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if match.scheduled_time %}
+                                        {% if match.event and match.event.timezone %}
+                                            <span class="text-nowrap">{{ match.scheduled_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
+                                        {% else %}
+                                            <span class="text-nowrap">{{ match.scheduled_time.strftime('%I:%M %p') }} UTC</span>
+                                        {% endif %}
+                                    {% elif match.predicted_time %}
+                                        {% if match.event and match.event.timezone %}
+                                            <span class="text-nowrap text-muted">~{{ match.predicted_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
+                                        {% else %}
+                                            <span class="text-nowrap text-muted">~{{ match.predicted_time.strftime('%I:%M %p') }} UTC</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">TBD</span>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     {% for team_number in match.red_alliance.split(',') if team_number %}
                                     <span class="badge bg-danger me-1">{{ team_number }}</span>

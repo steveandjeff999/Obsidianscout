@@ -2,8 +2,364 @@ from app.models import ScoutingData, Team, Match, TeamAllianceStatus
 import statistics
 from flask import current_app
 import random
+import math
+from datetime import datetime
+try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
 from app.utils.config_manager import get_current_game_config, load_game_config
 from app.utils.team_isolation import filter_scouting_data_by_scouting_team, get_current_scouting_team_number, filter_scouting_data_only_by_scouting_team
+
+def _detect_outliers_adaptive(values):
+    """Adaptive outlier detection that works well on both small and large datasets.
+    
+    Uses multiple methods and adaptive thresholds based on dataset size and characteristics.
+    
+    Args:
+        values: List of numeric values
+    
+    Returns:
+        Tuple of (outlier_flags, outlier_scores)
+        - outlier_flags: List of booleans indicating outliers
+        - outlier_scores: List of severity scores (0.0=normal, 1.0=extreme outlier)
+    """
+    n = len(values)
+    
+    if not values or n < 3:
+        # Too few points for meaningful detection
+        return [False] * n, [0.0] * n
+    
+    outlier_flags = [False] * n
+    outlier_scores = [0.0] * n
+    
+    # Method 1: IQR with adaptive threshold
+    if n >= 4:
+        sorted_vals = sorted(values)
+        
+        # Calculate quartiles more accurately
+        def percentile(sorted_list, p):
+            k = (len(sorted_list) - 1) * p
+            f = math.floor(k)
+            c = math.ceil(k)
+            if f == c:
+                return sorted_list[int(k)]
+            return sorted_list[int(f)] * (c - k) + sorted_list[int(c)] * (k - f)
+        
+        q1 = percentile(sorted_vals, 0.25)
+        q2 = percentile(sorted_vals, 0.50)  # median
+        q3 = percentile(sorted_vals, 0.75)
+        iqr = q3 - q1
+        
+        if iqr > 0:
+            # Adaptive threshold based on dataset size
+            # Small datasets: more conservative (higher threshold)
+            # Large datasets: more sensitive (lower threshold)
+            if n <= 5:
+                iqr_multiplier = 2.5  # Very conservative for small datasets
+            elif n <= 10:
+                iqr_multiplier = 2.0  # Conservative
+            elif n <= 20:
+                iqr_multiplier = 1.5  # Standard
+            else:
+                iqr_multiplier = 1.3  # More sensitive for large datasets
+            
+            lower_bound = q1 - iqr_multiplier * iqr
+            upper_bound = q3 + iqr_multiplier * iqr
+            
+            for i, val in enumerate(values):
+                if val < lower_bound or val > upper_bound:
+                    # Calculate severity: how far beyond the bounds
+                    if val < lower_bound:
+                        distance = (lower_bound - val) / (iqr + 1e-6)
+                    else:
+                        distance = (val - upper_bound) / (iqr + 1e-6)
+                    
+                    outlier_scores[i] = min(1.0, distance / 2.0)  # Cap at 1.0
+                    outlier_flags[i] = True
+    
+    # Method 2: Modified Z-score (always applicable)
+    median = statistics.median(values)
+    deviations = [abs(v - median) for v in values]
+    mad = statistics.median(deviations)
+    
+    if mad > 0:
+        # Adaptive threshold for modified z-score
+        if n <= 5:
+            z_threshold = 4.0  # Very conservative
+        elif n <= 10:
+            z_threshold = 3.5  # Conservative
+        else:
+            z_threshold = 3.0  # Standard
+        
+        for i, val in enumerate(values):
+            modified_z = 0.6745 * (val - median) / mad
+            if abs(modified_z) > z_threshold:
+                z_score_severity = min(1.0, (abs(modified_z) - z_threshold) / z_threshold)
+                outlier_scores[i] = max(outlier_scores[i], z_score_severity)
+                outlier_flags[i] = True
+    
+    # Method 3: Extreme value detection (data entry errors)
+    # Flag values that are impossibly high/low or very different from neighbors
+    if n >= 3:
+        mean_val = sum(values) / n
+        std_val = (sum((v - mean_val) ** 2 for v in values) / n) ** 0.5
+        
+        if std_val > 0:
+            for i, val in enumerate(values):
+                # Check for extreme deviation (likely data entry error)
+                z = abs(val - mean_val) / std_val
+                
+                # Very extreme values (>5 std devs) are almost certainly errors
+                if z > 5.0:
+                    outlier_scores[i] = 1.0
+                    outlier_flags[i] = True
+                # Moderately extreme values
+                elif z > 4.0 and not outlier_flags[i]:
+                    outlier_scores[i] = max(outlier_scores[i], 0.7)
+                    outlier_flags[i] = True
+    
+    # Method 4: Isolation check (values far from all neighbors)
+    if n >= 5:
+        for i, val in enumerate(values):
+            # Calculate distance to nearest neighbors
+            other_vals = values[:i] + values[i+1:]
+            min_distance = min(abs(val - other) for other in other_vals)
+            typical_distance = statistics.median([abs(a - b) for a in values for b in values if a != b])
+            
+            if typical_distance > 0 and min_distance > 3 * typical_distance:
+                isolation_score = min(1.0, min_distance / (4 * typical_distance))
+                outlier_scores[i] = max(outlier_scores[i], isolation_score)
+                outlier_flags[i] = True
+    
+    return outlier_flags, outlier_scores
+
+def _detect_outliers(values, method='iqr', threshold=1.5):
+    """Legacy outlier detection - maintained for compatibility.
+    
+    Use _detect_outliers_adaptive() for better results.
+    """
+    if not values or len(values) < 4:
+        return [False] * len(values)
+    
+    outliers = [False] * len(values)
+    
+    if method == 'iqr':
+        sorted_vals = sorted(values)
+        n = len(sorted_vals)
+        q1_idx = n // 4
+        q3_idx = 3 * n // 4
+        q1 = sorted_vals[q1_idx]
+        q3 = sorted_vals[q3_idx]
+        iqr = q3 - q1
+        
+        if iqr > 0:
+            lower_bound = q1 - threshold * iqr
+            upper_bound = q3 + threshold * iqr
+            
+            for i, val in enumerate(values):
+                if val < lower_bound or val > upper_bound:
+                    outliers[i] = True
+    
+    elif method == 'modified_zscore':
+        median = statistics.median(values)
+        mad = statistics.median([abs(v - median) for v in values])
+        
+        if mad > 0:
+            for i, val in enumerate(values):
+                modified_z = 0.6745 * (val - median) / mad
+                if abs(modified_z) > threshold:
+                    outliers[i] = True
+    
+    return outliers
+
+def _calculate_quality_weights(values, base_penalty=0.5, use_adaptive=True):
+    """Calculate quality-based weights that penalize outliers/bad data.
+    
+    Uses adaptive detection and severity-based weighting for better handling
+    of both small and large datasets.
+    
+    Args:
+        values: List of performance values
+        base_penalty: Maximum penalty for severe outliers (0.0-1.0)
+        use_adaptive: Use adaptive multi-method detection (recommended)
+    
+    Returns:
+        List of quality weights (0.0-1.0)
+    """
+    n = len(values)
+    
+    if not values or n < 3:
+        # Not enough data for meaningful outlier detection
+        return [1.0] * n
+    
+    if use_adaptive:
+        # Use adaptive multi-method detection
+        outlier_flags, outlier_scores = _detect_outliers_adaptive(values)
+        
+        quality_weights = []
+        for i, (is_outlier, severity) in enumerate(zip(outlier_flags, outlier_scores)):
+            if is_outlier:
+                # Graduated penalty based on severity
+                # severity 0.0 = full weight (1.0)
+                # severity 1.0 = minimum weight (1.0 - base_penalty)
+                penalty = base_penalty * severity
+                weight = 1.0 - penalty
+                
+                # Never completely eliminate data (minimum 10% weight)
+                weight = max(0.1, weight)
+            else:
+                weight = 1.0
+            
+            quality_weights.append(weight)
+    else:
+        # Legacy fixed-penalty approach
+        outliers = _detect_outliers(values, method='iqr', threshold=1.5)
+        quality_weights = [1.0 - base_penalty if is_out else 1.0 for is_out in outliers]
+    
+    # Additional adjustment: boost weight of data points near the median
+    # This helps stabilize predictions with small datasets
+    if n <= 8:
+        median = statistics.median(values)
+        mad = statistics.median([abs(v - median) for v in values])
+        
+        if mad > 0:
+            for i, val in enumerate(values):
+                distance_from_median = abs(val - median) / mad
+                
+                # Values very close to median get slight boost
+                if distance_from_median < 0.5 and quality_weights[i] == 1.0:
+                    quality_weights[i] = 1.1  # 10% boost for very typical values
+    
+    return quality_weights
+
+def _calculate_exponential_weights(scouting_data, decay_factor=0.15):
+    """Calculate exponential weights for scouting data based on recency.
+    
+    Args:
+        scouting_data: List of ScoutingData objects (should be ordered)
+        decay_factor: How quickly to decay older data (0.1-0.3 typical, higher = faster decay)
+    
+    Returns:
+        List of weights corresponding to each scouting data entry
+    """
+    if not scouting_data:
+        return []
+    
+    # Sort by match number and timestamp to ensure proper ordering
+    sorted_data = sorted(scouting_data, key=lambda x: (
+        x.match.match_number if x.match else 0,
+        x.timestamp if x.timestamp else datetime.min
+    ))
+    
+    n = len(sorted_data)
+    if n == 1:
+        return [1.0]
+    
+    # Calculate exponential decay weights
+    # Most recent match gets weight 1.0, older matches decay exponentially
+    weights = []
+    for i in range(n):
+        # i=0 is oldest, i=n-1 is newest
+        age = n - 1 - i  # Age: 0 for newest, n-1 for oldest
+        weight = math.exp(-decay_factor * age)
+        weights.append(weight)
+    
+    # Normalize weights to sum to n (so mean calculation is comparable)
+    weight_sum = sum(weights)
+    if weight_sum > 0:
+        weights = [w * n / weight_sum for w in weights]
+    
+    return weights
+
+def _calculate_trend_factor(values, weights=None):
+    """Calculate performance trend factor.
+    
+    Args:
+        values: List of performance values over time (oldest to newest)
+        weights: Optional weights for each value
+    
+    Returns:
+        Trend factor: >1 if improving, <1 if declining, ~1 if stable
+    """
+    if not values or len(values) < 2:
+        return 1.0
+    
+    if weights is None:
+        weights = [1.0] * len(values)
+    
+    # Use linear regression to detect trend
+    if NUMPY_AVAILABLE and len(values) >= 3:
+        x = np.arange(len(values))
+        # Weighted linear regression
+        try:
+            w = np.array(weights)
+            fit = np.polyfit(x, values, 1, w=w)
+            slope = fit[0]
+            
+            # Normalize slope by mean value to get percentage change per match
+            mean_val = sum(v * w for v, w in zip(values, weights)) / sum(weights)
+            if mean_val > 0:
+                normalized_slope = slope / mean_val
+                # Convert to trend factor: positive slope increases factor
+                # Cap the trend factor between 0.8 and 1.2 to avoid extreme adjustments
+                trend_factor = 1.0 + (normalized_slope * len(values))
+                trend_factor = max(0.85, min(1.15, trend_factor))
+                return trend_factor
+        except:
+            pass
+    
+    # Fallback: simple comparison of first half vs second half
+    mid = len(values) // 2
+    if mid > 0:
+        first_half = values[:mid]
+        second_half = values[mid:]
+        first_avg = sum(first_half) / len(first_half) if first_half else 0
+        second_avg = sum(second_half) / len(second_half) if second_half else 0
+        
+        if first_avg > 0:
+            trend_factor = second_avg / first_avg
+            return max(0.85, min(1.15, trend_factor))
+    
+    return 1.0
+
+def _calculate_consistency_factor(values, weights=None):
+    """Calculate consistency factor - rewards consistent performance.
+    
+    Args:
+        values: List of performance values
+        weights: Optional weights for each value
+    
+    Returns:
+        Consistency factor: 1.0 for perfect consistency, <1.0 for high variance
+    """
+    if not values or len(values) < 2:
+        return 1.0
+    
+    if weights is None:
+        weights = [1.0] * len(values)
+    
+    # Calculate weighted mean and standard deviation
+    weight_sum = sum(weights)
+    if weight_sum == 0:
+        return 1.0
+    
+    mean = sum(v * w for v, w in zip(values, weights)) / weight_sum
+    if mean == 0:
+        return 1.0
+    
+    variance = sum(w * (v - mean) ** 2 for v, w in zip(values, weights)) / weight_sum
+    std = math.sqrt(variance)
+    
+    # Calculate coefficient of variation (CV)
+    cv = std / mean if mean > 0 else 0
+    
+    # Convert to consistency factor (lower CV = higher consistency)
+    # CV of 0.3 or higher = significant variance, factor approaches 0.9
+    # CV near 0 = high consistency, factor approaches 1.0
+    consistency_factor = 1.0 / (1.0 + cv * 0.5)
+    return max(0.9, min(1.0, consistency_factor))
 
 def calculate_team_metrics(team_id, event_id=None, game_config=None):
     """Calculate key performance metrics for a team based on their scouting data using dynamic period calculations
@@ -87,13 +443,16 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
     if game_config is None:
         game_config = get_current_game_config()
     
-    # Calculate dynamic period-based metrics
+    # Calculate exponential weights based on match recency
+    time_weights = _calculate_exponential_weights(scouting_data, decay_factor=0.15)
+    
+    # Calculate dynamic period-based metrics (first pass to get values)
     auto_values = []
     teleop_values = []
     endgame_values = []
     total_values = []
     
-    print(f"    Calculating dynamic metrics across {len(scouting_data)} matches:")
+    print(f"    Calculating dynamic metrics across {len(scouting_data)} matches with time-weighted analysis:")
     for idx, data in enumerate(scouting_data):
         match_info = f"Match {data.match.match_number}" if data.match else f"Record #{idx+1}"
         
@@ -107,12 +466,75 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
         teleop_values.append(teleop_pts)
         endgame_values.append(endgame_pts)
         total_values.append(total_pts)
-        
-        print(f"      {match_info}: total={total_pts} (auto={auto_pts}, teleop={teleop_pts}, endgame={endgame_pts})")
     
-    # Calculate statistics for each metric
-    def calculate_stats(values, metric_name):
-        if values:
+    # Detect outliers/bad data and calculate quality weights using adaptive method
+    quality_weights = _calculate_quality_weights(total_values, base_penalty=0.5, use_adaptive=True)
+    
+    # Get detailed outlier information for logging
+    outlier_flags, outlier_scores = _detect_outliers_adaptive(total_values)
+    
+    # Combine time weights with quality weights
+    # Final weight = time_weight × quality_weight
+    combined_weights = [t * q for t, q in zip(time_weights, quality_weights)]
+    
+    # Normalize combined weights to maintain comparable statistics
+    weight_sum = sum(combined_weights)
+    if weight_sum > 0:
+        weights = [w * len(combined_weights) / weight_sum for w in combined_weights]
+    else:
+        weights = time_weights
+    
+    # Log weight adjustments for outliers with severity information
+    outliers_detected = [q < 0.95 for q in quality_weights]  # Flag if quality reduced by 5% or more
+    if any(outliers_detected):
+        num_outliers = sum(outliers_detected)
+        outlier_pct = (num_outliers / len(scouting_data) * 100) if len(scouting_data) > 0 else 0
+        print(f"    Outlier detection: {num_outliers} potential bad data point(s) detected ({outlier_pct:.1f}%)")
+        
+        # Categorize outliers by severity
+        severe = sum(1 for s in outlier_scores if s > 0.7)
+        moderate = sum(1 for s in outlier_scores if 0.3 < s <= 0.7)
+        mild = sum(1 for s in outlier_scores if 0 < s <= 0.3)
+        
+        if severe > 0:
+            print(f"      Severe outliers: {severe} (likely data entry errors)")
+        if moderate > 0:
+            print(f"      Moderate outliers: {moderate} (unusual performance)")
+        if mild > 0:
+            print(f"      Mild outliers: {mild} (edge of normal range)")
+        
+        for idx, (data, is_outlier, weight, severity) in enumerate(zip(scouting_data, outliers_detected, weights, outlier_scores)):
+            if is_outlier:
+                match_info = f"Match {data.match.match_number}" if data.match else f"Record #{idx+1}"
+                severity_label = "SEVERE" if severity > 0.7 else "MODERATE" if severity > 0.3 else "MILD"
+                print(f"      {match_info}: total={total_values[idx]:.1f} ({severity_label} OUTLIER - severity={severity:.2f}, weight={weight:.3f})")
+    
+    # Print match details with final weights
+    for idx, data in enumerate(scouting_data):
+        match_info = f"Match {data.match.match_number}" if data.match else f"Record #{idx+1}"
+        weight = weights[idx] if idx < len(weights) else 1.0
+        quality_flag = " [OUTLIER]" if idx < len(outliers_detected) and outliers_detected[idx] else ""
+        print(f"      {match_info}: total={total_values[idx]:.1f} (auto={auto_values[idx]:.1f}, teleop={teleop_values[idx]:.1f}, endgame={endgame_values[idx]:.1f}, weight={weight:.3f}){quality_flag}")
+    
+    # Calculate weighted statistics for each metric
+    def calculate_weighted_stats(values, metric_name, weights):
+        if values and len(values) == len(weights):
+            weight_sum = sum(weights)
+            if weight_sum > 0:
+                # Weighted mean
+                avg = sum(v * w for v, w in zip(values, weights)) / weight_sum
+                # Weighted std
+                if len(values) > 1:
+                    variance = sum(w * (v - avg) ** 2 for v, w in zip(values, weights)) / weight_sum
+                    std = math.sqrt(variance)
+                else:
+                    std = 0.0
+                
+                metrics[metric_name] = avg
+                metrics[f"{metric_name}_std"] = std
+                return avg, std
+        elif values:
+            # Fallback to simple stats if weights don't match
             avg = statistics.mean(values)
             std = statistics.stdev(values) if len(values) > 1 else 0.0
             metrics[metric_name] = avg
@@ -120,13 +542,75 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
             return avg, std
         return 0, 0
     
-    # Store dynamic period metrics
-    auto_avg, auto_std = calculate_stats(auto_values, 'auto_points')
-    teleop_avg, teleop_std = calculate_stats(teleop_values, 'teleop_points')
-    endgame_avg, endgame_std = calculate_stats(endgame_values, 'endgame_points')
-    total_avg, total_std = calculate_stats(total_values, 'total_points')
+    # Store dynamic period metrics with weighted calculations
+    auto_avg, auto_std = calculate_weighted_stats(auto_values, 'auto_points', weights)
+    teleop_avg, teleop_std = calculate_weighted_stats(teleop_values, 'teleop_points', weights)
+    endgame_avg, endgame_std = calculate_weighted_stats(endgame_values, 'endgame_points', weights)
     
-    print(f"    Final averages: auto={auto_avg:.1f}, teleop={teleop_avg:.1f}, endgame={endgame_avg:.1f}, total={total_avg:.1f}")
+    # For total points, calculate trend and consistency factors
+    if total_values:
+        weight_sum = sum(weights)
+        if weight_sum > 0:
+            weighted_mean = sum(v * w for v, w in zip(total_values, weights)) / weight_sum
+            
+            # Calculate trend and consistency factors
+            trend_factor = _calculate_trend_factor(total_values, weights)
+            consistency_factor = _calculate_consistency_factor(total_values, weights)
+            
+            # Apply factors to weighted mean for final prediction value
+            total_avg = weighted_mean * trend_factor * consistency_factor
+            metrics['total_points'] = total_avg
+            metrics['total_points_base'] = weighted_mean  # Store base value for analysis
+            metrics['trend_factor'] = trend_factor
+            metrics['consistency_factor'] = consistency_factor
+            
+            # Calculate weighted std
+            if len(total_values) > 1:
+                variance = sum(w * (v - weighted_mean) ** 2 for v, w in zip(total_values, weights)) / weight_sum
+                total_std = math.sqrt(variance)
+            else:
+                total_std = 0.0
+            metrics['total_points_std'] = total_std
+            
+            print(f"    Final weighted averages: auto={auto_avg:.1f}, teleop={teleop_avg:.1f}, endgame={endgame_avg:.1f}")
+            print(f"    Total points - Base: {weighted_mean:.1f}, Trend: {trend_factor:.3f}, Consistency: {consistency_factor:.3f}, Final: {total_avg:.1f}")
+        else:
+            total_avg, total_std = calculate_weighted_stats(total_values, 'total_points', [1.0] * len(total_values))
+            print(f"    Final averages: auto={auto_avg:.1f}, teleop={teleop_avg:.1f}, endgame={endgame_avg:.1f}, total={total_avg:.1f}")
+    else:
+        total_avg = 0
+        total_std = 0
+        print(f"    Final averages: auto={auto_avg:.1f}, teleop={teleop_avg:.1f}, endgame={endgame_avg:.1f}, total={total_avg:.1f}")
+    
+    # Store comprehensive outlier detection info
+    if 'outliers_detected' in locals() and 'outlier_scores' in locals():
+        outlier_count = sum(outliers_detected)
+        metrics['outlier_count'] = outlier_count
+        metrics['outlier_percentage'] = (outlier_count / len(scouting_data) * 100) if len(scouting_data) > 0 else 0
+        
+        # Calculate data quality score (0-100)
+        # Based on: percentage of clean data, consistency, and sample size
+        clean_data_pct = (len(scouting_data) - outlier_count) / len(scouting_data) if len(scouting_data) > 0 else 0
+        sample_size_score = min(1.0, len(scouting_data) / 3.0)  # Full score at 3+ matches
+        consistency_score = metrics.get('consistency_factor', 1.0)
+        
+        quality_score = (clean_data_pct * 0.5 + sample_size_score * 0.25 + consistency_score * 0.25) * 100
+        metrics['data_quality_score'] = round(quality_score, 1)
+        
+        # Calculate prediction confidence (0-100)
+        # Higher with more data, fewer outliers, and better consistency
+        confidence = min(100, quality_score * (1.0 + math.log10(max(1, len(scouting_data)))) / 2.0)
+        metrics['prediction_confidence'] = round(confidence, 1)
+        
+        # Store severity distribution
+        if outlier_count > 0:
+            avg_severity = sum(outlier_scores) / len(outlier_scores)
+            max_severity = max(outlier_scores)
+            metrics['outlier_avg_severity'] = round(avg_severity, 3)
+            metrics['outlier_max_severity'] = round(max_severity, 3)
+            
+            print(f"    Data quality: {outlier_count}/{len(scouting_data)} outlier(s) detected ({metrics['outlier_percentage']:.1f}%)")
+            print(f"    Quality score: {metrics['data_quality_score']:.1f}/100, Prediction confidence: {metrics['prediction_confidence']:.1f}%")
     
     # Calculate endgame capability - find highest position this team has demonstrated
     endgame_positions = []
@@ -207,13 +691,26 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
             
             # Calculate legacy metric
             values = []
-            for data in scouting_data:
+            for idx, data in enumerate(scouting_data):
                 value = data.calculate_metric(metric_formula)
                 values.append(value)
             
             if values:
-                metrics[metric_id] = statistics.mean(values)
-                metrics[f"{metric_id}_std"] = statistics.stdev(values) if len(values) > 1 else 0.0
+                # Use weighted mean for all metrics
+                if len(values) == len(weights) and sum(weights) > 0:
+                    weighted_mean = sum(v * w for v, w in zip(values, weights)) / sum(weights)
+                    metrics[metric_id] = weighted_mean
+                    
+                    # Calculate weighted std
+                    if len(values) > 1:
+                        variance = sum(w * (v - weighted_mean) ** 2 for v, w in zip(values, weights)) / sum(weights)
+                        metrics[f"{metric_id}_std"] = math.sqrt(variance)
+                    else:
+                        metrics[f"{metric_id}_std"] = 0.0
+                else:
+                    # Fallback to simple mean
+                    metrics[metric_id] = statistics.mean(values)
+                    metrics[f"{metric_id}_std"] = statistics.stdev(values) if len(values) > 1 else 0.0
     
     return {
         'team_number': team_number,
@@ -222,8 +719,10 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
     }
 
 
-def _simulate_match_outcomes(red_alliance_teams, blue_alliance_teams, total_metric_id, n_simulations=2000, seed=None):
+def _simulate_match_outcomes(red_alliance_teams, blue_alliance_teams, total_metric_id, n_simulations=3000, seed=None):
     """Monte Carlo simulate match outcomes using per-team mean/std for total metric.
+    
+    Includes improved uncertainty modeling and alliance synergy effects.
 
     Returns a dict with expected_red, expected_blue, win_probability_for_red.
     """
@@ -232,19 +731,25 @@ def _simulate_match_outcomes(red_alliance_teams, blue_alliance_teams, total_metr
 
     red_means = []
     red_stds = []
+    red_consistencies = []
     for team_data in red_alliance_teams:
         m = team_data['metrics'].get(total_metric_id, team_data['metrics'].get('total_points', 0.0))
         s = team_data['metrics'].get(f"{total_metric_id}_std", team_data['metrics'].get('total_points_std', 0.0))
+        consistency = team_data['metrics'].get('consistency_factor', 1.0)
         red_means.append(float(m))
         red_stds.append(max(0.0, float(s)))
+        red_consistencies.append(consistency)
 
     blue_means = []
     blue_stds = []
+    blue_consistencies = []
     for team_data in blue_alliance_teams:
         m = team_data['metrics'].get(total_metric_id, team_data['metrics'].get('total_points', 0.0))
         s = team_data['metrics'].get(f"{total_metric_id}_std", team_data['metrics'].get('total_points_std', 0.0))
+        consistency = team_data['metrics'].get('consistency_factor', 1.0)
         blue_means.append(float(m))
         blue_stds.append(max(0.0, float(s)))
+        blue_consistencies.append(consistency)
 
     # If no teams or no data, fall back to deterministic sum
     if not red_means and not blue_means:
@@ -272,22 +777,39 @@ def _simulate_match_outcomes(red_alliance_teams, blue_alliance_teams, total_metr
             return {'expected_red': red_score, 'expected_blue': blue_score, 'red_win_prob': 0.0, 'blue_win_prob': 0.0, 'tie_prob': 1.0}
 
     for _ in range(n_simulations):
-        # sample per-team totals
+        # Sample per-team totals with improved uncertainty modeling
         sim_red = 0.0
-        for m, s in zip(red_means, red_stds):
+        for m, s, c in zip(red_means, red_stds, red_consistencies):
             if s > 0:
-                val = random.gauss(m, s)
+                # Adjust std based on consistency factor
+                # More consistent teams have tighter distributions
+                adjusted_std = s * (2.0 - c)  # c=1.0 (consistent) -> std, c=0.9 -> 1.1*std
+                val = random.gauss(m, adjusted_std)
             else:
                 val = m
             sim_red += max(0.0, val)
+        
+        # Add small alliance synergy bonus (teams playing together may perform slightly better)
+        # This represents coordination and strategy benefits
+        if len(red_means) >= 3:
+            avg_consistency = sum(red_consistencies) / len(red_consistencies)
+            synergy_bonus = sim_red * 0.02 * avg_consistency  # Up to 2% bonus for consistent alliances
+            sim_red += synergy_bonus
 
         sim_blue = 0.0
-        for m, s in zip(blue_means, blue_stds):
+        for m, s, c in zip(blue_means, blue_stds, blue_consistencies):
             if s > 0:
-                val = random.gauss(m, s)
+                adjusted_std = s * (2.0 - c)
+                val = random.gauss(m, adjusted_std)
             else:
                 val = m
             sim_blue += max(0.0, val)
+        
+        # Add alliance synergy bonus for blue
+        if len(blue_means) >= 3:
+            avg_consistency = sum(blue_consistencies) / len(blue_consistencies)
+            synergy_bonus = sim_blue * 0.02 * avg_consistency
+            sim_blue += synergy_bonus
 
         total_red += sim_red
         total_blue += sim_blue
@@ -477,7 +999,8 @@ def predict_match_outcome(match_id):
         blue_alliance_score += team_score
     
     # Perform Monte Carlo simulation using per-team totals and stddevs (if available)
-    sim = _simulate_match_outcomes(red_alliance_teams, blue_alliance_teams, total_metric_id, n_simulations=2000)
+    # Using 3000 simulations for improved statistical accuracy
+    sim = _simulate_match_outcomes(red_alliance_teams, blue_alliance_teams, total_metric_id, n_simulations=3000)
 
     expected_red = sim.get('expected_red', red_alliance_score)
     expected_blue = sim.get('expected_blue', blue_alliance_score)

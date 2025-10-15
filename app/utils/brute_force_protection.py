@@ -2,7 +2,7 @@
 Brute Force Protection Utilities
 Provides IP-based and user-based rate limiting for login attempts
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from flask import request, current_app
 from app.models import LoginAttempt
 import logging
@@ -120,7 +120,7 @@ class BruteForceProtection:
         
         try:
             # Get the most recent failed attempt within lockout period
-            cutoff_time = datetime.utcnow() - timedelta(minutes=self.lockout_minutes)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=self.lockout_minutes)
             
             query = LoginAttempt.query.filter(
                 LoginAttempt.ip_address == ip_address,
@@ -135,7 +135,7 @@ class BruteForceProtection:
             
             if latest_attempt:
                 unlock_time = latest_attempt.attempt_time + timedelta(minutes=self.lockout_minutes)
-                remaining = unlock_time - datetime.utcnow()
+                remaining = unlock_time - datetime.now(timezone.utc)
                 
                 if remaining.total_seconds() > 0:
                     return int(remaining.total_seconds() / 60)  # Return minutes

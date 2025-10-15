@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "alliance_size": 3,
   "scouting_stations": 6,
-  "current_event_code": "arsea",
+  "current_event_code": "ARLI",
   "match_types": [
     "Practice",
     "Qualification",
@@ -215,7 +215,7 @@
     "auto_sync_enabled": true
   },
   "tba_api_settings": {
-    "auth_key": "",
+    "auth_key": "##hae7pfixkaYpROTHhMx6XQ5qLkjT5v7jX7IymIp3sFadVOTsboxkSVJlYu4yoq9a",
     "base_url": "https://www.thebluealliance.com/api/v3"
   },
   "data_analysis": {

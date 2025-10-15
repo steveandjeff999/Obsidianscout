@@ -5,7 +5,7 @@ Comprehensive verification of all deletion types and sync capabilities
 
 from app import create_app, db
 from app.models import User, DatabaseChange
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 import time
 
 def final_status_check():
@@ -164,7 +164,7 @@ def final_status_check():
             sync_manager = MultiServerSyncManager()
             
             # Test sync data retrieval
-            cutoff_time = datetime.utcnow() - timedelta(hours=1)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=1)
             changes = sync_manager._get_database_changes_since(cutoff_time)
             
             print(f"   ✅ Sync system: READY ({len(changes)} changes in last hour)")

@@ -5,7 +5,7 @@ Focus on the database query and password verification without HTTP context
 """
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 def test_database_login():
     """Test just the database parts of login without HTTP context"""
@@ -103,7 +103,7 @@ def test_database_login():
             print("STEP 4: Manual brute force check...")
             
             # Count recent failed attempts
-            cutoff_time = datetime.utcnow() - timedelta(minutes=15)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=15)
             recent_failed = LoginAttempt.query.filter(
                 LoginAttempt.username == username,
                 LoginAttempt.success == False,
@@ -137,7 +137,7 @@ def test_database_login():
                     team_number=team_number,
                     ip_address='127.0.0.1',  # Test IP
                     success=True,
-                    attempt_time=datetime.utcnow()
+                    attempt_time=datetime.now(timezone.utc)
                 )
                 
                 db.session.add(new_attempt)

@@ -9,7 +9,7 @@ import json
 import plotly
 import sys
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models import Team, Match, ScoutingData, Event, SharedGraph
 from app.models import CustomPage
 from app import db
@@ -1281,7 +1281,7 @@ def create_page_share():
         'created_by': current_user.id if current_user.is_authenticated else None,
         'created_by_user': current_user.username if current_user.is_authenticated else None,
         'owner_team': current_user.scouting_team_number,
-        'created_at': datetime.utcnow().isoformat(),
+        'created_at': datetime.now(timezone.utc).isoformat(),
         'revoked': False
     }
 

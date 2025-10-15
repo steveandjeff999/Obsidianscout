@@ -11,7 +11,7 @@ def fix_change_tracking_context():
     try:
         from app import create_app, db
         from app.models import User, DatabaseChange, Team, Event
-        from datetime import datetime
+        from datetime import datetime, timezone
         import json
         
         app = create_app()
@@ -54,7 +54,7 @@ def fix_change_tracking_context():
                     'password_hash': 'HIDDEN',
                     'is_active': True
                 }),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 sync_status='pending',
                 created_by_server='local'
             )
@@ -79,7 +79,7 @@ def fix_change_tracking_context():
                     'scouting_team_number': test_user.scouting_team_number,
                     'is_active': True
                 }),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 sync_status='pending',
                 created_by_server='local'
             )
@@ -111,7 +111,7 @@ def fix_change_tracking_context():
                     'team_name': test_team.team_name,
                     'location': test_team.location
                 }),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 sync_status='pending',
                 created_by_server='local'
             )
@@ -142,7 +142,7 @@ def fix_change_tracking_context():
                     'year': test_event.year,
                     'scouting_team_number': test_event.scouting_team_number
                 }),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 sync_status='pending',
                 created_by_server='local'
             )
@@ -291,7 +291,7 @@ def test_sync_functionality():
                     record_id='999',
                     operation='TEST',
                     change_data=json.dumps({'test': 'sync_test'}),
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     sync_status='pending',
                     created_by_server='local'
                 )

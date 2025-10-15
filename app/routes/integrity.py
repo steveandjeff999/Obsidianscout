@@ -6,7 +6,7 @@ import time
 import json
 import platform
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from app import db
 
 integrity_bp = Blueprint('integrity', __name__, url_prefix='/integrity')
@@ -122,7 +122,7 @@ def status():
                 if fp not in (monitor.checksums or {}):
                     modified.append(f"{fp} (new)")
 
-            scan_summary['scanned_at'] = datetime.utcnow().isoformat()
+            scan_summary['scanned_at'] = datetime.now(timezone.utc).isoformat()
             scan_summary['duration_seconds'] = round(duration, 3)
             scan_summary['modified_count'] = len(modified)
             # Provide a few examples only
@@ -161,7 +161,7 @@ def status():
         info['system'] = {
             'platform': platform.platform(),
             'python_version': platform.python_version(),
-            'server_time_utc': datetime.utcnow().isoformat()
+            'server_time_utc': datetime.now(timezone.utc).isoformat()
         }
     except Exception:
         pass
@@ -184,7 +184,7 @@ def status():
         try:
             start = getattr(current_app, 'start_time', None)
             if start:
-                proc['uptime_seconds'] = int((datetime.utcnow() - start).total_seconds())
+                proc['uptime_seconds'] = int((datetime.now(timezone.utc) - start).total_seconds())
             else:
                 proc['uptime_seconds'] = None
         except Exception:

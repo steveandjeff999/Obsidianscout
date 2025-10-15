@@ -2,7 +2,7 @@
 API Key Models for separate apis.db database
 This module contains all models for API key management and usage tracking.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from flask import current_app
 from flask_sqlalchemy import SQLAlchemy
 import secrets
@@ -26,7 +26,7 @@ class ApiKey(Base):
     description = Column(Text, nullable=True)  # Optional description
     team_number = Column(Integer, nullable=False, index=True)  # Associated team number
     created_by = Column(String(80), nullable=False)  # Username who created it
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_used_at = Column(DateTime, nullable=True)
     expires_at = Column(DateTime, nullable=True)  # Optional expiration
     is_active = Column(Boolean, default=True, nullable=False)
@@ -103,7 +103,7 @@ class ApiUsage(Base):
     request_size = Column(Integer, default=0)  # Request body size in bytes
     response_size = Column(Integer, default=0)  # Response size in bytes
     response_time_ms = Column(Float, default=0)  # Response time in milliseconds
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     error_message = Column(Text, nullable=True)  # For failed requests
     
     def __repr__(self):
@@ -222,7 +222,7 @@ def create_api_key(name, team_number, created_by, description=None, permissions=
     # Set expiration if specified
     expires_at = None
     if expires_days:
-        expires_at = datetime.utcnow() + timedelta(days=expires_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=expires_days)
     
     # Create the API key record
     api_key = ApiKey(
@@ -319,7 +319,7 @@ def record_api_usage(api_key_id, endpoint, method, status_code, ip_address=None,
         api_key = session.query(ApiKey).filter_by(id=api_key_id).first()
         if api_key:
             api_key.total_requests += 1
-            api_key.last_used_at = datetime.utcnow()
+            api_key.last_used_at = datetime.now(timezone.utc)
             if 200 <= status_code < 300:
                 api_key.successful_requests += 1
             else:
@@ -332,7 +332,7 @@ def record_api_usage(api_key_id, endpoint, method, status_code, ip_address=None,
 
 def check_rate_limit(api_key_id, rate_limit_per_hour):
     """Check if an API key has exceeded its rate limit"""
-    current_time = datetime.utcnow()
+    current_time = datetime.now(timezone.utc)
     window_start = current_time.replace(minute=0, second=0, microsecond=0)
     
     session = api_db.get_session()
@@ -366,7 +366,7 @@ def check_rate_limit(api_key_id, rate_limit_per_hour):
 
 def get_api_usage_stats(api_key_id, days=30):
     """Get usage statistics for an API key"""
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
     
     session = api_db.get_session()
     try:
@@ -382,7 +382,7 @@ def get_api_usage_stats(api_key_id, days=30):
 
 def cleanup_old_usage_records(days_to_keep=90):
     """Clean up old usage records to prevent database bloat"""
-    cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
     
     session = api_db.get_session()
     try:

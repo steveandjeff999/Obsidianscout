@@ -3,7 +3,7 @@
 from app import create_app
 from app.models import DatabaseChange, SyncServer, User
 from app.utils.simplified_sync import simplified_sync_manager
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 
 app = create_app()
@@ -24,7 +24,7 @@ def complete_sync_test():
         print(f"\n1️⃣ CREATING TEST USER")
         print("-" * 30)
         
-        test_username = f"complete_sync_test_{datetime.utcnow().strftime('%H%M%S')}"
+        test_username = f"complete_sync_test_{datetime.now(timezone.utc).strftime('%H%M%S')}"
         test_user = User(username=test_username, scouting_team_number=7777)
         test_user.set_password('TestSync123!')
         

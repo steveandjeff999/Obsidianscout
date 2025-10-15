@@ -9,7 +9,7 @@ from functools import wraps
 from app import db
 from app.models import User, Role, DatabaseChange
 from sqlalchemy import or_, func
-from datetime import datetime
+from datetime import datetime, timezone
 from app.utils.system_check import SystemCheck
 from app.utils.theme_manager import ThemeManager
 from werkzeug.utils import secure_filename
@@ -92,7 +92,7 @@ def login():
             return redirect(url_for('auth.login'))
         
         # Update last login time
-        user.last_login = datetime.utcnow()
+        user.last_login = datetime.now(timezone.utc)
         db.session.commit()
         
         login_user(user, remember=remember_me)
@@ -160,7 +160,7 @@ def forgot_password():
                 'to': email,
                 'subject': subject,
                 'body': body,
-                'created_at': datetime.utcnow().isoformat() + 'Z'
+                'created_at': datetime.now(timezone.utc).isoformat() + 'Z'
             }
             out.append(entry)
             with open(outbox_path, 'w', encoding='utf-8') as f:
@@ -754,9 +754,9 @@ def delete_user(user_id):
     user.is_active = False
     # Update timestamp to ensure sync detection
     if hasattr(user, 'updated_at'):
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(timezone.utc)
     elif hasattr(user, 'last_login'):
-        user.last_login = datetime.utcnow()  # Use as modification timestamp
+        user.last_login = datetime.now(timezone.utc)  # Use as modification timestamp
     
     db.session.commit()
     # Manual soft delete change tracking fallback
@@ -861,7 +861,7 @@ def restore_user(user_id):
     # Reactivate user
     user.is_active = True
     if hasattr(user, 'updated_at'):
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(timezone.utc)
     
     db.session.commit()
     # Manual restore change tracking fallback

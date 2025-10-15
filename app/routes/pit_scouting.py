@@ -5,7 +5,7 @@ from app.models import Team, Event, PitScoutingData
 from app import db, socketio
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from app.utils.config_manager import get_id_to_perm_id_mapping
 from app.utils.sync_manager import SyncManager
 import os
@@ -433,7 +433,7 @@ def upload():
         # Mark data as uploaded (since WebSocket sync handles real-time updates)
         for pit_data in unuploaded_data:
             pit_data.is_uploaded = True
-            pit_data.upload_timestamp = datetime.utcnow()
+            pit_data.upload_timestamp = datetime.now(timezone.utc)
         
         db.session.commit()
         
@@ -472,7 +472,7 @@ def export():
     
     return jsonify({
         'pit_scouting_data': export_data,
-        'export_timestamp': datetime.utcnow().isoformat(),
+        'export_timestamp': datetime.now(timezone.utc).isoformat(),
         'total_entries': len(export_data)
     })
 
@@ -952,7 +952,7 @@ def sync_full():
             # Mark uploaded data as uploaded
             for pit_data in unuploaded_data:
                 pit_data.is_uploaded = True
-                pit_data.upload_timestamp = datetime.utcnow()
+                pit_data.upload_timestamp = datetime.now(timezone.utc)
         
         new_data_count = 0
         updated_data_count = 0

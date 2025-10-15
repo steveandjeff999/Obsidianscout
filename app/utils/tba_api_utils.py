@@ -7,7 +7,7 @@ import requests
 import json
 import os
 from flask import current_app
-from datetime import datetime
+from datetime import datetime, timezone
 from app.utils.config_manager import get_current_game_config, load_game_config
 from flask_login import current_user
 
@@ -424,11 +424,15 @@ def tba_event_to_db_format(tba_event):
     
     location = ', '.join(location_parts)
     
+    # Extract timezone (TBA provides IANA timezone like 'America/Denver')
+    event_timezone = tba_event.get('timezone')
+    
     return {
         'name': tba_event.get('name', ''),
         'code': tba_event.get('event_code', ''),
-        'year': tba_event.get('year', datetime.now().year),
+        'year': tba_event.get('year', datetime.now(timezone.utc).year),
         'location': location,
+        'timezone': event_timezone,
         'start_date': start_date,
         'end_date': end_date
     }
@@ -517,7 +521,7 @@ def get_tba_team_matches_at_event(team_key, event_key):
 def construct_tba_event_key(event_code, year=None):
     """Construct TBA event key from event code and year"""
     if year is None:
-        year = datetime.now().year
+        year = datetime.now(timezone.utc).year
     
     # TBA event keys are lowercase
     return f"{year}{event_code.lower()}"

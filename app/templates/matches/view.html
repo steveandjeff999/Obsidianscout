@@ -10,6 +10,43 @@
         <span class="badge bg-info">{{ match.event.name }}</span>
     </h1>
     
+    {% if match.scheduled_time or match.predicted_time %}
+    <div class="alert alert-info mb-4">
+        <h5 class="alert-heading mb-2">
+            <i class="fas fa-clock me-2"></i>Match Schedule
+        </h5>
+        {% if match.scheduled_time %}
+            {% if match.event and match.event.timezone %}
+                <p class="mb-1">
+                    <strong>Scheduled:</strong> 
+                    {{ match.scheduled_time | format_time_tz(match.event.timezone, '%A, %B %d at %I:%M %p') }}
+                </p>
+                <p class="mb-0 small text-muted">
+                    Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})
+                </p>
+            {% else %}
+                <p class="mb-0">
+                    <strong>Scheduled:</strong> {{ match.scheduled_time.strftime('%A, %B %d at %I:%M %p') }} UTC
+                </p>
+            {% endif %}
+        {% elif match.predicted_time %}
+            {% if match.event and match.event.timezone %}
+                <p class="mb-1">
+                    <strong>Predicted:</strong> 
+                    ~{{ match.predicted_time | format_time_tz(match.event.timezone, '%A, %B %d at %I:%M %p') }}
+                </p>
+                <p class="mb-0 small text-muted">
+                    Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})
+                </p>
+            {% else %}
+                <p class="mb-0">
+                    <strong>Predicted:</strong> ~{{ match.predicted_time.strftime('%A, %B %d at %I:%M %p') }} UTC
+                </p>
+            {% endif %}
+        {% endif %}
+    </div>
+    {% endif %}
+    
     <div class="row mb-4">
         <div class="col-md-6">
             <div class="card">

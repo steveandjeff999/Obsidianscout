@@ -7,7 +7,7 @@ import json
 import time
 import threading
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Any, Optional
 from flask import current_app
 from app.models import db
@@ -40,7 +40,7 @@ class SyncLockManager:
                 # Try to create lock file exclusively
                 with open(lock_file, 'x') as f:
                     lock_data = {
-                        'acquired_at': datetime.utcnow().isoformat(),
+                        'acquired_at': datetime.now(timezone.utc).isoformat(),
                         'process_id': os.getpid(),
                         'lock_name': lock_name
                     }
@@ -87,7 +87,7 @@ class SyncLockManager:
             with open(lock_file, 'r') as f:
                 lock_data = json.load(f)
                 acquired_at = datetime.fromisoformat(lock_data['acquired_at'])
-                age = datetime.utcnow() - acquired_at
+                age = datetime.now(timezone.utc) - acquired_at
                 
                 return age > timedelta(minutes=max_age_minutes)
         except Exception:
@@ -145,7 +145,7 @@ class SyncUtils:
         """Log a synchronization operation"""
         try:
             log_entry = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'operation': operation,
                 'details': details,
                 'sync_id': SyncUtils.generate_sync_id()
@@ -192,7 +192,7 @@ class SyncUtils:
     def check_sync_health() -> Dict[str, Any]:
         """Check the health of sync-related components"""
         health = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'database': 'unknown',
             'locks': 'unknown',
             'overall': 'unknown'

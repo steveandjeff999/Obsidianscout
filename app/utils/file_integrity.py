@@ -3,7 +3,7 @@ import os
 import json
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -187,7 +187,7 @@ class FileIntegrityMonitor:
             with open(self.checksums_file, 'w') as f:
                 json.dump({
                     'checksums': self.checksums,
-                    'created': datetime.now().isoformat()
+                    'created': datetime.now(timezone.utc).isoformat()
                 }, f, indent=2)
         except Exception as e:
             print(f"Error saving checksums: {e}")
@@ -212,7 +212,7 @@ class FileIntegrityMonitor:
                 json.dump({
                     'integrity_password_hash': self.integrity_password_hash,
                     'warning_only_mode': self.warning_only_mode,
-                    'created': datetime.now().isoformat()
+                    'created': datetime.now(timezone.utc).isoformat()
                 }, f, indent=2)
         except Exception as e:
             print(f"Error saving integrity config: {e}")

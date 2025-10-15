@@ -3,6 +3,7 @@ import os
 import sys
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 from app import create_app, socketio, db
 from flask import redirect, url_for, request, flash
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -126,29 +127,9 @@ if __name__ == '__main__':
         # Clear old failed login attempts on startup (especially important after updates)
         try:
             from app.models import LoginAttempt, db
-            from datetime import datetime, timedelta
             
             # Clear failed login attempts older than 5 minutes on startup
-            startup_cutoff = datetime.utcnow() - timedelta(minutes=5)
-            startup_deleted = LoginAttempt.query.filter(
-                LoginAttempt.success == False,
-                LoginAttempt.attempt_time < startup_cutoff
-            ).delete()
-            
-            if startup_deleted > 0:
-                db.session.commit()
-                print(f"Startup cleanup: Cleared {startup_deleted} old failed login attempts")
-            
-        except Exception as e:
-            print(f"Warning: Could not perform startup failed login cleanup: {e}")
-        
-        # Clear old failed login attempts on startup (especially important after updates)
-        try:
-            from app.models import LoginAttempt, db
-            from datetime import datetime, timedelta
-            
-            # Clear failed login attempts older than 5 minutes on startup
-            startup_cutoff = datetime.utcnow() - timedelta(minutes=5)
+            startup_cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
             startup_deleted = LoginAttempt.query.filter(
                 LoginAttempt.success == False,
                 LoginAttempt.attempt_time < startup_cutoff
@@ -292,9 +273,30 @@ if __name__ == '__main__':
                                 # Get or create event for this team and event code
                                 event = Event.query.filter_by(code=event_code, scouting_team_number=scouting_team_number).first()
                                 if not event:
-                                    print(f"  Event {event_code} not found for team {scouting_team_number}, creating placeholder event")
+                                    print(f"  Event {event_code} not found for team {scouting_team_number}, fetching from API...")
                                     try:
-                                        event = Event(name=event_code, code=event_code, year=game_config.get('season', None) or game_config.get('year', 0), scouting_team_number=scouting_team_number)
+                                        # Try to get full event details from API including timezone
+                                        from app.utils.api_utils import get_event_details_dual_api
+                                        event_details = get_event_details_dual_api(event_code)
+                                        
+                                        if event_details:
+                                            # Create event with full details including timezone
+                                            event = Event(
+                                                name=event_details.get('name', event_code),
+                                                code=event_code,
+                                                timezone=event_details.get('timezone'),  # Store timezone from API
+                                                location=event_details.get('location'),
+                                                start_date=event_details.get('start_date'),
+                                                end_date=event_details.get('end_date'),
+                                                year=event_details.get('year', game_config.get('season', None) or game_config.get('year', 0)),
+                                                scouting_team_number=scouting_team_number
+                                            )
+                                            if event.timezone:
+                                                print(f"  Event timezone: {event.timezone}")
+                                        else:
+                                            # Fallback to placeholder if API doesn't return details
+                                            event = Event(name=event_code, code=event_code, year=game_config.get('season', None) or game_config.get('year', 0), scouting_team_number=scouting_team_number)
+                                        
                                         db.session.add(event)
                                         db.session.commit()
                                     except Exception as e:

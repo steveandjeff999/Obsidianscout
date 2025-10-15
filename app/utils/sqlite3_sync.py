@@ -7,7 +7,7 @@ import sqlite3
 import json
 import requests
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 import hashlib
@@ -250,7 +250,7 @@ class SQLite3SyncManager:
     def _get_local_changes_sqlite3(self, since_time: Optional[datetime]) -> List[Dict]:
         """Get local changes using optimized SQLite3 queries"""
         if not since_time:
-            since_time = datetime.now() - timedelta(hours=24)
+            since_time = datetime.now(timezone.utc) - timedelta(hours=24)
         
         changes = []
         
@@ -398,7 +398,7 @@ class SQLite3SyncManager:
                             'record_id': str(row_dict.get('id', '')),
                             'operation': 'upsert',
                             'data': row_dict,
-                            'timestamp': datetime.now().isoformat(),
+                            'timestamp': datetime.now(timezone.utc).isoformat(),
                             'change_hash': hashlib.md5(json.dumps(row_dict, sort_keys=True, default=str).encode()).hexdigest()
                         }
                         out_changes.append(change)
@@ -620,7 +620,7 @@ class SQLite3SyncManager:
             try:
                 url = f"{server_config.get('protocol', 'http')}://{server_config['host']}:{server_config['port']}/api/sync/changes"
                 params = {
-                    'since': since_time.isoformat() if since_time else (datetime.now() - timedelta(hours=24)).isoformat(),
+                    'since': since_time.isoformat() if since_time else (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat(),
                     'server_id': server_config.get('id', 'local'),
                     'format': 'sqlite3_optimized'
                 }
@@ -660,7 +660,7 @@ class SQLite3SyncManager:
                 payload = {
                     'changes': changes,
                     'server_id': server_config.get('id', 'local'),
-                    'timestamp': datetime.now().isoformat(),
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
                     'format': 'sqlite3_optimized'
                 }
                 
@@ -938,7 +938,7 @@ class SQLite3SyncManager:
     
     def cleanup_old_sync_data(self, days_to_keep: int = 30):
         """Clean up old sync data to maintain performance"""
-        cutoff_date = datetime.now() - timedelta(days=days_to_keep)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
         cutoff_iso = cutoff_date.isoformat()
         
         with self._get_connection() as conn:

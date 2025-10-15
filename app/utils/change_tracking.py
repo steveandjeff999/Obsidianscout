@@ -4,7 +4,7 @@ Database change tracking for multi-server synchronization
 import json
 import queue
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import event, text
 from flask import current_app
 
@@ -129,7 +129,7 @@ def track_model_changes(model_class):
                 'operation': 'insert',  # normalized lowercase
                 'change_data': json.dumps(record_data),
                 'old_data': None,
-                'timestamp': datetime.utcnow(),
+                'timestamp': datetime.now(timezone.utc),
                 'sync_status': 'pending',
                 'created_by_server': _get_server_id()
             }
@@ -188,7 +188,7 @@ def track_model_changes(model_class):
                 'operation': operation_type.lower(),  # normalize
                 'change_data': json.dumps(new_data),
                 'old_data': None,
-                'timestamp': datetime.utcnow(),
+                'timestamp': datetime.now(timezone.utc),
                 'sync_status': 'pending',
                 'created_by_server': _get_server_id()
             }
@@ -226,7 +226,7 @@ def track_model_changes(model_class):
                 'operation': 'delete',  # already lowercase
                 'change_data': None,
                 'old_data': json.dumps(record_data),
-                'timestamp': datetime.utcnow(),
+                'timestamp': datetime.now(timezone.utc),
                 'sync_status': 'pending',
                 'created_by_server': _get_server_id()
             }

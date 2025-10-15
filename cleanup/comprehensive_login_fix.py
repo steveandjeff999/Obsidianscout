@@ -5,7 +5,7 @@ Addresses login rejection issues by improving error handling and user feedback
 """
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 def analyze_login_patterns():
     """Analyze login patterns to identify common issues"""
@@ -21,7 +21,7 @@ def analyze_login_patterns():
             
             # Get recent login attempts
             recent_attempts = LoginAttempt.query.filter(
-                LoginAttempt.attempt_time >= datetime.utcnow() - timedelta(days=7)
+                LoginAttempt.attempt_time >= datetime.now(timezone.utc) - timedelta(days=7)
             ).order_by(LoginAttempt.attempt_time.desc()).all()
             
             print(f"Total login attempts in last 7 days: {len(recent_attempts)}")
@@ -55,7 +55,7 @@ def analyze_login_patterns():
             print(f"\n🔒 CURRENTLY BLOCKED USERS/IPS")
             print("-" * 40)
             
-            cutoff_time = datetime.utcnow() - timedelta(minutes=15)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=15)
             blocked_candidates = db.session.query(
                 LoginAttempt.username, 
                 LoginAttempt.ip_address,

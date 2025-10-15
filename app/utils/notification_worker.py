@@ -4,7 +4,7 @@ Runs as a daemon thread to process pending notifications and update match times
 """
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from flask import current_app
 
 
@@ -18,14 +18,15 @@ def notification_worker(app):
     """
     print("🔔 Notification worker thread started")
     
-    last_match_time_update = datetime.min
-    last_schedule_check = datetime.min
-    last_cleanup = datetime.min
+    # Use timezone-aware datetime.min to avoid mixing naive and aware datetimes
+    last_match_time_update = datetime.min.replace(tzinfo=timezone.utc)
+    last_schedule_check = datetime.min.replace(tzinfo=timezone.utc)
+    last_cleanup = datetime.min.replace(tzinfo=timezone.utc)
     
     while True:
         try:
             with app.app_context():
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
                 
                 # Update match times every 10 minutes
                 if (now - last_match_time_update).total_seconds() >= 600:
@@ -91,7 +92,7 @@ def schedule_upcoming_match_notifications(app):
     from app.models import Match
     from app.utils.notification_service import schedule_notifications_for_match, get_match_time
     
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     window_end = now + timedelta(hours=2)
     
     # Find matches with scheduled times in the next 2 hours

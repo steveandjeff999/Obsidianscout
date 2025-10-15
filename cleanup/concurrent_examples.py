@@ -6,7 +6,7 @@ in your scouting application with CR-SQLite and BEGIN CONCURRENT support.
 """
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.models import User, Team, ScoutingData, Match
@@ -102,7 +102,7 @@ def example_with_decorator():
     # This function will automatically retry up to 5 times if there are database conflicts
     user = User.query.filter_by(username='test_user').first()
     if user:
-        user.last_login = datetime.utcnow()
+        user.last_login = datetime.now(timezone.utc)
         db.session.commit()
     
     return user
@@ -124,7 +124,7 @@ def example_high_concurrency_scenario():
                     'match_number': i + 1,
                     'data': f'{{"thread_id": {thread_id}, "entry": {i}}}',
                     'scouting_team_number': 5454,
-                    'timestamp': datetime.utcnow()
+                    'timestamp': datetime.now(timezone.utc)
                 }
                 
                 # Use concurrent write with automatic retry

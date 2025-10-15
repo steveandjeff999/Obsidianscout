@@ -30,8 +30,8 @@ def compare_users():
         # Since there might not be a standard users API, let's send a request to get database info
         try:
             # Try the sync changes endpoint to see what user records exist on remote
-            from datetime import datetime, timedelta
-            since_time = (datetime.utcnow() - timedelta(days=30)).isoformat()  # Last 30 days
+            from datetime import datetime, timezone, timedelta
+            since_time = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()  # Last 30 days
             
             changes_url = f"{server.base_url}/api/sync/changes"
             params = {'since': since_time, 'server_id': 'local'}

@@ -5,7 +5,7 @@ Check current login attempts and clear any that might be blocking
 """
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 def check_login_status():
     """Check current login status and clear blocks"""
@@ -54,7 +54,7 @@ def check_login_status():
             print(f"\n3. RECENT FAILED ATTEMPTS (last 15 minutes)")
             print("-" * 30)
             
-            cutoff = datetime.utcnow() - timedelta(minutes=15)
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
             recent_failed = LoginAttempt.query.filter(
                 LoginAttempt.username == username,
                 LoginAttempt.success == False,
@@ -111,7 +111,7 @@ def check_login_status():
                     team_number=0,
                     ip_address='127.0.0.1',
                     success=True,
-                    attempt_time=datetime.utcnow()
+                    attempt_time=datetime.now(timezone.utc)
                 )
                 
                 db.session.add(test_attempt)

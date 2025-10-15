@@ -4,7 +4,7 @@ Receives and applies database operations in real-time from other servers
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict
 from flask import Blueprint, request, jsonify, current_app
 from app import db
@@ -64,7 +64,7 @@ def receive_operation():
                 'operation_type': operation_type,
                 'table': table_name,
                 'record_id': record_id,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             })
         else:
             logger.error(f"❌ Failed to apply {operation_type} operation: {result['error']}")
@@ -148,7 +148,7 @@ def apply_delete(model_class, record_id: str):
                 # Soft delete
                 record.is_active = False
                 if hasattr(record, 'updated_at'):
-                    record.updated_at = datetime.utcnow()
+                    record.updated_at = datetime.now(timezone.utc)
             else:
                 # Hard delete
                 db.session.delete(record)
@@ -181,5 +181,5 @@ def ping_realtime():
     return jsonify({
         'status': 'ok',
         'service': 'real-time-replication',
-        'timestamp': datetime.utcnow().isoformat()
+        'timestamp': datetime.now(timezone.utc).isoformat()
     })

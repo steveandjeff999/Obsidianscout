@@ -9,7 +9,7 @@ import shutil
 import time
 import threading
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union, Tuple, TYPE_CHECKING
 from flask import current_app
@@ -159,7 +159,7 @@ class CatchupSyncManager:
         
         logger.info(f"🚀 Starting catch-up sync for {server.name}")
         
-        catchup_start = datetime.utcnow()
+        catchup_start = datetime.now(timezone.utc)
         results = {
             'server_id': server.id,
             'server_name': server.name,
@@ -186,12 +186,12 @@ class CatchupSyncManager:
             results['file_changes'] = file_result
             
             # Step 4: Update server sync timestamp
-            server.last_sync = datetime.utcnow()
+            server.last_sync = datetime.now(timezone.utc)
             db.session.commit()
             
             results['success'] = True
-            results['completed_at'] = datetime.utcnow().isoformat()
-            results['duration'] = (datetime.utcnow() - catchup_start).total_seconds()
+            results['completed_at'] = datetime.now(timezone.utc).isoformat()
+            results['duration'] = (datetime.now(timezone.utc) - catchup_start).total_seconds()
             
             logger.info(f"✅ Catch-up sync completed for {server.name} in {results['duration']:.2f} seconds")
             logger.info(f"   Database: {db_result['sent']} sent, {db_result['received']} received, {db_result['applied']} applied")
@@ -200,8 +200,8 @@ class CatchupSyncManager:
         except Exception as e:
             logger.error(f"❌ Catch-up sync failed for {server.name}: {e}")
             results['errors'].append(str(e))
-            results['completed_at'] = datetime.utcnow().isoformat()
-            results['duration'] = (datetime.utcnow() - catchup_start).total_seconds()
+            results['completed_at'] = datetime.now(timezone.utc).isoformat()
+            results['duration'] = (datetime.now(timezone.utc) - catchup_start).total_seconds()
         
         finally:
             # Always remove server from in-progress tracking when done
@@ -216,7 +216,7 @@ class CatchupSyncManager:
         """
         # If server has never synced, look back a reasonable amount (e.g., 7 days)
         if server.last_sync is None:
-            fallback_time = datetime.utcnow() - timedelta(days=7)
+            fallback_time = datetime.now(timezone.utc) - timedelta(days=7)
             logger.info(f"📅 Server {server.name} has never synced, using 7-day fallback: {fallback_time}")
             return fallback_time
         
@@ -365,7 +365,7 @@ class CatchupSyncManager:
                                 'record_id': str(record.id),
                                 'operation': operation,
                                 'data': record_data,
-                                'timestamp': datetime.utcnow().isoformat()
+                                'timestamp': datetime.now(timezone.utc).isoformat()
                             })
                         
                         logger.info(f"📋 Found {len(modified_records)} changes in {table_name} since {since}")
@@ -399,7 +399,7 @@ class CatchupSyncManager:
                 payload = {
                     'changes': batch,
                     'server_id': self._get_server_id(),
-                    'timestamp': datetime.utcnow().isoformat(),
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
                     'catchup_mode': True
                 }
                 
@@ -576,7 +576,7 @@ class CatchupSyncManager:
                         if existing_record and hasattr(existing_record, 'is_active'):
                             existing_record.is_active = False
                             if hasattr(existing_record, 'updated_at'):
-                                existing_record.updated_at = datetime.utcnow()
+                                existing_record.updated_at = datetime.now(timezone.utc)
                             applied_count += 1
                 
                 elif operation == 'reactivate':
@@ -586,7 +586,7 @@ class CatchupSyncManager:
                         if existing_record and hasattr(existing_record, 'is_active'):
                             existing_record.is_active = True
                             if hasattr(existing_record, 'updated_at'):
-                                existing_record.updated_at = datetime.utcnow()
+                                existing_record.updated_at = datetime.now(timezone.utc)
                             applied_count += 1
                 
             except Exception as e:

@@ -1,22 +1,28 @@
 """
 Match Time Fetcher
 Updates match scheduled times from FIRST and TBA APIs
+Properly handles timezone conversions to ensure notifications are sent at the correct local time
 """
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import current_app
 from app import db
 from app.models import Match, Event
 from app.utils.api_utils import get_api_headers, get_preferred_api_source
 from app.utils.config_manager import get_current_game_config
+from app.utils.timezone_utils import parse_iso_with_timezone, convert_utc_to_local
 
 
-def fetch_match_times_from_first(event_code):
+def fetch_match_times_from_first(event_code, event_timezone=None):
     """
     Fetch match scheduled times from FIRST API
     
+    Args:
+        event_code: Event code to fetch times for
+        event_timezone: IANA timezone string for the event (e.g., 'America/Denver')
+    
     Returns:
-        dict mapping (match_type, match_number) -> datetime
+        dict mapping (match_type, match_number) -> datetime (in UTC)
     """
     base_url = current_app.config.get('API_BASE_URL', 'https://frc-api.firstinspires.org')
     season = get_current_game_config().get('season', 2026)
@@ -47,8 +53,11 @@ def fetch_match_times_from_first(event_code):
                     if match_num and scheduled_time_str:
                         try:
                             # Parse ISO 8601 format: "2024-03-15T09:30:00"
-                            scheduled_time = datetime.fromisoformat(scheduled_time_str.replace('Z', '+00:00'))
-                            match_times[(match_type, match_num)] = scheduled_time
+                            # FIRST API may provide times in local timezone or UTC
+                            # Use our timezone-aware parser to handle properly
+                            scheduled_time = parse_iso_with_timezone(scheduled_time_str, event_timezone)
+                            if scheduled_time:
+                                match_times[(match_type, match_num)] = scheduled_time
                         except Exception as e:
                             print(f"Error parsing time '{scheduled_time_str}': {e}")
                 
@@ -62,12 +71,16 @@ def fetch_match_times_from_first(event_code):
     return match_times
 
 
-def fetch_match_times_from_tba(event_code):
+def fetch_match_times_from_tba(event_code, event_timezone=None):
     """
     Fetch match scheduled/predicted times from The Blue Alliance API
     
+    Args:
+        event_code: Event code to fetch times for
+        event_timezone: Not used - TBA provides Unix timestamps which are already UTC
+    
     Returns:
-        dict mapping (match_type, match_number) -> (scheduled_time, predicted_time)
+        dict mapping (match_type, match_number) -> (scheduled_time, predicted_time) (both in UTC)
     """
     from app.utils.tba_api_utils import get_tba_api_headers, construct_tba_event_key
     
@@ -101,22 +114,31 @@ def fetch_match_times_from_tba(event_code):
                 match_num = match_data.get('match_number')
                 match_type = comp_level_map.get(comp_level, 'Qualification')
                 
-                # TBA provides both actual_time and predicted_time
+                # TBA provides time, actual_time, and predicted_time as Unix timestamps (UTC)
+                # time = scheduled time for the match
+                # actual_time = when the match actually started (only set after match plays)
+                # predicted_time = TBA's prediction of when match will start
+                scheduled_time = match_data.get('time')  # Unix timestamp
                 actual_time = match_data.get('actual_time')  # Unix timestamp
                 predicted_time = match_data.get('predicted_time')  # Unix timestamp
                 
                 scheduled = None
                 predicted = None
                 
-                if actual_time:
+                # Prefer actual_time if available (match already played), otherwise use scheduled time
+                time_to_use = actual_time if actual_time else scheduled_time
+                
+                if time_to_use:
                     try:
-                        scheduled = datetime.fromtimestamp(actual_time)
+                        # Unix timestamps are in UTC, create timezone-aware datetime
+                        scheduled = datetime.fromtimestamp(time_to_use, tz=timezone.utc)
                     except Exception as e:
-                        print(f"Error parsing actual_time {actual_time}: {e}")
+                        print(f"Error parsing time {time_to_use}: {e}")
                 
                 if predicted_time:
                     try:
-                        predicted = datetime.fromtimestamp(predicted_time)
+                        # Unix timestamps are in UTC, create timezone-aware datetime
+                        predicted = datetime.fromtimestamp(predicted_time, tz=timezone.utc)
                     except Exception as e:
                         print(f"Error parsing predicted_time {predicted_time}: {e}")
                 
@@ -136,6 +158,7 @@ def fetch_match_times_from_tba(event_code):
 def update_match_times(event_code, scouting_team_number=None):
     """
     Update scheduled times for all matches at an event
+    Times are fetched from APIs in event local timezone and converted to UTC for storage
     
     Args:
         event_code: Event code to update
@@ -146,27 +169,7 @@ def update_match_times(event_code, scouting_team_number=None):
     """
     print(f"\n📅 Updating match times for event {event_code}...")
     
-    # Get preferred API source
-    preferred_api = get_preferred_api_source()
-    
-    # Fetch times from APIs
-    first_times = {}
-    tba_times = {}
-    
-    if preferred_api == 'first':
-        first_times = fetch_match_times_from_first(event_code)
-        if not first_times:
-            # Fallback to TBA
-            print("⚠️  No times from FIRST API, trying TBA...")
-            tba_times = fetch_match_times_from_tba(event_code)
-    else:
-        tba_times = fetch_match_times_from_tba(event_code)
-        if not tba_times:
-            # Fallback to FIRST
-            print("⚠️  No times from TBA, trying FIRST API...")
-            first_times = fetch_match_times_from_first(event_code)
-    
-    # Get event from database
+    # Get event from database first to get timezone info
     query = Event.query.filter_by(code=event_code)
     if scouting_team_number:
         query = query.filter_by(scouting_team_number=scouting_team_number)
@@ -175,6 +178,33 @@ def update_match_times(event_code, scouting_team_number=None):
     if not event:
         print(f"❌ Event {event_code} not found in database")
         return 0
+    
+    # Get event timezone for proper conversion
+    event_timezone = event.timezone
+    if event_timezone:
+        print(f"📍 Event timezone: {event_timezone}")
+    else:
+        print(f"⚠️  No timezone set for event, times will be treated as UTC")
+    
+    # Get preferred API source
+    preferred_api = get_preferred_api_source()
+    
+    # Fetch times from APIs (passing timezone for proper parsing)
+    first_times = {}
+    tba_times = {}
+    
+    if preferred_api == 'first':
+        first_times = fetch_match_times_from_first(event_code, event_timezone)
+        if not first_times:
+            # Fallback to TBA
+            print("⚠️  No times from FIRST API, trying TBA...")
+            tba_times = fetch_match_times_from_tba(event_code, event_timezone)
+    else:
+        tba_times = fetch_match_times_from_tba(event_code, event_timezone)
+        if not tba_times:
+            # Fallback to FIRST
+            print("⚠️  No times from TBA, trying FIRST API...")
+            first_times = fetch_match_times_from_first(event_code, event_timezone)
     
     # Get all matches for this event
     matches = Match.query.filter_by(event_id=event.id).all()
@@ -186,14 +216,14 @@ def update_match_times(event_code, scouting_team_number=None):
         
         updated = False
         
-        # Update from FIRST API times
+        # Update from FIRST API times (already in UTC from our parser)
         if match_key in first_times:
             scheduled_time = first_times[match_key]
             if match.scheduled_time != scheduled_time:
                 match.scheduled_time = scheduled_time
                 updated = True
         
-        # Update from TBA times
+        # Update from TBA times (already in UTC)
         if match_key in tba_times:
             scheduled, predicted = tba_times[match_key]
             
@@ -210,7 +240,7 @@ def update_match_times(event_code, scouting_team_number=None):
     
     if updated_count > 0:
         db.session.commit()
-        print(f"✅ Updated times for {updated_count} matches")
+        print(f"✅ Updated times for {updated_count} matches (stored in UTC)")
     else:
         print(f"ℹ️  No match time updates needed")
     
