@@ -699,6 +699,23 @@ def strategy_all():
                     red_score = rloc if rloc is not None else None
                     blue_score = bloc if bloc is not None else None
 
+                # If we still don't have any scores, prefer predicted outcome scores from analysis
+                if (red_score is None or blue_score is None) and isinstance(pred, dict):
+                    # Predicted outcome commonly provides 'red_score' and 'blue_score'
+                    p_red = pred.get('red_score') or pred.get('predicted_red') or pred.get('predicted_score')
+                    p_blue = pred.get('blue_score') or pred.get('predicted_blue') or pred.get('predicted_score')
+                    try:
+                        if red_score is None and p_red is not None:
+                            red_score = int(round(float(p_red)))
+                    except Exception:
+                        # keep raw value if conversion fails
+                        red_score = p_red if red_score is None else red_score
+                    try:
+                        if blue_score is None and p_blue is not None:
+                            blue_score = int(round(float(p_blue)))
+                    except Exception:
+                        blue_score = p_blue if blue_score is None else blue_score
+
                 # Parse alliance team strings into structured lists with optional team lookup
                 def _parse_alliance(alliance_str):
                     teams_out = []

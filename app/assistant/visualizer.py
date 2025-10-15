@@ -94,7 +94,8 @@ class Visualizer:
             'event_summary': self.plot_event_summary,
             'match_schedule': self.plot_match_schedule,
             'team_ranking': self.plot_team_ranking,
-            'ranking_comparison': self.plot_ranking_comparison
+            'ranking_comparison': self.plot_ranking_comparison,
+            'trend_chart': self.plot_trend_chart
         }
         
         if vis_type not in visualization_methods:
@@ -103,9 +104,10 @@ class Visualizer:
                 "message": f"Unsupported visualization type: {vis_type}"
             }
         
-        # Ensure required optional libraries are present before attempting heavy plotting
-        if not HAS_SEABORN:
-            return {"error": True, "message": "Optional visualization dependencies (seaborn/pandas/numpy) are not installed on this server."}
+        # Note: some visualizations (like trend_chart) can be generated with
+        # plain matplotlib only. Avoid blocking all visualizations if optional
+        # dependencies (seaborn/pandas/numpy) are missing. Individual plot
+        # methods should raise clear errors if they require those libs.
 
         try:
             # Call the appropriate visualization method
@@ -508,4 +510,85 @@ class Visualizer:
         # Add grid lines
         ax.xaxis.grid(True, linestyle='--', alpha=0.7)
         
+        return fig
+    
+    def plot_trend_chart(self, data: Dict[str, Any]):
+        """Plot team performance trend over time with regression line"""
+        # Support either being passed the assistant response (which contains
+        # a `visualization_data` key) or being passed the visualization_data
+        # dict directly.
+        payload = data.get('visualization_data') if isinstance(data, dict) and data.get('visualization_data') else data
+
+        team_number = payload.get('team_number')
+        match_scores = payload.get('match_scores', []) or payload.get('matches', [])
+        slope = payload.get('slope', 0)
+        intercept = payload.get('intercept', 0)
+        
+        if not match_scores:
+            raise ValueError("No match score data provided")
+        
+        # Extract match numbers and scores
+        # Accept several possible keys for match id/number
+        matches = []
+        scores = []
+        for score in match_scores:
+            # Score value can be under 'score' or 'total'
+            val = score.get('score') if isinstance(score, dict) else None
+            if val is None:
+                val = score.get('total') if isinstance(score, dict) else None
+            if val is None and isinstance(score, (int, float)):
+                val = score
+
+            # Match identifier can be 'match_number', 'match', or 'match_id'
+            mnum = None
+            if isinstance(score, dict):
+                mnum = score.get('match_number') or score.get('match') or score.get('match_id')
+            # If still None, use index order
+            matches.append(mnum if mnum is not None else len(matches))
+            scores.append(val if val is not None else 0)
+        
+        # Create figure and axis
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        # Plot actual scores as scatter points
+        ax.scatter(matches, scores, color=self.colors['primary'], 
+                  s=100, alpha=0.6, label='Actual Scores', zorder=3)
+        
+        # Plot trend line
+        if len(matches) >= 2 and slope != 0:
+            x_vals = list(range(len(matches)))
+            trend_line = [slope * x + intercept for x in x_vals]
+            ax.plot(matches, trend_line, color=self.colors['secondary'], 
+                   linewidth=2, linestyle='--', label='Trend Line', zorder=2)
+        
+        # Connect points with line
+        ax.plot(matches, scores, color=self.colors['primary'], 
+               linewidth=1.5, alpha=0.3, zorder=1)
+        
+        # Add labels and title
+        trend_direction = "Improving" if slope > 0 else "Declining" if slope < 0 else "Stable"
+        ax.set_title(f"Team {team_number} Performance Trend ({trend_direction})", 
+                    fontsize=14, fontweight='bold')
+        ax.set_xlabel('Match Number', fontsize=12)
+        ax.set_ylabel('Total Points', fontsize=12)
+        
+        # Add legend
+        ax.legend(loc='best', frameon=True, shadow=True)
+        
+        # Add grid
+        ax.grid(True, linestyle='--', alpha=0.5, zorder=0)
+        
+        # Set background color
+        ax.set_facecolor(self.colors['background'])
+        
+        # Format y-axis to show whole numbers
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{int(y)}'))
+        
+        # Add stats text box
+        stats_text = f"Slope: {slope:.2f}\nAvg: {sum(scores)/len(scores):.1f}"
+        props = dict(boxstyle='round', facecolor='white', alpha=0.8)
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
+               fontsize=10, verticalalignment='top', bbox=props)
+        
+        plt.tight_layout()
         return fig
