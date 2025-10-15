@@ -1596,8 +1596,27 @@ def api_brief_data():
                         'red_score': round(red_score, 1) if red_count > 0 else 0,
                         'blue_score': round(blue_score, 1) if blue_count > 0 else 0,
                         'confidence': round(confidence, 0)
+                    },
+                    # Include actual results when available in local DB
+                    'result': {
+                        'has_result': (match.red_score is not None and match.blue_score is not None),
+                        'red_score': match.red_score if getattr(match, 'red_score', None) is not None else None,
+                        'blue_score': match.blue_score if getattr(match, 'blue_score', None) is not None else None,
+                        'winner': None
                     }
                 })
+                # Populate winner string for result if scores are present
+                if upcoming_matches and upcoming_matches[-1]['result']['has_result']:
+                    r = upcoming_matches[-1]['result']
+                    try:
+                        if r['red_score'] > r['blue_score']:
+                            r['winner'] = 'red'
+                        elif r['blue_score'] > r['red_score']:
+                            r['winner'] = 'blue'
+                        else:
+                            r['winner'] = 'tie'
+                    except Exception:
+                        r['winner'] = None
         
         # Strategy insights removed per UI simplification
         

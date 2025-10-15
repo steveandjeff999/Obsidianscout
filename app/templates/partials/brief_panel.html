@@ -1,811 +1,433 @@
-<!-- Now Brief Panel - Samsung-style overview of scouting data and upcoming matches -->
-<div class="brief-panel card shadow-lg mb-4">
-    <div class="card-header brief-header text-white d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center gap-2">
-            <i class="fas fa-newspaper fa-lg"></i>
-            <h5 class="mb-0">Now Brief</h5>
-        </div>
-        <div class="d-flex gap-2">
-            <button class="btn btn-sm btn-outline-light" id="briefToggleTopBtn" aria-label="Toggle brief">
-                <i class="fas fa-chevron-up"></i>
-            </button>
-            <button class="btn btn-sm btn-outline-light" id="briefRefreshBtn" aria-label="Refresh brief">
-                <i class="fas fa-sync-alt"></i>
-            </button>
-        </div>
+<!-- Modern Now Brief Panel - redesigned for a cleaner, responsive UI -->
+<div class="now-brief card mb-4" id="nowBriefPanel" aria-live="polite">
+  <div class="now-brief__header d-flex align-items-center justify-content-between p-3">
+    <div class="d-flex align-items-center gap-3">
+      <div class="now-brief__logo bg-gradient rounded-3 d-flex align-items-center justify-content-center">
+        <i class="fas fa-broadcast-tower fa-lg text-white"></i>
+      </div>
+      <div>
+        <div class="h6 mb-0">Now</div>
+        <div class="small text-muted">Live overview & upcoming matches</div>
+      </div>
     </div>
-    <div class="card-body p-0" id="briefContent">
-        <!-- Quick Stats Overview -->
-        <div class="brief-stats p-3 brief-bg-alt border-bottom">
-            <div class="row g-2">
-                <div class="col-4 text-center">
-                    <div class="stat-icon text-primary mb-1"><i class="fas fa-clipboard-check fa-2x"></i></div>
-                    <div class="small brief-text-muted">Today's Scouts</div>
-                    <div class="h5 mb-0" id="briefTodayScouts">0</div>
-                </div>
-                <div class="col-4 text-center brief-border-side">
-                    <div class="stat-icon text-success mb-1"><i class="fas fa-gamepad fa-2x"></i></div>
-                    <div class="small brief-text-muted">Upcoming Matches</div>
-                    <div class="h5 mb-0" id="briefUpcomingMatchesCount">0</div>
-                </div>
-                <div class="col-4 text-center">
-                    <div class="stat-icon text-warning mb-1"><i class="fas fa-users fa-2x"></i></div>
-                    <div class="small brief-text-muted">Teams Analyzed</div>
-                    <div class="h5 mb-0" id="briefTeamsAnalyzed">0</div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Recent Scouting Activity -->
-        <div class="brief-section">
-            <div class="section-header p-3 pb-2">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0 text-primary"><i class="fas fa-clock me-2"></i>Recent Activity</h6>
-                    <a href="{{ url_for('scouting.list_data') }}" class="btn btn-sm btn-outline-primary">View All</a>
-                </div>
-            </div>
-            <div class="brief-recent-activity" id="briefRecentActivity">
-                <div class="text-center p-3 text-muted">
-                    <div class="spinner-border spinner-border-sm" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <div class="small mt-2">Loading recent activity...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Upcoming Matches Section -->
-        <div class="brief-section border-top">
-            <div class="section-header p-3 pb-2">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0 text-success"><i class="fas fa-calendar-alt me-2"></i>Next 5 Matches</h6>
-                    <a href="{{ url_for('matches.index') }}" class="btn btn-sm btn-outline-success">All Matches</a>
-                </div>
-            </div>
-            <div class="brief-upcoming-matches" id="briefUpcomingMatches">
-                <div class="text-center p-3 brief-text-muted">
-                    <div class="spinner-border spinner-border-sm" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <div class="small mt-2">Loading upcoming matches...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Strategy Insights removed per user request -->
-
-        <!-- Top Performers -->
-        <div class="brief-section border-top">
-            <div class="section-header p-3 pb-2">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0 text-info"><i class="fas fa-trophy me-2"></i>Top Performers</h6>
-                    <a href="{{ url_for('graphs.index') }}" class="btn btn-sm btn-outline-info">Analytics</a>
-                </div>
-            </div>
-            <div class="brief-top-performers" id="briefTopPerformers">
-                <div class="text-center p-3 text-muted">
-                    <div class="spinner-border spinner-border-sm" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <div class="small mt-2">Loading top performers...</div>
-                </div>
-            </div>
-        </div>
+    <div class="d-flex align-items-center gap-2">
+      <button id="briefRefreshBtn" class="btn btn-sm btn-outline-secondary" title="Refresh Now brief">
+        <i class="fas fa-sync-alt" aria-hidden="true"></i>
+        <span class="visually-hidden">Refresh</span>
+      </button>
+      <!-- Options removed per user request -->
     </div>
-    
-    <!-- Expand/Collapse Toggle -->
-    <div class="card-footer text-center bg-light">
-        <button class="btn btn-sm btn-outline-secondary" id="briefToggleBtn" data-expanded="true">
-            <i class="fas fa-chevron-up me-1"></i>
-            <span>Collapse Brief</span>
-        </button>
+  </div>
+
+  <div class="now-brief__body px-3 pb-3">
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-md-4">
+        <div class="kpi card shadow-sm p-3 h-100 d-flex align-items-center">
+          <div class="me-3 display-6 text-primary"><i class="fas fa-clipboard-check"></i></div>
+          <div class="flex-grow-1">
+            <div class="small text-muted">Today's Scouts</div>
+            <div class="h4 mb-0" id="briefTodayScouts">0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-md-4">
+        <div class="kpi card shadow-sm p-3 h-100 d-flex align-items-center">
+          <div class="me-3 display-6 text-success"><i class="fas fa-calendar-check"></i></div>
+          <div class="flex-grow-1">
+            <div class="small text-muted">Upcoming Matches</div>
+            <div class="h4 mb-0" id="briefUpcomingMatchesCount">0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-md-4">
+        <div class="kpi card shadow-sm p-3 h-100 d-flex align-items-center">
+          <div class="me-3 display-6 text-warning"><i class="fas fa-users"></i></div>
+          <div class="flex-grow-1">
+            <div class="small text-muted">Teams Analyzed</div>
+            <div class="h4 mb-0" id="briefTeamsAnalyzed">0</div>
+          </div>
+        </div>
+      </div>
     </div>
+
+    <div class="row g-3">
+      <div class="col-12 col-lg-6">
+        <div class="panel card panel--compact h-100">
+          <div class="panel__header d-flex justify-content-between align-items-center p-2 px-3">
+            <div class="fw-medium text-primary"><i class="fas fa-history me-2"></i>Recent Activity</div>
+            <a href="{{ url_for('scouting.list_data') }}" class="small">View all</a>
+          </div>
+          <div class="panel__body p-2" id="briefRecentActivity">
+            <div class="text-center p-3 text-muted small">
+              <div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>
+              <div class="mt-2">Loading recent activity...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-lg-6">
+        <div class="panel card panel--compact h-100">
+          <div class="panel__header d-flex justify-content-between align-items-center p-2 px-3">
+            <div class="fw-medium text-success"><i class="fas fa-calendar-alt me-2"></i>Next 5 Matches</div>
+            <a href="{{ url_for('matches.index') }}" class="small">All matches</a>
+          </div>
+          <div class="panel__body p-2" id="briefUpcomingMatches">
+            <div class="text-center p-3 text-muted small">
+              <div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>
+              <div class="mt-2">Loading upcoming matches...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row mt-3">
+      <div class="col-12">
+        <div class="panel card panel--compact">
+          <div class="panel__header d-flex justify-content-between align-items-center p-2 px-3">
+            <div class="fw-medium text-info"><i class="fas fa-trophy me-2"></i>Top Performers</div>
+            <a href="{{ url_for('graphs.index') }}" class="small">Analytics</a>
+          </div>
+          <div class="panel__body p-2" id="briefTopPerformers">
+            <div class="text-center p-3 text-muted small">
+              <div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>
+              <div class="mt-2">Loading top performers...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="now-brief__footer text-end p-2 px-3">
+    <small class="text-muted">Updated <span id="briefLastUpdated">--</span></small>
+  </div>
 </div>
 
 <style>
-/* Brief Panel Styles with Dark Mode Support */
-.brief-panel {
-    border-radius: 16px;
-    overflow: hidden;
-    transition: all 0.3s ease;
+/* Modern Now Brief styles (kept local to partial) */
+.now-brief { border-radius: 12px; overflow: visible; }
+.now-brief__header { background: linear-gradient(90deg, rgba(102,126,234,0.12), rgba(118,75,162,0.12)); border-bottom: 1px solid rgba(0,0,0,0.04); }
+.now-brief__logo { width:44px; height:44px; background: linear-gradient(135deg,#667eea,#764ba2); }
+.kpi { border: none; }
+.panel { border-radius: 10px; overflow: hidden; }
+.panel__header { background: transparent; border-bottom: 1px solid rgba(0,0,0,0.04); }
+.panel__body { max-height: 320px; overflow: auto; transition: max-height 280ms ease, padding 200ms ease; }
+.panel--compact .panel__body { max-height: 260px; }
+.match-row { display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px dashed rgba(0,0,0,0.04); }
+.match-row:last-child { border-bottom:none; }
+.team-badge { display:none; }
+
+/* Team card component for Now Brief */
+.team-card { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; width:84px; padding:6px 8px; border-radius:10px; font-weight:600; margin-right:8px; text-decoration:none; color:inherit; border:1px solid rgba(0,0,0,0.06); background: rgba(255,255,255,0.02); }
+.team-card .team-label { font-size:0.65rem; color:var(--bs-secondary-text,#6c757d); }
+  .team-card .team-number { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace; font-weight:700; font-size:clamp(0.78rem, 1.6vw, 1rem); color:inherit; min-width:72px; max-width:100%; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* Responsive small cards: clamp between a sensible min and a larger max so 5-digit numbers fit on wide screens */
+  .team-card.small { width: clamp(56px, 6vw, 180px); padding:4px 8px; font-size:clamp(0.7rem, 1.4vw, 0.96rem); }
+  /* Hide label on small cards if present */
+  .team-card.small .team-label { display:none; }
+
+.alliance-red .team-card { background: rgba(220,53,69,0.04); color:#b02a37; border-color: rgba(220,53,69,0.09); }
+.alliance-blue .team-card { background: rgba(13,110,253,0.04); color:#0b5ed7; border-color: rgba(13,110,253,0.09); }
+
+.team-card.winner { box-shadow: 0 4px 14px rgba(0,0,0,0.08); transform: translateY(-2px); border-width:2px; }
+
+[data-bs-theme="dark"] .team-card, body.dark-mode .team-card { background: rgba(255,255,255,0.02); color: inherit; border-color: rgba(255,255,255,0.03); }
+
+/* Background team card layer shown behind match rows */
+.match-teams-bg { position: absolute; left: 10px; right: 10px; top: 50%; transform: translateY(-50%); display:flex; gap:8px; justify-content:center; pointer-events:none; opacity:0.12; }
+.match-row { position: relative; min-height:64px; padding-top:10px; padding-bottom:10px; }
+.match-row .match-main { position: relative; z-index: 3; width:100%; background: rgba(255,255,255,0.92); border-radius:8px; padding:6px 8px; box-shadow: 0 1px 0 rgba(0,0,0,0.02); }
+  /* Stacks are now inside the match card to ensure they fit and don't overlap */
+  .match-row .match-bg { display:none; }
+  .match-row .match-main { display:flex; align-items:center; gap:12px; }
+  .match-row .match-stack { display:flex; flex-direction:column; gap:6px; align-items:center; width: clamp(44px, 6vw, 180px); }
+  .match-row .match-stack .team-card { width: clamp(44px, 6vw, 180px); }
+  .match-row .team-card { opacity:1; transform:none; }
+
+/* Dark mode override so match-main remains readable but not too bright */
+[data-bs-theme="dark"] .match-row .match-main,
+body.dark-mode .match-row .match-main {
+  background: rgba(11,12,13,0.88);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.02);
 }
 
-.brief-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border: none;
+.alliance-red .team-badge { background: rgba(220,53,69,0.06); color:#b02a37; border:1px solid rgba(220,53,69,0.12); }
+.alliance-blue .team-badge { background: rgba(13,110,253,0.06); color:#0b5ed7; border:1px solid rgba(13,110,253,0.12); }
+.predicted-winner { background: rgba(255,215,0,0.08); border-left:3px solid #ffd700; padding-left:8px; border-radius:6px; }
+.time-pill { font-size:0.8rem; padding:4px 8px; border-radius:999px; background:#f1f3f5; color:#495057; }
+
+/* Dark mode compatibility (scoped) - improved contrast and surfaces */
+[data-bs-theme="dark"] .now-brief,
+body.dark-mode .now-brief {
+  background-color: #0b0c0d;
+  color: #dbe7ef;
+  border-color: #141619;
+  box-shadow: 0 8px 24px rgba(2,6,23,0.6);
 }
 
-/* Light mode backgrounds */
-.brief-bg-alt {
-    background-color: #f8f9fa;
+[data-bs-theme="dark"] .now-brief__header,
+body.dark-mode .now-brief__header {
+  background: linear-gradient(90deg, rgba(102,126,234,0.10), rgba(118,75,162,0.10));
+  color: #ffffff;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
 }
 
-.brief-text-muted {
-    color: #6c757d;
+[data-bs-theme="dark"] .kpi.card,
+body.dark-mode .kpi.card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border: 1px solid rgba(255,255,255,0.03);
+  color: #e6eef3;
 }
 
-.brief-border-side {
-    border-left: 1px solid #dee2e6;
-    border-right: 1px solid #dee2e6;
+[data-bs-theme="dark"] .panel,
+body.dark-mode .panel {
+  background: #0f1112;
+  border: 1px solid #22252a;
+  color: #dbe7ef;
 }
 
-/* Dark mode support */
-[data-bs-theme="dark"] .brief-panel,
-body.modern-layout.dark-mode .brief-panel,
-body.dark-mode .brief-panel {
-    background-color: #000;
-    border-color: #111;
+[data-bs-theme="dark"] .panel__header,
+body.dark-mode .panel__header {
+  border-color: rgba(255,255,255,0.03);
 }
 
-/* Strong overrides to eliminate any remaining white panels inside the brief panel */
-[data-bs-theme="dark"] .brief-panel .card-body,
-[data-bs-theme="dark"] .brief-panel .card,
-[data-bs-theme="dark"] .brief-panel .brief-stats,
-[data-bs-theme="dark"] .brief-panel .brief-section,
-[data-bs-theme="dark"] .brief-panel .section-header,
-[data-bs-theme="dark"] .brief-panel .brief-recent-activity,
-[data-bs-theme="dark"] .brief-panel .brief-upcoming-matches,
-[data-bs-theme="dark"] .brief-panel .brief-top-performers,
-[data-bs-theme="dark"] .brief-panel .activity-item,
-[data-bs-theme="dark"] .brief-panel .match-card,
-[data-bs-theme="dark"] .brief-panel .performer-item {
-    background-color: #000 !important;
-    color: #e6eef3 !important;
+[data-bs-theme="dark"] .panel__body,
+body.dark-mode .panel__body {
+  background: transparent;
 }
 
-/* Override Bootstrap utility bg-light on footer/header inside the panel */
-[data-bs-theme="dark"] .brief-panel .card-footer.bg-light,
-[data-bs-theme="dark"] .brief-panel .brief-stats.brief-bg-alt,
-[data-bs-theme="dark"] .brief-panel .brief-stats.brief-bg-alt * {
-    background-color: #000 !important;
-    color: #e6eef3 !important;
+[data-bs-theme="dark"] .team-badge,
+body.dark-mode .team-badge {
+  border-color: rgba(255,255,255,0.04);
 }
 
-/* Make sure any nested placeholders don't show white */
-[data-bs-theme="dark"] .brief-panel .text-center.p-3,
-[data-bs-theme="dark"] .brief-panel .text-center.p-3 * {
-    background-color: transparent !important;
-    color: #d6dee3 !important;
-}
-
-/* Buttons and outlines should blend */
-[data-bs-theme="dark"] .brief-panel .btn.btn-outline-primary,
-[data-bs-theme="dark"] .brief-panel .btn.btn-outline-success,
-[data-bs-theme="dark"] .brief-panel .btn.btn-outline-info,
-[data-bs-theme="dark"] .brief-panel .btn.btn-outline-danger {
-    background-color: transparent !important;
-    color: #d6dee3 !important;
-    border-color: rgba(255,255,255,0.08) !important;
-}
-
-/* Ensure small badges/time labels are dark-friendly */
-[data-bs-theme="dark"] .brief-panel .time-badge,
-[data-bs-theme="dark"] .brief-panel .prediction-badge {
-    background-color: #212529 !important;
-    color: #cbd5da !important;
-}
-
-/* Comprehensive dark override: force all descendants of brief-panel to pure black backgrounds/text
-   This is intentionally broad to eliminate any remaining white panels injected by utilities. */
-[data-bs-theme="dark"] .brief-panel *,
-body.modern-layout.dark-mode .brief-panel *,
-body.dark-mode .brief-panel * {
-    background-color: #000 !important;
-    color: #d6dee3 !important;
-    border-color: #111 !important;
-    box-shadow: none !important;
-}
-
-/* Restore header gradient and its text/icons (exclude header from the global override) */
-[data-bs-theme="dark"] .brief-panel .brief-header,
-[data-bs-theme="dark"] .brief-panel .brief-header *,
-body.modern-layout.dark-mode .brief-panel .brief-header,
-body.modern-layout.dark-mode .brief-panel .brief-header *,
-body.dark-mode .brief-panel .brief-header,
-body.dark-mode .brief-panel .brief-header * {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-    color: white !important;
-}
-
-/* Also ensure the card-header container itself is styled (prevents white gap at top) */
-[data-bs-theme="dark"] .brief-panel .card-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-    color: #fff !important;
-}
-
-/* Keep alliance/team badges readable and distinct */
 [data-bs-theme="dark"] .alliance-red .team-badge,
-body.modern-layout.dark-mode .alliance-red .team-badge,
 body.dark-mode .alliance-red .team-badge {
-    background-color: rgba(220, 53, 69, 0.12) !important;
-    color: #ffc9cb !important;
-    border-color: rgba(220,53,69,0.25) !important;
+  background: rgba(220,53,69,0.12);
+  color: #ffd2d6;
+  border: 1px solid rgba(220,53,69,0.18);
 }
 
 [data-bs-theme="dark"] .alliance-blue .team-badge,
-body.modern-layout.dark-mode .alliance-blue .team-badge,
 body.dark-mode .alliance-blue .team-badge {
-    background-color: rgba(13, 110, 253, 0.12) !important;
-    color: #dbe9ff !important;
-    border-color: rgba(13,110,253,0.25) !important;
+  background: rgba(13,110,253,0.12);
+  color: #d7e9ff;
+  border: 1px solid rgba(13,110,253,0.18);
 }
 
-/* Keep predicted winner styling visible */
+[data-bs-theme="dark"] .time-pill,
+body.dark-mode .time-pill {
+  background: rgba(255,255,255,0.04);
+  color: #d6dee3;
+}
+
 [data-bs-theme="dark"] .predicted-winner,
-body.modern-layout.dark-mode .predicted-winner,
 body.dark-mode .predicted-winner {
-    background: rgba(255, 215, 0, 0.12) !important;
-    border: 2px solid #b38600 !important;
-    color: #fff !important;
+  background: rgba(255,215,0,0.10);
+  border-left: 3px solid #ffcf40;
+  color: #fff;
 }
 
-/* Restore small interactive elements' padding/appearance so they don't look flattened */
-[data-bs-theme="dark"] .brief-panel .btn,
-[data-bs-theme="dark"] .brief-panel .section-header .btn {
-    background-color: transparent !important;
-    border-color: rgba(255,255,255,0.06) !important;
-    color: #dfe8ec !important;
+[data-bs-theme="dark"] .performer-rank.rank-other,
+body.dark-mode .performer-rank.rank-other {
+  background-color: #262a2d;
+  color: #adb5bd;
 }
 
-[data-bs-theme="dark"] .brief-bg-alt,
-body.modern-layout.dark-mode .brief-bg-alt,
-body.dark-mode .brief-bg-alt {
-    background-color: #000;
+/* spinner tinting inside this panel */
+[data-bs-theme="dark"] .now-brief .spinner-border,
+body.dark-mode .now-brief .spinner-border {
+  color: #9aa4ad; /* fallback */
+  border-width: 0.15rem;
 }
 
-/* Stronger dark backgrounds to avoid white panels showing through */
-[data-bs-theme="dark"] .brief-recent-activity,
-[data-bs-theme="dark"] .brief-upcoming-matches,
-[data-bs-theme="dark"] .brief-top-performers,
-[data-bs-theme="dark"] .section-header,
-[data-bs-theme="dark"] .brief-stats,
-[data-bs-theme="dark"] .card-footer {
-    background-color: #000 !important;
+[data-bs-theme="dark"] .now-brief .text-muted,
+body.dark-mode .now-brief .text-muted {
+  color: #9aa4ad !important;
 }
 
-[data-bs-theme="dark"] .brief-recent-activity > div,
-[data-bs-theme="dark"] .brief-upcoming-matches > div,
-[data-bs-theme="dark"] .brief-top-performers > div {
-    background-color: transparent;
-    color: #e9ecef;
+[data-bs-theme="dark"] .now-brief .fw-medium,
+body.dark-mode .now-brief .fw-medium {
+  color: #e6eef3;
 }
 
-/* Explicitly set backgrounds for individual items to prevent inherited white */
-[data-bs-theme="dark"] .activity-item,
-[data-bs-theme="dark"] .match-card,
-[data-bs-theme="dark"] .performer-item,
-[data-bs-theme="dark"] .strategy-card,
-[data-bs-theme="dark"] .brief-recent-activity,
-[data-bs-theme="dark"] .brief-upcoming-matches,
-[data-bs-theme="dark"] .brief-top-performers,
-[data-bs-theme="dark"] .section-header {
-    background-color: #000 !important;
-    color: #e9ecef !important;
+/* Small screens adjustments */
+@media (max-width: 575.98px) {
+  .now-brief__header { padding: 0.75rem; }
+  .now-brief__logo { width:40px; height:40px; }
 }
 
-[data-bs-theme="dark"] .activity-item,
-[data-bs-theme="dark"] .performer-item,
-[data-bs-theme="dark"] .strategy-card {
-    border-bottom: 1px solid #2e3338 !important;
-}
-
-[data-bs-theme="dark"] .performer-rank.rank-other {
-    background-color: #2b3035 !important;
-    color: #adb5bd !important;
-}
-
-/* Buttons in headers - make them blend in */
-[data-bs-theme="dark"] .section-header .btn,
-[data-bs-theme="dark"] .card-footer .btn {
-    background-color: transparent !important;
-    border-color: rgba(255,255,255,0.08) !important;
-    color: #dbe3e8 !important;
-}
-
-/* Spinner and small helper blocks */
-[data-bs-theme="dark"] .brief-recent-activity .spinner-border,
-[data-bs-theme="dark"] .brief-upcoming-matches .spinner-border,
-[data-bs-theme="dark"] .brief-top-performers .spinner-border {
-    color: #adb5bd;
-}
-
-[data-bs-theme="dark"] .brief-text-muted {
-    color: #adb5bd;
-}
-
-[data-bs-theme="dark"] .brief-border-side {
-    border-left-color: #495057;
-    border-right-color: #495057;
-}
-
-[data-bs-theme="dark"] .activity-item {
-    border-bottom-color: #495057;
-}
-
-[data-bs-theme="dark"] .activity-item:hover {
-    background-color: #0a0a0a !important; /* ensure hover is black */
-}
-
-[data-bs-theme="dark"] .match-card {
-    border-bottom-color: #2e3338;
-    background-color: #000 !important;
-}
-
-[data-bs-theme="dark"] .match-card:hover {
-    background-color: #0a0a0a !important;
-    transform: translateX(4px);
-}
-
-[data-bs-theme="dark"] .strategy-card {
-    border-bottom-color: #2e3338;
-    background-color: #000 !important;
-}
-
-[data-bs-theme="dark"] .strategy-card:hover {
-    background-color: #0a0a0a !important;
-}
-
-[data-bs-theme="dark"] .performer-item {
-    border-bottom-color: #2e3338;
-    background-color: #000 !important;
-}
-
-[data-bs-theme="dark"] .time-badge {
-    background-color: #343a40;
-    color: #cbd5da;
-}
-
-[data-bs-theme="dark"] .alliance-red .team-badge {
-    background-color: rgba(220, 53, 69, 0.2);
-    border-color: #dc3545;
-}
-
-[data-bs-theme="dark"] .alliance-blue .team-badge {
-    background-color: rgba(13, 110, 253, 0.2);
-    border-color: #0d6efd;
-}
-
-[data-bs-theme="dark"] .brief-section::-webkit-scrollbar-track {
-    background: #1b1e21;
-}
-
-[data-bs-theme="dark"] .brief-section::-webkit-scrollbar-thumb {
-    background: #343a40;
-}
-
-[data-bs-theme="dark"] .brief-section::-webkit-scrollbar-thumb:hover {
-    background: #495057;
-}
-
-.brief-stats .stat-icon {
-    animation: pulse-icon 2s infinite;
-}
-
-@keyframes pulse-icon {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-}
-
-.brief-section {
-    /* No max-height or scrolling - show all content */
-    box-sizing: border-box;
-}
-
-.brief-section.collapsed {
-    max-height: 0;
-    overflow: hidden;
-}
-
-.activity-item {
-    padding: 12px 16px;
-    border-bottom: 1px solid #e9ecef;
-    transition: background-color 0.2s ease;
-}
-
-.activity-item:last-child {
-    border-bottom: none;
-}
-
-.activity-item:hover {
-    background-color: #f8f9fa;
-}
-
-.match-card {
-    padding: 12px 16px;
-    border-bottom: 1px solid #e9ecef;
-    transition: all 0.2s ease;
-    cursor: pointer;
-}
-
-.match-card:hover {
-    background-color: #f8f9fa;
-    transform: translateX(4px);
-}
-
-.match-card:last-child {
-    border-bottom: none;
-}
-
-.team-badge {
-    display: inline-block;
-    padding: 4px 8px;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    margin: 2px;
-}
-
-.alliance-red .team-badge {
-    background-color: #fee;
-    color: #dc3545;
-    border: 1px solid #dc3545;
-}
-
-.alliance-blue .team-badge {
-    background-color: #e7f1ff;
-    color: #0d6efd;
-    border: 1px solid #0d6efd;
-}
-
-.predicted-winner {
-    position: relative;
-    padding: 6px;
-    border-radius: 8px;
-    background: rgba(255, 215, 0, 0.15);
-    border: 2px solid #FFD700;
-}
-
-/* Crown emoji removed per user request */
-
-[data-bs-theme="dark"] .predicted-winner {
-    background: rgba(255, 215, 0, 0.25);
-}
-
-.prediction-badge {
-    padding: 4px 8px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-radius: 6px;
-    text-align: center;
-    margin-top: 8px;
-}
-
-.strategy-card {
-    padding: 12px 16px;
-    border-bottom: 1px solid #e9ecef;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-}
-
-.strategy-card:hover {
-    background-color: #f8f9fa;
-}
-
-.strategy-card:last-child {
-    border-bottom: none;
-}
-
-.performer-item {
-    padding: 12px 16px;
-    border-bottom: 1px solid #e9ecef;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-}
-
-.performer-item:hover {
-    background-color: #f8f9fa;
-}
-
-[data-bs-theme="dark"] .performer-item:hover {
-    background-color: #2b3035;
-}
-
-.performer-item:last-child {
-    border-bottom: none;
-}
-
-.performer-rank {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 0.9rem;
-}
-
-.performer-rank.rank-1 {
-    background: linear-gradient(135deg, #FFD700, #FFA500);
-    color: white;
-}
-
-.performer-rank.rank-2 {
-    background: linear-gradient(135deg, #C0C0C0, #808080);
-    color: white;
-}
-
-.performer-rank.rank-3 {
-    background: linear-gradient(135deg, #CD7F32, #8B4513);
-    color: white;
-}
-
-.performer-rank.rank-other {
-    background-color: #e9ecef;
-    color: #6c757d;
-}
-
-[data-bs-theme="dark"] .performer-rank.rank-other {
-    background-color: #495057;
-    color: #adb5bd;
-}
-
-.time-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    background-color: #e9ecef;
-    color: #6c757d;
-}
-
-/* Scrollbar styling */
-.brief-section::-webkit-scrollbar {
-    width: 6px;
-}
-
-.brief-section::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-
-.brief-section::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 3px;
-}
-
-.brief-section::-webkit-scrollbar-thumb:hover {
-    background: #555;
-}
 </style>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Brief Panel functionality
-    const briefPanel = {
-        init: function() {
-            this.bindEvents();
-            this.loadBriefData();
-            // Refresh every 60 seconds
-            setInterval(() => this.loadBriefData(), 60000);
-        },
+document.addEventListener('DOMContentLoaded', () => {
+  const apiUrl = '/api/brief-data';
+  const refreshBtn = document.getElementById('briefRefreshBtn');
+  const lastUpdated = document.getElementById('briefLastUpdated');
 
-        bindEvents: function() {
-            const refreshBtn = document.getElementById('briefRefreshBtn');
-            const toggleTopBtn = document.getElementById('briefToggleTopBtn');
-            const toggleBottomBtn = document.getElementById('briefToggleBtn');
+  async function fetchBrief() {
+    try {
+      if (refreshBtn) refreshBtn.querySelector('i').classList.add('fa-spin');
+      const res = await fetch(apiUrl, { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('Status ' + res.status);
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to load');
+      updateAll(data);
+    } catch (err) {
+      console.error('Now brief error:', err);
+      showError(err.message || String(err));
+    } finally {
+      if (refreshBtn) setTimeout(() => refreshBtn.querySelector('i').classList.remove('fa-spin'), 300);
+    }
+  }
+  function updateAll(data) {
+    // Stats
+    document.getElementById('briefTodayScouts').textContent = data.today_scouts || 0;
+    document.getElementById('briefUpcomingMatchesCount').textContent = data.upcoming_count || 0;
+    document.getElementById('briefTeamsAnalyzed').textContent = data.teams_analyzed || 0;
 
-            if (refreshBtn) {
-                refreshBtn.addEventListener('click', () => {
-                    refreshBtn.querySelector('i').classList.add('fa-spin');
-                    this.loadBriefData().finally(() => {
-                        setTimeout(() => {
-                            refreshBtn.querySelector('i').classList.remove('fa-spin');
-                        }, 500);
-                    });
-                });
-            }
+    renderRecentActivity(data.recent_activity || []);
+    renderUpcomingMatches(data.upcoming_matches || []);
+    renderTopPerformers(data.top_performers || []);
 
-            const toggleBrief = () => {
-                const content = document.getElementById('briefContent');
-                const isCollapsed = content.style.display === 'none';
-                
-                if (isCollapsed) {
-                    content.style.display = 'block';
-                    if (toggleTopBtn) toggleTopBtn.querySelector('i').className = 'fas fa-chevron-up';
-                    if (toggleBottomBtn) {
-                        toggleBottomBtn.querySelector('i').className = 'fas fa-chevron-up me-1';
-                        toggleBottomBtn.querySelector('span').textContent = 'Collapse Brief';
-                    }
-                } else {
-                    content.style.display = 'none';
-                    if (toggleTopBtn) toggleTopBtn.querySelector('i').className = 'fas fa-chevron-down';
-                    if (toggleBottomBtn) {
-                        toggleBottomBtn.querySelector('i').className = 'fas fa-chevron-down me-1';
-                        toggleBottomBtn.querySelector('span').textContent = 'Expand Brief';
-                    }
-                }
-            };
+    if (lastUpdated) lastUpdated.textContent = new Date().toLocaleTimeString();
+  }
 
-            if (toggleTopBtn) {
-                toggleTopBtn.addEventListener('click', toggleBrief);
-            }
+  function showError(msg) {
+    const ids = ['briefRecentActivity', 'briefUpcomingMatches', 'briefTopPerformers'];
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = `<div class="text-center p-3 text-danger small">${escapeHtml(msg)}</div>`;
+    });
+  }
 
-            if (toggleBottomBtn) {
-                toggleBottomBtn.addEventListener('click', toggleBrief);
-            }
-        },
+  function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
 
-        loadBriefData: function() {
-            return fetch('/api/brief-data', {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'same-origin'
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Brief data received:', data);
-                if (data.success) {
-                    this.updateStats(data);
-                    this.renderRecentActivity(data.recent_activity || []);
-                    this.renderUpcomingMatches(data.upcoming_matches || []);
-                    this.renderTopPerformers(data.top_performers || []);
-                } else {
-                    console.error('Brief data fetch failed:', data.error);
-                    // Show error in sections
-                    ['briefRecentActivity', 'briefUpcomingMatches', 'briefStrategyInsights', 'briefTopPerformers'].forEach(id => {
-                        const elem = document.getElementById(id);
-                        if (elem) elem.innerHTML = '<div class="text-center p-3 text-danger small">Failed to load data</div>';
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Error loading brief data:', error);
-                // Show error in sections
-                ['briefRecentActivity', 'briefUpcomingMatches', 'briefStrategyInsights', 'briefTopPerformers'].forEach(id => {
-                    const elem = document.getElementById(id);
-                    if (elem) elem.innerHTML = '<div class="text-center p-3 text-danger small">Error: ' + error.message + '</div>';
-                });
-            });
-        },
+  function formatTimeAgo(ts) {
+    const now = Date.now();
+    const t = new Date(ts).getTime();
+    const diff = Math.floor((now - t) / 1000);
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+    return Math.floor(diff/86400) + 'd ago';
+  }
 
-        updateStats: function(data) {
-            const todayScouts = document.getElementById('briefTodayScouts');
-            const upcomingMatchesCount = document.getElementById('briefUpcomingMatchesCount');
-            const teamsAnalyzed = document.getElementById('briefTeamsAnalyzed');
+  function formatMatchTime(ts) { const d = new Date(ts); return isNaN(d) ? '' : d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
 
-            if (todayScouts) todayScouts.textContent = data.today_scouts || 0;
-            if (upcomingMatchesCount) upcomingMatchesCount.textContent = data.upcoming_count || 0;
-            if (teamsAnalyzed) teamsAnalyzed.textContent = data.teams_analyzed || 0;
-        },
+  function renderRecentActivity(activities) {
+    const container = document.getElementById('briefRecentActivity');
+    if (!container) return;
+    if (!activities.length) {
+      container.innerHTML = '<div class="text-center p-3 text-muted small">No recent activity</div>';
+      return;
+    }
+    container.innerHTML = activities.map(a => `
+      <div class="activity-item d-flex justify-content-between align-items-start">
+        <div>
+          <div class="fw-medium"><i class="fas fa-user-circle me-1 text-primary"></i>${escapeHtml(a.scout_name || 'Unknown')}</div>
+          <div class="small text-muted">Scouted Team ${a.team_number} in Match ${a.match_number}</div>
+        </div>
+        <div class="text-end"><span class="time-pill">${formatTimeAgo(a.timestamp)}</span></div>
+      </div>
+    `).join('');
+  }
 
-        renderRecentActivity: function(activities) {
-            const container = document.getElementById('briefRecentActivity');
-            if (!container) return;
+  function renderUpcomingMatches(matches) {
+    const container = document.getElementById('briefUpcomingMatches');
+    if (!container) return;
+    if (!matches.length) { container.innerHTML = '<div class="text-center p-3 text-muted small">No upcoming matches</div>'; return; }
 
-            if (activities.length === 0) {
-                container.innerHTML = '<div class="text-center p-3 brief-text-muted small">No recent activity</div>';
-                return;
-            }
-
-            container.innerHTML = activities.map(activity => `
-                <div class="activity-item">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <div class="fw-medium">
-                                <i class="fas fa-user-circle me-1 text-primary"></i>
-                                ${this.escapeHtml(activity.scout_name)}
-                            </div>
-                            <div class="small brief-text-muted">
-                                Scouted Team ${activity.team_number} in Match ${activity.match_number}
-                            </div>
-                        </div>
-                        <span class="time-badge">${this.formatTimeAgo(activity.timestamp)}</span>
-                    </div>
-                </div>
-            `).join('');
-        },
-
-        renderUpcomingMatches: function(matches) {
-            const container = document.getElementById('briefUpcomingMatches');
-            if (!container) return;
-
-            if (matches.length === 0) {
-                container.innerHTML = '<div class="text-center p-3 brief-text-muted small">No upcoming matches</div>';
-                return;
-            }
-
-            container.innerHTML = matches.map(match => `
-                <div class="match-card" onclick="window.location.href='/matches/${match.id}'">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <div class="fw-bold">${this.escapeHtml(match.match_type)} ${match.match_number}</div>
-                        ${match.scheduled_time ? `<span class="time-badge">${this.formatMatchTime(match.scheduled_time)}</span>` : ''}
-                    </div>
-                    <div class="row g-1">
-                        <div class="col-6">
-                            <div class="small brief-text-muted mb-1">
-                                Red Alliance
-                                ${match.prediction && match.prediction.red_score > 0 ? `<span class="ms-1 text-danger fw-bold">${match.prediction.red_score}</span>` : ''}
-                            </div>
-                            <div class="alliance-red ${match.prediction && match.prediction.winner === 'red' ? 'predicted-winner' : ''}">
-                                ${match.red_teams.map(team => `<span class="team-badge">${team}</span>`).join('')}
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="small brief-text-muted mb-1">
-                                Blue Alliance
-                                ${match.prediction && match.prediction.blue_score > 0 ? `<span class="ms-1 text-primary fw-bold">${match.prediction.blue_score}</span>` : ''}
-                            </div>
-                            <div class="alliance-blue ${match.prediction && match.prediction.winner === 'blue' ? 'predicted-winner' : ''}">
-                                ${match.blue_teams.map(team => `<span class="team-badge">${team}</span>`).join('')}
-                            </div>
-                        </div>
-                    </div>
-                    ${match.prediction && match.prediction.winner ? `
-                        <div class="mt-2 small prediction-badge">
-                            <i class="fas fa-chart-line me-1"></i>
-                            <strong>Predicted: ${match.prediction.winner === 'red' ? 'Red' : match.prediction.winner === 'blue' ? 'Blue' : 'Tie'}</strong>
-                            ${match.prediction.confidence > 0 ? ` (${match.prediction.confidence}% confidence)` : ''}
-                        </div>
-                    ` : ''}
-                </div>
-            `).join('');
-        },
-
-        renderTopPerformers: function(performers) {
-            const container = document.getElementById('briefTopPerformers');
-            if (!container) return;
-
-            if (performers.length === 0) {
-                container.innerHTML = '<div class="text-center p-3 brief-text-muted small">No performance data available</div>';
-                return;
-            }
-
-            container.innerHTML = performers.map((performer, index) => {
-                const rank = index + 1;
-                const rankClass = rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : 'rank-other';
-                
-                return `
-                    <div class="performer-item" onclick="window.location.href='/teams/${performer.team_number}/view'">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="performer-rank ${rankClass}">${rank}</div>
-                            <div>
-                                <div class="fw-medium">Team ${performer.team_number}</div>
-                                <div class="small brief-text-muted">${this.escapeHtml(performer.team_name || '')}</div>
-                            </div>
-                        </div>
-                        <div class="text-end">
-                            <div class="fw-bold text-primary">${performer.avg_score.toFixed(1)}</div>
-                            <div class="small brief-text-muted">Avg Score</div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        },
-
-        formatTimeAgo: function(timestamp) {
-            const now = new Date();
-            const time = new Date(timestamp);
-            const diff = Math.floor((now - time) / 1000); // seconds
-
-            if (diff < 60) return 'Just now';
-            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-            return `${Math.floor(diff / 86400)}d ago`;
-        },
-
-        formatMatchTime: function(timestamp) {
-            const time = new Date(timestamp);
-            return time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        },
-
-        escapeHtml: function(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+    container.innerHTML = matches.map(function(m) {
+      // Prefer actual results from 'result' if present, otherwise use prediction
+      var resultHtml = '';
+      try {
+        if (m.result && m.result.has_result) {
+          var r = m.result;
+          var winnerStr = r.winner === 'red' ? 'Red' : (r.winner === 'blue' ? 'Blue' : (r.winner === 'tie' ? 'Tie' : null));
+          if (winnerStr) {
+            resultHtml = '<div class="mt-1 predicted-winner small">Winner: ' + escapeHtml(winnerStr) + (r.red_score!=null && r.blue_score!=null ? ' (' + escapeHtml(String(r.red_score)) + '-' + escapeHtml(String(r.blue_score)) + ')' : '') + '</div>';
+          } else {
+            resultHtml = '<div class="mt-1 small">Score: ' + (r.red_score!=null?escapeHtml(String(r.red_score)):'-') + ' - ' + (r.blue_score!=null?escapeHtml(String(r.blue_score)):'-') + '</div>';
+          }
+        } else if (m.prediction && m.prediction.winner) {
+          resultHtml = '<div class="mt-1 predicted-winner small">Predicted: ' + escapeHtml(m.prediction.winner) + ' (' + escapeHtml(String(m.prediction.red_score)) + '-' + escapeHtml(String(m.prediction.blue_score)) + ')</div>';
         }
-    };
+      } catch (e) { resultHtml = ''; }
 
-    // Initialize the brief panel
-    briefPanel.init();
+      // Build vertical stacks: redStack (left) and blueStack (right)
+      var redStack = [];
+      var blueStack = [];
+      try {
+        (m.red_teams || []).forEach(function(t) {
+          var tn = String(t);
+          var isWinner = m.result && m.result.has_result && m.result.winner === 'red';
+            redStack.push('<a class="team-card small' + (isWinner ? ' winner' : '') + '" href="/teams/' + escapeHtml(tn) + '/view" title="View Team ' + escapeHtml(tn) + '"><span class="team-number">' + escapeHtml(tn) + '</span></a>');
+        });
+        (m.blue_teams || []).forEach(function(t) {
+          var tn = String(t);
+          var isWinner = m.result && m.result.has_result && m.result.winner === 'blue';
+            blueStack.push('<a class="team-card small' + (isWinner ? ' winner' : '') + '" href="/teams/' + escapeHtml(tn) + '/view" title="View Team ' + escapeHtml(tn) + '"><span class="team-number">' + escapeHtml(tn) + '</span></a>');
+        });
+      } catch (e) { /* ignore */ }
+
+      // Build small text badges (kept for accessibility but styled hidden)
+      var redBadges = (m.red_teams||[]).map(function(t){ return '<span class="team-badge">' + escapeHtml(String(t)) + '</span>'; }).join('');
+      var blueBadges = (m.blue_teams||[]).map(function(t){ return '<span class="team-badge">' + escapeHtml(String(t)) + '</span>'; }).join('');
+
+      var html = '';
+  html += '<div class="match-row" onclick="window.location.href=\'/matches/' + escapeHtml(String(m.id)) + '\'">';
+  html += '<div class="match-main">';
+  // main content (title + stacks beneath title)
+  html += '<div class="flex-grow-1">';
+  html += '<div class="fw-semibold">' + escapeHtml(m.match_type || '') + ' ' + (m.match_number || '') + '</div>';
+  // stacks under title
+  html += '<div class="d-flex align-items-start gap-2 mt-1">';
+  html += '<div class="match-stack">' + redStack.join('') + '</div>';
+  html += '<div class="match-stack">' + blueStack.join('') + '</div>';
+  html += '</div>';
+  // small textual badge backup
+  html += '<div class="small text-muted mt-1"><span class="me-2 alliance-red">' + redBadges + '</span><span class="alliance-blue">' + blueBadges + '</span></div>';
+  html += '</div>';
+  // time/result on far right
+  html += '<div class="text-end small">' + (m.scheduled_time ? ('<div class="time-pill">' + formatMatchTime(m.scheduled_time) + '</div>') : '') + resultHtml + '</div>';
+  html += '</div></div>';
+      return html;
+    }).join('');
+  }
+
+  function renderTopPerformers(list) {
+    const container = document.getElementById('briefTopPerformers');
+    if (!container) return;
+    if (!list.length) { container.innerHTML = '<div class="text-center p-3 text-muted small">No performance data available</div>'; return; }
+    container.innerHTML = list.map((p,i) => `
+      <div class="d-flex justify-content-between align-items-center py-2" onclick="window.location.href='/teams/${p.team_number}/view'">
+        <div class="d-flex align-items-center gap-3">
+          <div class="performer-rank ${i<3?('rank-'+(i+1)):'rank-other'}">${i+1}</div>
+          <div>
+            <div class="fw-medium">Team ${p.team_number}</div>
+            <div class="small text-muted">${escapeHtml(p.team_name||'')}</div>
+          </div>
+        </div>
+        <div class="text-end">
+          <div class="fw-bold text-primary">${(p.avg_score||0).toFixed(1)}</div>
+          <div class="small text-muted">Avg Score</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // Attach events
+  if (refreshBtn) refreshBtn.addEventListener('click', e => { e.preventDefault(); fetchBrief(); });
+  // Options collapsed/expand removed — only refresh remains
+
+  // Initial load and periodic refresh
+  fetchBrief();
+  setInterval(fetchBrief, 60000);
 });
 </script>
