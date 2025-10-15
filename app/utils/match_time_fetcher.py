@@ -125,15 +125,22 @@ def fetch_match_times_from_tba(event_code, event_timezone=None):
                 scheduled = None
                 predicted = None
                 
-                # Prefer actual_time if available (match already played), otherwise use scheduled time
-                time_to_use = actual_time if actual_time else scheduled_time
-                
-                if time_to_use:
+                # For schedule adjustment: prefer actual_time if available (match already played)
+                # This lets us compare scheduled vs actual to detect schedule delays
+                # If match is complete (has actual_time), use that as the "scheduled" time
+                # so schedule_adjuster can compare it against the original scheduled time
+                if actual_time:
                     try:
-                        # Unix timestamps are in UTC, create timezone-aware datetime
-                        scheduled = datetime.fromtimestamp(time_to_use, tz=timezone.utc)
+                        # Match was actually played at this time - use for schedule delay detection
+                        scheduled = datetime.fromtimestamp(actual_time, tz=timezone.utc)
                     except Exception as e:
-                        print(f"Error parsing time {time_to_use}: {e}")
+                        print(f"Error parsing actual_time {actual_time}: {e}")
+                elif scheduled_time:
+                    try:
+                        # Match hasn't been played yet, use scheduled time
+                        scheduled = datetime.fromtimestamp(scheduled_time, tz=timezone.utc)
+                    except Exception as e:
+                        print(f"Error parsing time {scheduled_time}: {e}")
                 
                 if predicted_time:
                     try:

@@ -209,6 +209,7 @@ class Event(db.Model):
     end_date = db.Column(db.Date)
     year = db.Column(db.Integer, nullable=False)
     scouting_team_number = db.Column(db.Integer, nullable=True)
+    schedule_offset = db.Column(db.Integer, nullable=True)  # Current schedule offset in minutes (positive = behind, negative = ahead)
     matches = db.relationship('Match', backref='event', lazy=True)
     
     def __repr__(self):

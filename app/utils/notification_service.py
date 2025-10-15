@@ -15,11 +15,22 @@ import traceback
 
 
 def get_match_time(match):
-    """Get the best available time for a match (scheduled or predicted)"""
-    if match.scheduled_time:
-        return match.scheduled_time
-    elif match.predicted_time:
+    """
+    Get the best available time for a match with schedule adjustment
+    
+    Priority:
+    1. Predicted time (if schedule has been adjusted based on event delays)
+    2. Scheduled time (original schedule from API)
+    
+    The predicted_time field is updated by schedule_adjuster when events are
+    running behind/ahead of schedule, so it reflects the best estimate of
+    when the match will actually occur.
+    """
+    if match.predicted_time:
+        # Use adjusted prediction if available (more accurate for delayed events)
         return match.predicted_time
+    elif match.scheduled_time:
+        return match.scheduled_time
     return None
 
 
