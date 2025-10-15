@@ -883,6 +883,18 @@ class AvoidEntry(TeamListEntry):
         'polymorphic_identity': 'avoid'
     }
 
+
+class DeclinedEntry(TeamListEntry):
+    """Teams explicitly declined from recommendations by the user.
+
+    These teams will be excluded from the recommendations list but can still be
+    manually assigned to alliances. The entry supports an optional reason and
+    is scoped by scouting_team_number like the other list entries.
+    """
+    __mapper_args__ = {
+        'polymorphic_identity': 'declined'
+    }
+
 class AllianceSelection(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     alliance_number = db.Column(db.Integer, nullable=False)  # 1-8 for 8 alliances

@@ -4,7 +4,7 @@ Provides helper functions to filter database queries by scouting team.
 """
 
 from flask_login import current_user
-from app.models import Team, Event, Match, ScoutingData, AllianceSelection, DoNotPickEntry, AvoidEntry, PitScoutingData, User
+from app.models import Team, Event, Match, ScoutingData, AllianceSelection, DoNotPickEntry, AvoidEntry, PitScoutingData, User, DeclinedEntry
 from sqlalchemy import or_
 
 
@@ -120,6 +120,17 @@ def filter_avoid_entries_by_scouting_team(query=None):
     if scouting_team_number is not None:
         return query.filter(AvoidEntry.scouting_team_number == scouting_team_number)
     return query.filter(AvoidEntry.scouting_team_number.is_(None))
+
+
+def filter_declined_entries_by_scouting_team(query=None):
+    """Filter declined entries by current user's scouting team number."""
+    scouting_team_number = get_current_scouting_team_number()
+    if query is None:
+        query = DeclinedEntry.query
+
+    if scouting_team_number is not None:
+        return query.filter(DeclinedEntry.scouting_team_number == scouting_team_number)
+    return query.filter(DeclinedEntry.scouting_team_number.is_(None))
 
 
 def filter_pit_scouting_data_by_scouting_team(query=None):

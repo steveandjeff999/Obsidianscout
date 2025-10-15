@@ -7,6 +7,8 @@
 
 {% block content %}
 <div class="row mb-4">
+    <!-- Hidden holder for server-side event id to avoid inline Jinja in scripts -->
+    <div id="manage-event-id-holder" data-event-id="{{ event.id }}" style="display:none"></div>
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h4>Team List Management</h4>
@@ -58,7 +60,7 @@
                             <br><small class="text-muted">{{ entry.reason }}</small>
                             {% endif %}
                         </div>
-                        <button class="btn btn-sm btn-outline-danger" onclick="removeFromList('avoid', {{ entry.team_id }})">
+                        <button class="btn btn-sm btn-outline-danger remove-from-list-btn" data-list-type="avoid" data-team-id="{{ entry.team_id }}">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
@@ -111,13 +113,65 @@
                             <br><small class="text-muted">{{ entry.reason }}</small>
                             {% endif %}
                         </div>
-                        <button class="btn btn-sm btn-outline-danger" onclick="removeFromList('do_not_pick', {{ entry.team_id }})">
+                        <button class="btn btn-sm btn-outline-danger remove-from-list-btn" data-list-type="do_not_pick" data-team-id="{{ entry.team_id }}">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
                     {% endfor %}
                     {% else %}
                     <div class="text-muted text-center py-3">No teams in do not pick list</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Declined List -->
+    <div class="col-lg-6 mb-4">
+        <div class="card border-secondary">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-user-times me-2"></i>Declined List
+                </h5>
+                <small>Teams removed from recommendations (can be restored)</small>
+            </div>
+            <div class="card-body">
+                <!-- Add to Declined List -->
+                <div class="mb-3">
+                    <div class="input-group">
+                        <select class="form-select" id="declinedTeamSelect">
+                            <option value="">Select team to decline...</option>
+                            {% for team in all_teams %}
+                            <option value="{{ team.team_number }}">{{ team.team_number }} - {{ team.team_name or 'Unknown' }}</option>
+                            {% endfor %}
+                        </select>
+                        <button class="btn btn-secondary" onclick="addToList('declined')">
+                            <i class="fas fa-user-times me-1"></i>Add
+                        </button>
+                    </div>
+                    <div class="mt-2">
+                        <input type="text" class="form-control" id="declinedReason" placeholder="Reason (optional)">
+                    </div>
+                </div>
+                <!-- Declined List Display -->
+                <div id="declinedList">
+                    {% if declined_entries %}
+                    {% for entry in declined_entries %}
+                    <div class="d-flex justify-content-between align-items-center border-bottom py-2" data-team-id="{{ entry.team_id }}">
+                        <div>
+                            <strong>Team {{ entry.team.team_number }}</strong>
+                            {% if entry.team.team_name %} - {{ entry.team.team_name }}{% endif %}
+                            {% if entry.reason %}
+                            <br><small class="text-muted">{{ entry.reason }}</small>
+                            {% endif %}
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger remove-from-list-btn" data-list-type="declined" data-team-id="{{ entry.team_id }}">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="text-muted text-center py-3">No teams in declined list</div>
                     {% endif %}
                 </div>
             </div>
@@ -142,39 +196,52 @@
 {% block extra_js %}
 <script>
 let socket;
+const manageEventId = (function(){
+    const h = document.getElementById('manage-event-id-holder');
+    return h ? h.dataset.eventId : null;
+})();
 
 document.addEventListener('DOMContentLoaded', function() {
     initializeSocketIO();
+    // Delegated handler for remove buttons (works for static and dynamically added items)
+    document.body.addEventListener('click', function(e) {
+        const btn = e.target.closest('.remove-from-list-btn');
+        if (!btn) return;
+        const listType = btn.dataset.listType;
+        const teamId = btn.dataset.teamId;
+        // Call the existing remove function which performs confirmation and server call
+        removeFromList(listType, teamId);
+    });
 });
 
 function initializeSocketIO() {
     socket = io();
     
     // Join the alliance room for this event
-    socket.emit('join_alliance_room', { event_id: {{ event.id }} });
+    socket.emit('join_alliance_room', { event_id: manageEventId });
     
     // Listen for list updates
     socket.on('lists_updated', function(data) {
-        if (data.event_id === {{ event.id }}) {
+        if (String(data.event_id) === String(manageEventId)) {
             updateListUI(data);
         }
     });
 }
 
 function updateListUI(data) {
-    const listId = data.list_type === 'avoid' ? 'avoidList' : 'doNotPickList';
+    const listId = data.list_type === 'avoid' ? 'avoidList' : (data.list_type === 'do_not_pick' ? 'doNotPickList' : 'declinedList');
     const listContainer = document.getElementById(listId);
     
     if (data.action === 'add') {
         // Add new team to the list
-        const teamHtml = `
+                const teamHtml = `
             <div class="d-flex justify-content-between align-items-center border-bottom py-2" data-team-id="${data.team_id}">
                 <div>
                     <strong>Team ${data.team_number}</strong>
                     ${data.team_name ? ` - ${data.team_name}` : ''}
                     ${data.reason ? `<br><small class="text-muted">${data.reason}</small>` : ''}
                 </div>
-                <button class="btn btn-sm btn-outline-danger" onclick="removeFromList('${data.list_type}', ${data.team_id})">
+                <button class="btn btn-sm btn-outline-danger remove-from-list-btn" data-list-type="${data.list_type}" data-team-id="${data.team_id}">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -189,8 +256,8 @@ function updateListUI(data) {
         }
         
         // Clear the form inputs
-        const selectId = data.list_type === 'avoid' ? 'avoidTeamSelect' : 'doNotPickTeamSelect';
-        const reasonId = data.list_type === 'avoid' ? 'avoidReason' : 'doNotPickReason';
+    const selectId = data.list_type === 'avoid' ? 'avoidTeamSelect' : (data.list_type === 'do_not_pick' ? 'doNotPickTeamSelect' : 'declinedTeamSelect');
+    const reasonId = data.list_type === 'avoid' ? 'avoidReason' : (data.list_type === 'do_not_pick' ? 'doNotPickReason' : 'declinedReason');
         document.getElementById(selectId).value = '';
         document.getElementById(reasonId).value = '';
         
@@ -203,7 +270,7 @@ function updateListUI(data) {
         
         // If no teams left, show empty message
         if (listContainer.children.length === 0) {
-            const listName = data.list_type === 'avoid' ? 'avoid' : 'do not pick';
+            const listName = data.list_type === 'avoid' ? 'avoid' : (data.list_type === 'do_not_pick' ? 'do not pick' : 'declined');
             listContainer.innerHTML = `<div class="text-muted text-center py-3">No teams in ${listName} list</div>`;
         }
     }
@@ -271,7 +338,7 @@ function addToList(listType) {
         },
         body: JSON.stringify({
             team_number: teamNumber,
-            event_id: {{ event.id }},
+            event_id: manageEventId,
             list_type: listType,
             reason: reason
         })
@@ -293,7 +360,26 @@ function removeFromList(listType, teamId) {
     if (!confirm('Are you sure you want to remove this team from the list?')) {
         return;
     }
-    
+    // Optimistic UI: remove the element immediately, restore if server-side fails
+    const listId = listType === 'avoid' ? 'avoidList' : (listType === 'do_not_pick' ? 'doNotPickList' : 'declinedList');
+    const listContainer = document.getElementById(listId);
+    const teamElement = listContainer ? listContainer.querySelector(`[data-team-id="${teamId}"]`) : null;
+    let backup = null;
+    if (teamElement) {
+        // Save HTML and next sibling id to restore in-place if needed
+        backup = {
+            html: teamElement.outerHTML,
+            nextId: teamElement.nextElementSibling ? teamElement.nextElementSibling.dataset.teamId : null
+        };
+        teamElement.remove();
+    }
+
+    // If empty, show message
+    if (listContainer && listContainer.children.length === 0) {
+        const listName = listType === 'avoid' ? 'avoid' : (listType === 'do_not_pick' ? 'do not pick' : 'declined');
+        listContainer.innerHTML = `<div class="text-muted text-center py-3">No teams in ${listName} list</div>`;
+    }
+
     fetch('/alliances/api/remove_from_list', {
         method: 'POST',
         headers: {
@@ -301,7 +387,7 @@ function removeFromList(listType, teamId) {
         },
         body: JSON.stringify({
             team_id: teamId,
-            event_id: {{ event.id }},
+            event_id: manageEventId,
             list_type: listType
         })
     })
@@ -309,12 +395,34 @@ function removeFromList(listType, teamId) {
     .then(data => {
         if (!data.success) {
             alert('Error: ' + data.message);
+            // Restore the removed element if we had one
+            if (backup && listContainer && !listContainer.querySelector(`[data-team-id="${teamId}"]`)) {
+                const emptyMsg = listContainer.querySelector('.text-muted.text-center');
+                if (emptyMsg) {
+                    listContainer.innerHTML = backup.html;
+                } else if (backup.nextId && listContainer.querySelector(`[data-team-id="${backup.nextId}"]`)) {
+                    listContainer.querySelector(`[data-team-id="${backup.nextId}"]`).insertAdjacentHTML('beforebegin', backup.html);
+                } else {
+                    listContainer.insertAdjacentHTML('beforeend', backup.html);
+                }
+            }
         }
-        // UI will be updated via SocketIO, no need to reload
+        // UI will also be updated via SocketIO
     })
     .catch(error => {
         console.error('Error:', error);
         alert('Network error occurred');
+        // Restore on network error
+        if (backup && listContainer && !listContainer.querySelector(`[data-team-id="${teamId}"]`)) {
+            const emptyMsg = listContainer.querySelector('.text-muted.text-center');
+            if (emptyMsg) {
+                listContainer.innerHTML = backup.html;
+            } else if (backup.nextId && listContainer.querySelector(`[data-team-id="${backup.nextId}"]`)) {
+                listContainer.querySelector(`[data-team-id="${backup.nextId}"]`).insertAdjacentHTML('beforebegin', backup.html);
+            } else {
+                listContainer.insertAdjacentHTML('beforeend', backup.html);
+            }
+        }
     });
 }
 </script>
