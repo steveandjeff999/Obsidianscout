@@ -683,7 +683,6 @@ ROOT = Path(__file__).resolve().parents[1]
 JSON_KEYS = [
     # file path (relative) -> keys to extract
     ("instance/email_config.json", ["password", "username", "api_key", "host"]),
-    ("instance/vapid_keys.json", ["private_key", "public_key", "privateKey", "publicKey"]),
     ("instance/integrity_config.json", ["integrity_password_hash"]),
     ("app_config.json", ["SECRET_KEY", "SECRET", "API_KEY", "VAPID_PRIVATE_KEY", "VAPID_PUBLIC_KEY"]),
     ("config/sync_config.json", ["api_key", "token", "secret"]),
