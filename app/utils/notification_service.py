@@ -12,6 +12,7 @@ from app.utils.emailer import send_email, _build_html_email
 from app.utils.push_notifications import send_push_to_user
 from app.utils.timezone_utils import convert_utc_to_local, format_time_with_timezone
 import traceback
+import statistics
 
 
 def get_match_time(match):
@@ -393,6 +394,194 @@ def create_strategy_notification_message(match, target_team_number):
     return title, message
 
 
+def create_end_of_day_summary(last_match):
+    """
+    Create an end-of-day summary message for the event/day containing last_match.
+
+    Args:
+        last_match: Match model instance (the final match of the day used as anchor)
+
+    Returns:
+        (title, message) tuple
+    """
+    # Determine event and timezone
+    event = Event.query.get(last_match.event_id) if last_match and last_match.event_id else None
+    event_tz = event.timezone if event else None
+
+    title = f"End of Day Summary: {event.name if event else 'Event'}"
+
+    # Find all matches for this event that occurred on the same local date as last_match
+    matches = []
+    if event:
+        all_matches = Match.query.filter_by(event_id=event.id).all()
+        for m in all_matches:
+            mt = get_match_time(m)
+            if not mt:
+                continue
+            try:
+                local_dt = convert_utc_to_local(mt, event_tz)
+                last_local = convert_utc_to_local(get_match_time(last_match), event_tz)
+                if local_dt.date() == last_local.date():
+                    matches.append((m, mt))
+            except Exception:
+                continue
+
+    message_lines = []
+    message_lines.append(f"End of day summary for {event.name if event else 'the event'}:\n")
+
+    if not matches:
+        message_lines.append("No matches with recorded times found for today.")
+        return title, "\n".join(message_lines)
+
+    # Sort matches chronologically
+    matches.sort(key=lambda x: x[1])
+
+    # Simple aggregates
+    win_counts = {}
+    match_count = 0
+    completed_matches = 0
+    highest_scoring = None  # tuple (total_score, match)
+    totals_list = []
+    margins = []
+    missing_scores = []
+
+    # For schedule offset analysis (predicted vs scheduled)
+    offsets_minutes = []
+
+    for m, mt in matches:
+        match_count += 1
+        # Consider completed if scores present
+        if m.red_score is not None and m.blue_score is not None:
+            completed_matches += 1
+            total = (m.red_score or 0) + (m.blue_score or 0)
+            totals_list.append(total)
+            margin = abs((m.red_score or 0) - (m.blue_score or 0))
+            margins.append(margin)
+
+            if highest_scoring is None or total > highest_scoring[0]:
+                highest_scoring = (total, m)
+
+            if m.winner in ('red', 'blue'):
+                winners = m.red_teams if m.winner == 'red' else m.blue_teams
+                for t in winners:
+                    win_counts[t] = win_counts.get(t, 0) + 1
+        else:
+            missing_scores.append(m)
+
+        # Compute schedule offset if both scheduled_time and predicted_time exist
+        try:
+            if getattr(m, 'scheduled_time', None) and getattr(m, 'predicted_time', None):
+                off = (m.predicted_time - m.scheduled_time).total_seconds() / 60.0
+                offsets_minutes.append(off)
+        except Exception:
+            pass
+
+    # Match results (brief)
+    message_lines.append('MATCH RESULTS:')
+    for m, mt in matches:
+        local_time_str = format_time_with_timezone(mt, event_tz, '%I:%M %p')
+        if m.red_score is not None and m.blue_score is not None:
+            result = f"{m.match_type} {m.match_number}: Red {m.red_score} - Blue {m.blue_score} ({m.winner or 'unknown'})"
+        else:
+            result = f"{m.match_type} {m.match_number}: Result pending"
+        message_lines.append(f" - {local_time_str}: {result}")
+
+    # Highest scoring match
+    if highest_scoring:
+        total, hmatch = highest_scoring
+        message_lines.append('\nHIGHEST SCORING MATCH:')
+        htime = get_match_time(hmatch)
+        message_lines.append(f" - {hmatch.match_type} {hmatch.match_number} at {format_time_with_timezone(htime, event_tz)}: Total {total} (Red {hmatch.red_score} - Blue {hmatch.blue_score})")
+
+    # Overall match scoring statistics
+    if totals_list:
+        try:
+            avg_total = statistics.mean(totals_list)
+            med_total = statistics.median(totals_list)
+            stdev_total = statistics.pstdev(totals_list) if len(totals_list) > 1 else 0
+        except Exception:
+            avg_total = med_total = stdev_total = 0
+
+        message_lines.append('\nMATCH SCORING STATS:')
+        message_lines.append(f" - Average total points per completed match: {avg_total:.1f}")
+        message_lines.append(f" - Median total: {med_total}")
+        message_lines.append(f" - Std dev (population): {stdev_total:.1f}")
+
+        # Close matches (small margin)
+        close_threshold = 10
+        close_matches = []
+        for m, mt in matches:
+            if m.red_score is not None and m.blue_score is not None:
+                if abs((m.red_score or 0) - (m.blue_score or 0)) <= close_threshold:
+                    close_matches.append((m, mt, abs((m.red_score or 0) - (m.blue_score or 0))))
+
+        if close_matches:
+            message_lines.append(f" - Close matches (margin ≤ {close_threshold} points): {len(close_matches)}")
+            # show up to 5 of the closest
+            close_matches.sort(key=lambda x: x[2])
+            for m, mt, margin in close_matches[:5]:
+                message_lines.append(f"   • {m.match_type} {m.match_number}: Red {m.red_score} - Blue {m.blue_score} (margin {margin}) at {format_time_with_timezone(get_match_time(m), event_tz)}")
+
+    # Missing scores summary
+    if missing_scores:
+        message_lines.append(f"\nMATCHES WITH MISSING SCORES: {len(missing_scores)}")
+        for m in missing_scores[:8]:
+            mt = get_match_time(m)
+            message_lines.append(f" - {m.match_type} {m.match_number} at {format_time_with_timezone(mt, event_tz)}")
+
+    # Team performance averages (use scouting data where available)
+    team_set = set()
+    for m, _ in matches:
+        for t in m.red_teams + m.blue_teams:
+            team_set.add(t)
+
+    team_stats = []
+    for team_num in sorted(team_set):
+        try:
+            team_obj = Team.query.filter_by(team_number=team_num, scouting_team_number=last_match.scouting_team_number).first()
+            if team_obj:
+                stats = get_team_performance_stats(team_obj.id, last_match.scouting_team_number)
+                if stats:
+                    team_stats.append((team_num, stats['total_avg'], stats['match_count']))
+        except Exception:
+            continue
+
+    if team_stats:
+        message_lines.append('\nTEAM AVERAGES (approx):')
+        # Sort by average points desc
+        team_stats.sort(key=lambda x: x[1], reverse=True)
+        for tn, avg, cnt in team_stats[:10]:
+            message_lines.append(f" - Team {tn}: ~{avg:.1f} pts/match ({cnt} matches)")
+
+    # Schedule offset analysis (predicted vs scheduled)
+    if offsets_minutes:
+        try:
+            avg_off = statistics.mean(offsets_minutes)
+            max_off = max(offsets_minutes)
+            min_off = min(offsets_minutes)
+        except Exception:
+            avg_off = max_off = min_off = 0
+        message_lines.append('\nSCHEDULE OFFSET SUMMARY (predicted - scheduled, minutes):')
+        message_lines.append(f" - Average offset: {avg_off:.1f} min")
+        message_lines.append(f" - Min offset: {min_off:.1f} min, Max offset: {max_off:.1f} min")
+
+    # Top teams by wins
+    if win_counts:
+        message_lines.append('\nTOP TEAMS (by wins):')
+        sorted_wins = sorted(win_counts.items(), key=lambda x: x[1], reverse=True)
+        for team_num, wins in sorted_wins[:10]:
+            message_lines.append(f" - Team {team_num}: {wins} win(s)")
+
+    # Event-level info
+    if event and getattr(event, 'schedule_offset', None) is not None:
+        offset = event.schedule_offset
+        message_lines.append(f"\nSCHEDULE OFFSET: {offset} minutes ({'behind' if offset>0 else 'ahead' if offset<0 else 'on time'})")
+
+    message_lines.append(f"\nTotal matches today: {match_count} (completed: {completed_matches})")
+
+    return title, "\n".join(message_lines)
+
+
 def send_notification_for_subscription(subscription, match):
     """
     Send notification (email and/or push) for a specific subscription and match
@@ -410,6 +599,9 @@ def send_notification_for_subscription(subscription, match):
         # Create notification message based on type
         if subscription.notification_type == 'match_strategy':
             title, message = create_strategy_notification_message(match, subscription.target_team_number)
+        elif subscription.notification_type == 'end_of_day_summary':
+            # Use the provided match as the anchor for the day's summary
+            title, message = create_end_of_day_summary(match)
         else:
             # Generic match reminder
             title = f"Match Reminder"
@@ -727,6 +919,104 @@ def cleanup_old_queue_entries(days=7):
     
     db.session.commit()
     return deleted
+
+
+def schedule_end_of_day_summaries():
+    """
+    Schedule an end-of-day summary notification to be sent shortly after the
+    last match of the day for events that have active subscriptions.
+
+    Behavior:
+      - For each event that has matches today (in the event's local timezone),
+        find the last match (by match time) and schedule a notification for
+        subscriptions with notification_type == 'end_of_day_summary' and
+        matching event_code.
+      - The notification is scheduled 5 minutes after the last match time to
+        allow results/stats to settle.
+      - Avoids duplicating pending queue entries.
+
+    Returns:
+      Number of summary notifications scheduled
+    """
+    from app.models import Event, Match
+    from app.utils.timezone_utils import convert_utc_to_local
+
+    now_utc = datetime.now(timezone.utc)
+    scheduled_count = 0
+
+    # Find events that have matches and active subscriptions for end-of-day
+    events = Event.query.all()
+    for event in events:
+        try:
+            # Gather matches with a valid time
+            matches = Match.query.filter(
+                Match.event_id == event.id
+            ).all()
+
+            candidate_matches = []
+            for m in matches:
+                m_time = get_match_time(m)
+                if not m_time:
+                    continue
+
+                # Convert to event local time and compare date
+                local_dt = convert_utc_to_local(m_time, event.timezone)
+                # If the match happens on the same local date as now in that timezone
+                local_now = convert_utc_to_local(now_utc, event.timezone)
+                if local_dt.date() == local_now.date():
+                    candidate_matches.append((m, m_time))
+
+            if not candidate_matches:
+                continue
+
+            # Find the last match (by UTC match time)
+            last_match, last_match_time = max(candidate_matches, key=lambda x: x[1])
+
+            # Schedule send time a few minutes after the match ends (default +5 minutes)
+            send_time = last_match_time + timedelta(minutes=5)
+            if send_time <= now_utc:
+                # Already past - skip scheduling
+                continue
+
+            # Find subscriptions for end-of-day summaries for this event
+            subscriptions = NotificationSubscription.query.filter(
+                NotificationSubscription.is_active == True,
+                NotificationSubscription.notification_type == 'end_of_day_summary',
+                NotificationSubscription.event_code == event.code
+            ).all()
+
+            for subscription in subscriptions:
+                # Avoid duplicates
+                existing = NotificationQueue.query.filter_by(
+                    subscription_id=subscription.id,
+                    match_id=last_match.id,
+                    status='pending'
+                ).first()
+
+                if existing:
+                    # Update scheduled time if changed
+                    if existing.scheduled_for != send_time:
+                        existing.scheduled_for = send_time
+                        existing.updated_at = datetime.now(timezone.utc)
+                else:
+                    queue_entry = NotificationQueue(
+                        subscription_id=subscription.id,
+                        match_id=last_match.id,
+                        scheduled_for=send_time,
+                        status='pending'
+                    )
+                    db.session.add(queue_entry)
+                    scheduled_count += 1
+
+        except Exception as e:
+            print(f"⚠️  Error scheduling end-of-day summary for event {event.code if event else 'N/A'}: {e}")
+            import traceback
+            traceback.print_exc()
+
+    if scheduled_count > 0:
+        db.session.commit()
+
+    return scheduled_count
 
 
 def get_user_notification_history(user_id, limit=50):

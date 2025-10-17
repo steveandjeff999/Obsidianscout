@@ -11,7 +11,7 @@
   "preferred_api_source": "first",
   "api_settings": {
     "username": "",
-    "auth_token": "[REDACTED_auth_token]",
+    "auth_token": "",
     "base_url": "https://frc-api.firstinspires.org"
   },
   "tba_api_settings": {
