@@ -1,0 +1,69 @@
+{
+  "select2": [
+    "app/static/js/vendor/select2.min.js",
+    "app/static/css/vendor/select2.min.css",
+    "app/static/css/vendor/select2-bootstrap-5-theme.min.css",
+    "app/static/js/select2-mobile-fix.js",
+    "app/static/js/dark-mode-handlers.js",
+    "app/templates/base.html",
+    "scripts/fetch_vendors.py"
+  ],
+  "socket.io": [
+    "app/static/js/vendor/socket.io.min.js",
+    "app/static/js/vendor/socket.io.js",
+    "app/templates/base.html",
+    "app/templates/admin/global_config.html",
+    "app/templates/alliances/index.html",
+    "app/templates/chat.html",
+    "app/static/js/topbar-notifications.js",
+    "app/__init__.py",
+    "app/routes/matches.py",
+    "app/routes/pit_scouting.py",
+    "help/API_DOCUMENTATION.md",
+    "help/CONNECTIONS_AND_SYNC.md",
+    "help/REALTIME_SYNC_README.md",
+    "ALLIANCE_SELECTION_FIXES.md"
+  ],
+  "jspdf": [
+    "app/static/js/vendor/jspdf.umd.min.js",
+    "scripts/fetch_vendors.py",
+    "app/templates/matches/predict_printable.html"
+  ],
+  "html2canvas": [
+    "app/static/js/vendor/html2canvas.min.js",
+    "scripts/fetch_vendors.py",
+    "app/templates/matches/predict_printable.html"
+  ],
+  "jquery": [
+    "app/static/js/vendor/jquery-3.7.1.min.js",
+    "scripts/fetch_vendors.py",
+    "app/templates/base.html"
+  ],
+  "plotly": [
+    "app/static/js/plotly.min.js",
+    "app/static/js/vendor/plotly-latest.min.js",
+    "app/templates/base.html",
+    "app/static/js/scripts.js",
+    "app/routes/graphs.py",
+    "scripts/fetch_vendors.py",
+    "requirements.txt"
+  ],
+  "chartjs": [
+    "app/static/js/vendor/chart.umd.min.js",
+    "app/static/js/vendor/chart.min.js",
+    "scripts/fetch_vendors.py"
+  ],
+  "html5-qrcode": [
+    "app/static/js/vendor/html5-qrcode.min.js",
+    "scripts/fetch_vendors.py",
+    "sw.js"
+  ],
+  "jsqr": [
+    "app/static/js/vendor/jsQR.js",
+    "scripts/fetch_vendors.py"
+  ],
+  "qrcode": [
+    "app/static/js/qrcode.min.js",
+    "sw.js"
+  ]
+}
