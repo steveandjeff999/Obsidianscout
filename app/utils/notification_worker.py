@@ -112,6 +112,8 @@ def schedule_upcoming_match_notifications(app):
     """
     from app.models import Match
     from app.utils.notification_service import schedule_notifications_for_match, get_match_time
+    # Also import the new end-of-day summary scheduler
+    from app.utils.notification_service import schedule_end_of_day_summaries
     
     now = datetime.now(timezone.utc)
     window_end = now + timedelta(hours=2)
@@ -150,6 +152,14 @@ def schedule_upcoming_match_notifications(app):
     
     if scheduled_total > 0:
         print(f"✅ Scheduled {scheduled_total} notifications")
+
+    # Schedule end-of-day summaries (runs each time we check upcoming matches)
+    try:
+        summary_count = schedule_end_of_day_summaries()
+        if summary_count > 0:
+            print(f"\u2705 Scheduled {summary_count} end-of-day summary notifications")
+    except Exception as e:
+        print(f"\u274c Error scheduling end-of-day summaries: {e}")
 
 
 def start_notification_worker(app):

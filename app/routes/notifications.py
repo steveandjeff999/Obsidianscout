@@ -123,8 +123,16 @@ def subscribe():
         
         minutes_before = int(data.get('minutes_before', 20))
         
-        if not target_team_number:
-            return jsonify({'error': 'Team number is required'}), 400
+        # For end-of-day summaries, team number may be irrelevant but event_code is required
+        if notification_type == 'end_of_day_summary':
+            if not event_code:
+                return jsonify({'error': 'Event code is required for end-of-day summaries'}), 400
+            # Normalize minutes_before for summaries (ignored by scheduler)
+            minutes_before = 0
+        else:
+            if not target_team_number:
+                return jsonify({'error': 'Team number is required'}), 400
+
         
         # Check if exact same subscription already exists (same type, team, timing, and delivery methods)
         existing = NotificationSubscription.query.filter_by(
