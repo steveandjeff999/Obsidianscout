@@ -23,7 +23,7 @@ Be sure the server is stopped before running this script. Run with --dry-run to 
 from __future__ import annotations
 
 import argparse
-from asyncio import log
+import logging
 import os
 import shutil
 import sys

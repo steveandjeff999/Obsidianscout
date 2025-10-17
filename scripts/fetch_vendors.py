@@ -49,7 +49,13 @@ VENDORS = {
         "https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.min.js",
         "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.3.0/chart.min.js",
     ],
-    "js/vendor/plotly.min.js": "https://cdn.plot.ly/plotly-2.24.1.min.js",
+    # plotly sometimes times out on cdn.plot.ly — add fallback CDNs
+    "js/vendor/plotly.min.js": [
+        "https://cdn.plot.ly/plotly-2.24.1.min.js",
+        "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.24.1/plotly.min.js",
+        "https://unpkg.com/plotly.js-dist-min@2.24.1/plotly.min.js",
+        "https://cdn.jsdelivr.net/npm/plotly.js-dist@2.24.1/plotly.min.js",
+    ],
     "js/vendor/socket.io.min.js": "https://cdn.socket.io/4.7.2/socket.io.min.js",
     # Try multiple sources for libraries that move around or change package layout.
     "js/vendor/ace.js": [
