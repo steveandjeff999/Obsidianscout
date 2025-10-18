@@ -236,10 +236,12 @@ document.addEventListener('DOMContentLoaded', function() {
         sectionIndex++;
     });
     
-    // Remove section functionality
+    // Remove section functionality (use closest to handle clicks on icon or button reliably)
     document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('remove-section') || e.target.parentElement.classList.contains('remove-section')) {
-            const sectionItem = e.target.closest('.section-item');
+        const removeSectionBtn = e.target.closest && e.target.closest('.remove-section');
+        if (removeSectionBtn) {
+            const sectionItem = removeSectionBtn.closest('.section-item');
+            if (!sectionItem) return;
             if (confirm('Are you sure you want to remove this section?')) {
                 sectionItem.remove();
                 updateSectionIndexes();
@@ -259,12 +261,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Remove element functionality
+    // Remove element functionality (use closest to handle clicks on icon or button reliably)
     document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('remove-element') || e.target.parentElement.classList.contains('remove-element')) {
-            const elementItem = e.target.closest('.element-item');
+        const removeElementBtn = e.target.closest && e.target.closest('.remove-element');
+        if (removeElementBtn) {
+            const elementItem = removeElementBtn.closest('.element-item');
+            if (!elementItem) return;
             if (confirm('Are you sure you want to remove this element?')) {
                 elementItem.remove();
+                updateSectionIndexes();
             }
         }
     });
@@ -477,10 +482,17 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
             // Update add element button
             const addElementBtn = section.querySelector('.add-element');
             if (addElementBtn) {
-                addElementBtn.dataset.sectionIndex = index;
-            }
-        });
-    }
-});
-</script>
+                    addElementBtn.dataset.sectionIndex = index;
+                }
+            });
+        }
+    </script>
+<style>
+/* Small dark-mode and spacing improvements */
+body.dark-mode .card { background: var(--card-bg) !important; color: var(--bs-body-color) !important; }
+body.dark-mode .form-control, body.dark-mode .form-select { background: #0f0f11; border-color: rgba(255,255,255,0.05); color: var(--bs-body-color); }
+.section-item .card-header { display:flex; align-items:center; justify-content:space-between; }
+.element-item { background: transparent; }
+.option-points-table input { background: transparent; }
+</style>
 {% endblock %}

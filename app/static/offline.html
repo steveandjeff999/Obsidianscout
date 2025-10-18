@@ -3,21 +3,95 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Offline - ObsidianScout</title>
+  <title>Offline — ObsidianScout</title>
+  <!-- Prefer existing site CSS when available; fall back to minimal critical styles -->
+  <link rel="stylesheet" href="/static/css/vendor/bootstrap.min.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="/static/css/styles.css" crossorigin="anonymous">
   <style>
-    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; text-align:center; padding:3rem; color:#222; }
-    .card { max-width:680px; margin:2rem auto; padding:2rem; border-radius:8px; background:#fff; box-shadow:0 6px 18px rgba(0,0,0,0.06);} 
-    h1 { margin-top:0; }
-    a { color: #0066cc }
+    :root{
+      --card-bg:#ffffff;
+      --body-bg:#f4f6f8;
+      --muted:#6c757d;
+    }
+    @media (prefers-color-scheme: dark){
+      :root{ --card-bg: #0f1214; --body-bg: #070708; --muted: #9aa0a6; }
+      body { background: var(--body-bg); color: #e6e6e6; }
+    }
+    html,body{height:100%; margin:0;}
+    body{display:flex; align-items:center; justify-content:center; background:var(--body-bg); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;}
+    .offline-card{width:100%; max-width:720px; padding:1.75rem; border-radius:12px; box-shadow:0 8px 30px rgba(2,6,23,0.12); background:var(--card-bg); border:1px solid rgba(0,0,0,0.04)}
+    .offline-hero{display:flex; gap:1.25rem; align-items:center}
+    .offline-hero .icon{width:72px; height:72px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#6c63ff,#4f46e5); color:white; font-weight:700; font-size:1.5rem}
+    h1{margin:0 0 0.25rem 0; font-size:1.5rem}
+    p.lead{margin:0 0 0.75rem 0; color:var(--muted)}
+    .actions{display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:1rem}
+    .btn-outline{background:transparent;border:1px solid rgba(0,0,0,0.08);}
+    .small-muted{display:block;margin-top:1rem;color:var(--muted);font-size:0.9rem}
+    .status-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle;background:#e74c3c}
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>You're offline</h1>
-    <p>It looks like you're not connected to the internet. Some features may be unavailable.</p>
-    <p>Try reloading the page when you have a connection. You can continue using cached pages and data where available.</p>
-    <p><a href="/">Return to home</a></p>
-    <small>ObsidianScout - offline fallback</small>
-  </div>
+  <main class="offline-card" role="main" aria-labelledby="offline-heading">
+    <div class="offline-hero">
+      <div class="icon" aria-hidden="true">OS</div>
+      <div>
+        <h1 id="offline-heading">You're offline — some features are unavailable</h1>
+        <p class="lead">ObsidianScout is currently offline. You can continue to view cached pages and previously synced data. Some actions (syncing, predictions, sharing) require a network connection.</p>
+        <div class="actions">
+          <button id="reloadBtn" class="btn btn-primary" type="button">Try reconnecting</button>
+          <a href="/" class="btn btn-outline btn-secondary" role="button">Open Home (cached)</a>
+          <button id="openSettings" class="btn btn-outline btn-secondary" type="button">Open Settings</button>
+        </div>
+        <span class="small-muted"><span class="status-dot" id="connectStatus"></span><span id="statusText">Offline</span> — last checked: <time id="lastChecked">just now</time></span>
+      </div>
+    </div>
+    <section style="margin-top:1rem">
+      <h2 style="font-size:1rem;margin:0 0 .5rem 0">Offline tips</h2>
+      <ul style="margin:0 0 0.5rem 1rem;color:var(--muted)">
+        <li>Reload this page to retry a network connection.</li>
+        <li>Use the cached pages from the menu or return to the home screen.</li>
+        <li>When online, wait for the app to finish syncing before closing the browser.</li>
+      </ul>
+    </section>
+  </main>
+
+  <script>
+    // Minimal JS to check online status and provide actions; keep lightweight for offline use
+    (function(){
+      const statusDot = document.getElementById('connectStatus');
+      const statusText = document.getElementById('statusText');
+      const lastChecked = document.getElementById('lastChecked');
+      const reloadBtn = document.getElementById('reloadBtn');
+      const openSettings = document.getElementById('openSettings');
+
+      function updateStatus(){
+        const online = navigator.onLine;
+        statusDot.style.background = online ? '#28a745' : '#e74c3c';
+        statusText.textContent = online ? 'Online' : 'Offline';
+        lastChecked.textContent = new Date().toLocaleTimeString();
+      }
+
+      // Attempt a small request to root to detect connectivity beyond navigator.onLine
+      async function probe(){
+        try{
+          const r = await fetch('/', { method: 'HEAD', cache: 'no-store' });
+          if (r && r.ok) { statusDot.style.background = '#28a745'; statusText.textContent = 'Online (server reachable)'; }
+        }catch(e){ /* keep offline */ }
+        lastChecked.textContent = new Date().toLocaleTimeString();
+      }
+
+      window.addEventListener('online', updateStatus);
+      window.addEventListener('offline', updateStatus);
+      reloadBtn.addEventListener('click', function(){ probe().then(()=> location.reload()); });
+      openSettings.addEventListener('click', function(){
+        // Try to open app settings route if available; fallback to home
+        location.href = '/auth/profile' ;
+      });
+
+      // Initial state update and light probe
+      updateStatus();
+      setTimeout(probe, 600);
+    })();
+  </script>
 </body>
 </html>

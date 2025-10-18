@@ -8,17 +8,6 @@
         "name": "Team Information",
         "elements": [
           {
-            "id": "team_number",
-            "perm_id": "team_number",
-            "name": "Team Number",
-            "type": "number",
-            "required": true,
-            "validation": {
-              "min": 1,
-              "max": 99999
-            }
-          },
-          {
             "id": "team_name",
             "perm_id": "team_name",
             "name": "Team Name",
@@ -28,49 +17,13 @@
             "id": "drive_team_experience",
             "perm_id": "drive_team_experience",
             "name": "Drive Team Experience",
-            "type": "select",
-            "options": [
-              {
-                "value": "rookie",
-                "label": "Rookie (0-1 years)"
-              },
-              {
-                "value": "experienced",
-                "label": "Experienced (2-4 years)"
-              },
-              {
-                "value": "veteran",
-                "label": "Veteran (5+ years)"
-              }
-            ]
+            "type": "select"
           },
           {
             "id": "programming_language",
             "perm_id": "programming_language",
             "name": "Programming Language",
-            "type": "select",
-            "options": [
-              {
-                "value": "java",
-                "label": "Java"
-              },
-              {
-                "value": "cpp",
-                "label": "C++"
-              },
-              {
-                "value": "python",
-                "label": "Python"
-              },
-              {
-                "value": "labview",
-                "label": "LabVIEW"
-              },
-              {
-                "value": "other",
-                "label": "Other"
-              }
-            ]
+            "type": "select"
           }
         ]
       },
@@ -82,29 +35,7 @@
             "id": "drivetrain_type",
             "perm_id": "drivetrain_type",
             "name": "Drivetrain Type",
-            "type": "select",
-            "options": [
-              {
-                "value": "tank",
-                "label": "Tank Drive"
-              },
-              {
-                "value": "mecanum",
-                "label": "Mecanum"
-              },
-              {
-                "value": "swerve",
-                "label": "Swerve"
-              },
-              {
-                "value": "west_coast",
-                "label": "West Coast Drive"
-              },
-              {
-                "value": "other",
-                "label": "Other"
-              }
-            ]
+            "type": "select"
           },
           {
             "id": "drivetrain_motors",
@@ -120,29 +51,7 @@
             "id": "motor_type",
             "perm_id": "motor_type",
             "name": "Drive Motor Type",
-            "type": "select",
-            "options": [
-              {
-                "value": "neo",
-                "label": "NEO"
-              },
-              {
-                "value": "cim",
-                "label": "CIM"
-              },
-              {
-                "value": "falcon500",
-                "label": "Falcon 500"
-              },
-              {
-                "value": "kraken",
-                "label": "Kraken X60"
-              },
-              {
-                "value": "other",
-                "label": "Other"
-              }
-            ]
+            "type": "select"
           },
           {
             "id": "robot_weight",
@@ -190,49 +99,13 @@
             "id": "coral_intake_method",
             "perm_id": "coral_intake_method",
             "name": "CORAL Intake Method",
-            "type": "select",
-            "options": [
-              {
-                "value": "none",
-                "label": "Cannot Intake"
-              },
-              {
-                "value": "ground",
-                "label": "Ground Pickup"
-              },
-              {
-                "value": "station",
-                "label": "Human Player Station"
-              },
-              {
-                "value": "both",
-                "label": "Both Ground and Station"
-              }
-            ]
+            "type": "select"
           },
           {
             "id": "coral_levels",
             "perm_id": "coral_levels",
             "name": "CORAL Levels Robot Can Score",
-            "type": "multiselect",
-            "options": [
-              {
-                "value": "l1",
-                "label": "Level 1"
-              },
-              {
-                "value": "l2",
-                "label": "Level 2"
-              },
-              {
-                "value": "l3",
-                "label": "Level 3"
-              },
-              {
-                "value": "l4",
-                "label": "Level 4"
-              }
-            ]
+            "type": "multiselect"
           },
           {
             "id": "coral_cycle_time",
@@ -260,41 +133,13 @@
             "id": "algae_intake_method",
             "perm_id": "algae_intake_method",
             "name": "ALGAE Intake Method",
-            "type": "select",
-            "options": [
-              {
-                "value": "none",
-                "label": "Cannot Intake"
-              },
-              {
-                "value": "ground",
-                "label": "Ground Pickup"
-              },
-              {
-                "value": "station",
-                "label": "Human Player Station"
-              },
-              {
-                "value": "both",
-                "label": "Both Ground and Station"
-              }
-            ]
+            "type": "select"
           },
           {
             "id": "algae_locations",
             "perm_id": "algae_locations",
             "name": "ALGAE Scoring Locations",
-            "type": "multiselect",
-            "options": [
-              {
-                "value": "processor",
-                "label": "Processor"
-              },
-              {
-                "value": "net",
-                "label": "Net"
-              }
-            ]
+            "type": "multiselect"
           },
           {
             "id": "algae_cycle_time",
@@ -340,25 +185,7 @@
             "id": "autonomous_starting_position",
             "perm_id": "autonomous_starting_position",
             "name": "Preferred Starting Position",
-            "type": "select",
-            "options": [
-              {
-                "value": "left",
-                "label": "Left"
-              },
-              {
-                "value": "center",
-                "label": "Center"
-              },
-              {
-                "value": "right",
-                "label": "Right"
-              },
-              {
-                "value": "flexible",
-                "label": "Flexible"
-              }
-            ]
+            "type": "select"
           },
           {
             "id": "autonomous_points_estimate",
@@ -386,25 +213,7 @@
             "id": "climb_levels",
             "perm_id": "climb_levels",
             "name": "Climb Levels Achieved",
-            "type": "multiselect",
-            "options": [
-              {
-                "value": "none",
-                "label": "none"
-              },
-              {
-                "value": "park",
-                "label": "park"
-              },
-              {
-                "value": "shallow",
-                "label": "Shallow Climb"
-              },
-              {
-                "value": "deep",
-                "label": "Deep Climb"
-              }
-            ]
+            "type": "multiselect"
           },
           {
             "id": "climb_time",
@@ -454,31 +263,13 @@
             "id": "driver_skill_level",
             "perm_id": "driver_skill_level",
             "name": "Driver Skill Level",
-            "type": "select",
-            "options": [
-              {
-                "value": "novice",
-                "label": "Novice"
-              },
-              {
-                "value": "intermediate",
-                "label": "Intermediate"
-              },
-              {
-                "value": "advanced",
-                "label": "Advanced"
-              },
-              {
-                "value": "expert",
-                "label": "Expert"
-              }
-            ]
+            "type": "select"
           },
           {
-            "id": "additional_notes",
-            "perm_id": "additional_notes",
-            "name": "Additional Notes",
-            "type": "textarea",
+            "id": "image",
+            "perm_id": "image",
+            "name": "image",
+            "type": "text",
             "placeholder": "Any other observations or notes about this team"
           }
         ]

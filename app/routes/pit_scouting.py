@@ -6,7 +6,7 @@ from app import db, socketio
 import json
 import uuid
 from datetime import datetime, timezone
-from app.utils.config_manager import get_id_to_perm_id_mapping
+from app.utils.config_manager import get_id_to_perm_id_mapping, get_effective_game_config
 from app.utils.sync_manager import SyncManager
 import os
 from app.utils.theme_manager import ThemeManager
@@ -97,8 +97,8 @@ def index():
     """Pit scouting dashboard page"""
     pit_config = get_effective_pit_config()  # Use alliance config if active
     
-    # Get current event based on main game configuration
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    # Get current event based on team-scoped/alliance-aware game configuration
+    game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
@@ -112,6 +112,26 @@ def index():
     
     # Get recent pit scouting data
     recent_pit_data = PitScoutingData.query.order_by(PitScoutingData.timestamp.desc()).limit(10).all()
+    # Also gather all pit entries for the teams shown so the Teams grid can accurately
+    # reflect whether a team has been scouted (not limited to the recent list)
+    team_ids = [t.id for t in teams]
+    if team_ids:
+        all_pit_entries = PitScoutingData.query.filter(PitScoutingData.team_id.in_(team_ids)).all()
+    else:
+        all_pit_entries = []
+
+    # Build quick lookup sets for template membership tests
+    scouted_team_ids = set()
+    scouted_team_numbers = set()
+    for e in all_pit_entries:
+        try:
+            if e.team_id:
+                scouted_team_ids.add(e.team_id)
+            if hasattr(e, 'team') and e.team and hasattr(e.team, 'team_number'):
+                scouted_team_numbers.add(e.team.team_number)
+        except Exception:
+            # be resilient to partially populated records
+            continue
     
     # Get statistics
     total_teams_scouted = PitScoutingData.query.count()
@@ -120,6 +140,9 @@ def index():
     return render_template('scouting/pit_index.html', 
                           teams=teams, 
                           pit_data=recent_pit_data,
+                          all_pit_data=all_pit_entries,
+                          scouted_team_ids=list(scouted_team_ids),
+                          scouted_team_numbers=list(scouted_team_numbers),
                           pit_config=pit_config,
                           current_event=current_event,
                           total_teams_scouted=total_teams_scouted,
@@ -132,8 +155,8 @@ def form():
     """Dynamic pit scouting form"""
     pit_config = get_effective_pit_config()
     
-    # Get current event based on main game configuration
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    # Get current event based on team-scoped/alliance-aware game configuration
+    game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
@@ -144,6 +167,33 @@ def form():
         teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
     else:
         teams = filter_teams_by_scouting_team().all()
+
+    # Gather all pit entries for these teams so the form can show scouted status
+    team_ids = [t.id for t in teams]
+    if team_ids:
+        form_all_pit_entries = PitScoutingData.query.filter(PitScoutingData.team_id.in_(team_ids)).all()
+    else:
+        form_all_pit_entries = []
+
+    # Split into local (not uploaded) and server (uploaded) sets for UI
+    scouted_local_ids = set()
+    scouted_server_ids = set()
+    scouted_local_numbers = set()
+    scouted_server_numbers = set()
+    for e in form_all_pit_entries:
+        try:
+            if e.team_id:
+                if e.is_uploaded:
+                    scouted_server_ids.add(e.team_id)
+                else:
+                    scouted_local_ids.add(e.team_id)
+            if hasattr(e, 'team') and e.team and hasattr(e.team, 'team_number'):
+                if e.is_uploaded:
+                    scouted_server_numbers.add(e.team.team_number)
+                else:
+                    scouted_local_numbers.add(e.team.team_number)
+        except Exception:
+            continue
     
     if request.method == 'POST':
         try:
@@ -229,16 +279,34 @@ def form():
             return redirect(url_for('pit_scouting.form'))
     
     # For GET request, show the form
+    # Build a JSON-serializable representation of teams for use in JS
+    teams_for_js = []
+    for t in teams:
+        try:
+            teams_for_js.append({
+                'id': t.id,
+                'team_number': t.team_number,
+                'team_name': t.team_name or ''
+            })
+        except Exception:
+            continue
+
     return render_template('scouting/pit_form.html', 
                           teams=teams, 
                           pit_config=pit_config,
                           current_event=current_event,
+                          all_pit_data=form_all_pit_entries,
+                          scouted_local_ids=list(scouted_local_ids),
+                          scouted_server_ids=list(scouted_server_ids),
+                          scouted_local_numbers=list(scouted_local_numbers),
+                          scouted_server_numbers=list(scouted_server_numbers),
+                          teams_for_js=teams_for_js,
                           **get_theme_context())
 
-@bp.route('/list')
+@bp.route('/list', endpoint='list')
 @login_required
-def list():
-    """Redirect to dynamic list view"""
+def list_redirect():
+    """Redirect to dynamic list view (keeps endpoint 'list' for compatibility)"""
     return redirect(url_for('pit_scouting.list_dynamic'))
 
 @bp.route('/list-dynamic')
@@ -247,8 +315,8 @@ def list_dynamic():
     """Dynamic pit scouting data display with auto-refresh"""
     pit_config = get_effective_pit_config()
     
-    # Get current event based on main game configuration
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    # Get current event based on team-scoped/alliance-aware game configuration
+    game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
@@ -265,8 +333,8 @@ def api_list():
     """API endpoint to get pit scouting data as JSON"""
     pit_config = get_effective_pit_config()
     
-    # Get current event based on main game configuration
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    # Get current event based on team-scoped/alliance-aware game configuration
+    game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
@@ -329,6 +397,30 @@ def edit(id):
     
     if request.method == 'POST':
         try:
+            # Allow changing the team number when editing
+            team_number = request.form.get('team_number')
+            if team_number:
+                try:
+                    team_number_int = int(team_number)
+                except ValueError:
+                    team_number_int = None
+
+                if team_number_int:
+                    team = Team.query.filter_by(team_number=team_number_int).first()
+                    if not team:
+                        team = Team(team_number=team_number_int)
+                        db.session.add(team)
+                        db.session.flush()  # ensure id is available
+                    pit_data.team_id = team.id
+                    # If we have a current_event in scope, optionally keep event association
+                    game_config = get_effective_game_config()
+                    current_event_code = game_config.get('current_event_code')
+                    current_event = None
+                    if current_event_code:
+                        current_event = get_event_by_code(current_event_code)
+                    if current_event:
+                        pit_data.event_id = current_event.id
+
             # Collect form data based on pit config
             form_data = {}
             for section in pit_config['pit_scouting']['sections']:
@@ -374,10 +466,69 @@ def edit(id):
             flash(f'Error updating pit scouting data: {str(e)}', 'error')
     
     # For GET request, show the edit form
+    # Build teams for the dropdown (same behavior as the create form)
+    game_config = get_effective_game_config()
+    current_event_code = game_config.get('current_event_code')
+    current_event = None
+    if current_event_code:
+        current_event = get_event_by_code(current_event_code)
+
+    if current_event:
+        teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+    else:
+        teams = filter_teams_by_scouting_team().all()
+
+    # Gather all pit entries for these teams so the edit form can show scouted status
+    team_ids = [t.id for t in teams]
+    if team_ids:
+        form_all_pit_entries = PitScoutingData.query.filter(PitScoutingData.team_id.in_(team_ids)).all()
+    else:
+        form_all_pit_entries = []
+
+    # Split into local (not uploaded) and server (uploaded) sets for UI
+    scouted_local_ids = set()
+    scouted_server_ids = set()
+    scouted_local_numbers = set()
+    scouted_server_numbers = set()
+    for e in form_all_pit_entries:
+        try:
+            if e.team_id:
+                if e.is_uploaded:
+                    scouted_server_ids.add(e.team_id)
+                else:
+                    scouted_local_ids.add(e.team_id)
+            if hasattr(e, 'team') and e.team and hasattr(e.team, 'team_number'):
+                if e.is_uploaded:
+                    scouted_server_numbers.add(e.team.team_number)
+                else:
+                    scouted_local_numbers.add(e.team.team_number)
+        except Exception:
+            continue
+
+    # JSON-serializable teams for optional JS use
+    teams_for_js = []
+    for t in teams:
+        try:
+            teams_for_js.append({
+                'id': t.id,
+                'team_number': t.team_number,
+                'team_name': t.team_name or ''
+            })
+        except Exception:
+            continue
+
     return render_template('scouting/pit_form.html', 
                           pit_data=pit_data,
                           pit_config=pit_config,
                           edit_mode=True,
+                          teams=teams,
+                          current_event=current_event,
+                          all_pit_data=form_all_pit_entries,
+                          scouted_local_ids=list(scouted_local_ids),
+                          scouted_server_ids=list(scouted_server_ids),
+                          scouted_local_numbers=list(scouted_local_numbers),
+                          scouted_server_numbers=list(scouted_server_numbers),
+                          teams_for_js=teams_for_js,
                           **get_theme_context())
 
 @bp.route('/sync/status')
@@ -387,8 +538,8 @@ def sync_status():
     unuploaded_count = PitScoutingData.query.filter_by(is_uploaded=False).count()
     total_count = PitScoutingData.query.count()
     
-    # Get current event
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    # Get current event (team-scoped/alliance-aware)
+    game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     current_event = None
     if current_event_code:
@@ -1047,63 +1198,10 @@ def sync_full():
 @login_required
 def sync_config():
     """View and edit sync configuration"""
-    if not current_user.has_role('admin'):
-        flash('You must be an admin to view sync configuration', 'error')
-        return redirect(url_for('pit_scouting.index'))
-    
-    if request.method == 'POST':
-        try:
-            # Get form data
-            enabled = request.form.get('enabled') == 'on'
-            base_url = request.form.get('base_url', '').strip()
-            api_key = request.form.get('api_key', '').strip()
-            team_key = request.form.get('team_key', '').strip()
-            timeout = int(request.form.get('timeout', 30))
-            retry_attempts = int(request.form.get('retry_attempts', 3))
-            
-            # Build config
-            sync_config = {
-                "sync_server": {
-                    "enabled": enabled,
-                    "base_url": base_url,
-                    "endpoints": {
-                        "upload": "/pit-scouting/upload",
-                        "download": "/pit-scouting/download",
-                        "sync": "/pit-scouting/sync"
-                    },
-                    "auth": {
-                        "api_key": api_key,
-                        "team_key": team_key
-                    },
-                    "timeout": timeout,
-                    "retry_attempts": retry_attempts
-                }
-            }
-            
-            # Save config
-            config_path = os.path.join(os.getcwd(), 'config', 'sync_config.json')
-            
-            # Create backup
-            backup_path = config_path + '.backup'
-            if os.path.exists(config_path):
-                import shutil
-                shutil.copy2(config_path, backup_path)
-            
-            # Write new config
-            with open(config_path, 'w') as f:
-                json.dump(sync_config, f, indent=2)
-            
-            flash('Sync configuration updated successfully!', 'success')
-            return redirect(url_for('pit_scouting.sync_config'))
-            
-        except Exception as e:
-            flash(f'Error updating sync configuration: {str(e)}', 'error')
-    
-    # Load current config
-    sync_manager = SyncManager()
-    config = sync_manager.config.get('sync_server', {})
-    
-    return render_template('scouting/pit_sync_config.html', config=config, **get_theme_context())
+    # Sync configuration for pit scouting has been removed/disabled.
+    # Redirect back to the main pit config page with an informational message.
+    flash('Sync configuration for pit scouting has been removed. Use the main configuration editor instead.', 'info')
+    return redirect(url_for('pit_scouting.config'))
 
 @bp.route('/sync/test', methods=['POST'])
 @login_required

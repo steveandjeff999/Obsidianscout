@@ -23,96 +23,103 @@
             </div>
             <div class="card-body">
                 <form method="POST" id="pit-scouting-form">
+                    <!-- Team selector dropdown -->
+                    <div class="mb-3">
+                        <label for="team_number" class="form-label fw-semibold">Team</label>
+                        <select id="team_number" name="team_number" class="form-select form-select-lg" required>
+                            <option value="">Select a team...</option>
+                            {% for t in teams %}
+                                <option value="{{ t.team_number }}" {% if edit_mode and pit_data and pit_data.team and pit_data.team.team_number == t.team_number %}selected{% endif %}>
+                                    {{ t.team_number }}{% if t.team_name %} - {{ t.team_name }}{% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
                     {% for section in pit_config.pit_scouting.sections %}
-                    <div class="section-container mb-4">
-                        <div class="card">
-                            <div class="card-header bg-light">
+                    <div class="section-container mb-3">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-light d-flex align-items-center justify-content-between">
                                 <h6 class="mb-0">{{ section.name }}</h6>
+                                <button type="button" class="btn btn-sm btn-outline-secondary toggle-section" aria-expanded="true">Collapse</button>
                             </div>
-                            <div class="card-body">
-                                <div class="row">
+                            <div class="card-body section-body">
+                                <div class="row g-3">
                                     {% for element in section.elements %}
-                                    <div class="col-md-6 mb-3">
-                                        <label for="{{ element.id }}" class="form-label">
-                                            {{ element.name }}
-                                            {% if element.required %}
-                                                <span class="text-danger">*</span>
-                                            {% endif %}
-                                        </label>
-                                        
-                                        {% if element.type == 'text' %}
-                                            <input type="text" 
-                                                   class="form-control" 
-                                                   id="{{ element.id }}" 
-                                                   name="{{ element.id }}"
-                                                   {% if element.required %}required{% endif %}
-                                                   {% if element.placeholder %}placeholder="{{ element.placeholder }}"{% endif %}
-                                                   {% if edit_mode and pit_data.data.get(element.id) %}value="{{ pit_data.data.get(element.id) }}"{% endif %}>
-                                        
-                                        {% elif element.type == 'number' %}
-                                            <input type="number" 
-                                                   class="form-control" 
-                                                   id="{{ element.id }}" 
-                                                   name="{{ element.id }}"
-                                                   {% if element.required %}required{% endif %}
-                                                   {% if element.validation %}
-                                                       {% if element.validation.min %}min="{{ element.validation.min }}"{% endif %}
-                                                       {% if element.validation.max %}max="{{ element.validation.max }}"{% endif %}
-                                                   {% endif %}
-                                                   {% if edit_mode and pit_data.data.get(element.id) %}value="{{ pit_data.data.get(element.id) }}"{% endif %}>
-                                        
-                                        {% elif element.type == 'textarea' %}
-                                            <textarea class="form-control" 
-                                                      id="{{ element.id }}" 
-                                                      name="{{ element.id }}"
-                                                      rows="3"
-                                                      {% if element.required %}required{% endif %}
-                                                      {% if element.placeholder %}placeholder="{{ element.placeholder }}"{% endif %}>{% if edit_mode and pit_data.data.get(element.id) %}{{ pit_data.data.get(element.id) }}{% endif %}</textarea>
-                                        
-                                        {% elif element.type == 'select' %}
-                                            <select class="form-select" 
-                                                    id="{{ element.id }}" 
-                                                    name="{{ element.id }}"
-                                                    {% if element.required %}required{% endif %}>
-                                                <option value="">Select...</option>
-                                                {% for option in element.options %}
-                                                    <option value="{{ option.value }}" 
-                                                            {% if edit_mode and pit_data.data.get(element.id) == option.value %}selected{% endif %}>
-                                                        {{ option.label }}
-                                                    </option>
-                                                {% endfor %}
-                                            </select>
-                                        
-                                        {% elif element.type == 'multiselect' %}
-                                            <div class="multiselect-container">
-                                                {% for option in element.options %}
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" 
-                                                               type="checkbox" 
-                                                               id="{{ element.id }}_{{ option.value }}" 
-                                                               name="{{ element.id }}" 
-                                                               value="{{ option.value }}"
-                                                               {% if edit_mode and option.value in pit_data.data.get(element.id, []) %}checked{% endif %}>
-                                                        <label class="form-check-label" for="{{ element.id }}_{{ option.value }}">
-                                                            {{ option.label }}
-                                                        </label>
-                                                    </div>
-                                                {% endfor %}
-                                            </div>
-                                        
-                                        {% elif element.type == 'boolean' %}
-                                            <div class="form-check">
-                                                <input class="form-check-input" 
-                                                       type="checkbox" 
+                                    <div class="col-lg-6 col-md-6 col-sm-12">
+                                        <div class="form-group mb-2">
+                                            <label for="{{ element.id }}" class="form-label fw-semibold d-block">
+                                                {{ element.name }}
+                                                {% if element.required %}
+                                                    <span class="text-danger">*</span>
+                                                {% endif %}
+                                            </label>
+
+                                            {% if element.type == 'text' %}
+                                                <input type="text" 
+                                                       class="form-control form-control-lg" 
                                                        id="{{ element.id }}" 
                                                        name="{{ element.id }}"
-                                                       {% if edit_mode and pit_data.data.get(element.id) %}checked{% endif %}>
-                                                <label class="form-check-label" for="{{ element.id }}">
-                                                    {{ element.name }}
-                                                </label>
-                                            </div>
-                                        
-                                        {% endif %}
+                                                       {% if element.required %}required{% endif %}
+                                                       {% if element.placeholder %}placeholder="{{ element.placeholder }}"{% endif %}
+                                                       {% if edit_mode and pit_data.data.get(element.id) %}value="{{ pit_data.data.get(element.id) }}"{% endif %}>
+
+                                            {% elif element.type == 'number' %}
+                                                <input type="number" 
+                                                       class="form-control form-control-lg" 
+                                                       id="{{ element.id }}" 
+                                                       name="{{ element.id }}"
+                                                       {% if element.required %}required{% endif %}
+                                                       {% if element.validation %}
+                                                           {% if element.validation.min %}min="{{ element.validation.min }}"{% endif %}
+                                                           {% if element.validation.max %}max="{{ element.validation.max }}"{% endif %}
+                                                       {% endif %}
+                                                       {% if edit_mode and pit_data.data.get(element.id) %}value="{{ pit_data.data.get(element.id) }}"{% endif %}>
+
+                                            {% elif element.type == 'textarea' %}
+                                                <textarea class="form-control form-control-lg" 
+                                                          id="{{ element.id }}" 
+                                                          name="{{ element.id }}"
+                                                          rows="4"
+                                                          {% if element.required %}required{% endif %}
+                                                          {% if element.placeholder %}placeholder="{{ element.placeholder }}"{% endif %}>{% if edit_mode and pit_data.data.get(element.id) %}{{ pit_data.data.get(element.id) }}{% endif %}</textarea>
+
+                                            {% elif element.type == 'select' %}
+                                                <select class="form-select form-select-lg" 
+                                                        id="{{ element.id }}" 
+                                                        name="{{ element.id }}"
+                                                        {% if element.required %}required{% endif %}>
+                                                    <option value="">Select...</option>
+                                                    {% for option in element.options %}
+                                                        <option value="{{ option.value }}" 
+                                                                {% if edit_mode and pit_data.data.get(element.id) == option.value %}selected{% endif %}>
+                                                            {{ option.label }}
+                                                        </option>
+                                                    {% endfor %}
+                                                </select>
+
+                                            {% elif element.type == 'multiselect' %}
+                                                <div class="multiselect-container p-2">
+                                                    {% for option in element.options %}
+                                                        <div class="form-check form-check-inline me-3">
+                                                            <input class="form-check-input" 
+                                                                   type="checkbox" 
+                                                                   id="{{ element.id }}_{{ option.value }}" 
+                                                                   name="{{ element.id }}" 
+                                                                   value="{{ option.value }}"
+                                                                   {% if edit_mode and option.value in pit_data.data.get(element.id, []) %}checked{% endif %}>
+                                                            <label class="form-check-label" for="{{ element.id }}_{{ option.value }}">{{ option.label }}</label>
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+
+                                            {% elif element.type == 'boolean' %}
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" id="{{ element.id }}" name="{{ element.id }}" {% if edit_mode and pit_data.data.get(element.id) %}checked{% endif %}>
+                                                    <label class="form-check-label" for="{{ element.id }}">{{ element.name }}</label>
+                                                </div>
+
+                                            {% endif %}
+                                        </div>
                                     </div>
                                     {% endfor %}
                                 </div>
@@ -121,18 +128,15 @@
                     </div>
                     {% endfor %}
                     
-                    <div class="row">
-                        <div class="col-md-12">
-                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                                <a href="{{ url_for('pit_scouting.index') }}" class="btn btn-secondary me-md-2">
-                                    <i class="fas fa-arrow-left me-1"></i> Back to Dashboard
-                                </a>
-                                <button type="submit" class="btn btn-success">
-                                    <i class="fas fa-save me-1"></i> 
-                                    {% if edit_mode %}Update{% else %}Save{% endif %} Pit Scouting Data
-                                </button>
-                            </div>
-                        </div>
+                    <!-- Floating action bar for easier saving on mobile -->
+                    <div class="floating-actions d-flex justify-content-end gap-2 mt-3">
+                        <a href="{{ url_for('pit_scouting.index') }}" class="btn btn-outline-secondary btn-lg">
+                            <i class="fas fa-arrow-left me-1"></i> Back
+                        </a>
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-save me-1"></i>
+                            {% if edit_mode %}Update{% else %}Save{% endif %}
+                        </button>
                     </div>
                 </form>
             </div>
@@ -140,27 +144,74 @@
     </div>
 </div>
 
-<!-- Quick Team Selection Modal -->
-<div class="modal fade" id="teamSelectionModal" tabindex="-1" aria-labelledby="teamSelectionModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="teamSelectionModalLabel">Select Team</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="row">
-                    <div class="col-md-12 mb-3">
-                        <input type="text" id="teamSearchInput" class="form-control" placeholder="Search teams...">
-                    </div>
-                </div>
-                <div id="teamSelectionGrid" class="row">
-                    <!-- Teams will be populated here -->
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+
+<script>
+// Populate team selection grid with scouted status
+document.addEventListener('DOMContentLoaded', function() {
+    const grid = document.getElementById('teamSelectionGrid');
+    if (!grid) return;
+
+    // Read JSON payloads from hidden script tags (avoids direct Jinja-to-JS parsing)
+    function readJsonFromId(id) {
+        const el = document.getElementById(id);
+        if (!el) return null;
+        try { return JSON.parse(el.textContent || el.innerText || 'null'); } catch(e) { return null; }
+    }
+
+    const teams = readJsonFromId('teams_for_js') || [];
+    const scoutedLocalIds = new Set(readJsonFromId('scouted_local_ids') || []);
+    const scoutedServerIds = new Set(readJsonFromId('scouted_server_ids') || []);
+    const scoutedLocalNumbers = new Set(readJsonFromId('scouted_local_numbers') || []);
+    const scoutedServerNumbers = new Set(readJsonFromId('scouted_server_numbers') || []);
+
+    teams.forEach(team => {
+        const col = document.createElement('div');
+        col.className = 'col-md-2 col-sm-3 col-4 mb-2';
+        const card = document.createElement('div');
+        card.className = 'team-card p-2 border rounded text-center';
+
+        const strong = document.createElement('strong');
+        strong.textContent = team.team_number;
+        card.appendChild(strong);
+
+        if (team.team_name) {
+            const small = document.createElement('small');
+            small.className = 'text-muted d-block';
+            small.textContent = team.team_name.length > 20 ? team.team_name.substring(0,20) + '...' : team.team_name;
+            card.appendChild(small);
+        }
+
+        // Determine scouted state
+        const isServer = scoutedServerIds.has(team.id) || scoutedServerNumbers.has(team.team_number);
+        const isLocal = scoutedLocalIds.has(team.id) || scoutedLocalNumbers.has(team.team_number);
+
+        const status = document.createElement('div');
+        status.style.marginTop = '6px';
+        if (isServer) {
+            status.innerHTML = '<small class="text-success"><i class="fas fa-cloud-upload-alt"></i> Scouted (server)</small>';
+        } else if (isLocal) {
+            status.innerHTML = '<small class="text-warning"><i class="fas fa-hdd"></i> Scouted (local)</small>';
+        } else {
+            status.innerHTML = '<small class="text-muted"><i class="fas fa-circle"></i> Not scouted</small>';
+        }
+        card.appendChild(status);
+
+        // Click to select team number into the form
+        card.addEventListener('click', function() {
+            const teamNumberInput = document.getElementById('team_number');
+            if (teamNumberInput) {
+                teamNumberInput.value = team.team_number;
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('teamSelectionModal'));
+                if (modal) modal.hide();
+            }
+        });
+
+        col.appendChild(card);
+        grid.appendChild(col);
+    });
+});
+</script>
 
 <script>
 // Form validation and enhancement
@@ -206,6 +257,24 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load data from localStorage if available
     loadFormDataFromLocalStorage();
+});
+
+// Collapse/expand section handlers
+document.addEventListener('click', function(e) {
+    const btn = e.target.closest('.toggle-section');
+    if (!btn) return;
+    const card = btn.closest('.card');
+    const body = card.querySelector('.section-body');
+    const isCollapsed = body.getAttribute('aria-hidden') === 'true';
+    if (isCollapsed) {
+        body.setAttribute('aria-hidden', 'false');
+        btn.textContent = 'Collapse';
+        btn.setAttribute('aria-expanded', 'true');
+    } else {
+        body.setAttribute('aria-hidden', 'true');
+        btn.textContent = 'Expand';
+        btn.setAttribute('aria-expanded', 'false');
+    }
 });
 
 // Save form data to localStorage
@@ -370,7 +439,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <style>
 .section-container {
-    margin-bottom: 2rem;
+    margin-bottom: 1rem;
 }
 
 .multiselect-container {
@@ -394,11 +463,7 @@ document.addEventListener('DOMContentLoaded', function() {
     cursor: pointer;
 }
 
-.team-card:hover {
-    background-color: #f8f9fa;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}
+.team-card:hover { transform: translateY(-3px); }
 
 .btn-success {
     background-color: #28a745;
@@ -428,5 +493,20 @@ document.addEventListener('DOMContentLoaded', function() {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* New styles: collapse/expand sections */
+.toggle-section { font-size: .8rem; }
+.section-body[aria-hidden="true"] { display: none; }
+
+/* Floating action bar */
+.floating-actions { position: sticky; bottom: 8px; z-index: 20; }
+
+/* Dark mode form tweaks */
+body.dark-mode .form-control, body.modern-layout.dark-mode .form-control {
+    background: #111216;
+    border-color: rgba(255,255,255,0.06);
+    color: var(--bs-body-color);
+}
+body.dark-mode .form-select { background: #111216; border-color: rgba(255,255,255,0.06); color: var(--bs-body-color); }
 </style>
 {% endblock %}
