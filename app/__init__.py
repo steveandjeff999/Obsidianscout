@@ -837,6 +837,16 @@ def create_app(test_config=None):
     def pwa_install():
         # Serve a minimal static install page that links the manifest and registers the SW.
         return send_from_directory(app.static_folder, 'pwa.html')
+
+    # Serve an easy preview for the offline fallback at /offline
+    @app.route('/offline')
+    def offline_preview():
+        """Serve the offline fallback HTML so it can be previewed at /offline."""
+        try:
+            return send_from_directory(app.static_folder, 'offline.html')
+        except Exception:
+            from flask import abort
+            abort(404)
     
     # Add global context processor for alliance status
     @app.context_processor

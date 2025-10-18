@@ -38,25 +38,59 @@
                             <button id="manual-upload-btn" class="btn btn-warning btn-lg">
                                 <i class="fas fa-cloud-upload-alt me-2"></i> Upload All Data Now
                             </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+                            <style>
+                            /* Modernized dashboard card styles */
+                            .team-card {
+                                transition: transform 0.22s ease, box-shadow 0.22s ease, background-color 0.22s ease;
+                                border: 1px solid rgba(0,0,0,0.06);
+                                padding: 0.6rem;
+                                border-radius: 8px;
+                                background: var(--card-bg, #ffffff);
+                            }
 
-<!-- Statistics Section -->
-<div class="row">
-    <div class="col-md-4">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Teams Scouted</h5>
-                <h2 class="text-success">{{ total_teams_scouted }}</h2>
-                <p class="text-muted">Total pit scouting entries</p>
-            </div>
-        </div>
-    </div>
+                            .team-card:hover {
+                                transform: translateY(-4px);
+                                box-shadow: 0 8px 18px rgba(15,23,42,0.12);
+                            }
+
+                            .stat-card { padding: 1.25rem; border-radius: 10px; }
+
+                            .dashboard-cta { gap: .75rem; }
+
+                            .progress { height: 18px; border-radius: 8px; overflow: hidden; }
+                            .progress-bar { font-size: 12px; line-height: 18px; }
+
+                            /* Make action buttons more prominent and touch-friendly */
+                            .card .btn-lg { padding: .7rem 1.05rem; font-size: 1rem; }
+
+                            /* Dark-mode friendly tweaks (respects base.html .dark-mode rules) */
+                            body.dark-mode .team-card,
+                            body.modern-layout.dark-mode .team-card {
+                                background: var(--card-bg) !important;
+                                border-color: rgba(255,255,255,0.04) !important;
+                                color: var(--bs-body-color) !important;
+                            }
+
+                            /* Table in dark mode */
+                            body.dark-mode table.table.table-striped tbody tr td {
+                                border-color: rgba(255,255,255,0.03);
+                            }
+
+                            /* Compact responsive team grid */
+                            .team-card strong { display:block; font-size:1.05rem; }
+                            .team-card small { color: var(--bs-secondary); }
+
+                            /* Ensure readable badges in dark mode */
+                            .badge.bg-warning { color: #222 !important; }
+                            body.dark-mode .badge.bg-warning { color: #222 !important; }
+
+                            /* Small responsive adjustments */
+                            @media (max-width: 576px) {
+                                .team-card { padding: .5rem; }
+                                .col-md-2 { flex: 0 0 33.3333%; max-width: 33.3333%; }
+                            }
+                            </style>
+
     <div class="col-md-4">
         <div class="card text-center">
             <div class="card-body">
@@ -204,12 +238,9 @@
                             {% if team.team_name %}
                                 <br><small class="text-muted">{{ team.team_name[:20] }}{% if team.team_name|length > 20 %}...{% endif %}</small>
                             {% endif %}
-                            {% set pit_entry = pit_data|selectattr('team_id', 'equalto', team.id)|list|first %}
-                            {% if pit_entry %}
-                                <br><small class="text-success"><i class="fas fa-check"></i> Scouted</small>
-                            {% else %}
-                                <br><small class="text-muted"><i class="fas fa-circle"></i> Not scouted</small>
-                            {% endif %}
+                            {# Prefer the full set `all_pit_data` if provided, fallback to pit_data #}
+                            {# Use precomputed lookup lists for faster and more reliable checks #}
+                            {# Scouted indicator intentionally removed #}
                         </div>
                     </div>
                     {% endfor %}
@@ -338,6 +369,16 @@ document.addEventListener('DOMContentLoaded', function() {
     background-color: #f8f9fa;
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Improve team number readability in dark mode */
+body.dark-mode .team-card strong {
+    color: #ffffff;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+}
+
+body.dark-mode .team-card small {
+    color: rgba(255,255,255,0.85);
 }
 
 .progress {

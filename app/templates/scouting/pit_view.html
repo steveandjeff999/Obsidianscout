@@ -6,31 +6,58 @@
 
 {% block content %}
 <div class="row">
-    <div class="col-md-12 mb-3">
+</div>
+
+{# Gather photos from common fields (best-effort) #}
+{% set photos = [] %}
+{% for key, val in pit_data.data.items() %}
+    {# skip empty values #}
+    {% if val is not none and val is not false and val != '' %}
+        {# If it's a string, treat as possible single filename/url #}
+        {% if val is string %}
+            {% set vlow = val|lower() %}
+            {% if vlow.endswith('.jpg') or vlow.endswith('.jpeg') or vlow.endswith('.png') or vlow.endswith('.webp') %}
+                {% set _ = photos.append(val) %}
+            {% endif %}
+
+        {# If it's an iterable (list/tuple/etc) and not a string, iterate safely #}
+        {% elif val is iterable and not val is string %}
+            {% for item in val %}
+                {% if item is string %}
+                    {% set ilow = item|lower() %}
+                    {% if ilow.endswith('.jpg') or ilow.endswith('.jpeg') or ilow.endswith('.png') or ilow.endswith('.webp') %}
+                        {% set _ = photos.append(item) %}
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+
+        {# otherwise (numbers, booleans, dicts, etc) - ignore for photos #}
+        {% else %}
+            {# no-op - not a photo field #}
+        {% endif %}
+    {% endif %}
+{% endfor %}
+
+<div class="row mb-3">
+    <div class="col-12">
         <div class="d-flex justify-content-between align-items-center">
             <div>
-                <h4 class="mb-0">
-                    Team {{ pit_data.team.team_number }}
-                    {% if pit_data.team.team_name %}
-                        - {{ pit_data.team.team_name }}
-                    {% endif %}
-                </h4>
-                <small class="text-muted">
-                    Scouted by {{ pit_data.scout_name }} on {{ pit_data.timestamp.strftime('%B %d, %Y at %I:%M %p') }}
-                </small>
+                <h4 class="mb-0">Team {{ pit_data.team.team_number }} {% if pit_data.team.team_name %}- {{ pit_data.team.team_name }}{% endif %}</h4>
+                <small class="text-muted">Scouted by {{ pit_data.scout_name }} on {{ pit_data.timestamp.strftime('%B %d, %Y at %I:%M %p') }}</small>
             </div>
-            <div>
+            <div class="btn-group">
                 {% if current_user.has_role('admin') or pit_data.scout_id == current_user.id %}
-                    <a href="{{ url_for('pit_scouting.edit', id=pit_data.id) }}" class="btn btn-warning me-2">
-                        <i class="fas fa-edit me-1"></i> Edit
+                    <a href="{{ url_for('pit_scouting.edit', id=pit_data.id) }}" class="btn btn-outline-warning">
+                        <i class="fas fa-edit"></i>
                     </a>
                 {% endif %}
                 <a href="{{ url_for('pit_scouting.list') }}" class="btn btn-outline-secondary">
-                    <i class="fas fa-arrow-left me-1"></i> Back to List
+                    <i class="fas fa-arrow-left"></i>
                 </a>
             </div>
         </div>
     </div>
+</div>
 </div>
 
 <!-- Status Banner -->
@@ -51,72 +78,114 @@
     </div>
 </div>
 
-<!-- Pit Scouting Data Display -->
+<!-- Pit Scouting Data Display: two-column layout -->
 <div class="row">
-    <div class="col-md-12">
+    <div class="col-lg-4 col-md-12 mb-4">
+        <!-- Summary and Images -->
+        <div class="card mb-3">
+            <div class="card-header bg-transparent">
+                <h5 class="mb-0">Summary</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-1"><strong>Scouted by</strong>: {{ pit_data.scout_name }}</p>
+                <p class="mb-1"><strong>Timestamp</strong>: {{ pit_data.timestamp.strftime('%B %d, %Y %I:%M %p') }}</p>
+                <p class="mb-1"><strong>Status</strong>:
+                    {% if pit_data.is_uploaded %}
+                        <span class="badge bg-success">Uploaded</span>
+                    {% else %}
+                        <span class="badge bg-warning text-dark">Local</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+
+        {% if photos and photos|length > 0 %}
+        <div class="card mb-3">
+            <div class="card-header bg-transparent">
+                <h5 class="mb-0">Photos</h5>
+            </div>
+            <div class="card-body">
+                <div class="image-grid">
+                    {% for p in photos %}
+                        {% set src = p if p.startswith('http') or p.startswith('/') else url_for('static', filename='uploads/pit_scouting/' ~ p) %}
+                        <a href="{{ src }}" target="_blank" rel="noopener" class="d-inline-block img-thumb-link">
+                            <img src="{{ src }}" class="img-thumbnail img-thumb" alt="Team {{ pit_data.team.team_number }} photo">
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Quick key-value summary of common fields -->
+        <div class="card mb-3">
+            <div class="card-header bg-transparent"><h5 class="mb-0">Quick Info</h5></div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    {% set quick_keys = ['drivetrain_type','drivetrain_motors','robot_weight','cycle_time'] %}
+                    {% for k in quick_keys %}
+                        {% if pit_data.data.get(k) %}
+                            <li><strong>{{ k.replace('_',' ')|title }}:</strong> {{ pit_data.data.get(k) }}</li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8 col-md-12">
         {% for section in pit_config.pit_scouting.sections %}
-        <div class="card mb-4">
-            <div class="card-header bg-primary text-white">
+        <div class="card mb-3">
+            <div class="card-header">
                 <h5 class="mb-0">{{ section.name }}</h5>
             </div>
             <div class="card-body">
-                <div class="row">
+                <div class="row g-3">
                     {% for element in section.elements %}
                         {% set value = pit_data.data.get(element.id) %}
                         {% if value or element.type == 'boolean' %}
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-6">
                             <div class="data-field">
-                                <strong class="field-label">{{ element.name }}:</strong>
-                                <div class="field-value">
-                                    {% if element.type == 'boolean' %}
-                                        {% if value %}
-                                            <span class="badge bg-success">
-                                                <i class="fas fa-check me-1"></i> Yes
-                                            </span>
-                                        {% else %}
-                                            <span class="badge bg-secondary">
-                                                <i class="fas fa-times me-1"></i> No
-                                            </span>
-                                        {% endif %}
-                                    
-                                    {% elif element.type == 'multiselect' %}
-                                        {% if value %}
-                                            <div class="badge-container">
-                                                {% for selected_value in value %}
-                                                    {% set option_label = element.options|selectattr('value', 'equalto', selected_value)|map(attribute='label')|first %}
-                                                    <span class="badge bg-primary me-1 mb-1">{{ option_label or selected_value }}</span>
-                                                {% endfor %}
-                                            </div>
-                                        {% else %}
-                                            <span class="text-muted">None selected</span>
-                                        {% endif %}
-                                    
-                                    {% elif element.type == 'select' %}
-                                        {% set option_label = element.options|selectattr('value', 'equalto', value)|map(attribute='label')|first %}
-                                        <span class="badge bg-info">{{ option_label or value }}</span>
-                                    
-                                    {% elif element.type == 'number' %}
-                                        <span class="number-value">{{ value }}</span>
-                                        {% if element.id == 'robot_weight' %}
-                                            <small class="text-muted">lbs</small>
-                                        {% elif element.id == 'robot_height' %}
-                                            <small class="text-muted">inches</small>
-                                        {% elif element.id == 'cycle_time' %}
-                                            <small class="text-muted">seconds</small>
-                                        {% endif %}
-                                    
-                                    {% elif element.type == 'textarea' %}
-                                        <div class="textarea-value">
-                                            {% if value %}
-                                                {{ value|replace('\n', '<br>')|safe }}
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <div class="field-label small text-muted">{{ element.name }}</div>
+                                        <div class="field-value mt-1">
+                                            {% if element.type == 'boolean' %}
+                                                {% if value %}
+                                                    <span class="badge bg-success"><i class="fas fa-check"></i> Yes</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary"><i class="fas fa-times"></i> No</span>
+                                                {% endif %}
+
+                                            {% elif element.type == 'multiselect' %}
+                                                {% if value %}
+                                                    <div class="badge-container">
+                                                        {% for selected_value in value %}
+                                                            {% set option_label = element.options|selectattr('value', 'equalto', selected_value)|map(attribute='label')|first %}
+                                                            <span class="badge bg-primary me-1 mb-1">{{ option_label or selected_value }}</span>
+                                                        {% endfor %}
+                                                    </div>
+                                                {% else %}
+                                                    <span class="text-muted">None</span>
+                                                {% endif %}
+
+                                            {% elif element.type == 'select' %}
+                                                {% set option_label = element.options|selectattr('value', 'equalto', value)|map(attribute='label')|first %}
+                                                <span class="badge bg-info">{{ option_label or value }}</span>
+
+                                            {% elif element.type == 'number' %}
+                                                <div class="number-value">{{ value }}</div>
+
+                                            {% elif element.type == 'textarea' %}
+                                                <div class="textarea-value small">
+                                                    {% if value %}{{ value|replace('\n','<br>')|safe }}{% else %}<span class="text-muted">No notes</span>{% endif %}
+                                                </div>
+
                                             {% else %}
-                                                <span class="text-muted">No notes provided</span>
+                                                <div class="text-value">{{ value or 'Not specified' }}</div>
                                             {% endif %}
                                         </div>
-                                    
-                                    {% else %}
-                                        <span class="text-value">{{ value or 'Not specified' }}</span>
-                                    {% endif %}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -334,6 +403,19 @@ function confirmDelete() {
     border-radius: 0.375rem;
     border: 1px solid #dee2e6;
 }
+
+/* Image gallery */
+.image-grid { display:flex; gap:0.5rem; flex-wrap:wrap; }
+.img-thumb { width:100px; height:80px; object-fit:cover; border-radius:6px; border:1px solid rgba(0,0,0,0.06); }
+.img-thumb-link { display:inline-block; }
+
+/* Dark mode adjustments */
+body.dark-mode .card, body.modern-layout.dark-mode .card { background: var(--card-bg) !important; color: var(--bs-body-color) !important; }
+body.dark-mode .textarea-value, body.modern-layout.dark-mode .textarea-value { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.03); }
+body.dark-mode .summary-stat, body.modern-layout.dark-mode .summary-stat { background: rgba(255,255,255,0.02); }
+
+/* Tighter spacing for summary items */
+.summary-stat { padding: .7rem; }
 
 /* Print styles */
 @media print {
