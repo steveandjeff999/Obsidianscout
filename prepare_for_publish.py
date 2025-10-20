@@ -35,6 +35,13 @@ def find_json_files(root: Path) -> List[Path]:
     files: List[Path] = []
     for p in root.rglob("*.json"):
         if p.is_file():
+            # Skip known runtime-generated or intentionally excluded files
+            try:
+                rel = p.relative_to(root)
+                if rel.as_posix().lower() == "instance/vapid_keys.json":
+                    continue
+            except Exception:
+                pass
             if any(part.startswith(".") for part in p.parts):
                 continue
             if "__pycache__" in p.parts:
@@ -710,6 +717,13 @@ def find_files(root: Path) -> List[Path]:
     files: List[Path] = []
     for p in root.rglob("*"):
         if p.is_file():
+            # Skip runtime-generated VAPID keys file
+            try:
+                rel = p.relative_to(root)
+                if rel.as_posix().lower() == "instance/vapid_keys.json":
+                    continue
+            except Exception:
+                pass
             # skip virtual envs, git, pycache
             if any(part.startswith(".") for part in p.parts):
                 # allow files like .env? skip hidden files to be safe
