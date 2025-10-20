@@ -9618,3 +9618,965 @@ Parsed endgame scoring_elements:
   }
 ]
 
+--- Save attempt at 2025-10-18T17:49:41.887979+00:00 by Seth Herod ---
+Form keys:
+  simple_edit
+  simple_payload
+  game_name
+  season
+  version
+  alliance_size
+  scouting_stations
+  current_event_code
+  match_type_practice
+  match_type_qualification
+  match_type_playoff
+  auto_duration
+  teleop_duration
+  endgame_duration
+  auto_element_name_0
+  auto_element_type_0
+  auto_element_points_0
+  auto_element_display_predictions_0
+  auto_element_id_0
+  auto_element_name_1
+  auto_element_type_1
+  auto_element_points_1
+  auto_element_id_1
+  auto_element_name_2
+  auto_element_type_2
+  auto_element_points_2
+  auto_element_id_2
+  auto_element_name_3
+  auto_element_type_3
+  auto_element_points_3
+  auto_element_id_3
+  auto_element_name_4
+  auto_element_type_4
+  auto_element_points_4
+  auto_element_id_4
+  auto_element_name_5
+  auto_element_type_5
+  auto_element_points_5
+  auto_element_id_5
+  auto_element_name_6
+  auto_element_type_6
+  auto_element_points_6
+  auto_element_id_6
+  auto_element_name_7
+  auto_element_type_7
+  auto_element_points_7
+  auto_element_id_7
+  teleop_element_name_0
+  teleop_element_type_0
+  teleop_element_points_0
+  teleop_element_id_0
+  teleop_element_name_1
+  teleop_element_type_1
+  teleop_element_points_1
+  teleop_element_id_1
+  teleop_element_name_2
+  teleop_element_type_2
+  teleop_element_points_2
+  teleop_element_id_2
+  teleop_element_name_3
+  teleop_element_type_3
+  teleop_element_points_3
+  teleop_element_id_3
+  teleop_element_name_4
+  teleop_element_type_4
+  teleop_element_points_4
+  teleop_element_id_4
+  teleop_element_name_5
+  teleop_element_type_5
+  teleop_element_points_5
+  teleop_element_id_5
+  teleop_element_name_6
+  teleop_element_type_6
+  teleop_element_points_6
+  teleop_element_id_6
+  endgame_element_name_0
+  endgame_element_type_0
+  endgame_element_points_0
+  endgame_element_display_predictions_0
+  endgame_element_option_name_0_0
+  endgame_element_option_points_0_0
+  endgame_element_option_name_0_1
+  endgame_element_option_points_0_1
+  endgame_element_option_name_0_2
+  endgame_element_option_points_0_2
+  endgame_element_option_name_0_3
+  endgame_element_option_points_0_3
+  endgame_element_id_0
+  rating_element_name_0
+  rating_element_min_0
+  rating_element_max_0
+  rating_element_default_0
+  rating_element_id_0
+  text_element_name_0
+  text_element_multiline_0
+  text_element_id_0
+  preferred_api_source
+  tba_auth_key
+  tba_base_url
+  api_username
+  api_auth_token
+  api_base_url
+  auto_sync_enabled
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Leave Strating Line",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "points": 3.0
+  },
+  {
+    "id": "elem_auto_2",
+    "perm_id": "elem_auto_2",
+    "name": "CORAL (L1)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 3.0
+  },
+  {
+    "id": "elem_auto_3",
+    "perm_id": "elem_auto_3",
+    "name": "CORAL (L2)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_auto_4",
+    "perm_id": "elem_auto_4",
+    "name": "CORAL (L3)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 6.0
+  },
+  {
+    "id": "elem_auto_5",
+    "perm_id": "elem_auto_5",
+    "name": "CORAL (L4)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 7.0
+  },
+  {
+    "id": "elem_auto_6",
+    "perm_id": "elem_auto_6",
+    "name": "ALGAE in Net",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_auto_7",
+    "perm_id": "elem_auto_7",
+    "name": "ALGAE Processer",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 6.0
+  },
+  {
+    "id": "elem_auto_8",
+    "perm_id": "elem_auto_8",
+    "name": "ALGAE Missed",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 0.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Leave Strating Line",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "points": 3.0
+  },
+  {
+    "id": "elem_auto_2",
+    "perm_id": "elem_auto_2",
+    "name": "CORAL (L1)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 3.0
+  },
+  {
+    "id": "elem_auto_3",
+    "perm_id": "elem_auto_3",
+    "name": "CORAL (L2)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_auto_4",
+    "perm_id": "elem_auto_4",
+    "name": "CORAL (L3)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 6.0
+  },
+  {
+    "id": "elem_auto_5",
+    "perm_id": "elem_auto_5",
+    "name": "CORAL (L4)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 7.0
+  },
+  {
+    "id": "elem_auto_6",
+    "perm_id": "elem_auto_6",
+    "name": "ALGAE in Net",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_auto_7",
+    "perm_id": "elem_auto_7",
+    "name": "ALGAE Processer",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 6.0
+  },
+  {
+    "id": "elem_auto_8",
+    "perm_id": "elem_auto_8",
+    "name": "ALGAE Missed",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 0.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_6",
+    "perm_id": "elem_teleop_6",
+    "name": "CORAL (L1)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 2.0
+  },
+  {
+    "id": "elem_teleop_1",
+    "perm_id": "elem_teleop_1",
+    "name": "CORAL (L2)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 3.0
+  },
+  {
+    "id": "elem_teleop_2",
+    "perm_id": "elem_teleop_2",
+    "name": "CORAL (L3)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_teleop_3",
+    "perm_id": "elem_teleop_3",
+    "name": "CORAL (L4)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 5.0
+  },
+  {
+    "id": "elem_teleop_4",
+    "perm_id": "elem_teleop_4",
+    "name": "ALGAE in Processor",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 7.0
+  },
+  {
+    "id": "elem_teleop_5",
+    "perm_id": "elem_teleop_5",
+    "name": "ALGAE in Net",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_teleop_6",
+    "perm_id": "elem_teleop_6",
+    "name": "Defense Played",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 0.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_6",
+    "perm_id": "elem_teleop_6",
+    "name": "CORAL (L1)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 2.0
+  },
+  {
+    "id": "elem_teleop_1",
+    "perm_id": "elem_teleop_1",
+    "name": "CORAL (L2)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 3.0
+  },
+  {
+    "id": "elem_teleop_2",
+    "perm_id": "elem_teleop_2",
+    "name": "CORAL (L3)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_teleop_3",
+    "perm_id": "elem_teleop_3",
+    "name": "CORAL (L4)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 5.0
+  },
+  {
+    "id": "elem_teleop_4",
+    "perm_id": "elem_teleop_4",
+    "name": "ALGAE in Processor",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 7.0
+  },
+  {
+    "id": "elem_teleop_5",
+    "perm_id": "elem_teleop_5",
+    "name": "ALGAE in Net",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_teleop_6",
+    "perm_id": "elem_teleop_6",
+    "name": "Defense Played",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 0.0
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_2",
+    "perm_id": "elem_endgame_2",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "Park",
+    "display_in_predictions": true,
+    "options": [
+      {
+        "name": "Park",
+        "points": 2.0
+      },
+      {
+        "name": "Shallow",
+        "points": 6.0
+      },
+      {
+        "name": "Deep",
+        "points": 12.0
+      },
+      {
+        "name": "None",
+        "points": 0.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_2",
+    "perm_id": "elem_endgame_2",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "Park",
+    "display_in_predictions": true,
+    "options": [
+      {
+        "name": "Park",
+        "points": 2.0
+      },
+      {
+        "name": "Shallow",
+        "points": 6.0
+      },
+      {
+        "name": "Deep",
+        "points": 12.0
+      },
+      {
+        "name": "None",
+        "points": 0.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_2",
+    "perm_id": "elem_endgame_2",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "Park",
+    "display_in_predictions": true,
+    "options": [
+      {
+        "name": "Park",
+        "points": 2.0
+      },
+      {
+        "name": "Shallow",
+        "points": 6.0
+      },
+      {
+        "name": "Deep",
+        "points": 12.0
+      },
+      {
+        "name": "None",
+        "points": 0.0
+      }
+    ]
+  }
+]
+
+--- Save attempt at 2025-10-19T02:51:41.850281+00:00 by Seth Herod ---
+Form keys:
+  simple_edit
+  simple_payload
+  game_name
+  season
+  version
+  alliance_size
+  scouting_stations
+  current_event_code
+  match_type_practice
+  match_type_qualification
+  match_type_playoff
+  auto_duration
+  teleop_duration
+  endgame_duration
+  auto_element_name_0
+  auto_element_type_0
+  auto_element_points_0
+  auto_element_display_predictions_0
+  auto_element_id_0
+  auto_element_name_1
+  auto_element_type_1
+  auto_element_points_1
+  auto_element_id_1
+  auto_element_name_2
+  auto_element_type_2
+  auto_element_points_2
+  auto_element_id_2
+  auto_element_name_3
+  auto_element_type_3
+  auto_element_points_3
+  auto_element_id_3
+  auto_element_name_4
+  auto_element_type_4
+  auto_element_points_4
+  auto_element_id_4
+  auto_element_name_5
+  auto_element_type_5
+  auto_element_points_5
+  auto_element_id_5
+  auto_element_name_6
+  auto_element_type_6
+  auto_element_points_6
+  auto_element_id_6
+  auto_element_name_7
+  auto_element_type_7
+  auto_element_points_7
+  auto_element_id_7
+  teleop_element_name_0
+  teleop_element_type_0
+  teleop_element_points_0
+  teleop_element_id_0
+  teleop_element_name_1
+  teleop_element_type_1
+  teleop_element_points_1
+  teleop_element_id_1
+  teleop_element_name_2
+  teleop_element_type_2
+  teleop_element_points_2
+  teleop_element_id_2
+  teleop_element_name_3
+  teleop_element_type_3
+  teleop_element_points_3
+  teleop_element_id_3
+  teleop_element_name_4
+  teleop_element_type_4
+  teleop_element_points_4
+  teleop_element_id_4
+  teleop_element_name_5
+  teleop_element_type_5
+  teleop_element_points_5
+  teleop_element_id_5
+  teleop_element_name_6
+  teleop_element_type_6
+  teleop_element_points_6
+  teleop_element_id_6
+  endgame_element_name_0
+  endgame_element_type_0
+  endgame_element_points_0
+  endgame_element_display_predictions_0
+  endgame_element_option_name_0_0
+  endgame_element_option_points_0_0
+  endgame_element_option_name_0_1
+  endgame_element_option_points_0_1
+  endgame_element_option_name_0_2
+  endgame_element_option_points_0_2
+  endgame_element_option_name_0_3
+  endgame_element_option_points_0_3
+  endgame_element_id_0
+  rating_element_name_0
+  rating_element_min_0
+  rating_element_max_0
+  rating_element_default_0
+  rating_element_id_0
+  text_element_name_0
+  text_element_multiline_0
+  text_element_id_0
+  preferred_api_source
+  tba_auth_key
+  tba_base_url
+  api_username
+  api_auth_token
+  api_base_url
+  auto_sync_enabled
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Leave Strating Line",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "points": 3.0
+  },
+  {
+    "id": "elem_auto_2",
+    "perm_id": "elem_auto_2",
+    "name": "CORAL (L1)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 3.0
+  },
+  {
+    "id": "elem_auto_3",
+    "perm_id": "elem_auto_3",
+    "name": "CORAL (L2)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_auto_4",
+    "perm_id": "elem_auto_4",
+    "name": "CORAL (L3)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 6.0
+  },
+  {
+    "id": "elem_auto_5",
+    "perm_id": "elem_auto_5",
+    "name": "CORAL (L4)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 7.0
+  },
+  {
+    "id": "elem_auto_6",
+    "perm_id": "elem_auto_6",
+    "name": "ALGAE in Net",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_auto_7",
+    "perm_id": "elem_auto_7",
+    "name": "ALGAE Processer",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 6.0
+  },
+  {
+    "id": "elem_auto_8",
+    "perm_id": "elem_auto_8",
+    "name": "ALGAE Missed",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 0.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Leave Strating Line5",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "points": 3.0
+  },
+  {
+    "id": "elem_auto_2",
+    "perm_id": "elem_auto_2",
+    "name": "CORAL (L1)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 3.0
+  },
+  {
+    "id": "elem_auto_3",
+    "perm_id": "elem_auto_3",
+    "name": "CORAL (L2)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_auto_4",
+    "perm_id": "elem_auto_4",
+    "name": "CORAL (L3)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 6.0
+  },
+  {
+    "id": "elem_auto_5",
+    "perm_id": "elem_auto_5",
+    "name": "CORAL (L4)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 7.0
+  },
+  {
+    "id": "elem_auto_6",
+    "perm_id": "elem_auto_6",
+    "name": "ALGAE in Net",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_auto_7",
+    "perm_id": "elem_auto_7",
+    "name": "ALGAE Processer",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 6.0
+  },
+  {
+    "id": "elem_auto_8",
+    "perm_id": "elem_auto_8",
+    "name": "ALGAE Missed",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 0.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_6",
+    "perm_id": "elem_teleop_6",
+    "name": "CORAL (L1)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 2.0
+  },
+  {
+    "id": "elem_teleop_1",
+    "perm_id": "elem_teleop_1",
+    "name": "CORAL (L2)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 3.0
+  },
+  {
+    "id": "elem_teleop_2",
+    "perm_id": "elem_teleop_2",
+    "name": "CORAL (L3)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_teleop_3",
+    "perm_id": "elem_teleop_3",
+    "name": "CORAL (L4)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 5.0
+  },
+  {
+    "id": "elem_teleop_4",
+    "perm_id": "elem_teleop_4",
+    "name": "ALGAE in Processor",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 7.0
+  },
+  {
+    "id": "elem_teleop_5",
+    "perm_id": "elem_teleop_5",
+    "name": "ALGAE in Net",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_teleop_6",
+    "perm_id": "elem_teleop_6",
+    "name": "Defense Played",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 0.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_6",
+    "perm_id": "elem_teleop_6",
+    "name": "CORAL (L1)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 2.0
+  },
+  {
+    "id": "elem_teleop_1",
+    "perm_id": "elem_teleop_1",
+    "name": "CORAL (L2)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 3.0
+  },
+  {
+    "id": "elem_teleop_2",
+    "perm_id": "elem_teleop_2",
+    "name": "CORAL (L3)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_teleop_3",
+    "perm_id": "elem_teleop_3",
+    "name": "CORAL (L4)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 5.0
+  },
+  {
+    "id": "elem_teleop_4",
+    "perm_id": "elem_teleop_4",
+    "name": "ALGAE in Processor",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 7.0
+  },
+  {
+    "id": "elem_teleop_5",
+    "perm_id": "elem_teleop_5",
+    "name": "ALGAE in Net",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_teleop_6",
+    "perm_id": "elem_teleop_6",
+    "name": "Defense Played",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "points": 0.0
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_2",
+    "perm_id": "elem_endgame_2",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "Park",
+    "display_in_predictions": true,
+    "options": [
+      {
+        "name": "Park",
+        "points": 2.0
+      },
+      {
+        "name": "Shallow",
+        "points": 6.0
+      },
+      {
+        "name": "Deep",
+        "points": 12.0
+      },
+      {
+        "name": "None",
+        "points": 0.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_2",
+    "perm_id": "elem_endgame_2",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "Park",
+    "display_in_predictions": true,
+    "options": [
+      {
+        "name": "Park",
+        "points": 2.0
+      },
+      {
+        "name": "Shallow",
+        "points": 6.0
+      },
+      {
+        "name": "Deep",
+        "points": 12.0
+      },
+      {
+        "name": "None",
+        "points": 0.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_2",
+    "perm_id": "elem_endgame_2",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "Park",
+    "display_in_predictions": true,
+    "options": [
+      {
+        "name": "Park",
+        "points": 2.0
+      },
+      {
+        "name": "Shallow",
+        "points": 6.0
+      },
+      {
+        "name": "Deep",
+        "points": 12.0
+      },
+      {
+        "name": "None",
+        "points": 0.0
+      }
+    ]
+  }
+]
+

@@ -17,7 +17,7 @@
       {
         "id": "elem_auto_1",
         "perm_id": "elem_auto_1",
-        "name": "Leave Strating Line",
+        "name": "Leave Strating Line5",
         "type": "boolean",
         "default": false,
         "display_in_predictions": true,

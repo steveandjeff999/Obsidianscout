@@ -215,10 +215,51 @@ def form():
                 team_id=team.id,
                 scout_id=current_user.id
             ).first()
-            
+            # If data exists for this scout/team, overwrite it with the new submission
             if existing_data:
-                flash(f'You have already scouted Team {team_number}. You can edit your existing data.', 'warning')
-                return redirect(url_for('pit_scouting.view', id=existing_data.id))
+                try:
+                    # Collect form data based on pit config (same logic as for new entries)
+                    form_data = {}
+                    for section in pit_config['pit_scouting']['sections']:
+                        for element in section['elements']:
+                            element_id = element['id']
+                            element_type = element['type']
+
+                            if element_type == 'multiselect':
+                                values = request.form.getlist(element_id)
+                                form_data[element_id] = values
+                            elif element_type == 'boolean':
+                                form_data[element_id] = element_id in request.form
+                            elif element_type == 'number':
+                                value = request.form.get(element_id)
+                                if value:
+                                    try:
+                                        form_data[element_id] = float(value)
+                                    except ValueError:
+                                        form_data[element_id] = 0
+                                else:
+                                    form_data[element_id] = 0
+                            else:
+                                form_data[element_id] = request.form.get(element_id, '')
+
+                    # Update existing record
+                    existing_data.data_json = json.dumps(form_data)
+                    existing_data.is_uploaded = False
+                    existing_data.device_id = request.headers.get('User-Agent', 'Unknown')[:100]
+                    existing_data.timestamp = datetime.now(timezone.utc)
+                    db.session.commit()
+
+                    # Auto-sync and emit update
+                    auto_sync_alliance_pit_data(existing_data)
+                    if current_event:
+                        emit_pit_data_update(current_event.id, 'updated', existing_data.to_dict())
+
+                    flash(f'Pit scouting data for Team {team_number} updated successfully!', 'success')
+                    return redirect(url_for('pit_scouting.view', id=existing_data.id))
+                except Exception as e:
+                    db.session.rollback()
+                    flash(f'Error updating existing pit scouting data: {str(e)}', 'error')
+                    return redirect(url_for('pit_scouting.form'))
             
             # Collect form data based on pit config
             form_data = {}
