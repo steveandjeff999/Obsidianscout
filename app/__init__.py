@@ -726,7 +726,7 @@ def create_app(test_config=None):
     # Universal sync system removed - keeping only normal user features
 
     # Import and register blueprints
-    from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, assistant, integrity, pit_scouting, scouting_alliances, setup, search, db_admin, sync_api, update_monitor, notifications
+    from app.routes import main, teams, matches, scouting, data, graphs, events, alliances, auth, assistant, integrity, pit_scouting, scouting_alliances, setup, search, db_admin, sync_api, update_monitor, notifications, mobile_api
     # Register new team trends route (lightweight analytics + prediction)
     try:
         from app.routes import team_trends
@@ -754,6 +754,7 @@ def create_app(test_config=None):
     app.register_blueprint(search.bp)
     app.register_blueprint(db_admin.db_admin_bp)
     app.register_blueprint(notifications.bp)
+    app.register_blueprint(mobile_api.mobile_api)
     # Register team_trends blueprint if available
     if team_trends:
         try:

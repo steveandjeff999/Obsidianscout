@@ -3,6 +3,7 @@ import os
 from flask import current_app
 from flask_login import current_user
 import shutil
+import copy
 
 class ConfigManager:
     def __init__(self, app=None):
@@ -283,16 +284,106 @@ def get_effective_pit_config():
         # Use alliance's shared pit config
         if active_alliance.shared_pit_config:
             try:
-                return json.loads(active_alliance.shared_pit_config)
+                # Merge shared config with default so missing option lists are preserved
+                shared = json.loads(active_alliance.shared_pit_config)
+                default = load_pit_config(team_number=None)
+                return merge_pit_configs(default, shared)
             except (json.JSONDecodeError, TypeError):
                 pass
         
         # Fallback to the alliance's configured team's config
         if active_alliance.pit_config_team:
-            return load_pit_config(team_number=active_alliance.pit_config_team)
+            team_cfg = load_pit_config(team_number=active_alliance.pit_config_team)
+            default = load_pit_config(team_number=None)
+            return merge_pit_configs(default, team_cfg)
     
     # Use team's own config
-    return get_current_pit_config()
+    default = load_pit_config(team_number=None)
+    team_cfg = get_current_pit_config()
+    return merge_pit_configs(default, team_cfg)
+
+
+def merge_pit_configs(base_config, override_config):
+    """Return a merged pit config where missing fields in override_config are filled from base_config.
+
+    Specifically ensures that select/multiselect elements retain option lists from the base when the
+    team-specific config omitted them (common when instance files were edited incorrectly).
+    """
+    if not base_config:
+        return override_config or {}
+    if not override_config:
+        return base_config
+
+    result = copy.deepcopy(base_config)
+
+    # Top-level pit_scouting keys (title/description) - override if provided
+    base_ps = result.get('pit_scouting', {})
+    over_ps = override_config.get('pit_scouting', {})
+
+    if 'title' in over_ps:
+        base_ps['title'] = over_ps['title']
+    if 'description' in over_ps:
+        base_ps['description'] = over_ps['description']
+
+    # Build lookup of base sections by id
+    base_sections = {s.get('id'): s for s in base_ps.get('sections', [])}
+
+    merged_sections = []
+
+    # Iterate through override sections; merge with base where possible
+    for o_sec in over_ps.get('sections', []):
+        sec_id = o_sec.get('id')
+        b_sec = base_sections.get(sec_id)
+        if not b_sec:
+            # Section doesn't exist in base; add as-is
+            merged_sections.append(copy.deepcopy(o_sec))
+            continue
+
+        # Start from base section and overlay override fields
+        merged_sec = copy.deepcopy(b_sec)
+        if 'name' in o_sec:
+            merged_sec['name'] = o_sec['name']
+
+        # Build element lookup from base by perm_id or id
+        base_elements = {e.get('perm_id') or e.get('id'): e for e in merged_sec.get('elements', [])}
+
+        merged_elements = []
+        for o_elem in o_sec.get('elements', []):
+            key = o_elem.get('perm_id') or o_elem.get('id')
+            b_elem = base_elements.get(key)
+            if not b_elem:
+                merged_elements.append(copy.deepcopy(o_elem))
+                continue
+
+            # Start from base element and overlay override properties
+            merged_elem = copy.deepcopy(b_elem)
+            for k, v in o_elem.items():
+                # If override explicitly provides a value, set it
+                merged_elem[k] = v
+
+            # If override omitted options but base had them, keep base.options
+            if 'options' not in o_elem and 'options' in b_elem:
+                merged_elem['options'] = copy.deepcopy(b_elem['options'])
+
+            merged_elements.append(merged_elem)
+
+        # Also include any base elements that were not present in override
+        override_keys = set([e.get('perm_id') or e.get('id') for e in o_sec.get('elements', [])])
+        for b_key, b_elem in base_elements.items():
+            if b_key not in override_keys:
+                merged_elements.append(copy.deepcopy(b_elem))
+
+        merged_sec['elements'] = merged_elements
+        merged_sections.append(merged_sec)
+
+    # Include any base sections not present in override
+    override_sec_ids = set([s.get('id') for s in over_ps.get('sections', [])])
+    for b_id, b_sec in base_sections.items():
+        if b_id not in override_sec_ids:
+            merged_sections.append(copy.deepcopy(b_sec))
+
+    result['pit_scouting']['sections'] = merged_sections
+    return result
 
 def is_alliance_mode_active():
     """Check if alliance mode is currently active for the current user's team"""
