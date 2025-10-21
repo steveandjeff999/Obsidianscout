@@ -22,6 +22,68 @@ from werkzeug.security import check_password_hash
 # Create blueprint
 mobile_api = Blueprint('mobile_api', __name__, url_prefix='/api/mobile')
 
+
+# Blueprint-wide enforcement: ensure mobile clients are authenticated for all
+# endpoints except explicitly allowed ones (health and auth/login). This
+# provides defense-in-depth so a missing decorator on an endpoint won't
+# accidentally expose data.
+EXEMPT_PATHS = [
+    '/api/mobile/health',
+    '/api/mobile/auth/login'
+]
+
+
+@mobile_api.before_request
+def enforce_mobile_auth():
+    """Require a valid JWT for all mobile API requests except exempt paths.
+
+    This runs before each request on the blueprint and mirrors the checks
+    performed by the token_required decorator. It sets `request.mobile_user`
+    and `request.mobile_team_number` when a valid token is provided.
+    """
+    # Allow CORS preflight and other safe early exits
+    if request.method == 'OPTIONS':
+        return None
+
+    path = request.path
+    # If request is for an exempt path, don't require a token
+    if path in EXEMPT_PATHS:
+        return None
+
+    # Expect Authorization: Bearer <token>
+    auth_header = request.headers.get('Authorization')
+    token = None
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ', 1)[1]
+
+    if not token:
+        return jsonify({
+            'success': False,
+            'error': 'Authentication token is missing',
+            'error_code': 'AUTH_REQUIRED'
+        }), 401
+
+    payload = verify_token(token)
+    if not payload:
+        return jsonify({
+            'success': False,
+            'error': 'Invalid or expired token',
+            'error_code': 'INVALID_TOKEN'
+        }), 401
+
+    user = User.query.get(payload.get('user_id')) if payload.get('user_id') else None
+    if not user or not user.is_active:
+        return jsonify({
+            'success': False,
+            'error': 'User not found or inactive',
+            'error_code': 'USER_NOT_FOUND'
+        }), 401
+
+    # Attach to request so downstream handlers can use them just like
+    # the token_required decorator does.
+    request.mobile_user = user
+    request.mobile_team_number = payload.get('team_number')
+
 # JWT Configuration
 JWT_SECRET_KEY = 'your-secret-key-change-in-production'  # TODO: Move to config
 JWT_ALGORITHM = 'HS256'
