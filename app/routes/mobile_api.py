@@ -15,6 +15,7 @@ from app.models import (
     User, Team, Event, Match, ScoutingData, PitScoutingData, 
     DoNotPickEntry, AvoidEntry, db
 )
+from app.models_misc import NotificationQueue, NotificationSubscription
 from app.utils.team_isolation import get_current_scouting_team_number
 from app.utils.analysis import calculate_team_metrics
 from werkzeug.security import check_password_hash
@@ -1601,6 +1602,93 @@ def get_sync_status():
             'error': 'Failed to retrieve sync status',
             'error_code': 'SYNC_STATUS_ERROR'
         }), 500
+
+
+@mobile_api.route('/notifications/scheduled', methods=['GET'])
+@token_required
+def get_scheduled_notifications():
+    """
+    Return pending scheduled notifications for the scouting team.
+
+    Response:
+    {
+      "success": true,
+      "notifications": [
+         {
+           "id": 123,
+           "subscription_id": 5,
+           "notification_type": "match_reminder",
+           "match_id": 10,
+           "match_number": 3,
+           "event_id": 7,
+           "event_code": "CALA",
+           "scheduled_for": "2024-01-01T12:00:00Z",
+           "status": "pending",
+           "attempts": 0,
+           "delivery_methods": {"email": true, "push": true},
+           "target_team_number": 5454,
+           "minutes_before": 20,
+           "weather": null
+         }
+      ]
+    }
+    """
+    try:
+        team_number = request.mobile_team_number
+        now = datetime.now(timezone.utc)
+
+        # Join queue to subscription so we can scope by scouting_team_number
+        q = NotificationQueue.query.join(NotificationSubscription, NotificationQueue.subscription_id == NotificationSubscription.id).filter(
+            NotificationSubscription.scouting_team_number == team_number,
+            NotificationQueue.status == 'pending',
+            NotificationQueue.scheduled_for > now
+        ).order_by(NotificationQueue.scheduled_for)
+
+        limit = min(request.args.get('limit', 200, type=int), 1000)
+        offset = request.args.get('offset', 0, type=int)
+
+        total = q.count()
+        rows = q.offset(offset).limit(limit).all()
+
+        notifications = []
+        for row in rows:
+            try:
+                sub = NotificationSubscription.query.get(row.subscription_id)
+            except Exception:
+                sub = None
+
+            # Load related match and event info if available
+            match_obj = Match.query.get(row.match_id) if row.match_id else None
+            event_obj = match_obj.event if match_obj and hasattr(match_obj, 'event') else None
+
+            delivery = {'email': False, 'push': False}
+            if sub:
+                delivery['email'] = bool(sub.email_enabled)
+                delivery['push'] = bool(sub.push_enabled)
+
+            notifications.append({
+                'id': row.id,
+                'subscription_id': row.subscription_id,
+                'notification_type': sub.notification_type if sub else None,
+                'match_id': row.match_id,
+                'match_number': match_obj.match_number if match_obj else None,
+                'event_id': event_obj.id if event_obj else None,
+                'event_code': event_obj.code if event_obj else None,
+                'scheduled_for': row.scheduled_for.isoformat() if row.scheduled_for else None,
+                'status': row.status,
+                'attempts': row.attempts,
+                'delivery_methods': delivery,
+                'target_team_number': sub.target_team_number if sub else None,
+                'minutes_before': sub.minutes_before if sub else None,
+                # Weather not provided by server yet; clients may fetch their own weather if needed
+                'weather': None
+            })
+
+        return jsonify({'success': True, 'count': len(notifications), 'total': total, 'notifications': notifications}), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Get scheduled notifications error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Failed to retrieve scheduled notifications', 'error_code': 'NOTIFICATIONS_ERROR'}), 500
 
 
 # ============================================================================

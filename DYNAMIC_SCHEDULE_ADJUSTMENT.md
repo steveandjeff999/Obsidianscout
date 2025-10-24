@@ -382,3 +382,14 @@ Possible improvements:
 ## Credits
 
 Developed to solve the real-world problem of FRC events running behind schedule, causing missed notifications and user frustration. The system intelligently adapts to actual event pace while maintaining high confidence thresholds to avoid false adjustments.
+
+## Mobile API: Scheduled Notifications
+
+The system exposes pending scheduled notifications to mobile clients via a dedicated mobile API endpoint. This allows mobile apps to display upcoming reminders and the delivery methods configured for each subscription.
+
+- **Endpoint:** `GET /api/mobile/notifications/scheduled`
+- **Scope:** Results are scoped to the authenticated scouting team (token `team_number`).
+- **Delivery methods:** The response includes `delivery_methods` with `email` and `push` booleans indicating which channels are enabled on the subscription.
+- **Weather:** The `weather` field is returned as `null` by default. Server-side weather integration is optional; mobile apps may perform their own weather lookups for scheduled times/locations if needed.
+
+This mobile exposure makes it easy for client apps to show upcoming notifications (and whether they will be delivered via email, push, or both) and to surface any schedule-adjusted times to users.

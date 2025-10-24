@@ -518,7 +518,11 @@ def add_user():
         username = request.form['username']
         email = request.form.get('email')
         password = request.form['password']
-        scouting_team_number = request.form.get('scouting_team_number')
+        # If creator is not a superadmin, lock new user to creator's scouting team
+        if not current_user.has_role('superadmin'):
+            scouting_team_number = current_user.scouting_team_number
+        else:
+            scouting_team_number = request.form.get('scouting_team_number')
         role_ids = request.form.getlist('roles')
         
         # Check if username already exists
@@ -582,36 +586,45 @@ def update_user(user_id):
     current_app.logger.info(f"Update user request for user_id: {user_id}")
     current_app.logger.info(f"Current user: {current_user.username}, roles: {[role.name for role in current_user.roles]}")
     current_app.logger.info(f"Form data: {dict(request.form)}")
-    
-    if not current_user.has_role('superadmin'):
-        flash('You do not have permission to perform this action.', 'error')
-        return redirect(url_for('auth.manage_users'))
-
+    # Load target user early so we can enforce scoped permissions
     user = User.query.get_or_404(user_id)
     current_app.logger.info(f"Target user: {user.username}, current active status: {user.is_active}")
 
-    user.username = request.form.get('username')
-    user.scouting_team_number = request.form.get('scouting_team_number')
+    # Permit action if current user is superadmin, or an admin managing users in their own team
+    is_super = current_user.has_role('superadmin')
+    is_team_admin = current_user.has_role('admin') and (user.scouting_team_number == current_user.scouting_team_number)
+    if not (is_super or is_team_admin):
+        flash('You do not have permission to perform this action.', 'error')
+        return redirect(url_for('auth.manage_users'))
+
+    # Only superadmins can change username, team membership, or roles. Team admins may
+    # toggle active status (deactivate/reactivate) and set a new password for team members.
+    if is_super:
+        user.username = request.form.get('username')
+        user.scouting_team_number = request.form.get('scouting_team_number')
 
     password = request.form.get('password')
     if password:
+        # Allow both superadmins and team-admins to set passwords for users they manage
         user.set_password(password)
 
-    # Handle is_active checkbox
+    # Handle is_active checkbox - team admins should be able to toggle this for team members
     old_status = user.is_active
+    # Treat presence of checkbox as True/False
     user.is_active = 'is_active' in request.form
     current_app.logger.info(f"Active status changed from {old_status} to {user.is_active}")
 
-    role_ids = request.form.getlist('roles')
-    user.roles.clear()
-    for role_id in role_ids:
-        role = Role.query.get(role_id)
-        if role:
-            # Only superadmins can assign the superadmin role
-            if role.name == 'superadmin' and not current_user.has_role('superadmin'):
-                flash('Only superadmins can assign superadmin roles', 'error')
-                return redirect(url_for('auth.manage_users'))
-            user.roles.append(role)
+    if is_super:
+        role_ids = request.form.getlist('roles')
+        user.roles.clear()
+        for role_id in role_ids:
+            role = Role.query.get(role_id)
+            if role:
+                # Only superadmins can assign the superadmin role
+                if role.name == 'superadmin' and not current_user.has_role('superadmin'):
+                    flash('Only superadmins can assign superadmin roles', 'error')
+                    return redirect(url_for('auth.manage_users'))
+                user.roles.append(role)
 
     db.session.commit()
     # Manual update change tracking fallback
@@ -906,11 +919,17 @@ def delete_user_permanently(user_id):
         flash('You cannot delete your own account', 'error')
         return redirect(url_for('auth.manage_users'))
     
-    # Extra security check - only superadmin can delete permanently
-    if not current_user.has_role('superadmin'):
-        print("🔴 Blocked - user is not superadmin")
-        current_app.logger.info("Blocked - user is not superadmin")
-        flash('Only superadmins can permanently delete users', 'error')
+    # Extra security: allow permanent deletion by superadmins, or by admins for users
+    # in their own scouting team. This enables team admins to permanently remove
+    # users from their team while preventing cross-team deletions.
+    allowed_to_permanently_delete = (
+        current_user.has_role('superadmin') or
+        (current_user.has_role('admin') and user.scouting_team_number == current_user.scouting_team_number)
+    )
+    if not allowed_to_permanently_delete:
+        print("🔴 Blocked - insufficient privileges to permanently delete user")
+        current_app.logger.info("Blocked - insufficient privileges to permanently delete user")
+        flash('Only superadmins or team admins (for their own team) can permanently delete users', 'error')
         return redirect(url_for('auth.manage_users'))
     
     # Prevent deleting other superadmin users (safety measure)
@@ -930,7 +949,7 @@ def delete_user_permanently(user_id):
     
     print(f"🔴 Permanent deletion completed for user: {username}")
     current_app.logger.info(f"Permanent deletion completed for user: {username}")
-    flash(f'User {username} permanently deleted and synced across servers', 'warning')
+    flash(f'User {username} permanently deleted', 'warning')
     return redirect(url_for('auth.manage_users'))
 
 @bp.route('/system_check', methods=['GET', 'POST'])

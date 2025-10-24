@@ -34,8 +34,9 @@
                         <div class="col-md-4">
                             <div class="mb-3">
                                 <label for="scouting_team_number" class="form-label">Team Number <span class="text-danger">*</span></label>
-                                <input type="number" class="form-control" id="scouting_team_number" name="scouting_team_number" required>
-                                <div class="form-text">The team this user belongs to.</div>
+                                <input type="number" class="form-control" id="scouting_team_number" name="scouting_team_number" required
+                                       {% if not user_has_role('superadmin') %}value="{{ current_user.scouting_team_number }}" readonly{% endif %}>
+                                <div class="form-text">The team this user belongs to. {% if not user_has_role('superadmin') %}Locked to your team{% endif %}</div>
                             </div>
                         </div>
                     </div>
