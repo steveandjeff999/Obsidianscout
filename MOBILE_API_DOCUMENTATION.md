@@ -578,6 +578,53 @@ Scouting form contract (quick reference)
   - `type` (string): field type (see supported types below)
   - `label` (string): user-visible label
   - `help_text` (string, optional): short help description
+
+---
+
+### Notes: server-side image generation & fallback
+
+- The mobile graphs endpoint tries to return a PNG image generated server-side using Plotly. If the server does not have a Plotly image engine available (for example, `kaleido`), the endpoint will instead return a JSON fallback with the Plotly figure under the key `fallback_plotly_json` so clients can render the chart themselves.
+
+- To enable server-side PNG generation, install `kaleido` into the server environment and restart the app. Example addition to `requirements.txt`:
+
+```
+kaleido>=0.2.1
+```
+
+This provides a robust UX for mobile applications: either a ready-made PNG or a Plotly JSON that the client can render.
+
+---
+
+## Graph Image Endpoint
+
+Generate chart images for teams (useful for mobile clients that want PNGs).
+
+**Endpoint:** POST `/api/mobile/graphs`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request JSON (example):**
+```json
+{
+  "team_number": 5454,
+  "graph_type": "line",
+  "metric": "total_points",
+  "mode": "match_by_match"
+}
+```
+
+**Response:**
+- On success: HTTP 200 with Content-Type `image/png` and PNG bytes of the generated chart.
+- On error: JSON with `success: false` and `error_code`.
+
+Notes:
+- The endpoint requires a valid mobile JWT token. Team isolation is respected (token's scouting_team_number).
+- If the server lacks image-generation dependencies (kaleido or plotly image engines), the endpoint will return an error indicating the missing dependency.
+
   - `required` (boolean, optional): whether field is required
   - `default` (any, optional): default value
   - `options` (array, optional): for select/radio/checkbox types — list of {"value","label"}
