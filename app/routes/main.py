@@ -1204,7 +1204,76 @@ def increment_unread():
     if body and isinstance(body, dict) and 'lastSource' in body:
         state['lastSource'] = body.get('lastSource')
     # increment unread count
-    state['unreadCount'] = state.get('unreadCount', 0) + 1
+    prev = int(state.get('unreadCount', 0) or 0)
+    state['unreadCount'] = prev + 1
+
+    # If this is the first unread message (transition 0 -> 1) and we haven't notified yet,
+    # attempt to send an email and push notification to the user.
+    try:
+        notified = bool(state.get('notified'))
+    except Exception:
+        notified = False
+
+    if prev == 0 and state['unreadCount'] > 0 and not notified:
+        try:
+            # Lazy imports to avoid circular imports during app init
+            from app.utils.push_notifications import send_push_to_user
+            from app.utils.emailer import send_email
+            from app.models import User
+            # Resolve user record to get id and email
+            user = None
+            try:
+                user = User.query.filter_by(username=current_user.username).first()
+            except Exception:
+                user = None
+
+            title = 'You have unread chat messages'
+            body_msg = f"You have {state['unreadCount']} unread chat message(s). Open Obsidian Scout to read them."
+
+            # Send push notifications to user's devices (if any)
+            try:
+                if user and getattr(user, 'id', None):
+                    success_count, failed_count, errors = send_push_to_user(user.id, title, body_msg, data={'type': 'chat_unread', 'unread': state['unreadCount']})
+                    try:
+                        current_app.logger.info(f"Push notify for {current_user.username}: sent={success_count}, failed={failed_count}")
+                    except Exception:
+                        pass
+            except Exception as e:
+                try:
+                    current_app.logger.error(f"Error sending push notification for user {getattr(current_user, 'username', 'unknown')}: {e}")
+                except Exception:
+                    pass
+
+            # Send email if user has an email address configured
+            try:
+                if user and getattr(user, 'email', None):
+                    # Build a short email body and HTML fallback handled by send_email
+                    email_subj = 'Unread chat messages on Obsidian Scout'
+                    email_body = body_msg + "\n\nOpen the app to view your messages."
+                    ok, err = send_email(user.email, email_subj, email_body)
+                    try:
+                        current_app.logger.info(f"Email notify for {current_user.username}: ok={ok}, err={err}")
+                    except Exception:
+                        pass
+            except Exception as e:
+                try:
+                    current_app.logger.error(f"Error sending email notification for user {getattr(current_user, 'username', 'unknown')}: {e}")
+                except Exception:
+                    pass
+
+            # Mark as notified so we don't repeatedly notify until user resets
+            try:
+                state['notified'] = True
+                state['lastNotified'] = datetime.now(timezone.utc).isoformat()
+            except Exception:
+                pass
+        except Exception as e:
+            try:
+                current_app.logger.error(f"Unread notify flow failed for {getattr(current_user, 'username', 'unknown')}: {e}")
+            except Exception:
+                pass
+
+    # persist state
     with open(state_file, 'w', encoding='utf-8') as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
     return {'success': True, 'unreadCount': state['unreadCount']}
@@ -1227,6 +1296,12 @@ def reset_unread():
             del state['lastSource']
         except Exception:
             state['lastSource'] = None
+    # Also clear notified flag so future unread events will trigger notifications again
+    if 'notified' in state:
+        try:
+            del state['notified']
+        except Exception:
+            state['notified'] = False
     with open(state_file, 'w', encoding='utf-8') as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
     return {'success': True}
@@ -1692,6 +1767,180 @@ def api_brief_data():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@bp.route('/analytics/config-averages')
+@login_required
+def analytics_config_averages():
+    """Compute averages / most-common values for all configured elements.
+
+    Returns an HTML view summarizing averages and most-common choices for the
+    current game's configuration elements, scoped to the current user's
+    scouting_team_number and current event (if configured).
+    """
+    try:
+        from app.models import ScoutingData, Match, Event, Team
+        from app.utils.config_manager import get_effective_game_config
+        from app.utils.team_isolation import filter_matches_by_scouting_team
+        import json
+        from collections import Counter, defaultdict
+
+        game_config = get_effective_game_config()
+
+        # Allow selecting an event via query string (event_id). If none provided,
+        # fall back to the configured current_event_code.
+        match_ids = None
+        selected_event_id = request.args.get('event_id')
+        events = []
+        try:
+            events = filter_events_by_scouting_team().all()
+        except Exception:
+            events = []
+
+        if selected_event_id:
+            try:
+                selected_event_id = int(selected_event_id)
+                match_ids = [m.id for m in filter_matches_by_scouting_team().filter(Match.event_id == selected_event_id).all()]
+            except Exception:
+                selected_event_id = None
+
+        if not selected_event_id:
+            current_event_code = game_config.get('current_event_code')
+            if current_event_code:
+                try:
+                    event = get_event_by_code(current_event_code)
+                    if event:
+                        match_ids = [m.id for m in filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()]
+                        selected_event_id = event.id
+                except Exception:
+                    match_ids = None
+
+        # Query scouting data scoped to current user's scouting team
+        scouting_team_number = getattr(current_user, 'scouting_team_number', None)
+        q = ScoutingData.query.filter(ScoutingData.scouting_team_number == scouting_team_number)
+        if match_ids:
+            q = q.filter(ScoutingData.match_id.in_(match_ids))
+        entries = q.all()
+
+        # Helper to extract data dict from ScoutingData entry
+        def extract_data(e):
+            if hasattr(e, 'data') and e.data:
+                if isinstance(e.data, dict):
+                    return e.data
+                try:
+                    return json.loads(e.data)
+                except Exception:
+                    return {}
+            return {}
+
+        # Build list of fields grouped by period
+        periods = ['auto_period', 'teleop_period', 'endgame_period', 'post_match', 'game_pieces']
+        fields_by_period = {p: [] for p in periods}
+
+        for period in ['auto_period', 'teleop_period', 'endgame_period']:
+            period_cfg = game_config.get(period, {})
+            for el in period_cfg.get('scoring_elements', []):
+                fields_by_period[period].append((el.get('id'), el.get('name'), el.get('type'), period))
+
+        for el in game_config.get('post_match', {}).get('rating_elements', []):
+            fields_by_period['post_match'].append((el.get('id'), el.get('name'), 'rating', 'post_match'))
+        for el in game_config.get('post_match', {}).get('text_elements', []):
+            fields_by_period['post_match'].append((el.get('id'), el.get('name'), 'text', 'post_match'))
+
+        for gp in game_config.get('game_pieces', []):
+            fields_by_period['game_pieces'].append((gp.get('id'), gp.get('name'), 'game_piece', 'game_pieces'))
+
+        # Group entries by team
+        teams_map = defaultdict(list)  # team_id -> list of data dicts
+        team_info = {}  # team_id -> (team_number, team_name)
+        for e in entries:
+            tid = getattr(e, 'team_id', None) or None
+            data = extract_data(e)
+            if tid is None:
+                # skip entries without a team_id
+                continue
+            teams_map[tid].append(data)
+            if tid not in team_info:
+                try:
+                    if hasattr(e, 'team') and e.team:
+                        team_info[tid] = (e.team.team_number, e.team.team_name or '')
+                    else:
+                        t = Team.query.filter_by(id=tid).first()
+                        team_info[tid] = (t.team_number if t else None, t.team_name if t else '')
+                except Exception:
+                    team_info[tid] = (None, '')
+
+        results_per_team = []
+        # For each team, compute per-period per-field stats
+        for tid, data_list in teams_map.items():
+            team_number, team_name = team_info.get(tid, (None, ''))
+            team_result = {
+                'team_id': tid,
+                'team_number': team_number,
+                'team_name': team_name,
+                'periods': {}
+            }
+
+            for period in periods:
+                team_result['periods'][period] = []
+                for fid, fname, ftype, fperiod in fields_by_period.get(period, []):
+                    values = []
+                    for d in data_list:
+                        if fid in d:
+                            values.append(d.get(fid))
+
+                    if not values:
+                        team_result['periods'][period].append({'id': fid, 'name': fname, 'type': ftype, 'period': fperiod, 'count': 0, 'average': None, 'most_common': None})
+                        continue
+
+                    if ftype in ('counter', 'rating'):
+                        nums = []
+                        for v in values:
+                            try:
+                                nums.append(float(v))
+                            except Exception:
+                                continue
+                        avg = sum(nums) / len(nums) if nums else None
+                        team_result['periods'][period].append({'id': fid, 'name': fname, 'type': ftype, 'period': fperiod, 'count': len(values), 'average': round(avg, 2) if avg is not None else None, 'most_common': None})
+                    elif ftype in ('boolean',):
+                        true_count = sum(1 for v in values if str(v).lower() in ('1','true','yes','on'))
+                        pct = round(true_count / len(values) * 100, 1)
+                        team_result['periods'][period].append({'id': fid, 'name': fname, 'type': ftype, 'period': fperiod, 'count': len(values), 'average': pct, 'most_common': f"{true_count}/{len(values)} true ({pct}%)"})
+                    elif ftype in ('select', 'multiple_choice', 'multiple-choice'):
+                        ctr = Counter(values)
+                        most = ctr.most_common(3)
+                        team_result['periods'][period].append({'id': fid, 'name': fname, 'type': ftype, 'period': fperiod, 'count': len(values), 'average': None, 'most_common': most})
+                    elif ftype == 'game_piece':
+                        usage = 0
+                        for d in data_list:
+                            for k, v in d.items():
+                                if v == fid:
+                                    usage += 1
+                        team_result['periods'][period].append({'id': fid, 'name': fname, 'type': ftype, 'period': fperiod, 'count': usage, 'average': None, 'most_common': None})
+                    else:
+                        ctr = Counter(values)
+                        most = ctr.most_common(3)
+                        team_result['periods'][period].append({'id': fid, 'name': fname, 'type': ftype, 'period': fperiod, 'count': len(values), 'average': None, 'most_common': most})
+
+            results_per_team.append(team_result)
+
+        # Sort results by team_number when available
+        results_per_team.sort(key=lambda t: (t.get('team_number') is None, t.get('team_number') or 0))
+
+        # CSS classes to apply per period (green, blue, yellow, red order as requested)
+        period_classes = {
+            'auto_period': 'table-success',
+            'teleop_period': 'table-primary',
+            'endgame_period': 'table-warning',
+            'post_match': 'table-danger',
+            'game_pieces': 'table-light'
+        }
+
+        return render_template('analytics/config_averages.html', results_per_team=results_per_team, fields_by_period=fields_by_period, periods=periods, events=events, selected_event_id=selected_event_id, entries_count=len(entries), period_classes=period_classes, **get_theme_context())
+    except Exception as e:
+        current_app.logger.exception('Error computing config averages')
+        flash(f'Error computing averages: {e}', 'danger')
+        return redirect(url_for('main.config'))
 
 
 @bp.route('/api/sync-event', methods=['POST'])

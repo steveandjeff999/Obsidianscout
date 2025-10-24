@@ -1392,6 +1392,166 @@ def mobile_graphs_compare():
         return jsonify({'success': False, 'error': 'Failed to generate graph comparison', 'error_code': 'GRAPHS_COMPARE_ERROR'}), 500
 
 
+@mobile_api.route('/graphs', methods=['POST'])
+@token_required
+def mobile_graphs_image():
+    """
+    Generate a graph image for a single team or teams and return PNG bytes.
+
+    Request JSON (examples):
+    {
+      "team_numbers": [5454],            # or single "team_number": 5454
+      "graph_type": "line",            # line|bar|radar|scatter
+      "metric": "total_points",        # metric id
+      "weather": "sunny",              # optional, passthrough for future use
+      "mode": "match_by_match"         # match_by_match | averages
+    }
+
+    Response: image/png bytes with Content-Type set. If image libs unavailable,
+    returns JSON error.
+    """
+    try:
+        payload = request.get_json() or {}
+        # Accept either team_number or team_numbers
+        team_numbers = []
+        if 'team_numbers' in payload and isinstance(payload.get('team_numbers'), (list, tuple)):
+            team_numbers = [int(t) for t in payload.get('team_numbers') if str(t).isdigit()]
+        elif 'team_number' in payload:
+            try:
+                team_numbers = [int(payload.get('team_number'))]
+            except Exception:
+                team_numbers = []
+
+        if not team_numbers:
+            return jsonify({'success': False, 'error': 'team_number(s) required', 'error_code': 'MISSING_TEAMS'}), 400
+
+        graph_type = (payload.get('graph_type') or 'line').lower()
+        metric = payload.get('metric') or 'total_points'
+        mode = (payload.get('mode') or 'match_by_match')
+
+        token_team_number = request.mobile_team_number
+
+        # Resolve teams (respect team isolation like compare endpoint)
+        teams = []
+        for tn in team_numbers:
+            t = Team.query.filter_by(team_number=tn, scouting_team_number=token_team_number).first()
+            if not t:
+                t = Team.query.filter_by(team_number=tn).first()
+            if t:
+                teams.append(t)
+
+        if not teams:
+            return jsonify({'success': False, 'error': 'No teams found', 'error_code': 'NO_TEAMS'}), 404
+
+        # Build minimal team_data dict compatible with graphs.py helpers
+        team_ids = [t.id for t in teams]
+        scouting_rows = ScoutingData.query.join(Match, ScoutingData.match_id == Match.id).filter(
+            ScoutingData.team_id.in_(team_ids),
+            ScoutingData.scouting_team_number == token_team_number
+        ).order_by(Match.match_number).all()
+
+        team_data = {}
+        for row in scouting_rows:
+            teamnum = row.team.team_number if row.team else None
+            if teamnum is None:
+                continue
+            if teamnum not in team_data:
+                team_data[teamnum] = {'team_name': row.team.team_name if row.team else '', 'matches': []}
+            if metric in ('total_points', 'points', 'tot'):
+                val = row.calculate_metric('tot')
+            else:
+                try:
+                    val = row.calculate_metric(metric)
+                except Exception:
+                    val = 0
+            team_data[teamnum]['matches'].append({'match_number': row.match.match_number if row.match else None, 'metric_value': val})
+
+        # Create a plotly figure using existing helper functions where possible
+        import plotly.graph_objects as go
+        import plotly.io as pio
+        from io import BytesIO
+
+        # Simple rendering: if single team and match_by_match -> line chart
+        fig = None
+        try:
+            if graph_type == 'bar':
+                # bar of averages per team
+                labels = []
+                values = []
+                for t in teams:
+                    nums = [m['metric_value'] for m in team_data.get(t.team_number, {}).get('matches', [])]
+                    avg = sum(nums) / len(nums) if nums else 0
+                    labels.append(str(t.team_number))
+                    values.append(avg)
+                fig = go.Figure(data=[go.Bar(x=labels, y=values)])
+            elif graph_type in ('line', 'scatter'):
+                # line per team across matches
+                for idx, t in enumerate(teams):
+                    matches = team_data.get(t.team_number, {}).get('matches', [])
+                    x = [f"Match {m['match_number']}" for m in matches if m['match_number'] is not None]
+                    y = [m['metric_value'] for m in matches if m['match_number'] is not None]
+                    if graph_type == 'line':
+                        fig = fig or go.Figure()
+                        fig.add_trace(go.Scatter(x=x, y=y, mode='lines+markers', name=str(t.team_number)))
+                    else:
+                        fig = fig or go.Figure()
+                        fig.add_trace(go.Scatter(x=x, y=y, mode='markers', name=str(t.team_number)))
+            elif graph_type == 'radar':
+                # radar: reuse compare radar labels
+                labels = ['Total Points', 'Auto Points', 'Teleop Points', 'Endgame Points', 'Consistency']
+                fig = go.Figure()
+                for t in teams:
+                    analytics = calculate_team_metrics(t.id)
+                    metrics = analytics.get('metrics', {})
+                    radar_metrics = [
+                        metrics.get('total_points') or metrics.get('tot') or 0,
+                        metrics.get('auto_points') or metrics.get('apt') or 0,
+                        metrics.get('teleop_points') or metrics.get('tpt') or 0,
+                        metrics.get('endgame_points') or metrics.get('ept') or 0,
+                        round((metrics.get('consistency') or 0) * 100, 2) if metrics.get('consistency') is not None else 0
+                    ]
+                    fig.add_trace(go.Scatterpolar(r=radar_metrics, theta=labels, fill='toself', name=str(t.team_number)))
+            else:
+                fig = go.Figure()
+
+            # Apply a minimal layout
+            fig.update_layout(margin=dict(l=20, r=20, t=30, b=20), template='plotly_white')
+
+            # Convert to PNG using plotly.io if available
+            try:
+                img_bytes = pio.to_image(fig, format='png')
+            except Exception:
+                # Fallback to kaleido via write_image to a buffer
+                buf = BytesIO()
+                try:
+                    pio.write_image(fig, buf, format='png')
+                    img_bytes = buf.getvalue()
+                except Exception as e:
+                    current_app.logger.error(f"Graph image generation error: {str(e)}")
+                    # If we cannot produce an image, fall back to returning the
+                    # Plotly JSON representation so clients can render client-side.
+                    try:
+                        plot_json = fig.to_json()
+                        return jsonify({'success': True, 'fallback_plotly_json': json.loads(plot_json)}), 200
+                    except Exception:
+                        return jsonify({'success': False, 'error': 'Server cannot generate images (missing dependencies)', 'error_code': 'IMAGE_LIB_MISSING'}), 500
+
+            # Return PNG bytes
+            from flask import make_response
+            resp = make_response(img_bytes)
+            resp.headers.set('Content-Type', 'image/png')
+            resp.headers.set('Content-Disposition', 'inline; filename=graph.png')
+            return resp
+
+        except Exception as e:
+            current_app.logger.error(f"mobile_graphs_image error: {str(e)}\n{traceback.format_exc()}")
+            return jsonify({'success': False, 'error': 'Failed to generate graph image', 'error_code': 'GRAPH_IMAGE_ERROR'}), 500
+
+    except Exception as e:
+        current_app.logger.error(f"mobile_graphs_image top-level error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Invalid request', 'error_code': 'INVALID_REQUEST'}), 400
+
+
 # ============================================================================
 # SYNC STATUS ENDPOINT
 # ============================================================================

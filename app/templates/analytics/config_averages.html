@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+
+{% block title %}Config Averages — Per Team{% endblock %}
+
+{% block heading %}Configuration Averages (Per Team){% endblock %}
+
+{% block head %}
+<style>
+    /* Floating metric header styling: vivid colors, rounded, semi-transparent */
+    .metrics-header thead tr {
+        position: sticky;
+        bottom: 0; /* stick to bottom of the scroll container */
+        z-index: 1050;
+        backdrop-filter: blur(6px);
+    }
+
+    .metrics-header th {
+        color: #fff !important;
+        font-weight: 700;
+        padding: 0.65rem 0.9rem;
+        white-space: nowrap;
+        border: none !important;
+        text-shadow: 0 1px 0 rgba(0,0,0,0.25);
+    }
+
+    /* Rounded pill-like look for the header row background by applying radius to first/last cells */
+    .metrics-header thead tr th:first-child { border-top-left-radius: 0.6rem; border-bottom-left-radius: 0.6rem; }
+    .metrics-header thead tr th:last-child  { border-top-right-radius: 0.6rem; border-bottom-right-radius: 0.6rem; }
+
+    /* Bright vivid colors per period (override Bootstrap defaults with stronger hues) */
+    /* stronger/darker green for better white-text contrast */
+    .period-auto_period { background: linear-gradient(180deg,#00a859,#007a3d) !important; }
+    .period-teleop_period { background: linear-gradient(180deg,#42a5f5,#2979ff) !important; }
+    .period-endgame_period { background: linear-gradient(180deg,#ffd54f,#ffca28) !important; color:#111 !important; }
+    .period-post_match { background: linear-gradient(180deg,#ff5252,#ff1744) !important; }
+    .period-game_pieces { background: linear-gradient(180deg,#ffffff,#f8f9fa) !important; color:#111 !important; }
+
+    /* Ensure sticky header appears above table rows and keeps rounded look when overlapping */
+    .metrics-header thead tr th { box-shadow: 0 6px 18px rgba(0,0,0,0.25); }
+
+    /* Small visual tweaks for the combined table */
+    .table.metrics-table td, .table.metrics-table th { vertical-align: middle; }
+    .table.metrics-table th { font-size: 0.9rem; }
+    .table-responsive { overflow: auto; max-height: 65vh; }
+    /* Additional vivid header and cell styles */
+    th.period-header { color: #fff !important; }
+    /* darker header green for improved contrast */
+    th.period-header.period-auto_period { background: #007a3d !important; } /* darker green */
+    th.period-header.period-teleop_period { background: #2979FF !important; } /* vivid blue */
+    th.period-header.period-endgame_period { background: #FFD600 !important; color: #111 !important; } /* vivid yellow */
+    th.period-header.period-post_match { background: #FF3D00 !important; } /* vivid red */
+    th.period-header.period-game_pieces { background: #AA00FF !important; } /* vivid purple */
+
+    /* Slightly tinted cells to match header but subtler for readability */
+    td.period-cell.period-auto_period { background: rgba(0,122,61,0.06); }
+    td.period-cell.period-teleop_period { background: rgba(41,121,255,0.06); }
+    td.period-cell.period-endgame_period { background: rgba(255,214,0,0.06); }
+    td.period-cell.period-post_match { background: rgba(255,61,0,0.06); }
+    td.period-cell.period-game_pieces { background: rgba(170,0,255,0.04); }
+
+    /* Keep header text bold and centered for clarity */
+    th.period-header { font-weight: 700; text-align: center; }
+    table.table thead th { vertical-align: middle; }
+    /* Reduce padding for many columns */
+    table.table td, table.table th { padding: 0.35rem 0.6rem; }
+</style>
+{% endblock %}
+{# Additional header styles merged into the primary head block to avoid duplicate block definition. #}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Averages and Most-Common Values — Per Team</h5>
+                <div>
+                    <a href="{{ url_for('main.config') }}" class="btn btn-light btn-sm">Back to Configuration</a>
+                </div>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Showing per-team summaries computed from {{ entries_count }} scouting entries.</p>
+
+                <form method="get" class="mb-3">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-auto">
+                            <label for="eventSelect" class="form-label mb-0 small">Event</label>
+                        </div>
+                        <div class="col-auto">
+                            <select id="eventSelect" name="event_id" class="form-select form-select-sm">
+                                <option value="">(Use configured event)</option>
+                                {% for ev in events %}
+                                <option value="{{ ev.id }}" {% if selected_event_id and ev.id == selected_event_id|int %}selected{% endif %}>{{ ev.name or ev.code or ev.id }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-primary btn-sm" type="submit">Apply</button>
+                        </div>
+                    </div>
+                </form>
+
+                {% if results_per_team and results_per_team|length > 0 %}
+                    <div class="table-responsive">
+                        {# Single combined table: one row per team, columns grouped by period and colored #}
+                        <table class="table table-striped table-sm table-nowrap mb-3 metrics-header metrics-table">
+                            <thead>
+                                <tr>
+                                    <th>Team #</th>
+                                    <th>Team Name</th>
+                                    {% for period in periods %}
+                                        {% for f in fields_by_period.get(period, []) %}
+                                            <th class="period-header period-{{ period }}" title="{{ f[0] }} ({{ f[2] }})">{{ f[1] }}</th>
+                                        {% endfor %}
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for t in results_per_team %}
+                                <tr>
+                                    <td>{{ t.team_number or t.team_id }}</td>
+                                    <td>{{ t.team_name or '-' }}</td>
+                                        {% for period in periods %}
+                                        {% for f in t.periods[period] %}
+                                        <td class="period-cell period-{{ period }}">
+                                            {% if f.count == 0 %}
+                                                -
+                                            {% else %}
+                                                {% if f.type in ['counter','rating'] %}
+                                                    {{ f.average }}
+                                                {% elif f.type == 'boolean' %}
+                                                    {{ f.most_common }}
+                                                {% elif f.type in ['select','multiple_choice','multiple-choice'] %}
+                                                    <ul class="mb-0">
+                                                        {% for item in f.most_common %}
+                                                        <li>{{ item[0] }} ({{ item[1] }})</li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                {% elif f.type == 'game_piece' %}
+                                                    {{ f.count }}
+                                                {% else %}
+                                                    <ul class="mb-0">
+                                                        {% for item in f.most_common %}
+                                                        <li>{{ item[0] }} ({{ item[1] }})</li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                {% endif %}
+                                            {% endif %}
+                                        </td>
+                                        {% endfor %}
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">No team data available to display.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
