@@ -87,19 +87,22 @@
                                     </td>
 
                                     <td>
-                                        <input type="password" name="password" class="form-control form-control-sm" placeholder="New password..." {% if not current_user.has_role('superadmin') %}readonly{% endif %}>
+                                        {# Allow team admins to set passwords for users in their team; other sensitive fields remain superadmin-only #}
+                                        <input type="password" name="password" class="form-control form-control-sm" placeholder="New password..." {% if not (current_user.has_role('superadmin') or (current_user.has_role('admin') and user.scouting_team_number == current_user.scouting_team_number)) %}readonly{% endif %}>
                                     </td>
                                     <td>
                                         <div class="form-check form-switch">
+                                            {# Admins should be able to toggle active state for users on their own team; never allow toggling other superadmins or yourself here #}
                                             <input class="form-check-input" type="checkbox" name="is_active" 
                                                    {% if user.is_active %}checked{% endif %} 
-                                                   {% if not current_user.has_role('superadmin') %}disabled{% endif %}
+                                                   {% if (not (current_user.has_role('superadmin') or (current_user.has_role('admin') and user.scouting_team_number == current_user.scouting_team_number))) or user.id == current_user.id or user.has_role('superadmin') %}disabled{% endif %}
                                                    onchange="if(this.closest('form')) this.closest('form').submit();">
                                         </div>
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm" role="group">
-                                            {% if current_user.has_role('superadmin') %}
+                                            {# Superadmins can save any user; team-admins can save (submit) for team members (to toggle active or set password) but not for superadmins or themselves #}
+                                            {% if current_user.has_role('superadmin') or (current_user.has_role('admin') and user.scouting_team_number == current_user.scouting_team_number and not user.has_role('superadmin') and user.id != current_user.id) %}
                                             <button type="submit" class="btn btn-outline-success">
                                                 <i class="fas fa-save"></i>
                                             </button>
@@ -108,12 +111,17 @@
                                                class="btn btn-outline-primary">
                                                 <i class="fas fa-edit"></i>
                                             </a>
-                                            {% if current_user.has_role('superadmin') and user.id != current_user.id and not user.has_role('superadmin') %}
-                        <button type="button" class="btn btn-outline-danger btn-sm delete-user-btn"
-                            data-delete-username="{{ user.username|e }}" data-delete-userid="{{ user.id }}"
-                            title="Delete User">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
+                                            {% if (current_user.has_role('superadmin') and user.id != current_user.id and not user.has_role('superadmin')) or (current_user.has_role('admin') and user.scouting_team_number == current_user.scouting_team_number and user.id != current_user.id and not user.has_role('superadmin')) %}
+                                                <button type="button" class="btn btn-outline-danger btn-sm delete-user-btn"
+                                                    data-delete-username="{{ user.username|e }}" data-delete-userid="{{ user.id }}"
+                                                    {% if current_user.has_role('superadmin') or (current_user.has_role('admin') and user.scouting_team_number == current_user.scouting_team_number) %}
+                                                        data-action="{{ url_for('auth.delete_user_permanently', user_id=user.id) }}"
+                                                    {% else %}
+                                                        data-action="{{ url_for('auth.delete_user', user_id=user.id) }}"
+                                                    {% endif %}
+                                                    title="Delete/Deactivate User">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
                                             {% endif %}
                                         </div>
                                     </td>
@@ -149,11 +157,18 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to delete the user <strong><span id="deleteUsername"></span></strong>?</p>
+                <p>Are you sure you want to remove the user <strong><span id="deleteUsername"></span></strong>?</p>
+                {% if current_user.has_role('superadmin') %}
                 <div class="alert alert-warning">
                     <i class="fas fa-exclamation-triangle me-1"></i>
-                    <strong>WARNING:</strong> This action will permanently remove the user from the database. This deletion will be synchronized across all servers.
+                    <strong>WARNING:</strong> This action will permanently remove the user from the database.
                 </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    <strong>Note:</strong> As an admin you may only deactivate (soft-delete) users on your team. The user will be deactivated but not permanently removed.
+                </div>
+                {% endif %}
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -213,7 +228,12 @@ document.addEventListener('DOMContentLoaded', function() {
             if (deleteUsernameEl) deleteUsernameEl.textContent = username;
             var deleteForm = document.getElementById('deleteUserForm');
             if (deleteForm) {
-                deleteForm.action = "{{ url_for('auth.delete_user_permanently', user_id=0) }}".replace('0', userId);
+                // Use the per-button data-action attribute (rendered server-side with the correct endpoint)
+                // so we don't need to build or replace URLs in JS.
+                var actionUrl = this.getAttribute('data-action');
+                if (actionUrl) {
+                    deleteForm.action = actionUrl;
+                }
             }
             new bootstrap.Modal(document.getElementById('deleteUserModal')).show();
         });
