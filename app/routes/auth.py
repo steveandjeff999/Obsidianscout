@@ -25,6 +25,12 @@ def get_theme_context():
     return {
         'themes': theme_manager.get_available_themes(),
         'current_theme_id': theme_manager.current_theme
+        ,
+        # Signal to base template that auth pages should render without the
+        # global chrome (sidebar/topbar). This prevents global JS/CSS that
+        # manipulates the sidebar or adds overlays from running on auth pages
+        # and causing touch/click offsets on mobile devices.
+        'no_chrome': True
     }
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
@@ -597,6 +603,11 @@ def update_user(user_id):
         flash('You do not have permission to perform this action.', 'error')
         return redirect(url_for('auth.manage_users'))
 
+    # Prevent team-admins from modifying superadmin accounts
+    if user.has_role('superadmin') and not is_super:
+        flash('You do not have permission to modify superadmin users.', 'error')
+        return redirect(url_for('auth.manage_users'))
+
     # Only superadmins can change username, team membership, or roles. Team admins may
     # toggle active status (deactivate/reactivate) and set a new password for team members.
     if is_super:
@@ -614,14 +625,21 @@ def update_user(user_id):
     user.is_active = 'is_active' in request.form
     current_app.logger.info(f"Active status changed from {old_status} to {user.is_active}")
 
-    if is_super:
+    # Handle role updates: superadmins can change any roles; team-admins may change roles
+    # for users in their own team but may NOT assign the superadmin role.
+    if is_super or is_team_admin:
+        # Prevent users from changing their own roles unless they are superadmin
+        if user.id == current_user.id and not is_super:
+            flash('You cannot modify your own roles.', 'error')
+            return redirect(url_for('auth.manage_users'))
+
         role_ids = request.form.getlist('roles')
         user.roles.clear()
         for role_id in role_ids:
             role = Role.query.get(role_id)
             if role:
                 # Only superadmins can assign the superadmin role
-                if role.name == 'superadmin' and not current_user.has_role('superadmin'):
+                if role.name == 'superadmin' and not is_super:
                     flash('Only superadmins can assign superadmin roles', 'error')
                     return redirect(url_for('auth.manage_users'))
                 user.roles.append(role)

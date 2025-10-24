@@ -67,15 +67,22 @@
                                         <input type="number" name="scouting_team_number" class="form-control form-control-sm" value="{{ user.scouting_team_number }}" {% if not current_user.has_role('superadmin') %}readonly{% endif %}>
                                     </td>
                                     <td>
-                                        <select name="roles" multiple class="form-select form-select-sm" {% if not current_user.has_role('superadmin') %}disabled{% endif %}>
+                                        <div>
+                                            {% set can_edit_roles = current_user.has_role('superadmin') or (current_user.has_role('admin') and user.scouting_team_number == current_user.scouting_team_number and not user.has_role('superadmin')) %}
                                             {% for role in all_roles %}
                                                 {% if role.name != 'superadmin' or current_user.has_role('superadmin') %}
-                                                <option value="{{ role.id }}" {% if role in user.roles %}selected{% endif %}>
-                                                    {{ role.name.title() }}
-                                                </option>
+                                                <div class="form-check form-check-inline">
+                                                    <input class="form-check-input" type="checkbox"
+                                                           id="role_{{ user.id }}_{{ role.id }}"
+                                                           name="roles"
+                                                           value="{{ role.id }}"
+                                                           {% if role in user.roles %}checked{% endif %}
+                                                           {% if not can_edit_roles %}disabled{% endif %}>
+                                                    <label class="form-check-label" for="role_{{ user.id }}_{{ role.id }}">{{ role.name.title() }}</label>
+                                                </div>
                                                 {% endif %}
                                             {% endfor %}
-                                        </select>
+                                        </div>
                                     </td>
                                     <td class="align-middle">
                                         {# Display last login time or 'Never' if null. Use simple formatting to avoid introducing new filters. #}
