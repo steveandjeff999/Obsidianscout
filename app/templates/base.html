@@ -775,7 +775,12 @@
     
     {% block head %}{% endblock %}
 </head>
-<body class="d-flex flex-column h-100 with-sidebar topbar-fixed">
+{# If an endpoint wants to render without the global chrome (topbar/sidebar)
+    it can pass `no_chrome=True` in the template context (auth pages do this).
+    When true we omit the sidebar/topbar helper classes so related JS/CSS
+    won't add overlays or offsets on mobile which can cause tap/click
+    coordinate mismatches. #}
+<body class="d-flex flex-column h-100 {% if not no_chrome %}with-sidebar topbar-fixed{% endif %}">
     <!-- Global Top Bar (search + user) -->
     <div class="topbar glass d-flex align-items-center gap-2 px-3 py-2 shadow-sm" role="banner">
         <div class="d-flex align-items-center gap-2 flex-shrink-0">
