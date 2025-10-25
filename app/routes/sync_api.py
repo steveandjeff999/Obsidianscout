@@ -905,8 +905,10 @@ def get_catchup_status():
         servers_needing_catchup = catchup_sync_manager.detect_servers_needing_catchup()
         
         # Get recent sync logs for catch-up operations
+        # Use naive UTC for database comparison since SQLite stores naive datetimes
+        cutoff_time = (datetime.now(timezone.utc) - timedelta(hours=24)).replace(tzinfo=None)
         recent_logs = SyncLog.query.filter(
-            SyncLog.created_at >= datetime.now(timezone.utc) - timedelta(hours=24)
+            SyncLog.created_at >= cutoff_time
         ).order_by(SyncLog.created_at.desc()).limit(50).all()
         
         catchup_logs = [log for log in recent_logs if 'catch-up' in log.operation.lower()]

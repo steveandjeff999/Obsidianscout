@@ -26,13 +26,22 @@ def get_match_time(match):
     The predicted_time field is updated by schedule_adjuster when events are
     running behind/ahead of schedule, so it reflects the best estimate of
     when the match will actually occur.
+    
+    Returns:
+        datetime object in UTC timezone (timezone-aware)
     """
+    match_time = None
     if match.predicted_time:
         # Use adjusted prediction if available (more accurate for delayed events)
-        return match.predicted_time
+        match_time = match.predicted_time
     elif match.scheduled_time:
-        return match.scheduled_time
-    return None
+        match_time = match.scheduled_time
+    
+    # Ensure timezone-aware (database stores naive UTC datetimes)
+    if match_time and match_time.tzinfo is None:
+        match_time = match_time.replace(tzinfo=timezone.utc)
+    
+    return match_time
 
 
 def format_match_description(match):
@@ -767,7 +776,7 @@ def schedule_notifications_for_match(match):
     # See: https://frc-api-docs.firstinspires.org/ and https://www.thebluealliance.com/apidocs/v3
     match_time = get_match_time(match)
     if not match_time:
-        print(f"⚠️  Match {match.id} has no scheduled/predicted time, skipping notification scheduling")
+        print(f"⚠️  Match {match.match_type} {match.match_number} (ID {match.id}) has no scheduled/predicted time, skipping notification scheduling")
         return 0
     
     # Get event for timezone information
@@ -777,10 +786,11 @@ def schedule_notifications_for_match(match):
     if event_tz:
         # Log for debugging: show what time the match is in local timezone
         local_time = convert_utc_to_local(match_time, event_tz)
-        print(f"🕐 Match time in {event_tz}: {local_time.strftime('%I:%M %p %Z')}")
+        print(f"🕐 Match {match.match_type} {match.match_number} time in {event_tz}: {local_time.strftime('%I:%M %p %Z')}")
     
     # Get all teams in this match
     all_teams = match.red_teams + match.blue_teams
+    print(f"📋 Match {match.match_type} {match.match_number} teams: {all_teams}")
     
     # Find active subscriptions for these teams
     subscriptions = NotificationSubscription.query.filter(
@@ -788,6 +798,8 @@ def schedule_notifications_for_match(match):
         NotificationSubscription.target_team_number.in_(all_teams),
         NotificationSubscription.scouting_team_number == match.scouting_team_number
     ).all()
+    
+    print(f"🔔 Found {len(subscriptions)} active subscriptions for this match")
     
     scheduled_count = 0
     
@@ -797,9 +809,12 @@ def schedule_notifications_for_match(match):
         # This ensures notification is sent X minutes before match starts in LOCAL time
         send_time = match_time - timedelta(minutes=subscription.minutes_before)
         
-        # Don't schedule if already past
+        # Don't schedule if already past (compare timezone-aware datetimes)
         if send_time < datetime.now(timezone.utc):
             continue
+        
+        # Convert to naive UTC for database storage (SQLite doesn't support timezone-aware datetimes)
+        send_time_naive = send_time.replace(tzinfo=None)
         
         # Check if already scheduled
         existing = NotificationQueue.query.filter_by(
@@ -810,15 +825,15 @@ def schedule_notifications_for_match(match):
         
         if existing:
             # Update scheduled time if changed
-            if existing.scheduled_for != send_time:
-                existing.scheduled_for = send_time
-                existing.updated_at = datetime.now(timezone.utc)
+            if existing.scheduled_for != send_time_naive:
+                existing.scheduled_for = send_time_naive
+                existing.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         else:
             # Create new queue entry
             queue_entry = NotificationQueue(
                 subscription_id=subscription.id,
                 match_id=match.id,
-                scheduled_for=send_time,
+                scheduled_for=send_time_naive,
                 status='pending'
             )
             db.session.add(queue_entry)
@@ -836,11 +851,13 @@ def process_pending_notifications():
         (sent_count, failed_count)
     """
     now = datetime.now(timezone.utc)
+    # Use naive UTC for database comparison since SQLite stores naive datetimes
+    now_utc_naive = now.replace(tzinfo=None)
     
     # Get all pending notifications that are due
     pending = NotificationQueue.query.filter(
         NotificationQueue.status == 'pending',
-        NotificationQueue.scheduled_for <= now,
+        NotificationQueue.scheduled_for <= now_utc_naive,
         NotificationQueue.attempts < 3  # Max 3 attempts
     ).all()
     
