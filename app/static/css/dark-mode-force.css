@@ -857,6 +857,45 @@ html body.dark-mode .dashboard-card {
     overflow: hidden !important;
 }
 
+/* Ensure colored badges (alliances and other semantic badges) retain their
+   distinct background colors in dark mode even after the general .badge
+   glass/neutral overrides above. These rules use very specific selectors
+   and !important so they win against the generic glassy badge styles. */
+html body.modern-layout.dark-mode .badge.bg-danger,
+html body.dark-mode .badge.bg-danger {
+    background-color: #dc3545 !important;
+    color: #ffffff !important;
+    border-color: #dc3545 !important;
+}
+
+html body.modern-layout.dark-mode .badge.bg-primary,
+html body.dark-mode .badge.bg-primary {
+    background-color: #3d8bfd !important;
+    color: #ffffff !important;
+    border-color: #3d8bfd !important;
+}
+
+html body.modern-layout.dark-mode .badge.bg-success,
+html body.dark-mode .badge.bg-success {
+    background-color: #198754 !important;
+    color: #ffffff !important;
+    border-color: #198754 !important;
+}
+
+html body.modern-layout.dark-mode .badge.bg-warning,
+html body.dark-mode .badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #000000 !important;
+    border-color: #ffc107 !important;
+}
+
+html body.modern-layout.dark-mode .badge.bg-info,
+html body.dark-mode .badge.bg-info {
+    background-color: #0dcaf0 !important;
+    color: #000000 !important;
+    border-color: #0dcaf0 !important;
+}
+
 
 
 
