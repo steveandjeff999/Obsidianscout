@@ -2,7 +2,7 @@
 Notifications Routes
 Handles notification subscriptions, device registration, and testing
 """
-from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
+from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app
 from flask_login import login_required, current_user
 from app import db
 from app.models import Match, Team, Event
@@ -643,4 +643,43 @@ def refresh_schedule():
     except Exception as e:
         import traceback
         traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/clear-scheduled', methods=['POST'])
+@login_required
+def clear_scheduled_notifications():
+    """Clear all pending scheduled notifications that belong to the current user.
+
+    This will remove pending NotificationQueue entries that were scheduled for
+    the current user's subscriptions.
+    """
+    try:
+        from datetime import datetime, timezone
+        from app.models_misc import NotificationQueue, NotificationSubscription
+
+        now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        # Query pending queue entries that belong to this user's subscriptions
+        q = db.session.query(NotificationQueue).join(
+            NotificationSubscription, NotificationQueue.subscription_id == NotificationSubscription.id
+        ).filter(
+            NotificationSubscription.user_id == current_user.id,
+            NotificationQueue.status == 'pending',
+            NotificationQueue.scheduled_for > now_utc_naive
+        )
+
+        to_delete = q.all()
+        deleted_count = len(to_delete)
+
+        for entry in to_delete:
+            db.session.delete(entry)
+
+        db.session.commit()
+
+        return jsonify({'success': True, 'deleted': deleted_count, 'message': f'Cleared {deleted_count} pending scheduled notification(s).'})
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error clearing scheduled notifications for user {getattr(current_user, 'id', None)}: {str(e)}")
         return jsonify({'error': str(e)}), 500
