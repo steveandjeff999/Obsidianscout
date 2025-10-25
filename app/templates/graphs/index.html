@@ -128,10 +128,10 @@
                                 </label>
                                 <select name="data_view" id="data_view" class="form-select">
                                     <option value="averages" {% if selected_data_view == 'averages' %}selected{% endif %}>
-                                        📊 Team Averages (Recommended)
+                                        Team Averages (Recommended)
                                     </option>
                                     <option value="matches" {% if selected_data_view == 'matches' %}selected{% endif %}>
-                                        📈 Match-by-Match Data
+                                        Match-by-Match Data
                                     </option>
                                 </select>
                                 <div class="form-text">
@@ -167,63 +167,63 @@
                                         <!-- Basic Charts -->
                                         <div class="form-check">
                                             <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="bar" id="graph_type_bar" {% if 'bar' in selected_graph_types %}checked{% endif %}>
-                                            <label class="form-check-label" for="graph_type_bar">📊 Bar Chart</label>
+                                            <label class="form-check-label" for="graph_type_bar">Bar Chart</label>
                                         </div>
                                         <div class="form-check">
                                             <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="line" id="graph_type_line" {% if 'line' in selected_graph_types %}checked{% endif %}>
-                                            <label class="form-check-label" for="graph_type_line">📈 Line Chart</label>
+                                            <label class="form-check-label" for="graph_type_line">Line Chart</label>
                                         </div>
                                         <div class="form-check">
                                             <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="scatter" id="graph_type_scatter" {% if 'scatter' in selected_graph_types %}checked{% endif %}>
-                                            <label class="form-check-label" for="graph_type_scatter">🔵 Scatter Plot</label>
+                                            <label class="form-check-label" for="graph_type_scatter">Scatter Plot</label>
                                         </div>
                                         <div class="form-check">
                                             <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="area" id="graph_type_area" {% if 'area' in selected_graph_types %}checked{% endif %}>
-                                            <label class="form-check-label" for="graph_type_area">📊 Area Chart</label>
+                                            <label class="form-check-label" for="graph_type_area">Area Chart</label>
                                         </div>
 
                                         <!-- Distribution Charts -->
                                         <div class="form-check">
                                             <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="box" id="graph_type_box" {% if 'box' in selected_graph_types %}checked{% endif %}>
-                                            <label class="form-check-label" for="graph_type_box">📦 Box Plot</label>
+                                            <label class="form-check-label" for="graph_type_box">Box Plot</label>
                                         </div>
                                         <div class="form-check">
                                             <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="violin" id="graph_type_violin" {% if 'violin' in selected_graph_types %}checked{% endif %}>
-                                            <label class="form-check-label" for="graph_type_violin">🎻 Violin Plot</label>
+                                            <label class="form-check-label" for="graph_type_violin">Violin Plot</label>
                                         </div>
                                         <div class="form-check">
                                             <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="histogram" id="graph_type_histogram" {% if 'histogram' in selected_graph_types %}checked{% endif %}>
-                                            <label class="form-check-label" for="graph_type_histogram">📊 Histogram</label>
+                                            <label class="form-check-label" for="graph_type_histogram">Histogram</label>
                                         </div>
 
                                         <!-- Advanced Charts -->
                                         <div class="form-check">
                                             <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="radar" id="graph_type_radar" {% if 'radar' in selected_graph_types %}checked{% endif %}>
-                                            <label class="form-check-label" for="graph_type_radar">🕸️ Radar Chart</label>
+                                            <label class="form-check-label" for="graph_type_radar">Radar Chart</label>
                                         </div>
                                         <div class="form-check">
                                             <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="heatmap" id="graph_type_heatmap" {% if 'heatmap' in selected_graph_types %}checked{% endif %}>
-                                            <label class="form-check-label" for="graph_type_heatmap">🔥 Heatmap</label>
+                                            <label class="form-check-label" for="graph_type_heatmap">Heatmap</label>
                                         </div>
                                         <div class="form-check">
                                             <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="bubble" id="graph_type_bubble" {% if 'bubble' in selected_graph_types %}checked{% endif %}>
-                                            <label class="form-check-label" for="graph_type_bubble">🫧 Bubble Chart</label>
+                                            <label class="form-check-label" for="graph_type_bubble">Bubble Chart</label>
                                         </div>
                                         <div class="form-check">
                                             <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="sunburst" id="graph_type_sunburst" {% if 'sunburst' in selected_graph_types %}checked{% endif %}>
-                                            <label class="form-check-label" for="graph_type_sunburst">☀️ Sunburst Chart</label>
+                                            <label class="form-check-label" for="graph_type_sunburst">Sunburst Chart</label>
                                         </div>
                                         <div class="form-check">
                                             <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="treemap" id="graph_type_treemap" {% if 'treemap' in selected_graph_types %}checked{% endif %}>
-                                            <label class="form-check-label" for="graph_type_treemap">🌳 Treemap</label>
+                                            <label class="form-check-label" for="graph_type_treemap">Treemap</label>
                                         </div>
                                         <div class="form-check">
                                             <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="waterfall" id="graph_type_waterfall" {% if 'waterfall' in selected_graph_types %}checked{% endif %}>
-                                            <label class="form-check-label" for="graph_type_waterfall">💧 Waterfall Chart</label>
+                                            <label class="form-check-label" for="graph_type_waterfall">Waterfall Chart</label>
                                         </div>
                                         <div class="form-check">
                                             <input class="form-check-input graph-type-checkbox" type="checkbox" name="graph_types" value="sankey" id="graph_type_sankey" {% if 'sankey' in selected_graph_types %}checked{% endif %}>
-                                            <label class="form-check-label" for="graph_type_sankey">🌊 Sankey Diagram</label>
+                                            <label class="form-check-label" for="graph_type_sankey">Sankey Diagram</label>
                                         </div>
                                     </div>
                                 </div>

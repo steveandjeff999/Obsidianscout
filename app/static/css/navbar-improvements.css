@@ -891,4 +891,41 @@ body.dark-mode .qr-container #qrcode::before {
     padding: 1rem 1.25rem !important;
 }
 
+/* Stronger white text for QR modal to improve contrast against dark glass */
+#qrModal .modal-header .modal-title {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6) !important;
+}
+
+#qrModal .modal-content,
+#qrModal .modal-header,
+#qrModal .modal-body,
+#qrModal .qr-container {
+    color: rgba(255,255,255,0.96) !important; /* near-white for text */
+}
+
+/* Make close button more visible in dark background */
+#qrModal .modal-header .btn-close {
+    filter: brightness(4) !important;
+    opacity: 0.98 !important;
+}
+
+/* Ensure download button text is pure white on its colored background */
+#qrModal .qr-container .btn,
+#qrModal #qrDownloadContainer .btn {
+    color: #ffffff !important;
+}
+
+/* If any inner helper text exists, make sure it's bright enough */
+#qrModal .qr-container small,
+#qrModal .qr-container .text-muted {
+    color: rgba(255,255,255,0.86) !important;
+}
+
+/* Remove the entire modal title (text + icon) for the QR modal header */
+#qrModal .modal-header .modal-title {
+    display: none !important;
+}
+
 

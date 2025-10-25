@@ -1178,12 +1178,52 @@ def strategy_draw():
 @bp.route('/api/strategy_drawing/<int:match_id>', methods=['GET'])
 @login_required
 def get_strategy_drawing(match_id):
-    drawing = StrategyDrawing.query.filter_by(match_id=match_id, scouting_team_number=current_user.scouting_team_number).first()
+    # Use a single drawing per match (match_id is unique in the model). Fall back to global drawing.
+    drawing = StrategyDrawing.query.filter_by(match_id=match_id).first()
     if drawing:
         bg_url = url_for('matches.get_strategy_background', filename=drawing.background_image) if drawing.background_image else None
         return jsonify({'data': drawing.data, 'last_updated': drawing.last_updated.isoformat() if drawing.last_updated else None, 'background_image': bg_url})
     else:
         return jsonify({'data': None, 'last_updated': None, 'background_image': None})
+
+
+@bp.route('/api/strategy_drawing/<int:match_id>', methods=['POST'])
+@login_required
+def save_strategy_drawing(match_id):
+    """Persist strategy drawing data for a match (fallback to REST when Socket.IO is unavailable)."""
+    try:
+        payload = request.get_json(force=True)
+    except Exception:
+        return jsonify({'error': 'Invalid JSON payload'}), 400
+
+    drawing_data = payload.get('data') if payload else None
+    if drawing_data is None:
+        return jsonify({'error': 'Missing drawing data'}), 400
+
+    try:
+        # Use single per-match drawing (match_id unique)
+        drawing = StrategyDrawing.query.filter_by(match_id=match_id).first()
+        if not drawing:
+            drawing = StrategyDrawing(match_id=match_id, data_json='{}')
+            db.session.add(drawing)
+        drawing.data = drawing_data
+        db.session.commit()
+
+        # Notify other clients via Socket.IO room if socketio is available
+        try:
+            room = f'strategy_match_{match_id}'
+            socketio.emit('drawing_data', {
+                'match_id': match_id,
+                'data': drawing_data,
+                'last_updated': drawing.last_updated.isoformat() if drawing.last_updated else None
+            }, room=room, include_self=False)
+        except Exception:
+            current_app.logger.debug('SocketIO emit failed during REST save (non-fatal)')
+
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.exception('Failed to save strategy drawing')
+        return jsonify({'error': str(e)}), 500
 
 # Socket.IO events for real-time strategy drawing sync
 @socketio.on('join_strategy_room')
@@ -1193,7 +1233,7 @@ def on_join_strategy_room(data):
         room = f'strategy_match_{match_id}'
         join_room(room)
         # Send current drawing data to the new client
-        drawing = StrategyDrawing.query.filter_by(match_id=match_id, scouting_team_number=current_user.scouting_team_number).first()
+        drawing = StrategyDrawing.query.filter_by(match_id=match_id).first()
         emit('drawing_data', {
             'match_id': match_id,
             'data': drawing.data if drawing else None,
@@ -1207,9 +1247,9 @@ def on_drawing_update(data):
     if not match_id or drawing_data is None:
         return
     # Save to DB
-    drawing = StrategyDrawing.query.filter_by(match_id=match_id, scouting_team_number=current_user.scouting_team_number).first()
+    drawing = StrategyDrawing.query.filter_by(match_id=match_id).first()
     if not drawing:
-        drawing = StrategyDrawing(match_id=match_id, data_json='{}', scouting_team_number=current_user.scouting_team_number)
+        drawing = StrategyDrawing(match_id=match_id, data_json='{}')
         db.session.add(drawing)
     drawing.data = drawing_data
     db.session.commit()

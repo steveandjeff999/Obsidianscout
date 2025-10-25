@@ -513,9 +513,14 @@ def manage_users():
 
     users = query.all()
     all_roles = Role.query.all()
+    # These are superadmin/admin pages that should render with the global chrome
+    # (sidebar/topbar) so the content is offset correctly. Override the default
+    # auth no_chrome flag returned by get_theme_context().
+    ctx = get_theme_context()
+    ctx['no_chrome'] = False
     return render_template('auth/manage_users.html', users=users, all_roles=all_roles, search=search,
                            total_users=total_users, active_users=active_users,
-                           **get_theme_context())
+                           **ctx)
 
 @bp.route('/add_user', methods=['GET', 'POST'])
 @admin_required
@@ -583,7 +588,10 @@ def add_user():
         return redirect(url_for('auth.manage_users'))
     
     roles = Role.query.all()
-    return render_template('auth/add_user.html', roles=roles, **get_theme_context())
+    # Ensure sidebar/topbar chrome is present for administrative pages
+    ctx = get_theme_context()
+    ctx['no_chrome'] = False
+    return render_template('auth/add_user.html', roles=roles, **ctx)
 
 @bp.route('/users/update/<int:user_id>', methods=['POST'])
 @admin_required
