@@ -48,6 +48,24 @@
         
         // Intercept form loads to cache rendered HTML
         interceptFormLoads();
+        
+        // Attach match selector listener so team dropdown can be filtered locally (works offline)
+        try {
+            const matchSel = document.getElementById('match-selector');
+            if (matchSel) {
+                matchSel.addEventListener('change', function() {
+                    try { filterTeamsByMatchId(this.value); } catch (e) { /* ignore */ }
+                });
+
+                // Apply initial filter if a match is already selected or stored
+                const initialMatch = matchSel.value || localStorage.getItem('last_match_id');
+                if (initialMatch) {
+                    try { filterTeamsByMatchId(initialMatch); } catch (e) { /* ignore */ }
+                }
+            }
+        } catch (e) {
+            // ignore attach errors
+        }
     }
 
     /**
@@ -415,6 +433,99 @@
     }
 
     /**
+     * Parse an alliance string like "111,222,333" into an array of team numbers
+     */
+    function parseAllianceTeams(allianceStr) {
+        if (!allianceStr) return [];
+        return allianceStr.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    /**
+     * Filter team <option>s to only those participating in the given matchId.
+     * This runs entirely in-browser using cached MATCHES and TEAMS data so it works offline.
+     * If matchId is falsy, it will clear the filter and show all teams again.
+     */
+    function filterTeamsByMatchId(matchId) {
+        try {
+            const teamsSelect = document.getElementById('team-selector');
+            if (!teamsSelect) return;
+
+            // If no match specified, show all teams
+            if (!matchId) {
+                Array.from(teamsSelect.options).forEach(opt => {
+                    opt.hidden = false;
+                    opt.style.display = '';
+                });
+
+                // Sync any custom select UI
+                if (teamsSelect._customWrapper) syncCustomSelectVisibilityForNative(teamsSelect);
+                return;
+            }
+
+            const matches = getCachedMatches();
+            const match = matches.find(m => String(m.id) === String(matchId));
+            if (!match) {
+                // If we don't have the match cached, do nothing (leave options unchanged)
+                return;
+            }
+
+            const red = parseAllianceTeams(match.red_alliance || '');
+            const blue = parseAllianceTeams(match.blue_alliance || '');
+            const allowed = new Set([...red, ...blue].map(s => String(s)));
+
+            // Show placeholder option always and hide others not in allowed set
+            Array.from(teamsSelect.options).forEach(opt => {
+                if (!opt.value) { // placeholder option
+                    opt.hidden = false;
+                    opt.style.display = '';
+                    return;
+                }
+
+                const teamNumber = opt.getAttribute('data-team-number') || opt.textContent || '';
+                const allowedFlag = allowed.has(String(teamNumber).trim());
+
+                opt.hidden = !allowedFlag;
+                opt.style.display = allowedFlag ? '' : 'none';
+            });
+
+            // If current selection is now hidden, reset to placeholder
+            const current = teamsSelect.options[teamsSelect.selectedIndex];
+            if (current && current.hidden) {
+                teamsSelect.value = '';
+            }
+
+            // Sync any custom select UI
+            if (teamsSelect._customWrapper) syncCustomSelectVisibilityForNative(teamsSelect);
+        } catch (e) {
+            console.warn('[Offline Manager] Error filtering teams by match:', e);
+        }
+    }
+
+    // Helper to sync custom select wrapper items for a native select element
+    function syncCustomSelectVisibilityForNative(nativeSelect) {
+        try {
+            const wrapper = nativeSelect._customWrapper;
+            if (!wrapper) return;
+            const menu = wrapper.querySelector('.custom-select-menu');
+            const items = Array.from(menu.querySelectorAll('.custom-select-item'));
+
+            Array.from(nativeSelect.options).forEach((opt, idx) => {
+                const item = items[idx];
+                if (!item) return;
+                if (opt.hidden) item.style.display = 'none'; else item.style.display = '';
+                // keep selected/placeholder state in sync
+                if (opt.selected) {
+                    wrapper.querySelector('.custom-select-value').textContent = opt.textContent;
+                    items.forEach(i => i.classList.remove('selected'));
+                    item.classList.add('selected');
+                }
+            });
+        } catch (e) {
+            // Silently ignore if custom UI not present or structured differently
+        }
+    }
+
+    /**
      * Generate form content offline using cached data
      */
     function generateFormOffline(teamId, matchId) {
@@ -500,6 +611,9 @@
         getCachedTeams: getCachedTeams,
         getCachedMatches: getCachedMatches,
         getCachedGameConfig: getCachedGameConfig,
+        // Helpers for matching/filtering
+        parseAllianceTeams: parseAllianceTeams,
+        filterTeamsByMatchId: filterTeamsByMatchId,
         saveFormOffline: saveFormOffline,
         syncOfflineForms: syncOfflineForms,
         generateFormOffline: generateFormOffline,
