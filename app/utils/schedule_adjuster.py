@@ -158,7 +158,8 @@ def fetch_actual_times_from_tba(event_code, event_timezone=None):
             if scheduled or actual:
                 match_times[(match_type, display_match_number)] = (scheduled, actual)
         
-        print(f\"   Parsed {scheduled_count} scheduled times, {actual_count} actual times\")\n        print(f\"   Returning {len(match_times)} match time entries\")
+        print(f"   Parsed {scheduled_count} scheduled times, {actual_count} actual times")
+        print(f"   Returning {len(match_times)} match time entries")
         
     except Exception as e:
         print(f"❌ Error fetching from TBA API: {e}")
