@@ -1442,7 +1442,8 @@ def api_sync_status():
     
     # Get recent sync activity (last 10 minutes)
     from datetime import datetime, timedelta
-    recent_time = datetime.now(timezone.utc) - timedelta(minutes=10)
+    # Use naive UTC for database comparison since SQLite stores naive datetimes
+    recent_time = (datetime.now(timezone.utc) - timedelta(minutes=10)).replace(tzinfo=None)
     recent_teams = filter_teams_by_scouting_team().filter(Team.created_at >= recent_time).count() if hasattr(Team, 'created_at') else 0
     recent_matches = filter_matches_by_scouting_team().filter(Match.created_at >= recent_time).count() if hasattr(Match, 'created_at') else 0
     

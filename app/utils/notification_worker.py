@@ -118,18 +118,22 @@ def schedule_upcoming_match_notifications(app):
     now = datetime.now(timezone.utc)
     window_end = now + timedelta(hours=2)
     
+    # Convert to naive UTC for database comparison (SQLite stores naive datetimes)
+    now_naive = now.replace(tzinfo=None)
+    window_end_naive = window_end.replace(tzinfo=None)
+    
     # Find matches with scheduled times in the next 2 hours
     matches = Match.query.filter(
         Match.scheduled_time.isnot(None),
-        Match.scheduled_time >= now,
-        Match.scheduled_time <= window_end
+        Match.scheduled_time >= now_naive,
+        Match.scheduled_time <= window_end_naive
     ).all()
     
     # Also check predicted times
     predicted_matches = Match.query.filter(
         Match.predicted_time.isnot(None),
-        Match.predicted_time >= now,
-        Match.predicted_time <= window_end
+        Match.predicted_time >= now_naive,
+        Match.predicted_time <= window_end_naive
     ).all()
     
     # Combine and deduplicate

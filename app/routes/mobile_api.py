@@ -1635,13 +1635,14 @@ def get_scheduled_notifications():
     """
     try:
         team_number = request.mobile_team_number
-        now = datetime.now(timezone.utc)
+        # Use naive UTC for database comparison since SQLite stores naive datetimes
+        now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Join queue to subscription so we can scope by scouting_team_number
         q = NotificationQueue.query.join(NotificationSubscription, NotificationQueue.subscription_id == NotificationSubscription.id).filter(
             NotificationSubscription.scouting_team_number == team_number,
             NotificationQueue.status == 'pending',
-            NotificationQueue.scheduled_for > now
+            NotificationQueue.scheduled_for > now_utc_naive
         ).order_by(NotificationQueue.scheduled_for)
 
         limit = min(request.args.get('limit', 200, type=int), 1000)

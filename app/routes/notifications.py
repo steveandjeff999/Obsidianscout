@@ -44,6 +44,8 @@ def index():
     
     try:
         # Get pending queue entries with subscriptions
+        # Note: Use naive UTC for database comparison since SQLite stores naive datetimes
+        now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
         pending_queue = db.session.query(
             NotificationQueue, NotificationSubscription
         ).join(
@@ -51,7 +53,7 @@ def index():
         ).filter(
             NotificationSubscription.user_id == current_user.id,
             NotificationQueue.status == 'pending',
-            NotificationQueue.scheduled_for > datetime.now(timezone.utc)
+            NotificationQueue.scheduled_for > now_utc_naive
         ).order_by(NotificationQueue.scheduled_for.asc()).limit(50).all()
         
         # Join with Match data from main database
@@ -552,6 +554,13 @@ def refresh_schedule():
         matches = Match.query.filter_by(event_id=event.id).all()
         match_ids = [m.id for m in matches]
         
+        print(f"📋 Found {len(matches)} matches for event {event_code}")
+        if matches:
+            # Show some match details
+            for match in matches[:5]:  # Show first 5
+                print(f"  - {match.match_type} {match.match_number}: scheduled={match.scheduled_time}, predicted={match.predicted_time}")
+                print(f"    Teams: Red={match.red_teams}, Blue={match.blue_teams}")
+        
         # Delete old pending notifications for these matches (from misc.db)
         # Do this in Python to avoid cross-database join
         if match_ids:
@@ -570,6 +579,17 @@ def refresh_schedule():
         
         # Reschedule notifications for all matches
         scheduled_count = 0
+        
+        # Show active subscriptions for debugging
+        from app.models_misc import NotificationSubscription
+        active_subs = NotificationSubscription.query.filter_by(
+            is_active=True,
+            scouting_team_number=current_user.scouting_team_number
+        ).all()
+        print(f"🔔 Found {len(active_subs)} active subscriptions for team {current_user.scouting_team_number}")
+        for sub in active_subs:
+            print(f"  - Team {sub.target_team_number}, Type: {sub.notification_type}, Minutes before: {sub.minutes_before}")
+        
         for match in matches:
             count = schedule_notifications_for_match(match)
             scheduled_count += count
