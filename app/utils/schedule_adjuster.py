@@ -22,7 +22,13 @@ def fetch_actual_times_from_first(event_code, event_timezone=None):
     season = get_current_game_config().get('season', 2026)
     headers = get_api_headers()
     
+    if not headers:
+        print(f"⚠️  FIRST API headers not available (no API key configured)")
+        return {}
+    
     match_times = {}
+    
+    print(f"🔍 Fetching from FIRST API: season={season}, event={event_code}")
     
     # FIRST API endpoints for different match types
     endpoints = [
@@ -36,9 +42,12 @@ def fetch_actual_times_from_first(event_code, event_timezone=None):
             api_url = f"{base_url}{endpoint}"
             response = requests.get(api_url, headers=headers, timeout=15)
             
+            print(f"   {match_type}: {response.status_code} from {api_url}")
+            
             if response.status_code == 200:
                 data = response.json()
                 matches = data.get('Schedule', [])
+                print(f"      Found {len(matches)} {match_type} matches")
                 
                 for match_data in matches:
                     match_num = str(match_data.get('matchNumber'))
@@ -82,6 +91,8 @@ def fetch_actual_times_from_tba(event_code, event_timezone=None):
     year = get_current_game_config().get('season', 2026)
     event_key = construct_tba_event_key(event_code, year)
     
+    print(f"🔍 Fetching from TBA: event_key={event_key} (year={year}, code={event_code})")
+    
     match_times = {}
     
     # Map TBA comp_level to our match_type (same as in match_time_fetcher and tba_api_utils)
@@ -99,10 +110,17 @@ def fetch_actual_times_from_tba(event_code, event_timezone=None):
         response = requests.get(api_url, headers=get_tba_api_headers(), timeout=15)
         
         if response.status_code != 200:
-            print(f"⚠️  TBA API returned {response.status_code}")
+            print(f"⚠️  TBA API returned {response.status_code} for {api_url}")
+            if response.status_code == 404:
+                print(f"   Event key '{event_key}' not found on TBA")
+                print(f"   Note: TBA event keys are case-sensitive and year-specific (e.g., '2026molee')")
             return match_times
         
         tba_matches = response.json()
+        print(f"   Received {len(tba_matches)} matches from TBA")
+        
+        scheduled_count = 0
+        actual_count = 0
         
         for tba_match in tba_matches:
             comp_level = tba_match.get('comp_level', 'qm')
@@ -126,17 +144,21 @@ def fetch_actual_times_from_tba(event_code, event_timezone=None):
             if scheduled_time:
                 try:
                     scheduled = datetime.fromtimestamp(scheduled_time, tz=timezone.utc)
+                    scheduled_count += 1
                 except Exception as e:
                     print(f"Error parsing TBA scheduled time {scheduled_time}: {e}")
             
             if actual_time:
                 try:
                     actual = datetime.fromtimestamp(actual_time, tz=timezone.utc)
+                    actual_count += 1
                 except Exception as e:
                     print(f"Error parsing TBA actual time {actual_time}: {e}")
             
             if scheduled or actual:
                 match_times[(match_type, display_match_number)] = (scheduled, actual)
+        
+        print(f\"   Parsed {scheduled_count} scheduled times, {actual_count} actual times\")\n        print(f\"   Returning {len(match_times)} match time entries\")
         
     except Exception as e:
         print(f"❌ Error fetching from TBA API: {e}")
@@ -291,6 +313,10 @@ class ScheduleAdjuster:
         recent_delays = []  # Last 3 matches - more relevant to current schedule
         match_types_analyzed = {}
         matches_not_found = []
+        skipped_large_gaps = []
+        
+        # Track previous match time to detect gaps
+        prev_scheduled_time = None
         
         for match in matches:
             # Convert match_number to string to handle both int (quals) and string (playoffs like "1-1")
@@ -302,9 +328,30 @@ class ScheduleAdjuster:
                 scheduled_time = match_scheduled_times[match_key]
                 actual_time = match_actual_times[match_key]
                 
+                # Detect large gaps (1+ hour) between consecutive matches - likely breaks or multiple events
+                skip_due_to_gap = False
+                if prev_scheduled_time is not None:
+                    time_since_prev = (scheduled_time - prev_scheduled_time).total_seconds() / 60
+                    if time_since_prev >= 60:  # 1 hour or more gap
+                        skip_due_to_gap = True
+                        skipped_large_gaps.append((match.match_type, match_number_str, time_since_prev))
+                        print(f"  ⏭️  Skipping {match.match_type} {match.match_number}: {time_since_prev:.0f} min gap from previous match (likely break/multiple events)")
+                
+                # Update previous time for next iteration
+                prev_scheduled_time = scheduled_time
+                
+                # Skip this match if there's a large gap before it
+                if skip_due_to_gap:
+                    continue
+                
                 # Calculate delay
                 delay = actual_time - scheduled_time
                 delay_minutes = delay.total_seconds() / 60
+                
+                # Also skip if the delay itself is extreme (>60 min or <-60 min) - likely data error
+                if abs(delay_minutes) > 60:
+                    print(f"  ⚠️  Skipping {match.match_type} {match.match_number}: Extreme delay of {delay_minutes:+.1f} min (likely data error)")
+                    continue
                 
                 delays.append(delay_minutes)
                 
@@ -335,6 +382,12 @@ class ScheduleAdjuster:
             print(f"\n⚠️  Matches in DB but not matched with TBA: {', '.join(f'{count} {mtype}' for mtype, count in not_found_by_type.items())}")
             # Show first few examples for debugging
             print(f"   Examples: {', '.join(f'{mt} {mn}' for mt, mn in matches_not_found[:5])}")
+        
+        # Show summary of skipped gaps
+        if skipped_large_gaps:
+            print(f"\n⏭️  Skipped {len(skipped_large_gaps)} matches due to large time gaps (breaks/multiple events):")
+            for match_type, match_num, gap_minutes in skipped_large_gaps[:5]:
+                print(f"   {match_type} {match_num}: {gap_minutes:.0f} min gap")
         
         if not delays:
             print(f"ℹ️  No completed matches with actual times yet for {self.event.code}")

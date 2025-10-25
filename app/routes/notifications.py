@@ -15,6 +15,7 @@ from app.utils.notification_service import (
 from app.utils.push_notifications import register_device, get_vapid_keys, send_push_to_user
 from app.utils.emailer import send_email
 from datetime import datetime, timezone, timedelta
+from app.utils.notification_worker import get_seconds_until_next_schedule
 
 bp = Blueprint('notifications', __name__, url_prefix='/notifications')
 
@@ -76,14 +77,15 @@ def index():
     event_code = game_config.get('current_event_code')
     
     available_teams = []
+    current_event = None
     if event_code:
-        event = Event.query.filter_by(
+        current_event = Event.query.filter_by(
             code=event_code,
             scouting_team_number=current_user.scouting_team_number
         ).first()
-        if event:
+        if current_event:
             available_teams = Team.query.filter(
-                Team.events.contains(event),
+                Team.events.contains(current_event),
                 Team.scouting_team_number == current_user.scouting_team_number
             ).order_by(Team.team_number).all()
     
@@ -95,7 +97,9 @@ def index():
         pending_notifications=pending_notifications,
         vapid_public_key=vapid_public_key,
         available_teams=available_teams,
-        event_code=event_code
+        event_code=event_code,
+        current_event=current_event,
+        next_schedule_seconds=get_seconds_until_next_schedule()
     )
 
 
@@ -594,11 +598,46 @@ def refresh_schedule():
             count = schedule_notifications_for_match(match)
             scheduled_count += count
         
+        # Fetch updated pending notifications for response
+        now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+        pending_queue = db.session.query(
+            NotificationQueue, NotificationSubscription
+        ).join(
+            NotificationSubscription, NotificationQueue.subscription_id == NotificationSubscription.id
+        ).filter(
+            NotificationSubscription.user_id == current_user.id,
+            NotificationQueue.status == 'pending',
+            NotificationQueue.scheduled_for > now_utc_naive
+        ).order_by(NotificationQueue.scheduled_for.asc()).limit(50).all()
+        
+        # Join with Match data from main database
+        pending_list = []
+        for queue, subscription in pending_queue:
+            match = Match.query.get(queue.match_id)
+            if match:
+                # Use predicted_time if available (adjusted schedule), otherwise scheduled_time
+                match_time = match.predicted_time if match.predicted_time else match.scheduled_time
+                # Get event for timezone
+                event = Event.query.get(match.event_id) if match.event_id else None
+                pending_list.append({
+                    'id': queue.id,
+                    'match_type': match.match_type,
+                    'match_number': match.match_number,
+                    'team_number': subscription.target_team_number,
+                    'scheduled_for': queue.scheduled_for.isoformat() if queue.scheduled_for else None,
+                    'match_time': match_time.isoformat() if match_time else None,
+                    'is_predicted': bool(match.predicted_time),
+                    'notification_type': subscription.notification_type,
+                    'minutes_before': subscription.minutes_before,
+                    'event_timezone': event.timezone if event else None
+                })
+        
         return jsonify({
             'success': True,
             'message': f'Schedule refreshed! Updated {updated_count} match times, rescheduled {scheduled_count} notifications.',
             'matches_updated': updated_count,
-            'notifications_scheduled': scheduled_count
+            'notifications_scheduled': scheduled_count,
+            'pending_notifications': pending_list
         })
         
     except Exception as e:
