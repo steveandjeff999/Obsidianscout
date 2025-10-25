@@ -184,6 +184,20 @@ body.modern-layout.dark-mode .alert {
     border-color: #444 !important;
 }
 
+/* Keep danger alerts visibly 'red' in dark mode but toned down so contrast is comfortable */
+body.modern-layout.dark-mode .alert.alert-danger,
+html body.dark-mode .alert.alert-danger {
+    background-color: rgba(220,53,69,0.12) !important; /* subtle red tint */
+    border-color: rgba(220,53,69,0.28) !important;
+    color: #ffe8e8 !important;
+}
+
+/* Ensure strong text inside danger alerts is readable */
+body.modern-layout.dark-mode .alert.alert-danger strong,
+html body.dark-mode .alert.alert-danger strong {
+    color: #ffffff !important;
+}
+
 /* Force badges */
 body.modern-layout.dark-mode .badge {
     background-color: #2d3338 !important;
@@ -590,6 +604,68 @@ html body.dark-mode #teamSelectionModal .team-selection-item {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     opacity: 1 !important;
+}
+
+/* Ensure general modals (including the Wipe DB modal) use dark surfaces in dark mode */
+html body.modern-layout.dark-mode .modal-content,
+html body.dark-mode .modal-content {
+    background-color: #2d3338 !important;
+    color: #e6e6e6 !important;
+    border-color: #444 !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.6) !important;
+}
+
+/* Specific tuning for the wipe database modal so the danger alert isn't a bright translucent pink */
+html body.modern-layout.dark-mode #wipeDbModal .modal-content,
+html body.dark-mode #wipeDbModal .modal-content {
+    background-color: #2b2f33 !important;
+    border: 1px solid rgba(255,255,255,0.04) !important;
+}
+
+/* Make the modal header (bg-danger) slightly darker in dark mode so it reads well */
+html body.modern-layout.dark-mode #wipeDbModal .modal-header.bg-danger,
+html body.dark-mode #wipeDbModal .modal-header.bg-danger {
+    background-color: #b03a3a !important; /* darker red for header */
+    color: #ffffff !important;
+}
+
+/* Danger alert inside the wipe modal: use a toned, low-alpha red on top of the dark modal surface
+   and ensure all inner text, lists and form labels are readable */
+html body.modern-layout.dark-mode #wipeDbModal .alert.alert-danger,
+html body.dark-mode #wipeDbModal .alert.alert-danger {
+    background-color: rgba(220,53,69,0.08) !important; /* subtle red tint */
+    border-color: rgba(220,53,69,0.22) !important;
+    color: #ffffff !important;
+}
+
+html body.modern-layout.dark-mode #wipeDbModal .alert.alert-danger p,
+html body.dark-mode #wipeDbModal .alert.alert-danger p,
+html body.modern-layout.dark-mode #wipeDbModal .alert.alert-danger ul,
+html body.dark-mode #wipeDbModal .alert.alert-danger ul,
+html body.modern-layout.dark-mode #wipeDbModal .alert.alert-danger li,
+html body.dark-mode #wipeDbModal .alert.alert-danger li {
+    color: #e6e6e6 !important;
+}
+
+/* Checkbox label and small text in the modal should be clear */
+html body.modern-layout.dark-mode #wipeDbModal .form-check-label,
+html body.dark-mode #wipeDbModal .form-check-label,
+html body.modern-layout.dark-mode #wipeDbModal .small,
+html body.dark-mode #wipeDbModal .small {
+    color: #e6e6e6 !important;
+}
+
+/* Ensure buttons in the modal use visible contrast on dark surfaces */
+html body.modern-layout.dark-mode #wipeDbModal .btn-secondary {
+    background-color: #6c757d !important;
+    color: #fff !important;
+    border-color: rgba(255,255,255,0.04) !important;
+}
+
+html body.modern-layout.dark-mode #wipeDbModal .btn-danger {
+    background-color: #c94b4b !important; /* slightly muted danger so it doesn't glare */
+    color: #fff !important;
+    border-color: rgba(0,0,0,0.2) !important;
 }
 
 /* Muted/smaller text inside the modal should be visible */
