@@ -22,22 +22,6 @@
                 <form id="team-match-form" aria-label="Team and Match selection">
                     <div class="row">
                         <div class="col-md-6 mb-2">
-                            <label for="team-selector" class="form-label">Select Team</label>
-                            <!-- Search input for teams -->
-                            <div class="input-group mb-1">
-                                <span class="input-group-text"><i class="fas fa-search"></i></span>
-                                <input type="search" id="team-search" class="form-control form-control-sm" placeholder="Search teams by number or name" aria-label="Search teams">
-                            </div>
-                            <select class="form-select" id="team-selector" name="team_id" required aria-label="Team selector">
-                                <option value="">-- Select Team --</option>
-                                {% for team_option in teams %}
-                                <option value="{{ team_option.id }}" data-team-number="{{ team_option.team_number }}" data-team-name="{{ team_option.team_name }}" {% if team and team.id == team_option.id %}selected{% endif %}>
-                                    {{ team_option.team_number }} - {{ team_option.team_name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-6 mb-2">
                             <label for="match-selector" class="form-label">Select Match</label>
                             <!-- Search input for matches -->
                             <div class="input-group mb-1">
@@ -49,6 +33,22 @@
                                 {% for match_option in matches %}
                                 <option value="{{ match_option.id }}" data-match-type="{{ match_option.match_type }}" data-match-number="{{ match_option.match_number }}" data-red-alliance="{{ match_option.red_alliance }}" data-blue-alliance="{{ match_option.blue_alliance }}" {% if match and match.id == match_option.id %}selected{% endif %}>
                                     {{ match_option.match_type }} {{ match_option.match_number }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <label for="team-selector" class="form-label">Select Team</label>
+                            <!-- Search input for teams -->
+                            <div class="input-group mb-1">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                <input type="search" id="team-search" class="form-control form-control-sm" placeholder="Search teams by number or name" aria-label="Search teams">
+                            </div>
+                            <select class="form-select" id="team-selector" name="team_id" required aria-label="Team selector">
+                                <option value="">-- Select Team --</option>
+                                {% for team_option in teams %}
+                                <option value="{{ team_option.id }}" data-team-number="{{ team_option.team_number }}" data-team-name="{{ team_option.team_name }}" {% if team and team.id == team_option.id %}selected{% endif %}>
+                                    {{ team_option.team_number }} - {{ team_option.team_name }}
                                 </option>
                                 {% endfor %}
                             </select>
