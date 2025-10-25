@@ -324,6 +324,9 @@
                         <button id="refresh-schedule-btn" class="test-button btn-primary" onclick="refreshSchedule()">
                             🔄 Refresh Schedule
                         </button>
+                        <button id="clear-schedule-btn" class="test-button btn-danger" style="display:inline-block;" onclick="clearScheduledNotifications()">
+                            🧹 Clear Scheduled
+                        </button>
                     </div>
                 </div>
                 {% if pending_notifications %}
@@ -852,6 +855,44 @@ async function refreshSchedule(silent=false) {
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = originalText;
+        }
+    }
+}
+
+// Clear all scheduled notifications for current user
+async function clearScheduledNotifications() {
+    if (!confirm('Clear all your pending scheduled notifications? This will remove any pending sends for your subscriptions. Continue?')) return;
+    const btn = document.getElementById('clear-schedule-btn');
+    const orig = btn ? btn.innerHTML : '';
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Clearing...';
+        }
+
+        const response = await fetch('/notifications/clear-scheduled', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            alert('✅ ' + result.message);
+            // Update pending list in-place to show no scheduled notifications
+            updatePendingNotificationsList([]);
+        } else {
+            alert('❌ ' + (result.error || 'Failed to clear scheduled notifications'));
+        }
+    } catch (error) {
+        console.error('Error clearing scheduled notifications:', error);
+        alert('❌ Error: ' + error.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = orig;
         }
     }
 }
