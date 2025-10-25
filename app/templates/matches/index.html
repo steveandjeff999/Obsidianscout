@@ -89,6 +89,18 @@
     <div class="col-lg-8 col-md-12 mb-3">
         <div class="card">
             <div class="card-body">
+                <style>
+                /* Ensure action buttons don't wrap text into multiple lines and stay horizontally aligned */
+                .match-actions .btn {
+                    white-space: nowrap;
+                    display: inline-flex;
+                    align-items: center;
+                }
+                .match-actions .btn i {
+                    margin-right: 0.35rem;
+                }
+                .match-actions .delete-confirm-form { margin: 0; }
+                </style>
                 {% if matches %}
                 <div class="table-responsive">
                     <table class="table table-hover align-middle">
@@ -120,7 +132,28 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if match.scheduled_time and match.predicted_time %}
+                                    {# If match has an actual_time (played), show that first using event timezone if available #}
+                                    {# Consider a match 'played' if there's an actual_time, a winner, or recorded scores. #}
+                                    {% set has_played = (match.actual_time or match.winner or (match.red_score is not none) or (match.blue_score is not none)) %}
+                                    {% if has_played %}
+                                        {# Pick a time to display: prefer actual_time, then scheduled_time, then predicted_time #}
+                                        {% set display_time = match.actual_time or match.scheduled_time or match.predicted_time %}
+                                        {% if display_time %}
+                                            {% if match.event and match.event.timezone %}
+                                                <div class="text-nowrap">
+                                                    <span class="text-success fw-bold">Played at {{ display_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
+                                                    <br><small class="text-muted">{{ display_time | format_time_tz(match.event.timezone, '%Y-%m-%d %I:%M %p %Z') }}</small>
+                                                </div>
+                                            {% else %}
+                                                <div class="text-nowrap">
+                                                    <span class="text-success fw-bold">Played at {{ display_time.strftime('%I:%M %p') }} UTC</span>
+                                                    <br><small class="text-muted">{{ display_time.strftime('%Y-%m-%d %I:%M %p') }} UTC</small>
+                                                </div>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">Played</span>
+                                        {% endif %}
+                                    {% elif match.scheduled_time and match.predicted_time %}
                                         {# Show both scheduled and adjusted time when schedule offset exists #}
                                         {% if match.event and match.event.timezone %}
                                             <div class="text-nowrap">
@@ -182,7 +215,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <div class="btn-group" role="group">
+                                    <div class="btn-group match-actions" role="group" aria-label="Match actions">
                                         <a href="{{ url_for('matches.view', match_id=match.id) }}" class="btn btn-sm btn-primary">
                                             <i class="fas fa-search me-1"></i> View
                                         </a>

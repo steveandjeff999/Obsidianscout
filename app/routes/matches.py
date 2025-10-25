@@ -1313,6 +1313,10 @@ def matches_data():
                 'set_number': match.set_number,
                 'predicted_time': match.predicted_time.isoformat() if match.predicted_time else None,
                 'actual_time': match.actual_time.isoformat() if match.actual_time else None,
+                # played_time is provided to explicitly indicate when the match was played (if available).
+                # Some API sources (TBA) may supply actual_time and our updater can store that into scheduled_time
+                # so fall back to scheduled_time when actual_time is not set.
+                'played_time': (match.actual_time.isoformat() if match.actual_time else (match.scheduled_time.isoformat() if match.scheduled_time else None)),
                 'alliances': {
                     'red': {
                         'teams': [match.red_1, match.red_2, match.red_3],
@@ -1324,7 +1328,8 @@ def matches_data():
                     }
                 },
                 'winner': match.winner,
-                'status': 'completed' if match.winner else 'upcoming'
+                # Consider a match "played" if an actual_time exists or a winner/score is present
+                'status': 'played' if (match.actual_time or match.winner or (match.red_score is not None or match.blue_score is not None)) else 'upcoming'
             }
             matches_data.append(match_data)
         
