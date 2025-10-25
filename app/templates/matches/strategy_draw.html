@@ -31,14 +31,15 @@
     </div>
 </div>
 <div class="position-relative" style="width: 100%; max-width: 900px; margin: 0 auto;">
-    <img id="field-image" src="{{ url_for('static', filename='Feild-2025.png') }}" alt="Field" style="width: 100%; display: block;">
-    <canvas id="drawing-canvas" style="position: absolute; left: 0; top: 0; z-index: 2;"></canvas>
+    <img id="field-image" src="{{ url_for('static', filename='Feild-2025.png') }}" alt="Field" style="width: 100%; display: block; -webkit-user-drag: none; user-drag: none; user-select: none;" draggable="false">
+    <canvas id="drawing-canvas" style="position: absolute; left: 0; top: 0; z-index: 2; width: 100%; height: 100%; touch-action: none;"></canvas>
 </div>
 <div class="mt-3 text-center">
     <button id="clear-canvas" class="btn btn-warning">Clear Drawing</button>
-    <span class="text-muted ms-3">Drawings are synced in real time and saved per match.</span>
+    <button id="save-drawing" class="btn btn-primary ms-2">Save Drawing</button>
+    <span id="save-status" class="ms-3 text-muted">Drawings are synced in real time and can be saved for later.</span>
 </div>
-<script src="{{ url_for('static', filename='js/vendor/socket.io-4.7.5.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/vendor/socket.io.min.js') }}"></script>
 <script>
 const fieldImage = document.getElementById('field-image');
 const canvas = document.getElementById('drawing-canvas');
@@ -58,26 +59,37 @@ let drawingData = [];
 let defaultFieldImage = "{{ url_for('static', filename='Feild-2025.png') }}";
 
 function resizeCanvas() {
+    // Size the canvas to match the displayed image size
     canvas.width = fieldImage.clientWidth;
     canvas.height = fieldImage.clientHeight;
+    // Ensure the underlying image doesn't capture pointer events so the canvas receives them
+    try {
+        fieldImage.style.pointerEvents = 'none';
+    } catch (e) {
+        // ignore if not supported
+    }
     redraw();
 }
 
 function redraw() {
+    // Use the displayed size (bounding rect) so drawing matches pointer coordinates
+    const rect = canvas.getBoundingClientRect();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (const line of drawingData) {
         ctx.strokeStyle = line.color;
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(line.points[0].x * canvas.width, line.points[0].y * canvas.height);
+        ctx.moveTo(line.points[0].x * rect.width, line.points[0].y * rect.height);
         for (let i = 1; i < line.points.length; i++) {
-            ctx.lineTo(line.points[i].x * canvas.width, line.points[i].y * canvas.height);
+            ctx.lineTo(line.points[i].x * rect.width, line.points[i].y * rect.height);
         }
         ctx.stroke();
     }
 }
 
 function startDraw(e) {
+    // prevent touch from scrolling while drawing
+    if (e.type && e.type.startsWith('touch')) e.preventDefault();
     drawing = true;
     const {x, y} = getPos(e);
     lastX = x;
@@ -87,6 +99,7 @@ function startDraw(e) {
 
 function draw(e) {
     if (!drawing) return;
+    if (e.type && e.type.startsWith('touch')) e.preventDefault();
     const {x, y} = getPos(e);
     const line = drawingData[drawingData.length - 1];
     line.points.push({x, y});
@@ -112,14 +125,28 @@ function getPos(e) {
         clientX = e.clientX;
         clientY = e.clientY;
     }
-    const x = (clientX - rect.left) / canvas.width;
-    const y = (clientY - rect.top) / canvas.height;
+    // Normalize using the displayed size so coordinates are fractions [0..1]
+    const x = (clientX - rect.left) / rect.width;
+    const y = (clientY - rect.top) / rect.height;
     return {x, y};
 }
 
 function sendDrawingUpdate() {
     if (currentMatchId) {
-        socket.emit('drawing_update', {match_id: currentMatchId, data: drawingData});
+        // Emit via Socket.IO for real-time sync
+        try {
+            socket.emit('drawing_update', {match_id: currentMatchId, data: drawingData});
+        } catch (e) {
+            console.warn('Socket emit failed:', e);
+        }
+        // Also POST to server as a reliable fallback so drawings are persisted even if socket fails
+        fetch(`/matches/api/strategy_drawing/${currentMatchId}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({data: drawingData})
+        }).then(res => res.json()).then(resp => {
+            if (!resp || resp.error) console.warn('Persistent save failed', resp);
+        }).catch(err => console.warn('Persistent save error', err));
     }
 }
 
@@ -235,6 +262,7 @@ canvas.addEventListener('touchend', endDraw);
 
 window.addEventListener('resize', resizeCanvas);
 fieldImage.onload = resizeCanvas;
+fieldImage.addEventListener('dragstart', e => e.preventDefault());
 
 // Socket.IO events
 socket.on('drawing_data', data => {
@@ -251,12 +279,57 @@ if (matchSelect.value) {
     loadDrawing(currentMatchId);
     checkGlobalBackground();
 }
-resizeCanvas();
+
+// Only resize the canvas after the image is loaded (or immediately if already loaded)
+if (fieldImage.complete && fieldImage.naturalWidth !== 0) {
+    resizeCanvas();
+} else {
+    fieldImage.onload = resizeCanvas;
+}
 
 clearBtn.addEventListener('click', () => {
     drawingData = [];
     redraw();
     sendDrawingUpdate();
 });
+
+// Keep currentColor in sync with the color picker
+colorPicker.addEventListener('input', (e) => {
+    currentColor = e.target.value;
+});
+
+// Manual save button: persist drawing to server and show status
+const saveBtn = document.getElementById('save-drawing');
+const saveStatus = document.getElementById('save-status');
+async function saveDrawingToServer() {
+    if (!currentMatchId) {
+        saveStatus.textContent = 'Select a match before saving.';
+        return;
+    }
+    saveStatus.textContent = 'Saving...';
+    saveBtn.disabled = true;
+    try {
+        const resp = await fetch(`/matches/api/strategy_drawing/${currentMatchId}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({data: drawingData})
+        });
+        const json = await resp.json();
+        if (resp.ok && json && json.success) {
+            saveStatus.textContent = 'Saved.';
+            setTimeout(() => { saveStatus.textContent = 'Saved.'; }, 1000);
+        } else {
+            saveStatus.textContent = json && json.error ? `Save failed: ${json.error}` : 'Save failed';
+        }
+    } catch (e) {
+        console.warn('Save error', e);
+        saveStatus.textContent = 'Save error (see console)';
+    } finally {
+        saveBtn.disabled = false;
+        setTimeout(() => { if (saveStatus.textContent.startsWith('Saved')) saveStatus.textContent = 'Drawings are synced in real time and can be saved for later.'; }, 3000);
+    }
+}
+
+saveBtn.addEventListener('click', saveDrawingToServer);
 </script>
 {% endblock %} 

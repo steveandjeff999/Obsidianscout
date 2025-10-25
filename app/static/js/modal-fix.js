@@ -242,6 +242,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     'width': '100%',
                     'height': '100%'
                 });
+
+                // If the QR modal is currently shown, make the backdrop fully transparent
+                // (this prevents a dim/gray overlay while keeping the modal interactive).
+                try {
+                    const qrShown = document.querySelector('#qrModal.show') !== null;
+                    if (qrShown) {
+                        backdrop.style.backgroundColor = 'transparent';
+                        // inline !important to override other styles
+                        addImportantStyles(backdrop, { 'background-color': 'transparent' });
+                    } else {
+                        // ensure we still have a sensible default when other modals are shown
+                        // use a subtle dark overlay (15%) to match modal-fix.css default
+                        addImportantStyles(backdrop, { 'background-color': 'rgba(0,0,0,0.15)' });
+                    }
+                } catch (e) {
+                    // If any error occurs, leave backdrop as-is
+                    console.warn('Could not adjust modal backdrop for QR modal:', e);
+                }
             });
         }, 0);
     }
