@@ -316,9 +316,15 @@
             <div class="notification-card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <h3 style="margin: 0;">📅 Scheduled Notifications</h3>
-                    <button id="refresh-schedule-btn" class="test-button btn-primary" onclick="refreshSchedule()">
-                        🔄 Refresh Schedule
-                    </button>
+                    <div style="display:flex;gap:12px;align-items:center;">
+                        <div id="next-schedule-container" style="font-size:0.95em;color:#6c757d;display:flex;align-items:center;gap:8px;">
+                            <span style="font-weight:600;">Next scheduling in</span>
+                            <span id="next-schedule-timer">{% if next_schedule_seconds is defined and next_schedule_seconds %}{{ next_schedule_seconds }}s{% else %}--:--{% endif %}</span>
+                        </div>
+                        <button id="refresh-schedule-btn" class="test-button btn-primary" onclick="refreshSchedule()">
+                            🔄 Refresh Schedule
+                        </button>
+                    </div>
                 </div>
                 {% if pending_notifications %}
                 <div id="pending-list">
@@ -329,9 +335,20 @@
                         <small>{{ subscription.notification_type.replace('_', ' ').title() }}</small>
                         <br>
                         <small class="text-muted">
-                            ⏰ Will send: {{ queue.scheduled_for.strftime('%Y-%m-%d %I:%M %p') }}
-                            {% if match.scheduled_time %}
-                            | 🏆 Match time: {{ match.scheduled_time.strftime('%I:%M %p') }}
+                            {% if current_event and current_event.timezone %}
+                                ⏰ Will send: {{ queue.scheduled_for | format_time_tz(current_event.timezone, '%Y-%m-%d %I:%M %p %Z') }}
+                                {% if match.predicted_time %}
+                                | 🏆 Match time: ~{{ match.predicted_time | format_time_tz(current_event.timezone, '%I:%M %p') }} (predicted)
+                                {% elif match.scheduled_time %}
+                                | 🏆 Match time: {{ match.scheduled_time | format_time_tz(current_event.timezone, '%I:%M %p') }}
+                                {% endif %}
+                            {% else %}
+                                ⏰ Will send: {{ queue.scheduled_for.strftime('%Y-%m-%d %I:%M %p') }} UTC
+                                {% if match.predicted_time %}
+                                | 🏆 Match time: ~{{ match.predicted_time.strftime('%I:%M %p') }} UTC (predicted)
+                                {% elif match.scheduled_time %}
+                                | 🏆 Match time: {{ match.scheduled_time.strftime('%I:%M %p') }} UTC
+                                {% endif %}
                             {% endif %}
                             | Status: <span class="badge badge-info">{{ queue.status }}</span>
                         </small>
@@ -684,15 +701,114 @@ async function testPush() {
     }
 }
 
+// Shared countdown state for next scheduling (seconds)
+var nextScheduleRemaining = null;
+var nextScheduleTimerElem = null;
+
+// Update pending notifications list in the DOM
+function updatePendingNotificationsList(pendingList) {
+    // Find the pending notifications container by ID
+    let listContainer = document.getElementById('pending-list');
+    
+    // If not found, try to find the parent notification-card that contains "Scheduled Notifications"
+    if (!listContainer) {
+        const cards = document.querySelectorAll('.notification-card');
+        for (const card of cards) {
+            const h3 = card.querySelector('h3');
+            if (h3 && h3.textContent.includes('Scheduled Notifications')) {
+                listContainer = document.createElement('div');
+                listContainer.id = 'pending-list';
+                // Find the paragraph with "No notifications" and replace it, or append
+                const existingP = card.querySelector('p.text-muted');
+                if (existingP) {
+                    existingP.replaceWith(listContainer);
+                } else {
+                    card.appendChild(listContainer);
+                }
+                break;
+            }
+        }
+    }
+    
+    if (!listContainer) {
+        console.error('Could not find pending notifications container');
+        return;
+    }
+    
+    // Clear existing content
+    listContainer.innerHTML = '';
+    
+    if (pendingList.length === 0) {
+        listContainer.innerHTML = '<p class="text-muted">No notifications scheduled. Create a subscription and wait for upcoming matches!</p>';
+        return;
+    }
+    
+    // Build the list
+    pendingList.forEach(notif => {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.style.borderLeftColor = '#17a2b8';
+        
+        const scheduledDate = new Date(notif.scheduled_for);
+        // Use timezone from notification or default to browser timezone
+        const tzOptions = { 
+            year: 'numeric', 
+            month: '2-digit', 
+            day: '2-digit', 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: true
+        };
+        if (notif.event_timezone) {
+            tzOptions.timeZone = notif.event_timezone;
+            tzOptions.timeZoneName = 'short';
+        }
+        const timeStr = scheduledDate.toLocaleString('en-US', tzOptions);
+        
+        let matchTimeStr = '';
+        if (notif.match_time) {
+            const matchDate = new Date(notif.match_time);
+            const matchTzOptions = { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: true
+            };
+            if (notif.event_timezone) {
+                matchTzOptions.timeZone = notif.event_timezone;
+            }
+            const matchTime = matchDate.toLocaleString('en-US', matchTzOptions);
+            matchTimeStr = notif.is_predicted 
+                ? `| 🏆 Match time: ~${matchTime} (predicted)` 
+                : `| 🏆 Match time: ${matchTime}`;
+        }
+        
+        item.innerHTML = `
+            <strong>Team ${notif.team_number} - Match #${notif.match_number}</strong>
+            <br>
+            <small>${notif.notification_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</small>
+            <br>
+            <small class="text-muted">
+                ⏰ Will send: ${timeStr} (${notif.minutes_before} min before match) ${matchTimeStr}
+            </small>
+        `;
+        listContainer.appendChild(item);
+    });
+}
+
 // Refresh notification schedule from FRC APIs
-async function refreshSchedule() {
+// If `silent` is true, the function will request a schedule refresh but will
+// not reload the page or show alerts; instead it will reset the frontend
+// countdown to 5 minutes so the UI reflects the upcoming periodic run.
+async function refreshSchedule(silent=false) {
     const btn = document.getElementById('refresh-schedule-btn');
-    const originalText = btn.innerHTML;
+    const originalText = btn ? btn.innerHTML : '';
     
     try {
-        // Show loading state
-        btn.disabled = true;
-        btn.innerHTML = '⏳ Refreshing...';
+        if (btn) {
+            // Show loading state
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Refreshing...';
+        }
         
         const response = await fetch('/notifications/refresh-schedule', {
             method: 'POST',
@@ -704,19 +820,39 @@ async function refreshSchedule() {
         const result = await response.json();
         
         if (response.ok) {
-            alert('✅ ' + result.message);
-            // Reload page to show updated schedule
-            window.location.reload();
+            if (!silent) {
+                alert('✅ ' + result.message);
+                // Reload page to show updated schedule
+                window.location.reload();
+            } else {
+                // Silent mode: update pending notifications list in-place
+                if (result.pending_notifications) {
+                    updatePendingNotificationsList(result.pending_notifications);
+                }
+                // Reset frontend countdown to 5 minutes (300s) and continue
+                nextScheduleRemaining = 300;
+                if (nextScheduleTimerElem) nextScheduleTimerElem.textContent = formatRemaining(nextScheduleRemaining);
+                // Reset button state
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+                console.log(`✅ Auto-scheduled ${result.notifications_scheduled} notifications`);
+            }
         } else {
-            alert('❌ ' + (result.error || 'Failed to refresh schedule'));
-            btn.disabled = false;
-            btn.innerHTML = originalText;
+            if (!silent) alert('❌ ' + (result.error || 'Failed to refresh schedule'));
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
         }
     } catch (error) {
         console.error('Error refreshing schedule:', error);
-        alert('❌ Error refreshing schedule: ' + error.message);
-        btn.disabled = false;
-        btn.innerHTML = originalText;
+        if (!silent) alert('❌ Error refreshing schedule: ' + error.message);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
     }
 }
 
@@ -777,6 +913,51 @@ async function updateRegisterButton() {
 document.addEventListener('DOMContentLoaded', function() {
     // Register button is always visible, no need to check
     console.log('Notifications page loaded');
+    // Initialize next-schedule countdown if server provided an initial value
+    try {
+        const initial = {{ next_schedule_seconds|default(0) }};
+        nextScheduleRemaining = parseInt(initial, 10) || 0;
+        nextScheduleTimerElem = document.getElementById('next-schedule-timer');
+
+        function formatRemaining(sec) {
+            if (sec <= 0) return '00:00';
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60);
+            return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        }
+
+        if (nextScheduleTimerElem) {
+            // If the server returned a small integer (seconds), show mm:ss
+            nextScheduleTimerElem.textContent = nextScheduleRemaining > 0 ? formatRemaining(nextScheduleRemaining) : '--:--';
+
+            // Expose formatRemaining for other functions (used by refreshSchedule)
+            window.formatRemaining = formatRemaining;
+
+            setInterval(() => {
+                if (nextScheduleRemaining > 0) {
+                    nextScheduleRemaining -= 1;
+                    nextScheduleTimerElem.textContent = formatRemaining(nextScheduleRemaining);
+                } else {
+                    // Countdown reached zero — trigger the same action as the Refresh Schedule button
+                    // Use the silent flag so the page doesn't reload and we can reset the frontend timer to 5:00
+                    try {
+                        // Prevent multiple concurrent calls by setting remaining to -1 until the call completes
+                        nextScheduleRemaining = -1;
+                        refreshSchedule(true);
+                        // Reset to 5 minutes for the next cycle so frontend shows 05:00 immediately
+                        nextScheduleRemaining = 300;
+                        nextScheduleTimerElem.textContent = formatRemaining(nextScheduleRemaining);
+                    } catch(e) {
+                        // If refresh fails, try again next tick
+                        console.error('Error auto-refreshing schedule:', e);
+                        nextScheduleRemaining = 0; // allow retry next second
+                    }
+                }
+            }, 1000);
+        }
+    } catch (err) {
+        // ignore errors in countdown init
+    }
 });
 </script>
 {% endblock %}
