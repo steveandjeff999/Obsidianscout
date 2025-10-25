@@ -332,29 +332,36 @@
                 {% if pending_notifications %}
                 <div id="pending-list">
                     {% for queue, subscription, match in pending_notifications %}
-                    <div class="history-item" style="border-left-color: #17a2b8;">
-                        <strong>Team {{ subscription.target_team_number }} - Match #{{ match.match_number }}</strong>
-                        <br>
-                        <small>{{ subscription.notification_type.replace('_', ' ').title() }}</small>
-                        <br>
-                        <small class="text-muted">
-                            {% if current_event and current_event.timezone %}
-                                ⏰ Will send: {{ queue.scheduled_for | format_time_tz(current_event.timezone, '%Y-%m-%d %I:%M %p %Z') }}
-                                {% if match.predicted_time %}
-                                | 🏆 Match time: ~{{ match.predicted_time | format_time_tz(current_event.timezone, '%I:%M %p') }} (predicted)
-                                {% elif match.scheduled_time %}
-                                | 🏆 Match time: {{ match.scheduled_time | format_time_tz(current_event.timezone, '%I:%M %p') }}
+                    <div class="history-item d-flex" style="border-left-color: #17a2b8; justify-content:space-between; align-items:center;">
+                        <div>
+                            <strong>Team {{ subscription.target_team_number }} - Match #{{ match.match_number }}</strong>
+                            <br>
+                            <small>{{ subscription.notification_type.replace('_', ' ').title() }}</small>
+                            <br>
+                            <small class="text-muted">
+                                {% if current_event and current_event.timezone %}
+                                    ⏰ Will send: {{ queue.scheduled_for | format_time_tz(current_event.timezone, '%Y-%m-%d %I:%M %p %Z') }}
+                                    {% if match.predicted_time %}
+                                    | 🏆 Match time: ~{{ match.predicted_time | format_time_tz(current_event.timezone, '%I:%M %p') }} (predicted)
+                                    {% elif match.scheduled_time %}
+                                    | 🏆 Match time: {{ match.scheduled_time | format_time_tz(current_event.timezone, '%I:%M %p') }}
+                                    {% endif %}
+                                {% else %}
+                                    ⏰ Will send: {{ queue.scheduled_for.strftime('%Y-%m-%d %I:%M %p') }} UTC
+                                    {% if match.predicted_time %}
+                                    | 🏆 Match time: ~{{ match.predicted_time.strftime('%I:%M %p') }} UTC (predicted)
+                                    {% elif match.scheduled_time %}
+                                    | 🏆 Match time: {{ match.scheduled_time.strftime('%I:%M %p') }} UTC
+                                    {% endif %}
                                 {% endif %}
-                            {% else %}
-                                ⏰ Will send: {{ queue.scheduled_for.strftime('%Y-%m-%d %I:%M %p') }} UTC
-                                {% if match.predicted_time %}
-                                | 🏆 Match time: ~{{ match.predicted_time.strftime('%I:%M %p') }} UTC (predicted)
-                                {% elif match.scheduled_time %}
-                                | 🏆 Match time: {{ match.scheduled_time.strftime('%I:%M %p') }} UTC
-                                {% endif %}
-                            {% endif %}
-                            | Status: <span class="badge badge-info">{{ queue.status }}</span>
-                        </small>
+                                | Status: <span class="badge badge-info">{{ queue.status }}</span>
+                            </small>
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <button class="test-button btn-danger btn-sm" onclick="clearHistory({{ match.id }}, {{ subscription.id }}, false, false)">Clear Queue</button>
+                            <button class="test-button btn-warning btn-sm" onclick="clearHistory({{ match.id }}, {{ subscription.id }}, true, false)">Clear + Logs</button>
+                            <button class="test-button btn-success btn-sm" onclick="clearHistory({{ match.id }}, {{ subscription.id }}, true, true)">Clear + Reschedule</button>
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
@@ -387,24 +394,36 @@
     <div class="row">
         <div class="col-12">
             <div class="notification-card">
-                <h3>📜 Notification History</h3>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <h3 style="margin:0;">📜 Notification History</h3>
+                    <div>
+                        <button id="clear-history-all-btn" class="test-button btn-danger" onclick="clearAllHistory()">🧹 Clear History</button>
+                    </div>
+                </div>
                 {% if history %}
                 <div id="history-list">
                     {% for log in history %}
-                    <div class="history-item {% if log.email_sent %}email-sent{% endif %} {% if log.push_sent_count > 0 %}push-sent{% endif %}">
-                        <strong>{{ log.title }}</strong>
-                        {% if log.team_number %}
-                        <span class="badge badge-info" style="margin-left: 8px;">Team {{ log.team_number }}</span>
-                        {% endif %}
-                        <br>
-                        <small>{{ log.message[:100] }}{% if log.message|length > 100 %}...{% endif %}</small>
-                        <br>
-                        <small class="text-muted">
-                            ⏰ Sent: {{ log.sent_at.strftime('%Y-%m-%d %I:%M %p') }}
-                            {% if log.email_sent %} | <span class="badge badge-success">📧 Email</span>{% endif %}
-                            {% if log.push_sent_count > 0 %} | <span class="badge badge-info">📱 Push ({{ log.push_sent_count }})</span>{% endif %}
-                            {% if log.push_failed_count > 0 %} | <span class="badge badge-warning">⚠️ {{ log.push_failed_count }} failed</span>{% endif %}
-                        </small>
+                    <div class="history-item d-flex" style="justify-content:space-between;align-items:center;">
+                        <div>
+                            <strong>{{ log.title }}</strong>
+                            {% if log.team_number %}
+                            <span class="badge badge-info" style="margin-left: 8px;">Team {{ log.team_number }}</span>
+                            {% endif %}
+                            <br>
+                            <small>{{ log.message[:100] }}{% if log.message|length > 100 %}...{% endif %}</small>
+                            <br>
+                            <small class="text-muted">
+                                ⏰ Sent: {{ log.sent_at.strftime('%Y-%m-%d %I:%M %p') }}
+                                {% if log.email_sent %} | <span class="badge badge-success">📧 Email</span>{% endif %}
+                                {% if log.push_sent_count > 0 %} | <span class="badge badge-info">📱 Push ({{ log.push_sent_count }})</span>{% endif %}
+                                {% if log.push_failed_count > 0 %} | <span class="badge badge-warning">⚠️ {{ log.push_failed_count }} failed</span>{% endif %}
+                            </small>
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <button class="test-button btn-danger btn-sm" onclick="clearLog({{ log.id }}, false, false)">Clear Log</button>
+                            <button class="test-button btn-warning btn-sm" onclick="clearLog({{ log.id }}, true, false)">Clear Log + Queue</button>
+                            <button class="test-button btn-success btn-sm" onclick="clearLog({{ log.id }}, true, true)">Clear + Reschedule</button>
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
@@ -889,6 +908,126 @@ async function clearScheduledNotifications() {
     } catch (error) {
         console.error('Error clearing scheduled notifications:', error);
         alert('❌ Error: ' + error.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = orig;
+        }
+    }
+}
+
+// Clear history (queue and optional logs) for a specific match/subscription
+async function clearHistory(matchId, subscriptionId, includeLogs=false, reschedule=false) {
+    let actionText = 'Clear queued notifications for this match and subscription?';
+    if (includeLogs && reschedule) actionText = 'Clear queued notifications AND logs, then reschedule for this match?';
+    else if (includeLogs) actionText = 'Clear queued notifications AND logs for this match/subscription?';
+    else if (reschedule) actionText = 'Clear queued notifications for this match/subscription and reschedule?';
+
+    if (!confirm(actionText)) return;
+
+    try {
+        const payload = {
+            match_id: matchId,
+            subscription_id: subscriptionId,
+            include_logs: includeLogs,
+            reschedule: reschedule
+        };
+
+        const response = await fetch('/notifications/clear-history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            let msg = `✅ Cleared ${result.deleted_queue || 0} queue entries`;
+            if (typeof result.deleted_logs !== 'undefined') msg += ` and ${result.deleted_logs} logs`;
+            if (result.rescheduled) msg += `. Rescheduled ${result.rescheduled} notifications.`;
+            alert(msg);
+            // Refresh the scheduled list in-place by calling refreshSchedule silently
+            await refreshSchedule(true);
+        } else {
+            alert('❌ ' + (result.error || 'Failed to clear history'));
+        }
+    } catch (err) {
+        console.error('Error clearing history:', err);
+        alert('❌ Error: ' + err.message);
+    }
+}
+
+// Clear a specific notification log (and optionally its queue entries), then optionally reschedule
+async function clearLog(logId, clearQueue=false, reschedule=false) {
+    let actionText = 'Delete this notification log?';
+    if (clearQueue && reschedule) actionText = 'Delete this log, clear any queued notifications for the same match, and reschedule?';
+    else if (clearQueue) actionText = 'Delete this log and clear any queued notifications for the same match?';
+    else if (reschedule) actionText = 'Delete this log and reschedule notifications for its match?';
+
+    if (!confirm(actionText)) return;
+
+    try {
+        const payload = {
+            log_id: logId,
+            clear_queue: clearQueue,
+            reschedule: reschedule
+        };
+
+        const response = await fetch('/notifications/clear-history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            let msg = `✅ Deleted ${result.deleted_logs || 0} log(s)`;
+            if (typeof result.deleted_queue !== 'undefined') msg += ` and ${result.deleted_queue} queue entries`;
+            if (result.rescheduled) msg += `. Rescheduled ${result.rescheduled} notifications.`;
+            alert(msg);
+            // Refresh history and pending lists silently
+            await refreshSchedule(true);
+            // Reload history list via simple page reload for now
+            window.location.reload();
+        } else {
+            alert('❌ ' + (result.error || 'Failed to delete log'));
+        }
+    } catch (err) {
+        console.error('Error deleting log:', err);
+        alert('❌ Error: ' + err.message);
+    }
+}
+
+// Clear all notification history for the current user
+async function clearAllHistory() {
+    if (!confirm('Delete ALL notification history for your account? This cannot be undone. Continue?')) return;
+
+    const btn = document.getElementById('clear-history-all-btn');
+    const orig = btn ? btn.innerHTML : '';
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Clearing...';
+        }
+
+        const response = await fetch('/notifications/clear-all-history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            alert(`✅ ${result.message}`);
+            // Reload to show empty history
+            window.location.reload();
+        } else {
+            alert('❌ ' + (result.error || 'Failed to clear history'));
+        }
+    } catch (err) {
+        console.error('Error clearing all history:', err);
+        alert('❌ Error: ' + err.message);
     } finally {
         if (btn) {
             btn.disabled = false;

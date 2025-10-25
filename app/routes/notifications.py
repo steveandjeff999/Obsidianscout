@@ -683,3 +683,170 @@ def clear_scheduled_notifications():
         db.session.rollback()
         current_app.logger.error(f"Error clearing scheduled notifications for user {getattr(current_user, 'id', None)}: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/clear-history', methods=['POST'])
+@login_required
+def clear_notification_history():
+    """Clear notification queue entries and optionally notification log entries for a specific
+    match and/or subscription. Optionally reschedule notifications for the given match.
+
+    Expected JSON body:
+      - match_id: (optional) integer
+      - subscription_id: (optional) integer
+      - include_logs: (optional) boolean (default: False) — delete NotificationLog entries
+      - reschedule: (optional) boolean (default: False) — call schedule_notifications_for_match after clearing
+    """
+    try:
+        data = request.get_json() if request.is_json else request.form
+        match_id = data.get('match_id')
+        subscription_id = data.get('subscription_id')
+        log_id = data.get('log_id')
+        include_logs = str(data.get('include_logs', 'false')).lower() in ('true', '1', 'yes', 'on')
+        do_reschedule = str(data.get('reschedule', 'false')).lower() in ('true', '1', 'yes', 'on')
+        clear_queue = str(data.get('clear_queue', 'false')).lower() in ('true', '1', 'yes', 'on')
+
+        # Validate input
+        if not match_id and not subscription_id:
+            return jsonify({'error': 'match_id or subscription_id is required'}), 400
+
+        from app.models_misc import NotificationQueue, NotificationLog, NotificationSubscription
+        from app.models import Match, Event
+
+        # If subscription specified, verify ownership
+        if subscription_id:
+            sub = NotificationSubscription.query.get_or_404(subscription_id)
+            if sub.user_id != current_user.id:
+                return jsonify({'error': 'Unauthorized subscription access'}), 403
+        else:
+            sub = None
+
+        # If match specified, verify it belongs to the same scouting team
+        match = None
+        if match_id:
+            match = Match.query.get(match_id)
+            if not match:
+                return jsonify({'error': f'Match {match_id} not found'}), 404
+            # Verify match belongs to the user's scouting_team_number via event
+            event = Event.query.get(match.event_id) if match.event_id else None
+            if event and event.scouting_team_number != current_user.scouting_team_number:
+                return jsonify({'error': 'Unauthorized match access'}), 403
+
+        # If a log_id was provided, load and verify ownership
+        log = None
+        if log_id:
+            log = NotificationLog.query.get(log_id)
+            if not log:
+                return jsonify({'error': f'Log {log_id} not found'}), 404
+            if log.user_id != current_user.id:
+                return jsonify({'error': 'Unauthorized log access'}), 403
+            # If log references a match/subscription and they weren't provided explicitly, use them
+            if not match_id and log.match_id:
+                match_id = log.match_id
+                match = Match.query.get(match_id)
+            if not subscription_id and log.subscription_id:
+                subscription_id = log.subscription_id
+
+        # Build query to delete NotificationQueue entries
+        q = NotificationQueue.query
+        if match_id:
+            q = q.filter(NotificationQueue.match_id == match_id)
+        if subscription_id:
+            q = q.filter(NotificationQueue.subscription_id == subscription_id)
+
+        # Limit to entries that belong to this user's subscriptions unless a specific subscription was provided
+        if not subscription_id:
+            # Join to subscription to ensure only this user's subscriptions
+            q = q.join(NotificationSubscription, NotificationQueue.subscription_id == NotificationSubscription.id)
+            q = q.filter(NotificationSubscription.user_id == current_user.id)
+
+        to_delete_queue = q.all()
+        deleted_queue_count = len(to_delete_queue)
+
+        for entry in to_delete_queue:
+            db.session.delete(entry)
+
+        deleted_logs_count = 0
+        if include_logs:
+            # Delete related NotificationLog entries
+            lq = NotificationLog.query
+            if match_id:
+                lq = lq.filter(NotificationLog.match_id == match_id)
+            if subscription_id:
+                lq = lq.filter(NotificationLog.subscription_id == subscription_id)
+            if not subscription_id:
+                # Only the current user's logs: join via subscription
+                lq = lq.join(NotificationSubscription, NotificationLog.subscription_id == NotificationSubscription.id)
+                lq = lq.filter(NotificationSubscription.user_id == current_user.id)
+
+            logs_to_delete = lq.all()
+            deleted_logs_count = len(logs_to_delete)
+            for lg in logs_to_delete:
+                db.session.delete(lg)
+
+        # If a specific log_id was provided, delete that single log (unless include_logs handled it)
+        if log_id and not include_logs:
+            try:
+                db.session.delete(log)
+                deleted_logs_count += 1
+            except Exception:
+                pass
+
+        db.session.commit()
+
+        scheduled_count = 0
+        if do_reschedule and match:
+            # Re-run scheduling for this match (will only create pending entries)
+            scheduled_count = schedule_notifications_for_match(match)
+
+        # If requested, clear related queue entries by log reference (used when calling by log_id)
+        if log_id and clear_queue and match:
+            try:
+                q2 = NotificationQueue.query.filter(NotificationQueue.match_id == match.id)
+                if subscription_id:
+                    q2 = q2.filter(NotificationQueue.subscription_id == subscription_id)
+                # Ensure queue entries belong to this user's subscriptions
+                q2 = q2.join(NotificationSubscription, NotificationQueue.subscription_id == NotificationSubscription.id)
+                q2 = q2.filter(NotificationSubscription.user_id == current_user.id)
+                q_entries = q2.all()
+                for qe in q_entries:
+                    db.session.delete(qe)
+                    deleted_queue_count += 1
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+
+        return jsonify({
+            'success': True,
+            'deleted_queue': deleted_queue_count,
+            'deleted_logs': deleted_logs_count,
+            'rescheduled': scheduled_count,
+            'message': f'Cleared {deleted_queue_count} queue entries and {deleted_logs_count} logs.'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error clearing notification history: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/clear-all-history', methods=['POST'])
+@login_required
+def clear_all_history():
+    """Delete all NotificationLog rows that belong to the current user.
+
+    This is a destructive action and should be confirmed on the client.
+    Returns the number of deleted rows.
+    """
+    try:
+        from app.models_misc import NotificationLog
+
+        # Bulk delete logs for this user
+        deleted = NotificationLog.query.filter_by(user_id=current_user.id).delete(synchronize_session=False)
+        db.session.commit()
+
+        return jsonify({'success': True, 'deleted_logs': deleted, 'message': f'Deleted {deleted} log(s) for your account.'})
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error clearing all notification history for user {getattr(current_user,'id',None)}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
