@@ -31,15 +31,36 @@ def get_match_time(match):
         datetime object in UTC timezone (timezone-aware)
     """
     match_time = None
+    time_source = None
     if match.predicted_time:
         # Use adjusted prediction if available (more accurate for delayed events)
         match_time = match.predicted_time
+        time_source = "predicted"
     elif match.scheduled_time:
         match_time = match.scheduled_time
+        time_source = "scheduled"
     
     # Ensure timezone-aware (database stores naive UTC datetimes)
     if match_time and match_time.tzinfo is None:
+        # Database stores times as naive UTC - add timezone info (NOT converting, just labeling)
         match_time = match_time.replace(tzinfo=timezone.utc)
+        
+        # Get event for timezone display
+        try:
+            event = Event.query.get(match.event_id) if match.event_id else None
+            event_tz = event.timezone if event else None
+            if event_tz:
+                local_time = convert_utc_to_local(match_time, event_tz)
+                print(f"⏰ Match {match.match_type} #{match.match_number} {time_source} time:")
+                print(f"   DB value: {match_time.replace(tzinfo=None)} (naive UTC)")
+                print(f"   As UTC: {match_time.strftime('%I:%M %p UTC')}")
+                print(f"   As {event_tz}: {local_time.strftime('%I:%M %p %Z')}")
+            else:
+                print(f"⏰ Match {match.match_type} #{match.match_number} {time_source} time: {match_time.strftime('%Y-%m-%d %I:%M %p UTC')}")
+        except Exception as e:
+            print(f"⚠️  Could not display timezone info: {e}")
+    elif match_time:
+        print(f"ℹ️  Match {match.match_type} #{match.match_number} {time_source} time already has tzinfo: {match_time}")
     
     return match_time
 
@@ -805,16 +826,40 @@ def schedule_notifications_for_match(match):
     
     for subscription in subscriptions:
         # Calculate when to send notification
-        # match_time is in UTC, so subtracting minutes gives us the correct UTC time to send
-        # This ensures notification is sent X minutes before match starts in LOCAL time
-        send_time = match_time - timedelta(minutes=subscription.minutes_before)
+        # match_time is timezone-aware UTC, so subtracting minutes gives us the correct UTC time to send
+        # This ensures notification is sent X minutes before match starts (in any timezone)
+        send_time_utc = match_time - timedelta(minutes=subscription.minutes_before)
+        
+        print(f"\n� Subscription {subscription.id} for team {subscription.target_team_number}:")
+        print(f"   Match time (UTC): {match_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        
+        if event_tz:
+            try:
+                # Show in local timezone for clarity
+                match_local = convert_utc_to_local(match_time, event_tz)
+                send_local = convert_utc_to_local(send_time_utc, event_tz)
+                print(f"   Match time (Local): {match_local.strftime('%Y-%m-%d %I:%M %p %Z')}")
+                print(f"   Send {subscription.minutes_before} min before")
+                print(f"   Send time (UTC): {send_time_utc.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+                print(f"   Send time (Local): {send_local.strftime('%Y-%m-%d %I:%M %p %Z')}")
+            except Exception as e:
+                print(f"   (Timezone conversion error: {e})")
+                print(f"   Send time (UTC): {send_time_utc.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        else:
+            print(f"   Send {subscription.minutes_before} min before")
+            print(f"   Send time (UTC): {send_time_utc.strftime('%Y-%m-%d %H:%M:%S %Z')}")
         
         # Don't schedule if already past (compare timezone-aware datetimes)
-        if send_time < datetime.now(timezone.utc):
+        now_utc = datetime.now(timezone.utc)
+        if send_time_utc < now_utc:
+            print(f"   ⏭️  SKIPPED - send time has passed")
+            print(f"      Current: {now_utc.strftime('%Y-%m-%d %H:%M:%S %Z')}")
             continue
         
-        # Convert to naive UTC for database storage (SQLite doesn't support timezone-aware datetimes)
-        send_time_naive = send_time.replace(tzinfo=None)
+        # Convert to naive UTC for database storage (SQLite stores naive datetimes)
+        # CRITICAL: This removes timezone info but keeps the UTC time value unchanged
+        send_time_naive = send_time_utc.replace(tzinfo=None)
+        print(f"   ✅ Will store: {send_time_naive} (naive UTC for DB)")
         
         # Check if already scheduled
         existing = NotificationQueue.query.filter_by(
