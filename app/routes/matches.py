@@ -4,7 +4,10 @@ from app.routes.auth import analytics_required
 from app.models import Match, Event, Team, ScoutingData
 from app import db
 from app.utils.api_utils import get_matches, ApiError, api_to_db_match_conversion, get_matches_dual_api
+from app.utils.score_utils import norm_db_score
 from datetime import datetime, timezone
+from app.utils.timezone_utils import convert_local_to_utc
+from app.utils.prediction_offsets import compute_event_dynamic_offset_minutes
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_effective_game_config
 from flask_socketio import emit, join_room, leave_room
@@ -29,21 +32,7 @@ def get_theme_context():
     }
 
 
-def norm_db_score(val):
-    """Normalize a score value coming from the DB/API: treat negative or invalid scores as None.
-
-    Many APIs use -1 as a sentinel for "no score yet". Treat those as None so the UI
-    and status logic don't consider the match played.
-    """
-    try:
-        if val is None:
-            return None
-        v = int(val)
-        if v < 0:
-            return None
-        return v
-    except Exception:
-        return None
+# (score normalization is provided by app.utils.score_utils.norm_db_score)
 
 bp = Blueprint('matches', __name__, url_prefix='/matches')
 
@@ -196,7 +185,72 @@ def index():
             else:
                 display_scores[match.id] = {'red_score': None, 'blue_score': None, 'source': None}
 
-    return render_template('matches/index.html', matches=matches, events=events, selected_event=event, display_scores=display_scores, **get_theme_context())
+            # Compute per-event dynamic offset (minutes) from recent completed matches to improve predicted times
+            dynamic_offset_minutes = 0
+            try:
+                if event:
+                    # Use matches sorted by most recent match_number descending to find recent completed matches
+                    recent_matches = sorted(matches, key=lambda m: m.match_number, reverse=True)
+                    dynamic_offset_minutes = compute_event_dynamic_offset_minutes(event, recent_matches, lookback=10)
+            except Exception:
+                dynamic_offset_minutes = 0
+
+            # Build adjusted predicted times map (match_id -> adjusted_datetime)
+            adjusted_predictions = {}
+            try:
+                for m in matches:
+                    if getattr(m, 'predicted_time', None) is not None:
+                        try:
+                            adj = m.predicted_time
+                            if dynamic_offset_minutes:
+                                from datetime import timedelta
+                                adj = adj + timedelta(minutes=dynamic_offset_minutes)
+                            adjusted_predictions[m.id] = adj
+                        except Exception:
+                            adjusted_predictions[m.id] = m.predicted_time
+
+            except Exception:
+                adjusted_predictions = {}
+
+            # Determine the next unplayed match (first match in sorted order without actual_time/winner/scores)
+            next_unplayed_match_id = None
+            try:
+                now_utc = datetime.now(timezone.utc)
+                for m in matches:
+                    finished = bool(
+                        getattr(m, 'actual_time', None)
+                        or getattr(m, 'winner', None)
+                        or ((getattr(m, 'red_score', None) is not None and getattr(m, 'red_score', None) >= 0)
+                            or (getattr(m, 'blue_score', None) is not None and getattr(m, 'blue_score', None) >= 0))
+                    )
+                    if finished:
+                        continue
+
+                    # We only consider matches with an adjusted predicted_time for the 'starting soon' behavior
+                    pred = adjusted_predictions.get(m.id) or getattr(m, 'predicted_time', None)
+                    if not pred:
+                        # If no predicted_time, this match is the next unplayed but we won't mark it 'starting soon' unless predicted_time exists
+                        next_unplayed_match_id = m.id
+                        break
+
+                    # Convert event-local predicted_time to UTC for comparison
+                    try:
+                        match_pred_utc = convert_local_to_utc(pred, m.event.timezone if getattr(m, 'event', None) else None)
+                    except Exception:
+                        match_pred_utc = pred if pred.tzinfo is not None else pred.replace(tzinfo=timezone.utc)
+
+                    # If predicted time is in the past, mark this as the next unplayed to show 'Starting soon'
+                    if now_utc > match_pred_utc:
+                        next_unplayed_match_id = m.id
+                        break
+
+                    # If predicted time is not past, then the first unplayed match is this one but it's not yet 'starting soon'
+                    next_unplayed_match_id = m.id
+                    break
+            except Exception:
+                next_unplayed_match_id = None
+
+            return render_template('matches/index.html', matches=matches, events=events, selected_event=event, display_scores=display_scores, next_unplayed_match_id=next_unplayed_match_id, adjusted_predictions=adjusted_predictions, **get_theme_context())
 
 @bp.route('/sync_from_config')
 def sync_from_config():

@@ -36,6 +36,33 @@ def index():
     
     # Get notification history
     history = get_user_notification_history(current_user.id, limit=50)
+    # Annotate each history log with event timezone (if available) so templates can
+    # display sent times in the event local timezone instead of UTC.
+    try:
+        for log in history:
+            tz = None
+            # Prefer explicit event_code stored on the log
+            if getattr(log, 'event_code', None):
+                ev = Event.query.filter_by(code=log.event_code, scouting_team_number=current_user.scouting_team_number).first()
+                if ev and getattr(ev, 'timezone', None):
+                    tz = ev.timezone
+
+            # Fallback: if log references a match, derive the event from the match
+            if not tz and getattr(log, 'match_id', None):
+                try:
+                    m = Match.query.get(log.match_id)
+                    if m and getattr(m, 'event_id', None):
+                        ev2 = Event.query.get(m.event_id)
+                        if ev2 and getattr(ev2, 'timezone', None):
+                            tz = ev2.timezone
+                except Exception:
+                    tz = None
+
+            # Attach attribute for template usage (Jinja can access it)
+            setattr(log, 'event_timezone', tz)
+    except Exception as e:
+        # Fail gracefully; templates will fall back to UTC formatting
+        print(f"Warning: could not resolve event timezone for history logs: {e}")
     
     # Get pending notifications (scheduled to send in the future)
     # Note: Match data is in different database, so we fetch separately and join in Python
@@ -47,6 +74,10 @@ def index():
         # Get pending queue entries with subscriptions
         # Note: Use naive UTC for database comparison since SQLite stores naive datetimes
         now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+        # Include a small buffer window so entries scheduled very recently (or set to now)
+        # are still included in the UI even if the page renders a few seconds later.
+        buffer_seconds = 120
+        now_minus_buffer = now_utc_naive - timedelta(seconds=buffer_seconds)
         pending_queue = db.session.query(
             NotificationQueue, NotificationSubscription
         ).join(
@@ -54,7 +85,7 @@ def index():
         ).filter(
             NotificationSubscription.user_id == current_user.id,
             NotificationQueue.status == 'pending',
-            NotificationQueue.scheduled_for > now_utc_naive
+            NotificationQueue.scheduled_for >= now_minus_buffer
         ).order_by(NotificationQueue.scheduled_for.asc()).limit(50).all()
         
         # Join with Match data from main database
@@ -600,6 +631,8 @@ def refresh_schedule():
         
         # Fetch updated pending notifications for response
         now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+        buffer_seconds = 120
+        now_minus_buffer = now_utc_naive - timedelta(seconds=buffer_seconds)
         pending_queue = db.session.query(
             NotificationQueue, NotificationSubscription
         ).join(
@@ -607,7 +640,7 @@ def refresh_schedule():
         ).filter(
             NotificationSubscription.user_id == current_user.id,
             NotificationQueue.status == 'pending',
-            NotificationQueue.scheduled_for > now_utc_naive
+            NotificationQueue.scheduled_for >= now_minus_buffer
         ).order_by(NotificationQueue.scheduled_for.asc()).limit(50).all()
         
         # Join with Match data from main database
@@ -659,6 +692,8 @@ def clear_scheduled_notifications():
         from app.models_misc import NotificationQueue, NotificationSubscription
 
         now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+        buffer_seconds = 120
+        now_minus_buffer = now_utc_naive - timedelta(seconds=buffer_seconds)
 
         # Query pending queue entries that belong to this user's subscriptions
         q = db.session.query(NotificationQueue).join(
@@ -666,7 +701,7 @@ def clear_scheduled_notifications():
         ).filter(
             NotificationSubscription.user_id == current_user.id,
             NotificationQueue.status == 'pending',
-            NotificationQueue.scheduled_for > now_utc_naive
+            NotificationQueue.scheduled_for >= now_minus_buffer
         )
 
         to_delete = q.all()

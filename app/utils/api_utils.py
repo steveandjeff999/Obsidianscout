@@ -625,35 +625,14 @@ def api_to_db_match_conversion(api_match, event_id):
     blue_score = None
     winner = None
     
-    # Helper: normalize API score values
-    def _norm_score(val):
-        """Normalize incoming score values from APIs.
-        - Convert numeric strings to int
-        - Treat negative scores (e.g. -1) as unknown/unplayed -> None
-        - Any non-numeric or missing values become None
-        """
-        try:
-            if val is None:
-                return None
-            # Some APIs provide numeric scores as strings
-            if isinstance(val, str):
-                val = val.strip()
-                if val == '':
-                    return None
-                valn = int(val)
-            else:
-                valn = int(val)
-
-            if valn < 0:
-                return None
-            return valn
-        except Exception:
-            return None
+    # Use shared normalization helper so negative sentinel values (e.g. -1)
+    # are treated as None consistently across the codebase
+    from app.utils.score_utils import norm_db_score
 
     # FIRST API uses scoreRedFinal and scoreBlueFinal
     if 'scoreRedFinal' in api_match and 'scoreBlueFinal' in api_match:
-        red_score = _norm_score(api_match.get('scoreRedFinal'))
-        blue_score = _norm_score(api_match.get('scoreBlueFinal'))
+        red_score = norm_db_score(api_match.get('scoreRedFinal'))
+        blue_score = norm_db_score(api_match.get('scoreBlueFinal'))
 
         # Determine winner only when both scores are present (non-negative)
         if red_score is not None and blue_score is not None:
@@ -667,8 +646,8 @@ def api_to_db_match_conversion(api_match, event_id):
     # TBA API uses alliances.red.score and alliances.blue.score
     elif 'alliances' in api_match:
         alliances = api_match.get('alliances', {})
-        red_score = _norm_score(alliances.get('red', {}).get('score'))
-        blue_score = _norm_score(alliances.get('blue', {}).get('score'))
+        red_score = norm_db_score(alliances.get('red', {}).get('score'))
+        blue_score = norm_db_score(alliances.get('blue', {}).get('score'))
 
         # Determine winner (TBA uses winning_alliance field, but we can also calculate)
         if red_score is not None and blue_score is not None:

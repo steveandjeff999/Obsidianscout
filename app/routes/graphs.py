@@ -587,7 +587,7 @@ def scout_leaderboard():
         except Exception:
             match = None
 
-        if match and match.red_score is not None and match.blue_score is not None:
+        if match and match.red_score is not None and match.red_score >= 0 and match.blue_score is not None and match.blue_score >= 0:
             # Attempt to find prediction value in the scouting data
             data = {}
             try:
@@ -1748,7 +1748,7 @@ def public_page_widget_render(token, widget_index):
                         matches_list = []
                         for match in matches:
                                 match_data = {'match_id': match.id, 'match_type': match.match_type, 'match_number': match.match_number, 'red_alliance': match.red_alliance, 'blue_alliance': match.blue_alliance, 'timestamp': match.timestamp}
-                                if show_scores and match.red_score is not None and match.blue_score is not None:
+                                if show_scores and match.red_score is not None and match.red_score >= 0 and match.blue_score is not None and match.blue_score >= 0:
                                         match_data['red_score'] = match.red_score
                                         match_data['blue_score'] = match.blue_score
                                         match_data['winner'] = 'red' if match.red_score > match.blue_score else 'blue' if match.blue_score > match.red_score else 'tie'
@@ -2404,7 +2404,7 @@ def pages_widget_render(page_id, widget_index):
                     'timestamp': match.timestamp
                 }
                 
-                if show_scores and match.red_score is not None and match.blue_score is not None:
+                if show_scores and match.red_score is not None and match.red_score >= 0 and match.blue_score is not None and match.blue_score >= 0:
                     match_data['red_score'] = match.red_score
                     match_data['blue_score'] = match.blue_score
                     match_data['winner'] = 'red' if match.red_score > match.blue_score else 'blue' if match.blue_score > match.red_score else 'tie'
@@ -2801,7 +2801,7 @@ def pages_view(page_id):
                         'timestamp': match.timestamp
                     }
                     
-                    if show_scores and match.red_score is not None and match.blue_score is not None:
+                    if show_scores and match.red_score is not None and match.red_score >= 0 and match.blue_score is not None and match.blue_score >= 0:
                         match_data['red_score'] = match.red_score
                         match_data['blue_score'] = match.blue_score
                         match_data['winner'] = 'red' if match.red_score > match.blue_score else 'blue' if match.blue_score > match.red_score else 'tie'

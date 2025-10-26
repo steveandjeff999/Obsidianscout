@@ -64,7 +64,7 @@
                                 <div class="d-flex align-items-center">
                                     <span class="badge bg-danger me-2">Red</span>
                                     <div class="fw-semibold me-2">
-                                        {% if s.red_score is not none %}
+                                        {% if s.red_score is not none and s.red_score >= 0 %}
                                             {{ s.red_score }}
                                         {% else %}
                                             <span class="text-muted">--</span>
@@ -102,7 +102,7 @@
                                 <div class="d-flex align-items-center">
                                     <span class="badge bg-primary me-2">Blue</span>
                                     <div class="fw-semibold me-2">
-                                        {% if s.blue_score is not none %}
+                                        {% if s.blue_score is not none and s.blue_score >= 0 %}
                                             {{ s.blue_score }}
                                         {% else %}
                                             <span class="text-muted">--</span>

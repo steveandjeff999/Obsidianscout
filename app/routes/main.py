@@ -1530,9 +1530,9 @@ def api_brief_data():
                     match_num = api_match.get('match_number')
                     red_score = api_match.get('red_score')
                     blue_score = api_match.get('blue_score')
-                    
-                    # Check if this match has been scored
-                    if match_num and red_score is not None and blue_score is not None:
+
+                    # Check if this match has been scored (both scores >= 0)
+                    if match_num and red_score is not None and red_score >= 0 and blue_score is not None and blue_score >= 0:
                         if last_completed_match_num is None or match_num > last_completed_match_num:
                             last_completed_match_num = match_num
                 
@@ -1553,8 +1553,8 @@ def api_brief_data():
                 # Fallback to local DB logic - find last match with scores in our DB
                 last_local_match = filter_matches_by_scouting_team()\
                     .filter(Match.event_id == current_event.id)\
-                    .filter(Match.red_score.isnot(None))\
-                    .filter(Match.blue_score.isnot(None))\
+                    .filter(Match.red_score >= 0)\
+                    .filter(Match.blue_score >= 0)\
                     .order_by(Match.match_number.desc())\
                     .first()
                 
@@ -1675,9 +1675,9 @@ def api_brief_data():
                     },
                     # Include actual results when available in local DB
                     'result': {
-                        'has_result': (match.red_score is not None and match.blue_score is not None),
-                        'red_score': match.red_score if getattr(match, 'red_score', None) is not None else None,
-                        'blue_score': match.blue_score if getattr(match, 'blue_score', None) is not None else None,
+                        'has_result': (match.red_score is not None and match.red_score >= 0 and match.blue_score is not None and match.blue_score >= 0),
+                        'red_score': match.red_score if getattr(match, 'red_score', None) is not None and match.red_score >= 0 else None,
+                        'blue_score': match.blue_score if getattr(match, 'blue_score', None) is not None and match.blue_score >= 0 else None,
                         'winner': None
                     }
                 })

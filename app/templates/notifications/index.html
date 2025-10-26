@@ -413,7 +413,11 @@
                             <small>{{ log.message[:100] }}{% if log.message|length > 100 %}...{% endif %}</small>
                             <br>
                             <small class="text-muted">
-                                ⏰ Sent: {{ log.sent_at.strftime('%Y-%m-%d %I:%M %p') }}
+                                {% if log.event_timezone %}
+                                    ⏰ Sent: {{ log.sent_at | format_time_tz(log.event_timezone, '%Y-%m-%d %I:%M %p %Z') }}
+                                {% else %}
+                                    ⏰ Sent: {{ log.sent_at.strftime('%Y-%m-%d %I:%M %p UTC') }}
+                                {% endif %}
                                 {% if log.email_sent %} | <span class="badge badge-success">📧 Email</span>{% endif %}
                                 {% if log.push_sent_count > 0 %} | <span class="badge badge-info">📱 Push ({{ log.push_sent_count }})</span>{% endif %}
                                 {% if log.push_failed_count > 0 %} | <span class="badge badge-warning">⚠️ {{ log.push_failed_count }} failed</span>{% endif %}

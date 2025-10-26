@@ -1053,9 +1053,23 @@ def get_match_details_with_teams(match_id):
     prediction = predict_match_outcome(match_id)
     
     # Enhance with actual match score if available
-    if match.red_score is not None and match.blue_score is not None:
+    try:
+        from app.utils.score_utils import norm_db_score
+    except Exception:
+        def norm_db_score(x):
+            try:
+                if x is None:
+                    return None
+                v = int(x)
+                return v if v >= 0 else None
+            except Exception:
+                return None
+
+    red_db = norm_db_score(match.red_score)
+    blue_db = norm_db_score(match.blue_score)
+    if red_db is not None and blue_db is not None:
         match_completed = True
-        actual_winner = 'red' if match.red_score > match.blue_score else 'blue' if match.blue_score > match.red_score else 'tie'
+        actual_winner = 'red' if red_db > blue_db else 'blue' if blue_db > red_db else 'tie'
     else:
         match_completed = False
         actual_winner = None
