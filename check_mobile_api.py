@@ -24,23 +24,23 @@ def check_api():
         data = response.read().decode('utf-8')
         result = json.loads(data)
         
-        print("✅ SUCCESS!")
+        print("SUCCESS!")
         print(json.dumps(result, indent=2))
-        print("\n✅ Mobile API is working!")
+        print("\nMobile API is working!")
         return True
         
     except urllib.error.HTTPError as e:
-        print(f"❌ HTTP Error {e.code}: {e.reason}")
+        print(f"HTTP Error {e.code}: {e.reason}")
         print(f"\nThe route exists but returned an error.")
         return False
         
     except urllib.error.URLError as e:
-        print(f"❌ Connection Error: {e.reason}")
+        print(f"Connection Error: {e.reason}")
         print(f"\nMake sure the server is running with: python run.py")
         return False
         
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"Error: {str(e)}")
         return False
 
 if __name__ == "__main__":

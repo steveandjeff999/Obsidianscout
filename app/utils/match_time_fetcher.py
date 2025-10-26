@@ -53,9 +53,27 @@ def fetch_match_times_from_first(event_code, event_timezone=None):
                     if match_num and scheduled_time_str:
                         try:
                             # Parse ISO 8601 format: "2024-03-15T09:30:00"
-                            # FIRST API may provide times in local timezone or UTC
-                            # Use our timezone-aware parser to handle properly
-                            scheduled_time = parse_iso_with_timezone(scheduled_time_str, event_timezone)
+                            # FIRST API has historically returned both naive-local and tz-aware
+                            # strings. We should NOT assume the event timezone for naive
+                            # strings by default because some endpoints actually return UTC
+                            # values without a tz marker. Strategy:
+                            # 1. Try parsing as-is (if string includes Z or offset it'll be
+                            #    treated as UTC-aware by the parser).
+                            # 2. If parsing yields a naive datetime, treat it as UTC first
+                            #    (do NOT force event timezone).
+                            # 3. If that fails and we have an event timezone, fall back to
+                            #    parsing as local event time (best-effort for older APIs).
+                            scheduled_time = parse_iso_with_timezone(scheduled_time_str, None)
+
+                            if scheduled_time is None and event_timezone:
+                                # Fallback: try parsing assuming the event local timezone
+                                scheduled_time = parse_iso_with_timezone(scheduled_time_str, event_timezone)
+                                if scheduled_time:
+                                    print(f"⚠️  FIRST: parsed naive time '{scheduled_time_str}' using event timezone fallback {event_timezone}: {scheduled_time.isoformat()}")
+                            elif scheduled_time:
+                                # Normal case: parsed as-aware or assumed-UTC
+                                print(f"✅ FIRST: parsed time '{scheduled_time_str}' -> {scheduled_time.isoformat()}")
+
                             if scheduled_time:
                                 match_times[(match_type, match_num)] = scheduled_time
                         except Exception as e:
@@ -226,20 +244,49 @@ def update_match_times(event_code, scouting_team_number=None):
         # Update from FIRST API times (already in UTC from our parser)
         if match_key in first_times:
             scheduled_time = first_times[match_key]
-            if match.scheduled_time != scheduled_time:
-                match.scheduled_time = scheduled_time
+            # Normalize to naive UTC for DB storage (SQLite stores naive datetimes)
+            try:
+                if scheduled_time is not None and scheduled_time.tzinfo is not None:
+                    scheduled_naive = scheduled_time.astimezone(timezone.utc).replace(tzinfo=None)
+                else:
+                    scheduled_naive = scheduled_time
+            except Exception:
+                scheduled_naive = scheduled_time
+
+            if match.scheduled_time != scheduled_naive:
+                print(f"⏬ Updating Match {match.match_type}#{match.match_number} scheduled_time -> {scheduled_naive} (naive UTC)")
+                match.scheduled_time = scheduled_naive
                 updated = True
         
         # Update from TBA times (already in UTC)
         if match_key in tba_times:
             scheduled, predicted = tba_times[match_key]
-            
-            if scheduled and match.scheduled_time != scheduled:
-                match.scheduled_time = scheduled
+
+            # Normalize TBA times (they are timezone-aware UTC) to naive UTC for DB
+            try:
+                if scheduled is not None and scheduled.tzinfo is not None:
+                    scheduled_naive = scheduled.astimezone(timezone.utc).replace(tzinfo=None)
+                else:
+                    scheduled_naive = scheduled
+            except Exception:
+                scheduled_naive = scheduled
+
+            try:
+                if predicted is not None and predicted.tzinfo is not None:
+                    predicted_naive = predicted.astimezone(timezone.utc).replace(tzinfo=None)
+                else:
+                    predicted_naive = predicted
+            except Exception:
+                predicted_naive = predicted
+
+            if scheduled_naive and match.scheduled_time != scheduled_naive:
+                print(f"⏬ Updating Match {match.match_type}#{match.match_number} scheduled_time -> {scheduled_naive} (naive UTC)")
+                match.scheduled_time = scheduled_naive
                 updated = True
-            
-            if predicted and match.predicted_time != predicted:
-                match.predicted_time = predicted
+
+            if predicted_naive and match.predicted_time != predicted_naive:
+                print(f"⏬ Updating Match {match.match_type}#{match.match_number} predicted_time -> {predicted_naive} (naive UTC)")
+                match.predicted_time = predicted_naive
                 updated = True
         
         if updated:
@@ -252,6 +299,102 @@ def update_match_times(event_code, scouting_team_number=None):
         print(f"ℹ️  No match time updates needed")
     
     return updated_count
+
+
+def normalize_event_match_times(event_code, dry_run=True):
+    """
+    Normalize stored match datetimes for a single event.
+
+    Heuristic:
+    - Some installations have stored naive datetimes that actually represent
+      the event-local time (no tzinfo). This function will try two
+      interpretations for each naive datetime:
+        A) Treat as UTC (dt_utc = naive.replace(tzinfo=UTC))
+        B) Treat as event-local (dt_alt = convert_local_to_utc(naive, event.timezone))
+    - If interpretation B maps to a local date within the event dates and A does not,
+      we assume the value was stored as local and convert it to naive UTC for DB.
+
+    Args:
+        event_code: Event code to normalize (string)
+        dry_run: If True, do not write changes to DB; instead return a report.
+
+    Returns:
+        dict with keys: 'event_code', 'checked', 'would_fix', 'fixed' (counts)
+    """
+    from app.models import Event, Match
+    from app import db
+    from datetime import timezone as _tz
+
+    event = Event.query.filter_by(code=event_code).first()
+    if not event:
+        print(f"❌ Event {event_code} not found")
+        return {'event_code': event_code, 'checked': 0, 'would_fix': 0, 'fixed': 0}
+
+    matches = Match.query.filter_by(event_id=event.id).all()
+    checked = 0
+    would_fix = 0
+    fixed = 0
+
+    for m in matches:
+        for field in ('scheduled_time', 'predicted_time'):
+            dt = getattr(m, field)
+            if not dt:
+                continue
+            checked += 1
+
+            # If the datetime already has tzinfo, assume it's correct (UTC-aware)
+            if getattr(dt, 'tzinfo', None) is not None:
+                continue
+
+            # Interpretation A: treat as UTC
+            try:
+                dt_a = dt.replace(tzinfo=_tz.utc)
+                local_a = None
+                if event.timezone:
+                    local_a = convert_utc_to_local(dt_a, event.timezone)
+            except Exception:
+                dt_a = None
+                local_a = None
+
+            # Interpretation B: treat as event-local
+            dt_b = None
+            local_b = None
+            if event.timezone:
+                try:
+                    dt_b = convert_local_to_utc(dt, event.timezone)
+                    local_b = convert_utc_to_local(dt_b, event.timezone)
+                except Exception:
+                    dt_b = None
+                    local_b = None
+
+            # Helper to check if local datetime falls within event start/end date
+            def in_event_date(local_dt):
+                if not local_dt or not event.start_date:
+                    return False
+                try:
+                    return event.start_date <= local_dt.date() <= (event.end_date or event.start_date)
+                except Exception:
+                    return False
+
+            a_in = in_event_date(local_a)
+            b_in = in_event_date(local_b)
+
+            # Decide: if B maps into event and A does not, we should fix
+            if b_in and not a_in:
+                would_fix += 1
+                print(f"⚠️  Would fix Match {m.match_type}#{m.match_number} field {field}: naive stored {dt} interpreted as local {event.timezone} -> UTC {dt_b}")
+                if not dry_run:
+                    # Store as naive UTC (DB convention)
+                    try:
+                        setattr(m, field, dt_b.replace(tzinfo=None))
+                        fixed += 1
+                    except Exception as e:
+                        print(f"❌ Failed to fix match {m.id} {field}: {e}")
+
+    if not dry_run and fixed > 0:
+        db.session.commit()
+
+    return {'event_code': event_code, 'checked': checked, 'would_fix': would_fix, 'fixed': fixed}
 
 
 def update_all_active_event_times():

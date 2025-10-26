@@ -878,7 +878,7 @@
     <aside id="appSidebar" class="sidebar glass" role="navigation" aria-label="Main sidebar">
         <div class="sidebar-header d-flex align-items-center justify-content-between">
             <a class="brand d-flex align-items-center text-decoration-none" href="{% if user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics') %}{{ url_for('scouting.index') }}{% else %}{{ url_for('main.index') }}{% endif %}">
-                <i class="fas fa-robot brand-icon me-2"></i>
+                <i class="fas fa-clipboard brand-icon me-2"></i>
                 <span class="brand-text fw-bold"><span class="obsidian-gradient">Obsidian</span>Scout</span>
             </a>
             <button id="sidebarClose" class="btn btn-link text-muted d-lg-none" aria-label="Close sidebar"><i class="fas fa-times"></i></button>
@@ -1374,7 +1374,7 @@
             <div class="row align-items-center g-2">
                 <div class="col-md-6 text-center text-md-start">
                     <div class="d-flex align-items-center justify-content-center justify-content-md-start">
-                        <i class="fas fa-robot brand-icon me-2 text-primary"></i>
+                        <i class="fas fa-clipboard brand-icon me-2 text-primary"></i>
                         <span class="fw-bold">ObsidianScout</span>
                         <span class="text-muted mx-2">•</span>
                         <span class="small text-muted">ObsidianScout</span>
@@ -2108,9 +2108,9 @@
               <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="dm-tab" data-bs-toggle="tab" data-bs-target="#dmTabPane" type="button" role="tab">DMs</button>
               </li>
-              <li class="nav-item" role="presentation">
-                <button class="nav-link" id="assistant-tab" data-bs-toggle="tab" data-bs-target="#assistantTabPane" type="button" role="tab">Assistant</button>
-              </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="assistant-tab" data-bs-toggle="tab" data-bs-target="#assistantTabPane" type="button" role="tab">Support</button>
+                            </li>
               <li class="nav-item" role="presentation">
                 <button class="nav-link" id="group-tab" data-bs-toggle="tab" data-bs-target="#groupTabPane" type="button" role="tab">Groups</button>
               </li>
@@ -2124,11 +2124,11 @@
                 </div>
               </div>
               <div class="tab-pane fade" id="assistantTabPane" role="tabpanel">
-                <div id="assistantChatContainer" style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fff;"></div>
-                <div class="input-group mt-3">
-                  <input type="text" class="form-control" id="assistantChatInput" placeholder="Ask the assistant...">
-                  <button class="btn btn-primary" id="assistantSendBtn">Send</button>
-                </div>
+                                <div id="assistantChatContainer" style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fff;"></div>
+                                <div class="input-group mt-3">
+                                    <input type="text" class="form-control" id="assistantChatInput" placeholder="Ask for help...">
+                                    <button class="btn btn-primary" id="assistantSendBtn">Send</button>
+                                </div>
               </div>
               <div class="tab-pane fade" id="groupTabPane" role="tabpanel">
                 <div class="mb-2">

@@ -10,7 +10,7 @@ from app.models import Match, Team, Event, User
 from app.models_misc import NotificationSubscription, NotificationLog, NotificationQueue, DeviceToken
 from app.utils.emailer import send_email, _build_html_email
 from app.utils.push_notifications import send_push_to_user
-from app.utils.timezone_utils import convert_utc_to_local, format_time_with_timezone
+from app.utils.timezone_utils import convert_utc_to_local, convert_local_to_utc, format_time_with_timezone
 import traceback
 import statistics
 
@@ -40,22 +40,35 @@ def get_match_time(match):
         match_time = match.scheduled_time
         time_source = "scheduled"
     
-    # Ensure timezone-aware (database stores naive UTC datetimes)
+    # Ensure timezone-aware. Note: DB stores naive datetimes, but some deployments
+    # have stored values that actually represent the event LOCAL time (no tzinfo).
+    # To be robust we prefer to interpret naive datetimes as event-local when
+    # the event timezone is known, then convert to UTC for scheduling. If no
+    # event timezone is available, we fall back to labeling as UTC.
     if match_time and match_time.tzinfo is None:
-        # Database stores times as naive UTC - add timezone info (NOT converting, just labeling)
-        match_time = match_time.replace(tzinfo=timezone.utc)
-        
         # Get event for timezone display
         try:
             event = Event.query.get(match.event_id) if match.event_id else None
             event_tz = event.timezone if event else None
+
             if event_tz:
-                local_time = convert_utc_to_local(match_time, event_tz)
-                print(f"⏰ Match {match.match_type} #{match.match_number} {time_source} time:")
-                print(f"   DB value: {match_time.replace(tzinfo=None)} (naive UTC)")
-                print(f"   As UTC: {match_time.strftime('%I:%M %p UTC')}")
-                print(f"   As {event_tz}: {local_time.strftime('%I:%M %p %Z')}")
+                # Treat the stored naive datetime as LOCAL time in the event timezone
+                # then convert to UTC for internal scheduling comparisons.
+                try:
+                    # convert_local_to_utc will localize naive dt to event tz then return UTC-aware dt
+                    match_time = convert_local_to_utc(match_time, event_tz)
+                    local_time = convert_utc_to_local(match_time, event_tz)
+                    print(f"⏰ Match {match.match_type} #{match.match_number} {time_source} time (interpreted as event-local {event_tz}):")
+                    print(f"   DB value: {match.scheduled_time} (naive - interpreted as local {event_tz})")
+                    print(f"   As UTC: {match_time.strftime('%I:%M %p UTC')}")
+                    print(f"   As {event_tz}: {local_time.strftime('%I:%M %p %Z')}")
+                except Exception as e:
+                    # Fallback: label as UTC
+                    match_time = match_time.replace(tzinfo=timezone.utc)
+                    print(f"⚠️  Failed to interpret naive time as event-local, falling back to UTC: {e}")
             else:
+                # No event timezone known - label stored naive as UTC
+                match_time = match_time.replace(tzinfo=timezone.utc)
                 print(f"⏰ Match {match.match_type} #{match.match_number} {time_source} time: {match_time.strftime('%Y-%m-%d %I:%M %p UTC')}")
         except Exception as e:
             print(f"⚠️  Could not display timezone info: {e}")
@@ -170,12 +183,25 @@ def create_match_prediction_html(match, target_team_number, message):
     event_name = event.name if event else "Unknown Event"
     event_code = event.code if event else ""
     
-    # Get scheduled time
+    # Get scheduled time in event's local timezone
     scheduled_time = ""
     if match.scheduled_time:
         try:
-            scheduled_time = match.scheduled_time.strftime("%I:%M %p")
-        except:
+            # Get match time using the same logic as scheduling (predicted or scheduled)
+            match_time = get_match_time(match)
+            if match_time and event and event.timezone:
+                # Convert UTC to event local timezone
+                local_time = convert_utc_to_local(match_time, event.timezone)
+                # Format with timezone abbreviation for clarity
+                scheduled_time = local_time.strftime("%I:%M %p %Z")
+            elif match_time:
+                # No event timezone, show UTC
+                scheduled_time = match_time.strftime("%I:%M %p UTC")
+            else:
+                # Fallback to raw scheduled_time
+                scheduled_time = match.scheduled_time.strftime("%I:%M %p")
+        except Exception as e:
+            print(f"Error formatting match time: {e}")
             scheduled_time = str(match.scheduled_time)
     
     # Parse the message to extract team stats

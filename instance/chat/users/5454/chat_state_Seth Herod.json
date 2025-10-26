@@ -1,4 +1,8 @@
 {
-  "lastDmUser": "5454",
-  "unreadCount": 0
+  "lastDmUser": "zman",
+  "unreadCount": 0,
+  "joinedGroups": [
+    "main"
+  ],
+  "currentGroup": "main"
 }

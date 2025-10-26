@@ -160,5 +160,23 @@
     "timestamp": "2025-10-14T14:20:59.691056",
     "owner": "Seth Herod",
     "reactions": []
+  },
+  {
+    "id": "e09a51db-4064-45b8-8ef0-14a6f437be79",
+    "sender": "Seth Herod",
+    "recipient": "assistant",
+    "text": "Compare team 5454 and team 1234",
+    "timestamp": "2025-10-25T23:30:40.169039+00:00",
+    "owner": "Seth Herod",
+    "reactions": []
+  },
+  {
+    "id": "90648f66-a15a-4768-a2d5-0951aa6765f8",
+    "sender": "assistant",
+    "recipient": "Seth Herod",
+    "text": "Team 1234 not found in the database.",
+    "timestamp": "2025-10-25T23:30:40.169067+00:00",
+    "owner": "Seth Herod",
+    "reactions": []
   }
 ]

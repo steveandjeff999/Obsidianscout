@@ -233,22 +233,29 @@ def schedule_upcoming_match_notifications(app):
     now_naive = now.replace(tzinfo=None)
     window_end_naive = window_end.replace(tzinfo=None)
 
-    # Find matches with scheduled times in the next 2 hours
-    matches = Match.query.filter(
+    # Database may store naive datetimes that represent event-local times
+    # (varies by import source). To be robust we query a broader window and
+    # filter in Python using get_match_time(), which will return a timezone-
+    # aware UTC datetime after interpreting naive values correctly.
+    lookback = timedelta(days=1)
+    extended_start = (now - lookback).replace(tzinfo=None)
+    extended_end = (window_end + lookback).replace(tzinfo=None)
+
+    candidates = Match.query.filter(
         Match.scheduled_time.isnot(None),
-        Match.scheduled_time >= now_naive,
-        Match.scheduled_time <= window_end_naive
+        Match.scheduled_time >= extended_start,
+        Match.scheduled_time <= extended_end
     ).all()
 
-    # Also check predicted times
-    predicted_matches = Match.query.filter(
+    # Also include matches with predicted times in the extended window
+    predicted_candidates = Match.query.filter(
         Match.predicted_time.isnot(None),
-        Match.predicted_time >= now_naive,
-        Match.predicted_time <= window_end_naive
+        Match.predicted_time >= extended_start,
+        Match.predicted_time <= extended_end
     ).all()
 
-    # Combine and deduplicate
-    all_matches = list(set(matches + predicted_matches))
+    # Combine and deduplicate candidate matches
+    all_matches = list({m.id: m for m in (candidates + predicted_candidates)}.values())
 
     if not all_matches:
         return
@@ -257,13 +264,21 @@ def schedule_upcoming_match_notifications(app):
 
     scheduled_total = 0
     for match in all_matches:
+        # Use get_match_time to interpret naive DB values properly and get UTC-aware time
         match_time = get_match_time(match)
-        if match_time:
-            try:
-                count = schedule_notifications_for_match(match)
-                scheduled_total += count
-            except Exception as e:
-                print(f"❌ Error scheduling notifications for match {match.id}: {e}")
+        if not match_time:
+            continue
+
+        # Only schedule matches that actually fall in our target window (now..window_end)
+        if match_time < now or match_time > window_end:
+            # Skip matches outside the real UTC window
+            continue
+
+        try:
+            count = schedule_notifications_for_match(match)
+            scheduled_total += count
+        except Exception as e:
+            print(f"❌ Error scheduling notifications for match {match.id}: {e}")
 
     if scheduled_total > 0:
         print(f"✅ Scheduled {scheduled_total} notifications")
