@@ -26,17 +26,17 @@ def comprehensive_login_diagnosis():
             
             superadmin = User.query.filter_by(username='superadmin').first()
             if not superadmin:
-                print("❌ CRITICAL: Superadmin user does not exist!")
+                print("CRITICAL: Superadmin user does not exist!")
                 return
             
-            print(f"✅ Username: {superadmin.username}")
-            print(f"✅ Team Number: {superadmin.scouting_team_number}")
-            print(f"✅ Is Active: {superadmin.is_active}")
-            print(f"✅ Must Change Password: {superadmin.must_change_password}")
-            print(f"✅ Created: {superadmin.created_at}")
-            print(f"✅ Updated: {superadmin.updated_at}")
-            print(f"✅ Last Login: {superadmin.last_login}")
-            print(f"✅ Roles: {[role.name for role in superadmin.roles]}")
+            print(f"Username: {superadmin.username}")
+            print(f"Team Number: {superadmin.scouting_team_number}")
+            print(f"Is Active: {superadmin.is_active}")
+            print(f"Must Change Password: {superadmin.must_change_password}")
+            print(f"Created: {superadmin.created_at}")
+            print(f"Updated: {superadmin.updated_at}")
+            print(f"Last Login: {superadmin.last_login}")
+            print(f"Roles: {[role.name for role in superadmin.roles]}")
             
             # 2. Test password verification with multiple candidates
             print(f"\n2. PASSWORD VERIFICATION TESTS")
@@ -55,14 +55,14 @@ def comprehensive_login_diagnosis():
             for pwd in test_passwords:
                 if superadmin.check_password(pwd):
                     working_passwords.append(pwd)
-                    print(f"✅ Password '{pwd}': WORKS")
+                    print(f"Password '{pwd}': WORKS")
                 else:
-                    print(f"❌ Password '{pwd}': Invalid")
+                    print(f"Password '{pwd}': Invalid")
             
             if not working_passwords:
                 print("🚨 CRITICAL: NO WORKING PASSWORDS FOUND!")
             else:
-                print(f"✅ Working passwords: {working_passwords}")
+                print(f"Working passwords: {working_passwords}")
             
             # 3. Test the exact login query used in auth.py
             print(f"\n3. DATABASE QUERY SIMULATION")
@@ -86,12 +86,12 @@ def comprehensive_login_diagnosis():
                         query_desc = f"username='{test_username}', scouting_team_number={team_var} ({type(team_var).__name__})"
                     
                     if user_found:
-                        print(f"✅ Query '{query_desc}': Found user {user_found.username}")
+                        print(f"Query '{query_desc}': Found user {user_found.username}")
                     else:
-                        print(f"❌ Query '{query_desc}': No user found")
+                        print(f"Query '{query_desc}': No user found")
                         
                 except Exception as e:
-                    print(f"❌ Query '{query_desc}': Error - {e}")
+                    print(f"Query '{query_desc}': Error - {e}")
             
             # 4. Check for duplicate users
             print(f"\n4. DUPLICATE USER CHECK")

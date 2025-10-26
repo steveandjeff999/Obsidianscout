@@ -29,13 +29,13 @@ with app.app_context():
             # What the code SHOULD do: treat DB value as UTC
             as_utc = match.predicted_time.replace(tzinfo=timezone.utc)
             as_local_correct = as_utc.astimezone(event_tz)
-            print(f"\n✅ CORRECT interpretation (DB = UTC):")
+            print(f"\nCORRECT interpretation (DB = UTC):")
             print(f"   {match.predicted_time} (DB) → {as_utc} (UTC) → {as_local_correct.strftime('%I:%M %p %Z')} (display)")
             
             # What it might be doing WRONG: treating DB value as local time
             as_local_wrong = event_tz.localize(match.predicted_time)
             as_utc_wrong = as_local_wrong.astimezone(timezone.utc)
-            print(f"\n❌ WRONG interpretation (DB = Local):")
+            print(f"\nWRONG interpretation (DB = Local):")
             print(f"   {match.predicted_time} (DB) → {as_local_wrong.strftime('%I:%M %p %Z')} (local) → {as_utc_wrong} (UTC)")
             
             # Show the 5-hour difference
@@ -43,4 +43,4 @@ with app.app_context():
             print(f"\n⏱️  Time difference: {abs(diff_hours):.1f} hours")
             
             if abs(diff_hours) == 5:
-                print(f"   ⚠️  This is exactly CDT offset - confirms timezone bug!")
+                print(f"   Warning: This is exactly CDT offset - confirms timezone bug!")

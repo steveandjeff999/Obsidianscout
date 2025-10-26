@@ -18,7 +18,7 @@ The VAPID private key was being stored in **base64url encoded format**, but the 
 private_key_b64 = base64.urlsafe_b64encode(private_bytes).decode('utf-8').rstrip('=')
 keys = {
     'public_key': public_key_b64,
-    'private_key': private_key_b64  # ❌ Base64url encoded - WRONG!
+   'private_key': private_key_b64  # Base64url encoded - WRONG
 }
 ```
 
@@ -33,7 +33,7 @@ private_key_pem = private_key.private_bytes(
 
 keys = {
     'public_key': public_key_b64,      # Base64url for client
-    'private_key': private_key_pem     # ✅ PEM format for pywebpush
+   'private_key': private_key_pem     # PEM format for pywebpush
 }
 ```
 
@@ -42,10 +42,10 @@ keys = {
 ### 1. Fixed VAPID Key Generation (`app/utils/push_notifications.py`)
 
 **Changes:**
-- ✅ Private key now stored as PEM string (not base64url)
-- ✅ Public key remains base64url (correct for client-side)
-- ✅ Added debug logging to show generated key preview
-- ✅ Removed unnecessary import
+- Private key now stored as PEM string (not base64url)
+- Public key remains base64url (correct for client-side)
+- Added debug logging to show generated key preview
+- Removed unnecessary import
 
 **Key Formats:**
 - **Private Key**: PEM format string (starts with `-----BEGIN PRIVATE KEY-----`)

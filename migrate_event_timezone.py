@@ -43,7 +43,6 @@ def backfill_timezones_from_api():
     
     try:
         from app.utils.api_utils import get_event_details_dual_api
-        from app.utils.config_manager import load_all_game_configs
         
         # Get all events that don't have timezone set
         events = Event.query.filter(

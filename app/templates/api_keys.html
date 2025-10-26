@@ -924,7 +924,7 @@ console.log('Global functions defined. Checking:', {
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀🔑 API KEYS PAGE LOADED - YOU ARE ON THE CORRECT PAGE! 🔑🚀');
+    console.log('API KEYS PAGE LOADED - YOU ARE ON THE CORRECT PAGE!');
     console.log('🚀🔑 API KEYS PAGE LOADED - YOU ARE ON THE CORRECT PAGE! 🔑🚀');
     console.log('🚀🔑 API KEYS PAGE LOADED - YOU ARE ON THE CORRECT PAGE! 🔑🚀');
     
@@ -945,14 +945,14 @@ function setupEventListeners() {
     const form = document.getElementById('create-key-form');
     if (form) {
         form.addEventListener('submit', function(event) {
-            console.log('🔥 FORM SUBMIT EVENT FIRED!');
+            console.log('FORM SUBMIT EVENT FIRED!');
             alert('Form submit detected! Check console for details.');
             event.preventDefault();
             handleCreateKey(event);
         });
-        console.log('✅ Form event listener added successfully');
+        console.log('Form event listener added successfully');
     } else {
-        console.error('❌ Create key form not found!');
+        console.error('Create key form not found!');
     }
     
     // Debug toggle button
@@ -989,26 +989,26 @@ function setupEventListeners() {
     const testFormBtn = document.getElementById('test-form-btn');
     if (testFormBtn) {
         testFormBtn.addEventListener('click', function() {
-            console.log('🔥 TEST FORM BUTTON CLICKED - EVENT FIRING!');
+            console.log('TEST FORM BUTTON CLICKED - EVENT FIRING!');
             alert('Test Form button clicked! Check console for details.');
             testFormSubmission();
         });
-        console.log('✅ Test form button event listener added successfully');
+        console.log('Test form button event listener added successfully');
     } else {
-        console.error('❌ Test form button not found!');
+        console.error('Test form button not found!');
     }
     
     // Test API button
     const testApiBtn = document.getElementById('test-api-btn');
     if (testApiBtn) {
         testApiBtn.addEventListener('click', function() {
-            console.log('🔥 TEST API BUTTON CLICKED - EVENT FIRING!');
+            console.log('TEST API BUTTON CLICKED - EVENT FIRING!');
             alert('Test API button clicked! Check console for details.');
             testApiEndpoint();
         });
-        console.log('✅ Test API button event listener added successfully');
+        console.log('Test API button event listener added successfully');
     } else {
-        console.error('❌ Test API button not found!');
+        console.error('Test API button not found!');
     }
     
     // Modal close buttons
@@ -1350,9 +1350,9 @@ function showAlert(type, message) {
     
     if (container) {
         container.appendChild(alert);
-        console.log('✅ Alert added to container');
+        console.log('Alert added to container');
     } else {
-        console.error('❌ Alert container not found!');
+        console.error('Alert container not found!');
     }
     
     // Auto-dismiss after 5 seconds

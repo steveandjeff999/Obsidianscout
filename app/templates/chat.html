@@ -34,8 +34,12 @@
                     <div class="card h-100">
                         <div class="card-header">Conversations</div>
                         <div class="card-body d-flex flex-column">
-                            <label for="dmUserSelect" class="form-label mb-1">Chat with:</label>
-                            <select id="dmUserSelect" class="form-select form-select-sm mb-2" style="width: 100%;"></select>
+                            <label for="dmUserList" class="form-label mb-1">Chat with:</label>
+                            <!-- Replaced dropdown with scrollable user panel -->
+                            <div id="dmUserList" class="list-group list-group-flush mb-2" style="max-height:240px; overflow:auto;">
+                                <!-- Populated dynamically with user list items -->
+                            </div>
+                            <div class="small text-muted mb-2">Click a user to open or continue a conversation.</div>
                             <div class="text-muted small mb-2">Select a user to open or continue a conversation.</div>
                             <div class="flex-grow-1 overflow-auto" style="min-height: 180px;">
                                 <!-- Placeholder for recent conversations if needed -->
@@ -241,7 +245,7 @@
         @media (max-width: 768px) {
             /* Prevent chat inputs from zooming */
             #dmChatInput, #assistantChatInput, #groupChatInput, 
-            #groupNameInput, #dmUserSelect, #addMemberSelect {
+            #groupNameInput, #dmUserList, #addMemberSelect {
                 font-size: 16px !important;
                 transform: translateZ(0);
                 -webkit-transform: translateZ(0);
@@ -258,6 +262,47 @@
                 scroll-margin: 0 !important;
             }
         }
+        /* Modern DM user list styles */
+        #dmUserList {
+            background: transparent;
+            padding: 0.25rem;
+        }
+        /* DM user tiles: ensure rounding applies to the button element even if other global rules try to remove it */
+        .dm-user-item,
+        button.dm-user-item,
+        .list-group .dm-user-item {
+            background: #111315; /* dark tile */
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.04);
+            margin-bottom: 8px;
+            padding: 14px 16px;
+            border-radius: 8px !important;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+            overflow: visible;
+        }
+        .dm-user-item .fw-semibold { font-size: 1rem; }
+        .dm-user-meta { font-size: 0.85rem; color: rgba(255,255,255,0.65); }
+        .dm-user-desc { font-size: 0.82rem; color: rgba(255,255,255,0.55); margin-top:4px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .dm-user-item:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
+        .dm-user-item.active,
+        button.dm-user-item.active,
+        .list-group .dm-user-item.active { background: linear-gradient(180deg,#151618,#0d0e0f); box-shadow: 0 10px 30px rgba(0,0,0,0.7); border-radius: 8px !important; }
+        /* Light-mode adjustments */
+        @media (prefers-color-scheme: light) {
+            .dm-user-item { background: #fff; color: #111; border: 1px solid rgba(0,0,0,0.06); }
+            .dm-user-meta { color: #6c757d; }
+            .dm-user-desc { color: #6c757d; }
+        }
+        /* Global: non-rounded (sharp corners) */
+        .card { border-radius: 0; overflow: visible; }
+        .card-header { border-radius: 0; }
+        .chat-message { border-radius: 0; padding: 10px; }
+        .chat-messages-fixed-height { border-radius: 0; }
+        .form-control, .input-group .form-control { border-radius: 0; }
+        .btn { border-radius: 0; }
     `;
     document.head.appendChild(style);
     // Add a small stylesheet for fixed-height chat containers
@@ -682,7 +727,17 @@
     setupMessageEventListeners();
 
     // Socket listeners for real-time updates
-    socket.on('message_updated', function(data) {
+    // If the Socket.IO client isn't initialized yet, queue handlers and attach them once it is.
+    window._pendingSocketHandlers = window._pendingSocketHandlers || [];
+    function attachOrQueueSocket(event, handler) {
+        if (typeof window.socket !== 'undefined' && window.socket) {
+            window.socket.on(event, handler);
+        } else {
+            window._pendingSocketHandlers.push({ event: event, handler: handler });
+        }
+    }
+
+    attachOrQueueSocket('message_updated', function(data) {
         const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
         if (messageElement) {
             const textElement = messageElement.querySelector('.message-text');
@@ -693,7 +748,7 @@
         }
     });
 
-    socket.on('message_deleted', function(data) {
+    attachOrQueueSocket('message_deleted', function(data) {
         const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
         if (messageElement) {
             messageElement.style.opacity = '0.5';
@@ -757,15 +812,44 @@ document.addEventListener('DOMContentLoaded', function() {
         window.socket = io();
     }
     const socket = window.socket;
+    // Attach any socket handlers that were queued before the client was initialized
+    try {
+        if (window._pendingSocketHandlers && window._pendingSocketHandlers.length) {
+            window._pendingSocketHandlers.forEach(h => {
+                try { socket.on(h.event, h.handler); } catch (e) { console.warn('Failed to attach queued socket handler', e); }
+            });
+            window._pendingSocketHandlers = [];
+        }
+    } catch (e) { /* ignore */ }
     let currentUsername = null;
+    // Current selected DM user (from the scrollable list)
+    let currentDmUser = '';
+
+    function getSelectedDmUser() {
+        return currentDmUser || null;
+    }
+
+    function setSelectedDmUser(username, {skipLoad=false, skipSave=false} = {}) {
+        currentDmUser = username || '';
+        // Update UI highlighting
+        const list = document.getElementById('dmUserList');
+        if (list) {
+            Array.from(list.querySelectorAll('.dm-user-item')).forEach(li => {
+                if (li.dataset && li.dataset.username === username) li.classList.add('active'); else li.classList.remove('active');
+            });
+        }
+        // Persist and optionally load history
+        if (!skipSave) saveChatState();
+        if (!skipLoad) loadDmHistory();
+    }
     // --- Backend helpers for persistence (only last selected DM user) ---
     async function saveChatState() {
-        const dmUserSelectEl = document.getElementById('dmUserSelect');
+        // Persist the currently selected DM user
         await fetch('/chat/state', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                lastDmUser: dmUserSelectEl ? dmUserSelectEl.value : ''
+                lastDmUser: getSelectedDmUser() || ''
             })
         });
     }
@@ -790,57 +874,107 @@ document.addEventListener('DOMContentLoaded', function() {
         console.warn('Error sending reset unread request', e);
     }
 
-    // Populate DM and group user selects
+    // Populate DM and group user list (scrollable panel)
     fetch('/assistant/chat-users').then(r => r.json()).then(data => {
-        const dmUserSelect = document.getElementById('dmUserSelect');
-        dmUserSelect.innerHTML = '';
-        data.users.forEach(u => {
-            const opt1 = document.createElement('option');
-            opt1.value = u;
-            opt1.textContent = u;
-            dmUserSelect.appendChild(opt1);
-        });
+        const dmUserList = document.getElementById('dmUserList');
+        if (!dmUserList) return;
+        dmUserList.innerHTML = '';
         currentUsername = data.current_user;
+        // Build list items. Support two shapes from the server:
+        // - simple array of usernames: ['alice','bob']
+        // - array of objects: [{ username, last_activity, last_message, last_message_time }, ...]
+        const users = data.users || [];
+        users.forEach(u => {
+            const username = (typeof u === 'string') ? u : (u.username || u.name || '');
+            const team = (typeof u === 'object') ? (u.team_number || u.team || u.teamNumber || '') : '';
+            const li = document.createElement('button');
+            li.type = 'button';
+            li.className = 'list-group-item list-group-item-action dm-user-item';
+            li.dataset.username = username;
+            li.dataset.team = team || '';
+            // store any server-provided last activity/message
+            if (typeof u === 'object') {
+                li.dataset.lastActivity = u.last_activity || u.last_message_time || '';
+                li.dataset.lastMessage = u.last_message || '';
+            }
+            const title = document.createElement('div');
+            title.className = 'fw-semibold';
+            title.textContent = username === currentUsername ? `${username} (you)` : username;
+            const meta = document.createElement('div');
+            meta.className = 'dm-user-meta';
+            meta.textContent = team ? `${team}` : '';
+            const desc = document.createElement('div');
+            desc.className = 'dm-user-desc';
+            desc.textContent = '';
+            li.appendChild(title);
+            li.appendChild(meta);
+            li.appendChild(desc);
+            li.onclick = function() {
+                setSelectedDmUser(username);
+            };
+            dmUserList.appendChild(li);
+        });
+
+        // After rendering the list, attempt to fetch each user's most recent DM (limit=1)
+        // to determine activity and a short preview. If the server already provided
+        // last_activity/last_message, this step will skip those users.
+        const listItems = Array.from(dmUserList.querySelectorAll('.dm-user-item'));
+        const fetchPromises = listItems.map(li => {
+            if (li.dataset.lastActivity && li.dataset.lastActivity.length > 0) return Promise.resolve(li);
+            const uname = li.dataset.username;
+            // Best-effort: request only the last message to reduce payload
+                return fetch(`/chat/dm-history?user=${encodeURIComponent(uname)}&limit=1`).then(r => r.json()).then(d => {
+                const last = (d.history && d.history[0]) || null;
+                if (last) {
+                    // Try multiple common timestamp fields
+                    const ts = last.timestamp || last.created_at || last.sent_at || last.time || last.ts || '';
+                    li.dataset.lastActivity = ts || Date.now();
+                    li.dataset.lastMessage = (last.text || '').slice(0, 160);
+                    const meta = li.querySelector('.dm-user-meta');
+                    const desc = li.querySelector('.dm-user-desc');
+                    try {
+                        if (meta) meta.textContent = `${li.dataset.team ? li.dataset.team + ' • ' : ''}${ts ? (new Date(ts).toLocaleString()) : ''}`.trim();
+                        if (desc) desc.textContent = (last.text || '').slice(0,80);
+                    } catch (e) { /* ignore formatting errors */ }
+                }
+                return li;
+            }).catch(() => li);
+        });
+
+        Promise.all(fetchPromises).then(() => {
+            // Sort the list by lastActivity (descending)
+            reorderDmUserList();
+        }).catch(() => reorderDmUserList());
+
         // --- DM tab auto-select logic from URL ---
         const params = new URLSearchParams(window.location.search);
         const dmParam = params.get('dm');
-        // If opened with focus param from unread link, attempt to focus that conversation
         const focusParam = params.get('focus');
+        let selected = null;
         if (focusParam) {
             try {
                 const focus = JSON.parse(decodeURIComponent(focusParam));
-                if (focus && focus.type === 'dm' && focus.id) {
-                    if (Array.from(dmUserSelect.options).some(opt => opt.value === focus.id)) {
-                        dmUserSelect.value = focus.id;
-                        const dmTab = document.getElementById('dm-tab');
-                        if (dmTab) dmTab.click();
-                    }
-                }
-            } catch (e) {
-                console.warn('Invalid focus param', e);
-            }
+                if (focus && focus.type === 'dm' && focus.id) selected = focus.id;
+            } catch (e) { console.warn('Invalid focus param', e); }
         }
-        if (dmParam && Array.from(dmUserSelect.options).some(opt => opt.value === dmParam)) {
-            dmUserSelect.value = dmParam;
-            // Switch to DM tab
-            const dmTab = document.getElementById('dm-tab');
-            if (dmTab) dmTab.click();
-        }
-        // Restore last selected DM user
+        if (!selected && dmParam) selected = dmParam;
         const lastDmUser = window._lastDmUser;
-        if (!dmParam && lastDmUser && Array.from(dmUserSelect.options).some(opt => opt.value === lastDmUser)) {
-            dmUserSelect.value = lastDmUser;
+        if (!selected && lastDmUser) selected = lastDmUser;
+
+        // If we have a candidate and it exists in the list, select it; otherwise pick first user (excluding current user if possible)
+        const exists = selected && dmUserList.querySelector(`[data-username="${selected}"]`);
+        if (exists) {
+            setSelectedDmUser(selected, { skipSave: true, skipLoad: false });
+            const dmTab = document.getElementById('dm-tab'); if (dmTab) dmTab.click();
+        } else {
+            // default: first other user, or first user
+            const first = dmUserList.querySelector('.dm-user-item');
+            if (first) setSelectedDmUser(first.dataset.username, { skipSave: true, skipLoad: false });
         }
-        // Attach event listener after populating
-        dmUserSelect.addEventListener('change', function() {
-            loadDmHistory();
-            saveChatState();
-        });
-        // Load initial DM chat history
-        loadDmHistory();
+
         // Load initial assistant chat history
         loadAssistantHistory();
-    });
+    }).catch(e => console.warn('Failed to load chat users', e));
 
     // --- Group Chat: setup ---
     const groupNameInput = document.getElementById('groupNameInput');
@@ -1010,11 +1144,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 li.onclick = () => {
                     const dmTab = document.getElementById('dm-tab');
                     if (dmTab) dmTab.click();
-                    const dmSelect = document.getElementById('dmUserSelect');
-                    if (dmSelect && Array.from(dmSelect.options).some(o => o.value === data.lastDmUser)) {
-                        dmSelect.value = data.lastDmUser;
-                        loadDmHistory();
-                    }
+                    setSelectedDmUser(data.lastDmUser);
                 };
                 myChatsList.appendChild(li);
             }
@@ -1114,10 +1244,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- DM Chat History ---
     function loadDmHistory() {
-        const dmUserSelect = document.getElementById('dmUserSelect');
         const dmChatContainer = document.getElementById('dmChatContainer');
         dmChatContainer.innerHTML = '';
-        const recipient = dmUserSelect ? dmUserSelect.value : null;
+        const recipient = getSelectedDmUser();
         if (!recipient) return;
         fetch(`/chat/dm-history?user=${encodeURIComponent(recipient)}`)
             .then(r => r.json())
@@ -1143,10 +1272,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Listen for real-time DM messages
     socket.on('dm_message', function(msg) {
-        const dmUserSelect = document.getElementById('dmUserSelect');
-        if (!dmUserSelect) return;
+        if (!getSelectedDmUser()) return;
         // Only show if the message is for the current DM chat
-        const selectedUser = dmUserSelect.value;
+        const selectedUser = getSelectedDmUser();
         if (
             (msg.sender === currentUsername && msg.recipient === selectedUser) ||
             (msg.sender === selectedUser && msg.recipient === currentUsername)
@@ -1167,6 +1295,43 @@ document.addEventListener('DOMContentLoaded', function() {
             dmChatContainer.appendChild(div);
             dmChatContainer.scrollTop = dmChatContainer.scrollHeight;
         }
+    });
+    // Also update the DM user list to reflect new activity for the sender/recipient
+    socket.on('dm_message', function(msg) {
+        try {
+            const other = (msg.sender === currentUsername) ? msg.recipient : msg.sender;
+            const li = document.querySelector(`#dmUserList .dm-user-item[data-username="${other}"]`);
+            if (li) {
+                li.dataset.lastActivity = msg.timestamp || msg.created_at || Date.now();
+                li.dataset.lastMessage = msg.text || '';
+                const meta = li.querySelector('.dm-user-meta');
+                const desc = li.querySelector('.dm-user-desc');
+                if (meta) meta.textContent = `${li.dataset.team ? li.dataset.team + ' • ' : ''}${li.dataset.lastActivity ? (new Date(li.dataset.lastActivity).toLocaleString()) : ''}`.trim();
+                if (desc) desc.textContent = (msg.text || '').slice(0,80);
+                // Move the item to the top
+                const list = document.getElementById('dmUserList');
+                if (list && li) list.prepend(li);
+            }
+        } catch (e) { /* ignore */ }
+    });
+
+    // When a new DM arrives, update the user list entry (preview + lastActivity) and reorder
+    socket.on('dm_message_received', function(msg) {
+        try {
+            const other = (msg.sender === currentUsername) ? msg.recipient : msg.sender;
+            const li = document.querySelector(`#dmUserList .dm-user-item[data-username="${other}"]`);
+            if (li) {
+                li.dataset.lastActivity = msg.timestamp || msg.created_at || Date.now();
+                li.dataset.lastMessage = msg.text || '';
+                const meta = li.querySelector('.dm-user-meta');
+                const desc = li.querySelector('.dm-user-desc');
+                if (meta) meta.textContent = `${li.dataset.team ? li.dataset.team + ' • ' : ''}${li.dataset.lastActivity ? (new Date(li.dataset.lastActivity).toLocaleString()) : ''}`.trim();
+                if (desc) desc.textContent = (msg.text || '').slice(0,80);
+                // Move the item to the top
+                const list = document.getElementById('dmUserList');
+                if (list && li) list.prepend(li);
+            }
+        } catch (e) { console.warn('Failed to update user list on incoming DM', e); }
     });
 
     // Group messaging disabled on this deployment; all related UI and socket handlers removed.
@@ -1227,8 +1392,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const dmChatContainer = document.getElementById('dmChatContainer');
     if (dmSendBtn) {
         dmSendBtn.addEventListener('click', async function() {
-            const dmUserSelect = document.getElementById('dmUserSelect');
-            const recipient = dmUserSelect ? dmUserSelect.value : null;
+            const recipient = getSelectedDmUser();
             const message = dmChatInput.value.trim();
             if (!recipient || !message) return;
                 // Disable the send button while the request is in-flight to avoid duplicates
@@ -1303,6 +1467,19 @@ document.addEventListener('DOMContentLoaded', function() {
         // fallback to bottom
         try { container.scrollTo({ top: container.scrollHeight, behavior: 'auto' }); } catch(e) { container.scrollTop = container.scrollHeight; }
         return false;
+    }
+
+    // Reorder DM user list by latest activity (data-last-activity). Newest first.
+    function reorderDmUserList() {
+        const list = document.getElementById('dmUserList');
+        if (!list) return;
+        const items = Array.from(list.querySelectorAll('.dm-user-item'));
+        items.sort((a, b) => {
+            const ta = parseInt(a.dataset.lastActivity, 10) || Date.parse(a.dataset.lastActivity || '') || 0;
+            const tb = parseInt(b.dataset.lastActivity, 10) || Date.parse(b.dataset.lastActivity || '') || 0;
+            return tb - ta;
+        });
+        items.forEach(it => list.appendChild(it));
     }
 
     // Try a server-provided last read id first (template variable), then URL

@@ -625,12 +625,37 @@ def api_to_db_match_conversion(api_match, event_id):
     blue_score = None
     winner = None
     
+    # Helper: normalize API score values
+    def _norm_score(val):
+        """Normalize incoming score values from APIs.
+        - Convert numeric strings to int
+        - Treat negative scores (e.g. -1) as unknown/unplayed -> None
+        - Any non-numeric or missing values become None
+        """
+        try:
+            if val is None:
+                return None
+            # Some APIs provide numeric scores as strings
+            if isinstance(val, str):
+                val = val.strip()
+                if val == '':
+                    return None
+                valn = int(val)
+            else:
+                valn = int(val)
+
+            if valn < 0:
+                return None
+            return valn
+        except Exception:
+            return None
+
     # FIRST API uses scoreRedFinal and scoreBlueFinal
     if 'scoreRedFinal' in api_match and 'scoreBlueFinal' in api_match:
-        red_score = api_match.get('scoreRedFinal')
-        blue_score = api_match.get('scoreBlueFinal')
-        
-        # Determine winner (only if both scores are present and not null)
+        red_score = _norm_score(api_match.get('scoreRedFinal'))
+        blue_score = _norm_score(api_match.get('scoreBlueFinal'))
+
+        # Determine winner only when both scores are present (non-negative)
         if red_score is not None and blue_score is not None:
             if red_score > blue_score:
                 winner = 'red'
@@ -642,11 +667,11 @@ def api_to_db_match_conversion(api_match, event_id):
     # TBA API uses alliances.red.score and alliances.blue.score
     elif 'alliances' in api_match:
         alliances = api_match.get('alliances', {})
-        red_score = alliances.get('red', {}).get('score')
-        blue_score = alliances.get('blue', {}).get('score')
-        
+        red_score = _norm_score(alliances.get('red', {}).get('score'))
+        blue_score = _norm_score(alliances.get('blue', {}).get('score'))
+
         # Determine winner (TBA uses winning_alliance field, but we can also calculate)
-        if red_score is not None and blue_score is not None and red_score >= 0 and blue_score >= 0:
+        if red_score is not None and blue_score is not None:
             winning_alliance = api_match.get('winning_alliance', '')
             if winning_alliance == 'red':
                 winner = 'red'

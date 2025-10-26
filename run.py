@@ -88,41 +88,41 @@ if __name__ == '__main__':
             
             # Create all tables for main database
             db.create_all()
-            print("✅ Main database tables verified/created")
+            print("Main database tables verified/created")
             
             # Create tables for misc database (notifications)
             try:
                 from app.models_misc import NotificationSubscription, DeviceToken, NotificationLog, NotificationQueue
                 db.create_all(bind_key='misc')
-                print("✅ Misc database (notifications) tables verified/created")
+                print("Misc database (notifications) tables verified/created")
             except Exception as misc_error:
-                print(f"⚠️  Warning: Could not create misc database tables: {misc_error}")
+                print(f"Warning: Could not create misc database tables: {misc_error}")
             
             # Create tables for users database if using separate bind
             try:
                 db.create_all(bind_key='users')
-                print("✅ Users database tables verified/created")
+                print("Users database tables verified/created")
             except Exception as users_error:
-                print(f"⚠️  Warning: Could not create users database tables: {users_error}")
+                print(f"Warning: Could not create users database tables: {users_error}")
             
             # Create tables for pages database if using separate bind
             try:
                 db.create_all(bind_key='pages')
-                print("✅ Pages database tables verified/created")
+                print("Pages database tables verified/created")
             except Exception as pages_error:
-                print(f"⚠️  Warning: Could not create pages database tables: {pages_error}")
+                print(f"Warning: Could not create pages database tables: {pages_error}")
             
             # Create tables for APIs database if using separate bind
             try:
                 db.create_all(bind_key='apis')
-                print("✅ APIs database tables verified/created")
+                print("APIs database tables verified/created")
             except Exception as apis_error:
-                print(f"⚠️  Warning: Could not create APIs database tables: {apis_error}")
+                print(f"Warning: Could not create APIs database tables: {apis_error}")
             
             print("Database table verification complete!")
             
         except Exception as table_error:
-            print(f"⚠️  Warning: Error during table verification: {table_error}")
+            print(f"Warning: Error during table verification: {table_error}")
         
         # Clear old failed login attempts on startup (especially important after updates)
         try:
@@ -166,7 +166,7 @@ if __name__ == '__main__':
                 db.session.add(superadmin_user)
                 db.session.commit()
                 
-                print("✅ SuperAdmin account created successfully!")
+                print("SuperAdmin account created successfully!")
                 print("   Username: superadmin")
                 print("   Password: password")
                 print("   Team Number: 0")
@@ -444,7 +444,7 @@ if __name__ == '__main__':
     try:
         from app.utils.notification_worker import start_notification_worker
         notification_worker_thread = start_notification_worker(app)
-        print("🔔 Started notification worker thread (processes every minute, updates every 5-10 min)")
+        print("Started notification worker thread (processes every minute, updates every 5-10 min)")
     except Exception as e:
         print(f"Warning: Could not start notification worker: {e}")
     
@@ -470,9 +470,9 @@ if __name__ == '__main__':
 
     try:
         if USE_WAITRESS:
-            print(f"🚀 Starting server with Waitress WSGI server on port {port}...")
-            print("   ✅ Production-ready server")
-            print("   ✅ SocketIO polling mode for compatibility")
+            print(f"Starting server with Waitress WSGI server on port {port}...")
+            print("   Production-ready server")
+            print("   SocketIO polling mode for compatibility")
             
             # Always use Waitress for serving
             from waitress import serve
@@ -552,9 +552,9 @@ if __name__ == '__main__':
 
             if use_ssl and ssl_context:
                 print(f"🔒 Starting Flask development server with SSL on port {port}...")
-                print("   ✅ HTTPS support enabled")
-                print("   ✅ Full SocketIO WebSocket support")
-                print(f"   ✅ Server URL: https://localhost:{port}")
+                print("   HTTPS support enabled")
+                print("   Full SocketIO WebSocket support")
+                print(f"   Server URL: https://localhost:{port}")
                 
                 socketio.run(
                     app,
@@ -567,9 +567,9 @@ if __name__ == '__main__':
                 )
             else:
                 print(f"🌐 Starting Flask development server (HTTP) on port {port}...")
-                print("   ⚠️  No SSL - some features may be limited")
-                print("   ✅ Full SocketIO WebSocket support")
-                print(f"   ✅ Server URL: http://localhost:{port}")
+                print("   Warning: No SSL - some features may be limited")
+                print("   Full SocketIO WebSocket support")
+                print(f"   Server URL: http://localhost:{port}")
                 
                 socketio.run(
                     app,

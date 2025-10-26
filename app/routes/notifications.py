@@ -590,7 +590,7 @@ def refresh_schedule():
             is_active=True,
             scouting_team_number=current_user.scouting_team_number
         ).all()
-        print(f"🔔 Found {len(active_subs)} active subscriptions for team {current_user.scouting_team_number}")
+        print(f"Found {len(active_subs)} active subscriptions for team {current_user.scouting_team_number}")
         for sub in active_subs:
             print(f"  - Team {sub.target_team_number}, Type: {sub.notification_type}, Minutes before: {sub.minutes_before}")
         

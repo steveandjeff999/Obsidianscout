@@ -28,6 +28,23 @@ def get_theme_context():
         'current_theme_id': theme_manager.current_theme
     }
 
+
+def norm_db_score(val):
+    """Normalize a score value coming from the DB/API: treat negative or invalid scores as None.
+
+    Many APIs use -1 as a sentinel for "no score yet". Treat those as None so the UI
+    and status logic don't consider the match played.
+    """
+    try:
+        if val is None:
+            return None
+        v = int(val)
+        if v < 0:
+            return None
+        return v
+    except Exception:
+        return None
+
 bp = Blueprint('matches', __name__, url_prefix='/matches')
 
 @bp.route('/')
@@ -155,12 +172,17 @@ def index():
             return (None, None)
         return (red_sum, blue_sum)
 
+
     for match in matches:
-        # If API-provided scores exist (not None), use them; otherwise try local scouting data
-        if match.red_score is not None or match.blue_score is not None:
+        # Normalize DB scores (treat negative scores like -1 as unplayed)
+        red_db = norm_db_score(match.red_score)
+        blue_db = norm_db_score(match.blue_score)
+
+        # If API-provided scores exist (not None after normalization), use them; otherwise try local scouting data
+        if red_db is not None or blue_db is not None:
             display_scores[match.id] = {
-                'red_score': match.red_score,
-                'blue_score': match.blue_score,
+                'red_score': red_db,
+                'blue_score': blue_db,
                 'source': 'api'
             }
         else:
@@ -345,8 +367,11 @@ def view(match_id):
     game_config = get_effective_game_config()
     # Compute display score for this match (prefer API, fallback to local scouting data)
     display_score = {'red_score': None, 'blue_score': None, 'source': None}
-    if match.red_score is not None or match.blue_score is not None:
-        display_score = {'red_score': match.red_score, 'blue_score': match.blue_score, 'source': 'api'}
+    # Normalize stored scores so negative sentinel values don't mark the match as played
+    red_db = norm_db_score(match.red_score)
+    blue_db = norm_db_score(match.blue_score)
+    if red_db is not None or blue_db is not None:
+        display_score = {'red_score': red_db, 'blue_score': blue_db, 'source': 'api'}
     else:
         try:
             scouting_team_number = current_user.scouting_team_number if getattr(current_user, 'is_authenticated', False) else None
@@ -745,8 +770,8 @@ def strategy_all():
                     confidence = pred.get('confidence') or pred.get('confidence_level') or pred.get('win_probability')
 
                 # Determine display scores (prefer API-defined match scores)
-                red_score = m.red_score if m.red_score is not None else None
-                blue_score = m.blue_score if m.blue_score is not None else None
+                red_score = norm_db_score(m.red_score)
+                blue_score = norm_db_score(m.blue_score)
                 if red_score is None and blue_score is None:
                     rloc, bloc = _compute_local_scores_for_match(m)
                     red_score = rloc if rloc is not None else None
@@ -831,8 +856,8 @@ def strategy_all():
             except Exception as e:
                 # Keep a minimal fallback so UI can at least show match and teams
                 # Attempt to at least include parsed team lists and any available scores
-                r_score = m.red_score if m.red_score is not None else None
-                b_score = m.blue_score if m.blue_score is not None else None
+                r_score = norm_db_score(m.red_score)
+                b_score = norm_db_score(m.blue_score)
                 if r_score is None and b_score is None:
                     rloc, bloc = _compute_local_scores_for_match(m)
                     r_score = rloc if rloc is not None else None
@@ -1346,6 +1371,9 @@ def matches_data():
         # Prepare matches data for JSON
         matches_data = []
         for match in matches:
+            # Normalize scores so that negative sentinels like -1 are treated as None
+            red_db = norm_db_score(match.red_score)
+            blue_db = norm_db_score(match.blue_score)
             match_data = {
                 'id': match.id,
                 'match_number': match.match_number,
@@ -1360,16 +1388,16 @@ def matches_data():
                 'alliances': {
                     'red': {
                         'teams': [match.red_1, match.red_2, match.red_3],
-                        'score': match.red_score
+                        'score': red_db
                     },
                     'blue': {
                         'teams': [match.blue_1, match.blue_2, match.blue_3],
-                        'score': match.blue_score
+                        'score': blue_db
                     }
                 },
                 'winner': match.winner,
-                # Consider a match "played" if an actual_time exists or a winner/score is present
-                'status': 'played' if (match.actual_time or match.winner or (match.red_score is not None or match.blue_score is not None)) else 'upcoming'
+                # Consider a match "played" if an actual_time exists or a winner/score is present (after normalization)
+                'status': 'played' if (match.actual_time or match.winner or (red_db is not None or blue_db is not None)) else 'upcoming'
             }
             matches_data.append(match_data)
         
