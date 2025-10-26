@@ -62,7 +62,7 @@
                                     </span>
                                 </td>
                                 <td>
-                                    {% if match.red_score is not none and match.blue_score is not none %}
+                                    {% if match.red_score is not none and match.red_score >= 0 and match.blue_score is not none and match.blue_score >= 0 %}
                                         <span class="text-danger">{{ match.red_score }}</span> - 
                                         <span class="text-primary">{{ match.blue_score }}</span>
                                     {% else %}

@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "alliance_size": 3,
   "scouting_stations": 6,
-  "current_event_code": "MINOR",
+  "current_event_code": "TXPLA2",
   "match_types": [
     "Practice",
     "Qualification",

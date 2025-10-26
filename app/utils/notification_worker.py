@@ -10,11 +10,15 @@ import atexit # Added missing import
 import traceback # Added missing import for error reporting
 from datetime import datetime, timezone, timedelta
 from flask import current_app
+from app import db
 
 # Module-level tracker for the last time we ran the "schedule upcoming matches" check.
 # This is intentionally module-level so other parts of the app (routes/templates)
 # can query how long until the next scheduled run.
 last_schedule_check_time = None
+# Cache of last-known event schedule_offset values so we only reschedule notifications
+# when the offset changes meaningfully. Keyed by event.id -> int(offset_minutes)
+last_event_offsets = {}
 
 # Leader lock file ensures only one process on this host runs the scheduler.
 # We use an atomic create (O_EXCL) strategy and write JSON containing pid/timestamp
@@ -290,6 +294,80 @@ def schedule_upcoming_match_notifications(app):
             print(f"✅ Scheduled {summary_count} end-of-day summary notifications")
     except Exception as e:
         print(f"❌ Error scheduling end-of-day summaries: {e}")
+
+    # Lightweight reschedule pass: when an event has a significant schedule_offset (>= 15 minutes)
+    # we should reschedule pending notifications for that event's future matches so they fire
+    # relative to the updated timetable. We avoid running the heavy schedule_adjuster here
+    # (which queries external APIs) and instead rely on the persisted Event.schedule_offset
+    # value computed by the schedule_adjuster. This check runs every 5 minutes (same cadence
+    # as scheduling) so notifications react quickly when offsets are detected.
+    try:
+        rescheduled_total = 0
+        from app.models import Event, Match
+        from app.models_misc import NotificationQueue
+        from app.utils.notification_service import schedule_notifications_for_match
+
+        now = datetime.now(timezone.utc)
+        now_naive = now.replace(tzinfo=None)
+
+        # Find events with non-null schedule_offset
+        events = Event.query.filter(Event.schedule_offset.isnot(None)).all()
+        for event in events:
+            try:
+                offset = int(event.schedule_offset or 0)
+                # Only act on significant offsets (15+ minutes)
+                if abs(offset) < 15:
+                    continue
+
+                prev = last_event_offsets.get(event.id)
+                # If offset hasn't changed since last time we rescheduled for this event,
+                # skip to avoid repeated reschedules.
+                if prev == offset:
+                    continue
+
+                # Find future matches for this event (compare against naive DB times)
+                future_matches = Match.query.filter(
+                    Match.event_id == event.id,
+                    Match.scheduled_time.isnot(None),
+                    Match.scheduled_time > now_naive
+                ).all()
+
+                if not future_matches:
+                    # Still update cache so we don't repeatedly check empty events
+                    last_event_offsets[event.id] = offset
+                    continue
+
+                # Clear pending queue entries for these future matches so they can be recreated
+                match_ids = [m.id for m in future_matches]
+                pending = NotificationQueue.query.filter(
+                    NotificationQueue.match_id.in_(match_ids),
+                    NotificationQueue.status == 'pending'
+                ).all()
+
+                if pending:
+                    for q in pending:
+                        db.session.delete(q)
+                    db.session.commit()
+                    print(f"  Cleared {len(pending)} pending notifications for event {event.code} due to offset {offset}m")
+
+                # Reschedule notifications based on adjusted predicted times (if any)
+                for m in future_matches:
+                    try:
+                        cnt = schedule_notifications_for_match(m)
+                        rescheduled_total += cnt
+                    except Exception as e:
+                        print(f"❌ Error rescheduling notifications for match {m.id}: {e}")
+
+                # Record that we've handled this offset value for this event
+                last_event_offsets[event.id] = offset
+
+            except Exception as e:
+                print(f"❌ Error handling reschedule logic for event {getattr(event,'code', 'N/A')}: {e}")
+
+        if rescheduled_total > 0:
+            print(f"✅ Rescheduled {rescheduled_total} notifications due to significant schedule offsets")
+    except Exception as e:
+        print(f"❌ Error in lightweight reschedule pass: {e}")
 
 
 def get_seconds_until_next_schedule():

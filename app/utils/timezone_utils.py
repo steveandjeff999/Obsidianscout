@@ -273,16 +273,17 @@ def format_time_with_timezone(dt, event_timezone_str=None, format_str='%I:%M %p'
     if dt is None:
         return ""
     
-    # Convert to event timezone if provided
+    # Convert to event timezone if provided and include TZ abbreviation
     if event_timezone_str:
         dt_local = convert_utc_to_local(dt, event_timezone_str)
         tz_abbr = dt_local.strftime('%Z')  # Get timezone abbreviation (e.g., 'MST', 'EDT')
         return f"{dt_local.strftime(format_str)} {tz_abbr}"
     else:
-        # Show as UTC
+        # No explicit event timezone: display the formatted time without appending 'UTC'
+        # Ensure dt is timezone-aware for consistent formatting, but don't append a label
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        return f"{dt.strftime(format_str)} UTC"
+        return dt.strftime(format_str)
 
 
 def get_timezone_display_name(event_timezone_str):

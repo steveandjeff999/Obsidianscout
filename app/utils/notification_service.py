@@ -13,6 +13,7 @@ from app.utils.push_notifications import send_push_to_user
 from app.utils.timezone_utils import convert_utc_to_local, convert_local_to_utc, format_time_with_timezone
 import traceback
 import statistics
+from app.utils.score_utils import norm_db_score
 
 
 def get_match_time(match):
@@ -506,12 +507,16 @@ def create_end_of_day_summary(last_match):
 
     for m, mt in matches:
         match_count += 1
-        # Consider completed if scores present
-        if m.red_score is not None and m.blue_score is not None:
+        # Normalize DB scores so negative sentinel values are considered missing
+        red_db = norm_db_score(m.red_score)
+        blue_db = norm_db_score(m.blue_score)
+
+        # Consider completed only if both normalized scores are present
+        if red_db is not None and blue_db is not None:
             completed_matches += 1
-            total = (m.red_score or 0) + (m.blue_score or 0)
+            total = (red_db or 0) + (blue_db or 0)
             totals_list.append(total)
-            margin = abs((m.red_score or 0) - (m.blue_score or 0))
+            margin = abs((red_db or 0) - (blue_db or 0))
             margins.append(margin)
 
             if highest_scoring is None or total > highest_scoring[0]:
@@ -536,8 +541,10 @@ def create_end_of_day_summary(last_match):
     message_lines.append('MATCH RESULTS:')
     for m, mt in matches:
         local_time_str = format_time_with_timezone(mt, event_tz, '%I:%M %p')
-        if m.red_score is not None and m.blue_score is not None:
-            result = f"{m.match_type} {m.match_number}: Red {m.red_score} - Blue {m.blue_score} ({m.winner or 'unknown'})"
+        red_db = norm_db_score(m.red_score)
+        blue_db = norm_db_score(m.blue_score)
+        if red_db is not None and blue_db is not None:
+            result = f"{m.match_type} {m.match_number}: Red {red_db} - Blue {blue_db} ({m.winner or 'unknown'})"
         else:
             result = f"{m.match_type} {m.match_number}: Result pending"
         message_lines.append(f" - {local_time_str}: {result}")
@@ -547,7 +554,9 @@ def create_end_of_day_summary(last_match):
         total, hmatch = highest_scoring
         message_lines.append('\nHIGHEST SCORING MATCH:')
         htime = get_match_time(hmatch)
-        message_lines.append(f" - {hmatch.match_type} {hmatch.match_number} at {format_time_with_timezone(htime, event_tz)}: Total {total} (Red {hmatch.red_score} - Blue {hmatch.blue_score})")
+        h_red = norm_db_score(hmatch.red_score)
+        h_blue = norm_db_score(hmatch.blue_score)
+        message_lines.append(f" - {hmatch.match_type} {hmatch.match_number} at {format_time_with_timezone(htime, event_tz)}: Total {total} (Red {h_red} - Blue {h_blue})")
 
     # Overall match scoring statistics
     if totals_list:
@@ -567,16 +576,20 @@ def create_end_of_day_summary(last_match):
         close_threshold = 10
         close_matches = []
         for m, mt in matches:
-            if m.red_score is not None and m.blue_score is not None:
-                if abs((m.red_score or 0) - (m.blue_score or 0)) <= close_threshold:
-                    close_matches.append((m, mt, abs((m.red_score or 0) - (m.blue_score or 0))))
+            red_db = norm_db_score(m.red_score)
+            blue_db = norm_db_score(m.blue_score)
+            if red_db is not None and blue_db is not None:
+                if abs((red_db or 0) - (blue_db or 0)) <= close_threshold:
+                    close_matches.append((m, mt, abs((red_db or 0) - (blue_db or 0))))
 
         if close_matches:
             message_lines.append(f" - Close matches (margin ≤ {close_threshold} points): {len(close_matches)}")
             # show up to 5 of the closest
             close_matches.sort(key=lambda x: x[2])
             for m, mt, margin in close_matches[:5]:
-                message_lines.append(f"   • {m.match_type} {m.match_number}: Red {m.red_score} - Blue {m.blue_score} (margin {margin}) at {format_time_with_timezone(get_match_time(m), event_tz)}")
+                rdb = norm_db_score(m.red_score)
+                bdb = norm_db_score(m.blue_score)
+                message_lines.append(f"   • {m.match_type} {m.match_number}: Red {rdb} - Blue {bdb} (margin {margin}) at {format_time_with_timezone(get_match_time(m), event_tz)}")
 
     # Missing scores summary
     if missing_scores:
@@ -878,9 +891,36 @@ def schedule_notifications_for_match(match):
         # Don't schedule if already past (compare timezone-aware datetimes)
         now_utc = datetime.now(timezone.utc)
         if send_time_utc < now_utc:
-            print(f"   ⏭️  SKIPPED - send time has passed")
-            print(f"      Current: {now_utc.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-            continue
+            # If the match appears to be finished, skip as before
+            finished = bool(
+                getattr(match, 'actual_time', None)
+                or getattr(match, 'winner', None)
+                or ((getattr(match, 'red_score', None) is not None and getattr(match, 'red_score', None) >= 0)
+                    or (getattr(match, 'blue_score', None) is not None and getattr(match, 'blue_score', None) >= 0))
+            )
+
+            if finished:
+                print(f"   ⏭️  SKIPPED - match appears finished, send time has passed")
+                print(f"      Current: {now_utc.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+                continue
+
+            # If the match is unplayed, allow scheduling past send time only if we
+            # have not already recorded a notification for this subscription+match
+            try:
+                existing_log = NotificationLog.query.filter_by(
+                    subscription_id=subscription.id,
+                    match_id=match.id
+                ).first()
+            except Exception:
+                existing_log = None
+
+            if existing_log:
+                print(f"   ⏭️  SKIPPED - notification already recorded in history for subscription {subscription.id} and match {match.id}")
+                continue
+
+            # Otherwise, schedule to send immediately (so the next processing batch will pick it up)
+            print(f"   ⚠️  Send time has passed but match is unplayed and no history found - scheduling immediate send")
+            send_time_utc = now_utc
         
         # Convert to naive UTC for database storage (SQLite stores naive datetimes)
         # CRITICAL: This removes timezone info but keeps the UTC time value unchanged

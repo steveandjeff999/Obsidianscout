@@ -134,11 +134,11 @@
                                 <td>
                                     {# If match has an actual_time (played), show that first using event timezone if available #}
                                     {# Consider a match 'played' if there's an actual_time, a winner, or recorded scores. #}
-                                    {% set has_played = (match.actual_time or match.winner or (match.red_score is not none) or (match.blue_score is not none)) %}
+                                    {% set has_played = (match.actual_time or match.winner or ((match.red_score is not none and match.red_score >= 0) or (match.blue_score is not none and match.blue_score >= 0))) %}
                                     {% if has_played %}
                                         {# Pick a time to display: prefer actual_time, then scheduled_time, then predicted_time #}
                                         {% set display_time = match.actual_time or match.scheduled_time or match.predicted_time %}
-                                        {% if display_time %}
+                                            {% if display_time %}
                                             {% if match.event and match.event.timezone %}
                                                 <div class="text-nowrap">
                                                     <span class="text-success fw-bold">Played at {{ display_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
@@ -146,8 +146,8 @@
                                                 </div>
                                             {% else %}
                                                 <div class="text-nowrap">
-                                                    <span class="text-success fw-bold">Played at {{ display_time.strftime('%I:%M %p') }} UTC</span>
-                                                    <br><small class="text-muted">{{ display_time.strftime('%Y-%m-%d %I:%M %p') }} UTC</small>
+                                                    <span class="text-success fw-bold">Played at {{ display_time | format_time_tz(None, '%I:%M %p') }}</span>
+                                                    <br><small class="text-muted">{{ display_time | format_time_tz(None, '%Y-%m-%d %I:%M %p') }}</small>
                                                 </div>
                                             {% endif %}
                                         {% else %}
@@ -155,39 +155,53 @@
                                         {% endif %}
                                     {% elif match.scheduled_time and match.predicted_time %}
                                         {# Show both scheduled and adjusted time when schedule offset exists #}
-                                        {% if match.event and match.event.timezone %}
-                                            <div class="text-nowrap">
-                                                <span class="text-muted" style="text-decoration: line-through; font-size: 0.85em;">{{ match.scheduled_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
-                                            </div>
-                                            <div class="text-nowrap">
-                                                <span class="text-warning fw-bold">~{{ match.predicted_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
-                                                {% if match.event.schedule_offset %}
-                                                <span class="badge bg-warning text-dark ms-1" title="Event is {{ match.event.schedule_offset|abs }} min {{ 'behind' if match.event.schedule_offset > 0 else 'ahead' }}">
-                                                    {{ match.event.schedule_offset|abs }}m {{ '🐌' if match.event.schedule_offset > 0 else '⚡' }}
-                                                </span>
+                                                {% if match.id == next_unplayed_match_id and is_starting_soon(match, match.event.timezone, adjusted_predictions.get(match.id) if adjusted_predictions is defined else None) %}
+                                                    <div class="text-nowrap">
+                                                        <span class="text-warning fw-bold">Starting soon</span>
+                                                    </div>
+                                                {% else %}
+                                                        {% if match.event and match.event.timezone %}
+                                                            <div class="text-nowrap">
+                                                                <span class="text-muted" style="text-decoration: line-through; font-size: 0.85em;">{{ match.scheduled_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
+                                                            </div>
+                                                            <div class="text-nowrap">
+                                                                <span class="text-warning fw-bold">~{{ match.predicted_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
+                                                                {% if match.event.schedule_offset %}
+                                                                <span class="badge bg-warning text-dark ms-1" title="Event is {{ match.event.schedule_offset|abs }} min {{ 'behind' if match.event.schedule_offset > 0 else 'ahead' }}">
+                                                                    {{ match.event.schedule_offset|abs }}m {{ '🐌' if match.event.schedule_offset > 0 else '⚡' }}
+                                                                </span>
+                                                                {% endif %}
+                                                            </div>
+                                                        {% else %}
+                                                            <div class="text-nowrap">
+                                                                <span class="text-muted" style="text-decoration: line-through; font-size: 0.85em;">{{ match.scheduled_time | format_time_tz(None, '%I:%M %p') }}</span>
+                                                            </div>
+                                                            <div class="text-nowrap">
+                                                                <span class="text-warning fw-bold">~{{ match.predicted_time | format_time_tz(None, '%I:%M %p') }}</span>
+                                                            </div>
+                                                        {% endif %}
                                                 {% endif %}
-                                            </div>
-                                        {% else %}
-                                            <div class="text-nowrap">
-                                                <span class="text-muted" style="text-decoration: line-through; font-size: 0.85em;">{{ match.scheduled_time.strftime('%I:%M %p') }} UTC</span>
-                                            </div>
-                                            <div class="text-nowrap">
-                                                <span class="text-warning fw-bold">~{{ match.predicted_time.strftime('%I:%M %p') }} UTC</span>
-                                            </div>
-                                        {% endif %}
                                     {% elif match.scheduled_time %}
                                         {# Only scheduled time, no adjustment #}
-                                        {% if match.event and match.event.timezone %}
-                                            <span class="text-nowrap">{{ match.scheduled_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
+                                        {% if match.id == next_unplayed_match_id and is_starting_soon(match, match.event.timezone, adjusted_predictions.get(match.id) if adjusted_predictions is defined else None) %}
+                                            <span class="text-warning fw-bold">Starting soon</span>
                                         {% else %}
-                                            <span class="text-nowrap">{{ match.scheduled_time.strftime('%I:%M %p') }} UTC</span>
+                                            {% if match.event and match.event.timezone %}
+                                                <span class="text-nowrap">{{ match.scheduled_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
+                                            {% else %}
+                                                <span class="text-nowrap">{{ match.scheduled_time | format_time_tz(None, '%I:%M %p') }}</span>
+                                            {% endif %}
                                         {% endif %}
                                     {% elif match.predicted_time %}
                                         {# Only predicted time #}
-                                        {% if match.event and match.event.timezone %}
-                                            <span class="text-nowrap text-muted">~{{ match.predicted_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
+                                        {% if match.id == next_unplayed_match_id and is_starting_soon(match, match.event.timezone, adjusted_predictions.get(match.id) if adjusted_predictions is defined else None) %}
+                                            <span class="text-warning fw-bold">Starting soon</span>
                                         {% else %}
-                                            <span class="text-nowrap text-muted">~{{ match.predicted_time.strftime('%I:%M %p') }} UTC</span>
+                                            {% if match.event and match.event.timezone %}
+                                                    <span class="text-nowrap text-muted">~{{ match.predicted_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
+                                                {% else %}
+                                                    <span class="text-nowrap text-muted">~{{ match.predicted_time | format_time_tz(None, '%I:%M %p') }}</span>
+                                                {% endif %}
                                         {% endif %}
                                     {% else %}
                                         <span class="text-muted">TBD</span>
@@ -205,7 +219,7 @@
                                 </td>
                                 <td>
                                     {% set ds = display_scores.get(match.id) if display_scores is defined else None %}
-                                    {% if ds and ds.red_score is not none and ds.blue_score is not none %}
+                                    {% if ds and ds.red_score is not none and ds.red_score >= 0 and ds.blue_score is not none and ds.blue_score >= 0 %}
                                     <div>
                                         <span class="fw-bold text-danger">{{ ds.red_score }}</span> - <span class="fw-bold text-primary">{{ ds.blue_score }}</span>
                                         {% if ds.source == 'local' %}<small class="text-muted ms-2">(from local scouting)</small>{% endif %}
