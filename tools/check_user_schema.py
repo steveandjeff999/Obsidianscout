@@ -1,0 +1,10 @@
+import sqlite3, json
+conn = sqlite3.connect('instance/users.db')
+cur = conn.cursor()
+idxs = cur.execute('PRAGMA index_list("user")').fetchall()
+print('PRAGMA index_list(user):')
+print(json.dumps(idxs, default=str, indent=2))
+cols = cur.execute('PRAGMA table_info("user")').fetchall()
+print('\nPRAGMA table_info(user):')
+print(json.dumps(cols, default=str, indent=2))
+conn.close()

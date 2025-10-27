@@ -25,8 +25,12 @@ team_event = db.Table('team_event',
 
 class User(UserMixin, ConcurrentModelMixin, db.Model):
     __bind_key__ = 'users'
+    __table_args__ = (
+        db.UniqueConstraint('username', 'scouting_team_number', name='uq_user_username_team'),
+    )
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    # Username is no longer globally unique; uniqueness is enforced per scouting_team_number
+    username = db.Column(db.String(80), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=True)
     password_hash = db.Column(db.String(128))
     scouting_team_number = db.Column(db.Integer, nullable=True)

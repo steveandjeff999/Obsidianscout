@@ -289,9 +289,15 @@ def register():
             flash('Passwords do not match.', 'error')
             return redirect(url_for('auth.register'))
 
-        user = User.query.filter_by(username=username).first()
+        # Enforce username uniqueness within the specified scouting team only
+        try:
+            team_number = int(team_number)
+        except Exception:
+            # Keep original value if conversion fails; DB will accept NULL/strings
+            pass
+        user = User.query.filter_by(username=username, scouting_team_number=team_number).first()
         if user is not None:
-            flash('Username already exists.', 'error')
+            flash('Username already exists for that team.', 'error')
             return redirect(url_for('auth.register'))
 
         # Normalize email value: treat empty string as None
@@ -302,13 +308,18 @@ def register():
             flash('Email already exists.', 'error')
             return redirect(url_for('auth.register'))
 
-        new_user = User(username=username, email=email, scouting_team_number=team_number)
+        # Ensure scouting_team_number is stored as an int where possible
+        try:
+            stored_team = int(team_number)
+        except Exception:
+            stored_team = team_number
+        new_user = User(username=username, email=email, scouting_team_number=stored_team)
         new_user.set_password(password)
         db.session.add(new_user)
         db.session.commit()
 
         # Check if this is the first user for the team
-        team_user_count = User.query.filter_by(scouting_team_number=team_number).count()
+        team_user_count = User.query.filter_by(scouting_team_number=stored_team).count()
         if team_user_count == 1:
             # First user becomes admin
             admin_role = Role.query.filter_by(name='admin').first()
@@ -383,10 +394,11 @@ def profile():
         new_username = request.form.get('username')
         new_email = request.form.get('email')
 
-        # Validate username uniqueness if changed
+        # Validate username uniqueness if changed (scoped to the user's team)
         if new_username and new_username != current_user.username:
-            if User.query.filter_by(username=new_username).first():
-                flash('Username already exists.', 'error')
+            conflict = User.query.filter_by(username=new_username, scouting_team_number=current_user.scouting_team_number).filter(User.id != current_user.id).first()
+            if conflict:
+                flash('Username already exists for your team.', 'error')
                 return redirect(request.url)
             current_user.username = new_username
 
@@ -536,9 +548,13 @@ def add_user():
             scouting_team_number = request.form.get('scouting_team_number')
         role_ids = request.form.getlist('roles')
         
-        # Check if username already exists
-        if User.query.filter_by(username=username).first():
-            flash('Username already exists', 'error')
+        # Check if username already exists for the target team
+        try:
+            target_team = int(scouting_team_number) if scouting_team_number not in (None, '') else None
+        except Exception:
+            target_team = scouting_team_number
+        if User.query.filter_by(username=username, scouting_team_number=target_team).first():
+            flash('Username already exists for the target team', 'error')
             return redirect(url_for('auth.add_user'))
         
         # Check if email already exists (if provided)
@@ -550,7 +566,7 @@ def add_user():
         if email == '':
             email = None
             
-        user = User(username=username, email=email, scouting_team_number=scouting_team_number)
+        user = User(username=username, email=email, scouting_team_number=target_team)
         user.set_password(password)
         
         # Add roles
@@ -619,8 +635,20 @@ def update_user(user_id):
     # Only superadmins can change username, team membership, or roles. Team admins may
     # toggle active status (deactivate/reactivate) and set a new password for team members.
     if is_super:
-        user.username = request.form.get('username')
-        user.scouting_team_number = request.form.get('scouting_team_number')
+        # Validate uniqueness before applying changes
+        new_username = request.form.get('username')
+        new_team_raw = request.form.get('scouting_team_number')
+        try:
+            new_team = int(new_team_raw) if new_team_raw not in (None, '') else None
+        except Exception:
+            new_team = new_team_raw
+        if new_username:
+            conflict = User.query.filter(User.username == new_username, User.scouting_team_number == new_team, User.id != user.id).first()
+            if conflict:
+                flash('Another user already has that username for the selected team.', 'error')
+                return redirect(url_for('auth.manage_users'))
+        user.username = new_username
+        user.scouting_team_number = new_team
 
     password = request.form.get('password')
     if password:
@@ -707,8 +735,19 @@ def edit_user(user_id):
         return redirect(url_for('auth.manage_users'))
     
     if request.method == 'POST':
-        user.username = request.form['username']
-        user.scouting_team_number = request.form.get('scouting_team_number')
+        # Validate username uniqueness within the (possibly new) team before applying
+        new_username = request.form['username']
+        new_team_raw = request.form.get('scouting_team_number')
+        try:
+            new_team = int(new_team_raw) if new_team_raw not in (None, '') else None
+        except Exception:
+            new_team = new_team_raw
+        conflict = User.query.filter(User.username == new_username, User.scouting_team_number == new_team, User.id != user.id).first()
+        if conflict:
+            flash('Another user already has that username for the selected team.', 'error')
+            return redirect(url_for('auth.edit_user', user_id=user.id))
+        user.username = new_username
+        user.scouting_team_number = new_team
         
         # Handle email (convert empty string to None)
         email = request.form.get('email')
