@@ -14,10 +14,10 @@ The main problem with the current `/graphs` implementation is that `points_data`
 3. **Improved Logic**: Teams are now processed even when no scouting data exists
 
 ## Current Status
-- ✅ Server starts successfully
-- ✅ Basic UI improvements work (12 graph types, categorized selection)
-- ✅ `data_view='averages'` works and shows graphs
-- ❌ `data_view='matches'` still has issues due to remaining indentation problems
+-  Server starts successfully
+-  Basic UI improvements work (12 graph types, categorized selection)
+-  `data_view='averages'` works and shows graphs
+-  `data_view='matches'` still has issues due to remaining indentation problems
 
 ## Next Steps Needed
 1. Fix remaining indentation issues in the large conditional blocks

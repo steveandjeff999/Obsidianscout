@@ -20,7 +20,7 @@ def test_login_flow():
         app = create_app()
         
         with app.app_context():
-            print("🔍 LOGIN FLOW TEST")
+            print(" LOGIN FLOW TEST")
             print("=" * 60)
             
             # Test credentials
@@ -41,17 +41,17 @@ def test_login_flow():
             if blocked:
                 status = get_login_status(username)
                 print(f"  Block details: {status}")
-                print("❌ LOGIN WOULD FAIL HERE - User is blocked")
+                print(" LOGIN WOULD FAIL HERE - User is blocked")
                 return
-            print("✅ Step 1 passed")
+            print(" Step 1 passed")
             print()
             
             # Step 2: Team number validation
             print("STEP 2: Team number validation...")
             if not team_number and team_number != 0:
-                print("❌ LOGIN WOULD FAIL HERE - Team number is required")
+                print(" LOGIN WOULD FAIL HERE - Team number is required")
                 return
-            print("✅ Step 2 passed - Team number provided")
+            print(" Step 2 passed - Team number provided")
             print()
             
             # Step 3: Team number conversion
@@ -59,9 +59,9 @@ def test_login_flow():
             try:
                 team_number_int = int(team_number)
                 print(f"  Converted '{team_number}' to {team_number_int} (type: {type(team_number_int)})")
-                print("✅ Step 3 passed")
+                print(" Step 3 passed")
             except ValueError:
-                print("❌ LOGIN WOULD FAIL HERE - Team number is not a valid number")
+                print(" LOGIN WOULD FAIL HERE - Team number is not a valid number")
                 return
             print()
             
@@ -71,7 +71,7 @@ def test_login_flow():
             
             user = User.query.filter_by(username=username, scouting_team_number=team_number_int).first()
             if user is None:
-                print("❌ LOGIN WOULD FAIL HERE - User not found with exact query")
+                print(" LOGIN WOULD FAIL HERE - User not found with exact query")
                 
                 # Try alternative queries to debug
                 print("  Debugging alternative queries:")
@@ -83,13 +83,13 @@ def test_login_flow():
                     print(f"    No user found with username '{username}' at all")
                 return
             
-            print(f"✅ Step 4 passed - Found user: {user.username} (Team: {user.scouting_team_number})")
+            print(f" Step 4 passed - Found user: {user.username} (Team: {user.scouting_team_number})")
             print()
             
             # Step 5: Password check
             print("STEP 5: Password verification...")
             if not user.check_password(password):
-                print("❌ LOGIN WOULD FAIL HERE - Password check failed")
+                print(" LOGIN WOULD FAIL HERE - Password check failed")
                 print("  Debugging password:")
                 
                 # Test the password hash directly
@@ -100,55 +100,55 @@ def test_login_flow():
                 
                 return
             
-            print("✅ Step 5 passed - Password verification successful")
+            print(" Step 5 passed - Password verification successful")
             print()
             
             # Step 6: Active account check
             print("STEP 6: Account active check...")
             if not user.is_active:
-                print("❌ LOGIN WOULD FAIL HERE - Account is deactivated")
+                print(" LOGIN WOULD FAIL HERE - Account is deactivated")
                 return
             
-            print("✅ Step 6 passed - Account is active")
+            print(" Step 6 passed - Account is active")
             print()
             
             # Step 7: Final block check (double-check)
             print("STEP 7: Final brute force block check...")
             blocked_final = is_login_blocked(username)
             if blocked_final:
-                print("❌ LOGIN WOULD FAIL HERE - User became blocked during login process")
+                print(" LOGIN WOULD FAIL HERE - User became blocked during login process")
                 return
             
-            print("✅ Step 7 passed - Still not blocked")
+            print(" Step 7 passed - Still not blocked")
             print()
             
             # Step 8: Must change password check
             print("STEP 8: Must change password check...")
             if user.must_change_password:
-                print("⚠️  User must change password - would redirect")
+                print("️  User must change password - would redirect")
             else:
-                print("✅ No password change required")
+                print(" No password change required")
             print()
             
             # Step 9: Role check
             print("STEP 9: Role check...")
             if not user.roles:
-                print("⚠️  User has no roles - would redirect to role selection")
+                print("️  User has no roles - would redirect to role selection")
             else:
                 role_names = [role.name for role in user.roles]
-                print(f"✅ User has roles: {role_names}")
+                print(f" User has roles: {role_names}")
             print()
             
-            print("🎉 LOGIN FLOW COMPLETE - ALL CHECKS PASSED!")
+            print(" LOGIN FLOW COMPLETE - ALL CHECKS PASSED!")
             print("   Login should be successful")
             
             # Test the actual record_login_attempt function
             print("\nTesting record_login_attempt function...")
             try:
                 record_login_attempt(username=username, team_number=team_number_int, success=True)
-                print("✅ Successfully recorded login attempt")
+                print(" Successfully recorded login attempt")
             except Exception as e:
-                print(f"❌ Failed to record login attempt: {e}")
+                print(f" Failed to record login attempt: {e}")
             
             # Final status check
             print("\nFinal login status check...")
@@ -156,7 +156,7 @@ def test_login_flow():
             print(f"Login status: {status}")
             
     except Exception as e:
-        print(f"❌ Error during login flow test: {e}")
+        print(f" Error during login flow test: {e}")
         import traceback
         traceback.print_exc()
 
@@ -168,7 +168,7 @@ def test_actual_http_login():
         app = create_app()
         
         with app.test_client() as client:
-            print("\n🌐 HTTP LOGIN TEST")
+            print("\n HTTP LOGIN TEST")
             print("=" * 60)
             
             # First get the login page to establish session
@@ -191,17 +191,17 @@ def test_actual_http_login():
             if response.status_code == 302:
                 location = response.headers.get('Location', '')
                 if 'lockout' in location:
-                    print("❌ Redirected to lockout page - user is blocked")
+                    print(" Redirected to lockout page - user is blocked")
                 elif 'change_password' in location:
-                    print("⚠️  Redirected to change password page")
+                    print("️  Redirected to change password page")
                 elif 'select_role' in location:
-                    print("⚠️  Redirected to role selection page")
+                    print("️  Redirected to role selection page")
                 elif 'main' in location or 'scouting' in location:
-                    print("✅ Redirected to main page - LOGIN SUCCESSFUL!")
+                    print(" Redirected to main page - LOGIN SUCCESSFUL!")
                 else:
-                    print(f"❓ Redirected to unexpected location: {location}")
+                    print(f" Redirected to unexpected location: {location}")
             else:
-                print("❌ No redirect - login likely failed")
+                print(" No redirect - login likely failed")
                 
                 # Get response data to see flash messages
                 response_text = response.get_data(as_text=True)
@@ -213,7 +213,7 @@ def test_actual_http_login():
                     print("   No specific error message found in response")
     
     except Exception as e:
-        print(f"❌ Error during HTTP login test: {e}")
+        print(f" Error during HTTP login test: {e}")
         import traceback
         traceback.print_exc()
 

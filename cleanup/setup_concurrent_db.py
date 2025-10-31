@@ -17,10 +17,10 @@ def check_crsqlite_dll():
     dll_path = os.path.join('instance', 'crsqlite', 'crsqlite.dll')
     
     if os.path.exists(dll_path):
-        print(f"✓ CR-SQLite DLL found at: {dll_path}")
+        print(f" CR-SQLite DLL found at: {dll_path}")
         return True
     else:
-        print(f"✗ CR-SQLite DLL not found at: {dll_path}")
+        print(f" CR-SQLite DLL not found at: {dll_path}")
         print("Please ensure the CR-SQLite DLL is placed in the instance/crsqlite/ directory")
         return False
 
@@ -41,9 +41,9 @@ def test_database_setup():
         
         try:
             conn.load_extension(dll_path_normalized)
-            print("✓ CR-SQLite DLL loaded successfully")
+            print(" CR-SQLite DLL loaded successfully")
         except Exception as e:
-            print(f"✗ Failed to load CR-SQLite DLL: {e}")
+            print(f" Failed to load CR-SQLite DLL: {e}")
             conn.close()
             return False
         finally:
@@ -59,9 +59,9 @@ def test_database_setup():
         # Check if concurrent writes can be enabled
         try:
             cursor.execute("PRAGMA crsql_concurrent_writes=1")
-            print("✓ CR-SQLite concurrent writes enabled")
+            print(" CR-SQLite concurrent writes enabled")
         except Exception as e:
-            print(f"⚠ Could not enable concurrent writes: {e}")
+            print(f" Could not enable concurrent writes: {e}")
         
         # Create a test table
         cursor.execute("""
@@ -77,17 +77,17 @@ def test_database_setup():
             cursor.execute("BEGIN CONCURRENT")
             cursor.execute("INSERT INTO test_table (name, value) VALUES (?, ?)", ("test", 123))
             cursor.execute("COMMIT")
-            print("✓ BEGIN CONCURRENT works")
+            print(" BEGIN CONCURRENT works")
         except Exception as e:
-            print(f"⚠ BEGIN CONCURRENT not available: {e}")
+            print(f" BEGIN CONCURRENT not available: {e}")
         
         # Try to get CR-SQLite version (may not be available in all builds)
         try:
             version = cursor.execute("SELECT crsql_version()").fetchone()[0]
-            print(f"✓ CR-SQLite version: {version}")
+            print(f" CR-SQLite version: {version}")
         except Exception as e:
-            print(f"⚠ Version function not available: {e}")
-            print("✓ CR-SQLite extension loaded (version function not supported)")
+            print(f" Version function not available: {e}")
+            print(" CR-SQLite extension loaded (version function not supported)")
         
         conn.close()
         
@@ -95,11 +95,11 @@ def test_database_setup():
         if os.path.exists(test_db_path):
             os.remove(test_db_path)
         
-        print("✓ Database setup test successful")
+        print(" Database setup test successful")
         return True
         
     except Exception as e:
-        print(f"✗ Database setup test failed: {e}")
+        print(f" Database setup test failed: {e}")
         return False
 
 def test_flask_integration():
@@ -118,24 +118,24 @@ def test_flask_integration():
             # Test database manager initialization
             db_info = concurrent_db_manager.get_database_info()
             
-            print(f"✓ SQLite version: {db_info.get('sqlite_version', 'Unknown')}")
-            print(f"✓ Journal mode: {db_info.get('journal_mode', 'Unknown')}")
+            print(f" SQLite version: {db_info.get('sqlite_version', 'Unknown')}")
+            print(f" Journal mode: {db_info.get('journal_mode', 'Unknown')}")
             
             if db_info.get('crsqlite_version'):
-                print(f"✓ CR-SQLite version: {db_info['crsqlite_version']}")
-                print(f"✓ Concurrent writes: {db_info.get('concurrent_writes', 'Unknown')}")
+                print(f" CR-SQLite version: {db_info['crsqlite_version']}")
+                print(f" Concurrent writes: {db_info.get('concurrent_writes', 'Unknown')}")
             else:
-                print("⚠ CR-SQLite not detected in Flask context")
+                print(" CR-SQLite not detected in Flask context")
             
             # Test connection pool
             pool_stats = concurrent_db_manager.get_connection_stats()
-            print(f"✓ Connection pool configured: {pool_stats}")
+            print(f" Connection pool configured: {pool_stats}")
         
-        print("✓ Flask integration test successful")
+        print(" Flask integration test successful")
         return True
         
     except Exception as e:
-        print(f"✗ Flask integration test failed: {e}")
+        print(f" Flask integration test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -198,25 +198,25 @@ def migrate_database(db_path):
             try:
                 conn.load_extension(dll_path_normalized)
                 cursor.execute("PRAGMA crsql_concurrent_writes=1")
-                print("✓ CR-SQLite DLL loaded and concurrent writes enabled")
+                print(" CR-SQLite DLL loaded and concurrent writes enabled")
             except Exception as load_error:
-                print(f"⚠ CR-SQLite DLL not available: {load_error}")
+                print(f" CR-SQLite DLL not available: {load_error}")
             finally:
                 # Disable extension loading for security
                 conn.enable_load_extension(False)
                 
         except Exception as e:
-            print(f"⚠ Could not load CR-SQLite extension: {e}")
+            print(f" Could not load CR-SQLite extension: {e}")
         
         # Optimize the database
         cursor.execute("PRAGMA optimize")
         
         conn.close()
-        print("✓ Database migration completed successfully")
+        print(" Database migration completed successfully")
         return True
         
     except Exception as e:
-        print(f"✗ Migration failed: {e}")
+        print(f" Migration failed: {e}")
         # Restore backup if migration failed
         if os.path.exists(backup_path):
             shutil.copy2(backup_path, db_path)
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     with open('migrate_database.py', 'w') as f:
         f.write(migration_script)
     
-    print("✓ Migration script created: migrate_database.py")
+    print(" Migration script created: migrate_database.py")
 
 def main():
     """Main setup function"""
@@ -268,14 +268,14 @@ def main():
     
     print("\n" + "=" * 60)
     if success:
-        print("✓ Setup completed successfully!")
+        print(" Setup completed successfully!")
         print("\nNext steps:")
         print("1. Restart your Flask application")
         print("2. Visit /admin/database to check the status")
         print("3. Run migrate_database.py on existing databases if needed")
         print("4. Check concurrent_examples.py for usage examples")
     else:
-        print("✗ Setup completed with errors")
+        print(" Setup completed with errors")
         print("\nTroubleshooting:")
         print("1. Ensure CR-SQLite DLL is in instance/crsqlite/crsqlite.dll")
         print("2. Download CR-SQLite DLL from: https://github.com/vlcn-io/cr-sqlite")

@@ -349,9 +349,9 @@ def sync_from_config():
             from app.utils.match_time_fetcher import update_match_times
             times_updated = update_match_times(event_code, current_app.config.get('TEAM_NUMBER'))
             if times_updated > 0:
-                print(f"✅ Updated scheduled times for {times_updated} matches")
+                print(f" Updated scheduled times for {times_updated} matches")
         except Exception as e:
-            print(f"⚠️  Could not update match times: {e}")
+            print(f"️  Could not update match times: {e}")
         
         # After bulk sync, queue a single replication event for the match sync
         if matches_added > 0 or matches_updated > 0:
@@ -399,7 +399,7 @@ def update_times():
         times_updated = update_match_times(event_code, current_app.config.get('TEAM_NUMBER'))
         
         if times_updated > 0:
-            flash(f"✅ Updated scheduled times for {times_updated} matches!", 'success')
+            flash(f" Updated scheduled times for {times_updated} matches!", 'success')
         else:
             flash("No match times needed updating.", 'info')
         

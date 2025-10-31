@@ -142,14 +142,14 @@ def get_changes():
         
         # For catch-up mode, use larger limits and different batching
         if catchup_mode:
-            logger.info(f"🔄 Catch-up mode: Getting changes since {since_time} for server {requesting_server_id}")
+            logger.info(f" Catch-up mode: Getting changes since {since_time} for server {requesting_server_id}")
             # Get more changes for catch-up operations
             changes = DatabaseChange.query.filter(
                 DatabaseChange.timestamp > since_time,
                 DatabaseChange.sync_status == 'pending'
             ).order_by(DatabaseChange.timestamp.asc()).all()
         else:
-            logger.info(f"📤 Normal mode: Getting changes since {since_time} for server {requesting_server_id}")
+            logger.info(f" Normal mode: Getting changes since {since_time} for server {requesting_server_id}")
             # Get normal batch of changes
             changes = DatabaseChange.query.filter(
                 DatabaseChange.timestamp > since_time,
@@ -158,7 +158,7 @@ def get_changes():
         
         change_data = [change.to_dict() for change in changes]
         
-        logger.info(f"📤 Sending {len(change_data)} changes to server {requesting_server_id}")
+        logger.info(f" Sending {len(change_data)} changes to server {requesting_server_id}")
         
         return jsonify({
             'changes': change_data,
@@ -188,7 +188,7 @@ def receive_changes():
         if catchup_mode:
             logger.info(f"� CATCH-UP: Receiving {len(changes)} changes from server {sending_server_id}")
         else:
-            logger.info(f"�📥 Receiving {len(changes)} changes from server {sending_server_id}")
+            logger.info(f"� Receiving {len(changes)} changes from server {sending_server_id}")
         
         # Log sample change for debugging
         if changes:
@@ -204,9 +204,9 @@ def receive_changes():
             errors = result.get('errors', [])
             
             if catchup_mode:
-                logger.info(f"✅ CATCH-UP: Successfully applied {applied_count} changes from {sending_server_id}")
+                logger.info(f" CATCH-UP: Successfully applied {applied_count} changes from {sending_server_id}")
             else:
-                logger.info(f"✅ Successfully applied {applied_count} changes from {sending_server_id}")
+                logger.info(f" Successfully applied {applied_count} changes from {sending_server_id}")
             
             response_data = {
                 'success': True,
@@ -223,9 +223,9 @@ def receive_changes():
         else:
             error_msg = result['error']
             if catchup_mode:
-                logger.error(f"❌ CATCH-UP: Failed to apply changes from {sending_server_id}: {error_msg}")
+                logger.error(f" CATCH-UP: Failed to apply changes from {sending_server_id}: {error_msg}")
             else:
-                logger.error(f"❌ Failed to apply changes from {sending_server_id}: {error_msg}")
+                logger.error(f" Failed to apply changes from {sending_server_id}: {error_msg}")
             return jsonify({'error': error_msg}), 500
             
     except Exception as e:
@@ -1036,7 +1036,7 @@ def universal_sync_receive():
         if not changes:
             return jsonify({'error': 'No changes provided'}), 400
         
-        logger.info(f"🌐 Universal sync: Received {len(changes)} {sync_type} changes")
+        logger.info(f" Universal sync: Received {len(changes)} {sync_type} changes")
         
         # Process changes based on type
         if sync_type == 'database_batch':
@@ -1069,7 +1069,7 @@ def universal_sync_receive():
         }
         
         if success_count > 0:
-            logger.info(f"✅ Universal sync: {success_count}/{len(changes)} changes processed successfully")
+            logger.info(f" Universal sync: {success_count}/{len(changes)} changes processed successfully")
         
         return jsonify(response)
         
@@ -1294,7 +1294,7 @@ def _process_universal_file_change(change):
                 if actual_hash != file_hash:
                     logger.warning(f"File hash mismatch for {file_path}")
         
-        logger.info(f"📄 File synced: {file_path}")
+        logger.info(f" File synced: {file_path}")
         return {'status': 'success', 'file': str(file_path)}
         
     except Exception as e:
@@ -1713,7 +1713,7 @@ def sqlite3_sync_server(server_id):
         return jsonify({
             'success': False,
             'error': str(e),
-            'operations': [f"❌ SQLite3 sync failed: {str(e)}"]
+            'operations': [f" SQLite3 sync failed: {str(e)}"]
         }), 500
 
 

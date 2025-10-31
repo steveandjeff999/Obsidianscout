@@ -11,7 +11,7 @@ with app.app_context():
     match = Match.query.filter_by(match_number=32).first()
     
     if not match:
-        print("❌ Match #32 not found")
+        print(" Match #32 not found")
         exit(1)
     
     print(f"Match #{match.match_number} ({match.match_type})")

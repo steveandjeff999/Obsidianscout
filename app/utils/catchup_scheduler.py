@@ -55,7 +55,7 @@ class CatchupSyncScheduler:
         self.running = True
         self.thread = threading.Thread(target=self._scheduler_loop, daemon=True)
         self.thread.start()
-        logger.info(f"🔄 Catch-up scheduler started (check interval: {self.check_interval}s)")
+        logger.info(f" Catch-up scheduler started (check interval: {self.check_interval}s)")
     
     def stop(self):
         """Stop the catch-up scheduler"""
@@ -66,11 +66,11 @@ class CatchupSyncScheduler:
         if self.thread:
             self.thread.join(timeout=5)
         
-        logger.info("🛑 Catch-up scheduler stopped")
+        logger.info(" Catch-up scheduler stopped")
     
     def _scheduler_loop(self):
         """Main scheduler loop"""
-        logger.info("🔄 Catch-up scheduler loop started")
+        logger.info(" Catch-up scheduler loop started")
         
         while self.running:
             try:
@@ -82,7 +82,7 @@ class CatchupSyncScheduler:
                 time.sleep(self.check_interval)
                 
             except Exception as e:
-                logger.error(f"❌ Error in catch-up scheduler loop: {e}")
+                logger.error(f" Error in catch-up scheduler loop: {e}")
                 # Wait a bit before retrying
                 time.sleep(60)
     
@@ -105,7 +105,7 @@ class CatchupSyncScheduler:
         self.last_check = datetime.now(timezone.utc)
         
         try:
-            logger.info("🔍 Running scheduled catch-up scan...")
+            logger.info(" Running scheduled catch-up scan...")
             
             with self.app.app_context():
                 from app.utils.catchup_sync import catchup_sync_manager
@@ -114,28 +114,28 @@ class CatchupSyncScheduler:
                 results = catchup_sync_manager.run_automatic_catchup()
                 
                 if results:
-                    logger.info(f"✅ Catch-up scan completed: {len(results)} servers processed")
+                    logger.info(f" Catch-up scan completed: {len(results)} servers processed")
                     
                     # Log summary of results
                     success_count = sum(1 for r in results if r['success'])
                     failed_count = len(results) - success_count
                     
                     if success_count > 0:
-                        logger.info(f"   🎯 {success_count} servers successfully caught up")
+                        logger.info(f"    {success_count} servers successfully caught up")
                     if failed_count > 0:
-                        logger.warning(f"   ⚠️  {failed_count} servers failed catch-up")
+                        logger.warning(f"   ️  {failed_count} servers failed catch-up")
                     
                     # Log detailed results for failed servers
                     for result in results:
                         if not result['success']:
                             server_name = result['server_name']
                             error_count = len(result['errors'])
-                            logger.warning(f"   ❌ {server_name}: {error_count} errors")
+                            logger.warning(f"    {server_name}: {error_count} errors")
                 else:
                     logger.debug("ℹ️  All servers are up to date")
         
         except Exception as e:
-            logger.error(f"❌ Catch-up scan failed: {e}")
+            logger.error(f" Catch-up scan failed: {e}")
             import traceback
             logger.debug(traceback.format_exc())
 
@@ -148,15 +148,15 @@ def start_catchup_scheduler(app):
     """Start the catch-up scheduler for the given app"""
     try:
         catchup_scheduler.init_app(app)
-        logger.info("✅ Catch-up scheduler initialized")
+        logger.info(" Catch-up scheduler initialized")
     except Exception as e:
-        logger.error(f"❌ Failed to start catch-up scheduler: {e}")
+        logger.error(f" Failed to start catch-up scheduler: {e}")
 
 
 def stop_catchup_scheduler():
     """Stop the catch-up scheduler"""
     try:
         catchup_scheduler.stop()
-        logger.info("✅ Catch-up scheduler stopped")
+        logger.info(" Catch-up scheduler stopped")
     except Exception as e:
-        logger.error(f"❌ Failed to stop catch-up scheduler: {e}")
+        logger.error(f" Failed to stop catch-up scheduler: {e}")

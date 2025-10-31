@@ -44,7 +44,7 @@ else:
 
 **Prediction Display**:
 - Shows predicted scores next to each alliance (e.g., "Red Alliance 85.3")
-- Highlights predicted winning alliance with golden border and crown emoji 👑
+- Highlights predicted winning alliance with golden border and crown emoji 
 - Shows confidence percentage in prediction badge
 - Uses gradient background for prediction badge
 
@@ -66,7 +66,7 @@ else:
 
 .predicted-winner::before {
     /* Crown emoji on predicted winner */
-    content: '👑';
+    content: '';
     position: absolute;
     top: -8px;
     right: -8px;
@@ -148,7 +148,7 @@ confidence = min(confidence, 99)
 ```
 Playoff 1                           [2:30 PM]
 ─────────────────────────────────────────────
-Red Alliance  127.5            👑 [Golden Border]
+Red Alliance  127.5             [Golden Border]
 ┌─────┬─────┬─────┐
 │3937 │6424 │9970 │
 └─────┴─────┴─────┘
@@ -159,14 +159,14 @@ Blue Alliance  98.3
 └──────┴─────┴─────┘
 
 [Predicted: Red (30% confidence)]
-✓ 4/6 teams scouted
+ 4/6 teams scouted
 ```
 
 **Top Performers**:
 ```
-🥇 1. Team 5454 - Obsidian        145.7 Avg Score
-🥈 2. Team 16   - Bomb Squad      132.4 Avg Score
-🥉 3. Team 323  - Lights Out      128.9 Avg Score
+ 1. Team 5454 - Obsidian        145.7 Avg Score
+ 2. Team 16   - Bomb Squad      132.4 Avg Score
+ 3. Team 323  - Lights Out      128.9 Avg Score
    4. Team 2357 - System Meltdown 115.2 Avg Score
    5. Team 3937 - Breakaway       110.5 Avg Score
 ```

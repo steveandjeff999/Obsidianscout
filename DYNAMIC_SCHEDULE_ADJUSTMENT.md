@@ -146,33 +146,33 @@ print(f"Rescheduled: {result['rescheduled_notifications']} notifications")
 Check console output for schedule adjustment activity:
 
 ```
-⏱️  Checking for schedule delays/advances...
+ Checking for schedule delays/advances...
 ============================================================
-🏢 Processing team 5454, event CALA
+ Processing team 5454, event CALA
 ============================================================
-🔍 Fetching match times from TBA for CALA...
+ Fetching match times from TBA for CALA...
   Match 5: Scheduled 02:00 PM, Actual 02:16 PM, Delay: +16.0 min
   Match 6: Scheduled 02:10 PM, Actual 02:25 PM, Delay: +15.0 min
   Match 7: Scheduled 02:20 PM, Actual 02:35 PM, Delay: +15.0 min
 
-📊 Schedule Analysis for CALA:
+ Schedule Analysis for CALA:
    Average offset: +15.3 minutes (behind schedule)
    Recent offset: +15.3 minutes (last 3 matches)
    Confidence: 60.0%
    Sample size: 3 completed matches
    Std deviation: 0.5 minutes
 
-🔧 Adjusting 47 future matches by +15.3 minutes...
+ Adjusting 47 future matches by +15.3 minutes...
   Match 8: 02:30 PM → 02:45 PM
   Match 9: 02:40 PM → 02:55 PM
   ...
-✅ Adjusted 47 future match predictions
+ Adjusted 47 future match predictions
 
-📅 Rescheduling notifications due to schedule changes...
+ Rescheduling notifications due to schedule changes...
   Cleared 23 old pending notifications
-✅ Rescheduled 23 notifications
+ Rescheduled 23 notifications
 
-⚠️  Event CALA is 15 min behind schedule
+️  Event CALA is 15 min behind schedule
 ```
 
 ## Configuration
@@ -243,15 +243,15 @@ The schedule adjuster uses The Blue Alliance (TBA) API:
 ## Benefits
 
 ### For Users
-- ✅ **Timely notifications**: No more missed matches due to schedule delays
-- ✅ **Accurate predictions**: See realistic match times, not outdated schedules
-- ✅ **Automatic updates**: No manual intervention needed
+-  **Timely notifications**: No more missed matches due to schedule delays
+-  **Accurate predictions**: See realistic match times, not outdated schedules
+-  **Automatic updates**: No manual intervention needed
 
 ### For System
-- ✅ **Smart adaptation**: Adjusts to real-world conditions automatically
-- ✅ **Confidence-based**: Only applies adjustments when sufficiently confident
-- ✅ **Recent data priority**: Weights recent matches more heavily
-- ✅ **Graceful degradation**: Falls back to original schedule if no data available
+-  **Smart adaptation**: Adjusts to real-world conditions automatically
+-  **Confidence-based**: Only applies adjustments when sufficiently confident
+-  **Recent data priority**: Weights recent matches more heavily
+-  **Graceful degradation**: Falls back to original schedule if no data available
 
 ## Example Scenarios
 
@@ -299,13 +299,13 @@ Only 1-2 matches completed
 **Check 1**: Verify schedule adjustment is running
 ```python
 # Look for these logs in console:
-⏱️  Checking for schedule delays/advances...
+ Checking for schedule delays/advances...
 ```
 
 **Check 2**: Check confidence level
 ```python
 # If confidence < 30%, adjustments won't be applied
-📊 Schedule Analysis for CALA:
+ Schedule Analysis for CALA:
    Confidence: 20.0%  # Too low!
 ```
 
@@ -327,14 +327,14 @@ print(event.timezone)  # Should be like 'America/Los_Angeles'
 **Check 2**: Verify TBA API access
 ```python
 # Check for TBA API errors in logs:
-⚠️  Could not fetch match details from TBA: 401
+️  Could not fetch match details from TBA: 401
 ```
 
 **Check 3**: Check match time updates
 ```python
 # Match times should be updating every 10 minutes:
-📅 Updating match times from APIs...
-✅ Updated X match times
+ Updating match times from APIs...
+ Updated X match times
 ```
 
 ## Migration Instructions

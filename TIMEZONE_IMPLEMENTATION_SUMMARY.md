@@ -1,6 +1,6 @@
 # Timezone Support Implementation Summary
 
-## ✅ Completed Changes
+##  Completed Changes
 
 ### 1. **Database Schema**
 - Added `timezone` column to `Event` model to store IANA timezone strings (e.g., 'America/Denver')
@@ -140,18 +140,18 @@ python -c "from app import create_app, db; from migrate_event_timezone import ru
 ## What's Different from Before
 
 ### Before:
-- ❌ All times displayed in UTC
-- ❌ Notifications sent based on UTC time
-- ❌ Confusing for users in different timezones
-- ❌ No timezone information stored
+-  All times displayed in UTC
+-  Notifications sent based on UTC time
+-  Confusing for users in different timezones
+-  No timezone information stored
 
 ### After:
-- ✅ Times displayed in event local timezone
-- ✅ Notifications sent at correct local time
-- ✅ Clear timezone indicators (PST, EST, etc.)
-- ✅ Timezone stored and managed properly
-- ✅ Works for all timezones worldwide
-- ✅ FIRST API fallback to TBA for timezone data
+-  Times displayed in event local timezone
+-  Notifications sent at correct local time
+-  Clear timezone indicators (PST, EST, etc.)
+-  Timezone stored and managed properly
+-  Works for all timezones worldwide
+-  FIRST API fallback to TBA for timezone data
 
 ## Benefits
 
@@ -173,4 +173,4 @@ python -c "from app import create_app, db; from migrate_event_timezone import ru
 ---
 
 **Implementation Date**: October 15, 2025
-**Status**: ✅ Complete and Ready for Testing
+**Status**:  Complete and Ready for Testing

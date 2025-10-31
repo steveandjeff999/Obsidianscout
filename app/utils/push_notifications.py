@@ -246,17 +246,17 @@ def send_push_to_user(user_id, title, message, data=None):
                 success, error = send_push_notification(device, title, message, data)
                 if success:
                     success_count += 1
-                    print(f"  ✓ Sent to device: {device.device_name}")
+                    print(f"   Sent to device: {device.device_name}")
                 else:
                     failed_count += 1
                     error_msg = f"{device.device_name or 'Unknown'}: {error}"
                     errors.append(error_msg)
-                    print(f"  ✗ Failed for device {device.device_name}: {error}")
+                    print(f"   Failed for device {device.device_name}: {error}")
             except Exception as device_ex:
                 failed_count += 1
                 error_msg = f"{device.device_name or 'Unknown'}: Exception: {type(device_ex).__name__}"
                 errors.append(error_msg)
-                print(f"  ✗ Exception for device {device.device_name}: {device_ex}")
+                print(f"   Exception for device {device.device_name}: {device_ex}")
         
         return success_count, failed_count, errors
         

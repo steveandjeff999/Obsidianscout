@@ -10,12 +10,12 @@ The OBSIDIAN Scout Mobile API provides a comprehensive REST API for building mob
 
 ## Features
 
-- 🔐 **JWT-based Authentication** - Secure token-based authentication with 7-day expiration
-- 📱 **Mobile-Optimized** - Designed specifically for mobile app constraints
-- 🔄 **Offline Sync** - Bulk submission support for offline-first mobile apps
-- 📊 **Team Isolation** - Data automatically scoped to user's scouting team
-- ⚡ **Real-time Data** - Access to live match and team data
-- 🎯 **Comprehensive Coverage** - All scouting features available via API
+-  **JWT-based Authentication** - Secure token-based authentication with 7-day expiration
+-  **Mobile-Optimized** - Designed specifically for mobile app constraints
+-  **Offline Sync** - Bulk submission support for offline-first mobile apps
+-  **Team Isolation** - Data automatically scoped to user's scouting team
+-  **Real-time Data** - Access to live match and team data
+-  **Comprehensive Coverage** - All scouting features available via API
 
 ---
 
@@ -66,127 +66,336 @@ Authenticate a user and receive a JWT token.
 
 Refresh an authentication token before it expires.
 
-**Endpoint:** `POST /api/mobile/auth/refresh`
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+List and fetch messages
+-----------------------
 
-**Success Response (200):**
+The mobile API provides a single file-backed fetch endpoint to read messages for direct conversations and alliance chats:
+
+- `GET /api/mobile/chat/messages?type=dm&user=<other_user_id>&limit=<n>&offset=<n>` — returns direct messages involving the authenticated user. When `user` is provided the endpoint returns the conversation between the authenticated user and that other user (other user must be on the same scouting team). When `user` is omitted the endpoint aggregates all direct-message files involving the authenticated user and returns a merged, sorted list.
+
+- `GET /api/mobile/chat/messages?type=alliance&limit=<n>&offset=<n>` — returns alliance messages read from per-team group files named `alliance_<alliance_id>_group_chat_history.json` (the endpoint also falls back to any DB-held alliance chat rows if present). The authenticated user's active alliance is used to determine which per-team files are read.
+
+Both endpoints return paginated results with `limit` (default 50) and `offset` (default 0). Messages are returned newest-first (sorted by timestamp).
+
+Success response (200):
 ```json
 {
   "success": true,
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "expires_at": "2024-01-08T12:00:00Z"
+  "count": 10,
+  "total": 123,
+  "messages": [
+    { "id": "uuid-1", "sender": "scout123", "recipient": "other", "text": "On my way", "timestamp": "2025-10-29T14:30:00Z" }
+  ]
 }
 ```
 
-### Verify Token
-
-Check if a token is still valid.
-
-**Endpoint:** `GET /api/mobile/auth/verify`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Success Response (200):**
-```json
-{
-  "success": true,
-  "valid": true,
-  "user": {
-    "id": 42,
-    "username": "scout123",
-    "team_number": 5454,
-    "roles": ["scout"]
-  }
-}
+Notes:
+- Messages are stored under `instance/chat` on the server. Direct messages are saved to `instance/chat/users/<team_number>/<user1>_<user2>_chat_history.json` where the users in the filename are sorted alphabetically for a consistent file path.
+- Alliance messages are saved to per-team group files under `instance/chat/groups/<team_number>/alliance_<alliance_id>_group_chat_history.json`.
+- The mobile API enforces team/alliance membership server-side. Clients must pass a valid JWT in `Authorization: Bearer <token>`.
 ```
 
 ---
 
-## Team Data
+---
 
-### Get Teams
+## Chat API
 
-Retrieve a list of teams for your scouting team.
+Enable in-team and in-alliance messaging for scouts. The Chat API allows mobile clients to list chat-eligible members, create and list conversations, send messages, and fetch message history. All endpoints require a valid mobile JWT token in the `Authorization: Bearer <token>` header.
 
-**Endpoint:** `GET /api/mobile/teams`
+Permissions and scope
+ - Users may message other users who are members of the same scouting team (scoping enforced by the token's `scouting_team_number`) or members of the user's current scouting alliance for the active event. The server MUST verify membership before delivering or persisting messages.
+ - Team-isolation rules apply: users cannot message arbitrary users outside their team or alliance.
 
-**Headers:**
+Base path
+ - All Chat endpoints are under `/api/mobile/chat`
+
+List chat-eligible members
+-------------------------
+
+Get a list of users you can message (team members and current alliance members).
+
+Endpoint: `GET /api/mobile/chat/members`
+
+Headers:
 ```
 Authorization: Bearer <token>
 ```
 
-**Query Parameters:**
-- `event_id` (optional) - Filter teams by event
-- `limit` (optional, default: 100, max: 500) - Number of results
-- `offset` (optional, default: 0) - Pagination offset
+Query Parameters:
+- `scope` (optional) - `team` (default) or `alliance` — which membership list to return
 
-**Success Response (200):**
+Success Response (200):
 ```json
 {
   "success": true,
-  "teams": [
-    {
-      "id": 1,
-      "team_number": 5454,
-      "team_name": "The Bionics",
-      "location": "USA"
-    }
-  ],
-  "count": 1,
-  "total": 45
+  "members": [
+    { "id": 42, "username": "scout123", "display_name": "Alex", "team_number": 5454 },
+    { "id": 43, "username": "lead_scout", "display_name": "Morgan", "team_number": 5454 }
+  ]
 }
 ```
 
-### Get Team Details
+Errors:
+- `401` - `AUTH_REQUIRED` or `INVALID_TOKEN`
 
-Get detailed information about a specific team.
+Create / send a message
+------------------------
 
-**Endpoint:** `GET /api/mobile/teams/<team_id>`
+Send a direct message to a user, or send to a conversation (group/alliance). Server enforces that recipients are in-scope.
 
-**Headers:**
+Endpoint: `POST /api/mobile/chat/send`
+
+Headers:
 ```
 Authorization: Bearer <token>
+Content-Type: application/json
 ```
 
-**Success Response (200):**
+Request Body (direct message example):
+```json
+{
+  "recipient_id": 43,
+  "body": "Good match — meet at the pit after the next round",
+  "offline_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+Request Body (create in-alliance conversation example):
+```json
+{
+  "conversation_type": "alliance",
+  "body": "Alliance strategy: pick defensive positioning",
+  "offline_id": "uuid-2"
+}
+```
+
+Success Response (201):
 ```json
 {
   "success": true,
-  "team": {
-    "id": 1,
-    "team_number": 5454,
-    "team_name": "The Bionics",
-    "location": "USA",
-    "scouting_data_count": 15,
-    "events": [
-      {
-        "id": 1,
-        "name": "Greater Kansas City Regional",
-        "code": "2024moks"
-      }
-    ],
-    "recent_matches": [
-      {
-        "id": 10,
-        "match_number": 5,
-        "match_type": "Qualification",
-        "red_alliance": "5454,1234,5678",
-        "blue_alliance": "9012,3456,7890",
-        "red_score": 125,
-        "blue_score": 110,
-        "winner": "red"
-      }
-    ]
+  "message": {
+    "id": 987,
+    "conversation_id": 55,
+    "sender_id": 42,
+    "recipient_id": 43,
+    "body": "Good match — meet at the pit after the next round",
+    "created_at": "2025-10-29T14:35:12Z",
+    "offline_id": "550e8400-e29b-41d4-a716-446655440000"
   }
 }
 ```
+
+Error codes:
+- `400` - `MISSING_DATA`, `MESSAGE_TOO_LONG` (recommend limit: 4000 chars)
+- `401` - `AUTH_REQUIRED` or `INVALID_TOKEN`
+- `403` - `USER_NOT_IN_SCOPE` (attempt to message someone outside team/alliance)
+
+List conversations
+------------------
+
+List conversations relevant to the authenticated user (direct and group/alliance).
+
+Endpoint: `GET /api/mobile/chat/conversations`
+
+Headers:
+```
+Authorization: Bearer <token>
+```
+
+Query Params:
+- `limit` (optional, default: 50)
+- `offset` (optional, default: 0)
+
+Success Response (200):
+```json
+{
+  "success": true,
+  "conversations": [
+    {
+      "id": 55,
+      "type": "direct",
+      "title": "Alex",
+      "last_message": "See you at the pit",
+      "last_message_at": "2025-10-29T14:35:12Z",
+      "unread_count": 2
+    }
+  ]
+}
+```
+
+Fetch messages for a conversation
+---------------------------------
+
+Retrieve messages for a conversation (direct or alliance). The server enforces access control: only conversation members may fetch messages.
+
+Endpoint: `GET /api/mobile/chat/conversations/{conversation_id}/messages`
+
+Headers:
+```
+Authorization: Bearer <token>
+```
+
+Query Params:
+- `limit` (optional, default: 50)
+- `before` (optional ISO 8601 timestamp) — for pagination
+
+Success Response (200):
+```json
+{
+  "success": true,
+  "messages": [
+    { "id": 986, "sender_id": 43, "body": "On my way", "created_at": "2025-10-29T14:30:00Z" },
+    { "id": 987, "sender_id": 42, "body": "Good match — meet at the pit", "created_at": "2025-10-29T14:35:12Z" }
+  ],
+  "count": 2
+}
+```
+
+Mark messages read
+------------------
+
+Endpoint: `POST /api/mobile/chat/conversations/{conversation_id}/read`
+
+Body:
+```json
+{ "last_read_message_id": 987 }
+```
+
+Response:
+```json
+{ "success": true }
+```
+
+Edit / Delete / React to messages (mobile)
+-----------------------------------------
+
+Mobile clients may edit, delete, or react to messages they have sent. These endpoints mirror the web UI behavior and emit the same Socket.IO events so clients (web and mobile) can update the UI in real time.
+
+Common headers for these endpoints:
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+1) Edit a message
+
+Endpoint: `POST /api/mobile/chat/edit-message`
+
+Request body:
+```json
+{
+  "message_id": "uuid-1234",
+  "text": "Updated message text"
+}
+```
+
+Success response (200):
+```json
+{ "success": true, "message": "Message edited." }
+```
+
+Errors:
+- `400` - missing fields (message_id and text required)
+- `403` - not allowed (only the original sender may edit their messages; assistant messages cannot be edited)
+- `404` - message not found
+
+Notes:
+- The server will set an `edited` flag and `edited_timestamp` on the persisted message.
+- The server emits a `message_updated` Socket.IO event to the message participants (for DMs: sender and recipient) with payload: `{ message_id, text, reactions? }` so clients can update the message text in-place.
+
+2) Delete a message
+
+Endpoint: `POST /api/mobile/chat/delete-message`
+
+Request body:
+```json
+{
+  "message_id": "uuid-1234"
+}
+```
+
+Success response (200):
+```json
+{ "success": true, "message": "Message deleted." }
+```
+
+Errors:
+- `400` - missing message_id
+- `403` - not allowed (only the original sender may delete their messages; assistant messages cannot be deleted)
+- `404` - message not found
+
+Notes:
+- The server removes the message from the file-backed history and emits a `message_deleted` Socket.IO event to the message participants with payload `{ message_id }`.
+
+3) React (toggle) to a message
+
+Endpoint: `POST /api/mobile/chat/react-message`
+
+Request body:
+```json
+{
+  "message_id": "uuid-1234",
+  "emoji": "👍"
+}
+```
+
+Success response (200):
+```json
+{ "success": true, "reactions": [ { "emoji": "👍", "count": 2 }, { "emoji": "❤️", "count": 1 } ] }
+```
+
+Errors:
+- `400` - missing message_id or emoji
+- `404` - message not found
+
+Notes:
+- Reactions are toggled per-user: posting the same emoji again removes the user's reaction.
+- The server stores individual reaction entries under `reactions` (per-user records) and also computes and persists a `reactions_summary` grouped list like `{ emoji, count }` for efficient client rendering.
+- The server emits a `message_updated` Socket.IO event to the message participants (for DMs: sender and recipient) with payload `{ message_id, reactions }` where `reactions` is the grouped summary. Clients should treat `message_updated` payloads as possibly reaction-only updates (i.e., `text` may be omitted).
+
+Client behavior tips
+--------------------
+- When handling `message_updated` socket events, mobile apps should check whether `data.text` is present before replacing the message body — reaction-only updates may omit the `text` field.
+- Ensure your client sends a non-empty `emoji` string. The server will reject empty or missing emoji with a 400 error.
+- The server enforces team/alliance scope and message ownership; expect `403` when attempting to edit/delete others' messages.
+
+Real-time delivery (optional)
+----------------------------
+
+For near real-time messaging, the server may expose a WebSocket or server-sent events endpoint (implementation dependent). Suggested WebSocket path: `/api/mobile/chat/ws` with the JWT passed in the `Sec-WebSocket-Protocol` or as a query param. If implemented, messages delivered over the socket should follow the same permission checks.
+
+Data model notes (server-side)
+------------------------------
+- Message: { id, conversation_id, sender_id, recipient_id (nullable for group), body (text), created_at (UTC), read (boolean), offline_id (optional) }
+- Conversation: { id, type: direct|alliance|team, participant_ids, last_message_at }
+- Index and partition messages by `scouting_team_number` to keep team isolation efficient.
+
+Rate limits and limits
+----------------------
+- Message body recommended max: 4000 characters
+- Rate-limit messaging to a reasonable rate per-user (for example, 10 messages/second burst limit and 1000/day combined) to prevent abuse. Return `429` when rate-limited.
+
+Error codes (chat-specific)
+- `USER_NOT_IN_SCOPE` - recipient is not in user's team or alliance
+- `CONVERSATION_NOT_FOUND` - conversation id is invalid or inaccessible
+- `MESSAGE_TOO_LONG` - message exceeds allowed length
+- `RATE_LIMITED` - user exceeded messaging rate limits
+
+Examples
+--------
+
+Send a direct message (curl example):
+
+```bash
+curl -X POST "https://your-server.com/api/mobile/chat/send" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"recipient_id":43, "body":"Meet at pit in 5"}'
+```
+
+Server implementers: enforce membership checks using the token payload (scouting_team_number) and the event/alliance membership tables. If your platform already has an alliances/connections table, reuse it to evaluate `alliance` scope.
 
 ---
 

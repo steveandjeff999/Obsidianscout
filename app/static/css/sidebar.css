@@ -261,6 +261,14 @@ body.topbar-fixed main { padding-top: 0.75rem; }
 /* Smooth transitions for main area shifting */
 body.with-sidebar main, body.with-sidebar footer { transition: margin-left .25s ease; }
 
+/* Stronger override: ensure main/footer/topbar respect sidebar width even when
+   other styles or scripts interfere. This uses !important sparingly as a
+   fallback to guarantee the layout doesn't flow under the sidebar. */
+@media (min-width: 992px) {
+	body.with-sidebar main, body.with-sidebar footer { margin-left: var(--sidebar-width) !important; }
+	body.with-sidebar .topbar { margin-left: var(--sidebar-width) !important; width: calc(100% - var(--sidebar-width)) !important; }
+}
+
 /* Modern enhancements */
 .sidebar .nav-link { transition: background .18s ease, color .18s ease, transform .12s ease; }
 .sidebar .nav-link:hover { transform: translateX(2px); }

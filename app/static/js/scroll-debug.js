@@ -17,7 +17,7 @@
         return;
     }
     
-    console.log('🔍 SCROLL DEBUG MODE ACTIVE');
+    console.log(' SCROLL DEBUG MODE ACTIVE');
     
     let lastScrollY = 0;
     let scrollEvents = [];
@@ -40,11 +40,11 @@
             
             // Log significant scroll changes
             if (Math.abs(event.diff) > 20) {
-                console.log(`📊 SIGNIFICANT SCROLL: ${event.from}px → ${event.to}px (${event.diff > 0 ? '+' : ''}${event.diff}px)`);
+                console.log(` SIGNIFICANT SCROLL: ${event.from}px → ${event.to}px (${event.diff > 0 ? '+' : ''}${event.diff}px)`);
                 
                 // If jumped to top unexpectedly
                 if (currentY === 0 && lastScrollY > 50) {
-                    console.error('🚨 SCROLL TO TOP DETECTED!');
+                    console.error(' SCROLL TO TOP DETECTED!');
                     console.log('Stack trace:', event.stack);
                     
                     // Try to identify the cause
@@ -77,13 +77,13 @@
         
         clickEvents.push(event);
         
-        console.log(`🖱️ CLICK: ${event.tagName}${event.className ? '.' + event.className.split(' ')[0] : ''}${event.id ? '#' + event.id : ''} at scroll ${event.scrollBefore}px`);
+        console.log(`️ CLICK: ${event.tagName}${event.className ? '.' + event.className.split(' ')[0] : ''}${event.id ? '#' + event.id : ''} at scroll ${event.scrollBefore}px`);
         
         // Check if click causes scroll change
         setTimeout(() => {
             const scrollAfter = window.pageYOffset || document.documentElement.scrollTop || 0;
             if (Math.abs(scrollAfter - event.scrollBefore) > 10) {
-                console.warn(`⚠️ CLICK CAUSED SCROLL CHANGE: ${event.scrollBefore}px → ${scrollAfter}px`);
+                console.warn(`️ CLICK CAUSED SCROLL CHANGE: ${event.scrollBefore}px → ${scrollAfter}px`);
                 console.log('Problematic element:', e.target);
             }
         }, 50);
@@ -91,7 +91,7 @@
         setTimeout(() => {
             const scrollAfter = window.pageYOffset || document.documentElement.scrollTop || 0;
             if (scrollAfter === 0 && event.scrollBefore > 20) {
-                console.error('🚨 CLICK CAUSED SCROLL TO TOP!');
+                console.error(' CLICK CAUSED SCROLL TO TOP!');
                 console.log('Culprit element:', e.target);
                 console.log('Element details:', {
                     tagName: e.target.tagName,
@@ -115,14 +115,14 @@
     document.addEventListener('focusin', function(e) {
         const scrollBefore = window.pageYOffset || document.documentElement.scrollTop || 0;
         
-        console.log(`🎯 FOCUS: ${e.target.tagName}${e.target.type ? '[' + e.target.type + ']' : ''} at scroll ${scrollBefore}px`);
+        console.log(` FOCUS: ${e.target.tagName}${e.target.type ? '[' + e.target.type + ']' : ''} at scroll ${scrollBefore}px`);
         
         setTimeout(() => {
             const scrollAfter = window.pageYOffset || document.documentElement.scrollTop || 0;
             if (Math.abs(scrollAfter - scrollBefore) > 10) {
-                console.warn(`⚠️ FOCUS CAUSED SCROLL CHANGE: ${scrollBefore}px → ${scrollAfter}px`);
+                console.warn(`️ FOCUS CAUSED SCROLL CHANGE: ${scrollBefore}px → ${scrollAfter}px`);
                 if (scrollAfter === 0 && scrollBefore > 20) {
-                    console.error('🚨 FOCUS CAUSED SCROLL TO TOP!');
+                    console.error(' FOCUS CAUSED SCROLL TO TOP!');
                     console.log('Input element:', e.target);
                 }
             }
@@ -141,10 +141,10 @@
             targetY = args[1];
         }
         
-        console.log(`📜 scrollTo called: target=${targetY}px`);
+        console.log(` scrollTo called: target=${targetY}px`);
         
         if (targetY === 0) {
-            console.error('🚨 scrollTo(0) called - POTENTIAL CULPRIT!');
+            console.error(' scrollTo(0) called - POTENTIAL CULPRIT!');
             console.log('Call stack:', stack);
         }
         
@@ -159,14 +159,14 @@
     
     // Log when page is fully loaded
     window.addEventListener('load', function() {
-        console.log('🚀 Page fully loaded, scroll debug active');
+        console.log(' Page fully loaded, scroll debug active');
         console.log('Current scroll position:', window.pageYOffset || document.documentElement.scrollTop || 0);
     });
     
     // Periodic status report
     setInterval(() => {
         const currentY = window.pageYOffset || document.documentElement.scrollTop || 0;
-        console.log(`📊 Status: scroll=${currentY}px, recent events: ${scrollEvents.length} scrolls, ${clickEvents.length} clicks`);
+        console.log(` Status: scroll=${currentY}px, recent events: ${scrollEvents.length} scrolls, ${clickEvents.length} clicks`);
     }, 10000);
     
     // Export debug functions to window for manual inspection

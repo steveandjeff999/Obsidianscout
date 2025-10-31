@@ -46,15 +46,15 @@ The Obsidian-Scout API suite provides **programmatic access** to all scouting da
 
 ### Key Features
 
-✅ **RESTful Design** - Standard HTTP methods (GET, POST, PUT, DELETE)  
-✅ **Team Isolation** - Every API key is scoped to a specific scouting team  
-✅ **Fine-Grained Permissions** - Control exactly what each API key can do  
-✅ **Rate Limiting** - Prevent abuse with configurable limits  
-✅ **Pagination Support** - Handle large datasets efficiently  
-✅ **Real-Time Replication** - Server-to-server database synchronization  
-✅ **WebSocket Support** - Live updates for chat, drawings, and data changes  
-✅ **Catch-Up Sync** - Automatic recovery after disconnections  
-✅ **JSON Responses** - Clean, predictable data formats
+ **RESTful Design** - Standard HTTP methods (GET, POST, PUT, DELETE)  
+ **Team Isolation** - Every API key is scoped to a specific scouting team  
+ **Fine-Grained Permissions** - Control exactly what each API key can do  
+ **Rate Limiting** - Prevent abuse with configurable limits  
+ **Pagination Support** - Handle large datasets efficiently  
+ **Real-Time Replication** - Server-to-server database synchronization  
+ **WebSocket Support** - Live updates for chat, drawings, and data changes  
+ **Catch-Up Sync** - Automatic recovery after disconnections  
+ **JSON Responses** - Clean, predictable data formats
 
 ### API Architecture
 
@@ -93,7 +93,7 @@ sk_live_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 You can authenticate using **three methods** (in order of security preference):
 
-#### 1. Authorization Header (✅ Recommended)
+#### 1. Authorization Header ( Recommended)
 ```http
 Authorization: Bearer sk_live_your_api_key_here
 ```
@@ -107,7 +107,7 @@ X-API-Key: sk_live_your_api_key_here
 
 **Best for**: Legacy systems or APIs that don't support Authorization header
 
-#### 3. Query Parameter (⚠️ Use with caution)
+#### 3. Query Parameter (️ Use with caution)
 ```http
 GET /api/v1/teams?api_key=sk_live_your_api_key_here
 ```
@@ -150,10 +150,10 @@ Every API key is **permanently registered** to a specific **scouting team number
 3. Cannot access or modify data from other teams
 
 **Security Benefits:**
-✅ **Data Privacy** - Teams cannot see each other's scouting data  
-✅ **Multi-Team Support** - Multiple teams can use same server safely  
-✅ **Automatic Filtering** - No need to specify team in every request  
-✅ **Prevents Data Leaks** - Impossible to accidentally access wrong team's data  
+ **Data Privacy** - Teams cannot see each other's scouting data  
+ **Multi-Team Support** - Multiple teams can use same server safely  
+ **Automatic Filtering** - No need to specify team in every request  
+ **Prevents Data Leaks** - Impossible to accidentally access wrong team's data  
 
 **Example:**
 ```javascript
@@ -1130,11 +1130,11 @@ curl https://your-server.com/api/realtime/ping
 ### Replication Features
 
 **Automatic Features:**
-✅ **Datetime Field Processing** - Automatic parsing and conversion  
-✅ **Upsert Logic** - Insert if new, update if exists  
-✅ **Soft Deletes** - Preserves records with `is_active=False`  
-✅ **Loop Prevention** - Changes from replication don't re-replicate  
-✅ **Error Recovery** - Automatic rollback on failures  
+ **Datetime Field Processing** - Automatic parsing and conversion  
+ **Upsert Logic** - Insert if new, update if exists  
+ **Soft Deletes** - Preserves records with `is_active=False`  
+ **Loop Prevention** - Changes from replication don't re-replicate  
+ **Error Recovery** - Automatic rollback on failures  
 
 ---
 
@@ -1296,10 +1296,10 @@ Each API key has a **configurable rate limit** to prevent abuse and ensure fair 
 ### Rate Limit Tracking
 
 The API tracks:
-- ✅ **Requests per hour**: Count within rolling window
-- ✅ **Current usage**: Real-time counter
-- ✅ **Last request time**: For usage statistics
-- ✅ **Time until reset**: When limit resets
+-  **Requests per hour**: Count within rolling window
+-  **Current usage**: Real-time counter
+-  **Last request time**: For usage statistics
+-  **Time until reset**: When limit resets
 
 ### When Rate Limited
 
@@ -1508,7 +1508,7 @@ curl -X POST \
 
 ### Security
 
-#### ✅ DO
+####  DO
 - **Use HTTPS** in production environments
 - **Store API keys securely** (environment variables, key vaults)
 - **Use Authorization header** instead of query parameters
@@ -1518,7 +1518,7 @@ curl -X POST \
 - **Monitor key usage** for suspicious activity
 - **Delete unused keys** immediately
 
-#### ❌ DON'T
+####  DON'T
 - **Don't commit keys to version control** (.env files, config files)
 - **Don't share keys** between teams or applications
 - **Don't use query parameters** for API keys in production
@@ -1942,5 +1942,5 @@ curl -H "Authorization: Bearer $API_KEY" \
 
 ---
 
-**📚 Happy Scouting!**  
+** Happy Scouting!**  
 This documentation covers all current API features. For updates, check the GitHub repository and CHANGELOG.txt.

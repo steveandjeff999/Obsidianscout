@@ -183,41 +183,41 @@ class SQLite3SyncManager:
             }
             
             try:
-                logger.info(f"🔄 Starting SQLite3-enhanced sync with {server_config.get('name')}")
+                logger.info(f" Starting SQLite3-enhanced sync with {server_config.get('name')}")
                 
                 # Step 1: Test connection reliability
                 if not self._test_connection_reliability(server_config):
                     raise Exception("Server connection reliability test failed")
                 
-                result['operations'].append("✅ Connection reliability verified")
+                result['operations'].append(" Connection reliability verified")
                 
                 # Step 2: Get local changes using direct SQLite queries
                 local_changes = self._get_local_changes_sqlite3(server_config.get('last_sync'))
-                logger.info(f"📤 Found {len(local_changes)} local changes")
-                result['operations'].append(f"📤 Prepared {len(local_changes)} local changes")
+                logger.info(f" Found {len(local_changes)} local changes")
+                result['operations'].append(f" Prepared {len(local_changes)} local changes")
                 
                 # Step 3: Get remote changes
                 remote_changes = self._get_remote_changes_reliable(server_config, server_config.get('last_sync'))
-                logger.info(f"📥 Received {len(remote_changes)} remote changes")
-                result['operations'].append(f"📥 Received {len(remote_changes)} remote changes")
+                logger.info(f" Received {len(remote_changes)} remote changes")
+                result['operations'].append(f" Received {len(remote_changes)} remote changes")
                 
                 # Step 4: Perform conflict detection with SQLite3
                 conflicts = self._detect_conflicts_sqlite3(local_changes, remote_changes)
                 if conflicts:
                     resolved = self._resolve_conflicts_sqlite3(conflicts)
                     result['stats']['conflicts_resolved'] = len(resolved)
-                    result['operations'].append(f"⚠️ Resolved {len(resolved)} conflicts")
+                    result['operations'].append(f"️ Resolved {len(resolved)} conflicts")
                 
                 # Step 5: Apply changes atomically using SQLite3 transactions
                 if local_changes:
                     sent_count = self._send_changes_reliable(server_config, local_changes)
                     result['stats']['local_changes_sent'] = sent_count
-                    result['operations'].append(f"📤 Sent {sent_count} changes to remote")
+                    result['operations'].append(f" Sent {sent_count} changes to remote")
                 
                 if remote_changes:
                     applied_count = self._apply_changes_sqlite3(remote_changes)
                     result['stats']['remote_changes_received'] = applied_count
-                    result['operations'].append(f"📥 Applied {applied_count} remote changes")
+                    result['operations'].append(f" Applied {applied_count} remote changes")
                 
                 # Step 6: Update sync tracking
                 self._mark_changes_synced_sqlite3(local_changes)
@@ -229,18 +229,18 @@ class SQLite3SyncManager:
                 
                 result['success'] = True
                 result['stats']['duration'] = sync_duration
-                result['operations'].append("✅ SQLite3-enhanced sync completed successfully")
+                result['operations'].append(" SQLite3-enhanced sync completed successfully")
                 
                 self._complete_sync_log(sync_id, 'completed', result['stats'])
                 
-                logger.info(f"✅ Enhanced sync completed in {sync_duration:.2f}s")
+                logger.info(f" Enhanced sync completed in {sync_duration:.2f}s")
                 
             except Exception as e:
                 error_msg = str(e)
-                logger.error(f"❌ SQLite3 sync failed: {error_msg}")
+                logger.error(f" SQLite3 sync failed: {error_msg}")
                 
                 result['stats']['errors'].append(error_msg)
-                result['operations'].append(f"❌ Sync failed: {error_msg}")
+                result['operations'].append(f" Sync failed: {error_msg}")
                 
                 self._update_reliability_metrics(server_config['id'], 'sync', False, time.time() - sync_start)
                 self._complete_sync_log(sync_id, 'failed', result['stats'], error_msg)

@@ -50,15 +50,15 @@ def fix_duplicate_function():
     with open(file_path, 'w', encoding='utf-8') as f:
         f.writelines(new_lines)
     
-    print(f"✅ Removed duplicate config_reset function")
+    print(f" Removed duplicate config_reset function")
     print(f"   Removed {end_of_function - second_config_reset} lines")
     return True
 
 if __name__ == "__main__":
-    print("🔧 Fixing duplicate config_reset function...")
+    print(" Fixing duplicate config_reset function...")
     success = fix_duplicate_function()
     
     if success:
-        print("✅ Fix completed successfully!")
+        print(" Fix completed successfully!")
     else:
-        print("❌ Fix failed!")
+        print(" Fix failed!")

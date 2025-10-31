@@ -153,17 +153,17 @@ def main():
         if modified:
             total_files += 1
             total_replacements += count
-            print(f"✅ {file_path_str}: {count} replacement(s)")
+            print(f" {file_path_str}: {count} replacement(s)")
         elif count == 0:
-            print(f"⏭️  {file_path_str}: No occurrences found")
+            print(f" {file_path_str}: No occurrences found")
     
     print("=" * 70)
-    print(f"\n✅ Complete!")
+    print(f"\n Complete!")
     print(f"   Files modified: {total_files}")
     print(f"   Total replacements: {total_replacements}")
     
     if errors:
-        print(f"\n⚠️  Errors encountered:")
+        print(f"\n️  Errors encountered:")
         for error in errors:
             print(f"   - {error}")
         return 1

@@ -17,7 +17,7 @@ def investigate_non_database_blocks():
         app = create_app()
         
         with app.app_context():
-            print("🔍 NON-DATABASE LOGIN BLOCKING INVESTIGATION")
+            print(" NON-DATABASE LOGIN BLOCKING INVESTIGATION")
             print("=" * 70)
             
             print("CHECKING POTENTIAL NON-DATABASE BLOCKING FACTORS:")
@@ -38,7 +38,7 @@ def investigate_non_database_blocks():
                 # Look for Flask session files
                 session_files = [f for f in instance_files if 'session' in f.lower()]
                 if session_files:
-                    print(f"⚠️  Found session files: {session_files}")
+                    print(f"️  Found session files: {session_files}")
                     for session_file in session_files:
                         file_path = os.path.join(instance_path, session_file)
                         try:
@@ -47,9 +47,9 @@ def investigate_non_database_blocks():
                         except Exception as e:
                             print(f"   {session_file}: Error reading - {e}")
                 else:
-                    print("✅ No session files found")
+                    print(" No session files found")
             else:
-                print("✅ No instance directory")
+                print(" No instance directory")
             
             # 2. Check for temporary/cache files that might store login state
             print(f"\n2. CACHE AND TEMPORARY FILES")
@@ -68,12 +68,12 @@ def investigate_non_database_blocks():
                 if os.path.exists(cache_dir):
                     files = os.listdir(cache_dir)
                     if files:
-                        print(f"⚠️  Found cache directory: {cache_dir}")
+                        print(f"️  Found cache directory: {cache_dir}")
                         print(f"   Files: {len(files)} items")
                     else:
-                        print(f"✅ Empty cache directory: {cache_dir}")
+                        print(f" Empty cache directory: {cache_dir}")
                 else:
-                    print(f"✅ No cache directory: {cache_dir}")
+                    print(f" No cache directory: {cache_dir}")
             
             # 3. Check for config files that might affect login
             print(f"\n3. CONFIGURATION FILES")
@@ -91,7 +91,7 @@ def investigate_non_database_blocks():
             for config_file in config_files:
                 config_path = os.path.join(current_dir, config_file)
                 if os.path.exists(config_path):
-                    print(f"⚠️  Found config file: {config_file}")
+                    print(f"️  Found config file: {config_file}")
                     try:
                         stat = os.stat(config_path)
                         print(f"   Size: {stat.st_size} bytes, modified: {datetime.fromtimestamp(stat.st_mtime)}")
@@ -102,16 +102,16 @@ def investigate_non_database_blocks():
                                 with open(config_path, 'r') as f:
                                     config_data = json.load(f)
                                     if any('login' in str(key).lower() or 'auth' in str(key).lower() for key in config_data.keys()):
-                                        print(f"   ⚠️  Contains auth-related settings")
+                                        print(f"   ️  Contains auth-related settings")
                                     else:
-                                        print(f"   ✅ No auth settings found")
+                                        print(f"    No auth settings found")
                             except Exception as e:
                                 print(f"   Error reading JSON: {e}")
                         
                     except Exception as e:
                         print(f"   Error accessing file: {e}")
                 else:
-                    print(f"✅ No config file: {config_file}")
+                    print(f" No config file: {config_file}")
             
             # 4. Check Flask app configuration for login-related settings
             print(f"\n4. FLASK APP CONFIGURATION")
@@ -134,7 +134,7 @@ def investigate_non_database_blocks():
                     value = current_app.config[config_key]
                     print(f"   {config_key}: {value}")
                 else:
-                    print(f"✅ {config_key}: Not set")
+                    print(f" {config_key}: Not set")
             
             # 5. Check for application state that persists across database deletion
             print(f"\n5. APPLICATION STATE & MEMORY")
@@ -156,11 +156,11 @@ def investigate_non_database_blocks():
                 if hasattr(brute_force_protection, 'brute_force_protection'):
                     bf = brute_force_protection.brute_force_protection
                     if hasattr(bf, '_cached_attempts'):
-                        print(f"   ⚠️  Brute force cache exists: {len(getattr(bf, '_cached_attempts', {}))}")
+                        print(f"   ️  Brute force cache exists: {len(getattr(bf, '_cached_attempts', {}))}")
                     else:
-                        print(f"   ✅ No brute force cache found")
+                        print(f"    No brute force cache found")
                 else:
-                    print(f"   ✅ No brute force protection instance")
+                    print(f"    No brute force protection instance")
             except Exception as e:
                 print(f"   Brute force check error: {e}")
             
@@ -180,7 +180,7 @@ def investigate_non_database_blocks():
             for blocking_file in blocking_files:
                 file_path = os.path.join(current_dir, blocking_file)
                 if os.path.exists(file_path):
-                    print(f"⚠️  Found potential blocking file: {blocking_file}")
+                    print(f"️  Found potential blocking file: {blocking_file}")
                     try:
                         stat = os.stat(file_path)
                         print(f"   Size: {stat.st_size} bytes, created: {datetime.fromtimestamp(stat.st_ctime)}")
@@ -198,7 +198,7 @@ def investigate_non_database_blocks():
                     except Exception as e:
                         print(f"   Error reading: {e}")
                 else:
-                    print(f"✅ No blocking file: {blocking_file}")
+                    print(f" No blocking file: {blocking_file}")
             
             # 7. Check application startup code for login blocks
             print(f"\n7. STARTUP CODE ANALYSIS")
@@ -229,15 +229,15 @@ def investigate_non_database_blocks():
                             found_patterns.append(pattern)
                     
                     if found_patterns:
-                        print(f"⚠️  Found potential blocking patterns: {found_patterns}")
+                        print(f"️  Found potential blocking patterns: {found_patterns}")
                     else:
-                        print("✅ No obvious blocking patterns in run.py")
+                        print(" No obvious blocking patterns in run.py")
                     
                     # Check for hardcoded authentication bypasses or blocks
                     if 'return False' in run_py_content and 'login' in run_py_content.lower():
-                        print("⚠️  Found 'return False' near login code - potential hardcoded block")
+                        print("️  Found 'return False' near login code - potential hardcoded block")
                     else:
-                        print("✅ No hardcoded login blocks found")
+                        print(" No hardcoded login blocks found")
                         
                 except Exception as e:
                     print(f"Error reading run.py: {e}")
@@ -258,9 +258,9 @@ def investigate_non_database_blocks():
             for env_var in auth_env_vars:
                 value = os.environ.get(env_var)
                 if value:
-                    print(f"⚠️  {env_var}: {value}")
+                    print(f"️  {env_var}: {value}")
                 else:
-                    print(f"✅ {env_var}: Not set")
+                    print(f" {env_var}: Not set")
             
             # Summary and recommendations
             print(f"\n9. SUMMARY & RECOMMENDATIONS")
@@ -285,7 +285,7 @@ def investigate_non_database_blocks():
             print("7. Check for any .lock or .flag files")
             
     except Exception as e:
-        print(f"❌ Error during investigation: {e}")
+        print(f" Error during investigation: {e}")
         import traceback
         traceback.print_exc()
 

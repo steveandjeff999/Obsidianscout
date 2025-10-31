@@ -63,17 +63,17 @@ with app.app_context():
     
     try:
         db.session.commit()
-        print("✅ SuperAdmin account setup complete!")
+        print(" SuperAdmin account setup complete!")
         print(f"   Username: superadmin")
         print(f"   Password: password")
         print(f"   Team Number: 0")
         print(f"   Must Change Password: True")
         print(f"   Role: superadmin")
         print("")
-        print("⚠️  The superadmin will be required to change their password on first login.")
+        print("️  The superadmin will be required to change their password on first login.")
         print("   Only superadmin users can access the Database Admin interface.")
         
     except Exception as e:
-        print(f"❌ Error setting up SuperAdmin account: {e}")
+        print(f" Error setting up SuperAdmin account: {e}")
         db.session.rollback()
         sys.exit(1)

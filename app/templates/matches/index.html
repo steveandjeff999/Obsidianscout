@@ -168,7 +168,7 @@
                                                                 <span class="text-warning fw-bold">~{{ match.predicted_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
                                                                 {% if match.event.schedule_offset %}
                                                                 <span class="badge bg-warning text-dark ms-1" title="Event is {{ match.event.schedule_offset|abs }} min {{ 'behind' if match.event.schedule_offset > 0 else 'ahead' }}">
-                                                                    {{ match.event.schedule_offset|abs }}m {{ '🐌' if match.event.schedule_offset > 0 else '⚡' }}
+                                                                    {{ match.event.schedule_offset|abs }}m {{ '' if match.event.schedule_offset > 0 else '' }}
                                                                 </span>
                                                                 {% endif %}
                                                             </div>

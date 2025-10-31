@@ -8,6 +8,7 @@ import json
 from datetime import datetime, timezone
 from app.utils.config_manager import ConfigManager, get_current_game_config, load_game_config
 import threading
+import re
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -34,6 +35,24 @@ def ensure_chat_folder():
     if not os.path.exists(CHAT_FOLDER):
         os.makedirs(CHAT_FOLDER, exist_ok=True)
 
+
+def normalize_username(username):
+    """Normalize a username for deterministic filenames and room names.
+
+    Normalization rules:
+    - strip leading/trailing whitespace
+    - collapse internal whitespace to single spaces
+    - lowercase
+    Returns a safe string suitable for filenames/room names.
+    """
+    try:
+        s = str(username or '').strip()
+        # collapse multiple whitespace to single spaces
+        s = re.sub(r'\s+', ' ', s)
+        return s.lower()
+    except Exception:
+        return str(username or '').lower()
+
 def load_chat_history():
     ensure_chat_folder()
     if not os.path.exists(CHAT_HISTORY_FILE):
@@ -59,8 +78,10 @@ def get_user_chat_file_path(user1, user2, team_number):
     team_dir = os.path.join(CHAT_FOLDER, 'users', str(team_number))
     os.makedirs(team_dir, exist_ok=True)
     
-    # Create consistent filename regardless of message direction
-    users = sorted([user1, user2])
+    # Normalize usernames to lowercase and create consistent filename regardless of message direction
+    u1 = normalize_username(user1)
+    u2 = normalize_username(user2)
+    users = sorted([u1, u2])
     filename = f"{users[0]}_{users[1]}_chat_history.json"
     return os.path.join(team_dir, filename)
 
@@ -78,9 +99,19 @@ def load_user_chat_history(user1, user2, team_number):
 
 def save_user_chat_history(user1, user2, team_number, history):
     """Save chat history between two specific users"""
+    # Ensure usernames normalized for path and write atomically to avoid partial writes
     file_path = get_user_chat_file_path(user1, user2, team_number)
-    with open(file_path, 'w', encoding='utf-8') as f:
-        json.dump(history, f, ensure_ascii=False, indent=2)
+    tmp_path = file_path + '.tmp'
+    try:
+        # Write to a temp file first then atomically replace
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+        # Replace the target atomically
+        os.replace(tmp_path, file_path)
+    except Exception:
+        # Fallback: try direct write
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
 
 def get_assistant_chat_file_path(username, team_number):
     """Get the file path for assistant chat for a specific user"""
@@ -89,8 +120,9 @@ def get_assistant_chat_file_path(username, team_number):
     # Create team directory if it doesn't exist
     team_dir = os.path.join(CHAT_FOLDER, 'users', str(team_number))
     os.makedirs(team_dir, exist_ok=True)
-    
-    filename = f"{username}_assistant_chat_history.json"
+    # normalize username in filename to avoid case-sensitivity mismatches
+    safe = normalize_username(username)
+    filename = f"{safe}_assistant_chat_history.json"
     return os.path.join(team_dir, filename)
 
 def get_group_chat_file_path(team_number, group_name='main'):
@@ -102,7 +134,8 @@ def get_group_chat_file_path(team_number, group_name='main'):
     ensure_chat_folder()
     team_dir = os.path.join(CHAT_FOLDER, 'groups', str(team_number))
     os.makedirs(team_dir, exist_ok=True)
-    safe_group = str(group_name).replace('/', '_')
+    # normalize group name to lowercase and replace path separators
+    safe_group = str(group_name).replace('/', '_').lower()
     filename = f"{safe_group}_group_chat_history.json"
     return os.path.join(team_dir, filename)
 
@@ -145,6 +178,7 @@ def find_message_in_user_files(message_id, username, team_number):
     import glob
     
     # Check the user's assistant file first
+    # normalize username when checking assistant file path
     assistant_history = load_assistant_chat_history(username, team_number)
     for i, msg in enumerate(assistant_history):
         if msg.get('id') == message_id:
@@ -161,7 +195,7 @@ def find_message_in_user_files(message_id, username, team_number):
     team_dir = os.path.join(CHAT_FOLDER, 'users', str(team_number))
     if os.path.exists(team_dir):
         # Find all chat history files that include this username
-        pattern = os.path.join(team_dir, f'*{username}*_chat_history.json')
+        pattern = os.path.join(team_dir, f'*{str(username).lower()}*_chat_history.json')
         dm_files = glob.glob(pattern)
         
         for file_path in dm_files:
@@ -176,6 +210,7 @@ def find_message_in_user_files(message_id, username, team_number):
                             filename = os.path.basename(file_path).replace('_chat_history.json', '')
                             users = filename.split('_')
                             if len(users) >= 2:
+                                # filenames are stored lowercased; map back to extracted lowercase names
                                 user1, user2 = users[0], users[1]
                                 return {
                                     'message': msg,
@@ -183,7 +218,7 @@ def find_message_in_user_files(message_id, username, team_number):
                                     'history': dm_history,
                                     'file_type': 'dm',
                                     'file_path': file_path,
-                                    'save_func': lambda hist: save_user_chat_history(user1, user2, team_number, hist)
+                                    'save_func': lambda hist, u1=user1, u2=user2: save_user_chat_history(u1, u2, team_number, hist)
                                 }
                 except Exception:
                     continue
@@ -712,9 +747,9 @@ def create_app(test_config=None):
     try:
         from app.security.firewall import Firewall
         fw = Firewall(app, socketio=socketio)
-        app.logger.info('✅ Firewall initialized')
+        app.logger.info(' Firewall initialized')
     except Exception as e:
-        app.logger.error(f'❌ Failed to initialize firewall: {e}')
+        app.logger.error(f' Failed to initialize firewall: {e}')
     
     # Initialize ConfigManager
     config_manager.init_app(app)
@@ -988,37 +1023,37 @@ def create_app(test_config=None):
         except Exception:
             pass
         enable_real_time_replication()
-        app.logger.info("✅ Real-time database replication enabled")
+        app.logger.info(" Real-time database replication enabled")
     except Exception as e:
-        app.logger.error(f"❌ Failed to initialize real-time replication: {e}")
+        app.logger.error(f" Failed to initialize real-time replication: {e}")
     
     # Initialize real-time file synchronization
     try:
         from app.utils.real_time_file_sync import setup_real_time_file_sync
         setup_real_time_file_sync(app)
-        app.logger.info("✅ Real-time file synchronization enabled")
+        app.logger.info(" Real-time file synchronization enabled")
     except Exception as e:
-        app.logger.error(f"❌ Failed to initialize real-time file sync: {e}")
+        app.logger.error(f" Failed to initialize real-time file sync: {e}")
     
     # Initialize catch-up synchronization system
     try:
         from app.utils.catchup_sync import catchup_sync_manager
         catchup_sync_manager.init_app(app)
-        app.logger.info("✅ Catch-up synchronization system enabled")
+        app.logger.info(" Catch-up synchronization system enabled")
         
         # Start catch-up scheduler
         from app.utils.catchup_scheduler import start_catchup_scheduler
         start_catchup_scheduler(app)
-        app.logger.info("✅ Catch-up scheduler started")
+        app.logger.info(" Catch-up scheduler started")
     except Exception as e:
-        app.logger.error(f"❌ Failed to initialize catch-up sync: {e}")
+        app.logger.error(f" Failed to initialize catch-up sync: {e}")
     
     # Initialize API key system
     try:
         from app.utils.api_init import init_api_system
         init_api_system(app)
-        app.logger.info("✅ API key system initialized")
+        app.logger.info(" API key system initialized")
     except Exception as e:
-        app.logger.error(f"❌ Failed to initialize API key system: {e}")
+        app.logger.error(f" Failed to initialize API key system: {e}")
 
     return app

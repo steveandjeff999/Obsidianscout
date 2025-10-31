@@ -266,9 +266,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   function updateAll(data) {
     // Stats
-    document.getElementById('briefTodayScouts').textContent = data.today_scouts || 0;
-    document.getElementById('briefUpcomingMatchesCount').textContent = data.upcoming_count || 0;
-    document.getElementById('briefTeamsAnalyzed').textContent = data.teams_analyzed || 0;
+    // Guard each element because some pages may remove panels (server-side templates vary)
+    const elToday = document.getElementById('briefTodayScouts');
+    if (elToday) elToday.textContent = data.today_scouts || 0;
+
+    const elUpcomingCount = document.getElementById('briefUpcomingMatchesCount');
+    if (elUpcomingCount) elUpcomingCount.textContent = data.upcoming_count || 0;
+
+    const elTeams = document.getElementById('briefTeamsAnalyzed');
+    if (elTeams) elTeams.textContent = data.teams_analyzed || 0;
 
     renderRecentActivity(data.recent_activity || []);
     renderUpcomingMatches(data.upcoming_matches || []);

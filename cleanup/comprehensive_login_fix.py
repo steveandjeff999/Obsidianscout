@@ -16,7 +16,7 @@ def analyze_login_patterns():
         app = create_app()
         
         with app.app_context():
-            print("📊 ANALYZING LOGIN PATTERNS")
+            print(" ANALYZING LOGIN PATTERNS")
             print("=" * 60)
             
             # Get recent login attempts
@@ -34,7 +34,7 @@ def analyze_login_patterns():
             print(f"Failed logins: {len(failed)}")
             
             if failed:
-                print(f"\n❌ FAILED LOGIN ANALYSIS")
+                print(f"\n FAILED LOGIN ANALYSIS")
                 print("-" * 40)
                 
                 # Group by username
@@ -52,7 +52,7 @@ def analyze_login_patterns():
                         print(f"     IP addresses: {set(a.ip_address for a in attempts[:5])}")
             
             # Check for currently blocked users/IPs
-            print(f"\n🔒 CURRENTLY BLOCKED USERS/IPS")
+            print(f"\n CURRENTLY BLOCKED USERS/IPS")
             print("-" * 40)
             
             cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=15)
@@ -74,14 +74,14 @@ def analyze_login_patterns():
                 print("   No users/IPs currently blocked")
                 
     except Exception as e:
-        print(f"❌ Error analyzing login patterns: {e}")
+        print(f" Error analyzing login patterns: {e}")
 
 def improve_login_error_handling():
     """Improve login error handling to give better feedback"""
     try:
         from app.routes.auth import bp
         
-        print(f"\n🔧 CHECKING LOGIN ERROR HANDLING")
+        print(f"\n CHECKING LOGIN ERROR HANDLING")
         print("-" * 40)
         
         # Check if we need to modify the login route for better error messages
@@ -92,18 +92,18 @@ def improve_login_error_handling():
         
         # Check for specific error handling patterns
         if 'Invalid username, password, or team number' in content:
-            print("✅ Generic error message found - this is good for security")
+            print(" Generic error message found - this is good for security")
         
         if 'remaining_attempts' in content:
-            print("✅ Remaining attempts warning is implemented")
+            print(" Remaining attempts warning is implemented")
         
         if 'is_login_blocked' in content:
-            print("✅ Brute force protection is active")
+            print(" Brute force protection is active")
         
-        print("✅ Login error handling appears to be properly implemented")
+        print(" Login error handling appears to be properly implemented")
         
     except Exception as e:
-        print(f"❌ Error checking login error handling: {e}")
+        print(f" Error checking login error handling: {e}")
 
 def create_password_info_file():
     """Create a file with password information for administrators"""
@@ -160,10 +160,10 @@ def create_password_info_file():
         with open(info_file, 'w', encoding='utf-8') as f:
             f.write(info_content)
         
-        print(f"✅ Created password info file: ADMIN_PASSWORD_INFO.md")
+        print(f" Created password info file: ADMIN_PASSWORD_INFO.md")
         
     except Exception as e:
-        print(f"❌ Error creating password info file: {e}")
+        print(f" Error creating password info file: {e}")
 
 def create_failed_login_cleaner():
     """Create a utility script to clear failed login attempts"""
@@ -187,23 +187,23 @@ def clear_failed_attempts(username=None, all_users=False):
         
         with app.app_context():
             if all_users:
-                print("🧹 Clearing all failed login attempts...")
+                print(" Clearing all failed login attempts...")
                 deleted = LoginAttempt.query.filter_by(success=False).delete()
             elif username:
-                print(f"🧹 Clearing failed login attempts for user: {username}")
+                print(f" Clearing failed login attempts for user: {username}")
                 deleted = LoginAttempt.query.filter(
                     LoginAttempt.username == username,
                     LoginAttempt.success == False
                 ).delete()
             else:
-                print("❌ Must specify username or --all")
+                print(" Must specify username or --all")
                 return
                 
             db.session.commit()
-            print(f"✅ Cleared {deleted} failed login attempts")
+            print(f" Cleared {deleted} failed login attempts")
             
     except Exception as e:
-        print(f"❌ Error clearing failed attempts: {e}")
+        print(f" Error clearing failed attempts: {e}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Clear failed login attempts')
@@ -228,10 +228,10 @@ if __name__ == '__main__':
         with open(cleaner_file, 'w', encoding='utf-8') as f:
             f.write(cleaner_content)
         
-        print(f"✅ Created failed login cleaner: clear_failed_logins.py")
+        print(f" Created failed login cleaner: clear_failed_logins.py")
         
     except Exception as e:
-        print(f"❌ Error creating cleaner script: {e}")
+        print(f" Error creating cleaner script: {e}")
 
 def main():
     """Main function to run all analyses and fixes"""
@@ -240,7 +240,7 @@ def main():
     create_password_info_file()
     create_failed_login_cleaner()
     
-    print(f"\n✅ LOGIN ISSUE INVESTIGATION COMPLETE")
+    print(f"\n LOGIN ISSUE INVESTIGATION COMPLETE")
     print("=" * 60)
     print("SUMMARY:")
     print("- Superadmin password confirmed: JSHkimber1911")

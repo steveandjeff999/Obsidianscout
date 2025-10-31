@@ -34,15 +34,15 @@ def test_side_by_side_integration():
             print(f"Found expected metrics: {found_metrics}")
             
             if found_metrics:
-                print("✅ Dynamic metrics are available!")
+                print(" Dynamic metrics are available!")
             else:
-                print("❌ No dynamic metrics found")
+                print(" No dynamic metrics found")
                 
         else:
-            print("❌ Unexpected result format")
+            print(" Unexpected result format")
             
     except Exception as e:
-        print(f"❌ Error testing analytics: {e}")
+        print(f" Error testing analytics: {e}")
         import traceback
         traceback.print_exc()
     
@@ -77,10 +77,10 @@ def test_side_by_side_integration():
         key_metrics = config.get('data_analysis', {}).get('key_metrics', [])
         print(f"Legacy key_metrics count: {len(key_metrics)}")
         
-        print("✅ Config structure looks good!")
+        print(" Config structure looks good!")
         
     except Exception as e:
-        print(f"❌ Error testing config: {e}")
+        print(f" Error testing config: {e}")
         import traceback
         traceback.print_exc()
 

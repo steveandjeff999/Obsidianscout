@@ -17,7 +17,7 @@ def create_login_attempts_table():
         app = create_app()
         
         with app.app_context():
-            print("🔄 Creating login_attempts table for brute force protection...")
+            print(" Creating login_attempts table for brute force protection...")
             
             # Check if table already exists
             from sqlalchemy import inspect
@@ -25,7 +25,7 @@ def create_login_attempts_table():
             existing_tables = inspector.get_table_names()
             
             if 'login_attempts' in existing_tables:
-                print("✅ login_attempts table already exists")
+                print(" login_attempts table already exists")
                 return True
             
             # Create the table
@@ -36,7 +36,7 @@ def create_login_attempts_table():
             existing_tables = inspector.get_table_names()
             
             if 'login_attempts' in existing_tables:
-                print("✅ login_attempts table created successfully!")
+                print(" login_attempts table created successfully!")
                 
                 # Get table info
                 columns = inspector.get_columns('login_attempts')
@@ -46,11 +46,11 @@ def create_login_attempts_table():
                 
                 return True
             else:
-                print("❌ Failed to create login_attempts table")
+                print(" Failed to create login_attempts table")
                 return False
                 
     except Exception as e:
-        print(f"❌ Error creating login_attempts table: {e}")
+        print(f" Error creating login_attempts table: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -65,7 +65,7 @@ def test_brute_force_protection():
         app = create_app()
         
         with app.app_context():
-            print("\n🧪 Testing brute force protection functionality...")
+            print("\n Testing brute force protection functionality...")
             
             # Create a test protection instance
             protection = BruteForceProtection(max_attempts=3, lockout_minutes=5)
@@ -110,21 +110,21 @@ def test_brute_force_protection():
             db.session.commit()
             print("   Cleaned up test data")
             
-            print("✅ Brute force protection test completed successfully!")
+            print(" Brute force protection test completed successfully!")
             return True
             
     except Exception as e:
-        print(f"❌ Error testing brute force protection: {e}")
+        print(f" Error testing brute force protection: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 def show_protection_info():
     """Show information about the brute force protection system"""
-    print("\n📊 BRUTE FORCE PROTECTION SYSTEM")
+    print("\n BRUTE FORCE PROTECTION SYSTEM")
     print("=" * 50)
     
-    print("\n🛡️  Protection Features:")
+    print("\n️  Protection Features:")
     print("   - Max failed attempts: 10 (configurable)")
     print("   - Lockout duration: 15 minutes (configurable)")
     print("   - IP-based and username-based tracking")
@@ -132,25 +132,25 @@ def show_protection_info():
     print("   - Remaining attempts warnings")
     print("   - Real-time blocking")
     
-    print("\n🔒 How It Works:")
+    print("\n How It Works:")
     print("   1. Each failed login is recorded with IP and username")
     print("   2. After 10 failed attempts, IP is blocked for 15 minutes")
     print("   3. Successful login clears failed attempt counter")
     print("   4. Users get warnings when approaching limit")
     print("   5. Blocked users see lockout time remaining")
     
-    print("\n⚙️  Configuration:")
+    print("\n️  Configuration:")
     print("   - Settings in app/utils/brute_force_protection.py")
     print("   - Can be adjusted per deployment needs")
     print("   - Supports proxy/load balancer environments")
     
-    print("\n📝 Database:")
+    print("\n Database:")
     print("   - login_attempts table tracks all attempts")
     print("   - Automatic cleanup prevents table bloat")
     print("   - Indexes on IP and username for performance")
 
 if __name__ == '__main__':
-    print("🔐 Setting up brute force protection...")
+    print(" Setting up brute force protection...")
     
     success = create_login_attempts_table()
     
@@ -159,10 +159,10 @@ if __name__ == '__main__':
         
         if test_success:
             show_protection_info()
-            print("\n🎉 SUCCESS: Brute force protection is ready!")
+            print("\n SUCCESS: Brute force protection is ready!")
             print("   Your application is now protected against brute force attacks.")
             print("   Failed login attempts will be blocked after 10 attempts.")
         else:
-            print("\n❌ SETUP INCOMPLETE: Table created but testing failed")
+            print("\n SETUP INCOMPLETE: Table created but testing failed")
     else:
-        print("\n❌ SETUP FAILED: Could not create required database table")
+        print("\n SETUP FAILED: Could not create required database table")

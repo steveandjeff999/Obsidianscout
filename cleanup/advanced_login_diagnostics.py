@@ -17,7 +17,7 @@ def comprehensive_login_diagnosis():
         app = create_app()
         
         with app.app_context():
-            print("🔍 COMPREHENSIVE LOGIN DIAGNOSIS")
+            print(" COMPREHENSIVE LOGIN DIAGNOSIS")
             print("=" * 60)
             
             # 1. Check superadmin account status
@@ -60,7 +60,7 @@ def comprehensive_login_diagnosis():
                     print(f"Password '{pwd}': Invalid")
             
             if not working_passwords:
-                print("🚨 CRITICAL: NO WORKING PASSWORDS FOUND!")
+                print(" CRITICAL: NO WORKING PASSWORDS FOUND!")
             else:
                 print(f"Working passwords: {working_passwords}")
             
@@ -101,7 +101,7 @@ def comprehensive_login_diagnosis():
             print(f"Total 'superadmin' users found: {len(all_superadmins)}")
             
             if len(all_superadmins) > 1:
-                print("🚨 MULTIPLE SUPERADMIN USERS FOUND!")
+                print(" MULTIPLE SUPERADMIN USERS FOUND!")
                 for i, user in enumerate(all_superadmins):
                     print(f"   User {i+1}: ID={user.id}, Team={user.scouting_team_number}, Active={user.is_active}")
             
@@ -111,7 +111,7 @@ def comprehensive_login_diagnosis():
             
             for user in all_similar_usernames:
                 if user.username != 'superadmin':
-                    print(f"⚠️ Similar username found: '{user.username}' (Team {user.scouting_team_number})")
+                    print(f"️ Similar username found: '{user.username}' (Team {user.scouting_team_number})")
             
             # 5. Check failed login attempts specifically
             print(f"\n5. FAILED LOGIN ATTEMPT ANALYSIS")
@@ -144,9 +144,9 @@ def comprehensive_login_diagnosis():
             
             print(f"Failed attempts for 'superadmin' in last 15 minutes: {blocking_attempts}")
             if blocking_attempts >= 10:
-                print("🚨 SUPERADMIN IS CURRENTLY BLOCKED BY BRUTE FORCE PROTECTION!")
+                print(" SUPERADMIN IS CURRENTLY BLOCKED BY BRUTE FORCE PROTECTION!")
             else:
-                print("✅ Superadmin is not blocked by brute force protection")
+                print(" Superadmin is not blocked by brute force protection")
             
             # 6. Database integrity checks
             print(f"\n6. DATABASE INTEGRITY CHECKS")
@@ -154,29 +154,29 @@ def comprehensive_login_diagnosis():
             
             # Check if password hash is corrupted
             if superadmin.password_hash:
-                print(f"✅ Password hash exists: {len(superadmin.password_hash)} characters")
-                print(f"✅ Hash preview: {superadmin.password_hash[:50]}...")
+                print(f" Password hash exists: {len(superadmin.password_hash)} characters")
+                print(f" Hash preview: {superadmin.password_hash[:50]}...")
                 
                 # Check if it's a valid scrypt hash format
                 if superadmin.password_hash.startswith('scrypt:'):
-                    print("✅ Password hash format: scrypt (correct)")
+                    print(" Password hash format: scrypt (correct)")
                 elif superadmin.password_hash.startswith('pbkdf2:'):
-                    print("⚠️ Password hash format: pbkdf2 (older format)")
+                    print("️ Password hash format: pbkdf2 (older format)")
                 else:
-                    print("❌ Password hash format: Unknown/Invalid")
+                    print(" Password hash format: Unknown/Invalid")
             else:
-                print("🚨 CRITICAL: No password hash found!")
+                print(" CRITICAL: No password hash found!")
             
             # Check roles
             if superadmin.roles:
                 for role in superadmin.roles:
                     role_obj = Role.query.get(role.id)
                     if role_obj:
-                        print(f"✅ Role: {role_obj.name} (ID: {role_obj.id})")
+                        print(f" Role: {role_obj.name} (ID: {role_obj.id})")
                     else:
-                        print(f"❌ Role ID {role.id} not found in database")
+                        print(f" Role ID {role.id} not found in database")
             else:
-                print("❌ No roles assigned to superadmin")
+                print(" No roles assigned to superadmin")
             
             # 7. Test actual login flow
             print(f"\n7. LOGIN FLOW SIMULATION")
@@ -187,32 +187,32 @@ def comprehensive_login_diagnosis():
             # Step 1: User lookup
             login_user = User.query.filter_by(username='superadmin', scouting_team_number=0).first()
             if login_user:
-                print("✅ Step 1: User found by login query")
+                print(" Step 1: User found by login query")
                 
                 # Step 2: Password check
                 if login_user.check_password('JSHkimber1911'):
-                    print("✅ Step 2: Password verification passed")
+                    print(" Step 2: Password verification passed")
                     
                     # Step 3: Active check
                     if login_user.is_active:
-                        print("✅ Step 3: User account is active")
+                        print(" Step 3: User account is active")
                         
                         # Step 4: Block check (simulated)
                         if blocking_attempts < 10:
-                            print("✅ Step 4: Not blocked by brute force protection")
-                            print("🎉 LOGIN SHOULD SUCCEED - investigating why it doesn't...")
+                            print(" Step 4: Not blocked by brute force protection")
+                            print(" LOGIN SHOULD SUCCEED - investigating why it doesn't...")
                         else:
-                            print("❌ Step 4: BLOCKED by brute force protection")
+                            print(" Step 4: BLOCKED by brute force protection")
                     else:
-                        print("❌ Step 3: User account is DEACTIVATED")
+                        print(" Step 3: User account is DEACTIVATED")
                 else:
-                    print("❌ Step 2: Password verification FAILED")
+                    print(" Step 2: Password verification FAILED")
                     # Test with database password directly
                     raw_hash = login_user.password_hash
                     direct_check = check_password_hash(raw_hash, 'JSHkimber1911')
                     print(f"   Direct hash check result: {direct_check}")
             else:
-                print("❌ Step 1: User NOT FOUND by login query")
+                print(" Step 1: User NOT FOUND by login query")
                 
                 # Try alternative queries
                 alt_user = User.query.filter_by(username='superadmin').first()
@@ -240,15 +240,15 @@ def comprehensive_login_diagnosis():
                 issues_found.append("No roles assigned")
             
             if issues_found:
-                print("🚨 ISSUES FOUND:")
+                print(" ISSUES FOUND:")
                 for i, issue in enumerate(issues_found, 1):
                     print(f"   {i}. {issue}")
             else:
-                print("✅ No obvious issues found - login should work")
+                print(" No obvious issues found - login should work")
                 print("   The problem may be in the request/session handling")
             
     except Exception as e:
-        print(f"❌ Error during comprehensive diagnosis: {e}")
+        print(f" Error during comprehensive diagnosis: {e}")
         import traceback
         traceback.print_exc()
 

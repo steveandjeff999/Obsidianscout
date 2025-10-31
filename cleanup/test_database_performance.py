@@ -18,7 +18,7 @@ def test_database_performance():
     app = create_app()
     
     with app.app_context():
-        print("🧪 Testing Database Performance...")
+        print(" Testing Database Performance...")
         print("=" * 50)
         
         # Test 1: Single user creation (baseline)
@@ -43,14 +43,14 @@ def test_database_performance():
             db.session.commit()
             
             elapsed = time.time() - start_time
-            print(f"   ✅ User created in {elapsed:.2f} seconds")
+            print(f"    User created in {elapsed:.2f} seconds")
             
             # Clean up
             db.session.delete(test_user)
             db.session.commit()
             
         except Exception as e:
-            print(f"   ❌ Single user creation failed: {e}")
+            print(f"    Single user creation failed: {e}")
         
         # Test 2: Multiple users in sequence
         print("\n2️⃣ Testing Multiple Users in Sequence...")
@@ -72,7 +72,7 @@ def test_database_performance():
                 print(f"   Created user {i+1}/5")
             
             elapsed = time.time() - start_time
-            print(f"   ✅ 5 users created sequentially in {elapsed:.2f} seconds ({elapsed/5:.2f}s avg)")
+            print(f"    5 users created sequentially in {elapsed:.2f} seconds ({elapsed/5:.2f}s avg)")
             
             # Clean up
             for user in created_users:
@@ -80,7 +80,7 @@ def test_database_performance():
                 db.session.commit()
                 
         except Exception as e:
-            print(f"   ❌ Sequential user creation failed: {e}")
+            print(f"    Sequential user creation failed: {e}")
         
         # Test 3: Concurrent user operations (stress test)
         print("\n3️⃣ Testing Concurrent Operations...")
@@ -107,7 +107,7 @@ def test_database_performance():
                     
                     return True
             except Exception as e:
-                print(f"   ❌ Worker {worker_id} failed: {e}")
+                print(f"    Worker {worker_id} failed: {e}")
                 return False
         
         start_time = time.time()
@@ -124,13 +124,13 @@ def test_database_performance():
             thread.join()
         
         elapsed = time.time() - start_time
-        print(f"   ✅ 3 concurrent operations completed in {elapsed:.2f} seconds")
+        print(f"    3 concurrent operations completed in {elapsed:.2f} seconds")
         
         # Test 4: Database status check
         print("\n4️⃣ Checking Database Status...")
         try:
             user_count = User.query.count()
-            print(f"   📊 Total users in database: {user_count}")
+            print(f"    Total users in database: {user_count}")
             
             # Check SQLite settings
             from sqlalchemy import text
@@ -138,28 +138,28 @@ def test_database_performance():
             cache_size = db.session.execute(text("PRAGMA cache_size")).scalar()
             busy_timeout = db.session.execute(text("PRAGMA busy_timeout")).scalar()
             
-            print(f"   📊 Journal mode: {journal_mode}")
-            print(f"   📊 Cache size: {cache_size}")
-            print(f"   📊 Busy timeout: {busy_timeout}ms")
+            print(f"    Journal mode: {journal_mode}")
+            print(f"    Cache size: {cache_size}")
+            print(f"    Busy timeout: {busy_timeout}ms")
             
         except Exception as e:
-            print(f"   ⚠️ Status check error: {e}")
+            print(f"   ️ Status check error: {e}")
         
-        print(f"\n🎯 Performance Test Results:")
-        print(f"   ✅ Database optimizations applied")
-        print(f"   ✅ No database locking errors detected")
-        print(f"   ✅ Sequential operations working")
-        print(f"   ✅ Concurrent operations working")
-        print(f"   ✅ Fast sync system active")
+        print(f"\n Performance Test Results:")
+        print(f"    Database optimizations applied")
+        print(f"    No database locking errors detected")
+        print(f"    Sequential operations working")
+        print(f"    Concurrent operations working")
+        print(f"    Fast sync system active")
         
         return True
 
 if __name__ == "__main__":
     success = test_database_performance()
     if success:
-        print(f"\n🎉 SUCCESS: Database performance issues resolved!")
+        print(f"\n SUCCESS: Database performance issues resolved!")
         print(f"   - No more 'database is locked' errors")
         print(f"   - Operations complete in reasonable time")
         print(f"   - Fast sync system prevents conflicts")
     else:
-        print(f"\n❌ Database performance issues still exist")
+        print(f"\n Database performance issues still exist")

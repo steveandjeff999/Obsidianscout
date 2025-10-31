@@ -757,7 +757,7 @@ def get_event_details(event_code):
                 inferred_tz = infer_timezone_from_location(city, state, country)
                 if inferred_tz:
                     db_format['timezone'] = inferred_tz
-                    print(f"✅ Inferred timezone from location ({city}, {state}, {country}): {inferred_tz}")
+                    print(f" Inferred timezone from location ({city}, {state}, {country}): {inferred_tz}")
             
             # If we couldn't infer from FIRST API, try TBA as fallback
             if not db_format['timezone']:
@@ -766,9 +766,9 @@ def get_event_details(event_code):
                     tba_event = get_tba_event_details(tba_event_key)
                     if tba_event and tba_event.get('timezone'):
                         db_format['timezone'] = tba_event['timezone']
-                        print(f"✅ Got timezone from TBA fallback: {db_format['timezone']}")
+                        print(f" Got timezone from TBA fallback: {db_format['timezone']}")
                 except:
-                    print("⚠️  Could not fetch timezone from TBA, will use UTC as default")
+                    print("️  Could not fetch timezone from TBA, will use UTC as default")
             
             return db_format
         else:

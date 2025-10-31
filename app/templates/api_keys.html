@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}🔑 API Key Management{% endblock %}
+{% block title %} API Key Management{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -925,13 +925,13 @@ console.log('Global functions defined. Checking:', {
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
     console.log('API KEYS PAGE LOADED - YOU ARE ON THE CORRECT PAGE!');
-    console.log('🚀🔑 API KEYS PAGE LOADED - YOU ARE ON THE CORRECT PAGE! 🔑🚀');
-    console.log('🚀🔑 API KEYS PAGE LOADED - YOU ARE ON THE CORRECT PAGE! 🔑🚀');
+    console.log(' API KEYS PAGE LOADED - YOU ARE ON THE CORRECT PAGE! ');
+    console.log(' API KEYS PAGE LOADED - YOU ARE ON THE CORRECT PAGE! ');
     
     // Test showAlert immediately
     setTimeout(() => {
-        console.log('🧪 Testing showAlert function...');
-        showAlert('success', '🔑 API KEYS PAGE: JavaScript is working!');
+        console.log(' Testing showAlert function...');
+        showAlert('success', ' API KEYS PAGE: JavaScript is working!');
     }, 500);
     
     loadApiKeys();
@@ -1333,7 +1333,7 @@ function updateKeyCountBadge(count) {
 }
 
 function showAlert(type, message) {
-    console.log('🚨 showAlert called:', { type, message });
+    console.log(' showAlert called:', { type, message });
     const container = document.getElementById('alert-container');
     console.log('Alert container found:', !!container);
     

@@ -21,14 +21,14 @@ def create_shared_graph_table():
         try:
             # Create the table
             db.create_all()
-            print("✅ SharedGraph table created successfully!")
+            print(" SharedGraph table created successfully!")
             
             # Verify the table was created
             inspector = db.inspect(db.engine)
             tables = inspector.get_table_names()
             
             if 'shared_graph' in tables:
-                print("✅ Verified: shared_graph table exists in database")
+                print(" Verified: shared_graph table exists in database")
                 
                 # Show table structure
                 columns = inspector.get_columns('shared_graph')
@@ -36,11 +36,11 @@ def create_shared_graph_table():
                 for column in columns:
                     print(f"  - {column['name']}: {column['type']}")
             else:
-                print("❌ Error: shared_graph table was not created")
+                print(" Error: shared_graph table was not created")
                 return False
                 
         except Exception as e:
-            print(f"❌ Error creating SharedGraph table: {str(e)}")
+            print(f" Error creating SharedGraph table: {str(e)}")
             return False
     
     return True
@@ -50,8 +50,8 @@ if __name__ == "__main__":
     success = create_shared_graph_table()
     
     if success:
-        print("\n🎉 Migration completed successfully!")
+        print("\n Migration completed successfully!")
         print("You can now use the graph sharing features.")
     else:
-        print("\n💥 Migration failed!")
+        print("\n Migration failed!")
         sys.exit(1)

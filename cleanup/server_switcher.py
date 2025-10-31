@@ -15,7 +15,7 @@ def modify_server_flag(use_waitress):
     run_py_path = os.path.join(script_dir, 'run.py')
     
     if not os.path.exists(run_py_path):
-        print("❌ Error: run.py not found!")
+        print(" Error: run.py not found!")
         return False
     
     # Read the file
@@ -49,7 +49,7 @@ def modify_server_flag(use_waitress):
             break
     
     if not modified:
-        print("❌ Error: Could not find USE_WAITRESS flag in run.py")
+        print(" Error: Could not find USE_WAITRESS flag in run.py")
         return False
     
     # Write back to file
@@ -70,26 +70,26 @@ def main():
     mode = sys.argv[1].lower()
     use_waitress = (mode == 'waitress')
     
-    print(f"🔄 Switching to {'Waitress' if use_waitress else 'Flask development server'}...")
+    print(f" Switching to {'Waitress' if use_waitress else 'Flask development server'}...")
     
     if modify_server_flag(use_waitress):
         if use_waitress:
-            print("✅ Server mode set to: Waitress WSGI Server")
-            print("   🚀 Production-ready server")
-            print("   📊 HTTP only (use reverse proxy for SSL)")
-            print("   ⚡ SocketIO polling mode")
-            print("   🌐 URL: http://localhost:5000")
+            print(" Server mode set to: Waitress WSGI Server")
+            print("    Production-ready server")
+            print("    HTTP only (use reverse proxy for SSL)")
+            print("    SocketIO polling mode")
+            print("    URL: http://localhost:5000")
         else:
-            print("✅ Server mode set to: Flask Development Server")
-            print("   🔒 SSL/HTTPS support enabled")
-            print("   🔌 Full WebSocket support")
-            print("   🛠️  Debug mode enabled")
-            print("   🌐 URL: https://localhost:5000")
+            print(" Server mode set to: Flask Development Server")
+            print("    SSL/HTTPS support enabled")
+            print("    Full WebSocket support")
+            print("   ️  Debug mode enabled")
+            print("    URL: https://localhost:5000")
         
         print()
         print("Now run: python run.py")
     else:
-        print("❌ Failed to modify server configuration")
+        print(" Failed to modify server configuration")
         sys.exit(1)
 
 if __name__ == '__main__':

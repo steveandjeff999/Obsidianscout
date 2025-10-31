@@ -6,26 +6,26 @@ The Multi-Server Synchronization System allows multiple scouting servers to auto
 
 ## Features
 
-### ✅ **Real-Time Synchronization**
+###  **Real-Time Synchronization**
 - **Instant sync** when files or database changes are detected
 - **Automatic periodic sync** at configurable intervals (default: 30 seconds)
 - **File monitoring** with change detection (default: 5 second intervals)
 - **Real-time status updates** via WebSocket connections
 
-### ✅ **No Authentication Required**
+###  **No Authentication Required**
 - **IP-based communication** - no API keys or passwords needed
 - **Domain name support** - use hostnames or IP addresses
 - **Zero-configuration networking** - works out of the box on local networks
 - **Secure HTTPS support** - optional SSL/TLS encryption
 
-### ✅ **Comprehensive Data Sync**
+###  **Comprehensive Data Sync**
 - **Database synchronization** - all scouting data, teams, matches, events
 - **Instance files** - database files, logs, and instance folder contents
 - **Configuration files** - game config, themes, and application settings
 - **Upload files** - images, documents, and user uploads
 - **Selective sync** - enable/disable specific sync types per server
 
-### ✅ **Superadmin Management**
+###  **Superadmin Management**
 - **Web-based interface** for managing sync servers
 - **Real-time monitoring** of server health and sync status
 - **Manual sync triggers** for immediate synchronization
@@ -55,10 +55,10 @@ python setup_multi_server_sync.py
    - **Port**: Usually `5000` (the default Flask port)
    - **Protocol**: Choose `HTTPS` (recommended) or `HTTP`
 4. Configure what to sync (all enabled by default):
-   - ✅ Database Synchronization
-   - ✅ Instance Files
-   - ✅ Configuration Files 
-   - ✅ Uploaded Files
+   -  Database Synchronization
+   -  Instance Files
+   -  Configuration Files 
+   -  Uploaded Files
 5. Click **"Add Server"**
 
 ### 4. Verify Connection
@@ -354,4 +354,4 @@ We welcome contributions to improve the sync system:
 
 ---
 
-**🎯 Ready to sync? Start by running `python setup_multi_server_sync.py` and adding your first server!**
+** Ready to sync? Start by running `python setup_multi_server_sync.py` and adding your first server!**

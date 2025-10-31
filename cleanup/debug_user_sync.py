@@ -6,7 +6,7 @@ Check why user changes aren't syncing between servers
 
 def debug_user_sync():
     """Debug user synchronization issues"""
-    print("🔍 DEBUGGING USER SYNC ISSUE")
+    print(" DEBUGGING USER SYNC ISSUE")
     print("=" * 50)
     
     try:
@@ -50,7 +50,7 @@ def debug_user_sync():
                         except:
                             print(f"    Data: {change.change_data[:100]}...")
             else:
-                print("❌ No user changes found in database_changes table!")
+                print(" No user changes found in database_changes table!")
                 print("This suggests change tracking may not be working for User model")
             
             print("\n3️⃣ TESTING CHANGE TRACKING")
@@ -70,7 +70,7 @@ def debug_user_sync():
                 db.session.add(test_user)
                 db.session.flush()  # Get the ID but don't commit yet
                 
-                print(f"✅ Created test user: {test_user.username} (ID: {test_user.id})")
+                print(f" Created test user: {test_user.username} (ID: {test_user.id})")
                 
                 # Check if a change was automatically tracked
                 db.session.commit()
@@ -85,15 +85,15 @@ def debug_user_sync():
                 ).first()
                 
                 if new_change:
-                    print(f"✅ Change tracking is working - found change for new user")
+                    print(f" Change tracking is working - found change for new user")
                     print(f"   Change ID: {new_change.id}")
                     print(f"   Operation: {new_change.operation}")
                     print(f"   Status: {new_change.sync_status}")
                 else:
-                    print("❌ Change tracking is NOT working - no change recorded for new user")
+                    print(" Change tracking is NOT working - no change recorded for new user")
                 
             except Exception as e:
-                print(f"❌ Error testing change tracking: {e}")
+                print(f" Error testing change tracking: {e}")
             
             print("\n4️⃣ CHECKING SYNC SERVER STATUS")
             print("-" * 30)
@@ -111,25 +111,25 @@ def debug_user_sync():
             
             for server in servers:
                 if server.sync_enabled:
-                    print(f"\n🔄 Testing sync with {server.name}...")
+                    print(f"\n Testing sync with {server.name}...")
                     
                     try:
                         result = simplified_sync_manager.perform_bidirectional_sync(server.id)
                         
                         print(f"  Success: {result['success']}")
                         if result['success']:
-                            print(f"  📤 Sent to remote: {result['stats']['sent_to_remote']}")
-                            print(f"  📥 Received from remote: {result['stats']['received_from_remote']}")
+                            print(f"   Sent to remote: {result['stats']['sent_to_remote']}")
+                            print(f"   Received from remote: {result['stats']['received_from_remote']}")
                             
                             # Check what was sent
                             for op in result['operations']:
                                 if 'changes' in op.lower():
                                     print(f"    • {op}")
                         else:
-                            print(f"  ❌ Error: {result.get('error', 'Unknown error')}")
+                            print(f"   Error: {result.get('error', 'Unknown error')}")
                             
                     except Exception as e:
-                        print(f"  ❌ Exception: {e}")
+                        print(f"   Exception: {e}")
             
             print("\n6️⃣ CHECKING REMOTE SERVER USERS")
             print("-" * 30)
@@ -145,7 +145,7 @@ def debug_user_sync():
                         response = requests.get(url, timeout=5, verify=False)
                         
                         if response.status_code == 200:
-                            print(f"✅ Remote server {server.name} is responding")
+                            print(f" Remote server {server.name} is responding")
                             
                             # Check if remote has changes to send back
                             since_time = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
@@ -164,12 +164,12 @@ def debug_user_sync():
                                 for change in user_changes_remote[:3]:
                                     print(f"    • {change.get('operation')} - {change.get('record_id')}")
                             else:
-                                print(f"  ❌ Failed to get changes from remote: {changes_response.status_code}")
+                                print(f"   Failed to get changes from remote: {changes_response.status_code}")
                         else:
-                            print(f"❌ Remote server {server.name} not responding: {response.status_code}")
+                            print(f" Remote server {server.name} not responding: {response.status_code}")
                             
                     except Exception as e:
-                        print(f"❌ Error checking remote server {server.name}: {e}")
+                        print(f" Error checking remote server {server.name}: {e}")
             
             print("\n7️⃣ RECOMMENDATIONS")
             print("-" * 30)
@@ -181,20 +181,20 @@ def debug_user_sync():
             print(f"Pending user changes: {pending_user_changes}")
             
             if user_changes_count == 0:
-                print("\n❌ ISSUE: No user changes tracked")
+                print("\n ISSUE: No user changes tracked")
                 print("   Problem: Change tracking not working for User model")
                 print("   Solution: Check change_tracking.py and User model setup")
             elif pending_user_changes == 0:
-                print("\n⚠️  ISSUE: All user changes marked as synced but not on remote")
+                print("\n️  ISSUE: All user changes marked as synced but not on remote")
                 print("   Problem: Sync process not actually sending data")
                 print("   Solution: Check sync API endpoints and data transmission")
             else:
-                print("\n✅ User changes are being tracked but not synced")
+                print("\n User changes are being tracked but not synced")
                 print("   Problem: Sync process may be failing")
                 print("   Solution: Check network connectivity and sync logs")
             
     except Exception as e:
-        print(f"❌ Debug failed: {e}")
+        print(f" Debug failed: {e}")
         import traceback
         traceback.print_exc()
 

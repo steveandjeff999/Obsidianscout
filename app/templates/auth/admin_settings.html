@@ -1,6 +1,41 @@
 {% extends "base.html" %}
 {% block title %}Admin Settings{% endblock %}
 
+{% block head %}
+<style>
+/* Ensure admin settings page respects sidebar layout - backup for when JS fails */
+@media (min-width: 992px) {
+    /* Let JavaScript handle the dynamic margins, but ensure CSS doesn't interfere */
+    body.with-sidebar main,
+    body.with-sidebar footer,
+    body.with-sidebar .topbar {
+        /* Remove any static margins that might conflict */
+        margin-left: auto !important;
+        width: auto !important;
+    }
+
+    /* But ensure the layout classes are applied */
+    body.with-sidebar:not(.sidebar-collapsed) main {
+        /* CSS fallback - JS should override this */
+        margin-left: var(--sidebar-width) !important;
+    }
+
+    body.with-sidebar.sidebar-collapsed main {
+        /* CSS fallback for collapsed state */
+        margin-left: 72px !important;
+    }
+
+    body.with-sidebar:not(.sidebar-collapsed) .topbar {
+        width: calc(100% - var(--sidebar-width)) !important;
+    }
+
+    body.with-sidebar.sidebar-collapsed .topbar {
+        width: calc(100% - 72px) !important;
+    }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
     <div class="row">
@@ -141,7 +176,13 @@
                         <div class="col-md-6">
                             <h6>System Information</h6>
                             <p><strong>Application:</strong> ObsidianScout {{ game_config.season }}</p>
-                            <p><strong>Version:</strong> 1.0.0</p>
+                            <p><strong>Version:</strong>
+                                {% if app_version %}
+                                    {{ app_version }}
+                                {% else %}
+                                    <span class="text-muted">unknown</span>
+                                {% endif %}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -152,6 +193,91 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+// Admin settings page layout enforcement
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Admin settings page loaded - enforcing sidebar layout');
+
+    // Function to apply sidebar margins using global function
+    function enforceSidebarLayout() {
+        if (typeof applySidebarMargin === 'function') {
+            console.log('Applying sidebar margin via global function');
+            applySidebarMargin();
+        } else {
+            console.warn('applySidebarMargin function not available, using fallback');
+            // Fallback: manually calculate and apply margins
+            const sidebar = document.querySelector('.sidebar');
+            const main = document.querySelector('main');
+            const footer = document.querySelector('footer');
+            const topbar = document.querySelector('.topbar');
+
+            if (sidebar && main) {
+                const sidebarWidth = sidebar.offsetWidth;
+                const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+
+                console.log('Fallback: sidebar width =', sidebarWidth, 'collapsed =', isCollapsed);
+
+                // Apply margins based on sidebar state
+                const marginLeft = isCollapsed ? '72px' : sidebarWidth + 'px';
+
+                if (main) main.style.marginLeft = marginLeft;
+                if (footer) footer.style.marginLeft = marginLeft;
+                if (topbar) {
+                    topbar.style.marginLeft = marginLeft;
+                    topbar.style.width = `calc(100% - ${marginLeft})`;
+                }
+            }
+        }
+    }
+
+    // Apply layout immediately
+    enforceSidebarLayout();
+
+    // Re-apply on window resize
+    window.addEventListener('resize', function() {
+        setTimeout(enforceSidebarLayout, 100);
+    });
+
+    // Watch for sidebar collapse/expand events
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                console.log('Body class changed - reapplying sidebar layout');
+                setTimeout(enforceSidebarLayout, 50);
+            }
+        });
+    });
+
+    observer.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class']
+    });
+
+    // Also watch for sidebar class changes
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+        const sidebarObserver = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    console.log('Sidebar class changed - reapplying layout');
+                    setTimeout(enforceSidebarLayout, 50);
+                }
+            });
+        });
+        sidebarObserver.observe(sidebar, {
+            attributes: true,
+            attributeFilter: ['class']
+        });
+    }
+
+    // Periodic check as backup
+    setInterval(function() {
+        enforceSidebarLayout();
+    }, 2000);
+
+    console.log('Admin settings layout enforcement initialized');
+});
+</script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const statusEl = document.getElementById('accountLockStatus');
@@ -192,5 +318,39 @@ document.addEventListener('DOMContentLoaded', function() {
     // Optional: poll every 10s to keep UI in sync across devices
     setInterval(refreshStatus, 10000);
 });
+</script>
+<script>
+// Page-specific sidebar normalization: ensure this admin page uses the same
+// sidebar layout as other admin pages. This clears any transient mobile
+// overlay state and triggers the global layout adjuster.
+(function(){
+    try {
+        // Ensure body has the desktop layout classes
+        if (!document.body.classList.contains('with-sidebar')) document.body.classList.add('with-sidebar');
+        if (!document.body.classList.contains('topbar-fixed')) document.body.classList.add('topbar-fixed');
+
+        // Clear mobile overlay state if present
+        if (document.body.classList.contains('sidebar-open')) document.body.classList.remove('sidebar-open');
+
+        // Dispatch the existing sidebar event so other scripts update
+        document.dispatchEvent(new CustomEvent('obsidian:sidebar:toggled'));
+
+        // Call the global adjuster multiple times to ensure it takes effect
+        if (typeof applySidebarMargin === 'function') {
+            try { 
+                applySidebarMargin(); 
+                // Call again after transitions complete
+                setTimeout(applySidebarMargin, 300);
+                setTimeout(applySidebarMargin, 600);
+                setTimeout(applySidebarMargin, 1000);
+            } catch(e) { console.warn('applySidebarMargin error:', e); }
+        } else {
+            // Fallback: trigger resize events
+            window.dispatchEvent(new Event('resize'));
+            setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
+            setTimeout(() => window.dispatchEvent(new Event('resize')), 600);
+        }
+    } catch (e) { /* ignore */ }
+})();
 </script>
 {% endblock %}

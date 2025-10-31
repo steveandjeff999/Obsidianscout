@@ -5,7 +5,7 @@ Provides helper functions to filter database queries by scouting team.
 
 from flask_login import current_user
 from app.models import Team, Event, Match, ScoutingData, AllianceSelection, DoNotPickEntry, AvoidEntry, PitScoutingData, User, DeclinedEntry
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 
 
 def get_current_scouting_team_number():
@@ -178,9 +178,39 @@ def validate_user_in_same_team(username):
     scouting_team_number = get_current_scouting_team_number()
     if scouting_team_number is None:
         return True  # If no team set, allow all users
-    
-    user = User.query.filter_by(username=username).first()
+    # Perform a case-insensitive lookup for the username to avoid mismatches
+    try:
+        uname = str(username).strip().lower()
+        user = User.query.filter(func.lower(User.username) == uname).first()
+    except Exception:
+        user = User.query.filter_by(username=username).first()
+
     if not user:
         return False
-    
+
     return user.scouting_team_number == scouting_team_number
+
+
+def find_user_in_same_team(username):
+    """Return the canonical User object for `username` if the user exists and is
+    in the same scouting team as the current user. Returns None otherwise.
+
+    This helper performs a case-insensitive username lookup and is useful when
+    code needs the DB's canonical username (for Socket.IO room names, etc.).
+    """
+    scouting_team_number = get_current_scouting_team_number()
+    if scouting_team_number is None:
+        # If no team set, return the user if it exists (no team scoping applied)
+        try:
+            uname = str(username).strip().lower()
+            return User.query.filter(func.lower(User.username) == uname).first()
+        except Exception:
+            return User.query.filter_by(username=username).first()
+
+    try:
+        uname = str(username).strip().lower()
+        user = User.query.filter(func.lower(User.username) == uname, User.scouting_team_number == scouting_team_number).first()
+    except Exception:
+        user = User.query.filter_by(username=username, scouting_team_number=scouting_team_number).first()
+
+    return user

@@ -17,23 +17,23 @@ def clear_failed_attempts(username=None, all_users=False):
         
         with app.app_context():
             if all_users:
-                print("🧹 Clearing all failed login attempts...")
+                print(" Clearing all failed login attempts...")
                 deleted = LoginAttempt.query.filter_by(success=False).delete()
             elif username:
-                print(f"🧹 Clearing failed login attempts for user: {username}")
+                print(f" Clearing failed login attempts for user: {username}")
                 deleted = LoginAttempt.query.filter(
                     LoginAttempt.username == username,
                     LoginAttempt.success == False
                 ).delete()
             else:
-                print("❌ Must specify username or --all")
+                print(" Must specify username or --all")
                 return
                 
             db.session.commit()
-            print(f"✅ Cleared {deleted} failed login attempts")
+            print(f" Cleared {deleted} failed login attempts")
             
     except Exception as e:
-        print(f"❌ Error clearing failed attempts: {e}")
+        print(f" Error clearing failed attempts: {e}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Clear failed login attempts')

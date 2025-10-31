@@ -49,13 +49,13 @@ def start_change_tracking_worker():
                         with app.app_context():
                             _process_change_tracking(operation)
                     except Exception as inner_e:
-                        print(f"❌ Failed to create app context in worker: {inner_e}")
+                        print(f" Failed to create app context in worker: {inner_e}")
 
                 change_tracking_queue.task_done()
             except queue.Empty:
                 continue
             except Exception as e:
-                print(f"❌ Error in change tracking worker: {e}")
+                print(f" Error in change tracking worker: {e}")
                 try:
                     change_tracking_queue.task_done()
                 except Exception:
@@ -85,7 +85,7 @@ def _process_change_tracking(operation):
             conn.execute(change_sql, operation)
             conn.commit()
     except Exception as e:
-        print(f"❌ Error processing change tracking: {e}")
+        print(f" Error processing change tracking: {e}")
 
 def _get_server_id():
     """Get the current server ID for change tracking"""
@@ -138,7 +138,7 @@ def track_model_changes(model_class):
             
         except Exception as e:
             # Log but don't raise to avoid breaking the transaction
-            print(f"❌ Error queuing insert tracking for {model_class.__name__}: {e}")
+            print(f" Error queuing insert tracking for {model_class.__name__}: {e}")
     
     @event.listens_for(model_class, 'after_update', propagate=True)
     def track_update(mapper, connection, target):
@@ -197,7 +197,7 @@ def track_model_changes(model_class):
             
         except Exception as e:
             # Log but don't raise to avoid breaking the transaction
-            print(f"❌ Error queuing update tracking for {model_class.__name__}: {e}")
+            print(f" Error queuing update tracking for {model_class.__name__}: {e}")
     
     @event.listens_for(model_class, 'after_delete', propagate=True)
     def track_delete(mapper, connection, target):
@@ -235,7 +235,7 @@ def track_model_changes(model_class):
             
         except Exception as e:
             # Log but don't raise to avoid breaking the transaction
-            print(f"❌ Error queuing delete tracking for {model_class.__name__}: {e}")
+            print(f" Error queuing delete tracking for {model_class.__name__}: {e}")
 
 
 def should_track_changes():

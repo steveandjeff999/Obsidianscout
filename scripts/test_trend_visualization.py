@@ -56,9 +56,9 @@ def test_trend_analysis():
             )
             
             if vis_result.get('error'):
-                print(f"❌ Visualization Error: {vis_result.get('message')}")
+                print(f" Visualization Error: {vis_result.get('message')}")
             else:
-                print(f"✅ Visualization generated successfully!")
+                print(f" Visualization generated successfully!")
                 print(f"   Image size: {len(vis_result.get('image', ''))} bytes (base64)")
                 print(f"   Type: {vis_result.get('type')}")
 

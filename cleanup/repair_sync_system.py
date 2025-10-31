@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 
 def repair_sync_system():
     """Main repair function"""
-    print("🔧 SYNC SYSTEM REPAIR UTILITY")
+    print(" SYNC SYSTEM REPAIR UTILITY")
     print("=" * 50)
     
     try:
@@ -29,14 +29,14 @@ def repair_sync_system():
             try:
                 # Test basic database connection
                 server_count = SyncServer.query.count()
-                print(f"✅ Database connected - {server_count} sync servers configured")
+                print(f" Database connected - {server_count} sync servers configured")
                 
                 # Test DatabaseChange table
                 change_count = DatabaseChange.query.count()
-                print(f"✅ DatabaseChange table accessible - {change_count} changes recorded")
+                print(f" DatabaseChange table accessible - {change_count} changes recorded")
                 
             except Exception as e:
-                print(f"❌ Database connection failed: {e}")
+                print(f" Database connection failed: {e}")
                 return False
                 
             print("\n2️⃣ CHECKING SYNC SERVERS")
@@ -44,7 +44,7 @@ def repair_sync_system():
             servers = SyncServer.query.filter_by(sync_enabled=True).all()
             
             for server in servers:
-                print(f"\n🖥️  Server: {server.name} ({server.host}:{server.port})")
+                print(f"\n️  Server: {server.name} ({server.host}:{server.port})")
                 print(f"   Protocol: {server.protocol}")
                 print(f"   Active: {server.is_active}")
                 print(f"   Last Ping: {server.last_ping}")
@@ -56,20 +56,20 @@ def repair_sync_system():
                     url = f"{server.protocol}://{server.host}:{server.port}/api/sync/ping"
                     response = requests.get(url, timeout=5, verify=False)
                     if response.status_code == 200:
-                        print(f"   🟢 Connection: SUCCESS")
+                        print(f"   OK Connection: SUCCESS")
                         # Update ping status
                         server.update_ping(success=True)
                     else:
-                        print(f"   🔴 Connection: FAILED (HTTP {response.status_code})")
+                        print(f"    Connection: FAILED (HTTP {response.status_code})")
                         server.update_ping(success=False, error_message=f"HTTP {response.status_code}")
                 except Exception as e:
-                    print(f"   🔴 Connection: FAILED ({str(e)})")
+                    print(f"    Connection: FAILED ({str(e)})")
                     server.update_ping(success=False, error_message=str(e))
             
             # Commit ping updates
             db.session.commit()
             
-            print("\n3️⃣ CLEANING SYNC LOGS")
+            print("\n3. CLEANING SYNC LOGS")
             print("-" * 30)
             
             # Clean up old malformed sync logs
@@ -90,14 +90,14 @@ def repair_sync_system():
                     })
             
             db.session.commit()
-            print(f"✅ Repaired {len(problematic_logs)} sync log entries")
+            print(f" Repaired {len(problematic_logs)} sync log entries")
             
-            print("\n4️⃣ TESTING SYNC API ENDPOINTS")
+            print("\n4. TESTING SYNC API ENDPOINTS")
             print("-" * 30)
             
             for server in servers:
                 if server.is_active:
-                    print(f"\n🔍 Testing {server.name}...")
+                    print(f"\n Testing {server.name}...")
                     
                     # Test ping endpoint
                     try:
@@ -120,7 +120,7 @@ def repair_sync_system():
                     except Exception as e:
                         print(f"   Changes: FAILED - {e}")
             
-            print("\n5️⃣ CREATING TEST DATABASE CHANGES")
+            print("\n5. CREATING TEST DATABASE CHANGES")
             print("-" * 30)
             
             # Create some test database changes to ensure sync has data
@@ -138,19 +138,19 @@ def repair_sync_system():
                 db.session.add(test_change)
                 db.session.commit()
                 
-                print("✅ Created test database change for sync")
+                print(" Created test database change for sync")
                 
             except Exception as e:
-                print(f"⚠️  Could not create test change: {e}")
+                print(f"ERROR Could not create test change: {e}")
             
-            print("\n6️⃣ SUMMARY AND RECOMMENDATIONS")
+            print("\n6. SUMMARY AND RECOMMENDATIONS")
             print("-" * 30)
             
             healthy_servers = [s for s in servers if s.is_healthy]
-            print(f"✅ {len(healthy_servers)}/{len(servers)} servers are healthy")
+            print(f" {len(healthy_servers)}/{len(servers)} servers are healthy")
             
             if len(healthy_servers) == 0:
-                print("🔴 NO HEALTHY SERVERS - Sync will not work")
+                print(" NO HEALTHY SERVERS - Sync will not work")
                 print("   Check network connectivity and server status")
             elif len(healthy_servers) < len(servers):
                 print("🟡 Some servers are unhealthy - partial sync only")
@@ -163,14 +163,14 @@ def repair_sync_system():
             return True
             
     except Exception as e:
-        print(f"❌ Repair failed: {e}")
+        print(f" Repair failed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 def test_manual_sync():
     """Test a manual sync operation"""
-    print("\n🧪 TESTING MANUAL SYNC")
+    print("\n TESTING MANUAL SYNC")
     print("=" * 50)
     
     try:
@@ -184,35 +184,35 @@ def test_manual_sync():
             servers = SyncServer.query.filter_by(sync_enabled=True, is_active=True).all()
             
             if not servers:
-                print("❌ No active sync servers found")
+                print(" No active sync servers found")
                 return False
             
             for server in servers:
-                print(f"\n🔄 Testing sync with {server.name}...")
+                print(f"\n Testing sync with {server.name}...")
                 
                 try:
                     result = simplified_sync_manager.perform_bidirectional_sync(server.id)
                     
                     if result['success']:
-                        print(f"✅ Sync successful!")
+                        print(f" Sync successful!")
                         print(f"   Sent: {result['stats']['sent_to_remote']}")
                         print(f"   Received: {result['stats']['received_from_remote']}")
                         print(f"   Operations: {len(result['operations'])}")
                     else:
-                        print(f"❌ Sync failed: {result.get('error', 'Unknown error')}")
+                        print(f" Sync failed: {result.get('error', 'Unknown error')}")
                         
                 except Exception as e:
-                    print(f"❌ Sync exception: {e}")
+                    print(f" Sync exception: {e}")
             
             return True
             
     except Exception as e:
-        print(f"❌ Manual sync test failed: {e}")
+        print(f" Manual sync test failed: {e}")
         return False
 
 def main():
     """Main function"""
-    print("🚀 STARTING SYNC SYSTEM REPAIR")
+    print(" STARTING SYNC SYSTEM REPAIR")
     print("=" * 60)
     
     # Run repairs
@@ -220,20 +220,20 @@ def main():
     
     if repair_success:
         print("\n" + "=" * 60)
-        print("🎯 REPAIR COMPLETED SUCCESSFULLY")
+        print(" REPAIR COMPLETED SUCCESSFULLY")
         print("=" * 60)
         
         # Test sync functionality
         test_manual_sync()
         
-        print("\n📋 NEXT STEPS:")
+        print("\n NEXT STEPS:")
         print("1. Restart the application: python run.py")
         print("2. Check console for auto-sync messages")
         print("3. Try manual sync from web interface")
         print("4. Monitor sync logs for errors")
         
     else:
-        print("\n❌ REPAIR FAILED")
+        print("\n REPAIR FAILED")
         print("Check the error messages above and fix issues manually")
 
 if __name__ == "__main__":

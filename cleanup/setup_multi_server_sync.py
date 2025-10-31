@@ -21,13 +21,13 @@ try:
     from app.models import SyncServer, SyncLog, FileChecksum, SyncConfig
     from app.utils.multi_server_sync import MultiServerSyncManager
 except ImportError as e:
-    print(f"❌ Error importing application modules: {e}")
+    print(f" Error importing application modules: {e}")
     print("Make sure you're running this script from the root directory.")
     sys.exit(1)
 
 def setup_sync_database():
     """Set up the multi-server sync database tables."""
-    print("🚀 Setting up Multi-Server Sync Database...")
+    print(" Setting up Multi-Server Sync Database...")
     
     # Create Flask application context
     app = create_app()
@@ -35,14 +35,14 @@ def setup_sync_database():
     with app.app_context():
         try:
             # Create all sync-related tables
-            print("📋 Creating sync database tables...")
+            print(" Creating sync database tables...")
             
             # Create the tables (this will only create missing tables)
             try:
                 db.create_all()
-                print("  ✅ Database tables created successfully")
+                print("   Database tables created successfully")
             except Exception as e:
-                print(f"  ❌ Error creating tables: {e}")
+                print(f"   Error creating tables: {e}")
                 return False
             
             # Verify the tables were created
@@ -55,18 +55,18 @@ def setup_sync_database():
             for table in sync_tables:
                 if table in tables:
                     created_tables.append(table)
-                    print(f"  ✅ {table}")
+                    print(f"   {table}")
                 else:
-                    print(f"  ⚠️  {table} - not found (may need manual creation)")
+                    print(f"  ️  {table} - not found (may need manual creation)")
             
             if len(created_tables) >= 1:  # At least sync_config should exist
-                print(f"\n✅ Database setup completed ({len(created_tables)}/{len(sync_tables)} tables ready)")
+                print(f"\n Database setup completed ({len(created_tables)}/{len(sync_tables)} tables ready)")
             else:
-                print(f"\n⚠️  Warning: Only {len(created_tables)}/{len(sync_tables)} tables created")
+                print(f"\n️  Warning: Only {len(created_tables)}/{len(sync_tables)} tables created")
                 # Don't fail completely - sync_config is the most important
             
             # Create default sync configuration
-            print("⚙️  Setting up default sync configuration...")
+            print("️  Setting up default sync configuration...")
             
             # Set default configuration values using the proper method
             SyncConfig.set_value('sync_enabled', True, 'boolean', 
@@ -80,48 +80,48 @@ def setup_sync_database():
             SyncConfig.set_value('connection_timeout', 30, 'integer',
                                'Connection timeout in seconds')
             
-            print("  ✅ Default sync configuration created")
+            print("   Default sync configuration created")
             
             # Initialize the sync manager (this will start background processes)
-            print("🔄 Initializing sync manager...")
+            print(" Initializing sync manager...")
             sync_manager = MultiServerSyncManager()
-            print("  ✅ Sync manager initialized")
+            print("   Sync manager initialized")
             
             print("\n" + "="*60)
-            print("🎊 MULTI-SERVER SYNC SETUP COMPLETE!")
+            print(" MULTI-SERVER SYNC SETUP COMPLETE!")
             print("="*60)
             print()
-            print("📍 Next steps:")
+            print(" Next steps:")
             print("1. Start your Flask application: python run.py")
             print("2. Log in as superadmin (username: superadmin, password: password)")
             print("3. Go to 'Multi-Server Sync' in the navigation menu")
             print("4. Add your sync servers using IP addresses or domain names")
             print("5. Configure sync settings as needed")
             print()
-            print("📖 For detailed setup instructions, see:")
+            print(" For detailed setup instructions, see:")
             print("   MULTI_SERVER_SYNC_README.md")
             print()
-            print("🔧 Sync Features Available:")
-            print("   ✅ Real-time file synchronization")
-            print("   ✅ Database synchronization")
-            print("   ✅ Configuration file sync")
-            print("   ✅ Upload file sync")
-            print("   ✅ No authentication required (IP-based)")
-            print("   ✅ Web-based management interface")
-            print("   ✅ Real-time monitoring and logging")
+            print(" Sync Features Available:")
+            print("    Real-time file synchronization")
+            print("    Database synchronization")
+            print("    Configuration file sync")
+            print("    Upload file sync")
+            print("    No authentication required (IP-based)")
+            print("    Web-based management interface")
+            print("    Real-time monitoring and logging")
             print()
             
             return True
             
         except Exception as e:
-            print(f"❌ Error setting up sync database: {e}")
+            print(f" Error setting up sync database: {e}")
             import traceback
             traceback.print_exc()
             return False
 
 def verify_prerequisites():
     """Verify that all prerequisites are met."""
-    print("🔍 Checking prerequisites...")
+    print(" Checking prerequisites...")
     
     # Check if we're in the right directory
     required_files = ['run.py', 'app/__init__.py', 'app/models.py']
@@ -132,7 +132,7 @@ def verify_prerequisites():
             missing_files.append(file)
     
     if missing_files:
-        print("❌ Missing required files:")
+        print(" Missing required files:")
         for file in missing_files:
             print(f"   - {file}")
         print("\nMake sure you're running this script from the root directory of your application.")
@@ -140,15 +140,15 @@ def verify_prerequisites():
     
     # Check Python version
     if sys.version_info < (3, 7):
-        print(f"❌ Python 3.7+ required, you have {sys.version}")
+        print(f" Python 3.7+ required, you have {sys.version}")
         return False
     
-    print("✅ Prerequisites check passed")
+    print(" Prerequisites check passed")
     return True
 
 def main():
     """Main setup function."""
-    print("🔧 Multi-Server Sync Setup Script")
+    print(" Multi-Server Sync Setup Script")
     print("=" * 40)
     print()
     
@@ -158,11 +158,11 @@ def main():
     
     # Setup the database
     if setup_sync_database():
-        print("🚀 Setup completed successfully!")
+        print(" Setup completed successfully!")
         print("\nYou can now start using the multi-server sync system.")
         sys.exit(0)
     else:
-        print("❌ Setup failed. Please check the error messages above.")
+        print(" Setup failed. Please check the error messages above.")
         sys.exit(1)
 
 if __name__ == "__main__":

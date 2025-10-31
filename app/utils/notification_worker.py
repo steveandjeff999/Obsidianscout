@@ -124,7 +124,7 @@ def notification_worker(app):
     3. Processes pending notifications every minute
     4. Cleans up old data periodically
     """
-    print("🔔 Notification worker thread started")
+    print(" Notification worker thread started")
 
     # Use timezone-aware datetime.min to avoid mixing naive and aware datetimes
     last_match_time_update = datetime.min.replace(tzinfo=timezone.utc)
@@ -142,15 +142,15 @@ def notification_worker(app):
                 # Update match times every 10 minutes
                 if (now - last_match_time_update).total_seconds() >= 600:
                     try:
-                        print("\n📅 Updating match times from APIs...")
+                        print("\n Updating match times from APIs...")
                         # This import is assumed to work in the Flask context
                         from app.utils.match_time_fetcher import update_all_active_event_times
                         updated_count = update_all_active_event_times()
                         if updated_count > 0:
-                            print(f"✅ Updated {updated_count} match times")
+                            print(f" Updated {updated_count} match times")
                         last_match_time_update = now
                     except Exception as e:
-                        print(f"❌ Error updating match times: {e}")
+                        print(f" Error updating match times: {e}")
 
                 # Check for schedule adjustments every 15 minutes
                 if (now - last_schedule_adjustment).total_seconds() >= 900:
@@ -164,24 +164,24 @@ def notification_worker(app):
                         for result in results:
                             if result.get('success') and result.get('adjusted_matches', 0) > 0:
                                 offset = result.get('analysis', {}).get('recent_offset_minutes', 0)
-                                print(f"⚠️  Event {result['event_code']} is {abs(offset):.0f} min "
+                                print(f"️  Event {result['event_code']} is {abs(offset):.0f} min "
                                       f"{'behind' if offset > 0 else 'ahead of'} schedule")
 
                         last_schedule_adjustment = now
                     except Exception as e:
-                        print(f"❌ Error checking schedule adjustments: {e}")
+                        print(f" Error checking schedule adjustments: {e}")
                         traceback.print_exc()
 
                 # Schedule notifications for upcoming matches every 5 minutes
                 # Update module-level last_schedule_check_time so other code can inspect it
                 if (now - last_schedule_check_time).total_seconds() >= 300:
                     try:
-                        print("\n📋 Checking for matches to schedule notifications...")
+                        print("\n Checking for matches to schedule notifications...")
                         schedule_upcoming_match_notifications(app)
                         # Record when we performed the schedule check
                         last_schedule_check_time = now
                     except Exception as e:
-                        print(f"❌ Error scheduling notifications: {e}")
+                        print(f" Error scheduling notifications: {e}")
 
                 # Process pending notifications every minute
                 try:
@@ -189,14 +189,14 @@ def notification_worker(app):
                     from app.utils.notification_service import process_pending_notifications
                     sent, failed = process_pending_notifications()
                     if sent > 0 or failed > 0:
-                        print(f"📬 Notifications sent: {sent}, failed: {failed}")
+                        print(f" Notifications sent: {sent}, failed: {failed}")
                 except Exception as e:
-                    print(f"❌ Error processing notifications: {e}")
+                    print(f" Error processing notifications: {e}")
 
                 # Cleanup old data every hour
                 if (now - last_cleanup).total_seconds() >= 3600:
                     try:
-                        print("\n🧹 Cleaning up old notification data...")
+                        print("\n Cleaning up old notification data...")
                         # These imports are assumed to work in the Flask context
                         from app.utils.notification_service import cleanup_old_queue_entries
                         from app.utils.push_notifications import cleanup_inactive_devices
@@ -205,17 +205,17 @@ def notification_worker(app):
                         devices_deleted = cleanup_inactive_devices()
 
                         if queue_deleted > 0 or devices_deleted > 0:
-                            print(f"✅ Cleaned up {queue_deleted} queue entries, {devices_deleted} devices")
+                            print(f" Cleaned up {queue_deleted} queue entries, {devices_deleted} devices")
 
                         last_cleanup = now
                     except Exception as e:
-                        print(f"❌ Error during cleanup: {e}")
+                        print(f" Error during cleanup: {e}")
 
             # Sleep for 60 seconds before next cycle
             time.sleep(60)
 
         except Exception as e:
-            print(f"❌ Error in notification worker: {e}")
+            print(f" Error in notification worker: {e}")
             traceback.print_exc()
             time.sleep(60)  # Continue after error
 
@@ -264,7 +264,7 @@ def schedule_upcoming_match_notifications(app):
     if not all_matches:
         return
 
-    print(f"📋 Found {len(all_matches)} upcoming matches to check for notifications")
+    print(f" Found {len(all_matches)} upcoming matches to check for notifications")
 
     scheduled_total = 0
     for match in all_matches:
@@ -282,18 +282,18 @@ def schedule_upcoming_match_notifications(app):
             count = schedule_notifications_for_match(match)
             scheduled_total += count
         except Exception as e:
-            print(f"❌ Error scheduling notifications for match {match.id}: {e}")
+            print(f" Error scheduling notifications for match {match.id}: {e}")
 
     if scheduled_total > 0:
-        print(f"✅ Scheduled {scheduled_total} notifications")
+        print(f" Scheduled {scheduled_total} notifications")
 
     # Schedule end-of-day summaries (runs each time we check upcoming matches)
     try:
         summary_count = schedule_end_of_day_summaries()
         if summary_count > 0:
-            print(f"✅ Scheduled {summary_count} end-of-day summary notifications")
+            print(f" Scheduled {summary_count} end-of-day summary notifications")
     except Exception as e:
-        print(f"❌ Error scheduling end-of-day summaries: {e}")
+        print(f" Error scheduling end-of-day summaries: {e}")
 
     # Lightweight reschedule pass: when an event has a significant schedule_offset (>= 15 minutes)
     # we should reschedule pending notifications for that event's future matches so they fire
@@ -356,18 +356,18 @@ def schedule_upcoming_match_notifications(app):
                         cnt = schedule_notifications_for_match(m)
                         rescheduled_total += cnt
                     except Exception as e:
-                        print(f"❌ Error rescheduling notifications for match {m.id}: {e}")
+                        print(f" Error rescheduling notifications for match {m.id}: {e}")
 
                 # Record that we've handled this offset value for this event
                 last_event_offsets[event.id] = offset
 
             except Exception as e:
-                print(f"❌ Error handling reschedule logic for event {getattr(event,'code', 'N/A')}: {e}")
+                print(f" Error handling reschedule logic for event {getattr(event,'code', 'N/A')}: {e}")
 
         if rescheduled_total > 0:
-            print(f"✅ Rescheduled {rescheduled_total} notifications due to significant schedule offsets")
+            print(f" Rescheduled {rescheduled_total} notifications due to significant schedule offsets")
     except Exception as e:
-        print(f"❌ Error in lightweight reschedule pass: {e}")
+        print(f" Error in lightweight reschedule pass: {e}")
 
 
 def get_seconds_until_next_schedule():

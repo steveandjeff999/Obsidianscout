@@ -20,7 +20,7 @@ def compare_users():
         # Get remote server info
         server = SyncServer.query.filter_by(sync_enabled=True).first()
         if not server:
-            print("❌ No sync server configured")
+            print(" No sync server configured")
             return
             
         print(f"\n=== REMOTE USERS ON {server.name} ===")
@@ -74,10 +74,10 @@ def compare_users():
                     print(f"  - {user_info['username']} (ID:{user_id}, Team:{user_info['team']}) [{status}] - Ops: {ops}")
                     
             else:
-                print(f"❌ Could not get remote changes: {response.status_code}")
+                print(f" Could not get remote changes: {response.status_code}")
                 
         except Exception as e:
-            print(f"❌ Error checking remote: {e}")
+            print(f" Error checking remote: {e}")
             
         print(f"\n=== COMPARISON ===")
         print("If sync is working, you should see the same users on both servers.")

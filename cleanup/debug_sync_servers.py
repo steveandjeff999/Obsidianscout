@@ -18,7 +18,7 @@ try:
         servers = SyncServer.query.all()
         
         if servers:
-            print(f"🔍 Current Sync Server Configuration:")
+            print(f" Current Sync Server Configuration:")
             for server in servers:
                 print(f"")
                 print(f"Server: {server.name}")
@@ -32,9 +32,9 @@ try:
                 print(f"  Last Error: {server.last_error}")
                 print(f"  Error Count: {server.error_count}")
         else:
-            print("❌ No sync servers found")
+            print(" No sync servers found")
             
 except Exception as e:
-    print(f"❌ Error: {e}")
+    print(f" Error: {e}")
     import traceback
     traceback.print_exc()

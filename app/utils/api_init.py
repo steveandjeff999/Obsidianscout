@@ -20,7 +20,7 @@ def init_api_system(app: Flask):
     from app.routes.api_v1 import bp as api_v1_bp
     app.register_blueprint(api_v1_bp)
     
-    print("✅ API key system initialized successfully")
+    print(" API key system initialized successfully")
     print("   - API key management: /api/keys/")
     print("   - API v1 endpoints: /api/v1/")
     print("   - API database: apis.db")

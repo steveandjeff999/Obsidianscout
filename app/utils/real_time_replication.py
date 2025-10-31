@@ -38,14 +38,14 @@ class RealTimeReplicator:
             # worker will use the Flask app passed to start (if any) to create an app context
             self.worker_thread = threading.Thread(target=self._worker, daemon=True)
             self.worker_thread.start()
-            logger.info("🚀 Real-time database replication started")
+            logger.info(" Real-time database replication started")
     
     def stop(self):
         """Stop the real-time replication worker"""
         self.running = False
         if self.worker_thread:
             self.worker_thread.join(timeout=5)
-            logger.info("🛑 Real-time database replication stopped")
+            logger.info(" Real-time database replication stopped")
     
     def get_queue_size(self):
         """Get the current size of the replication queue"""
@@ -71,9 +71,9 @@ class RealTimeReplicator:
             }
             
             self.replication_queue.put(operation)
-            logger.debug(f"📤 Queued {operation_type} operation for {table_name}")
+            logger.debug(f" Queued {operation_type} operation for {table_name}")
         except Exception as e:
-            logger.error(f"❌ Error queuing replication operation: {e}")
+            logger.error(f" Error queuing replication operation: {e}")
             # Don't re-raise to prevent disrupting the main application
     
     def queue_operation(self, operation_type: str, table_name: str, record_data: Dict, record_id: Optional[str] = None):
@@ -108,7 +108,7 @@ class RealTimeReplicator:
             except queue.Empty:
                 continue
             except Exception as e:
-                logger.error(f"❌ Error in replication worker: {e}")
+                logger.error(f" Error in replication worker: {e}")
                 # Continue processing to prevent worker from stopping
                 try:
                     self.replication_queue.task_done()
@@ -116,7 +116,7 @@ class RealTimeReplicator:
                     pass
                 continue
             except Exception as e:
-                logger.error(f"❌ Error in replication worker: {e}")
+                logger.error(f" Error in replication worker: {e}")
                 time.sleep(1)
     
     def _replicate_to_servers(self, operation: Dict, servers: List[SyncServer]):
@@ -128,12 +128,12 @@ class RealTimeReplicator:
                 if self._send_operation_to_server(operation, server):
                     successful_replications += 1
                 else:
-                    logger.warning(f"⚠️ Failed to replicate to {server.name}")
+                    logger.warning(f"️ Failed to replicate to {server.name}")
             except Exception as e:
-                logger.error(f"❌ Error replicating to {server.name}: {e}")
+                logger.error(f" Error replicating to {server.name}: {e}")
         
         if successful_replications > 0:
-            logger.debug(f"✅ Replicated {operation['type']} to {successful_replications}/{len(servers)} servers")
+            logger.debug(f" Replicated {operation['type']} to {successful_replications}/{len(servers)} servers")
     
     def _send_operation_to_server(self, operation: Dict, server: SyncServer) -> bool:
         """Send operation to a specific server"""
@@ -156,11 +156,11 @@ class RealTimeReplicator:
             if response.status_code == 200:
                 return True
             else:
-                logger.warning(f"❌ Server {server.name} returned HTTP {response.status_code}: {response.text}")
+                logger.warning(f" Server {server.name} returned HTTP {response.status_code}: {response.text}")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Network error sending to {server.name}: {e}")
+            logger.error(f" Network error sending to {server.name}: {e}")
             return False
     
     def _get_server_id(self):
@@ -188,13 +188,13 @@ def enable_real_time_replication():
     # creating a new app (see worker logic).
     real_time_replicator.start()
     real_time_replicator.enabled = True
-    logger.info("✅ Real-time replication enabled for all models")
+    logger.info(" Real-time replication enabled for all models")
 
 def disable_real_time_replication():
     """Disable real-time replication"""
     real_time_replicator.stop()
     real_time_replicator.enabled = False
-    logger.info("🛑 Real-time replication disabled")
+    logger.info(" Real-time replication disabled")
 
 def setup_real_time_tracking(model_class):
     """Setup real-time tracking for a model class with complete thread isolation"""
@@ -216,7 +216,7 @@ def setup_real_time_tracking(model_class):
             )
         except Exception as e:
             # Log but don't raise to avoid breaking the transaction
-            logger.error(f"❌ Error queuing insert for {model_class.__name__}: {e}")
+            logger.error(f" Error queuing insert for {model_class.__name__}: {e}")
     
     @event.listens_for(model_class, 'after_update', propagate=True)
     def track_update(mapper, connection, target):
@@ -235,7 +235,7 @@ def setup_real_time_tracking(model_class):
             )
         except Exception as e:
             # Log but don't raise to avoid breaking the transaction
-            logger.error(f"❌ Error queuing update for {model_class.__name__}: {e}")
+            logger.error(f" Error queuing update for {model_class.__name__}: {e}")
         
     @event.listens_for(model_class, 'after_delete', propagate=True)
     def track_delete(mapper, connection, target):
@@ -253,7 +253,7 @@ def setup_real_time_tracking(model_class):
             )
         except Exception as e:
             # Log but don't raise to avoid breaking the transaction
-            logger.error(f"❌ Error queuing delete for {model_class.__name__}: {e}")
+            logger.error(f" Error queuing delete for {model_class.__name__}: {e}")
 
 def serialize_record(target, mapper):
     """Serialize a record for replication"""

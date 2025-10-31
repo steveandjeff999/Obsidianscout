@@ -6,26 +6,26 @@ A comprehensive REST API has been added to OBSIDIAN Scout specifically designed 
 
 ## Key Features
 
-### 🔐 Authentication
+###  Authentication
 - **JWT Token-based authentication** - Secure, stateless authentication
 - **7-day token expiration** - Long-lived tokens for mobile convenience
 - **Token refresh endpoint** - Refresh tokens without re-login
 - **Token verification** - Check token validity
 
-### 📱 Mobile-Optimized Design
+###  Mobile-Optimized Design
 - **RESTful endpoints** - Standard HTTP methods (GET, POST)
 - **JSON responses** - Easy to parse in any language
 - **Consistent error handling** - Predictable error format
 - **Team isolation** - Data automatically scoped to user's team
 - **Pagination support** - Efficient data loading
 
-### 🔄 Offline Sync Support
+###  Offline Sync Support
 - **Bulk submission endpoint** - Upload multiple entries at once
 - **Offline ID tracking** - Match server IDs to local data
 - **Timestamp preservation** - Maintain accurate submission times
 - **Individual result tracking** - Know which entries succeeded/failed
 
-### 📊 Complete Data Access
+###  Complete Data Access
 - **Teams** - List and details
 - **Events** - Event information and schedules
 - **Matches** - Match schedules and results
@@ -197,7 +197,7 @@ request.setValue("Bearer \(loginResponse1.token ?? loginResponse2.token)", forHT
 
 ### Production Deployment
 
-**⚠️ IMPORTANT:** Before deploying to production, change the JWT secret key!
+**️ IMPORTANT:** Before deploying to production, change the JWT secret key!
 
 1. Open `app/routes/mobile_api.py`
 2. Find `JWT_SECRET_KEY`
@@ -287,11 +287,11 @@ python test_mobile_api.py
 
 The Mobile API integrates seamlessly with existing OBSIDIAN Scout features:
 
-- ✅ **Team Isolation** - Uses existing team scoping
-- ✅ **User Authentication** - Leverages existing User model
-- ✅ **Data Models** - Uses same Team, Match, ScoutingData models
-- ✅ **Permissions** - Respects user roles
-- ✅ **Game Config** - Accesses same configuration system
+-  **Team Isolation** - Uses existing team scoping
+-  **User Authentication** - Leverages existing User model
+-  **Data Models** - Uses same Team, Match, ScoutingData models
+-  **Permissions** - Respects user roles
+-  **Game Config** - Accesses same configuration system
 
 ## Performance Considerations
 
@@ -325,12 +325,12 @@ For questions or issues:
 
 The Mobile API provides everything needed to build a fully-featured mobile scouting app:
 
-✅ Secure authentication
-✅ Complete data access
-✅ Offline sync support
-✅ Mobile-optimized design
-✅ Comprehensive documentation
-✅ Test scripts included
-✅ Production-ready code
+ Secure authentication
+ Complete data access
+ Offline sync support
+ Mobile-optimized design
+ Comprehensive documentation
+ Test scripts included
+ Production-ready code
 
-Start building your mobile app today! 📱🚀
+Start building your mobile app today! 

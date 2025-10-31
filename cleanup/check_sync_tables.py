@@ -16,7 +16,7 @@ with app.app_context():
     if 'user_roles' in sync.table_database_map:
         print(f'  user_roles found in: {sync.table_database_map["user_roles"]}')
     else:
-        print('  ❌ user_roles NOT found in discovered tables')
+        print('   user_roles NOT found in discovered tables')
         
     print('\nChecking if user_roles exists in databases:')
     for db_name, db_path in sync.database_paths.items():

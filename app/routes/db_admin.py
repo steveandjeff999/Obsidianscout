@@ -145,103 +145,100 @@ def export_database():
         return jsonify({'error': 'Super Admin access required'}), 403
     
     try:
-        from app.models import (
-            User, Role, ScoutingTeamSettings, Team, Event, Match, 
-            ScoutingData, TeamListEntry, DoNotPickEntry, AvoidEntry,
-            AllianceSelection, PitScoutingData, StrategyDrawing,
-            ScoutingAlliance, ScoutingAllianceMember, ScoutingAllianceInvitation,
-            ScoutingAllianceEvent, ScoutingAllianceSync, ScoutingAllianceChat,
-            TeamAllianceStatus, SharedGraph
-        )
-        
-        # Collect all data from all tables
+        # Generic export across all configured SQLite engines (default + binds)
         export_data = {
             'export_timestamp': datetime.now(timezone.utc).isoformat(),
-            'version': '1.0',
-            'tables': {}
+            'version': '2.0',
+            # Legacy 'tables' mapping is kept for backwards compatibility (merged view)
+            'tables': {},
+            # New 'databases' mapping contains per-bind tables and data
+            'databases': {}
         }
-        
-        # Define all models to export
-        models_to_export = [
-            (User, 'users'),
-            (Role, 'roles'),
-            (ScoutingTeamSettings, 'scouting_team_settings'),
-            (Team, 'teams'),
-            (Event, 'events'),
-            (Match, 'matches'),
-            (ScoutingData, 'scouting_data'),
-            (TeamListEntry, 'team_list_entries'),
-            (DoNotPickEntry, 'do_not_pick_entries'),
-            (AvoidEntry, 'avoid_entries'),
-            (AllianceSelection, 'alliance_selections'),
-            (PitScoutingData, 'pit_scouting_data'),
-            (StrategyDrawing, 'strategy_drawings'),
-            (ScoutingAlliance, 'scouting_alliances'),
-            (ScoutingAllianceMember, 'scouting_alliance_members'),
-            (ScoutingAllianceInvitation, 'scouting_alliance_invitations'),
-            (ScoutingAllianceEvent, 'scouting_alliance_events'),
-            (ScoutingAllianceSync, 'scouting_alliance_syncs'),
-            (ScoutingAllianceChat, 'scouting_alliance_chats'),
-            (TeamAllianceStatus, 'team_alliance_status'),
-            (SharedGraph, 'shared_graphs')
-        ]
-        
-        # Define all models to export
-        models_to_export = [
-            (User, 'users'),
-            (Role, 'roles'),
-            (ScoutingTeamSettings, 'scouting_team_settings'),
-            (Team, 'teams'),
-            (Event, 'events'),
-            (Match, 'matches'),
-            (ScoutingData, 'scouting_data'),
-            (TeamListEntry, 'team_list_entries'),
-            (DoNotPickEntry, 'do_not_pick_entries'),
-            (AvoidEntry, 'avoid_entries'),
-            (AllianceSelection, 'alliance_selections'),
-            (PitScoutingData, 'pit_scouting_data'),
-            (StrategyDrawing, 'strategy_drawings'),
-            (ScoutingAlliance, 'scouting_alliances'),
-            (ScoutingAllianceMember, 'scouting_alliance_members'),
-            (ScoutingAllianceInvitation, 'scouting_alliance_invitations'),
-            (ScoutingAllianceEvent, 'scouting_alliance_events'),
-            (ScoutingAllianceSync, 'scouting_alliance_syncs'),
-            (ScoutingAllianceChat, 'scouting_alliance_chats'),
-            (TeamAllianceStatus, 'team_alliance_status'),
-            (SharedGraph, 'shared_graphs')
-        ]
-        
-        for model_class, table_name in models_to_export:
+
+        from flask import current_app as flask_current_app
+
+        # Helper that tries a few ways to get an engine for a bind key. Some
+        # Flask-SQLAlchemy versions interpret positional args differently so
+        # prefer keyword calls and fallbacks to session.get_bind or db.engine.
+        def _get_engine(bind_key=None):
+            app_obj = flask_current_app._get_current_object()
             try:
-                records = model_class.query.all()
-                export_data['tables'][table_name] = [
-                    {column.name: getattr(record, column.name) 
-                     for column in record.__table__.columns}
-                    for record in records
-                ]
+                return db.get_engine(app_obj, bind=bind_key)
+            except Exception:
+                try:
+                    # SQLAlchemy session-level bind
+                    return db.session.get_bind(bind=bind_key)
+                except Exception:
+                    try:
+                        return db.engine
+                    except Exception:
+                        raise
+
+        # Build list of engines: default + each configured bind
+        engines = {'default': _get_engine(None)}
+        binds = flask_current_app.config.get('SQLALCHEMY_BINDS', {}) or {}
+        for bind_key in binds.keys():
+            try:
+                engines[bind_key] = _get_engine(bind_key)
+            except Exception:
+                logger.warning(f"Could not get engine for bind '{bind_key}'")
+
+        # For each engine, enumerate tables and dump rows
+        for bind_key, engine in engines.items():
+            try:
+                with engine.connect() as conn:
+                    tables = []
+                    try:
+                        result = conn.execute(db.text("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))
+                        tables = [row[0] for row in result]
+                    except Exception as e:
+                        logger.warning(f"Could not list tables for bind {bind_key}: {e}")
+
+                    export_data['databases'][bind_key] = {}
+                    for table in tables:
+                        try:
+                            rows = []
+                            sel = conn.execute(db.text(f'SELECT * FROM "{table}"'))
+
+                            # Determine column keys robustly
+                            keys = None
+                            try:
+                                if hasattr(sel, 'keys'):
+                                    keys = list(sel.keys())
+                            except Exception:
+                                keys = None
+
+                            for r in sel:
+                                try:
+                                    # Prefer Row._mapping when available (SQLAlchemy Row)
+                                    if hasattr(r, '_mapping'):
+                                        rowdict = dict(r._mapping)
+                                    elif keys:
+                                        rowdict = {k: r[idx] for idx, k in enumerate(keys)}
+                                    else:
+                                        rowdict = dict(enumerate(r))
+                                except Exception as e_row:
+                                    # Best-effort fallback
+                                    logger.warning(f"Failed to convert row for table {table} on bind {bind_key}: {e_row}")
+                                    try:
+                                        rowdict = dict(enumerate(r))
+                                    except Exception:
+                                        rowdict = {}
+
+                                rows.append(rowdict)
+
+                            export_data['databases'][bind_key][table] = rows
+
+                            # Also merge into legacy top-level 'tables' (append/extend)
+                            if table not in export_data['tables']:
+                                export_data['tables'][table] = rows
+                            else:
+                                export_data['tables'][table].extend(rows)
+                        except Exception as e:
+                            logger.exception(f"Error exporting table {table} on bind {bind_key}")
+                            export_data['databases'][bind_key][table] = []
             except Exception as e:
-                logger.warning(f"Error exporting table {table_name}: {e}")
-                export_data['tables'][table_name] = []
-        
-        # Export user_roles association table
-        try:
-            result = db.session.execute(db.text('SELECT user_id, role_id FROM user_roles'))
-            export_data['tables']['user_roles'] = [
-                {'user_id': row[0], 'role_id': row[1]} for row in result
-            ]
-        except Exception as e:
-            logger.warning(f"Error exporting user_roles: {e}")
-            export_data['tables']['user_roles'] = []
-        
-        # Export team_event association table
-        try:
-            result = db.session.execute(db.text('SELECT team_id, event_id FROM team_event'))
-            export_data['tables']['team_event'] = [
-                {'team_id': row[0], 'event_id': row[1]} for row in result
-            ]
-        except Exception as e:
-            logger.warning(f"Error exporting team_event: {e}")
-            export_data['tables']['team_event'] = []
+                logger.exception(f"Error processing engine for bind {bind_key}")
         
         # Generate filename with timestamp
         timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
@@ -265,7 +262,7 @@ def export_database():
         return response
         
     except Exception as e:
-        logger.error(f"Error exporting database: {e}")
+        logger.exception("Error exporting database")
         return jsonify({
             'success': False,
             'error': f'Export failed: {str(e)}'
@@ -289,9 +286,103 @@ def import_database():
         # Read and parse JSON
         import_data = json.load(file)
         
-        if 'tables' not in import_data:
+        # Support both legacy export format ('tables') and new bind-aware format ('databases')
+        if 'tables' not in import_data and 'databases' not in import_data:
             return jsonify({'error': 'Invalid export file format'}), 400
         
+        # If the import file has a per-database export (new format), handle that generically
+        from flask import current_app as flask_current_app
+
+        # Local helper to obtain engines robustly (same approach as export)
+        def _get_engine(bind_key=None):
+            app_obj = flask_current_app._get_current_object()
+            try:
+                return db.get_engine(app_obj, bind=bind_key)
+            except Exception:
+                try:
+                    return db.session.get_bind(bind=bind_key)
+                except Exception:
+                    try:
+                        return db.engine
+                    except Exception:
+                        raise
+
+        if 'databases' in import_data and isinstance(import_data['databases'], dict):
+            try:
+                binds = flask_current_app.config.get('SQLALCHEMY_BINDS', {}) or {}
+                # Build engine map (key -> engine). Use key 'default' for main DB.
+                engines = {'default': _get_engine(None)}
+                for bind_key in binds.keys():
+                    try:
+                        engines[bind_key] = _get_engine(bind_key)
+                    except Exception:
+                        logger.warning(f"Could not get engine for bind '{bind_key}' during import")
+
+                # First, clear tables on each engine (disable foreign keys), then insert
+                for bind_key, tables in import_data['databases'].items():
+                    engine = engines.get(bind_key) or engines.get('default')
+                    if not engine:
+                        logger.warning(f"No engine found for bind {bind_key}, skipping")
+                        continue
+
+                    with engine.begin() as conn:
+                        try:
+                            conn.execute(db.text('PRAGMA foreign_keys = OFF'))
+                        except Exception:
+                            pass
+
+                        # Delete existing rows for the listed tables (order doesn't matter with FK off)
+                        for table_name, rows in tables.items():
+                            try:
+                                conn.execute(db.text(f'DELETE FROM "{table_name}"'))
+                            except Exception as e:
+                                logger.warning(f"Could not clear table {table_name} on bind {bind_key}: {e}")
+
+                        # Insert rows
+                        for table_name, rows in tables.items():
+                            if not rows:
+                                continue
+                            try:
+                                # Determine columns from first row
+                                cols = list(rows[0].keys())
+                                cols_quoted = ','.join([f'"{c}"' for c in cols])
+                                placeholders = ','.join([f':{c}' for c in cols])
+                                insert_sql = db.text(f'INSERT INTO "{table_name}" ({cols_quoted}) VALUES ({placeholders})')
+                                for r in rows:
+                                    try:
+                                        # Convert any non-serializable types minimally (e.g., bytes)
+                                        params = {}
+                                        for k, v in r.items():
+                                            if isinstance(v, bytes):
+                                                params[k] = v.decode('utf-8', errors='ignore')
+                                            else:
+                                                params[k] = v
+                                        conn.execute(insert_sql, params)
+                                    except Exception as ie:
+                                        logger.warning(f"Failed to insert row into {table_name} on bind {bind_key}: {ie}")
+                            except Exception as e:
+                                logger.warning(f"Failed to import table {table_name} on bind {bind_key}: {e}")
+
+                        try:
+                            # Reset sqlite_sequence for this engine to avoid PK collisions
+                            conn.execute(db.text('DELETE FROM sqlite_sequence'))
+                        except Exception:
+                            pass
+
+                        try:
+                            conn.execute(db.text('PRAGMA foreign_keys = ON'))
+                        except Exception:
+                            pass
+
+                db.session.commit()
+                flash('Database imported successfully (databases format)', 'success')
+                return jsonify({'success': True, 'message': 'Database imported successfully (databases format)'}), 200
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f"Error importing databases format: {e}")
+                return jsonify({'success': False, 'error': f'Import failed: {str(e)}'}), 500
+
+        # Fallback to legacy ORM-based import handling for 'tables' export
         from app.models import (
             User, Role, ScoutingTeamSettings, Team, Event, Match, 
             ScoutingData, TeamListEntry, DoNotPickEntry, AvoidEntry,
@@ -339,9 +430,12 @@ def import_database():
                 table_name = model_class.__tablename__
                 bind_key = getattr(model_class, '__bind_key__', None)
                 if bind_key:
-                    engine = db.get_engine(flask_current_app._get_current_object(), bind=bind_key)
+                    try:
+                        engine = _get_engine(bind_key)
+                    except Exception:
+                        engine = _get_engine(None)
                 else:
-                    engine = db.get_engine(flask_current_app._get_current_object())
+                    engine = _get_engine(None)
 
                 # Execute delete using a connection from the appropriate engine
                 try:
@@ -356,7 +450,7 @@ def import_database():
 
         # Additional explicit clearing for ScoutingTeamSettings to ensure it's completely cleared
         try:
-            scouting_engine = db.get_engine(flask_current_app._get_current_object())
+            scouting_engine = _get_engine(None)
             with scouting_engine.begin() as conn:
                 # Check how many records exist before clearing
                 result = conn.execute(db.text('SELECT COUNT(*) FROM scouting_team_settings'))
@@ -378,12 +472,12 @@ def import_database():
 
         # Reset auto-increment counters for each SQLite file/engine used
         try:
-            engines = [db.get_engine(flask_current_app._get_current_object())]
+            engines = [_get_engine(None)]
             # Add configured binds (e.g., 'users') if present
             binds = flask_current_app.config.get('SQLALCHEMY_BINDS', {}) or {}
             for bind_key in binds.keys():
                 try:
-                    engines.append(db.get_engine(flask_current_app._get_current_object(), bind=bind_key))
+                    engines.append(_get_engine(bind_key))
                 except Exception:
                     pass
 
@@ -496,7 +590,10 @@ def import_database():
         if 'users' in import_data['tables'] and 'user_roles' in import_data.get('tables', {}):
             try:
                 # Clear existing user-role relationships (users bind)
-                users_engine = db.get_engine(current_app._get_current_object(), bind='users')
+                try:
+                    users_engine = _get_engine('users')
+                except Exception:
+                    users_engine = _get_engine(None)
                 try:
                     with users_engine.begin() as conn:
                         conn.execute(db.text('DELETE FROM user_roles'))
@@ -531,7 +628,10 @@ def import_database():
         if 'teams' in import_data['tables'] and 'events' in import_data['tables'] and 'team_event' in import_data.get('tables', {}):
             try:
                 # Clear existing team-event relationships (default bind)
-                default_engine = db.get_engine(current_app._get_current_object())
+                try:
+                    default_engine = _get_engine(None)
+                except Exception:
+                    default_engine = db.engine
                 try:
                     with default_engine.begin() as conn:
                         conn.execute(db.text('DELETE FROM team_event'))
@@ -650,6 +750,19 @@ def clear_database():
         
         cleared_counts = {}
         from flask import current_app as flask_current_app
+        # Helper for clear_database to obtain engines robustly
+        def _get_engine_clear(bind_key=None):
+            app_obj = flask_current_app._get_current_object()
+            try:
+                return db.get_engine(app_obj, bind=bind_key)
+            except Exception:
+                try:
+                    return db.session.get_bind(bind=bind_key)
+                except Exception:
+                    try:
+                        return db.engine
+                    except Exception:
+                        raise
         
         # Clear tables from default bind (scouting.db) using raw SQL for consistency
         for model_class in models_to_clear:
@@ -657,9 +770,12 @@ def clear_database():
                 table_name = model_class.__tablename__
                 bind_key = getattr(model_class, '__bind_key__', None)
                 if bind_key:
-                    engine = db.get_engine(flask_current_app._get_current_object(), bind=bind_key)
+                    try:
+                        engine = _get_engine_clear(bind_key)
+                    except Exception:
+                        engine = _get_engine_clear(None)
                 else:
-                    engine = db.get_engine(flask_current_app._get_current_object())
+                    engine = _get_engine_clear(None)
 
                 # Get count before clearing
                 try:
@@ -685,7 +801,7 @@ def clear_database():
         # Also clear association tables that might not be covered by the models above
         try:
             # Clear team_event association table
-            default_engine = db.get_engine(flask_current_app._get_current_object())
+            default_engine = _get_engine_clear(None)
             with default_engine.begin() as conn:
                 conn.execute(db.text('DELETE FROM team_event'))
             logger.info("Cleared team_event association table")
@@ -694,7 +810,7 @@ def clear_database():
         
         # Explicitly clear scouting_team_settings to ensure complete clearing
         try:
-            scouting_engine = db.get_engine(flask_current_app._get_current_object())
+            scouting_engine = _get_engine_clear(None)
             with scouting_engine.begin() as conn:
                 # Check how many records exist before clearing
                 result = conn.execute(db.text('SELECT COUNT(*) FROM scouting_team_settings'))

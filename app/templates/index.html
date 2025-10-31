@@ -249,7 +249,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (syncBtn){
         syncBtn.addEventListener('click', function(evt){
             evt.preventDefault();
-            syncBtn.disabled = true; syncSpinner.style.display = '';
+            syncBtn.disabled = true; if (syncSpinner) syncSpinner.style.display = '';
             fetch('/api/sync-event', { method:'POST', credentials:'same-origin' })
             .then(r=>r.json()).then(data=>{
                 if (data && data.success) {
@@ -262,7 +262,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const err = (data && data.error) ? data.error : 'Sync failed';
                     const t = document.createElement('div'); t.className='toast show'; t.innerHTML=`<div class="toast-header"><strong class="me-auto">Sync</strong><small>Now</small><button type="button" class="btn-close" data-bs-dismiss="toast"></button></div><div class="toast-body">${err}</div>`; document.body.appendChild(t); setTimeout(()=>{ try{ t.remove(); }catch(e){} },5000);
                 }
-            }).catch(err=>{ console.error(err); }).finally(()=>{ syncBtn.disabled=false; syncSpinner.style.display='none'; });
+            }).catch(err=>{ console.error(err); }).finally(()=>{ syncBtn.disabled=false; if (syncSpinner) syncSpinner.style.display='none'; });
         });
     }
 });

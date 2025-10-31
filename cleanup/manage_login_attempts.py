@@ -16,7 +16,7 @@ def show_login_stats():
         app = create_app()
         
         with app.app_context():
-            print("📊 LOGIN ATTEMPT STATISTICS")
+            print(" LOGIN ATTEMPT STATISTICS")
             print("=" * 50)
             
             # Overall stats
@@ -82,7 +82,7 @@ def show_login_stats():
                 print(f"   {username or 'unknown'}: {count} failures")
                 
     except Exception as e:
-        print(f"❌ Error getting login stats: {e}")
+        print(f" Error getting login stats: {e}")
 
 def cleanup_failed_attempts(minutes_old=10, username=None, ip_address=None):
     """Clean up failed login attempts"""
@@ -94,19 +94,19 @@ def cleanup_failed_attempts(minutes_old=10, username=None, ip_address=None):
         
         with app.app_context():
             if username:
-                print(f"🧹 Clearing failed attempts for user: {username}")
+                print(f" Clearing failed attempts for user: {username}")
                 deleted_count = LoginAttempt.query.filter(
                     LoginAttempt.username == username,
                     LoginAttempt.success == False
                 ).delete()
             elif ip_address:
-                print(f"🧹 Clearing failed attempts for IP: {ip_address}")
+                print(f" Clearing failed attempts for IP: {ip_address}")
                 deleted_count = LoginAttempt.query.filter(
                     LoginAttempt.ip_address == ip_address,
                     LoginAttempt.success == False
                 ).delete()
             else:
-                print(f"🧹 Clearing failed attempts older than {minutes_old} minutes")
+                print(f" Clearing failed attempts older than {minutes_old} minutes")
                 cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=minutes_old)
                 deleted_count = LoginAttempt.query.filter(
                     LoginAttempt.success == False,
@@ -114,10 +114,10 @@ def cleanup_failed_attempts(minutes_old=10, username=None, ip_address=None):
                 ).delete()
             
             db.session.commit()
-            print(f"✅ Cleared {deleted_count} failed login attempts")
+            print(f" Cleared {deleted_count} failed login attempts")
             
     except Exception as e:
-        print(f"❌ Error cleaning up failed attempts: {e}")
+        print(f" Error cleaning up failed attempts: {e}")
 
 def test_brute_force_status():
     """Test current brute force protection status"""
@@ -129,7 +129,7 @@ def test_brute_force_status():
         
         with app.app_context():
             # Can't test without request context, but we can check the database directly
-            print("🛡️ BRUTE FORCE PROTECTION STATUS")
+            print("️ BRUTE FORCE PROTECTION STATUS")
             print("=" * 50)
             
             from app.models import LoginAttempt, db
@@ -154,7 +154,7 @@ def test_brute_force_status():
             print("Recent failed login activity (last 15 minutes):")
             if suspicious_activity:
                 for ip, username, count, latest in suspicious_activity:
-                    status = "🔒 BLOCKED" if count >= 10 else f"⚠️ {10-count} attempts remaining"
+                    status = " BLOCKED" if count >= 10 else f"️ {10-count} attempts remaining"
                     print(f"   {username or 'unknown'} from {ip}: {count} failures - {status}")
                     print(f"      Latest attempt: {latest}")
             else:
@@ -166,7 +166,7 @@ def test_brute_force_status():
             print(f"   Auto cleanup: Every 10 minutes")
                 
     except Exception as e:
-        print(f"❌ Error checking brute force status: {e}")
+        print(f" Error checking brute force status: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description='Manage login attempts and brute force protection')
@@ -187,12 +187,12 @@ def main():
         test_brute_force_status()
     elif args.action == 'clear-user':
         if not args.username:
-            print("❌ --username is required for clear-user action")
+            print(" --username is required for clear-user action")
             sys.exit(1)
         cleanup_failed_attempts(username=args.username)
     elif args.action == 'clear-ip':
         if not args.ip:
-            print("❌ --ip is required for clear-ip action")
+            print(" --ip is required for clear-ip action")
             sys.exit(1)
         cleanup_failed_attempts(ip_address=args.ip)
 

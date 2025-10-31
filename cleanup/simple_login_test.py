@@ -16,7 +16,7 @@ def test_database_login():
         app = create_app()
         
         with app.app_context():
-            print("🔍 DATABASE LOGIN TEST")
+            print(" DATABASE LOGIN TEST")
             print("=" * 60)
             
             # Test credentials
@@ -37,7 +37,7 @@ def test_database_login():
             user = User.query.filter_by(username=username, scouting_team_number=team_number).first()
             
             if user is None:
-                print("❌ User lookup FAILED")
+                print(" User lookup FAILED")
                 
                 # Debug alternative queries
                 print("\nDebugging alternative queries:")
@@ -61,7 +61,7 @@ def test_database_login():
                 
                 return
             else:
-                print(f"✅ User found: {user.username}")
+                print(f" User found: {user.username}")
                 print(f"  ID: {user.id}")
                 print(f"  Team: {user.scouting_team_number} (type: {type(user.scouting_team_number)})")
                 print(f"  Active: {user.is_active}")
@@ -73,7 +73,7 @@ def test_database_login():
             print(f"  user.check_password('{password}'): {password_valid}")
             
             if not password_valid:
-                print("❌ Password verification FAILED")
+                print(" Password verification FAILED")
                 
                 # Debug the password hash
                 print("\nDebugging password hash:")
@@ -87,16 +87,16 @@ def test_database_login():
                 
                 return
             else:
-                print("✅ Password verification successful")
+                print(" Password verification successful")
                 print()
             
             # Step 3: Active check
             print("STEP 3: Account active check...")
             if not user.is_active:
-                print("❌ Account is DEACTIVATED")
+                print(" Account is DEACTIVATED")
                 return
             else:
-                print("✅ Account is active")
+                print(" Account is active")
                 print()
             
             # Step 4: Check recent failed attempts (manual brute force check)
@@ -113,13 +113,13 @@ def test_database_login():
             print(f"  Failed attempts in last 15 minutes: {recent_failed}")
             
             if recent_failed >= 10:
-                print("❌ Too many recent failed attempts - would be blocked")
+                print(" Too many recent failed attempts - would be blocked")
                 return
             else:
-                print("✅ Not blocked by failed attempts")
+                print(" Not blocked by failed attempts")
                 print()
             
-            print("🎉 ALL DATABASE CHECKS PASSED!")
+            print(" ALL DATABASE CHECKS PASSED!")
             print("   The database-level login should work")
             print()
             
@@ -143,10 +143,10 @@ def test_database_login():
                 db.session.add(new_attempt)
                 db.session.commit()
                 
-                print("✅ Successfully recorded login attempt")
+                print(" Successfully recorded login attempt")
                 
             except Exception as e:
-                print(f"❌ Failed to record login attempt: {e}")
+                print(f" Failed to record login attempt: {e}")
             
             # Check what might be different after remote updates
             print("\nCHECKING FOR POST-UPDATE ISSUES:")
@@ -154,27 +154,27 @@ def test_database_login():
             
             # Check if there are any uncommitted database changes
             if db.session.dirty:
-                print(f"⚠️  Dirty session objects: {len(db.session.dirty)}")
+                print(f"️  Dirty session objects: {len(db.session.dirty)}")
                 for obj in db.session.dirty:
                     print(f"     {type(obj).__name__}: {obj}")
             else:
-                print("✅ No dirty session objects")
+                print(" No dirty session objects")
             
             # Check if there are any pending changes
             if db.session.new:
-                print(f"⚠️  New session objects: {len(db.session.new)}")
+                print(f"️  New session objects: {len(db.session.new)}")
             else:
-                print("✅ No new session objects")
+                print(" No new session objects")
             
             # Check database connection
             try:
                 db.session.execute(db.text('SELECT 1')).fetchone()
-                print("✅ Database connection is healthy")
+                print(" Database connection is healthy")
             except Exception as e:
-                print(f"❌ Database connection issue: {e}")
+                print(f" Database connection issue: {e}")
     
     except Exception as e:
-        print(f"❌ Error during database login test: {e}")
+        print(f" Error during database login test: {e}")
         import traceback
         traceback.print_exc()
 

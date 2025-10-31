@@ -5,7 +5,7 @@ Direct fix for database change tracking issues
 
 def fix_change_tracking_context():
     """Fix the application context issue in change tracking"""
-    print("🔧 FIXING CHANGE TRACKING CONTEXT ISSUE")
+    print(" FIXING CHANGE TRACKING CONTEXT ISSUE")
     print("=" * 50)
     
     try:
@@ -62,7 +62,7 @@ def fix_change_tracking_context():
             db.session.add(change_record)
             db.session.commit()
             
-            print("✅ User created with manual change tracking")
+            print(" User created with manual change tracking")
             
             # Test updating the user
             print(f"Updating user team number...")
@@ -87,7 +87,7 @@ def fix_change_tracking_context():
             db.session.add(update_record)
             db.session.commit()
             
-            print("✅ User updated with manual change tracking")
+            print(" User updated with manual change tracking")
             
             print("\n3️⃣ CREATING TEST DATA FOR OTHER MODELS")
             print("-" * 30)
@@ -117,7 +117,7 @@ def fix_change_tracking_context():
             )
             db.session.add(team_change)
             
-            print("✅ Test team created with change tracking")
+            print(" Test team created with change tracking")
             
             # Create test event
             test_event = Event(
@@ -148,7 +148,7 @@ def fix_change_tracking_context():
             )
             db.session.add(event_change)
             
-            print("✅ Test event created with change tracking")
+            print(" Test event created with change tracking")
             
             db.session.commit()
             
@@ -168,7 +168,7 @@ def fix_change_tracking_context():
             print(f"Event changes: {event_changes}")
             
             if pending_changes > 0:
-                print("\n📋 RECENT CHANGES:")
+                print("\n RECENT CHANGES:")
                 recent_changes = DatabaseChange.query.filter_by(sync_status='pending').order_by(DatabaseChange.timestamp.desc()).limit(5).all()
                 for change in recent_changes:
                     print(f"   • {change.table_name} - {change.operation} - ID:{change.record_id}")
@@ -176,14 +176,14 @@ def fix_change_tracking_context():
             return True
             
     except Exception as e:
-        print(f"❌ Fix failed: {e}")
+        print(f" Fix failed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 def fix_change_tracking_worker():
     """Fix the background worker application context issue"""
-    print("\n🔧 FIXING CHANGE TRACKING WORKER")
+    print("\n FIXING CHANGE TRACKING WORKER")
     print("=" * 50)
     
     try:
@@ -195,7 +195,7 @@ def fix_change_tracking_worker():
         
         # Check if the context fix is already applied
         if 'app.app_context():' in content:
-            print("✅ Context fix already applied")
+            print(" Context fix already applied")
             return True
         
         # Apply the context fix
@@ -217,7 +217,7 @@ def fix_change_tracking_worker():
             conn.commit()
             
     except Exception as e:
-        print(f"❌ Error processing change tracking: {e}")'''
+        print(f" Error processing change tracking: {e}")'''
 
         new_process_func = '''def _process_change_tracking(operation):
     """Process a change tracking operation"""
@@ -240,7 +240,7 @@ def fix_change_tracking_worker():
                 conn.commit()
                 
     except Exception as e:
-        print(f"❌ Error processing change tracking: {e}")'''
+        print(f" Error processing change tracking: {e}")'''
         
         # Replace the function
         new_content = content.replace(old_process_func, new_process_func)
@@ -249,19 +249,19 @@ def fix_change_tracking_worker():
             # Write the fixed file
             with open(change_tracking_file, 'w') as f:
                 f.write(new_content)
-            print("✅ Fixed change tracking worker context")
+            print(" Fixed change tracking worker context")
             return True
         else:
-            print("⚠️ Could not apply context fix")
+            print("️ Could not apply context fix")
             return False
             
     except Exception as e:
-        print(f"❌ Worker fix failed: {e}")
+        print(f" Worker fix failed: {e}")
         return False
 
 def test_sync_functionality():
     """Test the sync functionality after fixes"""
-    print("\n🧪 TESTING SYNC FUNCTIONALITY")
+    print("\n TESTING SYNC FUNCTIONALITY")
     print("=" * 50)
     
     try:
@@ -280,7 +280,7 @@ def test_sync_functionality():
             print(f"Pending changes to sync: {pending_changes}")
             
             if pending_changes == 0:
-                print("⚠️ No pending changes - creating a test change")
+                print("️ No pending changes - creating a test change")
                 # Create a quick test change
                 from app.models import User
                 import json
@@ -299,7 +299,7 @@ def test_sync_functionality():
                 from app import db
                 db.session.add(test_change)
                 db.session.commit()
-                print("✅ Created test change")
+                print(" Created test change")
                 pending_changes = 1
             
             print("\n2️⃣ CHECKING SYNC SERVERS")
@@ -311,7 +311,7 @@ def test_sync_functionality():
             for server in sync_servers:
                 print(f"   • {server.name} - {server.base_url}")
                 print(f"     Last ping: {server.last_ping_time}")
-                print(f"     Status: {'✅' if server.is_online else '❌'}")
+                print(f"     Status: {'' if server.is_online else ''}")
             
             if len(sync_servers) > 0:
                 print("\n3️⃣ TESTING MANUAL SYNC")
@@ -324,7 +324,7 @@ def test_sync_functionality():
                     result = simplified_sync_manager.perform_bidirectional_sync(server.id)
                     
                     if result['success']:
-                        print("✅ Sync test successful!")
+                        print(" Sync test successful!")
                         print(f"   Sent: {result['stats']['sent_to_remote']}")
                         print(f"   Received: {result['stats']['received_from_remote']}")
                         
@@ -332,28 +332,28 @@ def test_sync_functionality():
                         print(f"   Remaining pending: {remaining_pending}")
                         
                         if remaining_pending < pending_changes:
-                            print("🎉 Changes were successfully synced!")
+                            print(" Changes were successfully synced!")
                         else:
-                            print("⚠️ Changes are still pending - check server connectivity")
+                            print("️ Changes are still pending - check server connectivity")
                     else:
-                        print(f"❌ Sync failed: {result.get('error', 'Unknown error')}")
+                        print(f" Sync failed: {result.get('error', 'Unknown error')}")
                         
                 except Exception as e:
-                    print(f"❌ Sync exception: {e}")
+                    print(f" Sync exception: {e}")
             else:
-                print("⚠️ No sync servers configured")
+                print("️ No sync servers configured")
             
             return True
             
     except Exception as e:
-        print(f"❌ Sync test failed: {e}")
+        print(f" Sync test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 def main():
     """Main fix function"""
-    print("🚀 DIRECT CHANGE TRACKING FIX")
+    print(" DIRECT CHANGE TRACKING FIX")
     print("=" * 60)
     
     # Fix the context issue
@@ -364,20 +364,20 @@ def main():
     
     if context_ok:
         print("\n" + "=" * 60)
-        print("✅ CHANGE TRACKING FIXES APPLIED")
+        print(" CHANGE TRACKING FIXES APPLIED")
         
         # Test sync functionality
         sync_ok = test_sync_functionality()
         
         if sync_ok:
-            print("\n🎉 CHANGE TRACKING AND SYNC FULLY WORKING!")
-            print("✅ User changes will now sync between servers")
-            print("✅ Manual sync should work properly")
-            print("✅ File sync permission issues resolved")
+            print("\n CHANGE TRACKING AND SYNC FULLY WORKING!")
+            print(" User changes will now sync between servers")
+            print(" Manual sync should work properly")
+            print(" File sync permission issues resolved")
         else:
-            print("\n⚠️ Change tracking fixed but sync testing had issues")
+            print("\n️ Change tracking fixed but sync testing had issues")
     else:
-        print("\n❌ CHANGE TRACKING FIX FAILED")
+        print("\n CHANGE TRACKING FIX FAILED")
 
 if __name__ == "__main__":
     main()

@@ -37,7 +37,7 @@ def main():
         print('\nUniversal Sync table tracking:')
         for table in important_tables:
             tracked = table in tables
-            status = "✅ Tracked" if tracked else "❌ Missing"
+            status = " Tracked" if tracked else " Missing"
             print(f'  {table}: {status}')
             
         # Check if there are recent changes being tracked

@@ -18,17 +18,17 @@ def debug_superadmin_login():
         app = create_app()
         
         with app.app_context():
-            print("🔍 DEBUGGING SUPERADMIN LOGIN ISSUES")
+            print(" DEBUGGING SUPERADMIN LOGIN ISSUES")
             print("=" * 60)
             
             # Find the superadmin user
             superadmin = User.query.filter_by(username='superadmin').first()
             
             if not superadmin:
-                print("❌ Superadmin user not found!")
+                print(" Superadmin user not found!")
                 return
             
-            print(f"✅ Found superadmin user:")
+            print(f" Found superadmin user:")
             print(f"   Username: {superadmin.username}")
             print(f"   Team Number: {superadmin.scouting_team_number}")
             print(f"   Is Active: {superadmin.is_active}")
@@ -37,16 +37,16 @@ def debug_superadmin_login():
             print(f"   Last Login: {superadmin.last_login}")
             
             # Test password verification
-            print(f"\n🔐 TESTING PASSWORD VERIFICATION")
+            print(f"\n TESTING PASSWORD VERIFICATION")
             print("-" * 40)
             
             test_passwords = ['password', 'Password', 'PASSWORD', 'password123']
             for pwd in test_passwords:
                 is_valid = superadmin.check_password(pwd)
-                print(f"   Password '{pwd}': {'✅ VALID' if is_valid else '❌ INVALID'}")
+                print(f"   Password '{pwd}': {' VALID' if is_valid else ' INVALID'}")
             
             # Check brute force protection status
-            print(f"\n🛡️ CHECKING BRUTE FORCE PROTECTION")
+            print(f"\n️ CHECKING BRUTE FORCE PROTECTION")
             print("-" * 40)
             
             # Check current login status
@@ -61,17 +61,17 @@ def debug_superadmin_login():
                 LoginAttempt.attempt_time >= datetime.now(timezone.utc) - timedelta(hours=24)
             ).order_by(LoginAttempt.attempt_time.desc()).limit(10).all()
             
-            print(f"\n📊 RECENT LOGIN ATTEMPTS (Last 24 hours)")
+            print(f"\n RECENT LOGIN ATTEMPTS (Last 24 hours)")
             print("-" * 40)
             if recent_attempts:
                 for attempt in recent_attempts:
-                    status_icon = "✅" if attempt.success else "❌"
+                    status_icon = "" if attempt.success else ""
                     print(f"   {status_icon} {attempt.attempt_time} | IP: {attempt.ip_address} | Team: {attempt.team_number}")
             else:
                 print("   No recent login attempts found")
             
             # Check for any IP blocks that might affect superadmin
-            print(f"\n🌐 CHECKING IP-BASED BLOCKS")
+            print(f"\n CHECKING IP-BASED BLOCKS")
             print("-" * 40)
             
             # Get all IPs that have failed attempts in last 15 minutes
@@ -91,7 +91,7 @@ def debug_superadmin_login():
                 print("   No IPs currently blocked")
             
             # Test the login flow step by step
-            print(f"\n🧪 TESTING LOGIN FLOW STEP BY STEP")
+            print(f"\n TESTING LOGIN FLOW STEP BY STEP")
             print("-" * 40)
             
             # Simulate the exact login process from auth.py
@@ -101,44 +101,44 @@ def debug_superadmin_login():
             
             print(f"1. Checking if login is blocked...")
             if is_login_blocked(username):
-                print("   ❌ Login is currently blocked!")
+                print("    Login is currently blocked!")
                 return
             else:
-                print("   ✅ Login not blocked")
+                print("    Login not blocked")
             
             print(f"2. Looking up user...")
             user = User.query.filter_by(username=username, scouting_team_number=team_number).first()
             if user:
-                print(f"   ✅ User found: {user.username}")
+                print(f"    User found: {user.username}")
             else:
-                print("   ❌ User not found!")
+                print("    User not found!")
                 return
             
             print(f"3. Checking password...")
             if user.check_password(password):
-                print("   ✅ Password correct")
+                print("    Password correct")
             else:
-                print("   ❌ Password incorrect!")
+                print("    Password incorrect!")
                 return
             
             print(f"4. Checking if account is active...")
             if user.is_active:
-                print("   ✅ Account is active")
+                print("    Account is active")
             else:
-                print("   ❌ Account is deactivated!")
+                print("    Account is deactivated!")
                 return
             
             print(f"5. Final block check...")
             if is_login_blocked(username):
-                print("   ❌ Final block check failed!")
+                print("    Final block check failed!")
                 return
             else:
-                print("   ✅ Final block check passed")
+                print("    Final block check passed")
             
-            print(f"\n✅ ALL LOGIN CHECKS PASSED - Login should work!")
+            print(f"\n ALL LOGIN CHECKS PASSED - Login should work!")
             
             # Check for database corruption or issues
-            print(f"\n🔧 CHECKING DATABASE INTEGRITY")
+            print(f"\n CHECKING DATABASE INTEGRITY")
             print("-" * 40)
             
             try:
@@ -149,13 +149,13 @@ def debug_superadmin_login():
                 # Test if we can update the user
                 superadmin.last_login = datetime.now(timezone.utc)
                 db.session.commit()
-                print("   ✅ Database write test successful")
+                print("    Database write test successful")
                 
             except Exception as e:
-                print(f"   ❌ Database integrity issue: {e}")
+                print(f"    Database integrity issue: {e}")
             
             # Check for concurrent access issues
-            print(f"\n⚠️ POTENTIAL ISSUES TO INVESTIGATE")
+            print(f"\n️ POTENTIAL ISSUES TO INVESTIGATE")
             print("-" * 40)
             
             issues = []
@@ -180,12 +180,12 @@ def debug_superadmin_login():
             
             if issues:
                 for issue in issues:
-                    print(f"   ⚠️ {issue}")
+                    print(f"   ️ {issue}")
             else:
                 print("   No obvious issues detected")
             
     except Exception as e:
-        print(f"❌ Error during debug: {e}")
+        print(f" Error during debug: {e}")
         import traceback
         traceback.print_exc()
 
@@ -199,7 +199,7 @@ def test_login_flow():
         
         with app.app_context():
             with app.test_client() as client:
-                print(f"\n🌐 TESTING ACTUAL LOGIN ENDPOINT")
+                print(f"\n TESTING ACTUAL LOGIN ENDPOINT")
                 print("-" * 40)
                 
                 # Test GET request to login page
@@ -221,18 +221,18 @@ def test_login_flow():
                 if hasattr(response, 'data'):
                     response_text = response.data.decode('utf-8')
                     if 'Invalid' in response_text:
-                        print("   ❌ 'Invalid' found in response - credentials rejected")
+                        print("    'Invalid' found in response - credentials rejected")
                     elif 'deactivated' in response_text:
-                        print("   ❌ 'deactivated' found in response - account disabled")
+                        print("    'deactivated' found in response - account disabled")
                     elif 'change your password' in response_text:
-                        print("   ⚠️ 'change your password' found - password change required")
+                        print("   ️ 'change your password' found - password change required")
                     elif 'Welcome back' in response_text:
-                        print("   ✅ 'Welcome back' found - login successful")
+                        print("    'Welcome back' found - login successful")
                     else:
-                        print("   🤔 No obvious success/failure messages found")
+                        print("    No obvious success/failure messages found")
                 
     except Exception as e:
-        print(f"❌ Error testing login endpoint: {e}")
+        print(f" Error testing login endpoint: {e}")
         import traceback
         traceback.print_exc()
 

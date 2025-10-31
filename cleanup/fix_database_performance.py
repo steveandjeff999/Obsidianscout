@@ -46,7 +46,7 @@ def setup_sqlite_performance_optimizations():
             cursor.execute("PRAGMA read_uncommitted = ON")  # Allow dirty reads for performance
             
             cursor.close()
-            print("🔧 SQLite performance optimizations applied")
+            print(" SQLite performance optimizations applied")
 
 @contextmanager
 def safe_db_operation(max_retries=3, retry_delay=0.1):
@@ -61,12 +61,12 @@ def safe_db_operation(max_retries=3, retry_delay=0.1):
         except Exception as e:
             db.session.rollback()
             if "database is locked" in str(e).lower() and attempt < max_retries - 1:
-                print(f"⚠️ Database locked, retrying in {retry_delay}s... (attempt {attempt + 1})")
+                print(f"️ Database locked, retrying in {retry_delay}s... (attempt {attempt + 1})")
                 time.sleep(retry_delay)
                 retry_delay *= 2  # Exponential backoff
                 continue
             else:
-                print(f"❌ Database operation failed: {e}")
+                print(f" Database operation failed: {e}")
                 raise
 
 def fix_database_configuration():
@@ -74,21 +74,21 @@ def fix_database_configuration():
     app = create_app()
     
     with app.app_context():
-        print("🔧 Fixing Database Configuration...")
+        print(" Fixing Database Configuration...")
         
         # Apply SQLite optimizations
         setup_sqlite_performance_optimizations()
         
         # Test database operations
-        print("🧪 Testing database operations...")
+        print(" Testing database operations...")
         
         # Test 1: Simple query
         try:
             with safe_db_operation():
                 result = db.session.execute(text("SELECT COUNT(*) FROM user")).scalar()
-                print(f"   ✅ User count query: {result}")
+                print(f"    User count query: {result}")
         except Exception as e:
-            print(f"   ❌ Query failed: {e}")
+            print(f"    Query failed: {e}")
         
         # Test 2: Insert operation
         try:
@@ -102,37 +102,37 @@ def fix_database_configuration():
                 test_user.set_password('test123')
                 db.session.add(test_user)
                 # Commit happens in context manager
-                print(f"   ✅ Insert test successful: {test_user.username}")
+                print(f"    Insert test successful: {test_user.username}")
                 
                 # Clean up
                 db.session.delete(test_user)
                 # Commit happens in context manager
                 
         except Exception as e:
-            print(f"   ❌ Insert test failed: {e}")
+            print(f"    Insert test failed: {e}")
         
         # Test 3: Check WAL mode
         try:
             result = db.session.execute(text("PRAGMA journal_mode")).scalar()
-            print(f"   📊 Journal mode: {result}")
+            print(f"    Journal mode: {result}")
             
             result = db.session.execute(text("PRAGMA synchronous")).scalar()
-            print(f"   📊 Synchronous mode: {result}")
+            print(f"    Synchronous mode: {result}")
             
             result = db.session.execute(text("PRAGMA cache_size")).scalar()
-            print(f"   📊 Cache size: {result}")
+            print(f"    Cache size: {result}")
             
         except Exception as e:
-            print(f"   ⚠️ PRAGMA check failed: {e}")
+            print(f"   ️ PRAGMA check failed: {e}")
         
-        print("✅ Database configuration fix complete")
+        print(" Database configuration fix complete")
 
 def optimize_app_config():
     """Optimize Flask app configuration for performance"""
     app = create_app()
     
     with app.app_context():
-        print("⚡ Optimizing App Configuration...")
+        print(" Optimizing App Configuration...")
         
         # Check current SQLAlchemy settings
         print(f"   Database URL: {app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')}")
@@ -155,7 +155,7 @@ def optimize_app_config():
             'SQLALCHEMY_RECORD_QUERIES': False        # Disable query recording
         }
         
-        print("📋 Recommended configuration:")
+        print(" Recommended configuration:")
         for key, value in recommended_config.items():
             print(f"   {key}: {value}")
         
@@ -194,7 +194,7 @@ SQLALCHEMY_RECORD_QUERIES = False
     with open('database_optimization_config.py', 'w') as f:
         f.write(config_content)
     
-    print("📁 Created database_optimization_config.py")
+    print(" Created database_optimization_config.py")
 
 def disable_heavy_sync_during_operations():
     """Temporarily disable heavy sync operations during user interactions"""
@@ -203,24 +203,24 @@ def disable_heavy_sync_during_operations():
         
         # Get current sync status
         status = universal_sync.get_status()
-        print(f"🔄 Current sync status: {status}")
+        print(f" Current sync status: {status}")
         
         if status['worker_running'] and status['queue_size'] > 100:
-            print("⚠️ High sync queue detected - this may cause performance issues")
+            print("️ High sync queue detected - this may cause performance issues")
             print("   Consider implementing sync throttling during peak usage")
             
         # Recommendations for sync optimization
-        print("📋 Sync optimization recommendations:")
+        print(" Sync optimization recommendations:")
         print("   1. Batch database changes instead of individual operations")
         print("   2. Implement queue size limits")
         print("   3. Add delay between sync operations") 
         print("   4. Disable file monitoring during heavy database operations")
         
     except Exception as e:
-        print(f"⚠️ Could not check sync status: {e}")
+        print(f"️ Could not check sync status: {e}")
 
 if __name__ == "__main__":
-    print("🚀 Database Performance Fix")
+    print(" Database Performance Fix")
     print("=" * 50)
     
     # Step 1: Fix database configuration
@@ -235,14 +235,14 @@ if __name__ == "__main__":
     # Step 4: Check sync system
     disable_heavy_sync_during_operations()
     
-    print("\n🎯 Performance Fix Summary:")
-    print("   ✅ SQLite PRAGMA optimizations applied")
-    print("   ✅ Database locking safeguards added")
-    print("   ✅ Retry logic implemented")
-    print("   ✅ Configuration optimizations identified")
-    print("   ✅ Sync system analysis completed")
+    print("\n Performance Fix Summary:")
+    print("    SQLite PRAGMA optimizations applied")
+    print("    Database locking safeguards added")
+    print("    Retry logic implemented")
+    print("    Configuration optimizations identified")
+    print("    Sync system analysis completed")
     
-    print(f"\n💡 Next Steps:")
+    print(f"\n Next Steps:")
     print(f"   1. Apply the recommended SQLALCHEMY_ENGINE_OPTIONS")
     print(f"   2. Consider upgrading to PostgreSQL for better concurrency")
     print(f"   3. Implement sync throttling during peak usage")

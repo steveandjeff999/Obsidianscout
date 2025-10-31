@@ -18,7 +18,7 @@ def test_actual_login_protection():
         app = create_app()
         
         with app.app_context():
-            print("🧪 TESTING ACTUAL LOGIN BRUTE FORCE PROTECTION")
+            print(" TESTING ACTUAL LOGIN BRUTE FORCE PROTECTION")
             print("=" * 60)
             
             # Clean up any existing test data
@@ -60,10 +60,10 @@ def test_actual_login_protection():
                 print(f"Is blocked after: {status['is_blocked']}")
                 
                 if status['is_blocked']:
-                    print(f"🔒 BLOCKED after {attempt} attempts!")
+                    print(f" BLOCKED after {attempt} attempts!")
                     break
                 elif status['remaining_attempts'] <= 3:
-                    print(f"⚠️  Warning: Only {status['remaining_attempts']} attempts remaining")
+                    print(f"️  Warning: Only {status['remaining_attempts']} attempts remaining")
             
             # Test what happens with successful login
             print(f"\n--- Testing Successful Login Clears Attempts ---")
@@ -76,10 +76,10 @@ def test_actual_login_protection():
             # Clean up
             LoginAttempt.query.filter_by(ip_address=test_ip).delete()
             db.session.commit()
-            print("\n✅ Test data cleaned up")
+            print("\n Test data cleaned up")
             
     except Exception as e:
-        print(f"❌ Error during testing: {e}")
+        print(f" Error during testing: {e}")
         import traceback
         traceback.print_exc()
 
@@ -92,7 +92,7 @@ def check_current_protection_settings():
         app = create_app()
         
         with app.app_context():
-            print("\n🔍 CURRENT PROTECTION SETTINGS")
+            print("\n CURRENT PROTECTION SETTINGS")
             print("=" * 40)
             print(f"Max attempts: {brute_force_protection.max_attempts}")
             print(f"Lockout minutes: {brute_force_protection.lockout_minutes}")
@@ -115,7 +115,7 @@ def check_current_protection_settings():
             print(f"Recent attempts (15min): {recent_attempts}")
             
     except Exception as e:
-        print(f"❌ Error checking settings: {e}")
+        print(f" Error checking settings: {e}")
         import traceback
         traceback.print_exc()
 
@@ -127,7 +127,7 @@ def debug_auth_route():
         app = create_app()
         
         with app.app_context():
-            print("\n🔍 DEBUGGING AUTH ROUTE INTEGRATION")
+            print("\n DEBUGGING AUTH ROUTE INTEGRATION")
             print("=" * 40)
             
             # Check if the auth route file has our protection code
@@ -148,25 +148,25 @@ def debug_auth_route():
                 }
                 
                 for check, found in checks.items():
-                    status = "✅" if found else "❌"
+                    status = "" if found else ""
                     print(f"  {status} {check}: {'Found' if found else 'Missing'}")
                 
                 if not all(checks.values()):
-                    print("\n❌ Protection code is missing from auth route!")
+                    print("\n Protection code is missing from auth route!")
                     return False
                 else:
-                    print("\n✅ Protection code is properly integrated")
+                    print("\n Protection code is properly integrated")
                     return True
             else:
-                print("❌ Auth route file not found")
+                print(" Auth route file not found")
                 return False
                 
     except Exception as e:
-        print(f"❌ Error debugging auth route: {e}")
+        print(f" Error debugging auth route: {e}")
         return False
 
 if __name__ == '__main__':
-    print("🔒 Debugging brute force protection...")
+    print(" Debugging brute force protection...")
     
     # Check settings first
     check_current_protection_settings()
@@ -176,5 +176,5 @@ if __name__ == '__main__':
         # Test the actual protection
         test_actual_login_protection()
     else:
-        print("\n❌ ISSUE: Protection code not properly integrated into auth route")
+        print("\n ISSUE: Protection code not properly integrated into auth route")
         print("   This is likely why the lockout isn't working")

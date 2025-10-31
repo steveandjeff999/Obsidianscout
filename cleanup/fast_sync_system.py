@@ -45,7 +45,7 @@ class FastSyncSystem:
     def initialize(self, app):
         """Initialize enhanced fast sync system"""
         with app.app_context():
-            print("🚀 Initializing Enhanced Fast Sync System...")
+            print(" Initializing Enhanced Fast Sync System...")
             
             # Import additional models for config sync
             self._import_config_models()
@@ -63,7 +63,7 @@ class FastSyncSystem:
             self._load_servers()
             
             total_models = len(self.essential_models) + len(self.config_models)
-            print(f"✅ Enhanced fast sync initialized:")
+            print(f" Enhanced fast sync initialized:")
             print(f"   - Core models: {len(self.essential_models)}")
             print(f"   - Config models: {len(self.config_models)}")
             print(f"   - Total tracked: {total_models}")
@@ -80,33 +80,33 @@ class FastSyncSystem:
                 SyncConfig              # Sync configurations
             ]
             
-            print(f"📋 Config models loaded: {[m.__name__ for m in self.config_models]}")
-            print(f"🔍 Debug - config_models length: {len(self.config_models)}")
+            print(f" Config models loaded: {[m.__name__ for m in self.config_models]}")
+            print(f" Debug - config_models length: {len(self.config_models)}")
             
         except ImportError as e:
-            print(f"⚠️ Could not import some config models: {e}")
+            print(f"️ Could not import some config models: {e}")
             self.config_models = []  # Ensure it's at least an empty list
         except Exception as e:
-            print(f"⚠️ Error importing config models: {e}")
+            print(f"️ Error importing config models: {e}")
             self.config_models = []
     
     def _setup_config_tracking(self):
         """Set up tracking for config models"""
-        print(f"🔍 Debug - Setting up tracking for {len(self.config_models)} config models")
+        print(f" Debug - Setting up tracking for {len(self.config_models)} config models")
         for model_class in self.config_models:
             try:
                 self._track_model(model_class)
-                print(f"⚙️ Config tracking: {model_class.__name__}")
+                print(f"️ Config tracking: {model_class.__name__}")
                 print(f"   - Sync servers: {len(self.sync_servers)}")
                 print(f"   - Queue limit: {fast_sync_queue.maxsize}")
             except Exception as e:
-                print(f"⚠️ Failed to track config {model_class.__name__}: {e}")
+                print(f"️ Failed to track config {model_class.__name__}: {e}")
     
     def _setup_essential_tracking(self):
         """Set up tracking only for essential models"""
         for model_class in self.essential_models:
             self._track_model(model_class)
-            print(f"📊 Tracking {model_class.__name__}")
+            print(f" Tracking {model_class.__name__}")
     
     def _track_model(self, model_class):
         """Add lightweight change tracking to a model"""
@@ -143,7 +143,7 @@ class FastSyncSystem:
         try:
             # Don't queue if sync queue is full (prevent memory issues)
             if fast_sync_queue.full():
-                print(f"⚠️ Sync queue full, skipping change for {table_name}")
+                print(f"️ Sync queue full, skipping change for {table_name}")
                 return
             
             # Extract minimal data needed for sync
@@ -160,9 +160,9 @@ class FastSyncSystem:
             fast_sync_queue.put_nowait(change)
             
         except queue.Full:
-            print(f"⚠️ Fast sync queue full, dropping change for {table_name}")
+            print(f"️ Fast sync queue full, dropping change for {table_name}")
         except Exception as e:
-            print(f"❌ Error queuing change: {e}")
+            print(f" Error queuing change: {e}")
     
     def _extract_minimal_data(self, target):
         """Extract comprehensive data from model for complete sync"""
@@ -185,7 +185,7 @@ class FastSyncSystem:
                         value = str(value)
                     data[column.name] = value
                 except Exception as e:
-                    print(f"⚠️ Error extracting {column.name}: {e}")
+                    print(f"️ Error extracting {column.name}: {e}")
                     data[column.name] = None
             
             # Add model-specific important data
@@ -249,11 +249,11 @@ class FastSyncSystem:
                 except:
                     pass
             
-            print(f"📊 Extracted {len(data)} fields from {model_name}")
+            print(f" Extracted {len(data)} fields from {model_name}")
             return data
             
         except Exception as e:
-            print(f"⚠️ Data extraction error for {target.__class__.__name__}: {e}")
+            print(f"️ Data extraction error for {target.__class__.__name__}: {e}")
             return {'id': getattr(target, 'id', 'unknown'), 'error': str(e)}
     
     def _start_fast_worker(self):
@@ -294,12 +294,12 @@ class FastSyncSystem:
                             time.sleep(0.1)
                 
                 except Exception as e:
-                    print(f"❌ Fast worker error: {e}")
+                    print(f" Fast worker error: {e}")
                     time.sleep(1)
         
         self.worker_thread = threading.Thread(target=fast_worker, daemon=True)
         self.worker_thread.start()
-        print("🔄 Fast sync worker started")
+        print(" Fast sync worker started")
     
     def _process_batch(self, changes):
         """Process a batch of changes efficiently"""
@@ -315,10 +315,10 @@ class FastSyncSystem:
                     daemon=True
                 ).start()
             
-            print(f"📤 Processed batch of {len(changes)} changes")
+            print(f" Processed batch of {len(changes)} changes")
             
         except Exception as e:
-            print(f"❌ Batch processing error: {e}")
+            print(f" Batch processing error: {e}")
     
     def _send_batch_to_server(self, server, changes):
         """Send batch to a server (runs in separate thread)"""
@@ -339,12 +339,12 @@ class FastSyncSystem:
             )
             
             if response.status_code == 200:
-                print(f"✅ Fast sync to {server['name']}: {len(changes)} changes")
+                print(f" Fast sync to {server['name']}: {len(changes)} changes")
             else:
-                print(f"⚠️ Fast sync to {server['name']} returned {response.status_code}")
+                print(f"️ Fast sync to {server['name']} returned {response.status_code}")
                 
         except Exception as e:
-            print(f"❌ Failed to sync to {server['name']}: {e}")
+            print(f" Failed to sync to {server['name']}: {e}")
     
     def _load_servers(self):
         """Load sync servers"""
@@ -362,7 +362,7 @@ class FastSyncSystem:
                 self.sync_servers.append(server_info)
                 
         except Exception as e:
-            print(f"⚠️ Error loading sync servers: {e}")
+            print(f"️ Error loading sync servers: {e}")
     
     def get_status(self):
         """Get sync system status"""
@@ -389,7 +389,7 @@ def disable_universal_sync():
         from universal_real_time_sync import universal_sync
         # Stop the heavy system
         universal_sync.change_queue.queue.clear()  # Clear queue
-        print("🛑 Disabled heavy universal sync system")
+        print(" Disabled heavy universal sync system")
     except:
         pass
 
@@ -398,7 +398,7 @@ def apply_database_optimizations():
     app = create_app()
     
     with app.app_context():
-        print("🔧 Applying Database Optimizations...")
+        print(" Applying Database Optimizations...")
         
         try:
             # Apply SQLite optimizations
@@ -409,19 +409,19 @@ def apply_database_optimizations():
             db.session.execute(text("PRAGMA temp_store = MEMORY"))
             db.session.commit()
             
-            print("✅ Database optimizations applied")
+            print(" Database optimizations applied")
             
             # Verify settings
             journal_mode = db.session.execute(text("PRAGMA journal_mode")).scalar()
             cache_size = db.session.execute(text("PRAGMA cache_size")).scalar()
-            print(f"📊 Journal mode: {journal_mode}")
-            print(f"📊 Cache size: {cache_size}")
+            print(f" Journal mode: {journal_mode}")
+            print(f" Cache size: {cache_size}")
             
         except Exception as e:
-            print(f"❌ Database optimization error: {e}")
+            print(f" Database optimization error: {e}")
 
 if __name__ == "__main__":
-    print("🚀 Fast Sync System Setup")
+    print(" Fast Sync System Setup")
     print("=" * 40)
     
     # Step 1: Apply database optimizations
@@ -434,11 +434,11 @@ if __name__ == "__main__":
         
         # Test sync system
         status = fast_sync.get_status()
-        print(f"\n📊 Fast Sync Status:")
+        print(f"\n Fast Sync Status:")
         for key, value in status.items():
             print(f"   {key}: {value}")
     
-    print(f"\n✅ Fast Sync System ready!")
+    print(f"\n Fast Sync System ready!")
     print(f"   - Lightweight and efficient")
     print(f"   - Only tracks essential models")
     print(f"   - Prevents database locking")

@@ -152,13 +152,18 @@ function toggleTheme() {
 function syncDarkModeClass(themeId) {
     // Synchronize the body's dark-mode class with theme selection
     const body = document.body;
+    const htmlEl = document.documentElement;
     if (themeId === 'dark') {
         body.classList.add('dark-mode');
-        // Update localStorage to keep sidebar in sync
+        // Keep html element in sync (some early scripts observe html.class)
+        htmlEl.classList.add('dark-mode');
+        // Update localStorage to keep sidebar and other scripts in sync
         localStorage.setItem('darkMode', 'true');
     } else {
         body.classList.remove('dark-mode');
-        // Update localStorage to keep sidebar in sync
+        // Keep html element in sync
+        htmlEl.classList.remove('dark-mode');
+        // Update localStorage to keep sidebar and other scripts in sync
         localStorage.setItem('darkMode', 'false');
     }
 }

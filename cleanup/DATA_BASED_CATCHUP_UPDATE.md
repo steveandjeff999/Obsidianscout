@@ -2,7 +2,7 @@
 
 ## Changes Made
 
-### ✅ **Updated Detection Logic**
+###  **Updated Detection Logic**
 
 **Before (Time-based):**
 - Detected servers that hadn't synced in the last hour
@@ -15,7 +15,7 @@
 - Only triggers catch-up when servers are actually missing data
 - Counts exact number of missing changes per server
 
-### 🔧 **Key Method Changes**
+###  **Key Method Changes**
 
 1. **`detect_offline_servers()` → `detect_servers_needing_catchup()`**
    - New logic: Gets latest database change timestamp
@@ -32,13 +32,13 @@
    - `/api/sync/catchup/status` now returns `servers_needing_catchup` instead of `offline_servers`
    - More accurate status reporting
 
-### 📊 **Improved Logging**
+###  **Improved Logging**
 
 **New log format:**
 ```
-🔍 Latest database change: 2025-08-11 09:15:30
-📊 backup-server: Missing 12 changes since 2025-08-11 08:30:00 - Available for catch-up
-🔍 Detected 1 servers needing catch-up
+ Latest database change: 2025-08-11 09:15:30
+ backup-server: Missing 12 changes since 2025-08-11 08:30:00 - Available for catch-up
+ Detected 1 servers needing catch-up
 ```
 
 **Benefits:**
@@ -46,7 +46,7 @@
 - More precise and actionable information
 - Eliminates false positives from time-based detection
 
-### 🎯 **Operational Improvements**
+###  **Operational Improvements**
 
 1. **More Efficient**: Only syncs when actually needed
 2. **More Accurate**: Based on actual data differences, not time
@@ -54,14 +54,14 @@
 4. **Reduced Network Traffic**: Eliminates unnecessary sync operations
 5. **Smarter Detection**: Works regardless of sync frequency or server schedules
 
-### 🔄 **Migration Impact**
+###  **Migration Impact**
 
 - **Backward Compatible**: All existing API endpoints still work
 - **No Configuration Changes**: Uses same settings and database structure
 - **Seamless Operation**: Automatic detection of the improved logic
 - **Enhanced Monitoring**: Better status reporting and logging
 
-### 🚀 **Usage Examples**
+###  **Usage Examples**
 
 **Check for servers needing catch-up:**
 ```python
@@ -81,7 +81,7 @@ curl http://localhost:5000/api/sync/catchup/status
 # Returns: servers_needing_catchup array with missing change counts
 ```
 
-### 📈 **Performance Benefits**
+###  **Performance Benefits**
 
 1. **Reduced False Positives**: No more unnecessary catch-ups for servers that are up-to-date
 2. **Smart Scheduling**: Only processes servers that actually need synchronization
@@ -90,4 +90,4 @@ curl http://localhost:5000/api/sync/catchup/status
 
 ---
 
-The updated system now intelligently detects servers that are missing the latest data instead of relying on arbitrary time thresholds, making the catch-up process more efficient and accurate! 🎉
+The updated system now intelligently detects servers that are missing the latest data instead of relying on arbitrary time thresholds, making the catch-up process more efficient and accurate! 

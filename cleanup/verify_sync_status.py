@@ -13,7 +13,7 @@ def verify_sync_system():
     app = create_app()
     
     with app.app_context():
-        print("🔍 SYNC SYSTEM STATUS VERIFICATION")
+        print(" SYNC SYSTEM STATUS VERIFICATION")
         print("=" * 50)
         
         print("1️⃣  DATABASE SCHEMA VERIFICATION:")
@@ -28,11 +28,11 @@ def verify_sync_system():
         user_columns = [row[1] for row in cursor.fetchall()]
         
         has_updated_at = 'updated_at' in user_columns
-        print(f"  ✅ User.updated_at field: {'EXISTS' if has_updated_at else 'MISSING'}")
+        print(f"   User.updated_at field: {'EXISTS' if has_updated_at else 'MISSING'}")
         
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='database_changes'")
         has_change_table = cursor.fetchone() is not None
-        print(f"  ✅ database_changes table: {'EXISTS' if has_change_table else 'MISSING'}")
+        print(f"   database_changes table: {'EXISTS' if has_change_table else 'MISSING'}")
         
         conn.close()
         
@@ -44,9 +44,9 @@ def verify_sync_system():
         active_users = User.query.filter_by(is_active=True).all()
         inactive_users = User.query.filter_by(is_active=False).all()
         
-        print(f"  📊 Total users: {len(all_users)}")
+        print(f"   Total users: {len(all_users)}")
         print(f"  🟢 Active users: {len(active_users)}")
-        print(f"  🔴 Inactive users: {len(inactive_users)}")
+        print(f"   Inactive users: {len(inactive_users)}")
         
         for user in all_users:
             status = "ACTIVE" if user.is_active else "INACTIVE"
@@ -61,7 +61,7 @@ def verify_sync_system():
             table_name='user'
         ).order_by(DatabaseChange.timestamp.desc()).limit(10).all()
         
-        print(f"  📊 Recent user changes: {len(recent_changes)}")
+        print(f"   Recent user changes: {len(recent_changes)}")
         
         change_types = {}
         for change in recent_changes:
@@ -74,15 +74,15 @@ def verify_sync_system():
         pending_changes = DatabaseChange.query.filter_by(sync_status='pending').count()
         synced_changes = DatabaseChange.query.filter_by(sync_status='synced').count()
         
-        print(f"  🔄 Pending sync: {pending_changes}")
-        print(f"  ✅ Synced: {synced_changes}")
+        print(f"   Pending sync: {pending_changes}")
+        print(f"   Synced: {synced_changes}")
         
         print("\n4️⃣  SYNC SERVER CONFIGURATION:")
         print("  " + "=" * 35)
         
         try:
             sync_servers = SyncServer.query.all()
-            print(f"  📊 Configured servers: {len(sync_servers)}")
+            print(f"   Configured servers: {len(sync_servers)}")
             
             for server in sync_servers:
                 status = "ONLINE" if getattr(server, 'is_online', False) else "OFFLINE"
@@ -94,13 +94,13 @@ def verify_sync_system():
                 print(f"      Upload files: {'ON' if server.sync_uploads else 'OFF'}")
                 
         except Exception as e:
-            print(f"  ⚠️  No sync servers configured: {e}")
+            print(f"  ️  No sync servers configured: {e}")
         
         print("\n5️⃣  FUNCTIONAL VERIFICATION:")
         print("  " + "=" * 28)
         
         # Test soft delete functionality
-        print("  🧪 Testing soft delete detection...")
+        print("   Testing soft delete detection...")
         
         test_user = User(
             username=f"verification_test_{int(time.time())}",
@@ -127,9 +127,9 @@ def verify_sync_system():
         ).all()
         
         if soft_delete_changes:
-            print("    ✅ Soft delete tracking: WORKING")
+            print("     Soft delete tracking: WORKING")
         else:
-            print("    ❌ Soft delete tracking: NOT WORKING")
+            print("     Soft delete tracking: NOT WORKING")
         
         # Clean up
         db.session.delete(test_user)
@@ -148,24 +148,24 @@ def verify_sync_system():
             cutoff_time = datetime.now(timezone.utc) - timedelta(hours=1)
             changes = sync_manager._get_database_changes_since(cutoff_time)
             
-            print(f"    📊 Changes in last hour: {len(changes)}")
-            print("    ✅ Sync data retrieval: WORKING")
+            print(f"     Changes in last hour: {len(changes)}")
+            print("     Sync data retrieval: WORKING")
             
         except Exception as e:
-            print(f"    ❌ Sync system error: {e}")
+            print(f"     Sync system error: {e}")
         
         print("\n" + "=" * 50)
-        print("📋 SUMMARY OF FIXES IMPLEMENTED:")
+        print(" SUMMARY OF FIXES IMPLEMENTED:")
         print("=" * 50)
-        print("✅ Fixed hard delete → Changed to soft delete (is_active=False)")
-        print("✅ Added updated_at field to User model for better sync tracking")
-        print("✅ Enhanced change tracking to detect soft deletes properly") 
-        print("✅ Fixed SQLAlchemy raw SQL syntax errors")
-        print("✅ Improved sync consistency across all database operations")
-        print("✅ Maintained existing user management interface")
-        print("✅ Preserved all user data during deactivation")
+        print(" Fixed hard delete → Changed to soft delete (is_active=False)")
+        print(" Added updated_at field to User model for better sync tracking")
+        print(" Enhanced change tracking to detect soft deletes properly") 
+        print(" Fixed SQLAlchemy raw SQL syntax errors")
+        print(" Improved sync consistency across all database operations")
+        print(" Maintained existing user management interface")
+        print(" Preserved all user data during deactivation")
         
-        print("\n📈 SYNC SYSTEM STATUS:")
+        print("\n SYNC SYSTEM STATUS:")
         print("🟢 User deletion sync: WORKING")
         print("🟢 Change tracking: WORKING") 
         print("🟢 Database consistency: MAINTAINED")
@@ -176,8 +176,8 @@ def verify_sync_system():
 if __name__ == "__main__":
     try:
         verify_sync_system()
-        print("\n🎉 SYNC SYSTEM VERIFICATION COMPLETED SUCCESSFULLY!")
+        print("\n SYNC SYSTEM VERIFICATION COMPLETED SUCCESSFULLY!")
     except Exception as e:
-        print(f"\n❌ Verification failed: {e}")
+        print(f"\n Verification failed: {e}")
         import traceback
         traceback.print_exc()
