@@ -48,7 +48,7 @@ with app.app_context():
 
     server = pick_sync_server()
     if not server:
-        print("❌ No sync server configured (sync_enabled=True). Aborting.")
+        print(" No sync server configured (sync_enabled=True). Aborting.")
     else:
         print(f"Using sync server: {server.id} {server.name} {server.base_url}")
         user = create_test_user()
@@ -57,13 +57,13 @@ with app.app_context():
         print(f"Pending changes after user create: {pending_after_create}")
 
         # Perform manual bidirectional sync
-        print("\n🔄 Performing bidirectional sync...")
+        print("\n Performing bidirectional sync...")
         result = simplified_sync_manager.perform_bidirectional_sync(server.id)
         if result.get('success'):
-            print("✅ Sync succeeded")
+            print(" Sync succeeded")
             print(json.dumps(result['stats'], indent=2))
         else:
-            print("❌ Sync failed:", result.get('error'))
+            print(" Sync failed:", result.get('error'))
             if 'stats' in result:
                 print(json.dumps(result['stats'], indent=2))
         pending_after_sync = DatabaseChange.query.filter_by(sync_status='pending').count()

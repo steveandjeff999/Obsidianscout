@@ -64,10 +64,10 @@ def test_dynamic_analytics():
     print(f"\n=== Test Result: {'PASS' if success else 'FAIL'} ===")
     
     if success:
-        print("✅ Dynamic analytics work correctly with minimal config!")
-        print("✅ No data_analysis.key_metrics section required!")
+        print(" Dynamic analytics work correctly with minimal config!")
+        print(" No data_analysis.key_metrics section required!")
     else:
-        print("❌ Dynamic analytics calculations don't match expected values")
+        print(" Dynamic analytics calculations don't match expected values")
         
     return success
 

@@ -69,19 +69,19 @@ def main():
     for file_str in files:
         file_path = root / file_str.replace('/', '\\')
         if not file_path.exists():
-            print(f"⚠️  File not found: {file_str}")
+            print(f"️  File not found: {file_str}")
             continue
         
         modified, count = fix_default_datetime_utcnow(file_path)
         if modified:
             total_files += 1
             total_fixes += count
-            print(f"✅ {file_str}: {count} fix(es)")
+            print(f" {file_str}: {count} fix(es)")
         else:
-            print(f"⏭️  {file_str}: No issues found")
+            print(f" {file_str}: No issues found")
     
     print("=" * 70)
-    print(f"✅ Complete! Files: {total_files}, Fixes: {total_fixes}")
+    print(f" Complete! Files: {total_files}, Fixes: {total_fixes}")
 
 if __name__ == '__main__':
     main()

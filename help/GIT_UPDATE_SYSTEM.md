@@ -9,7 +9,7 @@
 
 The application now uses a Git-only update system powered by GitPython, making it work with any Git repository (not just GitHub). The system automatically handles Git repository initialization and falls back to direct download when Git is not installed.
 
-## 🎯 **Overview**
+##  **Overview**
 
 The update system has been simplified to use Git repositories for updates with automatic fallback. This provides:
 
@@ -21,7 +21,7 @@ The update system has been simplified to use Git repositories for updates with a
 - **Automatic branch switching** and conflict resolution
 - **Repository status monitoring** in the web interface
 
-## 🔧 **Requirements**
+##  **Requirements**
 
 ### Python Dependencies
 The system requires GitPython to be installed:
@@ -33,7 +33,7 @@ pip install GitPython==3.1.44
 - **With Git**: Full Git functionality with automatic repository initialization
 - **Without Git**: Falls back to direct download from GitHub (GitHub repositories only)
 
-## 📋 **Setup Instructions**
+##  **Setup Instructions**
 
 ### 1. Automatic Setup (Recommended)
 The system will automatically:
@@ -61,7 +61,7 @@ Update your `app_config.json` file with your repository information:
 4. Enable/disable backup creation
 5. Save configuration
 
-## 🌐 **Supported Git Hosting Services**
+##  **Supported Git Hosting Services**
 
 ### With Git Installed
 - **GitHub** (recommended)
@@ -76,7 +76,7 @@ Update your `app_config.json` file with your repository information:
 - Downloads ZIP files directly from GitHub
 - Extracts and installs updates
 
-## 🔄 **How Updates Work**
+##  **How Updates Work**
 
 ### With Git Installed
 1. **Automatic repository initialization** (if needed)
@@ -101,7 +101,7 @@ Update your `app_config.json` file with your repository information:
 2. **Other repositories**: Uses GitPython to fetch and compare commits
 3. **Version comparison**: Uses semantic versioning to determine if updates are available
 
-## 🛠 **Web Interface Features**
+##  **Web Interface Features**
 
 ### Repository Status
 The web interface shows:
@@ -123,7 +123,7 @@ The web interface shows:
 - **Error reporting**
 - **Progress tracking**
 
-## 🔒 **Security Features**
+##  **Security Features**
 
 ### Automatic Backups
 - Creates timestamped backups before updates

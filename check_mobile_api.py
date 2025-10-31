@@ -44,15 +44,15 @@ def check_api():
         return False
 
 if __name__ == "__main__":
-    print("🔍 Checking Mobile API...")
+    print(" Checking Mobile API...")
     print()
     
     if check_api():
-        print("\n📖 Next: Try the full test with:")
+        print("\n Next: Try the full test with:")
         print("   pip install requests")
         print("   python test_mobile_api.py")
     else:
-        print("\n🔧 Troubleshooting:")
+        print("\n Troubleshooting:")
         print("   1. Make sure server is running: python run.py")
         print("   2. Check server logs for errors")
         print("   3. Verify the server started successfully")

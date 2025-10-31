@@ -47,7 +47,7 @@ def test_match_type_mapping():
     print("-" * 70)
     for match_type, input_num, expected in test_cases:
         result = str(input_num)
-        status = "✅" if result == expected else "❌"
+        status = "" if result == expected else ""
         print(f"  {status} {match_type:20} {input_num} → '{result}'")
     
     print("\n" + "="*70)
@@ -64,7 +64,7 @@ def test_match_type_mapping():
         matches = Match.query.limit(10).all()
         
         if not matches:
-            print("\n⚠️  No matches in database to test")
+            print("\n️  No matches in database to test")
             return
         
         print(f"\nSample matches from database:")
@@ -92,13 +92,13 @@ def test_match_type_mapping():
         print("="*70)
         
         if has_playoff:
-            print("✅ Found playoff/practice matches in database")
+            print(" Found playoff/practice matches in database")
             print("   Schedule adjuster will now correctly track these matches!")
         else:
-            print("ℹ️  Only qualification matches found")
+            print(" Only qualification matches found")
             print("   Schedule adjuster will work with all match types when they appear")
         
-        print("\n📝 The fix ensures:")
+        print("\n The fix ensures:")
         print("   1. All match types are correctly mapped (Qualification, Practice, Playoffs)")
         print("   2. Match numbers work for both integer (quals) and string format (playoffs)")
         print("   3. Set-match format (e.g., '1-2') is properly handled")

@@ -16,14 +16,14 @@ def fix_superadmin_password():
         app = create_app()
         
         with app.app_context():
-            print("🔧 FIXING SUPERADMIN PASSWORD ISSUE")
+            print(" FIXING SUPERADMIN PASSWORD ISSUE")
             print("=" * 60)
             
             # Find the superadmin user
             superadmin = User.query.filter_by(username='superadmin').first()
             
             if not superadmin:
-                print("❌ Superadmin user not found!")
+                print(" Superadmin user not found!")
                 return
             
             print(f"Found superadmin user:")
@@ -47,20 +47,20 @@ def fix_superadmin_password():
                 '',              # Empty password (shouldn't work but worth checking)
             ]
             
-            print(f"\n🔍 TESTING POSSIBLE PASSWORDS")
+            print(f"\n TESTING POSSIBLE PASSWORDS")
             print("-" * 40)
             
             working_password = None
             for pwd in test_passwords:
                 if superadmin.check_password(pwd):
-                    print(f"   ✅ Password '{pwd}': WORKS!")
+                    print(f"    Password '{pwd}': WORKS!")
                     working_password = pwd
                     break
                 else:
-                    print(f"   ❌ Password '{pwd}': Invalid")
+                    print(f"    Password '{pwd}': Invalid")
             
             if not working_password:
-                print(f"\n⚠️ NO WORKING PASSWORD FOUND - RESETTING TO 'password'")
+                print(f"\n️ NO WORKING PASSWORD FOUND - RESETTING TO 'password'")
                 print("-" * 40)
                 
                 # Reset password to the expected default
@@ -69,24 +69,24 @@ def fix_superadmin_password():
                 
                 try:
                     db.session.commit()
-                    print("✅ Password reset to 'password' successfully!")
-                    print("✅ User must change password on next login")
+                    print(" Password reset to 'password' successfully!")
+                    print(" User must change password on next login")
                     
                     # Verify the reset worked
                     if superadmin.check_password('password'):
-                        print("✅ Password reset verified - 'password' now works!")
+                        print(" Password reset verified - 'password' now works!")
                     else:
-                        print("❌ Password reset verification failed!")
+                        print(" Password reset verification failed!")
                         
                 except Exception as e:
-                    print(f"❌ Error resetting password: {e}")
+                    print(f" Error resetting password: {e}")
                     db.session.rollback()
             else:
-                print(f"\n✅ FOUND WORKING PASSWORD: '{working_password}'")
+                print(f"\n FOUND WORKING PASSWORD: '{working_password}'")
                 print("No reset needed!")
             
             # Also check and fix any other users that might have similar issues
-            print(f"\n🔍 CHECKING OTHER USERS FOR SIMILAR ISSUES")
+            print(f"\n CHECKING OTHER USERS FOR SIMILAR ISSUES")
             print("-" * 40)
             
             all_users = User.query.all()
@@ -114,16 +114,16 @@ def fix_superadmin_password():
                     problem_users.append(user)
             
             if problem_users:
-                print(f"⚠️ Found {len(problem_users)} users with unknown passwords:")
+                print(f"️ Found {len(problem_users)} users with unknown passwords:")
                 for user in problem_users[:5]:  # Show first 5
                     print(f"   - {user.username} (team {user.scouting_team_number})")
                 if len(problem_users) > 5:
                     print(f"   ... and {len(problem_users) - 5} more")
             else:
-                print("✅ All other users have recognizable passwords")
+                print(" All other users have recognizable passwords")
             
             # Clear any failed login attempts for superadmin to prevent lockout
-            print(f"\n🧹 CLEARING FAILED LOGIN ATTEMPTS")
+            print(f"\n CLEARING FAILED LOGIN ATTEMPTS")
             print("-" * 40)
             
             try:
@@ -134,13 +134,13 @@ def fix_superadmin_password():
                 ).delete()
                 
                 db.session.commit()
-                print(f"✅ Cleared {failed_attempts} failed login attempts for superadmin")
+                print(f" Cleared {failed_attempts} failed login attempts for superadmin")
                 
             except Exception as e:
-                print(f"⚠️ Could not clear login attempts: {e}")
+                print(f"️ Could not clear login attempts: {e}")
             
     except Exception as e:
-        print(f"❌ Error during fix: {e}")
+        print(f" Error during fix: {e}")
         import traceback
         traceback.print_exc()
 
@@ -153,7 +153,7 @@ def test_fixed_login():
         
         with app.app_context():
             with app.test_client() as client:
-                print(f"\n🧪 TESTING FIXED LOGIN")
+                print(f"\n TESTING FIXED LOGIN")
                 print("-" * 40)
                 
                 # Test POST request with superadmin credentials
@@ -170,18 +170,18 @@ def test_fixed_login():
                 
                 if response.status_code == 302:
                     if '/auth/login' in location:
-                        print("❌ Still redirecting to login - credentials still invalid")
+                        print(" Still redirecting to login - credentials still invalid")
                     elif '/auth/change_password' in location:
-                        print("⚠️ Redirecting to change password - this is expected!")
+                        print("️ Redirecting to change password - this is expected!")
                     elif '/main' in location or location == '/':
-                        print("✅ Redirecting to main page - login successful!")
+                        print(" Redirecting to main page - login successful!")
                     else:
-                        print(f"🤔 Redirecting to unexpected location: {location}")
+                        print(f" Redirecting to unexpected location: {location}")
                 else:
-                    print(f"🤔 Unexpected response code: {response.status_code}")
+                    print(f" Unexpected response code: {response.status_code}")
                 
     except Exception as e:
-        print(f"❌ Error testing login: {e}")
+        print(f" Error testing login: {e}")
 
 if __name__ == '__main__':
     fix_superadmin_password()

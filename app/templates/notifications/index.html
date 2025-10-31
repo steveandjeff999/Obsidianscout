@@ -169,7 +169,7 @@
 <div class="container py-4">
     <div class="row mb-4">
         <div class="col-12">
-            <h1>🔔 Notifications <span class="badge badge-warning" style="font-size:1em;vertical-align:middle;">Beta</span></h1>
+            <h1> Notifications <span class="badge badge-warning" style="font-size:1em;vertical-align:middle;">Beta</span></h1>
             <p class="text-muted">Manage your match strategy notifications and devices<br><span style="color:#ffc107;font-weight:500;">Notification features are in beta and may change.</span></p>
         </div>
     </div>
@@ -188,7 +188,7 @@
     <div class="row mb-4">
         <div class="col-12">
             <div class="notification-card">
-                <h3>➕ Create Notification</h3>
+                <h3> Create Notification</h3>
                 <form id="subscription-form">
                     <div class="form-group">
                         <label class="form-label" for="target_team_number">Team Number *</label>
@@ -238,7 +238,7 @@
     <div class="row mb-4">
         <div class="col-12">
             <div class="notification-card">
-                <h3>📋 Active Subscriptions</h3>
+                <h3> Active Subscriptions</h3>
                 {% if subscriptions %}
                 <div id="subscriptions-list">
                     {% for sub in subscriptions %}
@@ -249,8 +249,8 @@
                             <br>
                             <small class="text-muted">
                                 {{ sub.minutes_before }} min before | 
-                                {% if sub.email_enabled %}📧 Email {% endif %}
-                                {% if sub.push_enabled %}📱 Push {% endif %}
+                                {% if sub.email_enabled %} Email {% endif %}
+                                {% if sub.push_enabled %} Push {% endif %}
                             </small>
                         </div>
                         <div class="subscription-actions">
@@ -277,9 +277,9 @@
         <div class="col-12">
             <div class="notification-card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0;">📱 Registered Devices</h3>
+                    <h3 style="margin: 0;"> Registered Devices</h3>
                     <button id="register-device-btn" class="test-button btn-primary" onclick="registerThisDevice()">
-                        ➕ Register This Device
+                         Register This Device
                     </button>
                 </div>
                 {% if devices %}
@@ -315,17 +315,17 @@
         <div class="col-12">
             <div class="notification-card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0;">📅 Scheduled Notifications</h3>
+                    <h3 style="margin: 0;"> Scheduled Notifications</h3>
                     <div style="display:flex;gap:12px;align-items:center;">
                         <div id="next-schedule-container" style="font-size:0.95em;color:#6c757d;display:flex;align-items:center;gap:8px;">
                             <span style="font-weight:600;">Next scheduling in</span>
                             <span id="next-schedule-timer">{% if next_schedule_seconds is defined and next_schedule_seconds %}{{ next_schedule_seconds }}s{% else %}--:--{% endif %}</span>
                         </div>
                         <button id="refresh-schedule-btn" class="test-button btn-primary" onclick="refreshSchedule()">
-                            🔄 Refresh Schedule
+                             Refresh Schedule
                         </button>
                         <button id="clear-schedule-btn" class="test-button btn-danger" style="display:inline-block;" onclick="clearScheduledNotifications()">
-                            🧹 Clear Scheduled
+                             Clear Scheduled
                         </button>
                     </div>
                 </div>
@@ -340,18 +340,18 @@
                             <br>
                             <small class="text-muted">
                                 {% if current_event and current_event.timezone %}
-                                    ⏰ Will send: {{ queue.scheduled_for | format_time_tz(current_event.timezone, '%Y-%m-%d %I:%M %p %Z') }}
+                                    Will send: {{ queue.scheduled_for | format_time_tz(current_event.timezone, '%Y-%m-%d %I:%M %p %Z') }}
                                     {% if match.predicted_time %}
-                                    | 🏆 Match time: ~{{ match.predicted_time | format_time_tz(current_event.timezone, '%I:%M %p') }} (predicted)
+                                    |  Match time: ~{{ match.predicted_time | format_time_tz(current_event.timezone, '%I:%M %p') }} (predicted)
                                     {% elif match.scheduled_time %}
-                                    | 🏆 Match time: {{ match.scheduled_time | format_time_tz(current_event.timezone, '%I:%M %p') }}
+                                    |  Match time: {{ match.scheduled_time | format_time_tz(current_event.timezone, '%I:%M %p') }}
                                     {% endif %}
                                 {% else %}
-                                    ⏰ Will send: {{ queue.scheduled_for.strftime('%Y-%m-%d %I:%M %p') }} UTC
+                                    Will send: {{ queue.scheduled_for.strftime('%Y-%m-%d %I:%M %p') }} UTC
                                     {% if match.predicted_time %}
-                                    | 🏆 Match time: ~{{ match.predicted_time.strftime('%I:%M %p') }} UTC (predicted)
+                                    |  Match time: ~{{ match.predicted_time.strftime('%I:%M %p') }} UTC (predicted)
                                     {% elif match.scheduled_time %}
-                                    | 🏆 Match time: {{ match.scheduled_time.strftime('%I:%M %p') }} UTC
+                                    |  Match time: {{ match.scheduled_time.strftime('%I:%M %p') }} UTC
                                     {% endif %}
                                 {% endif %}
                                 | Status: <span class="badge badge-info">{{ queue.status }}</span>
@@ -376,7 +376,7 @@
     <div class="row mb-4">
         <div class="col-12">
             <div class="notification-card">
-                <h3>🧪 Test Notifications</h3>
+                <h3> Test Notifications</h3>
                 <p>Send test notifications to verify your setup</p>
                 <div class="d-flex gap-2">
                     <button class="test-button btn-success" onclick="testEmail()">
@@ -395,9 +395,9 @@
         <div class="col-12">
             <div class="notification-card">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <h3 style="margin:0;">📜 Notification History</h3>
+                    <h3 style="margin:0;"> Notification History</h3>
                     <div>
-                        <button id="clear-history-all-btn" class="test-button btn-danger" onclick="clearAllHistory()">🧹 Clear History</button>
+                        <button id="clear-history-all-btn" class="test-button btn-danger" onclick="clearAllHistory()"> Clear History</button>
                     </div>
                 </div>
                 {% if history %}
@@ -414,13 +414,13 @@
                             <br>
                             <small class="text-muted">
                                 {% if log.event_timezone %}
-                                    ⏰ Sent: {{ log.sent_at | format_time_tz(log.event_timezone, '%Y-%m-%d %I:%M %p %Z') }}
+                                    Sent: {{ log.sent_at | format_time_tz(log.event_timezone, '%Y-%m-%d %I:%M %p %Z') }}
                                 {% else %}
-                                    ⏰ Sent: {{ log.sent_at.strftime('%Y-%m-%d %I:%M %p UTC') }}
+                                    Sent: {{ log.sent_at.strftime('%Y-%m-%d %I:%M %p UTC') }}
                                 {% endif %}
-                                {% if log.email_sent %} | <span class="badge badge-success">📧 Email</span>{% endif %}
-                                {% if log.push_sent_count > 0 %} | <span class="badge badge-info">📱 Push ({{ log.push_sent_count }})</span>{% endif %}
-                                {% if log.push_failed_count > 0 %} | <span class="badge badge-warning">⚠️ {{ log.push_failed_count }} failed</span>{% endif %}
+                                {% if log.email_sent %} | <span class="badge badge-success"> Email</span>{% endif %}
+                                {% if log.push_sent_count > 0 %} | <span class="badge badge-info"> Push ({{ log.push_sent_count }})</span>{% endif %}
+                                {% if log.push_failed_count > 0 %} | <span class="badge badge-warning">️ {{ log.push_failed_count }} failed</span>{% endif %}
                             </small>
                         </div>
                         <div style="display:flex;gap:8px;align-items:center;">
@@ -453,7 +453,7 @@ async function checkPushSupport() {
     console.log('Checking push support...');
     
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        statusDiv.innerHTML = '<div class="alert alert-warning">⚠️ Push notifications are not supported in this browser.</div>';
+        statusDiv.innerHTML = '<div class="alert alert-warning">️ Push notifications are not supported in this browser.</div>';
         return;
     }
     
@@ -472,28 +472,28 @@ async function checkPushSupport() {
                 console.log('Subscription status:', subscription ? 'subscribed' : 'not subscribed');
                 
                 if (subscription) {
-                    statusDiv.innerHTML = '<div class="alert alert-success">✅ Push notifications are enabled and active</div>';
+                    statusDiv.innerHTML = '<div class="alert alert-success"> Push notifications are enabled and active</div>';
                     disableBtn.style.display = 'inline-block';
                     testBtn.style.display = 'inline-block';
                     console.log('Showing disable and test buttons');
                 } else {
-                    statusDiv.innerHTML = '<div class="alert alert-warning">⚠️ Push permission granted but not registered. Click to enable.</div>';
+                    statusDiv.innerHTML = '<div class="alert alert-warning">️ Push permission granted but not registered. Click to enable.</div>';
                     enableBtn.style.display = 'inline-block';
                     console.log('Showing enable button');
                 }
             } else {
-                statusDiv.innerHTML = '<div class="alert alert-warning">⚠️ Service worker not registered. Click to enable.</div>';
+                statusDiv.innerHTML = '<div class="alert alert-warning">️ Service worker not registered. Click to enable.</div>';
                 enableBtn.style.display = 'inline-block';
                 console.log('No service worker, showing enable button');
             }
         } catch (error) {
             console.error('Error checking subscription:', error);
-            statusDiv.innerHTML = '<div class="alert alert-warning">⚠️ Could not check subscription status. Click to enable.</div>';
+            statusDiv.innerHTML = '<div class="alert alert-warning">️ Could not check subscription status. Click to enable.</div>';
             enableBtn.style.display = 'inline-block';
             console.log('Error checking, showing enable button');
         }
     } else if (permission === 'denied') {
-        statusDiv.innerHTML = '<div class="alert alert-danger">❌ Push notifications are blocked. Please enable them in your browser settings.</div>';
+        statusDiv.innerHTML = '<div class="alert alert-danger"> Push notifications are blocked. Please enable them in your browser settings.</div>';
     } else {
         statusDiv.innerHTML = '<div class="alert alert-info">ℹ️ Push notifications are not enabled yet.</div>';
         enableBtn.style.display = 'inline-block';
@@ -552,14 +552,14 @@ async function enablePush() {
         const result = await response.json();
         
         if (result.success) {
-            alert('✅ Push notifications enabled successfully!');
+            alert(' Push notifications enabled successfully!');
             location.reload();
         } else {
-            alert('❌ Failed to register device: ' + result.error);
+            alert(' Failed to register device: ' + result.error);
         }
     } catch (error) {
         console.error('Error enabling push:', error);
-        alert('❌ Error: ' + error.message);
+        alert(' Error: ' + error.message);
     }
 }
 
@@ -580,11 +580,11 @@ async function disablePush() {
             console.log('Unsubscribed from push notifications');
         }
         
-        alert('✅ Push notifications disabled on this device');
+        alert(' Push notifications disabled on this device');
         location.reload();
     } catch (error) {
         console.error('Error disabling push:', error);
-        alert('❌ Error: ' + error.message);
+        alert(' Error: ' + error.message);
     }
 }
 
@@ -630,13 +630,13 @@ document.getElementById('subscription-form').addEventListener('submit', async (e
         const result = await response.json();
         
         if (result.success) {
-            alert('✅ Subscription created successfully!');
+            alert(' Subscription created successfully!');
             location.reload();
         } else {
-            alert('❌ Error: ' + result.error);
+            alert(' Error: ' + result.error);
         }
     } catch (error) {
-        alert('❌ Error: ' + error.message);
+        alert(' Error: ' + error.message);
     }
 });
 
@@ -652,13 +652,13 @@ async function removeSubscription(subscriptionId) {
         const result = await response.json();
         
         if (result.success) {
-            alert('✅ Subscription removed');
+            alert(' Subscription removed');
             location.reload();
         } else {
-            alert('❌ Error: ' + result.error);
+            alert(' Error: ' + result.error);
         }
     } catch (error) {
-        alert('❌ Error: ' + error.message);
+        alert(' Error: ' + error.message);
     }
 }
 
@@ -671,7 +671,7 @@ async function removeDevice(deviceId) {
         });
         const result = await response.json();
         if (result.success) {
-            alert('✅ Device removed');
+            alert(' Device removed');
             // Remove device from DOM instantly
             const deviceElem = document.querySelector(`.device-item[data-device-id='${deviceId}']`);
             if (deviceElem) deviceElem.remove();
@@ -682,10 +682,10 @@ async function removeDevice(deviceId) {
                 if (registerBtn) registerBtn.style.display = 'inline-block';
             }
         } else {
-            alert('❌ Error: ' + result.error);
+            alert(' Error: ' + result.error);
         }
     } catch (error) {
-        alert('❌ Error: ' + error.message);
+        alert(' Error: ' + error.message);
     }
 }
 
@@ -699,12 +699,12 @@ async function testEmail() {
         const result = await response.json();
         
         if (result.success) {
-            alert('✅ ' + result.message);
+            alert(' ' + result.message);
         } else {
-            alert('❌ Error: ' + result.error);
+            alert(' Error: ' + result.error);
         }
     } catch (error) {
-        alert('❌ Error: ' + error.message);
+        alert(' Error: ' + error.message);
     }
 }
 
@@ -718,12 +718,12 @@ async function testPush() {
         const result = await response.json();
         
         if (result.success) {
-            alert('✅ ' + result.message);
+            alert(' ' + result.message);
         } else {
-            alert('❌ Error: ' + result.error);
+            alert(' Error: ' + result.error);
         }
     } catch (error) {
-        alert('❌ Error: ' + error.message);
+        alert(' Error: ' + error.message);
     }
 }
 
@@ -804,8 +804,8 @@ function updatePendingNotificationsList(pendingList) {
             }
             const matchTime = matchDate.toLocaleString('en-US', matchTzOptions);
             matchTimeStr = notif.is_predicted 
-                ? `| 🏆 Match time: ~${matchTime} (predicted)` 
-                : `| 🏆 Match time: ${matchTime}`;
+                ? `|  Match time: ~${matchTime} (predicted)` 
+                : `|  Match time: ${matchTime}`;
         }
         
         item.innerHTML = `
@@ -814,7 +814,7 @@ function updatePendingNotificationsList(pendingList) {
             <small>${notif.notification_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</small>
             <br>
             <small class="text-muted">
-                ⏰ Will send: ${timeStr} (${notif.minutes_before} min before match) ${matchTimeStr}
+                Will send: ${timeStr} (${notif.minutes_before} min before match) ${matchTimeStr}
             </small>
         `;
         listContainer.appendChild(item);
@@ -847,7 +847,7 @@ async function refreshSchedule(silent=false) {
         
         if (response.ok) {
             if (!silent) {
-                alert('✅ ' + result.message);
+                alert(' ' + result.message);
                 // Reload page to show updated schedule
                 window.location.reload();
             } else {
@@ -863,10 +863,10 @@ async function refreshSchedule(silent=false) {
                     btn.disabled = false;
                     btn.innerHTML = originalText;
                 }
-                console.log(`✅ Auto-scheduled ${result.notifications_scheduled} notifications`);
+                console.log(` Auto-scheduled ${result.notifications_scheduled} notifications`);
             }
         } else {
-            if (!silent) alert('❌ ' + (result.error || 'Failed to refresh schedule'));
+            if (!silent) alert(' ' + (result.error || 'Failed to refresh schedule'));
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = originalText;
@@ -874,7 +874,7 @@ async function refreshSchedule(silent=false) {
         }
     } catch (error) {
         console.error('Error refreshing schedule:', error);
-        if (!silent) alert('❌ Error refreshing schedule: ' + error.message);
+        if (!silent) alert(' Error refreshing schedule: ' + error.message);
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = originalText;
@@ -903,15 +903,15 @@ async function clearScheduledNotifications() {
         const result = await response.json();
 
         if (response.ok && result.success) {
-            alert('✅ ' + result.message);
+            alert(' ' + result.message);
             // Update pending list in-place to show no scheduled notifications
             updatePendingNotificationsList([]);
         } else {
-            alert('❌ ' + (result.error || 'Failed to clear scheduled notifications'));
+            alert(' ' + (result.error || 'Failed to clear scheduled notifications'));
         }
     } catch (error) {
         console.error('Error clearing scheduled notifications:', error);
-        alert('❌ Error: ' + error.message);
+        alert(' Error: ' + error.message);
     } finally {
         if (btn) {
             btn.disabled = false;
@@ -946,18 +946,18 @@ async function clearHistory(matchId, subscriptionId, includeLogs=false, reschedu
         const result = await response.json();
 
         if (response.ok && result.success) {
-            let msg = `✅ Cleared ${result.deleted_queue || 0} queue entries`;
+            let msg = ` Cleared ${result.deleted_queue || 0} queue entries`;
             if (typeof result.deleted_logs !== 'undefined') msg += ` and ${result.deleted_logs} logs`;
             if (result.rescheduled) msg += `. Rescheduled ${result.rescheduled} notifications.`;
             alert(msg);
             // Refresh the scheduled list in-place by calling refreshSchedule silently
             await refreshSchedule(true);
         } else {
-            alert('❌ ' + (result.error || 'Failed to clear history'));
+            alert(' ' + (result.error || 'Failed to clear history'));
         }
     } catch (err) {
         console.error('Error clearing history:', err);
-        alert('❌ Error: ' + err.message);
+        alert(' Error: ' + err.message);
     }
 }
 
@@ -986,7 +986,7 @@ async function clearLog(logId, clearQueue=false, reschedule=false) {
         const result = await response.json();
 
         if (response.ok && result.success) {
-            let msg = `✅ Deleted ${result.deleted_logs || 0} log(s)`;
+            let msg = ` Deleted ${result.deleted_logs || 0} log(s)`;
             if (typeof result.deleted_queue !== 'undefined') msg += ` and ${result.deleted_queue} queue entries`;
             if (result.rescheduled) msg += `. Rescheduled ${result.rescheduled} notifications.`;
             alert(msg);
@@ -995,11 +995,11 @@ async function clearLog(logId, clearQueue=false, reschedule=false) {
             // Reload history list via simple page reload for now
             window.location.reload();
         } else {
-            alert('❌ ' + (result.error || 'Failed to delete log'));
+            alert(' ' + (result.error || 'Failed to delete log'));
         }
     } catch (err) {
         console.error('Error deleting log:', err);
-        alert('❌ Error: ' + err.message);
+        alert(' Error: ' + err.message);
     }
 }
 
@@ -1023,15 +1023,15 @@ async function clearAllHistory() {
         const result = await response.json();
 
         if (response.ok && result.success) {
-            alert(`✅ ${result.message}`);
+            alert(` ${result.message}`);
             // Reload to show empty history
             window.location.reload();
         } else {
-            alert('❌ ' + (result.error || 'Failed to clear history'));
+            alert(' ' + (result.error || 'Failed to clear history'));
         }
     } catch (err) {
         console.error('Error clearing all history:', err);
-        alert('❌ Error: ' + err.message);
+        alert(' Error: ' + err.message);
     } finally {
         if (btn) {
             btn.disabled = false;
@@ -1050,17 +1050,17 @@ async function testSubscription(subscriptionId) {
         const result = await response.json();
         
         if (result.success) {
-            let message = '✅ Test notification sent!\n\n';
-            if (result.email_sent) message += '📧 Email sent\n';
-            if (result.push_sent_count > 0) message += `📱 Push sent to ${result.push_sent_count} device(s)\n`;
-            if (result.email_error) message += `\n❌ Email error: ${result.email_error}`;
-            if (result.push_error) message += `\n❌ Push error: ${result.push_error}`;
+            let message = ' Test notification sent!\n\n';
+            if (result.email_sent) message += ' Email sent\n';
+            if (result.push_sent_count > 0) message += ` Push sent to ${result.push_sent_count} device(s)\n`;
+            if (result.email_error) message += `\n Email error: ${result.email_error}`;
+            if (result.push_error) message += `\n Push error: ${result.push_error}`;
             alert(message);
         } else {
-            alert('❌ Error: ' + result.error);
+            alert(' Error: ' + result.error);
         }
     } catch (error) {
-        alert('❌ Error: ' + error.message);
+        alert(' Error: ' + error.message);
     }
 }
 
@@ -1120,7 +1120,7 @@ document.addEventListener('DOMContentLoaded', function() {
             setInterval(() => {
                 if (nextScheduleRemaining > 0) {
                     nextScheduleRemaining -= 1;
-                    nextScheduleTimerElem.textContent = formatRemaining(nextScheduleRemaining);
+                    if (nextScheduleTimerElem) nextScheduleTimerElem.textContent = formatRemaining(nextScheduleRemaining);
                 } else {
                     // Countdown reached zero — trigger the same action as the Refresh Schedule button
                     // Use the silent flag so the page doesn't reload and we can reset the frontend timer to 5:00
@@ -1130,7 +1130,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         refreshSchedule(true);
                         // Reset to 5 minutes for the next cycle so frontend shows 05:00 immediately
                         nextScheduleRemaining = 300;
-                        nextScheduleTimerElem.textContent = formatRemaining(nextScheduleRemaining);
+                        if (nextScheduleTimerElem) nextScheduleTimerElem.textContent = formatRemaining(nextScheduleRemaining);
                     } catch(e) {
                         // If refresh fails, try again next tick
                         console.error('Error auto-refreshing schedule:', e);

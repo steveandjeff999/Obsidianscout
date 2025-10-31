@@ -5,6 +5,7 @@ Comprehensive REST API for mobile applications with authentication, data access,
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_user, logout_user, current_user
 from datetime import datetime, timezone, timedelta
+import os
 from functools import wraps
 import traceback
 import json
@@ -13,8 +14,9 @@ import uuid
 
 from app.models import (
     User, Team, Event, Match, ScoutingData, PitScoutingData, 
-    DoNotPickEntry, AvoidEntry, db
+    DoNotPickEntry, AvoidEntry, ScoutingAllianceChat, TeamAllianceStatus, ScoutingDirectMessage, db
 )
+from app import load_user_chat_history, load_group_chat_history, load_assistant_chat_history, save_user_chat_history, save_group_chat_history, get_user_chat_file_path
 from app.models_misc import NotificationQueue, NotificationSubscription
 from app.utils.team_isolation import get_current_scouting_team_number
 from app.utils.analysis import calculate_team_metrics
@@ -80,10 +82,29 @@ def enforce_mobile_auth():
             'error_code': 'USER_NOT_FOUND'
         }), 401
 
+    # Determine team_number securely: prefer the token value but if it is
+    # missing or looks suspicious (e.g. equals the user_id) fall back to the
+    # value from the DB to avoid treating user ids as team numbers.
+    token_team = payload.get('team_number')
+    team_number = None
+    try:
+        if token_team is None:
+            team_number = getattr(user, 'scouting_team_number', None)
+        else:
+            # If token_team matches the user id, that's likely an encoding bug
+            # where the client accidentally put user_id into team_number.
+            if str(token_team) == str(payload.get('user_id')):
+                current_app.logger.warning(f"token team_number appears to equal user_id for user {payload.get('user_id')}; using DB scouting_team_number instead")
+                team_number = getattr(user, 'scouting_team_number', None)
+            else:
+                team_number = token_team
+    except Exception:
+        team_number = payload.get('team_number')
+
     # Attach to request so downstream handlers can use them just like
     # the token_required decorator does.
     request.mobile_user = user
-    request.mobile_team_number = payload.get('team_number')
+    request.mobile_team_number = team_number
 
 # JWT Configuration
 JWT_SECRET_KEY = 'your-secret-key-change-in-production'  # TODO: Move to config
@@ -150,9 +171,25 @@ def token_required(f):
                 'error_code': 'USER_NOT_FOUND'
             }), 401
         
-        # Add user info to request context
+        # Add user info to request context. Be defensive about the team number
+        # - prefer the token value, but if it is missing or matches the user id
+        #   it is likely incorrect and we fall back to the DB value.
+        token_team = payload.get('team_number')
+        team_number = None
+        try:
+            if token_team is None:
+                team_number = getattr(user, 'scouting_team_number', None)
+            else:
+                if str(token_team) == str(payload.get('user_id')):
+                    current_app.logger.warning(f"token team_number equals user_id for user {payload.get('user_id')}; using DB scouting_team_number instead")
+                    team_number = getattr(user, 'scouting_team_number', None)
+                else:
+                    team_number = token_team
+        except Exception:
+            team_number = payload.get('team_number')
+
         request.mobile_user = user
-        request.mobile_team_number = payload['team_number']
+        request.mobile_team_number = team_number
         
         return f(*args, **kwargs)
     
@@ -732,6 +769,11 @@ def submit_scouting_data():
     try:
         user = request.mobile_user
         team_number = request.mobile_team_number
+        # Diagnostic log to help trace token vs DB team values for scouting submissions
+        try:
+            current_app.logger.info(f"submit_scouting_data invoked: mobile_user_id={getattr(user,'id',None)} mobile_username={getattr(user,'username',None)} token_team={team_number} db_team={getattr(user,'scouting_team_number',None)} content_type={request.content_type}")
+        except Exception:
+            pass
         data = request.get_json()
         
         if not data:
@@ -1690,6 +1732,624 @@ def get_scheduled_notifications():
     except Exception as e:
         current_app.logger.error(f"Get scheduled notifications error: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'success': False, 'error': 'Failed to retrieve scheduled notifications', 'error_code': 'NOTIFICATIONS_ERROR'}), 500
+
+
+@mobile_api.route('/chat/all', methods=['GET'])
+@token_required
+def get_user_and_team_chats():
+    """
+    Fetch all chat messages authored by the current user or by any team that
+    belongs to the same scouting_team_number as the authenticated user.
+
+    Query params:
+    - limit (int, default 200)
+    - offset (int, default 0)
+
+    Response:
+    {
+      "success": true,
+      "count": 10,
+      "total": 123,
+      "messages": [ ... ]
+    }
+    """
+    try:
+        user = request.mobile_user
+        team_number = request.mobile_team_number
+
+        # All team numbers that belong to this scouting_team_number
+        teams = Team.query.filter_by(scouting_team_number=team_number).all()
+        team_numbers = [t.team_number for t in teams]
+
+        # If no teams are registered for this scouting team, return empty
+        if not team_numbers:
+            return jsonify({'success': True, 'count': 0, 'total': 0, 'messages': []}), 200
+
+        # Build query: messages authored by the requesting user OR authored by any
+        # team number that belongs to this scouting team.
+        q = ScoutingAllianceChat.query.filter(
+            db.or_(
+                ScoutingAllianceChat.from_username == user.username,
+                ScoutingAllianceChat.from_team_number.in_(team_numbers)
+            )
+        )
+
+        limit = min(request.args.get('limit', 200, type=int), 2000)
+        offset = request.args.get('offset', 0, type=int)
+
+        total = q.count()
+        rows = q.order_by(ScoutingAllianceChat.created_at.desc()).offset(offset).limit(limit).all()
+
+        messages = [r.to_dict() for r in rows]
+
+        return jsonify({'success': True, 'count': len(messages), 'total': total, 'messages': messages}), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Get user/team chats error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Failed to retrieve chats', 'error_code': 'CHAT_FETCH_ERROR'}), 500
+
+
+@mobile_api.route('/chat/members', methods=['GET'])
+@token_required
+def chat_members():
+    """
+    List users the authenticated mobile user is allowed to message.
+
+    Query params:
+    - scope: 'team' (default) or 'alliance'
+    - team_number: optional integer to restrict to a specific member team's users
+
+    Rules:
+    - 'team' scope returns users with the same `scouting_team_number` as the token.
+    - 'alliance' scope returns users who belong to teams that are members of the
+      requesting team's active alliance (if any) OR users in the requesting team.
+    - If `team_number` is provided, the request is allowed only when that team
+      is the requesting user's scouting team or is part of the active alliance.
+    """
+    try:
+        user = request.mobile_user
+        token_team_number = request.mobile_team_number
+
+        scope = (request.args.get('scope') or 'team').lower()
+        q_team_number = request.args.get('team_number', type=int)
+
+        # Helper to serialize users
+        def serialize(u):
+            return {
+                'id': u.id,
+                'username': u.username,
+                'display_name': getattr(u, 'display_name', None) or u.username,
+                'team_number': u.scouting_team_number,
+                'profile_picture': u.profile_picture
+            }
+
+        # Resolve active alliance for token team (may be None)
+        alliance = TeamAllianceStatus.get_active_alliance_for_team(token_team_number)
+        alliance_member_team_numbers = alliance.get_member_team_numbers() if alliance else []
+
+        # If a specific team_number was requested, validate scope permissions
+        if q_team_number:
+            if q_team_number == token_team_number:
+                users = User.query.filter_by(scouting_team_number=token_team_number, is_active=True).all()
+            elif scope == 'alliance' and q_team_number in alliance_member_team_numbers:
+                users = User.query.filter_by(scouting_team_number=q_team_number, is_active=True).all()
+            else:
+                return jsonify({'success': False, 'error': 'Requested team not in scope', 'error_code': 'USER_NOT_IN_SCOPE'}), 403
+
+        else:
+            # No specific team requested — return according to scope
+            if scope == 'alliance' and alliance:
+                # Return users from all alliance member teams plus local team users
+                team_nums = set(alliance_member_team_numbers)
+                team_nums.add(token_team_number)
+                users = User.query.filter(User.scouting_team_number.in_(list(team_nums)), User.is_active == True).all()
+            else:
+                # Default: team scope
+                users = User.query.filter_by(scouting_team_number=token_team_number, is_active=True).all()
+
+        members = [serialize(u) for u in users]
+
+        return jsonify({'success': True, 'members': members, 'count': len(members)}), 200
+
+    except Exception as e:
+        current_app.logger.error(f"chat_members error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Failed to retrieve chat members', 'error_code': 'CHAT_MEMBERS_ERROR'}), 500
+
+
+@mobile_api.route('/chat/messages', methods=['GET'])
+@token_required
+def chat_messages():
+    """
+    Fetch chat messages. Supports:
+      - type=dm : direct messages for the authenticated user (use `user` param to filter conversation)
+      - type=alliance : alliance chat messages for the authenticated user's active alliance
+
+    Query params:
+      - type: 'dm' or 'alliance' (default: 'alliance')
+      - user: other user id (for dm conversation)
+      - limit, offset
+    """
+    try:
+        user = request.mobile_user
+        team_number = request.mobile_team_number
+
+        msg_type = (request.args.get('type') or 'alliance').lower()
+        other_user_id = request.args.get('user', type=int)
+        limit = min(request.args.get('limit', 50, type=int), 2000)
+        offset = request.args.get('offset', 0, type=int)
+
+        if msg_type == 'dm':
+            # Read direct messages from per-user JSON files under instance/chat/users/<team_number>/
+            import os, glob
+
+            username = user.username
+
+            # If a specific other user id was provided, validate and load that single conversation
+            if other_user_id:
+                other = User.query.get(other_user_id)
+                if not other:
+                    return jsonify({'success': False, 'error': 'Other user not found', 'error_code': 'USER_NOT_FOUND'}), 404
+                # Enforce team isolation: only allow DMs within the same scouting team
+                if other.scouting_team_number != team_number:
+                    return jsonify({'success': False, 'error': 'Requested user not in same team', 'error_code': 'USER_NOT_IN_SCOPE'}), 403
+
+                history = load_user_chat_history(username, other.username, team_number) or []
+                # Sort by timestamp (newest first)
+                history_sorted = sorted(history, key=lambda m: (m.get('timestamp') or m.get('created_at') or ''), reverse=True)
+                total = len(history_sorted)
+                start = offset
+                end = offset + limit
+                messages = history_sorted[start:end]
+
+                return jsonify({'success': True, 'count': len(messages), 'total': total, 'messages': messages}), 200
+
+            # No other_user specified: aggregate all DM files that include this user
+            team_dir = os.path.join(current_app.root_path, '..', 'instance', 'chat', 'users', str(team_number))
+            username_lower = str(username).lower()
+            pattern = os.path.join(team_dir, f'*{username_lower}*_chat_history.json')
+            dm_files = glob.glob(pattern) if os.path.exists(team_dir) else []
+
+            all_messages = []
+            for fp in dm_files:
+                try:
+                    with open(fp, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        if isinstance(data, list):
+                            all_messages.extend(data)
+                except Exception:
+                    continue
+
+            # Filter messages to those involving this username explicitly (case-insensitive)
+            uname_l = username_lower
+            filtered = []
+            for m in all_messages:
+                s = (m.get('sender') or '').lower()
+                r = (m.get('recipient') or '').lower()
+                if s == uname_l or r == uname_l:
+                    filtered.append(m)
+            all_messages = filtered
+            all_sorted = sorted(all_messages, key=lambda m: (m.get('timestamp') or m.get('created_at') or ''), reverse=True)
+            total = len(all_sorted)
+            messages = all_sorted[offset:offset + limit]
+
+            return jsonify({'success': True, 'count': len(messages), 'total': total, 'messages': messages}), 200
+
+        else:
+            # alliance chat (default) - read from per-team group files named 'alliance_<id>_group_chat_history.json'
+            alliance = TeamAllianceStatus.get_active_alliance_for_team(team_number)
+            if not alliance:
+                return jsonify({'success': True, 'count': 0, 'total': 0, 'messages': []}), 200
+
+            # Collect group histories from each alliance member team (file-backed), plus fall back to DB records
+            member_team_numbers = alliance.get_member_team_numbers() if hasattr(alliance, 'get_member_team_numbers') else []
+            # Always include the requesting team
+            if team_number not in member_team_numbers:
+                member_team_numbers.append(team_number)
+
+            all_messages = []
+            for tn in member_team_numbers:
+                try:
+                    grp = load_group_chat_history(tn, f'alliance_{alliance.id}') or []
+                    all_messages.extend(grp)
+                except Exception:
+                    continue
+
+            # Fallback: include DB alliance chat rows if present to avoid missing previously stored messages
+            try:
+                rows = ScoutingAllianceChat.query.filter_by(alliance_id=alliance.id).all()
+                for r in rows:
+                    all_messages.append(r.to_dict())
+            except Exception:
+                # Ignore DB errors — prefer file-backed content
+                pass
+
+            # Normalize and sort
+            all_sorted = sorted(all_messages, key=lambda m: (m.get('timestamp') or m.get('created_at') or ''), reverse=True)
+            total = len(all_sorted)
+            messages = all_sorted[offset:offset + limit]
+
+            return jsonify({'success': True, 'count': len(messages), 'total': total, 'messages': messages}), 200
+
+    except Exception as e:
+        current_app.logger.error(f"chat_messages error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Failed to retrieve chat messages', 'error_code': 'CHAT_MESSAGES_ERROR'}), 500
+
+
+
+@mobile_api.route('/chat/send', methods=['POST'])
+@token_required
+def chat_send():
+    """
+    Send a chat message. Supports direct messages and alliance/group messages.
+
+    Request JSON examples:
+      { "recipient_id": 43, "body": "Hello" }
+      { "conversation_type": "alliance", "body": "Alliance update" }
+
+    Response: 201 with saved message dict on success.
+    """
+    try:
+        user = request.mobile_user
+        team_number = request.mobile_team_number
+
+        # Try JSON first (common case)
+        data = None
+        try:
+            data = request.get_json(silent=True)
+        except Exception:
+            data = None
+
+        # Fallback to form-encoded or multipart
+        if not data:
+            if request.form and len(request.form) > 0:
+                data = request.form.to_dict()
+
+        # Fallback to raw body (text/plain or clients that send raw text)
+        if not data or not isinstance(data, dict):
+            raw = request.get_data(as_text=True) or ''
+            if raw:
+                # If raw looks like JSON, try to parse it
+                try:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, dict):
+                        data = parsed
+                except Exception:
+                    # treat raw text as message body
+                    data = {'body': raw}
+
+        if not data:
+            current_app.logger.info(f"chat_send missing body: content_type={request.content_type} raw={request.get_data(as_text=True)}")
+            return jsonify({'success': False, 'error': 'Message body required', 'error_code': 'MISSING_DATA'}), 400
+
+        # Accept multiple keys for message text for robustness
+        body = (data.get('body') or data.get('text') or data.get('message') or '').strip()
+        if not body:
+            current_app.logger.info(f"chat_send empty body after parsing: data={data} content_type={request.content_type}")
+            return jsonify({'success': False, 'error': 'Message body required', 'error_code': 'MISSING_DATA'}), 400
+
+        recipient_id = data.get('recipient_id')
+        conversation_type = (data.get('conversation_type') or data.get('type') or 'direct')
+
+        import uuid
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+        if recipient_id:
+            try:
+                recipient_id = int(recipient_id)
+            except Exception:
+                # if recipient provided as username rather than id, try lookup
+                pass
+
+            other = None
+            if isinstance(recipient_id, int):
+                other = User.query.get(recipient_id)
+            else:
+                # treat as username (do a case-insensitive lookup within the token's team)
+                try:
+                    from app.utils.team_isolation import find_user_in_same_team
+                    other = find_user_in_same_team(str(recipient_id))
+                except Exception:
+                    other = User.query.filter_by(username=str(recipient_id)).first()
+
+            if not other:
+                return jsonify({'success': False, 'error': 'Recipient not found', 'error_code': 'USER_NOT_FOUND'}), 404
+            if other.scouting_team_number != team_number:
+                return jsonify({'success': False, 'error': 'Recipient not in same team', 'error_code': 'USER_NOT_IN_SCOPE'}), 403
+
+            message = {
+                'id': str(uuid.uuid4()),
+                'sender': user.username,
+                'recipient': other.username,
+                'text': body,
+                'body': body,
+                'timestamp': timestamp,
+                'offline_id': data.get('offline_id')
+            }
+
+            # Load existing history and append
+            hist = load_user_chat_history(user.username, other.username, team_number) or []
+            hist.append(message)
+            save_user_chat_history(user.username, other.username, team_number, hist)
+            # Log the file path we wrote to (helps debug visibility issues)
+            try:
+                fp = get_user_chat_file_path(user.username, other.username, team_number)
+                current_app.logger.info(f"chat_send: saved DM to {fp} (sender={user.username} recipient={other.username})")
+            except Exception:
+                pass
+
+            # Emit Socket.IO event so online recipients receive the DM in real-time
+            try:
+                from app import socketio
+                socketio.emit('dm_message', message, room=user.username)
+                socketio.emit('dm_message', message, room=other.username)
+            except Exception:
+                pass
+
+            # Also increment recipient's chat state unread count so their UI poll picks it up
+            try:
+                # Use error-level logging temporarily so messages appear in test output logs
+                current_app.logger.error(f"mobile chat_send: incrementing chat state for recipient={other.username}")
+                from app import normalize_username
+                state_folder = os.path.join(current_app.instance_path, 'chat', 'users', str(other.scouting_team_number or team_number))
+                os.makedirs(state_folder, exist_ok=True)
+                state_file = os.path.join(state_folder, f'chat_state_{normalize_username(other.username)}.json')
+                state = {}
+                if os.path.exists(state_file):
+                    try:
+                        with open(state_file, 'r', encoding='utf-8') as sf:
+                            state = json.load(sf) or {}
+                    except Exception:
+                        state = {}
+                # increment unreadCount
+                try:
+                    prev = int(state.get('unreadCount', 0) or 0)
+                except Exception:
+                    prev = 0
+                state['unreadCount'] = prev + 1
+                state['lastSource'] = {'type': 'dm', 'id': user.username}
+                state['lastNotified'] = datetime.now(timezone.utc).isoformat()
+                with open(state_file, 'w', encoding='utf-8') as sf:
+                    json.dump(state, sf, ensure_ascii=False, indent=2)
+                current_app.logger.error(f"mobile chat_send: wrote chat state {state_file} unreadCount={state.get('unreadCount')}")
+            except Exception as e:
+                try:
+                    current_app.logger.error(f"mobile chat_send: failed incrementing chat state for {getattr(other,'username',None)}: {e}")
+                except Exception:
+                    pass
+
+            return jsonify({'success': True, 'message': message}), 201
+
+        # conversation_type-based sends
+        if str(conversation_type).lower() == 'alliance':
+            alliance = TeamAllianceStatus.get_active_alliance_for_team(team_number)
+            if not alliance:
+                return jsonify({'success': False, 'error': 'No active alliance', 'error_code': 'NO_ALLIANCE'}), 400
+
+            message = {
+                'id': str(uuid.uuid4()),
+                'sender': user.username,
+                'group': f'alliance_{alliance.id}',
+                'team': team_number,
+                'text': body,
+                'timestamp': timestamp,
+                'offline_id': data.get('offline_id')
+            }
+
+            # Save to requesting team's alliance group file
+            hist = load_group_chat_history(team_number, f'alliance_{alliance.id}') or []
+            hist.append(message)
+            save_group_chat_history(team_number, f'alliance_{alliance.id}', hist)
+
+            return jsonify({'success': True, 'message': message}), 201
+
+        # Other conversation types (group) - require 'group' field
+        group = data.get('group')
+        if group:
+            message = {
+                'id': str(uuid.uuid4()),
+                'sender': user.username,
+                'group': group,
+                'team': team_number,
+                'text': body,
+                'timestamp': timestamp,
+                'offline_id': data.get('offline_id')
+            }
+            hist = load_group_chat_history(team_number, group) or []
+            hist.append(message)
+            save_group_chat_history(team_number, group, hist)
+            return jsonify({'success': True, 'message': message}), 201
+
+        return jsonify({'success': False, 'error': 'Invalid send parameters', 'error_code': 'INVALID_PARAMS'}), 400
+
+    except Exception as e:
+        current_app.logger.error(f"chat_send error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Failed to send message', 'error_code': 'CHAT_SEND_ERROR'}), 500
+
+
+# Mobile-side message editing (mirror web /chat/edit-message)
+@mobile_api.route('/chat/edit-message', methods=['POST'])
+@token_required
+def mobile_edit_message():
+    try:
+        user = request.mobile_user
+        data = request.get_json() or {}
+        message_id = data.get('message_id')
+        new_text = data.get('text')
+
+        if not message_id or not new_text:
+            return jsonify({'success': False, 'error': 'Message ID and text required.'}), 400
+
+        # Import helper to locate and save message history (import inside to avoid circular imports)
+        from app import find_message_in_user_files
+
+        team_number = getattr(user, 'scouting_team_number', 'no_team')
+        username = user.username
+
+        message_info = find_message_in_user_files(message_id, username, team_number)
+        if not message_info:
+            return jsonify({'success': False, 'error': 'Message not found.'}), 404
+
+        message = message_info['message']
+        # Only allow editing messages authored by this user (and not assistant)
+        sender_val = str(message.get('sender') or '')
+        # Compare case-insensitively and trim whitespace to avoid false mismatches
+        if sender_val.strip().lower() != str(username).strip().lower():
+            current_app.logger.info(f"mobile_edit_message: ownership mismatch: token_user={username} message_sender={sender_val} message_id={message_id}")
+            return jsonify({'success': False, 'error': 'Cannot edit other users messages.'}), 403
+        if sender_val.strip().lower() == 'assistant':
+            return jsonify({'success': False, 'error': 'Cannot edit assistant messages.'}), 403
+
+        history = message_info['history']
+        history[message_info['index']]['text'] = new_text
+        history[message_info['index']]['edited'] = True
+        from datetime import datetime, timezone
+        history[message_info['index']]['edited_timestamp'] = datetime.now(timezone.utc).isoformat()
+
+        # Save
+        message_info['save_func'](history)
+
+        # Emit socket event
+        from app import socketio
+        emit_data = {'message_id': message_id, 'text': new_text, 'reactions': message.get('reactions', [])}
+        message_type = message_info.get('file_type')
+        if message_type == 'assistant':
+            socketio.emit('message_updated', emit_data, room=username)
+        elif message_type == 'dm' and message.get('recipient'):
+            socketio.emit('message_updated', emit_data, room=message['sender'])
+            socketio.emit('message_updated', emit_data, room=message['recipient'])
+
+        return jsonify({'success': True, 'message': 'Message edited.'}), 200
+    except Exception as e:
+        current_app.logger.error(f"mobile_edit_message error: {e}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Edit failed'}), 500
+
+
+# Mobile-side message deletion (mirror web /chat/delete-message)
+@mobile_api.route('/chat/delete-message', methods=['POST'])
+@token_required
+def mobile_delete_message():
+    try:
+        user = request.mobile_user
+        data = request.get_json() or {}
+        message_id = data.get('message_id')
+        if not message_id:
+            return jsonify({'success': False, 'error': 'Message ID required.'}), 400
+
+        from app import find_message_in_user_files
+        team_number = getattr(user, 'scouting_team_number', 'no_team')
+        username = user.username
+
+        message_info = find_message_in_user_files(message_id, username, team_number)
+        if not message_info:
+            return jsonify({'success': False, 'error': 'Message not found.'}), 404
+
+        message = message_info['message']
+        sender_val = str(message.get('sender') or '')
+        if sender_val.strip().lower() != str(username).strip().lower():
+            current_app.logger.info(f"mobile_delete_message: ownership mismatch: token_user={username} message_sender={sender_val} message_id={message_id}")
+            return jsonify({'success': False, 'error': 'Cannot delete other users messages.'}), 403
+        if sender_val.strip().lower() == 'assistant':
+            return jsonify({'success': False, 'error': 'Cannot delete assistant messages.'}), 403
+
+        history = message_info['history']
+        history.pop(message_info['index'])
+        message_info['save_func'](history)
+
+        # Emit socket event
+        from app import socketio
+        emit_data = {'message_id': message_id}
+        message_type = message_info.get('file_type')
+        if message_type == 'assistant':
+            socketio.emit('message_deleted', emit_data, room=username)
+        elif message_type == 'dm' and message.get('recipient'):
+            socketio.emit('message_deleted', emit_data, room=message['sender'])
+            socketio.emit('message_deleted', emit_data, room=message['recipient'])
+
+        return jsonify({'success': True, 'message': 'Message deleted.'}), 200
+    except Exception as e:
+        current_app.logger.error(f"mobile_delete_message error: {e}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Delete failed'}), 500
+
+
+# Mobile-side reaction toggle (mirror web /chat/react-message)
+@mobile_api.route('/chat/react-message', methods=['POST'])
+@token_required
+def mobile_react_to_message():
+    try:
+        user = request.mobile_user
+        data = request.get_json() or {}
+        message_id = data.get('message_id')
+        emoji = data.get('emoji')
+        if not message_id or not emoji:
+            return jsonify({'success': False, 'error': 'Message ID and emoji required.'}), 400
+
+        from app import find_message_in_user_files
+        team_number = getattr(user, 'scouting_team_number', 'no_team')
+        username = user.username
+
+        message_info = find_message_in_user_files(message_id, username, team_number)
+        if not message_info:
+            return jsonify({'success': False, 'error': 'Message not found.'}), 404
+
+        message = message_info['message']
+        history = message_info['history']
+        if 'reactions' not in history[message_info['index']]:
+            history[message_info['index']]['reactions'] = []
+
+        # Toggle reaction locally
+        def _toggle(reactions, username, emoji):
+            existing = next((r for r in reactions if r.get('user') == username and r.get('emoji') == emoji), None)
+            if existing:
+                reactions.remove(existing)
+            else:
+                from datetime import datetime, timezone
+                reactions.append({'user': username, 'emoji': emoji, 'timestamp': datetime.now(timezone.utc).isoformat()})
+            return reactions
+
+        updated_reactions = _toggle(history[message_info['index']]['reactions'], username, emoji)
+        history[message_info['index']]['reactions'] = updated_reactions
+
+        # Build summary
+        def _group(reactions):
+            emoji_counts = {}
+            for r in reactions:
+                em = r.get('emoji')
+                if not em: continue
+                emoji_counts[em] = emoji_counts.get(em, 0) + 1
+            return [{'emoji': e, 'count': c} for e, c in emoji_counts.items()]
+
+        reaction_summary = _group(updated_reactions)
+        try:
+            history[message_info['index']]['reactions_summary'] = reaction_summary
+        except Exception:
+            pass
+
+        message_info['save_func'](history)
+
+        # Emit socket update
+        from app import socketio
+        emit_data = {'message_id': message_id, 'reactions': reaction_summary}
+        message_type = message_info.get('file_type')
+        if message_type == 'assistant':
+            socketio.emit('message_updated', emit_data, room=username)
+        elif message_type == 'dm' and message.get('recipient'):
+            socketio.emit('message_updated', emit_data, room=message['sender'])
+            socketio.emit('message_updated', emit_data, room=message['recipient'])
+        elif message_type == 'group':
+            grp = message.get('group') or message.get('group_name')
+            team = message.get('team') or message.get('team_number')
+            try:
+                room_name = f"group_{team}_{grp}"
+                socketio.emit('message_updated', emit_data, room=room_name)
+            except Exception:
+                pass
+
+        # Return JSON with ensure_ascii=False so emoji are sent as unicode characters
+        resp_text = json.dumps({'success': True, 'reactions': reaction_summary}, ensure_ascii=False)
+        return current_app.response_class(resp_text, mimetype='application/json'), 200
+    except Exception as e:
+        current_app.logger.error(f"mobile_react_to_message error: {e}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'React failed'}), 500
 
 
 # ============================================================================

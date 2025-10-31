@@ -281,12 +281,12 @@ All analytics responses include:
 **Query:** "trends for team 5454"
 **Output:**
 ```
-📈 Trend Analysis for Team 5454
+ Trend Analysis for Team 5454
 
 Trajectory: Strongly improving (+18.5%)
 Team 5454 is showing significant improvement. Average increased from 42.3 to 50.1 points.
 
-🔍 Recent Form: 52.7 avg points
+ Recent Form: 52.7 avg points
 
 Component Trends:
   • Autonomous: Improving significantly (+3.2)
@@ -297,7 +297,7 @@ Component Trends:
 **Query:** "who will win match 5?"
 **Output:**
 ```
-🎯 Match 5 Prediction
+ Match 5 Prediction
 
 Red Alliance: 254, 118, 1678
 Blue Alliance: 5454, 1323, 2056
@@ -310,7 +310,7 @@ Predicted Score: Red 145 - Blue 98
 **Query:** "consistency of team 254"
 **Output:**
 ```
-🎯 Consistency Analysis for Team 254
+ Consistency Analysis for Team 254
 
 Average Score: 87.3 points
 Standard Deviation: 9.2

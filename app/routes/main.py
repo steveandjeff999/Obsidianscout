@@ -889,9 +889,19 @@ def send_dm():
     recipient = data.get('recipient')
     text = data.get('message')
     
-    # Validate that recipient is in the same scouting team
-    if not validate_user_in_same_team(recipient):
-        return {'success': False, 'message': 'Cannot send message to user from different scouting team.'}, 403
+    # Resolve recipient case-insensitively and validate team membership
+    from app.utils.team_isolation import find_user_in_same_team
+    other = None
+    try:
+        other = find_user_in_same_team(recipient)
+    except Exception:
+        other = None
+
+    if not other:
+        current_app.logger.info(f"send_dm: recipient lookup failed or not in team: recipient_raw={recipient} sender={sender}")
+        return {'success': False, 'message': 'Recipient not found or not in same scouting team.'}, 403
+    # Use canonical DB username for recipient
+    recipient_canonical = other.username
     
     from app import save_chat_message
     import uuid
@@ -907,7 +917,32 @@ def send_dm():
     # Emit real-time DM event to both sender and recipient
     from app import socketio
     socketio.emit('dm_message', message, room=sender)
-    socketio.emit('dm_message', message, room=recipient)
+    socketio.emit('dm_message', message, room=recipient_canonical)
+
+    # Increment recipient's chat state so their UI polling picks up the unread
+    try:
+        from app import normalize_username
+        state_folder = os.path.join(current_app.instance_path, 'chat', 'users', str(getattr(other, 'scouting_team_number', 'no_team')))
+        os.makedirs(state_folder, exist_ok=True)
+        state_file = os.path.join(state_folder, f'chat_state_{normalize_username(recipient_canonical)}.json')
+        state = {}
+        if os.path.exists(state_file):
+            try:
+                with open(state_file, 'r', encoding='utf-8') as sf:
+                    state = json.load(sf) or {}
+            except Exception:
+                state = {}
+        try:
+            prev = int(state.get('unreadCount', 0) or 0)
+        except Exception:
+            prev = 0
+        state['unreadCount'] = prev + 1
+        state['lastSource'] = {'type': 'dm', 'id': sender}
+        state['lastNotified'] = datetime.now(timezone.utc).isoformat()
+        with open(state_file, 'w', encoding='utf-8') as sf:
+            json.dump(state, sf, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
     return {'success': True, 'message': 'Message sent.'}
 
 @bp.route('/chat/edit-message', methods=['POST'])
@@ -1089,7 +1124,13 @@ def react_to_message():
             # If we can't construct the room, fall back to no-op
             pass
     
-    return {'success': True, 'reactions': reaction_summary}
+    # Return JSON with ensure_ascii=False so emoji are sent as unicode characters
+    try:
+        resp_text = json.dumps({'success': True, 'reactions': reaction_summary}, ensure_ascii=False)
+        return current_app.response_class(resp_text, mimetype='application/json')
+    except Exception:
+        # Fallback to original dict response if json encoding fails for some reason
+        return {'success': True, 'reactions': reaction_summary}
 
 def toggle_reaction(reactions, username, emoji):
     """Toggle a user's reaction with a specific emoji"""
@@ -1151,7 +1192,58 @@ def get_user_chat_state_file(username):
 
         folder = os.path.join(current_app.instance_path, 'chat', 'users', team_segment)
         os.makedirs(folder, exist_ok=True)
-        return os.path.join(folder, f'chat_state_{username}.json')
+        safe_name = str(username).strip().lower()
+        normalized = f'chat_state_{safe_name}.json'
+        normalized_path = os.path.join(folder, normalized)
+
+        # If normalized file already exists, return it
+        if os.path.exists(normalized_path):
+            return normalized_path
+
+        # Otherwise try to find any legacy/case-variant file and migrate it
+        try:
+            for f in os.listdir(folder):
+                # Match case-insensitively to find legacy files like 'chat_state_Seth Herod.json'
+                if f.lower() == normalized.lower():
+                    legacy_path = os.path.join(folder, f)
+                    try:
+                        # On case-insensitive filesystems (Windows) renaming only the case
+                        # can fail. Use a two-step replace via a temporary filename to
+                        # reliably change the filename casing or move contents to the
+                        # normalized path.
+                        if os.path.normcase(legacy_path) == os.path.normcase(normalized_path):
+                            # Paths point to the same case-insensitive file; perform
+                            # a safe rename via a temporary file.
+                            temp_path = normalized_path + '.migrate_tmp'
+                            # Ensure no leftover temp
+                            try:
+                                if os.path.exists(temp_path):
+                                    os.remove(temp_path)
+                            except Exception:
+                                pass
+                            os.replace(legacy_path, temp_path)
+                            os.replace(temp_path, normalized_path)
+                            current_app.logger.info(f"Migrated chat_state case-variant: {legacy_path} -> {normalized_path}")
+                            return normalized_path
+                        else:
+                            # Different paths (e.g., different characters beyond case),
+                            # simply move/replace to the normalized path.
+                            os.replace(legacy_path, normalized_path)
+                            current_app.logger.info(f"Migrated chat_state file: {legacy_path} -> {normalized_path}")
+                            return normalized_path
+                    except Exception:
+                        # If migration fails, fall back to returning the legacy path so
+                        # callers continue to read the existing file instead of failing.
+                        try:
+                            current_app.logger.warning(f"Failed migrating chat_state {legacy_path} -> {normalized_path}")
+                        except Exception:
+                            pass
+                        return legacy_path
+        except Exception:
+            pass
+
+        # No existing file found; return the normalized path where new state will be written
+        return normalized_path
     except Exception:
         # As a final fallback, use the original chat folder
         fallback = os.path.join(get_chat_folder(), f'chat_state_{username}.json')

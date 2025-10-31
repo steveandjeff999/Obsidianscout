@@ -835,13 +835,13 @@ class MultiServerSyncManager:
                         if record_id:
                             existing_record = model_class.query.get(record_id)
                             if existing_record:
-                                logger.info(f"🗑️  Applying HARD DELETE for {table_name} record {record_id}")
+                                logger.info(f"️  Applying HARD DELETE for {table_name} record {record_id}")
                                 
                                 # Store some info before deletion for logging
                                 record_info = f"{getattr(existing_record, 'username', getattr(existing_record, 'name', str(record_id)))}"
                                 
                                 db.session.delete(existing_record)
-                                logger.info(f"✅ Hard deleted {table_name} record {record_id} ({record_info})")
+                                logger.info(f" Hard deleted {table_name} record {record_id} ({record_info})")
                                 applied_count += 1
                             else:
                                 logger.warning(f"Warning: Record {record_id} in {table_name} not found for hard deletion (may already be deleted)")
@@ -851,7 +851,7 @@ class MultiServerSyncManager:
                         if record_id:
                             existing_record = model_class.query.get(record_id)
                             if existing_record and hasattr(existing_record, 'is_active'):
-                                logger.info(f"🚫 Applying SOFT DELETE for {table_name} record {record_id}")
+                                logger.info(f" Applying SOFT DELETE for {table_name} record {record_id}")
                                 
                                 existing_record.is_active = False
                                 # Also update any timestamp fields
@@ -859,7 +859,7 @@ class MultiServerSyncManager:
                                     existing_record.updated_at = datetime.now(timezone.utc)
                                 
                                 record_info = f"{getattr(existing_record, 'username', getattr(existing_record, 'name', str(record_id)))}"
-                                logger.info(f"✅ Soft deleted {table_name} record {record_id} ({record_info})")
+                                logger.info(f" Soft deleted {table_name} record {record_id} ({record_info})")
                                 applied_count += 1
                             else:
                                 logger.warning(f"Warning: Record {record_id} in {table_name} not found for soft deletion or doesn't support is_active")
@@ -869,7 +869,7 @@ class MultiServerSyncManager:
                         if record_id:
                             existing_record = model_class.query.get(record_id)
                             if existing_record and hasattr(existing_record, 'is_active'):
-                                logger.info(f"🔄 Applying REACTIVATION for {table_name} record {record_id}")
+                                logger.info(f" Applying REACTIVATION for {table_name} record {record_id}")
                                 
                                 existing_record.is_active = True
                                 # Also update any timestamp fields
@@ -877,7 +877,7 @@ class MultiServerSyncManager:
                                     existing_record.updated_at = datetime.now(timezone.utc)
                                 
                                 record_info = f"{getattr(existing_record, 'username', getattr(existing_record, 'name', str(record_id)))}"
-                                logger.info(f"✅ Reactivated {table_name} record {record_id} ({record_info})")
+                                logger.info(f" Reactivated {table_name} record {record_id} ({record_info})")
                                 applied_count += 1
                             else:
                                 logger.warning(f"Warning: Record {record_id} in {table_name} not found for reactivation")
@@ -1010,7 +1010,7 @@ class MultiServerSyncManager:
             # Start periodic sync
             self.start_periodic_sync()
             
-            print("✅ Multi-server sync background workers started")
+            print(" Multi-server sync background workers started")
         except Exception as e:
             print(f"Warning: Could not start sync workers: {e}")
             self.running = False
@@ -1025,7 +1025,7 @@ class MultiServerSyncManager:
         """Start periodic synchronization"""
         # This would start a background thread for periodic sync
         # For now, just mark as started
-        print("🔄 Periodic sync started")
+        print(" Periodic sync started")
     
     def upload_file_to_server(self, server: SyncServer, file_path: str) -> bool:
         """Public method to upload a file to a specific server"""

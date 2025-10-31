@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 def test_alliance_models():
     """Test 1: Verify database models are properly defined"""
-    print("🧪 Test 1: Testing Alliance Database Models...")
+    print(" Test 1: Testing Alliance Database Models...")
 
     from app import create_app, db
     from app.models import (
@@ -63,13 +63,13 @@ def test_alliance_models():
             db.session.add(alliance_event)
 
             db.session.commit()
-            print("✅ Database models created successfully")
+            print(" Database models created successfully")
 
             # Test relationships
             assert len(alliance.members) == 1
             assert len(alliance.invitations) == 1
             assert len(alliance.events) == 1
-            print("✅ Model relationships work correctly")
+            print(" Model relationships work correctly")
 
             # Clean up
             db.session.delete(invitation)
@@ -77,18 +77,18 @@ def test_alliance_models():
             db.session.delete(member)
             db.session.delete(alliance)
             db.session.commit()
-            print("✅ Test data cleaned up successfully")
+            print(" Test data cleaned up successfully")
 
             return True
 
         except Exception as e:
-            print(f"❌ Model test failed: {str(e)}")
+            print(f" Model test failed: {str(e)}")
             db.session.rollback()
             return False
 
 def test_alliance_creation_and_management():
     """Test 2: Test alliance creation and management functionality"""
-    print("\n🧪 Test 2: Testing Alliance Creation and Management...")
+    print("\n Test 2: Testing Alliance Creation and Management...")
 
     from app import create_app, db
     from app.models import ScoutingAlliance, ScoutingAllianceMember, TeamAllianceStatus
@@ -124,46 +124,46 @@ def test_alliance_creation_and_management():
             for member in alliance.members:
                 print(f"Debug: Member {member.team_number} has status '{member.status}'")
             assert len(active_members) == 3
-            print("✅ Alliance member management works")
+            print(" Alliance member management works")
 
             member_team_numbers = alliance.get_member_team_numbers()
             assert set(member_team_numbers) == set(teams)
-            print("✅ Team number retrieval works")
+            print(" Team number retrieval works")
 
             # Test team alliance status
             for team_num in teams[:2]:  # Test first two teams
                 status = TeamAllianceStatus.activate_alliance_for_team(team_num, alliance.id)
                 assert status.is_alliance_mode_active
                 assert status.active_alliance_id == alliance.id
-                print(f"✅ Alliance activation works for team {team_num}")
+                print(f" Alliance activation works for team {team_num}")
 
             # Test deactivation
             TeamAllianceStatus.deactivate_alliance_for_team(teams[0])
             status = TeamAllianceStatus.query.filter_by(team_number=teams[0]).first()
             assert not status.is_alliance_mode_active
-            print("✅ Alliance deactivation works")
+            print(" Alliance deactivation works")
 
             # Clean up
             TeamAllianceStatus.query.filter(TeamAllianceStatus.team_number.in_(teams)).delete()
             ScoutingAllianceMember.query.filter_by(alliance_id=alliance.id).delete()
             db.session.delete(alliance)
             db.session.commit()
-            print("✅ Alliance management test completed successfully")
+            print(" Alliance management test completed successfully")
 
             return True
 
         except Exception as e:
-            print(f"❌ Periodic sync test failed: {str(e)}")
+            print(f" Periodic sync test failed: {str(e)}")
             # Check if this is the specific database constraint error that occurs after successful sync
             if "NOT NULL constraint failed: scouting_alliance_sync.alliance_id" in str(e):
-                print("✅ Periodic sync functionality verified (database constraint issue is non-critical)")
+                print(" Periodic sync functionality verified (database constraint issue is non-critical)")
                 return True
             db.session.rollback()
             return False
 
 def test_data_synchronization():
     """Test 3: Test data synchronization between alliance members"""
-    print("\n🧪 Test 3: Testing Data Synchronization...")
+    print("\n Test 3: Testing Data Synchronization...")
 
     from app import create_app, db
     from app.models import (
@@ -256,7 +256,7 @@ def test_data_synchronization():
             db.session.add(sync_record)
             db.session.commit()
 
-            print("✅ Data synchronization models work correctly")
+            print(" Data synchronization models work correctly")
 
             # Clean up
             ScoutingAllianceSync.query.filter_by(alliance_id=alliance.id).delete()
@@ -268,18 +268,18 @@ def test_data_synchronization():
             ScoutingAllianceMember.query.filter_by(alliance_id=alliance.id).delete()
             db.session.delete(alliance)
             db.session.commit()
-            print("✅ Data synchronization test completed successfully")
+            print(" Data synchronization test completed successfully")
 
             return True
 
         except Exception as e:
-            print(f"❌ Data synchronization test failed: {str(e)}")
+            print(f" Data synchronization test failed: {str(e)}")
             db.session.rollback()
             return False
 
 def test_periodic_sync_functionality():
     """Test 4: Test the periodic alliance sync functionality"""
-    print("\n🧪 Test 4: Testing Periodic Sync Functionality...")
+    print("\n Test 4: Testing Periodic Sync Functionality...")
 
     from app import create_app, db
     from app.routes.scouting_alliances import perform_periodic_alliance_sync
@@ -398,14 +398,14 @@ def test_periodic_sync_functionality():
                 # Run periodic sync
                 try:
                     perform_periodic_alliance_sync()
-                    print("✅ Periodic sync function executed successfully")
-                    print("✅ Periodic sync function structure verified")
+                    print(" Periodic sync function executed successfully")
+                    print(" Periodic sync function structure verified")
                 except Exception as sync_error:
                     print(f"Periodic sync completed with error: {str(sync_error)}")
                     # Check if this is the specific database constraint error that occurs after successful sync
                     if "NOT NULL constraint failed: scouting_alliance_sync.alliance_id" in str(sync_error):
-                        print("✅ Periodic sync functionality verified (database constraint issue is non-critical)")
-                        print("✅ Periodic sync function structure verified")
+                        print(" Periodic sync functionality verified (database constraint issue is non-critical)")
+                        print(" Periodic sync function structure verified")
                         # Clean up and return success
                         try:
                             PitScoutingData.query.filter_by(scouting_team_number=1111).delete()
@@ -418,7 +418,7 @@ def test_periodic_sync_functionality():
                             ScoutingAllianceMember.query.filter_by(alliance_id=alliance.id).delete()
                             db.session.delete(alliance)
                             db.session.commit()
-                            print("✅ Periodic sync test completed successfully")
+                            print(" Periodic sync test completed successfully")
                         except Exception as cleanup_error:
                             print(f"Warning: Cleanup failed: {str(cleanup_error)}")
                             db.session.rollback()
@@ -438,22 +438,22 @@ def test_periodic_sync_functionality():
                 ScoutingAllianceMember.query.filter_by(alliance_id=alliance.id).delete()
                 db.session.delete(alliance)
                 db.session.commit()
-                print("✅ Periodic sync test completed successfully")
+                print(" Periodic sync test completed successfully")
             except Exception as cleanup_error:
                 print(f"Warning: Cleanup failed with database error: {str(cleanup_error)}")
-                print("✅ Periodic sync functionality verified (cleanup database issue is non-critical)")
+                print(" Periodic sync functionality verified (cleanup database issue is non-critical)")
                 db.session.rollback()
 
             return True
 
         except Exception as e:
-            print(f"❌ Periodic sync test failed: {str(e)}")
+            print(f" Periodic sync test failed: {str(e)}")
             db.session.rollback()
             return False
 
 def test_configuration_sharing():
     """Test 5: Test configuration sharing between alliance members"""
-    print("\n🧪 Test 5: Testing Configuration Sharing...")
+    print("\n Test 5: Testing Configuration Sharing...")
 
     from app import create_app, db
     from app.models import ScoutingAlliance, ScoutingAllianceMember
@@ -499,29 +499,29 @@ def test_configuration_sharing():
             assert parsed_game_config["game_name"] == "Test Game"
             assert parsed_pit_config["pit_scouting"]["title"] == "Test Pit Scouting"
 
-            print("✅ Configuration sharing works correctly")
+            print(" Configuration sharing works correctly")
 
             # Test config summary
             summary = alliance.get_config_summary()
             assert "Using Team 1111's config" in summary["game_config_status"]
             assert "Using Team 2222's config" in summary["pit_config_status"]
-            print("✅ Configuration summary works correctly")
+            print(" Configuration summary works correctly")
 
             # Clean up
             db.session.delete(alliance)
             db.session.commit()
-            print("✅ Configuration sharing test completed successfully")
+            print(" Configuration sharing test completed successfully")
 
             return True
 
         except Exception as e:
-            print(f"❌ Configuration sharing test failed: {str(e)}")
+            print(f" Configuration sharing test failed: {str(e)}")
             db.session.rollback()
             return False
 
 def test_real_time_communication():
     """Test 6: Test real-time communication via SocketIO"""
-    print("\n🧪 Test 6: Testing Real-Time Communication...")
+    print("\n Test 6: Testing Real-Time Communication...")
 
     from app import create_app, db, socketio
     from app.models import ScoutingAlliance, ScoutingAllianceMember, ScoutingAllianceChat
@@ -559,28 +559,28 @@ def test_real_time_communication():
             message_dict = chat_message.to_dict()
             assert message_dict["message"] == "Test message for SocketIO verification"
             assert message_dict["from_username"] == "testuser"
-            print("✅ Chat message serialization works")
+            print(" Chat message serialization works")
 
             # Test SocketIO room joining (mock) - skip the actual function call that needs request context
-            print("✅ SocketIO room management structure verified (skipping live test due to context requirements)")
+            print(" SocketIO room management structure verified (skipping live test due to context requirements)")
 
             # Clean up
             ScoutingAllianceChat.query.filter_by(alliance_id=alliance.id).delete()
             ScoutingAllianceMember.query.filter_by(alliance_id=alliance.id).delete()
             db.session.delete(alliance)
             db.session.commit()
-            print("✅ Real-time communication test completed successfully")
+            print(" Real-time communication test completed successfully")
 
             return True
 
         except Exception as e:
-            print(f"❌ Real-time communication test failed: {str(e)}")
+            print(f" Real-time communication test failed: {str(e)}")
             db.session.rollback()
             return False
 
 def test_alliance_invitation_system():
     """Test 7: Test alliance invitation system"""
-    print("\n🧪 Test 7: Testing Alliance Invitation System...")
+    print("\n Test 7: Testing Alliance Invitation System...")
 
     from app import create_app, db
     from app.models import ScoutingAlliance, ScoutingAllianceInvitation, ScoutingAllianceMember
@@ -631,7 +631,7 @@ def test_alliance_invitation_system():
             assert invitation.status == "accepted"
             assert invitation.responded_at is not None
             assert len(alliance.members) == 2
-            print("✅ Invitation acceptance works")
+            print(" Invitation acceptance works")
 
             # Test invitation decline
             decline_invitation = ScoutingAllianceInvitation(
@@ -648,25 +648,25 @@ def test_alliance_invitation_system():
             db.session.commit()
 
             assert decline_invitation.status == "declined"
-            print("✅ Invitation decline works")
+            print(" Invitation decline works")
 
             # Clean up
             ScoutingAllianceMember.query.filter_by(alliance_id=alliance.id).delete()
             ScoutingAllianceInvitation.query.filter_by(alliance_id=alliance.id).delete()
             db.session.delete(alliance)
             db.session.commit()
-            print("✅ Invitation system test completed successfully")
+            print(" Invitation system test completed successfully")
 
             return True
 
         except Exception as e:
-            print(f"❌ Invitation system test failed: {str(e)}")
+            print(f" Invitation system test failed: {str(e)}")
             db.session.rollback()
             return False
 
 def run_comprehensive_verification():
     """Run all verification tests"""
-    print("🚀 Starting Comprehensive Scouting Alliance Verification")
+    print(" Starting Comprehensive Scouting Alliance Verification")
     print("=" * 60)
 
     tests = [
@@ -687,16 +687,16 @@ def run_comprehensive_verification():
             if test():
                 passed += 1
             else:
-                print(f"❌ {test.__name__} failed")
+                print(f" {test.__name__} failed")
         except Exception as e:
-            print(f"❌ {test.__name__} crashed: {str(e)}")
+            print(f" {test.__name__} crashed: {str(e)}")
 
     print("\n" + "=" * 60)
-    print(f"📊 VERIFICATION RESULTS: {passed}/{total} tests passed")
+    print(f" VERIFICATION RESULTS: {passed}/{total} tests passed")
 
     if passed == total:
-        print("🎉 ALL TESTS PASSED! Scouting Alliances are 100% functional!")
-        print("\n✅ Verified Features:")
+        print(" ALL TESTS PASSED! Scouting Alliances are 100% functional!")
+        print("\n Verified Features:")
         print("  • Database models and relationships")
         print("  • Alliance creation and member management")
         print("  • Data synchronization between teams")
@@ -706,7 +706,7 @@ def run_comprehensive_verification():
         print("  • Invitation and membership system")
         return True
     else:
-        print(f"⚠️  {total - passed} test(s) failed. Please review the errors above.")
+        print(f"️  {total - passed} test(s) failed. Please review the errors above.")
         return False
 
 if __name__ == "__main__":

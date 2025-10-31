@@ -717,7 +717,7 @@ class Assistant:
                     response_text = f"**{title}** (via Wikipedia)\n\n{extract}\n\n"
                     
                     if url:
-                        response_text += f"📖 [Read more on Wikipedia]({url})\n\n"
+                        response_text += f" [Read more on Wikipedia]({url})\n\n"
                     
                     response_text += "*This is general knowledge. Ask me about scouting data for team-specific insights!*"
                     
@@ -1065,30 +1065,30 @@ class Assistant:
             trend_pct = (trend_diff / max(first_half_avg, 1)) * 100
             
             # Build response
-            response_text = f"📈 **Trend Analysis for Team {team_number}**\n\n"
+            response_text = f" **Trend Analysis for Team {team_number}**\n\n"
             
             if trend_pct > 15:
-                response_text += f"✅ **Trajectory:** Strongly improving (+{trend_pct:.1f}%)\n"
+                response_text += f" **Trajectory:** Strongly improving (+{trend_pct:.1f}%)\n"
                 response_text += f"Team {team_number} is showing significant improvement over their matches. "
                 response_text += f"Average score increased from {first_half_avg:.1f} to {second_half_avg:.1f} points.\n\n"
             elif trend_pct > 5:
-                response_text += f"📊 **Trajectory:** Steadily improving (+{trend_pct:.1f}%)\n"
+                response_text += f" **Trajectory:** Steadily improving (+{trend_pct:.1f}%)\n"
                 response_text += f"Team {team_number} is getting better with each match. "
                 response_text += f"Average score increased from {first_half_avg:.1f} to {second_half_avg:.1f} points.\n\n"
             elif trend_pct > -5:
-                response_text += f"➡️ **Trajectory:** Stable ({trend_pct:+.1f}%)\n"
+                response_text += f"️ **Trajectory:** Stable ({trend_pct:+.1f}%)\n"
                 response_text += f"Team {team_number} is performing consistently across matches with minimal variation.\n\n"
             elif trend_pct > -15:
-                response_text += f"⚠️ **Trajectory:** Declining ({trend_pct:.1f}%)\n"
+                response_text += f"️ **Trajectory:** Declining ({trend_pct:.1f}%)\n"
                 response_text += f"Team {team_number} performance has decreased from {first_half_avg:.1f} to {second_half_avg:.1f} points.\n\n"
             else:
-                response_text += f"❌ **Trajectory:** Significantly declining ({trend_pct:.1f}%)\n"
+                response_text += f" **Trajectory:** Significantly declining ({trend_pct:.1f}%)\n"
                 response_text += f"Team {team_number} is showing concerning performance drop.\n\n"
             
             # Recent performance
             recent = match_scores[-3:]
             recent_avg = sum(m['total'] for m in recent) / len(recent)
-            response_text += f"🔍 **Recent Form (Last 3 Matches):** {recent_avg:.1f} avg points\n\n"
+            response_text += f" **Recent Form (Last 3 Matches):** {recent_avg:.1f} avg points\n\n"
             
             # Component analysis
             auto_trend = sum(m['auto'] for m in match_scores[len(match_scores)//2:]) / (len(match_scores) - len(match_scores)//2) - \
@@ -1166,20 +1166,20 @@ class Assistant:
             # Make prediction
             predicted_score = recent_avg * (1 + trend_pct / 200)  # Conservative prediction
             
-            response_text = f"🔮 **Performance Prediction for Team {team_number}**\n\n"
+            response_text = f" **Performance Prediction for Team {team_number}**\n\n"
             response_text += f"**Predicted Next Match Score:** {predicted_score:.1f} points\n\n"
             
             confidence = min(95, 50 + abs(trend_pct) * 2)
             response_text += f"**Confidence Level:** {confidence:.0f}%\n\n"
             
             if trend_pct > 10:
-                response_text += "📈 **Outlook:** Based on their improving trend, expect strong performance. "
+                response_text += " **Outlook:** Based on their improving trend, expect strong performance. "
                 response_text += f"Team {team_number} is likely to score around {predicted_score:.0f} points.\n\n"
             elif trend_pct < -10:
-                response_text += "📉 **Outlook:** Recent decline suggests caution. "
+                response_text += " **Outlook:** Recent decline suggests caution. "
                 response_text += f"Performance may drop to around {predicted_score:.0f} points.\n\n"
             else:
-                response_text += "➡️ **Outlook:** Consistent performance expected. "
+                response_text += "️ **Outlook:** Consistent performance expected. "
                 response_text += f"Team {team_number} should score around {predicted_score:.0f} points.\n\n"
             
             response_text += "**Recommendation:** "
@@ -1243,18 +1243,18 @@ class Assistant:
             red_probability = (red_strength / max(total_strength, 1)) * 100 if total_strength > 0 else 50
             blue_probability = 100 - red_probability
             
-            response_text = f"🎯 **Match {match_number} Prediction**\n\n"
+            response_text = f" **Match {match_number} Prediction**\n\n"
             response_text += f"**Red Alliance:** {', '.join(map(str, red_teams))}\n"
             response_text += f"**Blue Alliance:** {', '.join(map(str, blue_teams))}\n\n"
             
             if red_probability > 60:
-                response_text += f"🔴 **Predicted Winner:** Red Alliance ({red_probability:.0f}% confidence)\n"
+                response_text += f" **Predicted Winner:** Red Alliance ({red_probability:.0f}% confidence)\n"
                 response_text += f"**Predicted Score:** Red {red_strength:.0f} - Blue {blue_strength:.0f}\n"
             elif blue_probability > 60:
-                response_text += f"🔵 **Predicted Winner:** Blue Alliance ({blue_probability:.0f}% confidence)\n"
+                response_text += f" **Predicted Winner:** Blue Alliance ({blue_probability:.0f}% confidence)\n"
                 response_text += f"**Predicted Score:** Blue {blue_strength:.0f} - Red {red_strength:.0f}\n"
             else:
-                response_text += f"⚖️ **Prediction:** Close match! Too close to call confidently.\n"
+                response_text += f"️ **Prediction:** Close match! Too close to call confidently.\n"
                 response_text += f"**Estimated Scores:** Red {red_strength:.0f} - Blue {blue_strength:.0f}\n"
             
             return {
@@ -1298,22 +1298,22 @@ class Assistant:
             std_dev = variance ** 0.5
             coefficient_of_variation = (std_dev / max(avg, 1)) * 100
             
-            response_text = f"🎯 **Consistency Analysis for Team {team_number}**\n\n"
+            response_text = f" **Consistency Analysis for Team {team_number}**\n\n"
             response_text += f"**Average Score:** {avg:.1f} points\n"
             response_text += f"**Standard Deviation:** {std_dev:.1f}\n"
             response_text += f"**Coefficient of Variation:** {coefficient_of_variation:.1f}%\n\n"
             
             if coefficient_of_variation < 15:
-                response_text += "✅ **Rating:** Extremely consistent - very reliable performer\n"
+                response_text += " **Rating:** Extremely consistent - very reliable performer\n"
                 response_text += "This team delivers predictable results match after match."
             elif coefficient_of_variation < 25:
-                response_text += "✓ **Rating:** Consistent - dependable team\n"
+                response_text += " **Rating:** Consistent - dependable team\n"
                 response_text += "This team usually performs close to their average."
             elif coefficient_of_variation < 40:
-                response_text += "⚠️ **Rating:** Somewhat inconsistent - variable performance\n"
+                response_text += "️ **Rating:** Somewhat inconsistent - variable performance\n"
                 response_text += "This team can have good matches but also struggles sometimes."
             else:
-                response_text += "❌ **Rating:** Highly inconsistent - unpredictable\n"
+                response_text += " **Rating:** Highly inconsistent - unpredictable\n"
                 response_text += "This team's performance varies significantly between matches."
             
             return {
@@ -1384,7 +1384,7 @@ class Assistant:
             if not stats:
                 return {"text": f"No data available for Team {team_number}."}
             
-            response_text = f"🔍 **Weakness Analysis for Team {team_number}**\n\n"
+            response_text = f" **Weakness Analysis for Team {team_number}**\n\n"
             
             weaknesses = []
             auto = stats.get('auto_points', 0) or 0
@@ -1393,19 +1393,19 @@ class Assistant:
             total = auto + teleop + endgame
             
             if auto < 10:
-                weaknesses.append(f"⚠️ **Weak Autonomous** ({auto:.1f} pts avg) - Limited auto scoring ability")
+                weaknesses.append(f"️ **Weak Autonomous** ({auto:.1f} pts avg) - Limited auto scoring ability")
             if teleop < 20:
-                weaknesses.append(f"⚠️ **Low Teleoperated Output** ({teleop:.1f} pts avg) - Struggles during driver control")
+                weaknesses.append(f"️ **Low Teleoperated Output** ({teleop:.1f} pts avg) - Struggles during driver control")
             if endgame < 5:
-                weaknesses.append(f"⚠️ **Minimal Endgame** ({endgame:.1f} pts avg) - Missing endgame opportunities")
+                weaknesses.append(f"️ **Minimal Endgame** ({endgame:.1f} pts avg) - Missing endgame opportunities")
             if total < 30:
-                weaknesses.append(f"⚠️ **Overall Low Scoring** ({total:.1f} pts avg) - Needs improvement across all phases")
+                weaknesses.append(f"️ **Overall Low Scoring** ({total:.1f} pts avg) - Needs improvement across all phases")
             
             if weaknesses:
                 response_text += "\n".join(weaknesses)
                 response_text += "\n\n**Recommendation:** Focus scouting efforts on how they can improve these areas or pair with alliance partners who excel here."
             else:
-                response_text += "✅ No significant weaknesses detected! Team {team_number} is performing well across all game phases."
+                response_text += " No significant weaknesses detected! Team {team_number} is performing well across all game phases."
             
             return {"text": response_text}
         except Exception as e:
@@ -1425,7 +1425,7 @@ class Assistant:
             if not stats:
                 return {"text": f"No data available for Team {team_number}."}
             
-            response_text = f"💪 **Strength Analysis for Team {team_number}**\n\n"
+            response_text = f" **Strength Analysis for Team {team_number}**\n\n"
             
             strengths = []
             auto = stats.get('auto_points', 0) or 0
@@ -1436,22 +1436,22 @@ class Assistant:
             if auto > 20:
                 strengths.append(f"⭐ **Excellent Autonomous** ({auto:.1f} pts avg) - Strong auto scorer")
             elif auto > 10:
-                strengths.append(f"✓ **Good Autonomous** ({auto:.1f} pts avg) - Reliable auto points")
+                strengths.append(f" **Good Autonomous** ({auto:.1f} pts avg) - Reliable auto points")
             
             if teleop > 50:
                 strengths.append(f"⭐ **Dominant Teleoperated** ({teleop:.1f} pts avg) - Elite driver control")
             elif teleop > 30:
-                strengths.append(f"✓ **Strong Teleoperated** ({teleop:.1f} pts avg) - Good scoring during driver period")
+                strengths.append(f" **Strong Teleoperated** ({teleop:.1f} pts avg) - Good scoring during driver period")
             
             if endgame > 20:
                 strengths.append(f"⭐ **Elite Endgame** ({endgame:.1f} pts avg) - Consistent endgame execution")
             elif endgame > 10:
-                strengths.append(f"✓ **Solid Endgame** ({endgame:.1f} pts avg) - Reliable endgame points")
+                strengths.append(f" **Solid Endgame** ({endgame:.1f} pts avg) - Reliable endgame points")
             
             if total > 80:
-                strengths.append(f"🏆 **Elite Overall Scorer** ({total:.1f} pts avg) - Top-tier performance")
+                strengths.append(f" **Elite Overall Scorer** ({total:.1f} pts avg) - Top-tier performance")
             elif total > 50:
-                strengths.append(f"✓ **Strong Overall Performance** ({total:.1f} pts avg) - Solid all-around team")
+                strengths.append(f" **Strong Overall Performance** ({total:.1f} pts avg) - Solid all-around team")
             
             if strengths:
                 response_text += "\n".join(strengths)
@@ -1465,7 +1465,7 @@ class Assistant:
                 else:
                     response_text += "balanced, versatile performers."
             else:
-                response_text += "📊 Team is developing - strengths not yet clearly defined. Monitor for emerging capabilities."
+                response_text += " Team is developing - strengths not yet clearly defined. Monitor for emerging capabilities."
             
             return {"text": response_text}
         except Exception as e:
@@ -1495,28 +1495,28 @@ class Assistant:
             teleop1 = metrics1.get('teleop_points', 0) or 0
             teleop2 = metrics2.get('teleop_points', 0) or 0
             
-            response_text = f"🤝 **Alliance Prediction: Team {team1} + Team {team2}**\n\n"
+            response_text = f" **Alliance Prediction: Team {team1} + Team {team2}**\n\n"
             response_text += f"**Combined Scoring Potential:** {combined_score:.0f} points\n\n"
             
             synergies = []
             if auto1 > 15 or auto2 > 15:
-                synergies.append("✓ Strong autonomous coverage")
+                synergies.append(" Strong autonomous coverage")
             if teleop1 + teleop2 > 60:
-                synergies.append("✓ Excellent teleoperated scoring")
+                synergies.append(" Excellent teleoperated scoring")
             if combined_score > 100:
-                synergies.append("✓ Elite total output - championship-caliber alliance")
+                synergies.append(" Elite total output - championship-caliber alliance")
             
             if synergies:
                 response_text += "**Synergies:**\n" + "\n".join(f"  {s}" for s in synergies) + "\n\n"
             
             if combined_score > 120:
-                response_text += "🏆 **Rating:** Exceptional alliance - strong contender for elimination rounds"
+                response_text += " **Rating:** Exceptional alliance - strong contender for elimination rounds"
             elif combined_score > 80:
-                response_text += "✅ **Rating:** Solid alliance - good playoff potential"
+                response_text += " **Rating:** Solid alliance - good playoff potential"
             elif combined_score > 50:
-                response_text += "➡️ **Rating:** Moderate alliance - can compete effectively"
+                response_text += "️ **Rating:** Moderate alliance - can compete effectively"
             else:
-                response_text += "⚠️ **Rating:** Developing alliance - may struggle in competitive matches"
+                response_text += "️ **Rating:** Developing alliance - may struggle in competitive matches"
             
             return {
                 "text": response_text,
@@ -1537,7 +1537,7 @@ class Assistant:
         
         # Analyze consistency
         if len(entries) >= 3:
-            insights.append(f"📊 **Data Quality:** {len(entries)} match entries analyzed")
+            insights.append(f" **Data Quality:** {len(entries)} match entries analyzed")
         
         # Performance level assessment
         total_points = stats.get('total_points', 0) or stats.get('tot', 0)
@@ -1545,7 +1545,7 @@ class Assistant:
             if total_points > 80:
                 insights.append("⭐ **Performance Level:** Elite scorer - consistently high output")
             elif total_points > 50:
-                insights.append("✓ **Performance Level:** Strong performer - reliable contributor")
+                insights.append(" **Performance Level:** Strong performer - reliable contributor")
             elif total_points > 30:
                 insights.append("→ **Performance Level:** Developing - shows potential")
             else:
@@ -1565,13 +1565,13 @@ class Assistant:
             strengths.append("reliable endgame execution")
         
         if strengths:
-            insights.append(f"💪 **Key Strengths:** {', '.join(strengths)}")
+            insights.append(f" **Key Strengths:** {', '.join(strengths)}")
         
         # Strategic recommendations
         if auto and auto > 20:
-            insights.append("🎯 **Alliance Value:** High autonomous scorer - valuable for qualification points")
+            insights.append(" **Alliance Value:** High autonomous scorer - valuable for qualification points")
         elif endgame and endgame > 20:
-            insights.append("🎯 **Alliance Value:** Strong endgame specialist - critical for close matches")
+            insights.append(" **Alliance Value:** Strong endgame specialist - critical for close matches")
         
         return '\n'.join(insights) if insights else "Performance data available - see detailed metrics below."
     
@@ -1736,7 +1736,7 @@ setTimeout(function() {{
             for idx, item in enumerate(top_teams, 1):
                 team = item['team']
                 score = item['score']
-                medal = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'][idx-1]
+                medal = ['', '', '', '4️⃣', '5️⃣'][idx-1]
                 analysis.append(f"{medal} **Team {team.team_number}** ({team.team_name}): {score:.1f} points")
             
             # Add strategic insights
@@ -1780,10 +1780,10 @@ setTimeout(function() {{
         if t1_total and t2_total:
             diff_pct = abs(t1_total - t2_total) / max(t1_total, t2_total) * 100
             if diff_pct < 10:
-                analysis.append("📊 **Overall Assessment:** Very evenly matched - performance within 10%")
+                analysis.append(" **Overall Assessment:** Very evenly matched - performance within 10%")
             else:
                 leader = team1_obj.team_number if t1_total > t2_total else team2_obj.team_number
-                analysis.append(f"📊 **Overall Assessment:** Team {leader} has a {diff_pct:.1f}% scoring advantage")
+                analysis.append(f" **Overall Assessment:** Team {leader} has a {diff_pct:.1f}% scoring advantage")
         
         # Detailed metric comparison
         metrics_comparison = []
@@ -1816,13 +1816,13 @@ setTimeout(function() {{
         
         # Complementary analysis
         if t1_auto > t2_auto and t2_teleop > t1_teleop:
-            analysis.append(f"  • 🤝 **Complementary strengths** - Team {team1_obj.team_number}'s auto pairs well with Team {team2_obj.team_number}'s teleop")
+            analysis.append(f"  •  **Complementary strengths** - Team {team1_obj.team_number}'s auto pairs well with Team {team2_obj.team_number}'s teleop")
         elif t1_teleop > t2_teleop and t2_endgame > t1_endgame:
-            analysis.append(f"  • 🤝 **Complementary strengths** - Team {team1_obj.team_number}'s teleop pairs well with Team {team2_obj.team_number}'s endgame")
+            analysis.append(f"  •  **Complementary strengths** - Team {team1_obj.team_number}'s teleop pairs well with Team {team2_obj.team_number}'s endgame")
         
         # Alliance recommendation
         if t1_total and t2_total and abs(t1_total - t2_total) / max(t1_total, t2_total) < 0.15:
-            analysis.append("  • ⚖️ **Alliance potential:** Both teams show similar capabilities - could form a balanced alliance")
+            analysis.append("  • ️ **Alliance potential:** Both teams show similar capabilities - could form a balanced alliance")
         
         analysis.append("\n*This analysis is based on current scouting data. Consider recent trends and match context for alliance decisions.*")
         
@@ -1944,9 +1944,9 @@ setTimeout(function() {{
             for match in matches:
                 # Format match type for display
                 match_type_display = {
-                    'practice': '🔧 Practice',
-                    'qualification': '📊 Qualification',
-                    'playoff': '🏆 Playoff'
+                    'practice': ' Practice',
+                    'qualification': ' Qualification',
+                    'playoff': ' Playoff'
                 }.get(match.match_type, match.match_type.title())
                 
                 match_info = {
@@ -2006,17 +2006,17 @@ setTimeout(function() {{
             # Check if match is completed based on scores being available
             if match.red_score is None or match.blue_score is None:
                 match_type_display = {
-                    'practice': '🔧 Practice',
-                    'qualification': '📊 Qualification',
-                    'playoff': '🏆 Playoff'
+                    'practice': ' Practice',
+                    'qualification': ' Qualification',
+                    'playoff': ' Playoff'
                 }.get(match.match_type, match.match_type.title())
                 return {"text": f"{match_type_display} Match {match_number} has not been completed yet."}
             
             # Format match type for display
             match_type_display = {
-                'practice': '🔧 Practice',
-                'qualification': '📊 Qualification',
-                'playoff': '🏆 Playoff'
+                'practice': ' Practice',
+                'qualification': ' Qualification',
+                'playoff': ' Playoff'
             }.get(match.match_type, match.match_type.title())
             
             # Construct response with match results
@@ -2259,12 +2259,12 @@ setTimeout(function() {{
                 }
             ],
             "features": [
-                "✓ Natural language understanding - ask questions however feels natural to you",
-                "✓ Spell-tolerant - I can understand questions even with typos",
-                "✓ Context-aware - I remember recent questions to better understand follow-ups",
-                "✓ Real-time data analysis - All responses use current scouting data",
-                "✓ Visual insights - Many queries include interactive charts and graphs",
-                "✓ Citation tracking - Documentation responses include source references"
+                " Natural language understanding - ask questions however feels natural to you",
+                " Spell-tolerant - I can understand questions even with typos",
+                " Context-aware - I remember recent questions to better understand follow-ups",
+                " Real-time data analysis - All responses use current scouting data",
+                " Visual insights - Many queries include interactive charts and graphs",
+                " Citation tracking - Documentation responses include source references"
             ],
             "tips": (
                 "**Pro Tips:**\n"

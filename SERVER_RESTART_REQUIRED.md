@@ -1,4 +1,4 @@
-# 🚨 IMPORTANT: Server Restart Required
+#  IMPORTANT: Server Restart Required
 
 ## The Issue
 
@@ -19,7 +19,7 @@ Once the server starts, you should see output like:
 ```
 Starting FRC Scouting Platform...
 ...
-🚀 Starting server...
+ Starting server...
 ```
 
 ### Step 4: Test the Mobile API
@@ -113,10 +113,10 @@ Then restart the server.
 
 ## Quick Verification Steps
 
-1. ✅ **PyJWT installed?** Run: `pip install PyJWT`
-2. ✅ **Server running?** Run: `python run.py`
-3. ✅ **Can access main site?** Visit: `http://localhost:8080/`
-4. ✅ **Can access API?** Visit: `http://localhost:8080/api/mobile/health`
+1.  **PyJWT installed?** Run: `pip install PyJWT`
+2.  **Server running?** Run: `python run.py`
+3.  **Can access main site?** Visit: `http://localhost:8080/`
+4.  **Can access API?** Visit: `http://localhost:8080/api/mobile/health`
 
 ## Next Steps After Server Restart
 
@@ -136,7 +136,7 @@ Once the server is running successfully:
    - `MOBILE_API_DOCUMENTATION.md` - Full API reference
    - `MOBILE_API_QUICKSTART.md` - Quick start guide
 
-4. **Start building your mobile app!** 🚀
+4. **Start building your mobile app!** 
 
 ## Need Help?
 

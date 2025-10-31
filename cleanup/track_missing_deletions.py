@@ -10,7 +10,7 @@ app = create_app()
 
 def track_missing_user_deletions():
     with app.app_context():
-        print("🔍 TRACKING MISSING USER DELETIONS")
+        print(" TRACKING MISSING USER DELETIONS")
         print("=" * 50)
         
         # Users that had recent changes but are no longer in the database
@@ -46,10 +46,10 @@ def track_missing_user_deletions():
                 
                 from app import db
                 db.session.add(delete_change)
-                print(f"    ✅ Created delete change record")
+                print(f"     Created delete change record")
                 
             except Exception as e:
-                print(f"    ❌ Failed to create delete change: {e}")
+                print(f"     Failed to create delete change: {e}")
         
         db.session.commit()
         
@@ -60,18 +60,18 @@ def track_missing_user_deletions():
             DatabaseChange.sync_status == 'pending'
         ).count()
         
-        print(f"\n📋 PENDING DELETE CHANGES: {pending_deletes}")
+        print(f"\n PENDING DELETE CHANGES: {pending_deletes}")
         
         if pending_deletes > 0:
             # Force sync
             server = SyncServer.query.filter_by(sync_enabled=True).first()
             if server:
-                print(f"\n🚀 SYNCING DELETE CHANGES TO {server.name}...")
+                print(f"\n SYNCING DELETE CHANGES TO {server.name}...")
                 
                 result = simplified_sync_manager.perform_bidirectional_sync(server.id)
                 
                 if result.get('success'):
-                    print("✅ DELETE SYNC COMPLETED!")
+                    print(" DELETE SYNC COMPLETED!")
                     print(f"   Sent to remote: {result['stats']['sent_to_remote']}")
                     print(f"   Received from remote: {result['stats']['received_from_remote']}")
                     
@@ -82,16 +82,16 @@ def track_missing_user_deletions():
                     ).count()
                     
                     if remaining == 0:
-                        print("🎉 All delete changes synced successfully!")
+                        print(" All delete changes synced successfully!")
                     else:
-                        print(f"⚠️ {remaining} delete changes still pending")
+                        print(f"️ {remaining} delete changes still pending")
                         
                 else:
-                    print(f"❌ DELETE SYNC FAILED: {result.get('error')}")
+                    print(f" DELETE SYNC FAILED: {result.get('error')}")
             else:
-                print("❌ No sync server found")
+                print(" No sync server found")
         
-        print(f"\n📋 VERIFICATION:")
+        print(f"\n VERIFICATION:")
         print(f"Check remote server user list - the deleted users should no longer appear")
         print(f"or should be marked as deleted/inactive")
 

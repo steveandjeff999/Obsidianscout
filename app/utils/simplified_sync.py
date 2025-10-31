@@ -109,13 +109,13 @@ class SimplifiedSyncManager:
         }
         
         try:
-            logger.info(f"🔄 Starting bidirectional sync with {server.name}")
+            logger.info(f" Starting bidirectional sync with {server.name}")
             
             # Step 1: Test connectivity
             if not self._test_connection(server):
                 raise Exception("Server is not reachable")
             
-            results['operations'].append("✅ Connection established")
+            results['operations'].append(" Connection established")
             
             # Step 2: Exchange sync metadata and perform atomic sync
             sync_result = self._perform_atomic_sync(server, sync_log)
@@ -132,12 +132,12 @@ class SimplifiedSyncManager:
             db.session.commit()
             
             results['success'] = True
-            results['operations'].append("✅ Sync completed successfully")
+            results['operations'].append(" Sync completed successfully")
             
-            logger.info(f"✅ Bidirectional sync completed with {server.name}")
+            logger.info(f" Bidirectional sync completed with {server.name}")
             
         except Exception as e:
-            logger.error(f"❌ Sync failed with {server.name}: {e}")
+            logger.error(f" Sync failed with {server.name}: {e}")
             
             sync_log.status = 'failed'
             sync_log.error_message = str(e)
@@ -150,7 +150,7 @@ class SimplifiedSyncManager:
             results['success'] = False
             results['error'] = str(e)
             results['stats']['errors'].append(str(e))
-            results['operations'].append(f"❌ Sync failed: {str(e)}")
+            results['operations'].append(f" Sync failed: {str(e)}")
         
         return results
     
@@ -195,29 +195,29 @@ class SimplifiedSyncManager:
         
         # Step 1: Get local changes to send
         local_changes = self._get_local_changes_since(cutoff_time)
-        logger.info(f"📤 Found {len(local_changes)} local changes to send")
-        results['operations'].append(f"📤 Prepared {len(local_changes)} local changes")
+        logger.info(f" Found {len(local_changes)} local changes to send")
+        results['operations'].append(f" Prepared {len(local_changes)} local changes")
         
         # Step 2: Get remote changes 
         remote_changes = self._get_remote_changes(server, cutoff_time)
-        logger.info(f"📥 Found {len(remote_changes)} remote changes to apply")
-        results['operations'].append(f"📥 Received {len(remote_changes)} remote changes")
+        logger.info(f" Found {len(remote_changes)} remote changes to apply")
+        results['operations'].append(f" Received {len(remote_changes)} remote changes")
         
         # Step 3: Detect and resolve conflicts
         conflicts = self._detect_conflicts(local_changes, remote_changes)
         if conflicts:
-            logger.info(f"⚠️  Detected {len(conflicts)} conflicts")
+            logger.info(f"️  Detected {len(conflicts)} conflicts")
             resolved_conflicts = self._resolve_conflicts(conflicts)
             results['stats']['conflicts_resolved'] = len(resolved_conflicts)
-            results['operations'].append(f"⚠️  Resolved {len(resolved_conflicts)} conflicts")
+            results['operations'].append(f"️  Resolved {len(resolved_conflicts)} conflicts")
         
         # Step 4: Send local changes to remote server (atomic)
         if local_changes:
             send_result = self._send_changes_to_remote(server, local_changes)
             if send_result['success']:
                 results['stats']['sent_to_remote'] = len(local_changes)
-                results['operations'].append(f"✅ Sent {len(local_changes)} changes to remote")
-                logger.info(f"✅ Successfully sent {len(local_changes)} changes to {server.name}")
+                results['operations'].append(f" Sent {len(local_changes)} changes to remote")
+                logger.info(f" Successfully sent {len(local_changes)} changes to {server.name}")
             else:
                 raise Exception(f"Failed to send changes: {send_result['error']}")
         
@@ -226,8 +226,8 @@ class SimplifiedSyncManager:
             apply_result = self._apply_remote_changes(remote_changes)
             if apply_result['success']:
                 results['stats']['received_from_remote'] = len(remote_changes)
-                results['operations'].append(f"✅ Applied {len(remote_changes)} remote changes")
-                logger.info(f"✅ Successfully applied {len(remote_changes)} changes from {server.name}")
+                results['operations'].append(f" Applied {len(remote_changes)} remote changes")
+                logger.info(f" Successfully applied {len(remote_changes)} changes from {server.name}")
             else:
                 raise Exception(f"Failed to apply changes: {apply_result['error']}")
         

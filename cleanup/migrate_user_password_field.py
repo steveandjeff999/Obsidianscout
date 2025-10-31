@@ -25,16 +25,16 @@ with app.app_context():
         columns = [row[1] for row in result]
         
         if 'must_change_password' in columns:
-            print("✅ must_change_password field already exists in User table.")
+            print(" must_change_password field already exists in User table.")
         else:
             # Add the column
             db.session.execute(text("ALTER TABLE user ADD COLUMN must_change_password BOOLEAN DEFAULT 0"))
             db.session.commit()
-            print("✅ Successfully added must_change_password field to User table.")
+            print(" Successfully added must_change_password field to User table.")
         
-        print("✅ Database migration completed!")
+        print(" Database migration completed!")
         
     except Exception as e:
-        print(f"❌ Error during migration: {e}")
+        print(f" Error during migration: {e}")
         db.session.rollback()
         sys.exit(1)

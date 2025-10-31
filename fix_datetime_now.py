@@ -92,10 +92,10 @@ def main():
         if modified:
             total_files += 1
             total_fixes += count
-            print(f"✅ {file_str}: {count} fix(es)")
+            print(f" {file_str}: {count} fix(es)")
     
     print("=" * 70)
-    print(f"✅ Complete! Files: {total_files}, Fixes: {total_fixes}")
+    print(f" Complete! Files: {total_files}, Fixes: {total_fixes}")
     
     # Create summary
     print("\n" + "=" * 70)

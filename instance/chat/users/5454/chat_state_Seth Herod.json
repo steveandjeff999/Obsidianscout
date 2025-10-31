@@ -1,8 +1,8 @@
 {
-  "lastDmUser": "zman",
-  "unreadCount": 0,
-  "joinedGroups": [
-    "main"
-  ],
-  "currentGroup": "main"
+  "unreadCount": 4,
+  "lastSource": {
+    "type": "dm",
+    "id": "admin"
+  },
+  "lastNotified": "2025-10-29T20:29:09.472852+00:00"
 }

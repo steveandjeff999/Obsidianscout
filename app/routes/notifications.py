@@ -589,7 +589,7 @@ def refresh_schedule():
         matches = Match.query.filter_by(event_id=event.id).all()
         match_ids = [m.id for m in matches]
         
-        print(f"📋 Found {len(matches)} matches for event {event_code}")
+        print(f" Found {len(matches)} matches for event {event_code}")
         if matches:
             # Show some match details
             for match in matches[:5]:  # Show first 5

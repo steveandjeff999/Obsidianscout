@@ -16,12 +16,12 @@ def live_login_monitor():
         app = create_app()
         
         with app.app_context():
-            print("🔍 LIVE LOGIN MONITORING & DIAGNOSTICS")
+            print(" LIVE LOGIN MONITORING & DIAGNOSTICS")
             print("=" * 60)
             
             print("SOLUTION SUMMARY:")
             print("-" * 60)
-            print("✅ 4-Layer Failed Login Cleanup System is ACTIVE")
+            print(" 4-Layer Failed Login Cleanup System is ACTIVE")
             print("   1. Background worker: Clears failed attempts every 10 minutes")
             print("   2. Startup cleanup: Clears old attempts on server start")
             print("   3. Restart flag cleanup: Clears attempts after updates")
@@ -34,15 +34,15 @@ def live_login_monitor():
             # Check superadmin status
             user = User.query.filter_by(username='superadmin').first()
             if user:
-                print(f"✅ Superadmin account: HEALTHY")
+                print(f" Superadmin account: HEALTHY")
                 print(f"   Username: {user.username}")
                 print(f"   Team: {user.scouting_team_number}")
                 print(f"   Active: {user.is_active}")
-                print(f"   Password: {'✅ CORRECT' if user.check_password('JSHkimber1911') else '❌ INCORRECT'}")
+                print(f"   Password: {' CORRECT' if user.check_password('JSHkimber1911') else ' INCORRECT'}")
                 print(f"   Must change password: {user.must_change_password}")
                 print(f"   Last successful login: {user.last_login}")
             else:
-                print("❌ Superadmin account: NOT FOUND")
+                print(" Superadmin account: NOT FOUND")
                 return
             
             # Check current login attempt status
@@ -53,7 +53,7 @@ def live_login_monitor():
             successful_attempts = LoginAttempt.query.filter_by(username='superadmin', success=True).count()
             failed_attempts = LoginAttempt.query.filter_by(username='superadmin', success=False).count()
             
-            print(f"\n✅ Login attempt statistics:")
+            print(f"\n Login attempt statistics:")
             print(f"   Total attempts: {all_attempts}")
             print(f"   Successful: {successful_attempts}")
             print(f"   Failed: {failed_attempts}")
@@ -65,7 +65,7 @@ def live_login_monitor():
                 LoginAttempt.attempt_time >= recent_cutoff
             ).order_by(LoginAttempt.attempt_time.desc()).all()
             
-            print(f"\n✅ Recent activity (last hour):")
+            print(f"\n Recent activity (last hour):")
             if recent_attempts:
                 for attempt in recent_attempts:
                     status = "SUCCESS" if attempt.success else "FAILED"
@@ -81,18 +81,18 @@ def live_login_monitor():
                 LoginAttempt.attempt_time >= block_cutoff
             ).count()
             
-            print(f"\n✅ Brute force protection status:")
+            print(f"\n Brute force protection status:")
             print(f"   Failed attempts in last 15 minutes: {blocking_attempts}")
             if blocking_attempts >= 10:
-                print("   🚨 STATUS: BLOCKED (too many failed attempts)")
+                print("    STATUS: BLOCKED (too many failed attempts)")
             else:
-                print("   ✅ STATUS: NOT BLOCKED")
+                print("    STATUS: NOT BLOCKED")
             
             print(f"\nRECOMMENDATIONS:")
             print("-" * 60)
             
             if failed_attempts == 0 and blocking_attempts == 0:
-                print("🎉 LOGIN SYSTEM IS FULLY OPERATIONAL!")
+                print(" LOGIN SYSTEM IS FULLY OPERATIONAL!")
                 print()
                 print("If you're still seeing login errors:")
                 print("1. Clear your browser cache and cookies")
@@ -116,22 +116,22 @@ def live_login_monitor():
                 
                 if cleared > 0:
                     db.session.commit()
-                    print(f"✅ Cleared {cleared} failed login attempts")
+                    print(f" Cleared {cleared} failed login attempts")
                 
-                print("🎉 System should now work correctly!")
+                print(" System should now work correctly!")
             
             print(f"\nBACKGROUND PROTECTION STATUS:")
             print("-" * 60)
-            print("✅ Failed login cleanup runs every 10 minutes")
-            print("✅ Post-update cleanup is integrated")
-            print("✅ Startup cleanup removes old attempts")
-            print("✅ Emergency cleanup tools are available")
+            print(" Failed login cleanup runs every 10 minutes")
+            print(" Post-update cleanup is integrated")
+            print(" Startup cleanup removes old attempts")
+            print(" Emergency cleanup tools are available")
             print()
             print("The comprehensive solution prevents the 'after remote update'")
             print("login failures that were reported.")
             
     except Exception as e:
-        print(f"❌ Error during live monitoring: {e}")
+        print(f" Error during live monitoring: {e}")
         import traceback
         traceback.print_exc()
 

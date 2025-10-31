@@ -21,20 +21,20 @@ with app.app_context():
     # Find Team 31
     team_31 = Team.query.filter_by(team_number=31).first()
     if not team_31:
-        print("❌ Team 31 not found in database")
+        print(" Team 31 not found in database")
         exit(1)
     
-    print(f"✅ Found Team 31: {team_31.team_name}")
+    print(f" Found Team 31: {team_31.team_name}")
     print(f"   Team ID: {team_31.id}")
     print(f"   Team scouting_team_number: {team_31.scouting_team_number}")
     print()
     
     # Check all scouting data for Team 31 (no filtering)
     all_data = ScoutingData.query.filter_by(team_id=team_31.id).all()
-    print(f"📊 Total ScoutingData entries for Team 31: {len(all_data)}")
+    print(f" Total ScoutingData entries for Team 31: {len(all_data)}")
     
     if len(all_data) == 0:
-        print("❌ No scouting data entries found for Team 31")
+        print(" No scouting data entries found for Team 31")
         exit(1)
     
     # Show breakdown by scouting team
@@ -45,7 +45,7 @@ with app.app_context():
             team_breakdown[team_num] = []
         team_breakdown[team_num].append(entry)
     
-    print("\n📈 Scouting data breakdown by scouting team:")
+    print("\n Scouting data breakdown by scouting team:")
     for scouting_team, entries in team_breakdown.items():
         print(f"   Scouting Team {scouting_team}: {len(entries)} entries")
         for i, entry in enumerate(entries[:3]):  # Show first 3 entries
@@ -62,18 +62,18 @@ with app.app_context():
     # Find user with scouting team 5454
     user_5454 = User.query.filter_by(scouting_team_number=5454).first()
     if not user_5454:
-        print("❌ No user found with scouting_team_number=5454")
+        print(" No user found with scouting_team_number=5454")
         print("Available users:")
         users = User.query.all()
         for user in users[:10]:  # Show first 10
             print(f"   {user.username}: scouting_team_number={user.scouting_team_number}")
         exit(1)
     
-    print(f"✅ Found user with scouting team 5454: {user_5454.username}")
+    print(f" Found user with scouting team 5454: {user_5454.username}")
     print()
     
     # Simulate being logged in as that user and test the filter
-    print("🔍 Testing filter_scouting_data_by_scouting_team with scouting team 5454...")
+    print(" Testing filter_scouting_data_by_scouting_team with scouting team 5454...")
     
     # Manually check what the filter should return
     from sqlalchemy import or_
@@ -110,7 +110,7 @@ with app.app_context():
         from flask_login import login_user
         
         # Create a mock user context
-        print("🧪 Testing filter_scouting_data_by_scouting_team function...")
+        print(" Testing filter_scouting_data_by_scouting_team function...")
         
         # Directly call the function and see what it returns
         from app.utils.team_isolation import get_current_scouting_team_number
@@ -140,14 +140,14 @@ with app.app_context():
                 scored_points = [p for p in total_points_list if p is not None and p != 0]
                 if scored_points:
                     avg_points = sum(scored_points) / len(scored_points)
-                    print(f"\n💯 Calculated average (excluding zeros): {avg_points}")
+                    print(f"\n Calculated average (excluding zeros): {avg_points}")
                     print(f"   Non-zero entries: {len(scored_points)}")
                     print(f"   Total entries: {len(total_points_list)}")
                 else:
-                    print(f"\n⚠️  All entries have 0 points")
+                    print(f"\n️  All entries have 0 points")
                     print(f"   Raw total points: {total_points_list}")
             else:
-                print(f"\n❌ No entries found by filter")
+                print(f"\n No entries found by filter")
                 
         finally:
             # Restore original function
@@ -159,14 +159,14 @@ with app.app_context():
         scouting_team_5454_count = len([e for e in all_data if e.scouting_team_number == 5454])
         null_team_count = len([e for e in all_data if e.scouting_team_number is None])
         
-        print(f"✅ Team 31 has {len(all_data)} total scouting entries")
+        print(f" Team 31 has {len(all_data)} total scouting entries")
         print(f"   - {scouting_team_5454_count} entries with scouting_team_number=5454")
         print(f"   - {null_team_count} entries with scouting_team_number=NULL")
         
         if scouting_team_5454_count > 0 or null_team_count > 0:
-            print("✅ Expected to see data when logged in as scouting team 5454")
+            print(" Expected to see data when logged in as scouting team 5454")
         else:
-            print("❌ No data visible to scouting team 5454")
+            print(" No data visible to scouting team 5454")
             print("   Check if entries have a different scouting_team_number")
     
     print("="*60)

@@ -32,14 +32,14 @@ def disable_heavy_sync_systems():
             
             for pattern in patterns_to_disable:
                 if pattern in content and not content.count(f'# {pattern}'):
-                    print(f"🛑 Disabling: {pattern}")
+                    print(f" Disabling: {pattern}")
                     content = content.replace(pattern, f'# {pattern}  # DISABLED - was causing database locking')
             
             app_init_path.write_text(content)
-            print("✅ Heavy sync systems disabled in app/__init__.py")
+            print(" Heavy sync systems disabled in app/__init__.py")
         
     except Exception as e:
-        print(f"⚠️ Could not modify app/__init__.py: {e}")
+        print(f"️ Could not modify app/__init__.py: {e}")
     
     # 2. Create simple sync-only-when-needed system
     create_simple_sync_system()
@@ -70,7 +70,7 @@ class SimpleSyncSystem:
     def sync_now(self, table_name=None, operation=None, record_data=None):
         """Perform sync immediately for specific operation"""
         if self.is_syncing:
-            print("⚠️ Sync already in progress, skipping...")
+            print("️ Sync already in progress, skipping...")
             return
             
         try:
@@ -81,7 +81,7 @@ class SimpleSyncSystem:
             servers = SyncServer.query.filter_by(is_active=True).all()
             
             if not servers:
-                print("📡 No active sync servers")
+                print(" No active sync servers")
                 return
             
             # Create simple sync payload
@@ -100,14 +100,14 @@ class SimpleSyncSystem:
                     if result:
                         success_count += 1
                 except Exception as e:
-                    print(f"❌ Sync to {server.name} failed: {e}")
+                    print(f" Sync to {server.name} failed: {e}")
             
             if success_count > 0:
-                print(f"✅ Synced to {success_count}/{len(servers)} servers")
+                print(f" Synced to {success_count}/{len(servers)} servers")
                 self.last_sync = datetime.now(timezone.utc)
             
         except Exception as e:
-            print(f"❌ Sync error: {e}")
+            print(f" Sync error: {e}")
         finally:
             self.is_syncing = False
     
@@ -128,7 +128,7 @@ class SimpleSyncSystem:
             return response.status_code == 200
             
         except Exception as e:
-            print(f"⚠️ Server communication error: {e}")
+            print(f"️ Server communication error: {e}")
             return False
 
 # Global instance - only one per application
@@ -150,7 +150,7 @@ def get_sync_status():
     }
 
 if __name__ == "__main__":
-    print("🚀 Simple Sync System")
+    print(" Simple Sync System")
     print("=" * 30)
     
     # Test the system
@@ -159,7 +159,7 @@ if __name__ == "__main__":
     
     with app.app_context():
         status = get_sync_status()
-        print(f"📊 Sync status: {status}")
+        print(f" Sync status: {status}")
         
         # Test sync
         test_data = {'username': 'test', 'team_number': 1234}
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     with open('simple_sync_system.py', 'w') as f:
         f.write(simple_sync_code)
     
-    print("📁 Created simple_sync_system.py")
+    print(" Created simple_sync_system.py")
 
 def update_auth_routes_for_simple_sync():
     """Update auth routes to use simple sync instead of heavy systems"""
@@ -200,13 +200,13 @@ def update_auth_routes_for_simple_sync():
             
             # Don't modify too much automatically - just create the simple system
             auth_path.write_text(content)
-            print("✅ Auth routes prepared for simple sync")
+            print(" Auth routes prepared for simple sync")
         
     except Exception as e:
-        print(f"⚠️ Could not update auth routes: {e}")
+        print(f"️ Could not update auth routes: {e}")
 
 if __name__ == "__main__":
-    print("🛑 Disabling Heavy Sync Systems")
+    print(" Disabling Heavy Sync Systems")
     print("=" * 40)
     
     # Step 1: Disable heavy systems
@@ -218,13 +218,13 @@ if __name__ == "__main__":
     # Step 3: Update routes (optional)
     update_auth_routes_for_simple_sync()
     
-    print("\n✅ Heavy Sync Systems Disabled!")
+    print("\n Heavy Sync Systems Disabled!")
     print("   - Periodic sync disabled")
     print("   - Universal sync disabled") 
     print("   - Multiple sync workers disabled")
     print("   - Simple on-demand sync created")
     
-    print(f"\n💡 Next Steps:")
+    print(f"\n Next Steps:")
     print(f"   1. Restart the application")
     print(f"   2. Test user operations")
     print(f"   3. Use simple_sync_system for sync when needed")

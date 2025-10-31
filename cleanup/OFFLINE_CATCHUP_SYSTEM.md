@@ -6,31 +6,31 @@ The Offline Server Catch-up Synchronization System automatically detects servers
 
 ## Features
 
-### 🔍 **Smart Data-based Detection**
+###  **Smart Data-based Detection**
 - Monitors database changes to detect servers missing latest data
 - Compares server last sync timestamp with latest database changes
 - No arbitrary time thresholds - only syncs when actually needed
 - Counts exact number of missing changes per server
 
-### 📊 **Database Change Catch-up**
+###  **Database Change Catch-up**
 - Leverages existing change tracking system to identify missed changes
 - Batch processing for efficient large-scale synchronization
 - Supports all CRUD operations (Create, Read, Update, Delete)
 - Handles soft deletes and reactivations
 
-### 📁 **File Synchronization**
+###  **File Synchronization**
 - Timestamp-based file change detection
 - Supports instance files, config files, and uploads
 - Checksum verification for file integrity
 - Incremental sync (only changed files)
 
-### ⚡ **Performance Optimized**
+###  **Performance Optimized**
 - Configurable batch sizes for memory management
 - Extended timeouts for large catch-up operations
 - Retry logic with exponential backoff
 - Background processing to avoid blocking
 
-### 🛡️ **Robust Error Handling**
+### ️ **Robust Error Handling**
 - Comprehensive logging and monitoring
 - Graceful failure handling
 - Transaction rollback on errors
@@ -176,9 +176,9 @@ print(f"Found {len(servers_needing_catchup)} servers needing catch-up")
 results = catchup_sync_manager.run_automatic_catchup()
 for result in results:
     if result['success']:
-        print(f"✅ {result['server_name']}: {result['database_changes']['applied']} changes applied")
+        print(f" {result['server_name']}: {result['database_changes']['applied']} changes applied")
     else:
-        print(f"❌ {result['server_name']}: {len(result['errors'])} errors")
+        print(f" {result['server_name']}: {len(result['errors'])} errors")
 ```
 
 ### API Usage
@@ -201,19 +201,19 @@ curl "http://localhost:5000/api/sync/files/checksums?path=instance&catchup_mode=
 The system provides detailed logging with emoji indicators:
 
 ```
-🔍 Latest database change: 2025-08-11 09:15:30
-📊 backup-server (192.168.1.101): Missing 12 changes since 2025-08-11 08:30:00 - Available for catch-up
-🔍 Detected 1 servers needing catch-up
-✅ Server backup-server is now available  
-🚀 Starting catch-up sync for backup-server
-📅 Server backup-server last synced: 2025-08-11 08:30:00
-🗄️ Starting database catch-up for backup-server since 2025-08-11 08:30:00
-📤 Found 12 local changes to send
-📥 Received 8 database changes from backup-server
-✅ Applied 8 database changes from backup-server
-📁 Starting file catch-up for backup-server since 2025-08-11 08:30:00
-📤 Uploaded 2 files, 📥 Downloaded 5 files
-✅ Catch-up sync completed for backup-server in 45.20 seconds
+ Latest database change: 2025-08-11 09:15:30
+ backup-server (192.168.1.101): Missing 12 changes since 2025-08-11 08:30:00 - Available for catch-up
+ Detected 1 servers needing catch-up
+ Server backup-server is now available  
+ Starting catch-up sync for backup-server
+ Server backup-server last synced: 2025-08-11 08:30:00
+️ Starting database catch-up for backup-server since 2025-08-11 08:30:00
+ Found 12 local changes to send
+ Received 8 database changes from backup-server
+ Applied 8 database changes from backup-server
+ Starting file catch-up for backup-server since 2025-08-11 08:30:00
+ Uploaded 2 files,  Downloaded 5 files
+ Catch-up sync completed for backup-server in 45.20 seconds
 ```
 
 ### Sync Logs

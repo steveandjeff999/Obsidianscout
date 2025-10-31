@@ -32,12 +32,12 @@ def init_git_repository():
     # Check if this is already a Git repository
     try:
         repo = Repo(current_dir)
-        print("✅ This directory is already a Git repository!")
+        print(" This directory is already a Git repository!")
         print(f"   Current branch: {repo.active_branch.name}")
         print(f"   Remotes: {[remote.name for remote in repo.remotes]}")
         return True
     except (InvalidGitRepositoryError, NoSuchPathError):
-        print("❌ This directory is not a Git repository.")
+        print(" This directory is not a Git repository.")
         print()
     
     # Ask user if they want to initialize
@@ -52,26 +52,26 @@ def init_git_repository():
     # Initialize Git repository
     success, stdout, stderr = run_command("git init")
     if not success:
-        print(f"❌ Failed to initialize Git repository: {stderr}")
+        print(f" Failed to initialize Git repository: {stderr}")
         return False
     
-    print("✅ Git repository initialized successfully!")
+    print(" Git repository initialized successfully!")
     
     # Add all files
     print("Adding files to repository...")
     success, stdout, stderr = run_command("git add .")
     if not success:
-        print(f"❌ Failed to add files: {stderr}")
+        print(f" Failed to add files: {stderr}")
         return False
     
     # Make initial commit
     print("Making initial commit...")
     success, stdout, stderr = run_command('git commit -m "Initial commit"')
     if not success:
-        print(f"❌ Failed to make initial commit: {stderr}")
+        print(f" Failed to make initial commit: {stderr}")
         return False
     
-    print("✅ Initial commit created successfully!")
+    print(" Initial commit created successfully!")
     
     # Ask for remote repository URL
     print()
@@ -87,19 +87,19 @@ def init_git_repository():
         print(f"Adding remote origin: {remote_url}")
         success, stdout, stderr = run_command(f'git remote add origin "{remote_url}"')
         if not success:
-            print(f"❌ Failed to add remote: {stderr}")
+            print(f" Failed to add remote: {stderr}")
             return False
         
-        print("✅ Remote origin added successfully!")
+        print(" Remote origin added successfully!")
         
         # Try to push to remote
         print("Pushing to remote repository...")
         success, stdout, stderr = run_command("git push -u origin main")
         if not success:
-            print(f"⚠️  Warning: Failed to push to remote: {stderr}")
+            print(f"️  Warning: Failed to push to remote: {stderr}")
             print("   You may need to push manually later.")
         else:
-            print("✅ Successfully pushed to remote repository!")
+            print(" Successfully pushed to remote repository!")
     
     print()
     print("Git repository setup completed!")
@@ -120,7 +120,7 @@ def main():
         print("\n\nOperation cancelled by user.")
         sys.exit(1)
     except Exception as e:
-        print(f"\n❌ An error occurred: {e}")
+        print(f"\n An error occurred: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

@@ -27,22 +27,22 @@ def test_schedule_adjustment():
             # Try to get first user's scouting team number
             user = User.query.filter(User.scouting_team_number.isnot(None)).first()
             if not user:
-                print("❌ No users with scouting team numbers found")
+                print(" No users with scouting team numbers found")
                 return
             
             scouting_team_number = user.scouting_team_number
-            print(f"\n📋 Using scouting team: {scouting_team_number}")
+            print(f"\n Using scouting team: {scouting_team_number}")
             
             # Get their event
             game_config = load_game_config(team_number=scouting_team_number)
             event_code = game_config.get('current_event_code')
             
             if not event_code:
-                print("❌ No current event configured")
-                print("💡 Set current_event_code in app_config.json")
+                print(" No current event configured")
+                print(" Set current_event_code in app_config.json")
                 return
             
-            print(f"🏆 Event code: {event_code}")
+            print(f" Event code: {event_code}")
             
             # Get event from database
             event = Event.query.filter_by(
@@ -51,21 +51,21 @@ def test_schedule_adjustment():
             ).first()
             
             if not event:
-                print(f"❌ Event {event_code} not found in database")
-                print("💡 Sync matches first to create the event")
+                print(f" Event {event_code} not found in database")
+                print(" Sync matches first to create the event")
                 return
             
-            print(f"📍 Event: {event.name}")
-            print(f"🌍 Timezone: {event.timezone}")
-            print(f"📊 Current offset: {event.schedule_offset or 0} minutes")
+            print(f" Event: {event.name}")
+            print(f" Timezone: {event.timezone}")
+            print(f" Current offset: {event.schedule_offset or 0} minutes")
             
             # Get match count
             match_count = Match.query.filter_by(event_id=event.id).count()
-            print(f"🎯 Total matches: {match_count}")
+            print(f" Total matches: {match_count}")
             
             if match_count == 0:
-                print("\n⚠️  No matches found for this event")
-                print("💡 Sync matches from the FRC API first")
+                print("\n️  No matches found for this event")
+                print(" Sync matches from the FRC API first")
                 return
             
             print("\n" + "-"*70)
@@ -76,15 +76,15 @@ def test_schedule_adjustment():
             adjuster = ScheduleAdjuster(event, scouting_team_number)
             analysis = adjuster.analyze_schedule_variance()
             
-            print(f"\n📊 ANALYSIS RESULTS:")
+            print(f"\n ANALYSIS RESULTS:")
             print(f"   Offset: {analysis['offset_minutes']:+.1f} minutes")
             print(f"   Recent offset: {analysis['recent_offset_minutes']:+.1f} minutes")
             print(f"   Confidence: {analysis['confidence']:.1%}")
             print(f"   Sample size: {analysis['sample_size']} completed matches")
             
             if analysis['sample_size'] == 0:
-                print("\n⚠️  No completed matches with actual times yet")
-                print("💡 This is expected if:")
+                print("\n️  No completed matches with actual times yet")
+                print(" This is expected if:")
                 print("   - Event hasn't started")
                 print("   - TBA hasn't updated actual times yet")
                 print("   - Event is brand new")
@@ -94,27 +94,27 @@ def test_schedule_adjustment():
             # Determine schedule status
             offset = analysis['recent_offset_minutes']
             if abs(offset) < 2:
-                status = "✅ ON SCHEDULE"
-                emoji = "🎯"
+                status = " ON SCHEDULE"
+                emoji = ""
             elif offset > 0:
-                status = f"⚠️  BEHIND SCHEDULE by {offset:.0f} minutes"
-                emoji = "🐌"
+                status = f"️  BEHIND SCHEDULE by {offset:.0f} minutes"
+                emoji = ""
             else:
-                status = f"⚡ AHEAD OF SCHEDULE by {abs(offset):.0f} minutes"
-                emoji = "🚀"
+                status = f" AHEAD OF SCHEDULE by {abs(offset):.0f} minutes"
+                emoji = ""
             
             print(f"\n{emoji} {status}")
             
             # Check if adjustment will be applied
             if analysis['confidence'] < 0.3:
-                print(f"\n⚠️  Confidence {analysis['confidence']:.1%} is below 30% threshold")
+                print(f"\n️  Confidence {analysis['confidence']:.1%} is below 30% threshold")
                 print("   Schedule adjustment will NOT be applied yet")
                 print("   More matches needed for reliable adjustment")
             elif abs(offset) < 5:
-                print(f"\n✅ Offset {offset:+.1f} min is minimal (< 5 min)")
+                print(f"\n Offset {offset:+.1f} min is minimal (< 5 min)")
                 print("   No significant adjustment needed")
             else:
-                print(f"\n🔧 Will adjust future match predictions")
+                print(f"\n Will adjust future match predictions")
                 
                 # Count future matches
                 from datetime import datetime, timezone as tz
@@ -138,7 +138,7 @@ def test_schedule_adjustment():
             )
             
             if result['success']:
-                print(f"\n✅ Schedule update completed!")
+                print(f"\n Schedule update completed!")
                 print(f"   Matches adjusted: {result['adjusted_matches']}")
                 print(f"   Notifications rescheduled: {result['rescheduled_notifications']}")
                 
@@ -147,10 +147,10 @@ def test_schedule_adjustment():
                 print(f"   Event offset updated to: {event.schedule_offset or 0} minutes")
                 
                 if result['should_notify_users']:
-                    print(f"\n📬 Significant schedule change detected!")
+                    print(f"\n Significant schedule change detected!")
                     print(f"   Consider notifying users about the delay")
             else:
-                print(f"\n❌ Update failed: {result.get('error')}")
+                print(f"\n Update failed: {result.get('error')}")
             
             print("\n" + "="*70)
             print("TEST COMPLETED")
@@ -162,7 +162,7 @@ def test_schedule_adjustment():
             print("  4. Check console logs for schedule adjustment activity")
             
         except Exception as e:
-            print(f"\n❌ Error during test: {e}")
+            print(f"\n Error during test: {e}")
             import traceback
             traceback.print_exc()
 

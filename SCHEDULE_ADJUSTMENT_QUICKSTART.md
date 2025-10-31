@@ -24,7 +24,7 @@ The system now automatically detects when FRC events are running behind or ahead
 In the `/matches/` page, you'll now see:
 - **Strikethrough original time** when schedule is adjusted
 - **Bold adjusted time** in yellow/warning color
-- **Badge showing delay amount** (e.g., "16m 🐌" for 16 minutes behind)
+- **Badge showing delay amount** (e.g., "16m " for 16 minutes behind)
 - **Alert color changes** from blue to yellow when schedule is off
 
 ## Example Display
@@ -37,7 +37,7 @@ In the `/matches/` page, you'll now see:
 ### When event is 16 minutes behind:
 ```
 02:30 PM  (crossed out)
-~02:46 PM  (in yellow/bold)  [16m 🐌]
+~02:46 PM  (in yellow/bold)  [16m ]
 ```
 
 ## How to Test
@@ -82,12 +82,12 @@ These thresholds can be adjusted in `app/utils/schedule_adjuster.py`.
 ## What Happens Automatically
 
 Once running, the system will:
-1. ✅ Update match times from APIs every 10 minutes
-2. ✅ Check for schedule delays every 15 minutes
-3. ✅ Adjust future match predictions when delays detected
-4. ✅ Reschedule pending notifications automatically
-5. ✅ Display adjusted times in the UI
-6. ✅ Log schedule changes to console
+1.  Update match times from APIs every 10 minutes
+2.  Check for schedule delays every 15 minutes
+3.  Adjust future match predictions when delays detected
+4.  Reschedule pending notifications automatically
+5.  Display adjusted times in the UI
+6.  Log schedule changes to console
 
 ## Troubleshooting
 
@@ -113,4 +113,4 @@ The system is now fully operational! It will:
 - Adjust schedules as needed
 - Keep notifications timely
 
-No manual intervention needed - it just works! 🎉
+No manual intervention needed - it just works! 

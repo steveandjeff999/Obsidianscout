@@ -145,10 +145,10 @@ def wait_for_file_unlock(file_path: Path, max_attempts: int = 3, wait_seconds: i
             # Test if we can open the file for writing
             with open(file_path, 'r+b') as f:
                 pass  # File is accessible
-            print(f"✓ File accessible on attempt {attempt + 1}: {file_path}", flush=True)
+            print(f" File accessible on attempt {attempt + 1}: {file_path}", flush=True)
             return True
         except Exception as e:
-            print(f"✗ File locked on attempt {attempt + 1}: {file_path} - {e}", flush=True)
+            print(f" File locked on attempt {attempt + 1}: {file_path} - {e}", flush=True)
             
             if attempt < max_attempts - 1:  # Not the last attempt
                 print(f"Waiting {wait_seconds} seconds before retry...", flush=True)
@@ -159,7 +159,7 @@ def wait_for_file_unlock(file_path: Path, max_attempts: int = 3, wait_seconds: i
                     force_kill_file_locks(file_path)
                     time.sleep(5)  # Additional wait after killing processes
     
-    print(f"✗ File remains locked after {max_attempts} attempts: {file_path}", flush=True)
+    print(f" File remains locked after {max_attempts} attempts: {file_path}", flush=True)
     return False
 
 
@@ -222,12 +222,12 @@ def set_use_waitress_and_port_in_run(run_py: Path, use_waitress: bool, port: int
         
         if port_pattern.search(text):
             text = port_pattern.sub(new_port_line, text)
-            print(f"✓ Updated port default in run.py to {port}", flush=True)
+            print(f" Updated port default in run.py to {port}", flush=True)
         else:
             print("Warning: Could not find PORT environment line in run.py", flush=True)
         
         run_py.write_text(text, encoding='utf-8')
-        print(f"✓ Updated run.py: USE_WAITRESS={use_waitress}, PORT default={port}", flush=True)
+        print(f" Updated run.py: USE_WAITRESS={use_waitress}, PORT default={port}", flush=True)
         
     except UnicodeDecodeError as e:
         print(f"Warning: Could not modify run.py due to encoding error: {e}", flush=True)
@@ -646,14 +646,14 @@ def main():
                     safety_copy = safety_backup_dir / db_file.name
                     shutil.copy2(db_file, safety_copy)
                     safety_copies.append((db_file, safety_copy))
-                    print(f"✓ Safety copy created: {db_file.name}", flush=True)
+                    print(f" Safety copy created: {db_file.name}", flush=True)
                     
                     # Try to open the original file to check if it's locked
                     with open(db_file, 'r+b') as f:
                         pass  # Just check if we can open it
-                    print(f"✓ Database file accessible: {db_file.name}", flush=True)
+                    print(f" Database file accessible: {db_file.name}", flush=True)
                 except Exception as e:
-                    print(f"⚠ Database file issue: {db_file.name} - {e}", flush=True)
+                    print(f" Database file issue: {db_file.name} - {e}", flush=True)
                     locked_files.append(str(db_file))
         
         if locked_files:
@@ -703,7 +703,7 @@ def main():
                 print(f"Attempting to kill processes locking {len(still_locked)} files...", flush=True)
                 killed_processes = force_kill_file_locks([str(f) for f in still_locked])
                 if killed_processes:
-                    print(f"🔥 Killed {killed_processes} processes", flush=True)
+                    print(f" Killed {killed_processes} processes", flush=True)
                     time.sleep(5)  # Wait after killing processes
                     
                     # Try unlocking again after killing processes
@@ -713,19 +713,19 @@ def main():
                             final_unlock_attempt.append(locked_file)
                     
                     if final_unlock_attempt:
-                        print(f"✓ Successfully unlocked {len(final_unlock_attempt)} files after killing processes", flush=True)
+                        print(f" Successfully unlocked {len(final_unlock_attempt)} files after killing processes", flush=True)
                         # Remove from still_locked list
                         still_locked = [f for f in still_locked if f not in final_unlock_attempt]
             
             if still_locked:
                 print("Files that remain locked:", flush=True)
                 for locked_file in still_locked:
-                    print(f"  ✗ {locked_file.relative_to(repo_root)}", flush=True)
+                    print(f"   {locked_file.relative_to(repo_root)}", flush=True)
                 print("Update may fail for these files - will attempt recovery", flush=True)
             else:
-                print("✓ All file locks successfully resolved", flush=True)
+                print(" All file locks successfully resolved", flush=True)
         else:
-            print("✓ No locked files detected in app directory", flush=True)
+            print(" No locked files detected in app directory", flush=True)
         
         try:
             # Add specific database files to preservation - these might be in root directory
@@ -759,7 +759,7 @@ def main():
             
             for original_db, safety_copy in safety_copies:
                 if not original_db.exists():
-                    print(f"❌ CRITICAL: Database file missing after update: {original_db.relative_to(repo_root)}", flush=True)
+                    print(f" CRITICAL: Database file missing after update: {original_db.relative_to(repo_root)}", flush=True)
                     corrupted_or_missing_dbs.append(original_db)
                 else:
                     # Check if file size changed dramatically (might indicate corruption/replacement)
@@ -768,30 +768,30 @@ def main():
                         safety_size = safety_copy.stat().st_size
                         
                         if original_size == 0 and safety_size > 0:
-                            print(f"❌ CRITICAL: Database file appears corrupted (zero size): {original_db.relative_to(repo_root)}", flush=True)
+                            print(f" CRITICAL: Database file appears corrupted (zero size): {original_db.relative_to(repo_root)}", flush=True)
                             corrupted_or_missing_dbs.append(original_db)
                         elif original_size < safety_size * 0.5:  # 50% size reduction might indicate corruption
-                            print(f"⚠ WARNING: Database file significantly smaller after update: {original_db.relative_to(repo_root)}", flush=True)
+                            print(f" WARNING: Database file significantly smaller after update: {original_db.relative_to(repo_root)}", flush=True)
                             print(f"   Original: {original_size} bytes, Current: {safety_size} bytes", flush=True)
                         else:
-                            print(f"✓ Database file intact: {original_db.relative_to(repo_root)} ({original_size} bytes)", flush=True)
+                            print(f" Database file intact: {original_db.relative_to(repo_root)} ({original_size} bytes)", flush=True)
                     except Exception as e:
-                        print(f"⚠ Could not verify database integrity: {original_db.relative_to(repo_root)} - {e}", flush=True)
+                        print(f" Could not verify database integrity: {original_db.relative_to(repo_root)} - {e}", flush=True)
             
             # Restore corrupted database files
             if corrupted_or_missing_dbs:
-                print(f"🚨 RESTORING {len(corrupted_or_missing_dbs)} corrupted/missing database files...", flush=True)
+                print(f" RESTORING {len(corrupted_or_missing_dbs)} corrupted/missing database files...", flush=True)
                 for corrupted_db in corrupted_or_missing_dbs:
                     for original_db, safety_copy in safety_copies:
                         if original_db == corrupted_db and safety_copy.exists():
                             try:
                                 corrupted_db.parent.mkdir(parents=True, exist_ok=True)
                                 shutil.copy2(safety_copy, corrupted_db)
-                                print(f"✅ Restored database: {corrupted_db.relative_to(repo_root)}", flush=True)
+                                print(f" Restored database: {corrupted_db.relative_to(repo_root)}", flush=True)
                             except Exception as e:
-                                print(f"❌ Failed to restore database {corrupted_db.relative_to(repo_root)}: {e}", flush=True)
+                                print(f" Failed to restore database {corrupted_db.relative_to(repo_root)}: {e}", flush=True)
             else:
-                print("✅ All database files verified intact - no corruption detected", flush=True)
+                print(" All database files verified intact - no corruption detected", flush=True)
                 
             print("=== END DATABASE VERIFICATION ===", flush=True)
             print("=== END POST-UPDATE CHECK ===", flush=True)
@@ -834,7 +834,7 @@ def main():
                                 if (file_name.endswith('.db') or file_name.endswith('.db-wal') or 
                                     file_name.endswith('.db-shm') or file_name.endswith('.sqlite') or 
                                     file_name.endswith('.sqlite3')):
-                                    print(f"🔒 Database protection: Skipping {file_name} extraction to prevent corruption", flush=True)
+                                    print(f" Database protection: Skipping {file_name} extraction to prevent corruption", flush=True)
                                     continue
                                     
                                 # Determine target path - handle different ZIP structures
@@ -870,13 +870,13 @@ def main():
                                     with zf.open(zip_file) as src:
                                         target_path.write_bytes(src.read())
                                     
-                                    print(f"✓ Manually extracted: {target_path.relative_to(repo_root)}", flush=True)
+                                    print(f" Manually extracted: {target_path.relative_to(repo_root)}", flush=True)
                                     extracted_count += 1
                                 else:
-                                    print(f"⚠ Could not determine target path for: {zip_file}", flush=True)
+                                    print(f" Could not determine target path for: {zip_file}", flush=True)
                                     
                             except Exception as e:
-                                print(f"✗ Failed to extract {zip_file}: {e}", flush=True)
+                                print(f" Failed to extract {zip_file}: {e}", flush=True)
                         
                         print(f"Manual extraction complete: {extracted_count} files extracted", flush=True)
                         
@@ -932,13 +932,13 @@ def main():
                             try:
                                 target_file.parent.mkdir(parents=True, exist_ok=True)
                                 shutil.copy2(backup_file, target_file)
-                                print(f"✓ Restored {missing} from backup", flush=True)
+                                print(f" Restored {missing} from backup", flush=True)
                                 recovery_success.append(missing)
                             except Exception as e:
-                                print(f"✗ Failed to restore {missing}: {e}", flush=True)
+                                print(f" Failed to restore {missing}: {e}", flush=True)
                                 recovery_failed.append(missing)
                         else:
-                            print(f"✗ Backup not found for {missing}", flush=True)
+                            print(f" Backup not found for {missing}", flush=True)
                             recovery_failed.append(missing)
                     
                     print(f"Recovery summary: {len(recovery_success)} restored, {len(recovery_failed)} failed", flush=True)
@@ -968,9 +968,9 @@ def main():
                                         target_file.parent.mkdir(parents=True, exist_ok=True)
                                         with zf.open(zip_file) as src:
                                             target_file.write_bytes(src.read())
-                                        print(f"✓ Emergency restored {missing} from ZIP", flush=True)
+                                        print(f" Emergency restored {missing} from ZIP", flush=True)
                                     except Exception as e:
-                                        print(f"✗ Emergency recovery failed for {missing}: {e}", flush=True)
+                                        print(f" Emergency recovery failed for {missing}: {e}", flush=True)
                     except Exception as e:
                         print(f"Emergency recovery from ZIP failed: {e}", flush=True)
                     
@@ -992,16 +992,16 @@ def main():
                     try:
                         original_file.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(safety_copy, original_file)
-                        print(f"✓ Restored missing database file: {original_file.name}", flush=True)
+                        print(f" Restored missing database file: {original_file.name}", flush=True)
                     except Exception as e:
-                        print(f"✗ Failed to restore database file {original_file.name}: {e}", flush=True)
+                        print(f" Failed to restore database file {original_file.name}: {e}", flush=True)
                 elif original_file.exists():
-                    print(f"✓ Database file preserved: {original_file.name}", flush=True)
+                    print(f" Database file preserved: {original_file.name}", flush=True)
             
             # Clean up safety copies
             try:
                 shutil.rmtree(safety_backup_dir)
-                print("✓ Cleaned up safety backup directory", flush=True)
+                print(" Cleaned up safety backup directory", flush=True)
             except Exception:
                 pass
             print("=== END DATABASE RESTORATION CHECK ===", flush=True)
@@ -1102,12 +1102,12 @@ def main():
                                            stderr=subprocess.DEVNULL,
                                            stdin=subprocess.DEVNULL)
                         
-                        print(f"✅ Successfully launched {selected_bat.name} in background", flush=True)
+                        print(f" Successfully launched {selected_bat.name} in background", flush=True)
                         # Give the batch file a moment to start
                         time.sleep(2)
                         
                     except Exception as e:
-                        print(f"❌ Failed to run batch file {selected_bat.name}: {e}", flush=True)
+                        print(f" Failed to run batch file {selected_bat.name}: {e}", flush=True)
                 else:
                     print("No suitable batch file found to execute", flush=True)
             else:

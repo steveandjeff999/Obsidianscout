@@ -905,9 +905,9 @@ def hard_delete_user(user_id):
             },
             server_id='local'
         )
-        current_app.logger.info(f"✅ Logged hard delete change for user {username}")
+        current_app.logger.info(f" Logged hard delete change for user {username}")
     except Exception as e:
-        current_app.logger.error(f"❌ Manual hard delete change tracking failed: {e}")
+        current_app.logger.error(f" Manual hard delete change tracking failed: {e}")
     
     # Hard delete - this will trigger the after_delete event
     db.session.delete(user)
@@ -966,8 +966,8 @@ def delete_user_permanently(user_id):
     from flask import current_app
     
     # First, let's print to console to see if function is being called
-    print(f"🔴 DELETE FUNCTION CALLED for user_id: {user_id}")
-    current_app.logger.error(f"🔴 DELETE FUNCTION CALLED for user_id: {user_id}")
+    print(f" DELETE FUNCTION CALLED for user_id: {user_id}")
+    current_app.logger.error(f" DELETE FUNCTION CALLED for user_id: {user_id}")
     
     current_app.logger.info(f"Delete user permanently attempt for user_id: {user_id}")
     current_app.logger.info(f"Current user: {current_user.username}, roles: {[role.name for role in current_user.roles]}")
@@ -975,11 +975,11 @@ def delete_user_permanently(user_id):
     user = User.query.get_or_404(user_id)
     current_app.logger.info(f"Target user: {user.username}, roles: {[role.name for role in user.roles]}, active: {user.is_active}")
     
-    print(f"🔴 Target user found: {user.username}")
+    print(f" Target user found: {user.username}")
     
     # Prevent deleting yourself
     if user.id == current_user.id:
-        print("🔴 Blocked - cannot delete own account")
+        print(" Blocked - cannot delete own account")
         current_app.logger.info("Blocked - cannot delete own account")
         flash('You cannot delete your own account', 'error')
         return redirect(url_for('auth.manage_users'))
@@ -992,27 +992,27 @@ def delete_user_permanently(user_id):
         (current_user.has_role('admin') and user.scouting_team_number == current_user.scouting_team_number)
     )
     if not allowed_to_permanently_delete:
-        print("🔴 Blocked - insufficient privileges to permanently delete user")
+        print(" Blocked - insufficient privileges to permanently delete user")
         current_app.logger.info("Blocked - insufficient privileges to permanently delete user")
         flash('Only superadmins or team admins (for their own team) can permanently delete users', 'error')
         return redirect(url_for('auth.manage_users'))
     
     # Prevent deleting other superadmin users (safety measure)
     if user.has_role('superadmin'):
-        print("🔴 Blocked - cannot delete superadmin user")
+        print(" Blocked - cannot delete superadmin user")
         current_app.logger.info("Blocked - cannot delete superadmin user")
         flash('Cannot delete other superadmin users for security reasons', 'error')
         return redirect(url_for('auth.manage_users'))
     
     username = user.username
-    print(f"🔴 Proceeding with permanent deletion of user: {username}")
+    print(f" Proceeding with permanent deletion of user: {username}")
     current_app.logger.info(f"Proceeding with permanent deletion of user: {username}")
     
     # Delete user - this will trigger the after_delete event and track the change for sync
     db.session.delete(user)
     db.session.commit()
     
-    print(f"🔴 Permanent deletion completed for user: {username}")
+    print(f" Permanent deletion completed for user: {username}")
     current_app.logger.info(f"Permanent deletion completed for user: {username}")
     flash(f'User {username} permanently deleted', 'warning')
     return redirect(url_for('auth.manage_users'))
@@ -1053,9 +1053,32 @@ def admin_settings():
     team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
     account_creation_locked = team_settings.account_creation_locked if team_settings else False
 
-    return render_template('auth/admin_settings.html', 
-                          account_creation_locked=account_creation_locked,
-                          **get_theme_context())
+    # This is an administrative page that should render with the global
+    # chrome (sidebar/topbar). get_theme_context() defaults auth pages to
+    # no_chrome=True, so explicitly enable the chrome here to preserve the
+    # standard admin layout and prevent content from overlapping the sidebar.
+    ctx = get_theme_context()
+    ctx['no_chrome'] = False
+    # Load application version from app_config.json if available so the UI
+    # displays the actual deployed version instead of a hard-coded value.
+    app_version = None
+    try:
+        base = os.getcwd()
+        cfg_path = os.path.join(base, 'app_config.json')
+        if os.path.exists(cfg_path):
+            with open(cfg_path, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+                app_version = cfg.get('version')
+    except Exception:
+        try:
+            current_app.logger.exception('Failed to load app_config.json for admin settings')
+        except Exception:
+            pass
+
+    return render_template('auth/admin_settings.html',
+                           account_creation_locked=account_creation_locked,
+                           app_version=app_version,
+                           **ctx)
 
 
 @bp.route('/admin/account-lock-status', methods=['GET'])

@@ -4,7 +4,7 @@
 
 ### Changes Made
 
-#### 1. ✅ Fixed Strategy Insights
+#### 1.  Fixed Strategy Insights
 **Problem**: Strategy Insights showed "No data available" even when strategy drawings existed.
 
 **Root Cause**: The code was trying to access fields (`title`, `created_by_name`) that don't exist in the StrategyDrawing model.
@@ -25,7 +25,7 @@ data = strategy.data
 creator = data.get('created_by', 'Unknown')
 ```
 
-#### 2. ✅ Added Top Collapse Toggle
+#### 2.  Added Top Collapse Toggle
 **New Feature**: Collapse/expand button in the header next to refresh button
 
 **How It Works**:
@@ -37,11 +37,11 @@ creator = data.get('created_by', 'Unknown')
 **Visual**:
 ```
 ┌─────────────────────────────────────────┐
-│ 📰 Now Brief    [↓] [🔄]                │ ← Top toggle
+│  Now Brief    [↓] []                │ ← Top toggle
 └─────────────────────────────────────────┘
 ```
 
-#### 3. ✅ Removed Scrolling - Show All Content
+#### 3.  Removed Scrolling - Show All Content
 **Before**: Each section had max-height of 400px with scrollbars
 
 **After**: All sections show full content without scrolling
@@ -51,20 +51,20 @@ creator = data.get('created_by', 'Unknown')
 
 **Result**: Users can see all data without needing to scroll within sections
 
-#### 4. ✅ Limited Recent Activity to 10 Items
+#### 4.  Limited Recent Activity to 10 Items
 **Change**: Recent Activity already showed 10 items (from the API query limit)
 
 **Confirmed**: The API query uses `.limit(10)` so only the 10 most recent scouting entries are fetched and displayed.
 
-#### 5. ✅ Removed Crown Emoji
-**Before**: Predicted winner showed 👑 crown emoji
+#### 5.  Removed Crown Emoji
+**Before**: Predicted winner showed  crown emoji
 
 **After**: Golden border only (no crown)
 
 **Visual Change**:
 ```
 Before:
-┌────────────────┐ 👑
+┌────────────────┐ 
 │ Red Alliance   │ [Golden Border]
 └────────────────┘
 
@@ -78,7 +78,7 @@ After:
 ```css
 /* Removed */
 .predicted-winner::before {
-    content: '👑';
+    content: '';
     ...
 }
 ```
@@ -102,14 +102,14 @@ After:
 **Header Changes**:
 ```
 ┌───────────────────────────────────────────────┐
-│ 📰 Now Brief     [↓ Collapse] [🔄 Refresh]   │
+│  Now Brief     [↓ Collapse] [ Refresh]   │
 └───────────────────────────────────────────────┘
 ```
 
 **Strategy Insights (Now Working)**:
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 Strategy Insights    [View All]
+ Strategy Insights    [View All]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Strategy for Playoff 1
 Unknown • 3d ago                →
@@ -124,7 +124,7 @@ Admin • 2d ago                  →
 **Match Predictions (No Crown)**:
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📅 Next 5 Matches      [All Matches]
+ Next 5 Matches      [All Matches]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Playoff 1                  [2:30 PM]
 
@@ -134,22 +134,22 @@ Red Alliance  127.5    [Golden Border]
 Blue Alliance  98.3
 │ 10661 │ 9067 │ 5454 │
 
-📊 Predicted: Red (30% confidence)
-✓ 4/6 teams scouted
+ Predicted: Red (30% confidence)
+ 4/6 teams scouted
 ```
 
 **Recent Activity (10 Items, Full Display)**:
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🕐 Recent Activity        [View All]
+ Recent Activity        [View All]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👤 Seth Herod
+ Seth Herod
 Scouted Team 6424 in Match 23   3d ago
 
-👤 Seth Herod  
+ Seth Herod  
 Scouted Team 5454 in Match 9    4d ago
 
-👤 zman
+ zman
 Scouted Team 6424 in Match 8    4d ago
 
 [... 7 more entries, all visible ...]

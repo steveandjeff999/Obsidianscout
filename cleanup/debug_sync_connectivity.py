@@ -14,7 +14,7 @@ def test_remote_connectivity():
         print(f"Found {len(servers)} sync-enabled servers:")
         
         for server in servers:
-            print(f"\n🔍 Testing server: {server.name}")
+            print(f"\n Testing server: {server.name}")
             print(f"   URL: {server.base_url}")
             print(f"   Sync enabled: {server.sync_enabled}")
             print(f"   Sync database: {server.sync_database}")
@@ -32,7 +32,7 @@ def test_remote_connectivity():
                 else:
                     print(f"   Ping failed: {response.text}")
             except Exception as e:
-                print(f"   ❌ Ping error: {e}")
+                print(f"    Ping error: {e}")
                 
             # Test changes endpoint
             try:
@@ -51,7 +51,7 @@ def test_remote_connectivity():
                 else:
                     print(f"   Changes failed: {response.text}")
             except Exception as e:
-                print(f"   ❌ Changes error: {e}")
+                print(f"    Changes error: {e}")
                 
             # Test receive-changes endpoint
             try:
@@ -69,17 +69,17 @@ def test_remote_connectivity():
                 else:
                     print(f"   Receive failed: {response.text}")
             except Exception as e:
-                print(f"   ❌ Receive error: {e}")
+                print(f"    Receive error: {e}")
                 
         # Check local pending changes
         pending_changes = DatabaseChange.query.filter_by(sync_status='pending').all()
-        print(f"\n📋 Local pending changes: {len(pending_changes)}")
+        print(f"\n Local pending changes: {len(pending_changes)}")
         for change in pending_changes:
             print(f"   - ID:{change.id} {change.table_name} {change.operation} rec:{change.record_id} created:{change.timestamp}")
             
         # Check recently synced changes
         synced_changes = DatabaseChange.query.filter_by(sync_status='synced').order_by(DatabaseChange.timestamp.desc()).limit(10).all()
-        print(f"\n✅ Recently synced changes: {len(synced_changes)}")
+        print(f"\n Recently synced changes: {len(synced_changes)}")
         for change in synced_changes:
             print(f"   - ID:{change.id} {change.table_name} {change.operation} rec:{change.record_id} synced")
 

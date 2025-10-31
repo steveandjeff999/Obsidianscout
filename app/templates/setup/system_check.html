@@ -115,7 +115,7 @@
                                 <i class="fas fa-folder{% if exists %}-open text-success{% else %} text-warning{% endif %} me-2"></i>
                                 <span class="me-2">{{ dir_name }}</span>
                                 <span class="badge {% if exists %}bg-success{% else %}bg-warning{% endif %} badge-sm">
-                                    {% if exists %}✓{% else %}✗{% endif %}
+                                    {% if exists %}{% else %}{% endif %}
                                 </span>
                             </div>
                         </div>

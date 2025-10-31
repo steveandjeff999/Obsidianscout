@@ -36,7 +36,7 @@ ObsidianScout now fully supports event-based timezones to ensure notifications a
 7. User in California sees match time displayed as: 2:30 PM PST (event local time)
 8. User in California receives notification at: 2:10 PM PST (20 minutes before match)
 
-✅ **Result:** Everyone gets notified at the correct time relative to when the match actually starts!
+ **Result:** Everyone gets notified at the correct time relative to when the match actually starts!
 
 ## Technical Implementation
 
@@ -299,10 +299,10 @@ Potential improvements for future versions:
 The timezone support ensures that ObsidianScout works correctly for FRC events happening anywhere in the world. Match times and notifications are now always accurate relative to the event's local time, regardless of where users are located. This makes the system truly international and eliminates confusion about when matches are actually happening.
 
 **Key Points:**
-- ✅ Match times stored in UTC (database standard)
-- ✅ Event timezone stored separately (IANA format)
-- ✅ Times displayed in event local timezone
-- ✅ Notifications sent at correct local time
-- ✅ Works for all timezones worldwide
-- ✅ Automatic timezone from TBA API
-- ✅ Backward compatible with existing data
+-  Match times stored in UTC (database standard)
+-  Event timezone stored separately (IANA format)
+-  Times displayed in event local timezone
+-  Notifications sent at correct local time
+-  Works for all timezones worldwide
+-  Automatic timezone from TBA API
+-  Backward compatible with existing data

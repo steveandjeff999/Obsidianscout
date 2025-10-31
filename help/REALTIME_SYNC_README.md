@@ -62,24 +62,24 @@ Each event includes relevant data like:
 ## Features
 
 ### Real-Time Synchronization
-- ✅ Alliance team assignments sync across devices instantly
-- ✅ Alliance team removals sync across devices instantly
-- ✅ Avoid list changes sync across devices instantly
-- ✅ Do-not-pick list changes sync across devices instantly
-- ✅ Recommendation updates sync across devices instantly
-- ✅ Alliance resets sync across devices instantly
+-  Alliance team assignments sync across devices instantly
+-  Alliance team removals sync across devices instantly
+-  Avoid list changes sync across devices instantly
+-  Do-not-pick list changes sync across devices instantly
+-  Recommendation updates sync across devices instantly
+-  Alliance resets sync across devices instantly
 
 ### User Experience
-- ✅ Toast notifications for all changes
-- ✅ No page refreshes required
-- ✅ Visual feedback for actions
-- ✅ Maintains scroll position and form state
-- ✅ Graceful error handling
+-  Toast notifications for all changes
+-  No page refreshes required
+-  Visual feedback for actions
+-  Maintains scroll position and form state
+-  Graceful error handling
 
 ### Multi-Device Support
-- ✅ Works across multiple browsers/devices
-- ✅ Real-time collaboration between scouts
-- ✅ Consistent state across all clients
+-  Works across multiple browsers/devices
+-  Real-time collaboration between scouts
+-  Consistent state across all clients
 
 ## Technical Details
 

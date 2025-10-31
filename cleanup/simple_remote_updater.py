@@ -82,17 +82,17 @@ def main():
                     run_py.write_text(content)
                     print(f"Updated USE_WAITRESS setting in run.py")
             
-            print(f"✅ Simple update completed. Please manually copy updated files from:")
+            print(f" Simple update completed. Please manually copy updated files from:")
             print(f"   {extracted_dir}")
             print(f"   to")
             print(f"   {repo_root}")
             print(f"")
-            print(f"⚠️  This is a simplified updater. For full update functionality,")
+            print(f"️  This is a simplified updater. For full update functionality,")
             print(f"   copy the new app/utils/remote_updater.py file to enable")
             print(f"   automatic updates in the future.")
             
         except Exception as e:
-            print(f"❌ Update failed: {e}")
+            print(f" Update failed: {e}")
             return 1
     
     return 0

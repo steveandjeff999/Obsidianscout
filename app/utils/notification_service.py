@@ -59,22 +59,22 @@ def get_match_time(match):
                     # convert_local_to_utc will localize naive dt to event tz then return UTC-aware dt
                     match_time = convert_local_to_utc(match_time, event_tz)
                     local_time = convert_utc_to_local(match_time, event_tz)
-                    print(f"⏰ Match {match.match_type} #{match.match_number} {time_source} time (interpreted as event-local {event_tz}):")
+                    print(f"Match {match.match_type} #{match.match_number} {time_source} time (interpreted as event-local {event_tz}):")
                     print(f"   DB value: {match.scheduled_time} (naive - interpreted as local {event_tz})")
                     print(f"   As UTC: {match_time.strftime('%I:%M %p UTC')}")
                     print(f"   As {event_tz}: {local_time.strftime('%I:%M %p %Z')}")
                 except Exception as e:
                     # Fallback: label as UTC
                     match_time = match_time.replace(tzinfo=timezone.utc)
-                    print(f"⚠️  Failed to interpret naive time as event-local, falling back to UTC: {e}")
+                    print(f"Failed to interpret naive time as event-local, falling back to UTC: {e}")
             else:
                 # No event timezone known - label stored naive as UTC
                 match_time = match_time.replace(tzinfo=timezone.utc)
-                print(f"⏰ Match {match.match_type} #{match.match_number} {time_source} time: {match_time.strftime('%Y-%m-%d %I:%M %p UTC')}")
+                print(f"Match {match.match_type} #{match.match_number} {time_source} time: {match_time.strftime('%Y-%m-%d %I:%M %p UTC')}")
         except Exception as e:
-            print(f"⚠️  Could not display timezone info: {e}")
+            print(f"Could not display timezone info: {e}")
     elif match_time:
-        print(f"ℹ️  Match {match.match_type} #{match.match_number} {time_source} time already has tzinfo: {match_time}")
+        print(f"Match {match.match_type} #{match.match_number} {time_source} time already has tzinfo: {match_time}")
     
     return match_time
 
@@ -213,16 +213,16 @@ def create_match_prediction_html(match, target_team_number, message):
     html_content = f"""
     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 24px; border-radius: 8px; margin-bottom: 20px;">
         <h2 style="margin: 0 0 8px 0; color: #ffffff; font-size: 24px; font-weight: 700;">
-            🏆 {match_type} {match_number} Strategy
+             {match_type} {match_number} Strategy
         </h2>
         <div style="color: rgba(255, 255, 255, 0.95); font-size: 16px; font-weight: 500;">
             Team {target_team_number} Upcoming Match
         </div>
-        {f'<div style="color: rgba(255, 255, 255, 0.85); font-size: 14px; margin-top: 8px;">⏰ Scheduled: {scheduled_time}</div>' if scheduled_time else ''}
+        {f'<div style="color: rgba(255, 255, 255, 0.85); font-size: 14px; margin-top: 8px;">Scheduled: {scheduled_time}</div>' if scheduled_time else ''}
     </div>
     
     <div style="background: #f8f9fa; padding: 16px; border-left: 4px solid #667eea; border-radius: 4px; margin-bottom: 20px;">
-        <div style="font-size: 14px; color: #555; font-weight: 600; margin-bottom: 8px;">📍 Event</div>
+        <div style="font-size: 14px; color: #555; font-weight: 600; margin-bottom: 8px;"> Event</div>
         <div style="font-size: 16px; color: #333; font-weight: 500;">{event_name}</div>
         {f'<div style="font-size: 13px; color: #666; margin-top: 4px;">{event_code}</div>' if event_code else ''}
     </div>
@@ -251,7 +251,7 @@ def create_match_prediction_html(match, target_team_number, message):
             is_target = team_num == str(target_team_number)
             bg_color = '#e8f5e9' if is_target else '#fff3e0'
             border_color = '#4caf50' if is_target else '#ff9800'
-            icon = '⭐' if is_target else '🤝'
+            icon = '' if is_target else ''
             
             html_content += f"""
     <div style="background: {bg_color}; padding: 18px; border-left: 4px solid {border_color}; border-radius: 6px; margin-bottom: 16px;">
@@ -271,13 +271,13 @@ def create_match_prediction_html(match, target_team_number, message):
                     # Add emoji icons for different stats
                     stat_icon = ''
                     if 'Auto' in label or 'Autonomous' in label:
-                        stat_icon = '🤖'
+                        stat_icon = ''
                     elif 'Teleop' in label or 'TeleOp' in label:
-                        stat_icon = '🎮'
+                        stat_icon = ''
                     elif 'Total' in label or 'Overall' in label:
-                        stat_icon = '📊'
+                        stat_icon = ''
                     elif 'matches' in label.lower():
-                        stat_icon = '🔢'
+                        stat_icon = ''
                     
                     html_content += f"""
             <tr>
@@ -300,7 +300,7 @@ def create_match_prediction_html(match, target_team_number, message):
             html_content += f"""
     <div style="margin: 24px 0 16px 0;">
         <h3 style="margin: 0; color: #444; font-size: 18px; font-weight: 700; border-bottom: 2px solid #ff9800; padding-bottom: 8px;">
-            🤝 Alliance Partners
+             Alliance Partners
         </h3>
     </div>
 """
@@ -442,11 +442,11 @@ def create_strategy_notification_message(match, target_team_number):
         message += f"  {opponent_color}: {opponent_avg:.0f} points\n"
         
         if alliance_avg > opponent_avg:
-            message += f"\n🎯 Prediction: {alliance_color} Alliance wins by {(alliance_avg - opponent_avg):.0f} points\n"
+            message += f"\n Prediction: {alliance_color} Alliance wins by {(alliance_avg - opponent_avg):.0f} points\n"
         elif opponent_avg > alliance_avg:
-            message += f"\n🎯 Prediction: {opponent_color} Alliance wins by {(opponent_avg - alliance_avg):.0f} points\n"
+            message += f"\n Prediction: {opponent_color} Alliance wins by {(opponent_avg - alliance_avg):.0f} points\n"
         else:
-            message += f"\n🎯 Prediction: Close match - too close to call!\n"
+            message += f"\n Prediction: Close match - too close to call!\n"
     
     return title, message
 
@@ -739,14 +739,14 @@ def send_notification_for_subscription(subscription, match):
                 
                 if success:
                     log.email_sent = True
-                    print(f"✅ Email sent to {user.email} for match {match.id}")
+                    print(f" Email sent to {user.email} for match {match.id}")
                 else:
                     log.email_error = error
-                    print(f"❌ Email failed for {user.email}: {error}")
+                    print(f" Email failed for {user.email}: {error}")
             except Exception as e:
                 import traceback
                 log.email_error = str(e)
-                print(f"❌ Email exception for {user.email}: {e}")
+                print(f" Email exception for {user.email}: {e}")
                 traceback.print_exc()
         
         # Send push notification if enabled
@@ -789,9 +789,9 @@ def send_notification_for_subscription(subscription, match):
                                 error_text = error_text[:997] + "..."
                             log.push_error = error_text
                         
-                        print(f"✅ Push sent to {success_count} devices for user {user.username}")
+                        print(f" Push sent to {success_count} devices for user {user.username}")
                         if failed_count > 0:
-                            print(f"❌ Push failed for {failed_count} devices")
+                            print(f" Push failed for {failed_count} devices")
                             for err in errors:
                                 print(f"   - {err}")
                     except Exception as push_ex:
@@ -799,15 +799,15 @@ def send_notification_for_subscription(subscription, match):
                         error_msg = f"Push send error: {type(push_ex).__name__}: {str(push_ex)}"
                         log.push_error = error_msg[:1000]  # Truncate for database
                         log.push_failed_count = device_count
-                        print(f"❌ Push exception for user {user.username}: {push_ex}")
+                        print(f" Push exception for user {user.username}: {push_ex}")
                         traceback.print_exc()
                 else:
                     log.push_error = "No active devices registered"
-                    print(f"⚠️  No active devices for user {user.username}")
+                    print(f"No active devices for user {user.username}")
             except Exception as e:
                 import traceback
                 log.push_error = f"Push setup error: {type(e).__name__}: {str(e)}"[:1000]
-                print(f"❌ Push exception for user {user.username}: {e}")
+                print(f" Push exception for user {user.username}: {e}")
                 traceback.print_exc()
         
         # Save log
@@ -817,7 +817,7 @@ def send_notification_for_subscription(subscription, match):
         return log
         
     except Exception as e:
-        print(f"❌ Error sending notification for subscription {subscription.id}: {e}")
+        print(f" Error sending notification for subscription {subscription.id}: {e}")
         traceback.print_exc()
         db.session.rollback()
         return None
@@ -836,7 +836,7 @@ def schedule_notifications_for_match(match):
     # See: https://frc-api-docs.firstinspires.org/ and https://www.thebluealliance.com/apidocs/v3
     match_time = get_match_time(match)
     if not match_time:
-        print(f"⚠️  Match {match.match_type} {match.match_number} (ID {match.id}) has no scheduled/predicted time, skipping notification scheduling")
+        print(f"Match {match.match_type} {match.match_number} (ID {match.id}) has no scheduled/predicted time, skipping notification scheduling")
         return 0
     
     # Get event for timezone information
@@ -846,11 +846,11 @@ def schedule_notifications_for_match(match):
     if event_tz:
         # Log for debugging: show what time the match is in local timezone
         local_time = convert_utc_to_local(match_time, event_tz)
-        print(f"🕐 Match {match.match_type} {match.match_number} time in {event_tz}: {local_time.strftime('%I:%M %p %Z')}")
+        print(f" Match {match.match_type} {match.match_number} time in {event_tz}: {local_time.strftime('%I:%M %p %Z')}")
     
     # Get all teams in this match
     all_teams = match.red_teams + match.blue_teams
-    print(f"📋 Match {match.match_type} {match.match_number} teams: {all_teams}")
+    print(f" Match {match.match_type} {match.match_number} teams: {all_teams}")
     
     # Find active subscriptions for these teams
     subscriptions = NotificationSubscription.query.filter(
@@ -859,7 +859,7 @@ def schedule_notifications_for_match(match):
         NotificationSubscription.scouting_team_number == match.scouting_team_number
     ).all()
     
-    print(f"🔔 Found {len(subscriptions)} active subscriptions for this match")
+    print(f" Found {len(subscriptions)} active subscriptions for this match")
     
     scheduled_count = 0
     
@@ -869,7 +869,7 @@ def schedule_notifications_for_match(match):
         # This ensures notification is sent X minutes before match starts (in any timezone)
         send_time_utc = match_time - timedelta(minutes=subscription.minutes_before)
         
-        print(f"\n� Subscription {subscription.id} for team {subscription.target_team_number}:")
+        print(f"\nSubscription {subscription.id} for team {subscription.target_team_number}:")
         print(f"   Match time (UTC): {match_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
         
         if event_tz:
@@ -900,7 +900,7 @@ def schedule_notifications_for_match(match):
             )
 
             if finished:
-                print(f"   ⏭️  SKIPPED - match appears finished, send time has passed")
+                print(f"   SKIPPED - match appears finished, send time has passed")
                 print(f"      Current: {now_utc.strftime('%Y-%m-%d %H:%M:%S %Z')}")
                 continue
 
@@ -915,17 +915,17 @@ def schedule_notifications_for_match(match):
                 existing_log = None
 
             if existing_log:
-                print(f"   ⏭️  SKIPPED - notification already recorded in history for subscription {subscription.id} and match {match.id}")
+                print(f"   SKIPPED - notification already recorded in history for subscription {subscription.id} and match {match.id}")
                 continue
 
             # Otherwise, schedule to send immediately (so the next processing batch will pick it up)
-            print(f"   ⚠️  Send time has passed but match is unplayed and no history found - scheduling immediate send")
+            print(f"   Send time has passed but match is unplayed and no history found - scheduling immediate send")
             send_time_utc = now_utc
         
         # Convert to naive UTC for database storage (SQLite stores naive datetimes)
         # CRITICAL: This removes timezone info but keeps the UTC time value unchanged
         send_time_naive = send_time_utc.replace(tzinfo=None)
-        print(f"   ✅ Will store: {send_time_naive} (naive UTC for DB)")
+        print(f"    Will store: {send_time_naive} (naive UTC for DB)")
         
         # Check if already scheduled
         existing = NotificationQueue.query.filter_by(
@@ -1022,7 +1022,7 @@ def process_pending_notifications():
                     failed_count += 1
                     
         except Exception as e:
-            print(f"❌ Error processing notification queue {queue_entry.id}: {e}")
+            print(f" Error processing notification queue {queue_entry.id}: {e}")
             traceback.print_exc()
             queue_entry.attempts += 1
             queue_entry.last_attempt = now
@@ -1137,7 +1137,7 @@ def schedule_end_of_day_summaries():
                     scheduled_count += 1
 
         except Exception as e:
-            print(f"⚠️  Error scheduling end-of-day summary for event {event.code if event else 'N/A'}: {e}")
+            print(f"Error scheduling end-of-day summary for event {event.code if event else 'N/A'}: {e}")
             import traceback
             traceback.print_exc()
 

@@ -11,7 +11,7 @@ def upgrade_database():
     db_path = os.path.join('instance', 'scouting.db')
     
     if not os.path.exists(db_path):
-        print("❌ Database not found!")
+        print(" Database not found!")
         return False
     
     try:
@@ -23,7 +23,7 @@ def upgrade_database():
         columns = [row[1] for row in cursor.fetchall()]
         
         if 'updated_at' not in columns:
-            print("➕ Adding updated_at column to user table...")
+            print(" Adding updated_at column to user table...")
             # First add column without default
             cursor.execute("""
                 ALTER TABLE user 
@@ -38,9 +38,9 @@ def upgrade_database():
                 WHERE updated_at IS NULL
             """, (current_time,))
             
-            print("✅ Added updated_at column successfully")
+            print(" Added updated_at column successfully")
         else:
-            print("✅ updated_at column already exists")
+            print(" updated_at column already exists")
         
         # Check database changes table exists
         cursor.execute("""
@@ -49,10 +49,10 @@ def upgrade_database():
         """)
         
         if not cursor.fetchone():
-            print("❌ database_changes table not found - run setup_concurrent_db.py first")
+            print(" database_changes table not found - run setup_concurrent_db.py first")
             return False
         else:
-            print("✅ database_changes table exists")
+            print(" database_changes table exists")
         
         conn.commit()
         conn.close()
@@ -60,7 +60,7 @@ def upgrade_database():
         return True
         
     except Exception as e:
-        print(f"❌ Error upgrading database: {e}")
+        print(f" Error upgrading database: {e}")
         return False
 
 def test_user_changes():
@@ -83,10 +83,10 @@ def test_user_changes():
         db.session.add(test_user)
         db.session.commit()
         
-        print(f"✅ Created test user: {test_user.username} (ID: {test_user.id})")
+        print(f" Created test user: {test_user.username} (ID: {test_user.id})")
         
         # Test soft delete
-        print("🗑️  Testing soft delete...")
+        print("️  Testing soft delete...")
         test_user.is_active = False
         db.session.commit()
         
@@ -96,21 +96,21 @@ def test_user_changes():
             record_id=str(test_user.id)
         ).order_by(DatabaseChange.timestamp.desc()).limit(3).all()
         
-        print(f"📊 Recent changes for user {test_user.id}:")
+        print(f" Recent changes for user {test_user.id}:")
         for change in recent_changes:
             print(f"  - {change.timestamp}: {change.operation} ({change.sync_status})")
         
         # Clean up
         db.session.delete(test_user)
         db.session.commit()
-        print(f"🧹 Cleaned up test user")
+        print(f" Cleaned up test user")
 
 if __name__ == "__main__":
-    print("🔧 Upgrading database for sync consistency...")
+    print(" Upgrading database for sync consistency...")
     
     if upgrade_database():
-        print("\n🔄 Testing change tracking...")
+        print("\n Testing change tracking...")
         test_user_changes()
-        print("\n✅ Database upgrade and sync fixes completed!")
+        print("\n Database upgrade and sync fixes completed!")
     else:
-        print("\n❌ Database upgrade failed!")
+        print("\n Database upgrade failed!")

@@ -1232,6 +1232,39 @@ class ScoutingAllianceChat(db.Model):
             'is_read': self.is_read
         }
 
+
+class ScoutingDirectMessage(db.Model):
+    """Model for direct (user-to-user) messages between users within the same
+    scouting team or allied teams.
+    """
+    __tablename__ = 'scouting_direct_message'
+
+    id = db.Column(db.Integer, primary_key=True)
+    sender_id = db.Column(db.Integer, nullable=False)  # User.id from users bind
+    recipient_id = db.Column(db.Integer, nullable=False)
+    sender_team_number = db.Column(db.Integer, nullable=True)
+    recipient_team_number = db.Column(db.Integer, nullable=True)
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    is_read = db.Column(db.Boolean, default=False)
+    offline_id = db.Column(db.String(36), nullable=True)
+
+    def __repr__(self):
+        return f'<DirectMessage {self.id} from {self.sender_id} to {self.recipient_id}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'sender_id': self.sender_id,
+            'recipient_id': self.recipient_id,
+            'sender_team_number': self.sender_team_number,
+            'recipient_team_number': self.recipient_team_number,
+            'body': self.body,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'is_read': self.is_read,
+            'offline_id': self.offline_id
+        }
+
 class TeamAllianceStatus(db.Model):
     """Model to track which alliance is currently active for each team"""
     __tablename__ = 'team_alliance_status'

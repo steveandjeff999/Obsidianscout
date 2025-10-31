@@ -10,7 +10,7 @@ def fix_user_roles_database_placement():
     app = create_app()
     
     with app.app_context():
-        print("🔍 Investigating user_roles table placement...")
+        print(" Investigating user_roles table placement...")
         
         # Check which database actually has the correct user_roles data
         scouting_path = 'instance/scouting.db'  
@@ -66,7 +66,7 @@ def fix_user_roles_database_placement():
         # The issue: user_roles exists in both databases but should only be where User and Role tables are
         # Let's determine the correct location and clean up
         
-        print("\n🔧 FIXING: Consolidating user_roles table...")
+        print("\n FIXING: Consolidating user_roles table...")
         
         # Step 1: Get all valid user_roles from both databases
         all_user_roles = set()
@@ -83,21 +83,21 @@ def fix_user_roles_database_placement():
             except:
                 pass
         
-        print(f"\n✅ Consolidated {len(all_user_roles)} unique user_role entries")
+        print(f"\n Consolidated {len(all_user_roles)} unique user_role entries")
         
         # Step 2: Clear user_roles from scouting.db (it shouldn't be there)
-        print("\n🗑️ Removing user_roles from scouting.db...")
+        print("\n️ Removing user_roles from scouting.db...")
         try:
             with sqlite3.connect(scouting_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("DROP TABLE IF EXISTS user_roles")
                 conn.commit()
-                print("  ✅ Removed user_roles from scouting.db")
+                print("   Removed user_roles from scouting.db")
         except Exception as e:
-            print(f"  ⚠️ Could not remove from scouting.db: {e}")
+            print(f"  ️ Could not remove from scouting.db: {e}")
             
         # Step 3: Ensure all user_roles are in users.db
-        print("\n📝 Ensuring all user_roles are in users.db...")
+        print("\n Ensuring all user_roles are in users.db...")
         try:
             with sqlite3.connect(users_path) as conn:
                 cursor = conn.cursor()
@@ -109,11 +109,11 @@ def fix_user_roles_database_placement():
                                  (user_id, role_id))
                 
                 conn.commit()
-                print(f"  ✅ Inserted {len(all_user_roles)} user_role entries into users.db")
+                print(f"   Inserted {len(all_user_roles)} user_role entries into users.db")
         except Exception as e:
-            print(f"  ❌ Error updating users.db: {e}")
+            print(f"   Error updating users.db: {e}")
             
-        print("\n🎉 Fixed user_roles database placement!")
+        print("\n Fixed user_roles database placement!")
         print("Now user_roles only exists in users.db where User and Role tables are located.")
 
 if __name__ == "__main__":

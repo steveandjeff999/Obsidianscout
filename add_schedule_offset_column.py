@@ -19,17 +19,17 @@ def migrate():
     app = create_app()
     
     with app.app_context():
-        print("🔄 Checking Event table for schedule_offset column...")
+        print(" Checking Event table for schedule_offset column...")
         
         # Check if column already exists
         inspector = inspect(db.engine)
         columns = [col['name'] for col in inspector.get_columns('event')]
         
         if 'schedule_offset' in columns:
-            print("✅ schedule_offset column already exists")
+            print(" schedule_offset column already exists")
             return
         
-        print("📝 Adding schedule_offset column to Event table...")
+        print(" Adding schedule_offset column to Event table...")
         
         # Add the column using raw SQL (more reliable than alembic for simple additions)
         try:
@@ -39,7 +39,7 @@ def migrate():
                 ))
                 conn.commit()
             
-            print("✅ Successfully added schedule_offset column")
+            print(" Successfully added schedule_offset column")
             print("\nColumn details:")
             print("  - Type: INTEGER")
             print("  - Nullable: Yes (NULL = no adjustment calculated yet)")
@@ -49,12 +49,12 @@ def migrate():
             print("    - NULL/0 = on schedule or not yet calculated")
             
         except Exception as e:
-            print(f"❌ Error adding column: {e}")
+            print(f" Error adding column: {e}")
             import traceback
             traceback.print_exc()
             return
         
-        print("\n✅ Migration completed successfully!")
+        print("\n Migration completed successfully!")
         print("\nThe schedule_adjuster module will now be able to:")
         print("  1. Detect when events are running behind/ahead of schedule")
         print("  2. Adjust future match time predictions")

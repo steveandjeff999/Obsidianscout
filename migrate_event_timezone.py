@@ -19,7 +19,7 @@ def add_timezone_column():
         columns = [col['name'] for col in inspector.get_columns('event')]
         
         if 'timezone' in columns:
-            print("✅ Timezone column already exists, skipping creation")
+            print(" Timezone column already exists, skipping creation")
             return True
         
         # Add the column using raw SQL
@@ -27,11 +27,11 @@ def add_timezone_column():
             conn.execute(text('ALTER TABLE event ADD COLUMN timezone VARCHAR(50)'))
             conn.commit()
         
-        print("✅ Successfully added timezone column")
+        print(" Successfully added timezone column")
         return True
         
     except Exception as e:
-        print(f"❌ Error adding timezone column: {e}")
+        print(f" Error adding timezone column: {e}")
         return False
 
 
@@ -50,7 +50,7 @@ def backfill_timezones_from_api():
         ).all()
         
         if not events:
-            print("✅ No events need timezone backfill")
+            print(" No events need timezone backfill")
             return True
         
         print(f"Found {len(events)} events without timezone information")
@@ -60,7 +60,7 @@ def backfill_timezones_from_api():
         
         for event in events:
             if not event.code:
-                print(f"⚠️  Event {event.id} has no code, skipping")
+                print(f"️  Event {event.id} has no code, skipping")
                 continue
             
             try:
@@ -79,23 +79,23 @@ def backfill_timezones_from_api():
                         event.end_date = event_details['end_date']
                     
                     updated_count += 1
-                    print(f"  ✅ Set timezone to {event.timezone}")
+                    print(f"   Set timezone to {event.timezone}")
                 else:
-                    print(f"  ⚠️  No timezone data available from API")
+                    print(f"  ️  No timezone data available from API")
                     failed_count += 1
                     
             except Exception as e:
-                print(f"  ❌ Error fetching details for {event.code}: {e}")
+                print(f"   Error fetching details for {event.code}: {e}")
                 failed_count += 1
         
         # Commit all changes
         db.session.commit()
         
-        print(f"\n✅ Backfill complete: {updated_count} events updated, {failed_count} failed")
+        print(f"\n Backfill complete: {updated_count} events updated, {failed_count} failed")
         return True
         
     except Exception as e:
-        print(f"❌ Error during backfill: {e}")
+        print(f" Error during backfill: {e}")
         db.session.rollback()
         return False
 
@@ -109,17 +109,17 @@ def run_migration():
     
     # Step 1: Add column
     if not add_timezone_column():
-        print("\n❌ Migration failed at column creation step")
+        print("\n Migration failed at column creation step")
         return False
     
     # Step 2: Backfill data
     if not backfill_timezones_from_api():
-        print("\n❌ Migration failed at backfill step")
-        print("⚠️  Column was created but some events may not have timezone data")
+        print("\n Migration failed at backfill step")
+        print("️  Column was created but some events may not have timezone data")
         return False
     
     print("\n" + "=" * 60)
-    print("✅ MIGRATION COMPLETED SUCCESSFULLY")
+    print(" MIGRATION COMPLETED SUCCESSFULLY")
     print("=" * 60)
     print("\nNext steps:")
     print("1. New events will automatically have timezone populated from API")

@@ -23,12 +23,12 @@ def fetch_actual_times_from_first(event_code, event_timezone=None):
     headers = get_api_headers()
     
     if not headers:
-        print(f"⚠️  FIRST API headers not available (no API key configured)")
+        print(f"️  FIRST API headers not available (no API key configured)")
         return {}
     
     match_times = {}
     
-    print(f"🔍 Fetching from FIRST API: season={season}, event={event_code}")
+    print(f" Fetching from FIRST API: season={season}, event={event_code}")
     
     # FIRST API endpoints for different match types
     endpoints = [
@@ -75,7 +75,7 @@ def fetch_actual_times_from_first(event_code, event_timezone=None):
                         match_times[(match_type, match_num)] = (scheduled, actual)
                 
         except Exception as e:
-            print(f"❌ Error fetching from FIRST API {endpoint}: {e}")
+            print(f" Error fetching from FIRST API {endpoint}: {e}")
     
     return match_times
 
@@ -91,7 +91,7 @@ def fetch_actual_times_from_tba(event_code, event_timezone=None):
     year = get_current_game_config().get('season', 2026)
     event_key = construct_tba_event_key(event_code, year)
     
-    print(f"🔍 Fetching from TBA: event_key={event_key} (year={year}, code={event_code})")
+    print(f" Fetching from TBA: event_key={event_key} (year={year}, code={event_code})")
     
     match_times = {}
     
@@ -110,7 +110,7 @@ def fetch_actual_times_from_tba(event_code, event_timezone=None):
         response = requests.get(api_url, headers=get_tba_api_headers(), timeout=15)
         
         if response.status_code != 200:
-            print(f"⚠️  TBA API returned {response.status_code} for {api_url}")
+            print(f"️  TBA API returned {response.status_code} for {api_url}")
             if response.status_code == 404:
                 print(f"   Event key '{event_key}' not found on TBA")
                 print(f"   Note: TBA event keys are case-sensitive and year-specific (e.g., '2026molee')")
@@ -162,7 +162,7 @@ def fetch_actual_times_from_tba(event_code, event_timezone=None):
         print(f"   Returning {len(match_times)} match time entries")
         
     except Exception as e:
-        print(f"❌ Error fetching from TBA API: {e}")
+        print(f" Error fetching from TBA API: {e}")
     
     return match_times
 
@@ -216,7 +216,7 @@ class ScheduleAdjuster:
         ).all()
         
         if not matches:
-            print(f"⚠️  No matches with scheduled times found for event {self.event.code}")
+            print(f"️  No matches with scheduled times found for event {self.event.code}")
             return {
                 'offset_minutes': 0,
                 'confidence': 0.0,
@@ -225,7 +225,7 @@ class ScheduleAdjuster:
             }
         
         # Fetch actual times from both FIRST and TBA APIs
-        print(f"🔍 Fetching match times for {self.event.code}...")
+        print(f" Fetching match times for {self.event.code}...")
         
         # Get preferred API source
         preferred_api = get_preferred_api_source()
@@ -296,10 +296,10 @@ class ScheduleAdjuster:
                     if match_key not in match_actual_times and actual:
                         match_actual_times[match_key] = actual
         
-        print(f"🔍 APIs returned: {', '.join(f'{count} {mtype}' for mtype, count in api_match_types.items())}")
+        print(f" APIs returned: {', '.join(f'{count} {mtype}' for mtype, count in api_match_types.items())}")
         
-        print(f"📋 Found {len(match_scheduled_times)} matches with scheduled times from TBA")
-        print(f"✅ Found {len(match_actual_times)} matches with actual times (completed)")
+        print(f" Found {len(match_scheduled_times)} matches with scheduled times from TBA")
+        print(f" Found {len(match_actual_times)} matches with actual times (completed)")
         
         # Count match types in database
         match_type_counts = {}
@@ -307,7 +307,7 @@ class ScheduleAdjuster:
             match_type = match.match_type
             match_type_counts[match_type] = match_type_counts.get(match_type, 0) + 1
         
-        print(f"📊 Database has: {', '.join(f'{count} {mtype}' for mtype, count in match_type_counts.items())}")
+        print(f" Database has: {', '.join(f'{count} {mtype}' for mtype, count in match_type_counts.items())}")
         
         # Compare scheduled vs actual times for completed matches
         delays = []
@@ -351,7 +351,7 @@ class ScheduleAdjuster:
                 
                 # Also skip if the delay itself is extreme (>60 min or <-60 min) - likely data error
                 if abs(delay_minutes) > 60:
-                    print(f"  ⚠️  Skipping {match.match_type} {match.match_number}: Extreme delay of {delay_minutes:+.1f} min (likely data error)")
+                    print(f"  ️  Skipping {match.match_type} {match.match_number}: Extreme delay of {delay_minutes:+.1f} min (likely data error)")
                     continue
                 
                 delays.append(delay_minutes)
@@ -380,7 +380,7 @@ class ScheduleAdjuster:
             not_found_by_type = {}
             for match_type, match_num in matches_not_found:
                 not_found_by_type[match_type] = not_found_by_type.get(match_type, 0) + 1
-            print(f"\n⚠️  Matches in DB but not matched with TBA: {', '.join(f'{count} {mtype}' for mtype, count in not_found_by_type.items())}")
+            print(f"\n️  Matches in DB but not matched with TBA: {', '.join(f'{count} {mtype}' for mtype, count in not_found_by_type.items())}")
             # Show first few examples for debugging
             print(f"   Examples: {', '.join(f'{mt} {mn}' for mt, mn in matches_not_found[:5])}")
         
@@ -414,7 +414,7 @@ class ScheduleAdjuster:
         
         confidence = (sample_confidence * 0.6) + (consistency_confidence * 0.4)
         
-        print(f"\n📊 Schedule Analysis for {self.event.code}:")
+        print(f"\n Schedule Analysis for {self.event.code}:")
         print(f"   Average offset: {avg_offset:+.1f} minutes ({'behind' if avg_offset > 0 else 'ahead of'} schedule)")
         print(f"   Recent offset: {recent_offset:+.1f} minutes (last {len(recent_delays)} matches)")
         print(f"   Confidence: {confidence:.1%}")
@@ -443,7 +443,7 @@ class ScheduleAdjuster:
             Number of matches adjusted
         """
         if self.confidence < min_confidence:
-            print(f"⚠️  Confidence {self.confidence:.1%} below threshold {min_confidence:.1%}, "
+            print(f"️  Confidence {self.confidence:.1%} below threshold {min_confidence:.1%}, "
                   f"not adjusting schedule")
             return 0
         
@@ -469,7 +469,7 @@ class ScheduleAdjuster:
             return 0
         
         offset_minutes = self.schedule_offset.total_seconds() / 60
-        print(f"\n🔧 Adjusting {len(future_matches)} future matches by {offset_minutes:+.1f} minutes...")
+        print(f"\n Adjusting {len(future_matches)} future matches by {offset_minutes:+.1f} minutes...")
         
         adjusted_count = 0
         
@@ -494,7 +494,7 @@ class ScheduleAdjuster:
         
         if adjusted_count > 0:
             db.session.commit()
-            print(f"✅ Adjusted {adjusted_count} future match predictions")
+            print(f" Adjusted {adjusted_count} future match predictions")
             
             # Update event's schedule offset field
             self.event.schedule_offset = int(offset_minutes)
@@ -557,7 +557,7 @@ def update_event_schedule(event_code, scouting_team_number=None, reschedule_noti
     # Reschedule notifications if needed
     rescheduled_count = 0
     if reschedule_notifications and adjuster.should_reschedule_notifications():
-        print(f"\n📅 Rescheduling notifications due to schedule changes...")
+        print(f"\n Rescheduling notifications due to schedule changes...")
         from app.utils.notification_service import schedule_notifications_for_match
         from app.models_misc import NotificationQueue
         
@@ -586,7 +586,7 @@ def update_event_schedule(event_code, scouting_team_number=None, reschedule_noti
             count = schedule_notifications_for_match(match)
             rescheduled_count += count
         
-        print(f"✅ Rescheduled {rescheduled_count} notifications")
+        print(f" Rescheduled {rescheduled_count} notifications")
     
     return {
         'success': True,
@@ -629,13 +629,13 @@ def update_all_active_events_schedule():
             
             if event_code:
                 print(f"\n{'='*60}")
-                print(f"🏢 Processing team {team_number}, event {event_code}")
+                print(f" Processing team {team_number}, event {event_code}")
                 print(f"{'='*60}")
                 
                 result = update_event_schedule(event_code, team_number)
                 results.append(result)
         except Exception as e:
-            print(f"❌ Error updating schedule for team {team_number}: {e}")
+            print(f" Error updating schedule for team {team_number}: {e}")
             import traceback
             traceback.print_exc()
     

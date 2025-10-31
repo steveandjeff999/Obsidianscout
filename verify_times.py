@@ -40,7 +40,7 @@ with app.app_context():
             
             # Show the 5-hour difference
             diff_hours = (as_utc - as_utc_wrong).total_seconds() / 3600
-            print(f"\n⏱️  Time difference: {abs(diff_hours):.1f} hours")
+            print(f"\nTime difference: {abs(diff_hours):.1f} hours")
             
             if abs(diff_hours) == 5:
                 print(f"   Warning: This is exactly CDT offset - confirms timezone bug!")

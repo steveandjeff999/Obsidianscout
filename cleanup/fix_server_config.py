@@ -5,7 +5,7 @@ Quick Fix for Sync Server Configuration
 
 def fix_server_config():
     """Fix the sync server configuration"""
-    print("🔧 FIXING SYNC SERVER CONFIGURATION")
+    print(" FIXING SYNC SERVER CONFIGURATION")
     print("=" * 50)
     
     try:
@@ -18,7 +18,7 @@ def fix_server_config():
             servers = SyncServer.query.all()
             
             for server in servers:
-                print(f"\n🖥️  Server: {server.name}")
+                print(f"\n️  Server: {server.name}")
                 print(f"   Current: {server.protocol}://{server.host}:{server.port}")
                 
                 # Common port configurations for scouting apps
@@ -36,7 +36,7 @@ def fix_server_config():
                             response = requests.get(url, timeout=3, verify=False)
                             if response.status_code == 200:
                                 working_config = (protocol, port)
-                                print(f"   ✅ FOUND: {protocol}://{server.host}:{port}")
+                                print(f"    FOUND: {protocol}://{server.host}:{port}")
                                 break
                         except:
                             continue
@@ -45,20 +45,20 @@ def fix_server_config():
                 
                 if working_config:
                     protocol, port = working_config
-                    print(f"   🔄 Updating server configuration...")
+                    print(f"    Updating server configuration...")
                     server.protocol = protocol  
                     server.port = port
                     server.error_count = 0
                     server.update_ping(success=True)
                     
                     db.session.commit()
-                    print(f"   ✅ Updated to {protocol}://{server.host}:{port}")
+                    print(f"    Updated to {protocol}://{server.host}:{port}")
                 else:
-                    print(f"   ❌ No working configuration found")
-                    print(f"   💡 Make sure the remote server is running and accessible")
+                    print(f"    No working configuration found")
+                    print(f"    Make sure the remote server is running and accessible")
             
     except Exception as e:
-        print(f"❌ Configuration fix failed: {e}")
+        print(f" Configuration fix failed: {e}")
 
 if __name__ == "__main__":
     fix_server_config()

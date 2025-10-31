@@ -23,28 +23,28 @@ def test_complete_autonomous_sync():
     app = create_app()
     
     with app.app_context():
-        print("🚀 Testing Complete Autonomous Sync System...")
+        print(" Testing Complete Autonomous Sync System...")
         print("=" * 60)
         
         # Check sync servers
         sync_servers = SyncServer.query.filter_by(is_active=True).all()
-        print(f"📡 Active sync servers: {len(sync_servers)}")
+        print(f" Active sync servers: {len(sync_servers)}")
         for server in sync_servers:
             print(f"   - {server.name}: {server.url}")
         
         if not sync_servers:
-            print("⚠️  No active sync servers found - sync will be local only")
+            print("️  No active sync servers found - sync will be local only")
         
         # Get baseline
         initial_changes = DatabaseChange.query.count()
         initial_pending = DatabaseChange.query.filter_by(sync_status='pending').count()
         
-        print(f"\n📊 Baseline:")
+        print(f"\n Baseline:")
         print(f"   Total changes: {initial_changes}")
         print(f"   Pending sync: {initial_pending}")
         
         # Create a test user to generate changes
-        print(f"\n👤 Creating test user for sync...")
+        print(f"\n Creating test user for sync...")
         admin_role = Role.query.filter_by(name='admin').first()
         if not admin_role:
             admin_role = Role(name='admin')
@@ -76,74 +76,74 @@ def test_complete_autonomous_sync():
             DatabaseChange.sync_status == 'pending'
         ).order_by(DatabaseChange.timestamp.desc()).limit(5).all()
         
-        print(f"\n🔄 Recent pending changes:")
+        print(f"\n Recent pending changes:")
         for change in recent_changes:
             age = datetime.now(timezone.utc) - change.timestamp
             print(f"   - {change.table_name}.{change.operation} "
                   f"(ID: {change.record_id}, age: {age.total_seconds():.1f}s)")
         
         # Verify autonomous sync components
-        print(f"\n✅ Autonomous Sync Status Check:")
+        print(f"\n Autonomous Sync Status Check:")
         
         # 1. Change tracking
         if new_changes >= 2:  # Should have at least insert and update
-            print("   ✅ Automatic change tracking: WORKING")
+            print("    Automatic change tracking: WORKING")
         else:
-            print("   ❌ Automatic change tracking: FAILED")
+            print("    Automatic change tracking: FAILED")
         
         # 2. Background sync process - Test Universal Sync System
         try:
             from universal_sync_system import universal_sync
             
             if hasattr(universal_sync, 'sync_servers') and universal_sync.sync_servers:
-                print("   ✅ Universal Sync manager initialized: WORKING")
+                print("    Universal Sync manager initialized: WORKING")
             else:
-                print("   ⚠️ Universal Sync manager initialized but no servers configured")
+                print("   ️ Universal Sync manager initialized but no servers configured")
         except ImportError:
-            print("   ❌ Universal Sync System not available")
-            print("   📌 Falling back to check for any sync system...")
+            print("    Universal Sync System not available")
+            print("    Falling back to check for any sync system...")
             
             # Fallback check for any sync system
             try:
                 from app.routes.sync_api import sync_manager
-                print("   ✅ Fallback sync manager available: WORKING")
+                print("    Fallback sync manager available: WORKING")
             except Exception as e:
-                print(f"   ❌ No sync system available: {e}")
+                print(f"    No sync system available: {e}")
         
         # 3. Check if periodic sync would run
         from app.models import DatabaseChange
         pending_count = DatabaseChange.query.filter_by(sync_status='pending').count()
         if pending_count > 0:
-            print(f"   ✅ Periodic sync ready: {pending_count} pending changes")
+            print(f"    Periodic sync ready: {pending_count} pending changes")
         else:
-            print("   ✅ Periodic sync ready: No pending changes")
+            print("    Periodic sync ready: No pending changes")
         
         # 4. Test connectivity if servers exist
         if sync_servers:
-            print(f"\n🌐 Testing remote connectivity...")
+            print(f"\n Testing remote connectivity...")
             for server in sync_servers[:1]:  # Test first server only
                 try:
                     response = requests.get(f"{server.url}/api/ping", timeout=5)
                     if response.status_code == 200:
-                        print(f"   ✅ {server.name}: Reachable")
+                        print(f"    {server.name}: Reachable")
                     else:
-                        print(f"   ⚠️  {server.name}: Response {response.status_code}")
+                        print(f"   ️  {server.name}: Response {response.status_code}")
                 except Exception as e:
-                    print(f"   ❌ {server.name}: Connection failed ({e})")
+                    print(f"    {server.name}: Connection failed ({e})")
         
         # Clean up test user
         db.session.delete(test_user)
         db.session.commit()
         
         # Final assessment
-        print(f"\n🎯 Autonomous Sync Assessment:")
-        print(f"   ✅ Change Tracking: Automatic (no manual intervention)")
-        print(f"   ✅ Sync Queue: Populated automatically")  
-        print(f"   ✅ Background Process: Running (visible in startup)")
-        print(f"   ✅ Periodic Execution: Configured")
-        print(f"   ✅ Error Handling: Built-in resilience")
+        print(f"\n Autonomous Sync Assessment:")
+        print(f"    Change Tracking: Automatic (no manual intervention)")
+        print(f"    Sync Queue: Populated automatically")  
+        print(f"    Background Process: Running (visible in startup)")
+        print(f"    Periodic Execution: Configured")
+        print(f"    Error Handling: Built-in resilience")
         
-        print(f"\n🏆 RESULT: FULLY AUTONOMOUS SYNC SYSTEM")
+        print(f"\n RESULT: FULLY AUTONOMOUS SYNC SYSTEM")
         print(f"   - Users can be added/updated/deleted normally")
         print(f"   - Changes are tracked automatically") 
         print(f"   - Sync happens in background without intervention")
@@ -155,8 +155,8 @@ def test_complete_autonomous_sync():
 if __name__ == "__main__":
     success = test_complete_autonomous_sync()
     if success:
-        print(f"\n🎉 SUCCESS: Autonomous sync system is complete!")
+        print(f"\n SUCCESS: Autonomous sync system is complete!")
         sys.exit(0)
     else:
-        print(f"\n❌ FAILURE: Autonomous sync system needs work")
+        print(f"\n FAILURE: Autonomous sync system needs work")
         sys.exit(1)

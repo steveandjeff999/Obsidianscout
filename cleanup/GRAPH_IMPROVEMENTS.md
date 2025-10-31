@@ -6,22 +6,22 @@ Enhanced the `/graphs` dashboard with more graph types and improved user interfa
 ## New Graph Types Added
 
 ### Basic Charts
-- **📊 Bar Chart** - Compare values across teams
-- **📈 Line Chart** - Show trends and progressions  
-- **🔵 Scatter Plot** - Display data points and relationships
-- **📊 Area Chart** - Show cumulative values over time
+- ** Bar Chart** - Compare values across teams
+- ** Line Chart** - Show trends and progressions  
+- ** Scatter Plot** - Display data points and relationships
+- ** Area Chart** - Show cumulative values over time
 
 ### Distribution Charts
-- **📦 Box Plot** - Display statistical distributions
-- **🎻 Violin Plot** - Show density distributions
-- **📊 Histogram** - Frequency distributions
+- ** Box Plot** - Display statistical distributions
+- ** Violin Plot** - Show density distributions
+- ** Histogram** - Frequency distributions
 
 ### Advanced Charts
-- **🕸️ Radar Chart** - Multi-metric team profiles
-- **🔥 Heatmap** - Performance matrix across matches
+- **️ Radar Chart** - Multi-metric team profiles
+- ** Heatmap** - Performance matrix across matches
 - **🫧 Bubble Chart** - Performance vs consistency with size indicators
-- **☀️ Sunburst Chart** - Hierarchical performance categories
-- **🌳 Treemap** - Team performance as nested rectangles
+- **️ Sunburst Chart** - Hierarchical performance categories
+- ** Treemap** - Team performance as nested rectangles
 
 ## UI Improvements
 

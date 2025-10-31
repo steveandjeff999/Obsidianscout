@@ -1358,13 +1358,6 @@
 
     <main class="flex-shrink-0 py-4">
         <div class="container">
-            <div class="row mb-4">
-                <div class="col-12">
-                    <h1 class="page-title">{% block heading %}ObsidianScout{% endblock %}</h1>
-                    {% block subheading %}{% endblock %}
-                </div>
-            </div>
-            
             {% block content %}{% endblock %}
         </div>
     </main>
@@ -1372,14 +1365,20 @@
     <footer class="footer mt-auto py-3">
         <div class="container">
             <div class="row align-items-center g-2">
-                <div class="col-md-6 text-center text-md-start">
-                    <div class="d-flex align-items-center justify-content-center justify-content-md-start">
+                {# If we're on the login page, center a single-brand label and hide the right column. #}
+                <div class="{% if request.endpoint == 'auth.login' %}col-12 text-center{% else %}col-md-6 text-center text-md-start{% endif %}">
+                    <div class="d-flex align-items-center justify-content-center {% if request.endpoint != 'auth.login' %}justify-content-md-start{% endif %}">
                         <i class="fas fa-clipboard brand-icon me-2 text-primary"></i>
                         <span class="fw-bold">ObsidianScout</span>
+                        {# On normal pages show a subtle secondary label; hide it on the login page to avoid duplication. #}
+                        {% if request.endpoint != 'auth.login' %}
                         <span class="text-muted mx-2">•</span>
                         <span class="small text-muted">ObsidianScout</span>
+                        {% endif %}
                     </div>
                 </div>
+
+                {% if request.endpoint != 'auth.login' %}
                 <div class="col-md-6 text-center text-md-end">
                     <div class="small text-muted">
                         {% if game_config %}
@@ -1394,6 +1393,7 @@
                         </a>
                     </div> -->
                 </div>
+                {% endif %}
             </div>
         </div>
     </footer>
@@ -1602,14 +1602,22 @@
             const darkModeLabel = document.getElementById('darkModeLabel');
             const isDarkMode = storedPreference !== null ? storedPreference === 'true' : prefersDarkMode;
             function applyState(on){
-                if(on){
-                    body.classList.add('dark-mode');
-                    if(darkModeIcon){darkModeIcon.classList.remove('fa-moon');darkModeIcon.classList.add('fa-sun');}
-                    if(darkModeLabel){darkModeLabel.textContent='Light Mode';}
-                } else {
-                    body.classList.remove('dark-mode');
-                    if(darkModeIcon){darkModeIcon.classList.remove('fa-sun');darkModeIcon.classList.add('fa-moon');}
-                    if(darkModeLabel){darkModeLabel.textContent='Dark Mode';}
+                try {
+                    const htmlEl = document.documentElement;
+                    if (on) {
+                        body.classList.add('dark-mode');
+                        htmlEl.classList.add('dark-mode');
+                        if(darkModeIcon){darkModeIcon.classList.remove('fa-moon');darkModeIcon.classList.add('fa-sun');}
+                        if(darkModeLabel){darkModeLabel.textContent='Light Mode';}
+                    } else {
+                        body.classList.remove('dark-mode');
+                        htmlEl.classList.remove('dark-mode');
+                        if(darkModeIcon){darkModeIcon.classList.remove('fa-sun');darkModeIcon.classList.add('fa-moon');}
+                        if(darkModeLabel){darkModeLabel.textContent='Dark Mode';}
+                    }
+                } catch (e) {
+                    // Keep this non-fatal - don't block page if DOM is unusual
+                    try { if (on) body.classList.add('dark-mode'); else body.classList.remove('dark-mode'); } catch(e2){}
                 }
             }
             applyState(isDarkMode);
@@ -1620,8 +1628,10 @@
                 darkModeBtn.addEventListener('click', ()=>{
                     const now = !body.classList.contains('dark-mode');
                     localStorage.setItem('darkMode', now ? 'true':'false');
+                    // Keep both html and body in sync so early loaded scripts and observers react
+                    try { if (now) { document.documentElement.classList.add('dark-mode'); } else { document.documentElement.classList.remove('dark-mode'); } } catch(e) {}
                     applyState(now);
-                    
+
                     // Persist only locally; no server-side theme endpoints are available.
                 });
             }
@@ -2282,8 +2292,42 @@
 
 
         // Socket.IO setup
+        // Attempt to use WebSocket transport first; if handshake fails (400) or
+        // websockets are not supported by the hosting environment (for example
+        // when behind a proxy that doesn't forward upgrades or when using a
+        // WSGI server without websocket support), fall back to long-polling.
         if (!window.socket) {
-            window.socket = io();
+            try {
+                // Try websocket + polling (prefer websocket)
+                window.socket = io({ transports: ['websocket', 'polling'] });
+            } catch (e) {
+                // Fallback to polling-only if the above throws synchronously
+                window.socket = io({ transports: ['polling'] });
+            }
+
+            // If connect errors occur (for example a 400 during websocket
+            // handshake), attempt a reconnect using polling-only transport.
+            window.socket.on && window.socket.on('connect_error', function(err) {
+                try {
+                    // If the current transport attempted websocket and failed,
+                    // force polling-only reconnect.
+                    if (window.socket && window.socket.io && window.socket.io.opts && Array.isArray(window.socket.io.opts.transports)) {
+                        const cur = window.socket.io.opts.transports;
+                        if (cur.includes('websocket') && !cur.includes('polling')) {
+                            // Switch to polling-only and reconnect
+                            window.socket.io.opts.transports = ['polling'];
+                            try { window.socket.disconnect(); } catch(e) {}
+                            try { window.socket.connect(); } catch(e) {}
+                        } else if (cur.includes('websocket') && cur.includes('polling')) {
+                            // If both were permitted but connection error still occurred,
+                            // prefer polling-only retry to avoid repeated 400s.
+                            window.socket.io.opts.transports = ['polling'];
+                            try { window.socket.disconnect(); } catch(e) {}
+                            try { window.socket.connect(); } catch(e) {}
+                        }
+                    }
+                } catch (e) { /* swallow */ }
+            });
         }
         const socket = window.socket;
     const recipientSelect = document.getElementById('assistantChatRecipient');
@@ -2448,7 +2492,100 @@
     });
     </script>
     <script>
+    // Robust sidebar layout adjustment helper. This actively measures the
+    // sidebar and applies inline margins to `main`/`footer`/`.topbar` so the
+    // page content is pushed over reliably on desktop breakpoints.
+    (function(){
+        'use strict';
+
+        function applySidebarMargin() {
+            try {
+                var sb = document.getElementById('appSidebar');
+                var mainEl = document.querySelector('main');
+                var footerEl = document.querySelector('footer.footer');
+                var topbar = document.querySelector('.topbar');
+                if (!sb || !mainEl) return;
+
+                var rect = sb.getBoundingClientRect();
+                var sbWidth = Math.round(rect.width || 0);
+                var isDesktop = window.innerWidth >= 992;
+
+                if (isDesktop && sbWidth > 8) {
+                    // Ensure the body has the desktop layout classes
+                    if (!document.body.classList.contains('with-sidebar')) document.body.classList.add('with-sidebar');
+                    if (!document.body.classList.contains('topbar-fixed')) document.body.classList.add('topbar-fixed');
+
+                    // Remove mobile overlay state if present
+                    if (document.body.classList.contains('sidebar-open')) document.body.classList.remove('sidebar-open');
+
+                    // Apply inline margins so the main area is pushed over
+                    mainEl.style.marginLeft = sbWidth + 'px';
+                    if (footerEl) footerEl.style.marginLeft = sbWidth + 'px';
+                    if (topbar) {
+                        topbar.style.marginLeft = sbWidth + 'px';
+                        topbar.style.width = 'calc(100% - ' + sbWidth + 'px)';
+                    }
+                } else {
+                    // Clear inline margins on small screens
+                    mainEl.style.marginLeft = '';
+                    if (footerEl) footerEl.style.marginLeft = '';
+                    if (topbar) {
+                        topbar.style.marginLeft = '';
+                        topbar.style.width = '';
+                    }
+                }
+            } catch (e) {
+                // swallow
+            }
+        }
+
+        // Debounce helper
+        var resizeTimer = null;
+        function onResizeDebounced() {
+            if (resizeTimer) clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(function(){ applySidebarMargin(); }, 120);
+        }
+
+        // Adjust on key events
+        document.addEventListener('DOMContentLoaded', function(){
+            // dispatch sidebar toggle so other listeners update
+            try { document.dispatchEvent(new CustomEvent('obsidian:sidebar:toggled')); } catch(e){}
+            applySidebarMargin();
+        });
+        window.addEventListener('load', applySidebarMargin);
+        window.addEventListener('resize', onResizeDebounced);
+
+        // When sidebar is toggled by our UI, adjust layout
+        document.addEventListener('obsidian:sidebar:toggled', applySidebarMargin);
+
+        // Ensure we react to sidebar transition end (open/close animations)
+        try {
+            var sbEl = document.getElementById('appSidebar');
+            if (sbEl) sbEl.addEventListener('transitionend', function(ev){
+                // Only respond to transform/width transitions
+                if (!ev || !ev.propertyName) { applySidebarMargin(); return; }
+                if (['transform','width','left','margin-left'].indexOf(ev.propertyName) !== -1) applySidebarMargin();
+            });
+        } catch (e) { /* ignore */ }
+
+        // Also periodically attempt to fix layout for pages that modify classes
+        // after load (guarded to avoid perf issues).
+        var tries = 0;
+        var maxTries = 8;
+        var poll = setInterval(function(){
+            try { applySidebarMargin(); } catch(e){}
+            tries += 1;
+            if (tries >= maxTries) clearInterval(poll);
+        }, 250);
+    })();
+    </script>
+    <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Expose current user's username to client-side scripts for local checks
+        try {
+            window.CURRENT_USERNAME = {% if current_user.is_authenticated and current_user.username %}{{ current_user.username|tojson }}{% else %}null{% endif %};
+        } catch (e) { window.CURRENT_USERNAME = null; }
+
         async function updateChatUnreadBadge() {
             try {
                 const resp = await fetch('/chat/state');
@@ -2457,16 +2594,17 @@
                 const userDot = document.getElementById('userChatDot');
                 const userUnreadItem = document.getElementById('userDropdownUnreadItem');
                 const openUnreadChatLink = document.getElementById('openUnreadChatLink');
+                const notifBellBadge = document.getElementById('notificationsBadge');
+                const notifList = document.getElementById('notificationsList');
+
+                // Update chat badge in nav/user menu
                 if (badge) {
                     if (data.unreadCount && data.unreadCount > 0) {
                         badge.textContent = data.unreadCount;
                         badge.style.display = '';
-                        // show red dot on user dropdown
                         if (userDot) userDot.style.display = '';
                         if (userUnreadItem) userUnreadItem.style.display = '';
-                        // if backend provided a source, add it as query param so chat page can focus
                         if (openUnreadChatLink && data.lastSource) {
-                            // lastSource could be {type: 'dm'|'group', id: 'username'|'groupname'}
                             try {
                                 const s = encodeURIComponent(JSON.stringify(data.lastSource));
                                 openUnreadChatLink.href = `{{ url_for('main.chat_page') }}?focus=${s}`;
@@ -2480,15 +2618,84 @@
                         if (userUnreadItem) userUnreadItem.style.display = 'none';
                     }
                 }
-            } catch (e) {}
+
+                // Update topbar notifications bell and list
+                if (notifBellBadge) {
+                    if (data.unreadCount && data.unreadCount > 0) {
+                        notifBellBadge.textContent = data.unreadCount;
+                        notifBellBadge.style.display = '';
+                    } else {
+                        notifBellBadge.style.display = 'none';
+                        notifBellBadge.textContent = '';
+                    }
+                }
+
+                if (notifList) {
+                    // Remove any existing chat-unread marker item
+                    const existing = document.getElementById('notif-chat-unread-item');
+                    if (existing) existing.remove();
+
+                    if (data.unreadCount && data.unreadCount > 0) {
+                        // Build a top entry for unread chat messages
+                        let title = '';
+                        let detail = '';
+                        let focusParam = '';
+                        if (data.lastSource && data.lastSource.type === 'dm' && data.lastSource.id) {
+                            title = `${data.unreadCount} unread chat message(s)`;
+                            detail = `Most recent: ${data.lastSource.id}`;
+                            try {
+                                focusParam = `?focus=${encodeURIComponent(JSON.stringify(data.lastSource))}`;
+                            } catch(e) { focusParam = ''; }
+                        } else {
+                            title = `${data.unreadCount} unread chat message(s)`;
+                            detail = 'Open chat to view messages';
+                        }
+
+                        const chatItemHtml = `
+                            <a id="notif-chat-unread-item" href="{{ url_for('main.chat_page') }}${focusParam}" class="list-group-item list-group-item-action d-flex align-items-start">
+                                <div class="me-2">
+                                    <i class="fas fa-comment-alt fa-lg text-primary"></i>
+                                </div>
+                                <div class="flex-fill">
+                                    <div class="fw-bold">${escapeHtml(title)}</div>
+                                    <div class="small text-muted">${escapeHtml(detail)}</div>
+                                </div>
+                                <div class="ms-2 text-end">
+                                    <small class="text-muted">Open</small>
+                                </div>
+                            </a>
+                        `;
+
+                        // Prepend so chat notifications appear at top
+                        notifList.insertAdjacentHTML('afterbegin', chatItemHtml);
+                    }
+                }
+            } catch (e) {
+                // Ignore fetch errors silently
+            }
+        }
+
+        // small helper to escape text for inserted HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
         // Update on page load
         updateChatUnreadBadge();
-        // Poll every 10 seconds
-        setInterval(updateChatUnreadBadge, 10000);
+        // Poll every 5 seconds so notifications stay timely across all pages
+        setInterval(updateChatUnreadBadge, 5000);
         // Listen for real-time DM and group chat events if socket.io is available
         if (window.socket) {
             window.socket.on('dm_message', function(msg) {
+                try {
+                    // Ignore messages authored by the current client (prevents sender receiving their own mobile send as unread)
+                    if (window.CURRENT_USERNAME && msg && msg.sender && String(msg.sender).toLowerCase() === String(window.CURRENT_USERNAME).toLowerCase()) {
+                        return;
+                    }
+                } catch (e) {
+                    // If any error, fall through and handle as before
+                }
                 if (!window.location.pathname.startsWith('/chat')) {
                     // include source info so dropdown can open focused DM
                     fetch('/chat/increment-unread', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({lastSource: {type: 'dm', id: msg.sender}})}).then(updateChatUnreadBadge);

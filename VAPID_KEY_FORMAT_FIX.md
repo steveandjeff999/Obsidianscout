@@ -70,14 +70,14 @@ keys = {
    - Keys saved to `instance/vapid_keys.json`
 
 2. **On Device Registration:**
-   - Browser receives public key in base64url format ✅
-   - Browser subscribes to push service ✅
-   - Server stores subscription info ✅
+   - Browser receives public key in base64url format 
+   - Browser subscribes to push service 
+   - Server stores subscription info 
 
 3. **On Push Send:**
-   - `pywebpush` uses private key in PEM format ✅
-   - Push notification sent successfully ✅
-   - No more ASN.1 parsing errors ✅
+   - `pywebpush` uses private key in PEM format 
+   - Push notification sent successfully 
+   - No more ASN.1 parsing errors 
 
 ## Testing Steps
 
@@ -99,13 +99,13 @@ Public key: ABCDefgh12345678...
 
 On device registration:
 ```
-✅ Push notifications enabled successfully!
+ Push notifications enabled successfully!
 ```
 
 On push send (no errors):
 ```
 Sending push to user 1: 1 active devices
-  ✓ Sent to device: Chrome Browser
+   Sent to device: Chrome Browser
 ```
 
 ## Technical Details
@@ -138,8 +138,8 @@ BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcx...
 
 ## Files Modified
 
-1. ✅ `app/utils/push_notifications.py` - Fixed VAPID key generation
-2. ✅ Deleted `instance/vapid_keys.json` - Removed incorrect keys
+1.  `app/utils/push_notifications.py` - Fixed VAPID key generation
+2.  Deleted `instance/vapid_keys.json` - Removed incorrect keys
 
 ## Related Documentation
 
@@ -150,7 +150,7 @@ BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcx...
 ## Prevention
 
 This error won't happen again because:
-- ✅ Private key stored in correct PEM format
-- ✅ Public key stored in correct base64url format
-- ✅ Added preview logging for verification
-- ✅ Format matches pywebpush expectations
+-  Private key stored in correct PEM format
+-  Public key stored in correct base64url format
+-  Added preview logging for verification
+-  Format matches pywebpush expectations

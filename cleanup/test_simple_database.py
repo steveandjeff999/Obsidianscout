@@ -17,7 +17,7 @@ def test_simple_database_operations():
     app = create_app()
     
     with app.app_context():
-        print("🧪 Simple Database Test (No Heavy Sync)")
+        print(" Simple Database Test (No Heavy Sync)")
         print("=" * 50)
         
         # Test user creation
@@ -31,7 +31,7 @@ def test_simple_database_operations():
                 admin_role = Role(name='admin')
                 db.session.add(admin_role)
                 db.session.commit()
-                print("   📝 Created admin role")
+                print("    Created admin role")
             
             # Create test user
             test_user = User(
@@ -46,14 +46,14 @@ def test_simple_database_operations():
             db.session.commit()
             
             elapsed = time.time() - start_time
-            print(f"   ✅ User created in {elapsed:.2f} seconds")
+            print(f"    User created in {elapsed:.2f} seconds")
             
             # Verify user exists
             found_user = User.query.filter_by(username=test_user.username).first()
             if found_user:
-                print(f"   ✅ User verified in database: {found_user.username}")
+                print(f"    User verified in database: {found_user.username}")
             else:
-                print(f"   ❌ User not found in database")
+                print(f"    User not found in database")
             
             # Test update
             print("\n2️⃣ Testing User Update...")
@@ -63,7 +63,7 @@ def test_simple_database_operations():
             db.session.commit()
             
             elapsed = time.time() - start_time
-            print(f"   ✅ User updated in {elapsed:.2f} seconds")
+            print(f"    User updated in {elapsed:.2f} seconds")
             
             # Test delete
             print("\n3️⃣ Testing User Deletion...")
@@ -73,17 +73,17 @@ def test_simple_database_operations():
             db.session.commit()
             
             elapsed = time.time() - start_time
-            print(f"   ✅ User deleted in {elapsed:.2f} seconds")
+            print(f"    User deleted in {elapsed:.2f} seconds")
             
             # Verify deletion
             deleted_user = User.query.filter_by(username=test_user.username).first()
             if not deleted_user:
-                print(f"   ✅ User successfully deleted from database")
+                print(f"    User successfully deleted from database")
             else:
-                print(f"   ❌ User still exists in database")
+                print(f"    User still exists in database")
                 
         except Exception as e:
-            print(f"   ❌ Database operation failed: {e}")
+            print(f"    Database operation failed: {e}")
             return False
         
         # Test multiple operations
@@ -108,7 +108,7 @@ def test_simple_database_operations():
             db.session.commit()
             
             elapsed = time.time() - start_time
-            print(f"   ✅ Created 3 users in {elapsed:.2f} seconds ({elapsed/3:.2f}s avg)")
+            print(f"    Created 3 users in {elapsed:.2f} seconds ({elapsed/3:.2f}s avg)")
             
             # Clean up quickly
             start_time = time.time()
@@ -117,42 +117,42 @@ def test_simple_database_operations():
             db.session.commit()
             
             elapsed = time.time() - start_time  
-            print(f"   ✅ Deleted 3 users in {elapsed:.2f} seconds ({elapsed/3:.2f}s avg)")
+            print(f"    Deleted 3 users in {elapsed:.2f} seconds ({elapsed/3:.2f}s avg)")
             
         except Exception as e:
-            print(f"   ❌ Multiple operations failed: {e}")
+            print(f"    Multiple operations failed: {e}")
             return False
         
         # Database status
         print(f"\n5️⃣ Database Status Check...")
         try:
             user_count = User.query.count()
-            print(f"   📊 Total users: {user_count}")
+            print(f"    Total users: {user_count}")
             
             # Check database settings
             from sqlalchemy import text
             journal_mode = db.session.execute(text("PRAGMA journal_mode")).scalar()
             cache_size = db.session.execute(text("PRAGMA cache_size")).scalar()
-            print(f"   📊 Journal mode: {journal_mode}")
-            print(f"   📊 Cache size: {cache_size}")
+            print(f"    Journal mode: {journal_mode}")
+            print(f"    Cache size: {cache_size}")
             
         except Exception as e:
-            print(f"   ⚠️ Status check failed: {e}")
+            print(f"   ️ Status check failed: {e}")
         
-        print(f"\n🎯 Simple Database Test Results:")
-        print(f"   ✅ All basic operations work")
-        print(f"   ✅ No database locking detected")
-        print(f"   ✅ Fast operation times")
-        print(f"   ✅ Heavy sync systems disabled")
+        print(f"\n Simple Database Test Results:")
+        print(f"    All basic operations work")
+        print(f"    No database locking detected")
+        print(f"    Fast operation times")
+        print(f"    Heavy sync systems disabled")
         
         return True
 
 if __name__ == "__main__":
     success = test_simple_database_operations()
     if success:
-        print(f"\n🎉 SUCCESS: Database works perfectly without heavy sync!")
+        print(f"\n SUCCESS: Database works perfectly without heavy sync!")
         print(f"   - Operations are fast")
         print(f"   - No locking errors")  
         print(f"   - Ready for normal use")
     else:
-        print(f"\n❌ Database issues still exist")
+        print(f"\n Database issues still exist")

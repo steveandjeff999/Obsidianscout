@@ -86,18 +86,18 @@ class AutomaticSQLite3Sync:
                 return {
                     'success': False,
                     'error': 'Sync is disabled for this server',
-                    'operations': ['❌ Sync disabled']
+                    'operations': [' Sync disabled']
                 }
             
-            logger.info(f"🔄 Starting automatic SQLite3 sync with {server.name}")
+            logger.info(f" Starting automatic SQLite3 sync with {server.name}")
             
             # Step 1: Capture all database changes using direct SQLite3 queries
             local_changes = self._capture_all_changes_sqlite3()
-            logger.info(f"📊 Captured {len(local_changes)} local database changes")
+            logger.info(f" Captured {len(local_changes)} local database changes")
             
             # Step 2: Get remote changes with retry and error handling
             remote_changes = self._get_remote_changes_reliable(server)
-            logger.info(f"📊 Received {len(remote_changes)} remote changes")
+            logger.info(f" Received {len(remote_changes)} remote changes")
             
             # Step 3: Perform atomic bidirectional sync
             server_config = {
@@ -112,14 +112,14 @@ class AutomaticSQLite3Sync:
             result = self.sqlite3_manager.perform_reliable_sync(server_config)
             
             if result['success']:
-                logger.info(f"✅ Automatic SQLite3 sync completed successfully with {server.name}")
+                logger.info(f" Automatic SQLite3 sync completed successfully with {server.name}")
                 
                 # Update server status
                 server.last_sync = datetime.now(timezone.utc)
                 server.status = 'online'
                 db.session.commit()
                 
-                result['operations'].append("✅ Server sync status updated")
+                result['operations'].append(" Server sync status updated")
                 result['automatic'] = True
                 
             return result
@@ -131,7 +131,7 @@ class AutomaticSQLite3Sync:
             return {
                 'success': False,
                 'error': error_msg,
-                'operations': [f"❌ {error_msg}"],
+                'operations': [f" {error_msg}"],
                 'automatic': True,
                 'stats': {
                     'local_changes_sent': 0,
@@ -364,50 +364,50 @@ class AutomaticSQLite3Sync:
                 return {
                     'success': False,
                     'error': 'Sync is disabled for this server',
-                    'operations': ['❌ Sync disabled']
+                    'operations': [' Sync disabled']
                 }
             
             operations = []
             
             # Step 1: Rediscover table mappings to catch new tables
-            operations.append("🔍 Discovering all database tables...")
+            operations.append(" Discovering all database tables...")
             self.table_database_map = self._discover_table_mappings()
             
             # Step 2: Capture ALL data from ALL tables
-            operations.append("📊 Capturing complete database state...")
+            operations.append(" Capturing complete database state...")
             all_changes = self._capture_full_database_state()
             
             # Step 3: Send all data to remote server
             if all_changes:
-                operations.append(f"📤 Sending {len(all_changes)} complete records to {server.host}...")
+                operations.append(f" Sending {len(all_changes)} complete records to {server.host}...")
                 
                 send_result = self._send_full_sync_to_server(server, all_changes)
                 
                 if send_result.get('success'):
-                    operations.append(f"✅ Successfully sent all data to {server.host}")
+                    operations.append(f" Successfully sent all data to {server.host}")
                 else:
-                    operations.append(f"❌ Failed to send data: {send_result.get('error')}")
+                    operations.append(f" Failed to send data: {send_result.get('error')}")
             
             # Step 4: Get complete remote data
-            operations.append(f"📥 Receiving complete database state from {server.host}...")
+            operations.append(f" Receiving complete database state from {server.host}...")
             
             remote_data = self._get_full_remote_database_state(server)
             
             if remote_data:
-                operations.append(f"📥 Received {len(remote_data)} records from {server.host}")
+                operations.append(f" Received {len(remote_data)} records from {server.host}")
                 
                 # Step 5: Apply remote data with full integrity
                 apply_result = self.apply_changes_zero_loss(remote_data)
                 
                 if apply_result.get('success'):
-                    operations.append(f"✅ Successfully applied {apply_result['applied_count']} records")
+                    operations.append(f" Successfully applied {apply_result['applied_count']} records")
                 else:
-                    operations.append(f"❌ Failed to apply remote data")
+                    operations.append(f" Failed to apply remote data")
             
             # Step 6: Update sync timestamp
             server.last_sync = datetime.now(timezone.utc)
             db.session.commit()
-            operations.append("✅ Full sync completed successfully")
+            operations.append(" Full sync completed successfully")
             
             return {
                 'success': True,
@@ -424,7 +424,7 @@ class AutomaticSQLite3Sync:
             return {
                 'success': False,
                 'error': error_msg,
-                'operations': [f"❌ {error_msg}"]
+                'operations': [f" {error_msg}"]
             }
     
     def _calculate_change_hash(self, data: Dict) -> str:
@@ -508,7 +508,7 @@ class AutomaticSQLite3Sync:
                     
                     # Verify all changes were applied
                     if result.get('applied_count') == len(changes):
-                        logger.info(f"✅ All {len(changes)} changes sent successfully")
+                        logger.info(f" All {len(changes)} changes sent successfully")
                         return {'success': True, 'sent_count': len(changes)}
                     else:
                         logger.warning(f"Partial send: {result.get('applied_count')}/{len(changes)}")
@@ -600,7 +600,7 @@ class AutomaticSQLite3Sync:
                     
                     # Commit transaction for this database
                     conn.commit()
-                    logger.info(f"✅ Applied {len(db_changes)} changes to {db_path}")
+                    logger.info(f" Applied {len(db_changes)} changes to {db_path}")
                     
             except Exception as e:
                 error_msg = f"Database transaction failed for {db_path}: {e}"
@@ -608,7 +608,7 @@ class AutomaticSQLite3Sync:
                 errors.append(error_msg)
                 continue
         
-        logger.info(f"✅ Successfully applied {applied_count} changes with zero loss")
+        logger.info(f" Successfully applied {applied_count} changes with zero loss")
         
         return {
             'success': applied_count > 0 or len(changes) == 0,

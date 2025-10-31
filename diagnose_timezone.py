@@ -19,10 +19,10 @@ with app.app_context():
     match = Match.query.filter(Match.predicted_time.isnot(None)).first()
     
     if not match:
-        print("\n❌ No matches with predicted times found")
+        print("\n No matches with predicted times found")
         exit(1)
     
-    print(f"\n📋 MATCH #{match.match_number} ({match.match_type})")
+    print(f"\n MATCH #{match.match_number} ({match.match_type})")
     print("-" * 80)
     
     # Get event timezone
@@ -32,7 +32,7 @@ with app.app_context():
     print(f"Event Timezone Setting: {event_tz_str}")
     
     # Show raw database values
-    print(f"\n📊 RAW DATABASE VALUES:")
+    print(f"\n RAW DATABASE VALUES:")
     print(f"  scheduled_time: {match.scheduled_time}")
     print(f"  predicted_time: {match.predicted_time}")
     print(f"  Type: {type(match.predicted_time)}")
@@ -41,7 +41,7 @@ with app.app_context():
     # Show what happens when we treat as UTC
     if match.predicted_time:
         naive_time = match.predicted_time
-        print(f"\n🔍 INTERPRETATION AS UTC:")
+        print(f"\n INTERPRETATION AS UTC:")
         
         # This is what the code currently does
         as_utc = naive_time.replace(tzinfo=timezone.utc)
@@ -57,11 +57,11 @@ with app.app_context():
                 print(f"  Converted to {event_tz_str}: {as_local}")
                 print(f"  Display format: {as_local.strftime('%I:%M %p %Z')}")
             except Exception as e:
-                print(f"  ⚠️  Could not convert to event timezone: {e}")
+                print(f"  ️  Could not convert to event timezone: {e}")
         
         # Show current time for reference
         now_utc = datetime.now(timezone.utc)
-        print(f"\n⏰ CURRENT TIME:")
+        print(f"\nCURRENT TIME:")
         print(f"  UTC: {now_utc}")
         if event_tz_str:
             try:
@@ -72,7 +72,7 @@ with app.app_context():
                 pass
     
     # Check notification queue
-    print(f"\n📬 NOTIFICATION QUEUE:")
+    print(f"\n NOTIFICATION QUEUE:")
     queued = NotificationQueue.query.filter_by(match_id=match.id).all()
     if queued:
         for notif in queued:
@@ -115,7 +115,7 @@ with app.app_context():
         print(f"  Actually is: {naive}")
         
         if naive.hour == as_local.hour:
-            print(f"\n⚠️  PROBLEM DETECTED: Database time matches LOCAL hour!")
+            print(f"\n️  PROBLEM DETECTED: Database time matches LOCAL hour!")
             print(f"   Times are being stored as {event_tz_str} instead of UTC!")
         else:
-            print(f"\n✅ Database appears correct (UTC storage)")
+            print(f"\n Database appears correct (UTC storage)")

@@ -185,7 +185,7 @@ def get_event_timezone(event):
     try:
         return pytz.timezone(event.timezone)
     except pytz.exceptions.UnknownTimeZoneError:
-        print(f"⚠️  Unknown timezone: {event.timezone}")
+        print(f"️  Unknown timezone: {event.timezone}")
         return None
 
 
@@ -219,7 +219,7 @@ def convert_local_to_utc(dt, event_timezone_str):
         # Convert to UTC
         return local_dt.astimezone(timezone.utc)
     except pytz.exceptions.UnknownTimeZoneError:
-        print(f"⚠️  Unknown timezone: {event_timezone_str}, treating as UTC")
+        print(f"️  Unknown timezone: {event_timezone_str}, treating as UTC")
         if dt.tzinfo is None:
             return dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc)
@@ -252,7 +252,7 @@ def convert_utc_to_local(dt_utc, event_timezone_str):
         # Convert to local timezone
         return dt_utc.astimezone(local_tz)
     except pytz.exceptions.UnknownTimeZoneError:
-        print(f"⚠️  Unknown timezone: {event_timezone_str}, returning UTC")
+        print(f"️  Unknown timezone: {event_timezone_str}, returning UTC")
         if dt_utc.tzinfo is None:
             return dt_utc.replace(tzinfo=timezone.utc)
         return dt_utc
@@ -345,7 +345,7 @@ def parse_iso_with_timezone(iso_string, default_timezone_str=None):
         # If aware, convert to UTC
         return dt.astimezone(timezone.utc)
     except (ValueError, AttributeError) as e:
-        print(f"⚠️  Error parsing datetime '{iso_string}': {e}")
+        print(f"️  Error parsing datetime '{iso_string}': {e}")
         return None
 
 

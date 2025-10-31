@@ -16,20 +16,20 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
 
 def test_server_connection(server):
     """Test various endpoints on a server"""
-    print(f"\n🔍 Testing connection to {server.name} ({server.base_url})")
+    print(f"\n Testing connection to {server.name} ({server.base_url})")
     
     # Test basic ping endpoint
     try:
         ping_url = f"{server.base_url}/api/sync/ping"
         print(f"Testing ping: {ping_url}")
         resp = requests.get(ping_url, timeout=10, verify=False)
-        print(f"  ✅ Ping successful: HTTP {resp.status_code}")
+        print(f"   Ping successful: HTTP {resp.status_code}")
         if resp.headers.get('content-type', '').startswith('application/json'):
-            print(f"  📄 Response: {resp.json()}")
+            print(f"   Response: {resp.json()}")
         else:
-            print(f"  📄 Response (text): {resp.text[:200]}...")
+            print(f"   Response (text): {resp.text[:200]}...")
     except Exception as e:
-        print(f"  ❌ Ping failed: {e}")
+        print(f"   Ping failed: {e}")
     
     # Test update endpoint with test payload
     try:
@@ -41,13 +41,13 @@ def test_server_connection(server):
             'port': server.port
         }
         resp = requests.post(update_url, json=test_payload, timeout=10, verify=False)
-        print(f"  ✅ Update endpoint accessible: HTTP {resp.status_code}")
+        print(f"   Update endpoint accessible: HTTP {resp.status_code}")
         if resp.headers.get('content-type', '').startswith('application/json'):
-            print(f"  📄 Response: {resp.json()}")
+            print(f"   Response: {resp.json()}")
         else:
-            print(f"  📄 Response (text): {resp.text[:200]}...")
+            print(f"   Response (text): {resp.text[:200]}...")
     except Exception as e:
-        print(f"  ❌ Update endpoint failed: {e}")
+        print(f"   Update endpoint failed: {e}")
 
 try:
     from app import create_app, db
@@ -58,13 +58,13 @@ try:
         servers = SyncServer.query.all()
         
         if servers:
-            print(f"🔗 Testing connections to {len(servers)} server(s):")
+            print(f" Testing connections to {len(servers)} server(s):")
             for server in servers:
                 test_server_connection(server)
         else:
-            print("❌ No sync servers found")
+            print(" No sync servers found")
             
 except Exception as e:
-    print(f"❌ Error: {e}")
+    print(f" Error: {e}")
     import traceback
     traceback.print_exc()

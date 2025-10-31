@@ -75,16 +75,16 @@ class CatchupSyncManager:
         # Get the timestamp of the latest change in our database
         latest_change = DatabaseChange.query.order_by(DatabaseChange.timestamp.desc()).first()
         if not latest_change:
-            logger.info("🔍 No database changes found - no catch-up needed")
+            logger.info(" No database changes found - no catch-up needed")
             return []
         
         latest_change_time = latest_change.timestamp
-        logger.info(f"🔍 Latest database change: {latest_change_time}")
+        logger.info(f" Latest database change: {latest_change_time}")
         
         for server in active_servers:
             # Skip servers that are already in catchup to prevent queue buildup
             if server.id in self._servers_in_catchup:
-                logger.debug(f"  🔄 {server.name} ({server.host}): Already in catch-up, skipping")
+                logger.debug(f"   {server.name} ({server.host}): Already in catch-up, skipping")
                 continue
                 
             needs_catchup = False
@@ -108,18 +108,18 @@ class CatchupSyncManager:
             if needs_catchup:
                 if self.check_server_availability(server):
                     servers_needing_catchup.append(server)
-                    logger.info(f"  📊 {server.name} ({server.host}): {reason} - Available for catch-up")
+                    logger.info(f"   {server.name} ({server.host}): {reason} - Available for catch-up")
                 else:
                     logger.info(f"  ⏸️  {server.name} ({server.host}): {reason} - Not reachable, skipping")
             else:
-                logger.debug(f"  ✅ {server.name} ({server.host}): Up to date")
+                logger.debug(f"   {server.name} ({server.host}): Up to date")
         
-        logger.info(f"🔍 Detected {len(servers_needing_catchup)} servers needing catch-up")
+        logger.info(f" Detected {len(servers_needing_catchup)} servers needing catch-up")
         
         # Debug: Show which servers are currently in progress
         if self._servers_in_catchup:
             in_progress_names = [f"ID:{server_id}" for server_id in self._servers_in_catchup]
-            logger.info(f"🔄 Servers currently in catch-up: {', '.join(in_progress_names)}")
+            logger.info(f" Servers currently in catch-up: {', '.join(in_progress_names)}")
             
         return servers_needing_catchup
     
@@ -128,7 +128,7 @@ class CatchupSyncManager:
         Check if a server is now available for catch-up sync
         """
         try:
-            logger.info(f"🔍 Checking availability of {server.name} ({server.base_url})")
+            logger.info(f" Checking availability of {server.name} ({server.base_url})")
             
             url = f"{server.base_url}/api/sync/ping"
             response = requests.get(url, timeout=10, verify=False)
@@ -137,16 +137,16 @@ class CatchupSyncManager:
                 data = response.json()
                 server.server_version = data.get('version')
                 server.update_ping(success=True)
-                logger.info(f"✅ Server {server.name} is now available")
+                logger.info(f" Server {server.name} is now available")
                 return True
             else:
                 server.update_ping(success=False, error_message=f"HTTP {response.status_code}")
-                logger.warning(f"❌ Server {server.name} returned HTTP {response.status_code}")
+                logger.warning(f" Server {server.name} returned HTTP {response.status_code}")
                 return False
                 
         except Exception as e:
             server.update_ping(success=False, error_message=str(e))
-            logger.warning(f"❌ Server {server.name} is not available: {e}")
+            logger.warning(f" Server {server.name} is not available: {e}")
             return False
     
     def perform_catchup_sync(self, server: 'SyncServer') -> Dict[str, Any]:
@@ -157,7 +157,7 @@ class CatchupSyncManager:
         # Mark server as in catchup to prevent duplicate processing
         self._servers_in_catchup.add(server.id)
         
-        logger.info(f"🚀 Starting catch-up sync for {server.name}")
+        logger.info(f" Starting catch-up sync for {server.name}")
         
         catchup_start = datetime.now(timezone.utc)
         results = {
@@ -175,7 +175,7 @@ class CatchupSyncManager:
         try:
             # Step 1: Determine catch-up period
             catchup_since = self._determine_catchup_period(server)
-            logger.info(f"📅 Catch-up period: since {catchup_since}")
+            logger.info(f" Catch-up period: since {catchup_since}")
             
             # Step 2: Exchange database changes
             db_result = self._catchup_database_changes(server, catchup_since)
@@ -193,12 +193,12 @@ class CatchupSyncManager:
             results['completed_at'] = datetime.now(timezone.utc).isoformat()
             results['duration'] = (datetime.now(timezone.utc) - catchup_start).total_seconds()
             
-            logger.info(f"✅ Catch-up sync completed for {server.name} in {results['duration']:.2f} seconds")
+            logger.info(f" Catch-up sync completed for {server.name} in {results['duration']:.2f} seconds")
             logger.info(f"   Database: {db_result['sent']} sent, {db_result['received']} received, {db_result['applied']} applied")
             logger.info(f"   Files: {file_result['uploaded']} uploaded, {file_result['downloaded']} downloaded")
             
         except Exception as e:
-            logger.error(f"❌ Catch-up sync failed for {server.name}: {e}")
+            logger.error(f" Catch-up sync failed for {server.name}: {e}")
             results['errors'].append(str(e))
             results['completed_at'] = datetime.now(timezone.utc).isoformat()
             results['duration'] = (datetime.now(timezone.utc) - catchup_start).total_seconds()
@@ -217,11 +217,11 @@ class CatchupSyncManager:
         # If server has never synced, look back a reasonable amount (e.g., 7 days)
         if server.last_sync is None:
             fallback_time = datetime.now(timezone.utc) - timedelta(days=7)
-            logger.info(f"📅 Server {server.name} has never synced, using 7-day fallback: {fallback_time}")
+            logger.info(f" Server {server.name} has never synced, using 7-day fallback: {fallback_time}")
             return fallback_time
         
         # Use the server's last sync time as the starting point
-        logger.info(f"📅 Server {server.name} last synced: {server.last_sync}")
+        logger.info(f" Server {server.name} last synced: {server.last_sync}")
         return server.last_sync
     
     def _catchup_database_changes(self, server: 'SyncServer', since: datetime) -> Dict[str, int]:
@@ -229,34 +229,34 @@ class CatchupSyncManager:
         Perform database catch-up synchronization
         Returns counts of changes sent, received, and applied
         """
-        logger.info(f"🗄️  Starting database catch-up for {server.name} since {since}")
+        logger.info(f"️  Starting database catch-up for {server.name} since {since}")
         
         result = {'sent': 0, 'received': 0, 'applied': 0, 'errors': []}
         
         try:
             # Get all local changes since the catch-up period
             local_changes = self._get_database_changes_since(since)
-            logger.info(f"📤 Found {len(local_changes)} local changes to send")
+            logger.info(f" Found {len(local_changes)} local changes to send")
             
             # Send changes in batches to avoid overwhelming the network/server
             if local_changes:
                 sent_count = self._send_database_changes_in_batches(server, local_changes)
                 result['sent'] = sent_count
-                logger.info(f"📤 Sent {sent_count} database changes to {server.name}")
+                logger.info(f" Sent {sent_count} database changes to {server.name}")
             
             # Get all remote changes since the catch-up period
             remote_changes = self._get_remote_database_changes(server, since)
             result['received'] = len(remote_changes)
-            logger.info(f"📥 Received {len(remote_changes)} database changes from {server.name}")
+            logger.info(f" Received {len(remote_changes)} database changes from {server.name}")
             
             # Apply remote changes in batches
             if remote_changes:
                 applied_count = self._apply_database_changes_in_batches(remote_changes)
                 result['applied'] = applied_count
-                logger.info(f"✅ Applied {applied_count} database changes from {server.name}")
+                logger.info(f" Applied {applied_count} database changes from {server.name}")
             
         except Exception as e:
-            logger.error(f"❌ Database catch-up failed for {server.name}: {e}")
+            logger.error(f" Database catch-up failed for {server.name}: {e}")
             result['errors'].append(str(e))
             raise
         
@@ -267,7 +267,7 @@ class CatchupSyncManager:
         Perform file catch-up synchronization
         Returns counts of files uploaded and downloaded
         """
-        logger.info(f"📁 Starting file catch-up for {server.name} since {since}")
+        logger.info(f" Starting file catch-up for {server.name} since {since}")
         
         result = {'uploaded': 0, 'downloaded': 0, 'errors': []}
         
@@ -291,7 +291,7 @@ class CatchupSyncManager:
                 result['downloaded'] += uploads_result['downloaded']
             
         except Exception as e:
-            logger.error(f"❌ File catch-up failed for {server.name}: {e}")
+            logger.error(f" File catch-up failed for {server.name}: {e}")
             result['errors'].append(str(e))
             raise
         
@@ -307,7 +307,7 @@ class CatchupSyncManager:
             # Import models here to avoid circular imports
             from app.models import DatabaseChange, User, ScoutingData, Match, Team, Event
             
-            logger.info(f"🔍 Getting database changes since {since}")
+            logger.info(f" Getting database changes since {since}")
             
             # Get tracked changes first
             tracked_changes = DatabaseChange.query.filter(
@@ -315,13 +315,13 @@ class CatchupSyncManager:
             ).order_by(DatabaseChange.timestamp.asc()).all()
             
             if tracked_changes:
-                logger.info(f"📋 Found {len(tracked_changes)} tracked changes")
+                logger.info(f" Found {len(tracked_changes)} tracked changes")
                 for change in tracked_changes:
                     changes.append(change.to_dict())
                 return changes
             
             # Fallback: If no change tracking, detect changes by timestamp
-            logger.info("📋 No tracked changes found, using timestamp-based detection")
+            logger.info(" No tracked changes found, using timestamp-based detection")
             
             # Define models to sync with their modification tracking
             sync_models = [
@@ -368,15 +368,15 @@ class CatchupSyncManager:
                                 'timestamp': datetime.now(timezone.utc).isoformat()
                             })
                         
-                        logger.info(f"📋 Found {len(modified_records)} changes in {table_name} since {since}")
+                        logger.info(f" Found {len(modified_records)} changes in {table_name} since {since}")
                 
                 except Exception as e:
-                    logger.warning(f"⚠️  Could not get changes for {table_name}: {e}")
+                    logger.warning(f"️  Could not get changes for {table_name}: {e}")
             
-            logger.info(f"📋 Total database changes found: {len(changes)}")
+            logger.info(f" Total database changes found: {len(changes)}")
             
         except Exception as e:
-            logger.error(f"❌ Error getting database changes: {e}")
+            logger.error(f" Error getting database changes: {e}")
             raise
         
         return changes
@@ -392,7 +392,7 @@ class CatchupSyncManager:
             batch = changes[i:i + self.batch_size]
             batch_count += 1
             
-            logger.info(f"📤 Sending batch {batch_count} ({len(batch)} changes) to {server.name}")
+            logger.info(f" Sending batch {batch_count} ({len(batch)} changes) to {server.name}")
             
             try:
                 url = f"{server.base_url}/api/sync/receive-changes"
@@ -410,16 +410,16 @@ class CatchupSyncManager:
                     result = response.json()
                     applied_count = result.get('applied_count', 0)
                     total_sent += applied_count
-                    logger.info(f"✅ Batch {batch_count} applied successfully ({applied_count} changes)")
+                    logger.info(f" Batch {batch_count} applied successfully ({applied_count} changes)")
                 else:
-                    logger.error(f"❌ Batch {batch_count} failed: HTTP {response.status_code} - {response.text}")
+                    logger.error(f" Batch {batch_count} failed: HTTP {response.status_code} - {response.text}")
                     # Continue with next batch instead of failing completely
                 
                 # Small delay between batches to avoid overwhelming the server
                 time.sleep(0.5)
                 
             except Exception as e:
-                logger.error(f"❌ Error sending batch {batch_count}: {e}")
+                logger.error(f" Error sending batch {batch_count}: {e}")
                 # Continue with next batch
                 continue
         
@@ -437,7 +437,7 @@ class CatchupSyncManager:
                 'catchup_mode': True
             }
             
-            logger.info(f"📥 Requesting changes from {server.name} since {since}")
+            logger.info(f" Requesting changes from {server.name} since {since}")
             
             response = requests.get(url, params=params, 
                                   timeout=self.connection_timeout, verify=False)
@@ -445,14 +445,14 @@ class CatchupSyncManager:
             if response.status_code == 200:
                 data = response.json()
                 changes = data.get('changes', [])
-                logger.info(f"📥 Received {len(changes)} changes from {server.name}")
+                logger.info(f" Received {len(changes)} changes from {server.name}")
                 return changes
             else:
-                logger.error(f"❌ Failed to get changes from {server.name}: HTTP {response.status_code}")
+                logger.error(f" Failed to get changes from {server.name}: HTTP {response.status_code}")
                 return []
                 
         except Exception as e:
-            logger.error(f"❌ Error getting changes from {server.name}: {e}")
+            logger.error(f" Error getting changes from {server.name}: {e}")
             return []
     
     def _apply_database_changes_in_batches(self, changes: List[Dict]) -> int:
@@ -471,18 +471,18 @@ class CatchupSyncManager:
                 batch = changes[i:i + self.batch_size]
                 batch_count += 1
                 
-                logger.info(f"📥 Applying batch {batch_count} ({len(batch)} changes)")
+                logger.info(f" Applying batch {batch_count} ({len(batch)} changes)")
                 
                 try:
                     applied_count = self._apply_change_batch(batch)
                     total_applied += applied_count
-                    logger.info(f"✅ Applied batch {batch_count} successfully ({applied_count} changes)")
+                    logger.info(f" Applied batch {batch_count} successfully ({applied_count} changes)")
                     
                     # Commit each batch separately
                     db.session.commit()
                     
                 except Exception as e:
-                    logger.error(f"❌ Error applying batch {batch_count}: {e}")
+                    logger.error(f" Error applying batch {batch_count}: {e}")
                     db.session.rollback()
                     # Continue with next batch
                     continue
@@ -522,7 +522,7 @@ class CatchupSyncManager:
                     # Only warn once per table name to avoid spam
                     if table_name not in self._unknown_table_warnings_logged:
                         self._unknown_table_warnings_logged.add(table_name)
-                        logger.warning(f"⚠️  Unknown table for catch-up: {table_name} (future warnings for this table suppressed)")
+                        logger.warning(f"️  Unknown table for catch-up: {table_name} (future warnings for this table suppressed)")
                     continue
                 
                 model_class = model_map[table_name]
@@ -590,7 +590,7 @@ class CatchupSyncManager:
                             applied_count += 1
                 
             except Exception as e:
-                logger.warning(f"⚠️  Error applying change to {table_name}: {e}")
+                logger.warning(f"️  Error applying change to {table_name}: {e}")
                 continue
         
         return applied_count
@@ -610,12 +610,12 @@ class CatchupSyncManager:
             elif directory_type == 'uploads':
                 directory_path = os.path.join(os.getcwd(), 'uploads')
             else:
-                logger.warning(f"⚠️  Unknown directory type: {directory_type}")
+                logger.warning(f"️  Unknown directory type: {directory_type}")
                 return result
             
             # Get local file checksums (only files modified since catch-up period)
             local_checksums = self._get_directory_checksums_since(directory_path, since)
-            logger.info(f"📁 Found {len(local_checksums)} local files in {directory_type} modified since {since}")
+            logger.info(f" Found {len(local_checksums)} local files in {directory_type} modified since {since}")
             
             # Get remote file checksums
             url = f"{server.base_url}/api/sync/files/checksums"
@@ -623,38 +623,38 @@ class CatchupSyncManager:
                                   timeout=self.connection_timeout, verify=False)
             
             if response.status_code != 200:
-                logger.error(f"❌ Failed to get remote checksums for {directory_type}: {response.text}")
+                logger.error(f" Failed to get remote checksums for {directory_type}: {response.text}")
                 return result
             
             remote_checksums = response.json()
-            logger.info(f"📁 Found {len(remote_checksums)} remote files in {directory_type}")
+            logger.info(f" Found {len(remote_checksums)} remote files in {directory_type}")
             
             # Compare and sync files
             files_to_upload, files_to_download = self._compare_checksums_for_catchup(
                 local_checksums, remote_checksums, since)
             
-            logger.info(f"📁 Files to upload: {len(files_to_upload)}, Files to download: {len(files_to_download)}")
+            logger.info(f" Files to upload: {len(files_to_upload)}, Files to download: {len(files_to_download)}")
             
             # Upload files that are newer locally
             for file_info in files_to_upload:
                 try:
                     self._upload_file_to_server(server, file_info['path'], directory_type)
                     result['uploaded'] += 1
-                    logger.debug(f"📤 Uploaded {file_info['path']}")
+                    logger.debug(f" Uploaded {file_info['path']}")
                 except Exception as e:
-                    logger.warning(f"⚠️  Failed to upload {file_info['path']}: {e}")
+                    logger.warning(f"️  Failed to upload {file_info['path']}: {e}")
             
             # Download files that are newer remotely
             for file_info in files_to_download:
                 try:
                     self._download_file_from_server(server, file_info['path'], directory_type)
                     result['downloaded'] += 1
-                    logger.debug(f"📥 Downloaded {file_info['path']}")
+                    logger.debug(f" Downloaded {file_info['path']}")
                 except Exception as e:
-                    logger.warning(f"⚠️  Failed to download {file_info['path']}: {e}")
+                    logger.warning(f"️  Failed to download {file_info['path']}: {e}")
             
         except Exception as e:
-            logger.error(f"❌ Directory catch-up failed for {directory_type}: {e}")
+            logger.error(f" Directory catch-up failed for {directory_type}: {e}")
             raise
         
         return result
@@ -703,7 +703,7 @@ class CatchupSyncManager:
                             'modified': file_modified.isoformat()
                         }
                 except Exception as e:
-                    logger.warning(f"⚠️  Could not process file {file_path}: {e}")
+                    logger.warning(f"️  Could not process file {file_path}: {e}")
         
         return checksums
     
@@ -777,7 +777,7 @@ class CatchupSyncManager:
                     raise Exception(f"Upload failed: {response.text}")
             
         except Exception as e:
-            logger.error(f"❌ Failed to upload {file_path} to {server.name}: {e}")
+            logger.error(f" Failed to upload {file_path} to {server.name}: {e}")
             raise
     
     def _download_file_from_server(self, server: 'SyncServer', file_path: str, base_folder: str):
@@ -808,7 +808,7 @@ class CatchupSyncManager:
                 f.write(response.content)
             
         except Exception as e:
-            logger.error(f"❌ Failed to download {file_path} from {server.name}: {e}")
+            logger.error(f" Failed to download {file_path} from {server.name}: {e}")
             raise
     
     def _get_server_id(self):
@@ -827,11 +827,11 @@ class CatchupSyncManager:
         if not self.catchup_enabled:
             return
         
-        logger.info("🔍 Running automatic catch-up scan...")
+        logger.info(" Running automatic catch-up scan...")
         
         servers_needing_catchup = self.detect_servers_needing_catchup()
         if not servers_needing_catchup:
-            logger.info("✅ All servers are up to date")
+            logger.info(" All servers are up to date")
             return
         
         catchup_results = []
@@ -844,16 +844,16 @@ class CatchupSyncManager:
                 catchup_results.append(result)
             
             except Exception as e:
-                logger.error(f"❌ Catch-up failed for {server.name}: {e}")
+                logger.error(f" Catch-up failed for {server.name}: {e}")
                 continue
         
         if catchup_results:
-            logger.info(f"🎯 Completed catch-up for {len(catchup_results)} servers")
+            logger.info(f" Completed catch-up for {len(catchup_results)} servers")
             for result in catchup_results:
                 if result['success']:
-                    logger.info(f"  ✅ {result['server_name']}: {result['database_changes']['applied']} DB changes, {result['file_changes']['downloaded']} files")
+                    logger.info(f"   {result['server_name']}: {result['database_changes']['applied']} DB changes, {result['file_changes']['downloaded']} files")
                 else:
-                    logger.info(f"  ❌ {result['server_name']}: Failed - {len(result['errors'])} errors")
+                    logger.info(f"   {result['server_name']}: Failed - {len(result['errors'])} errors")
         
         return catchup_results
 

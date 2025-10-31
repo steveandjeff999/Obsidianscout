@@ -347,8 +347,8 @@
             contextMenu.appendChild(deleteBtn);
         }
         
-        // React options
-        const reactions = ['👍', '👎', '❤️', '😄', '😮', '😢'];
+        // React options - default emoji set. Keep short to fit mobile bottom sheet.
+        const reactions = ['👍', '❤️', '😂', '🎉', '😮', '😢'];
         reactions.forEach(emoji => {
             const reactBtn = document.createElement('button');
             reactBtn.className = 'context-menu-item';
@@ -741,8 +741,13 @@
         const messageElement = document.querySelector(`[data-message-id="${data.message_id}"]`);
         if (messageElement) {
             const textElement = messageElement.querySelector('.message-text');
-            if (textElement) {
-                textElement.innerHTML = data.text + ' <span class="text-muted ms-1">(edited)</span>';
+            // Only update the message text if the server included a defined text field.
+            // Some updates (like reactions) emit only 'reactions' and do not include 'text',
+            // so guard against assigning `undefined` which would corrupt the DOM.
+            if (textElement && typeof data.text !== 'undefined' && data.text !== null) {
+                // Include edited marker only if payload indicates edited (server may not include this flag on reaction-only updates)
+                const editedSuffix = data.edited ? ' <span class="text-muted ms-1">(edited)</span>' : '';
+                textElement.innerHTML = data.text + editedSuffix;
             }
             updateReactionsDisplay(messageElement, data.reactions);
         }

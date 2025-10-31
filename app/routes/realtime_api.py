@@ -33,7 +33,7 @@ def receive_operation():
         record_data = operation.get('data', {})
         record_id = operation.get('record_id')
         
-        logger.debug(f"📥 Received {operation_type} operation for {table_name} from {source_server_id}")
+        logger.debug(f" Received {operation_type} operation for {table_name} from {source_server_id}")
         
         # Model mapping - handle both singular and plural forms
         model_map = {
@@ -58,7 +58,7 @@ def receive_operation():
             result = apply_operation(model_class, operation_type, record_data, record_id)
         
         if result['success']:
-            logger.debug(f"✅ Applied {operation_type} operation for {table_name}:{record_id}")
+            logger.debug(f" Applied {operation_type} operation for {table_name}:{record_id}")
             return jsonify({
                 'success': True,
                 'operation_type': operation_type,
@@ -67,11 +67,11 @@ def receive_operation():
                 'timestamp': datetime.now(timezone.utc).isoformat()
             })
         else:
-            logger.error(f"❌ Failed to apply {operation_type} operation: {result['error']}")
+            logger.error(f" Failed to apply {operation_type} operation: {result['error']}")
             return jsonify({'error': result['error']}), 500
             
     except Exception as e:
-        logger.error(f"❌ Error processing real-time operation: {e}")
+        logger.error(f" Error processing real-time operation: {e}")
         return jsonify({'error': str(e)}), 500
 
 def apply_operation(model_class, operation_type: str, record_data: Dict, record_id: str):
@@ -111,7 +111,7 @@ def apply_insert(model_class, record_data: Dict):
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"❌ Error in apply_insert: {e}")
+        logger.error(f" Error in apply_insert: {e}")
         return {'success': False, 'error': str(e)}
 
 def apply_update(model_class, record_data: Dict, record_id: str):
@@ -135,7 +135,7 @@ def apply_update(model_class, record_data: Dict, record_id: str):
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"❌ Error in apply_update: {e}")
+        logger.error(f" Error in apply_update: {e}")
         return {'success': False, 'error': str(e)}
 
 def apply_delete(model_class, record_id: str):
@@ -160,7 +160,7 @@ def apply_delete(model_class, record_id: str):
             
     except Exception as e:
         db.session.rollback()
-        logger.error(f"❌ Error in apply_delete: {e}")
+        logger.error(f" Error in apply_delete: {e}")
         return {'success': False, 'error': str(e)}
 
 def process_datetime_fields(record_data: Dict) -> Dict:

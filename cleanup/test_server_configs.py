@@ -5,7 +5,7 @@ Comprehensive Server Configuration Test
 
 def test_all_configs():
     """Test all possible server configurations"""
-    print("🔧 COMPREHENSIVE SERVER CONFIG TEST")
+    print(" COMPREHENSIVE SERVER CONFIG TEST")
     print("=" * 50)
     
     import requests
@@ -37,26 +37,26 @@ def test_all_configs():
             response = requests.get(url, timeout=5, verify=False)
             if response.status_code == 200:
                 data = response.json()
-                print(f"  ✅ SUCCESS - Status: {data.get('status', 'unknown')}")
+                print(f"   SUCCESS - Status: {data.get('status', 'unknown')}")
                 working_configs.append((protocol, port, data))
             else:
-                print(f"  ❌ HTTP {response.status_code}")
+                print(f"   HTTP {response.status_code}")
                 
         except requests.exceptions.ConnectTimeout:
             print(f"  ⏰ Connection timeout")
         except requests.exceptions.ConnectionError as e:
             if "Connection refused" in str(e):
-                print(f"  🚫 Connection refused")
+                print(f"   Connection refused")
             else:
-                print(f"  ❌ Connection error")
+                print(f"   Connection error")
         except Exception as e:
-            print(f"  ❌ Error: {type(e).__name__}")
+            print(f"   Error: {type(e).__name__}")
     
-    print(f"\n📊 SUMMARY:")
+    print(f"\n SUMMARY:")
     print(f"Found {len(working_configs)} working configurations:")
     
     for protocol, port, data in working_configs:
-        print(f"  ✅ {protocol}://{host}:{port}")
+        print(f"   {protocol}://{host}:{port}")
         print(f"     Server ID: {data.get('server_id', 'unknown')}")
         print(f"     Version: {data.get('version', 'unknown')}")
         print("")
@@ -75,7 +75,7 @@ def test_all_configs():
                     # Use the first working config (usually the most standard)
                     protocol, port, data = working_configs[0]
                     
-                    print(f"🔄 UPDATING DATABASE:")
+                    print(f" UPDATING DATABASE:")
                     print(f"   Setting server to {protocol}://{host}:{port}")
                     
                     server.protocol = protocol
@@ -84,13 +84,13 @@ def test_all_configs():
                     server.update_ping(success=True)
                     db.session.commit()
                     
-                    print(f"   ✅ Database updated successfully")
+                    print(f"    Database updated successfully")
                     
         except Exception as e:
-            print(f"❌ Failed to update database: {e}")
+            print(f" Failed to update database: {e}")
     else:
-        print("❌ No working configurations found!")
-        print("💡 Make sure the remote server is running and accessible")
+        print(" No working configurations found!")
+        print(" Make sure the remote server is running and accessible")
 
 if __name__ == "__main__":
     test_all_configs()

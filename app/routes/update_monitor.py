@@ -181,40 +181,40 @@ class UpdateMonitor:
         
         def update_thread():
             try:
-                self.add_message("🚀 Starting server update process...")
+                self.add_message(" Starting server update process...")
                 self.update_status('connecting', 5)
                 
                 # Step 1: Test connection
-                self.add_message(f"🔍 Testing connection to {self.server.base_url}...")
+                self.add_message(f" Testing connection to {self.server.base_url}...")
                 try:
                     ping_url = f"{self.server.base_url}/api/sync/ping"
-                    self.add_message(f"📡 Attempting to reach: {ping_url}")
+                    self.add_message(f" Attempting to reach: {ping_url}")
                     resp = requests.get(ping_url, timeout=15, verify=False)
                     if resp.status_code == 200:
                         data = resp.json()
-                        self.add_message(f"✅ Server is reachable - Version: {data.get('version', 'Unknown')}", 'success')
+                        self.add_message(f" Server is reachable - Version: {data.get('version', 'Unknown')}", 'success')
                         self.update_status('connected', 15)
                         self.last_contact = datetime.now(timezone.utc)
                     else:
                         raise Exception(f"Server returned HTTP {resp.status_code}: {resp.text[:200]}")
                 except requests.exceptions.ConnectTimeout:
-                    self.add_message(f"❌ Connection timeout - server may be offline or unreachable", 'error')
+                    self.add_message(f" Connection timeout - server may be offline or unreachable", 'error')
                     self.update_status('failed', 100)
                     self.error = "Connection timeout - check if server is running and accessible"
                     return
                 except requests.exceptions.ConnectionError as e:
-                    self.add_message(f"❌ Connection error - cannot reach server: {str(e)[:100]}", 'error')
+                    self.add_message(f" Connection error - cannot reach server: {str(e)[:100]}", 'error')
                     self.update_status('failed', 100)
                     self.error = f"Connection error: {str(e)[:100]}"
                     return
                 except Exception as e:
-                    self.add_message(f"❌ Connection failed: {e}", 'error')
+                    self.add_message(f" Connection failed: {e}", 'error')
                     self.update_status('failed', 100)
                     self.error = str(e)
                     return
                 
                 # Step 2: Send update request
-                self.add_message("📦 Sending update request...")
+                self.add_message(" Sending update request...")
                 self.update_status('requesting', 25)
                 
                 payload = {
@@ -228,7 +228,7 @@ class UpdateMonitor:
                     resp = requests.post(update_url, json=payload, timeout=10, verify=False)
                     if resp.status_code in (200, 202):
                         result = resp.json()
-                        self.add_message(f"✅ Update request accepted: {result.get('message', 'Started')}", 'success')
+                        self.add_message(f" Update request accepted: {result.get('message', 'Started')}", 'success')
                         self.update_status('updating', 35)
                     else:
                         error_msg = f"Server returned HTTP {resp.status_code}"
@@ -240,7 +240,7 @@ class UpdateMonitor:
                         raise Exception(error_msg)
                         
                 except Exception as e:
-                    self.add_message(f"❌ Update request failed: {e}", 'error')
+                    self.add_message(f" Update request failed: {e}", 'error')
                     self.update_status('failed', 100)
                     self.error = str(e)
                     return
@@ -250,7 +250,7 @@ class UpdateMonitor:
                 self.monitor_update_progress()
                 
             except Exception as e:
-                self.add_message(f"❌ Update failed: {e}", 'error')
+                self.add_message(f" Update failed: {e}", 'error')
                 self.update_status('failed', 100)
                 self.error = str(e)
             finally:
@@ -263,7 +263,7 @@ class UpdateMonitor:
     
     def monitor_update_progress(self):
         """Monitor the update progress by checking server status"""
-        self.add_message("🔄 Waiting for server to restart...")
+        self.add_message(" Waiting for server to restart...")
         self.update_status('restarting', 45)
         
         # Wait a bit for the server to start shutting down
@@ -290,10 +290,10 @@ class UpdateMonitor:
             self.add_message(f"⏳ Still checking server status... ({offline_checks}/{max_offline_checks})")
         
         if not server_offline:
-            self.add_message("⚠️  Server didn't go offline - update may not have started", 'warning')
+            self.add_message("️  Server didn't go offline - update may not have started", 'warning')
             self.update_status('uncertain', 70)
         else:
-            self.add_message("📴 Server went offline - update in progress", 'info')
+            self.add_message(" Server went offline - update in progress", 'info')
             self.update_status('installing', 60)
         
         # Wait for server to come back online
@@ -308,7 +308,7 @@ class UpdateMonitor:
                 resp = requests.get(ping_url, timeout=5, verify=False)
                 if resp.status_code == 200:
                     data = resp.json()
-                    self.add_message(f"✅ Server is back online! Version: {data.get('version', 'Unknown')}", 'success')
+                    self.add_message(f" Server is back online! Version: {data.get('version', 'Unknown')}", 'success')
                     server_back_online = True
                     break
             except:
@@ -322,13 +322,13 @@ class UpdateMonitor:
         
         if server_back_online:
             # Verify sync configuration is preserved
-            self.add_message("🔍 Verifying sync configuration...")
+            self.add_message(" Verifying sync configuration...")
             self.update_status('verifying', 90)
             
             try:
                 # Check if the server still has its sync configuration
                 # This is a basic check - the full verification happens on the remote server
-                self.add_message("✅ Update completed successfully!", 'success')
+                self.add_message(" Update completed successfully!", 'success')
                 self.update_status('completed', 100)
                 self.completed_at = datetime.now(timezone.utc)
                 
@@ -339,11 +339,11 @@ class UpdateMonitor:
                 db.session.commit()
                 
             except Exception as e:
-                self.add_message(f"⚠️  Update completed but verification failed: {e}", 'warning')
+                self.add_message(f"️  Update completed but verification failed: {e}", 'warning')
                 self.update_status('completed_with_warnings', 100)
                 self.completed_at = datetime.now(timezone.utc)
         else:
-            self.add_message("❌ Server didn't come back online within expected time", 'error')
+            self.add_message(" Server didn't come back online within expected time", 'error')
             self.update_status('timeout', 100)
             self.completed_at = datetime.now(timezone.utc)
             self.error = "Server didn't come back online"

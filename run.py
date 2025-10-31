@@ -551,7 +551,7 @@ if __name__ == '__main__':
                         use_ssl = False
 
             if use_ssl and ssl_context:
-                print(f"🔒 Starting Flask development server with SSL on port {port}...")
+                print(f" Starting Flask development server with SSL on port {port}...")
                 print("   HTTPS support enabled")
                 print("   Full SocketIO WebSocket support")
                 print(f"   Server URL: https://localhost:{port}")
@@ -566,7 +566,7 @@ if __name__ == '__main__':
                     allow_unsafe_werkzeug=True
                 )
             else:
-                print(f"🌐 Starting Flask development server (HTTP) on port {port}...")
+                print(f" Starting Flask development server (HTTP) on port {port}...")
                 print("   Warning: No SSL - some features may be limited")
                 print("   Full SocketIO WebSocket support")
                 print(f"   Server URL: http://localhost:{port}")

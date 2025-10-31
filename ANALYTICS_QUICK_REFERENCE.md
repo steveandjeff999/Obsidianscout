@@ -1,6 +1,6 @@
 # Quick Reference: Advanced Analytics Commands
 
-## 🎯 Quick Query Examples
+##  Quick Query Examples
 
 ### Trend Analysis
 ```
@@ -48,7 +48,7 @@ upcoming qualification matches
 compare 5454 and 254
 ```
 
-## 📊 What Each Feature Tells You
+##  What Each Feature Tells You
 
 | Feature | Best Used For | Key Metric |
 |---------|--------------|------------|
@@ -61,7 +61,7 @@ compare 5454 and 254
 | **Weaknesses** | Strategic planning | Gap Identification |
 | **Alliance Prediction** | Partnership evaluation | Combined Score |
 
-## 🏆 Strategic Workflows
+##  Strategic Workflows
 
 ### Before Alliance Selection
 1. Check **trends** to find improving teams
@@ -79,7 +79,7 @@ compare 5454 and 254
 2. Track **peak performance** potential
 3. Use **predictions** for strategy calls
 
-## 💡 Pro Tips
+##  Pro Tips
 
 - Use trends to spot "dark horse" teams early
 - Consistency matters more in elimination rounds
@@ -87,7 +87,7 @@ compare 5454 and 254
 - Alliance predictions consider synergies
 - Combine multiple analytics for best insights
 
-## 🚀 Try These Now
+##  Try These Now
 
 **Scouting Strategy:**
 ```

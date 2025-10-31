@@ -11,10 +11,10 @@ def check_remote_users():
     with app.app_context():
         server = SyncServer.query.filter_by(sync_enabled=True).first()
         if not server:
-            print("❌ No sync server found")
+            print(" No sync server found")
             return
             
-        print(f"🔍 Checking users on remote server: {server.base_url}")
+        print(f" Checking users on remote server: {server.base_url}")
         
         # Try to get users from remote server
         # This would require an API endpoint on the remote server
@@ -34,7 +34,7 @@ def check_remote_users():
             else:
                 print(f"   Users endpoint not available: {response.text}")
         except Exception as e:
-            print(f"   ❌ Users endpoint error: {e}")
+            print(f"    Users endpoint error: {e}")
             
         # Check sync logs on remote server
         try:
@@ -50,7 +50,7 @@ def check_remote_users():
             else:
                 print(f"   Logs endpoint: {response.text}")
         except Exception as e:
-            print(f"   ❌ Logs endpoint error: {e}")
+            print(f"    Logs endpoint error: {e}")
             
         # Let's manually send our user changes again to see what happens
         from app.models import DatabaseChange
@@ -63,7 +63,7 @@ def check_remote_users():
         ).all()
         
         if user_changes:
-            print(f"\n📤 Sending {len(user_changes)} user changes to remote:")
+            print(f"\n Sending {len(user_changes)} user changes to remote:")
             changes_data = [change.to_dict() for change in user_changes]
             
             for change in changes_data:
@@ -87,7 +87,7 @@ def check_remote_users():
                 else:
                     print(f"   Send failed: {response.text}")
             except Exception as e:
-                print(f"   ❌ Send error: {e}")
+                print(f"    Send error: {e}")
 
 if __name__ == "__main__":
     check_remote_users()

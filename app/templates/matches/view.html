@@ -39,7 +39,7 @@
                     <i class="fas fa-info-circle me-1"></i>
                     Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})
                     {% if match.event.schedule_offset %}
-                    <br>The event is running {{ match.event.schedule_offset|abs }} minutes {{ 'behind schedule 🐌' if match.event.schedule_offset > 0 else 'ahead of schedule ⚡' }}
+                    <br>The event is running {{ match.event.schedule_offset|abs }} minutes {{ 'behind schedule ' if match.event.schedule_offset > 0 else 'ahead of schedule ' }}
                     {% else %}
                         <p class="mb-1">
                             <strong>Scheduled:</strong> 

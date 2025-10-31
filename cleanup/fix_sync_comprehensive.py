@@ -5,7 +5,7 @@ Comprehensive Fix for Database Change Tracking and File Sync Issues
 
 def fix_change_tracking():
     """Fix database change tracking issues"""
-    print("🔧 FIXING CHANGE TRACKING ISSUES")
+    print(" FIXING CHANGE TRACKING ISSUES")
     print("=" * 50)
     
     try:
@@ -27,7 +27,7 @@ def fix_change_tracking():
             print(f"Existing database changes: {existing_changes}")
             
             # Test creating a user to see if tracking works
-            print("\n🧪 Testing user creation tracking...")
+            print("\n Testing user creation tracking...")
             
             test_username = f"test_change_tracking_{datetime.now().strftime('%H%M%S')}"
             test_user = User(
@@ -51,7 +51,7 @@ def fix_change_tracking():
             print(f"User-specific changes: {user_changes}")
             
             if new_changes > existing_changes:
-                print("✅ Change tracking is working!")
+                print(" Change tracking is working!")
                 
                 # Show the latest change
                 latest_change = DatabaseChange.query.order_by(DatabaseChange.timestamp.desc()).first()
@@ -60,7 +60,7 @@ def fix_change_tracking():
                     print(f"   Record ID: {latest_change.record_id}")
                     print(f"   Status: {latest_change.sync_status}")
             else:
-                print("❌ Change tracking is NOT working!")
+                print(" Change tracking is NOT working!")
                 print("   Attempting to fix...")
                 
                 # Force create a database change manually
@@ -81,17 +81,17 @@ def fix_change_tracking():
                 db.session.add(manual_change)
                 db.session.commit()
                 
-                print("✅ Manually created change record")
+                print(" Manually created change record")
             
             print("\n2️⃣ FIXING CHANGE TRACKING INITIALIZATION")
             print("-" * 30)
             
             # Re-setup change tracking to ensure it's working
             setup_change_tracking()
-            print("✅ Re-initialized change tracking")
+            print(" Re-initialized change tracking")
             
             # Test updating a user
-            print("\n🧪 Testing user update tracking...")
+            print("\n Testing user update tracking...")
             test_user.scouting_team_number = 9998  # Change the team number
             db.session.commit()
             
@@ -118,7 +118,7 @@ def fix_change_tracking():
             )
             db.session.add(test_team)
             db.session.commit()
-            print("✅ Created test team")
+            print(" Created test team")
             
             # Create a test event
             test_event = Event(
@@ -129,14 +129,14 @@ def fix_change_tracking():
             )
             db.session.add(test_event)
             db.session.commit()
-            print("✅ Created test event")
+            print(" Created test event")
             
             time.sleep(2)  # Give time to process
             
             total_changes_now = DatabaseChange.query.count()
             pending_changes = DatabaseChange.query.filter_by(sync_status='pending').count()
             
-            print(f"\n📊 FINAL CHANGE STATUS:")
+            print(f"\n FINAL CHANGE STATUS:")
             print(f"   Total changes: {total_changes_now}")
             print(f"   Pending sync: {pending_changes}")
             print(f"   User changes: {DatabaseChange.query.filter_by(table_name='user').count()}")
@@ -146,14 +146,14 @@ def fix_change_tracking():
             return True
             
     except Exception as e:
-        print(f"❌ Fix failed: {e}")
+        print(f" Fix failed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 def fix_file_sync_permissions():
     """Fix file synchronization permission issues"""
-    print("\n🔧 FIXING FILE SYNC PERMISSIONS")
+    print("\n FIXING FILE SYNC PERMISSIONS")
     print("=" * 50)
     
     try:
@@ -183,17 +183,17 @@ def fix_file_sync_permissions():
                         with open(test_file, 'w') as f:
                             f.write('test')
                         os.remove(test_file)
-                        print(f"  ✅ {dir_name} directory: writable")
+                        print(f"   {dir_name} directory: writable")
                     except Exception as e:
-                        print(f"  ❌ {dir_name} directory: {e}")
+                        print(f"   {dir_name} directory: {e}")
                         # Try to fix permissions
                         try:
                             os.chmod(dir_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
-                            print(f"     🔧 Fixed permissions for {dir_path}")
+                            print(f"      Fixed permissions for {dir_path}")
                         except:
-                            print(f"     ⚠️ Could not fix permissions for {dir_path}")
+                            print(f"     ️ Could not fix permissions for {dir_path}")
                 else:
-                    print(f"  ⚠️ {dir_name} directory does not exist: {dir_path}")
+                    print(f"  ️ {dir_name} directory does not exist: {dir_path}")
             
             print("\n2️⃣ CREATING IMPROVED FILE DELETION FUNCTION")
             print("-" * 30)
@@ -241,7 +241,7 @@ def safe_file_delete(file_path):
             helper_file = os.path.join(os.getcwd(), 'safe_file_operations.py')
             with open(helper_file, 'w') as f:
                 f.write(improved_delete_code)
-            print("✅ Created safe_file_operations.py helper")
+            print(" Created safe_file_operations.py helper")
             
             print("\n3️⃣ TESTING FILE OPERATIONS")
             print("-" * 30)
@@ -296,24 +296,24 @@ def safe_file_delete(file_path):
                         success, message = safe_file_delete(test_file)
                         
                         if success:
-                            print(f"  ✅ {dir_name}: File operations working - {message}")
+                            print(f"   {dir_name}: File operations working - {message}")
                         else:
-                            print(f"  ❌ {dir_name}: File deletion failed - {message}")
+                            print(f"   {dir_name}: File deletion failed - {message}")
                             
                     except Exception as e:
-                        print(f"  ❌ {dir_name}: Test failed - {e}")
+                        print(f"   {dir_name}: Test failed - {e}")
             
             return True
             
     except Exception as e:
-        print(f"❌ File sync fix failed: {e}")
+        print(f" File sync fix failed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 def test_complete_sync():
     """Test complete sync functionality after fixes"""
-    print("\n🧪 TESTING COMPLETE SYNC AFTER FIXES")
+    print("\n TESTING COMPLETE SYNC AFTER FIXES")
     print("=" * 50)
     
     try:
@@ -340,13 +340,13 @@ def test_complete_sync():
             servers = SyncServer.query.filter_by(sync_enabled=True).all()
             
             for server in servers:
-                print(f"\n🔄 Testing sync with {server.name}...")
+                print(f"\n Testing sync with {server.name}...")
                 
                 try:
                     result = simplified_sync_manager.perform_bidirectional_sync(server.id)
                     
                     if result['success']:
-                        print(f"  ✅ Success!")
+                        print(f"   Success!")
                         print(f"     Sent: {result['stats']['sent_to_remote']}")
                         print(f"     Received: {result['stats']['received_from_remote']}")
                         
@@ -355,20 +355,20 @@ def test_complete_sync():
                         print(f"     Remaining pending: {remaining_pending}")
                         
                     else:
-                        print(f"  ❌ Failed: {result.get('error', 'Unknown error')}")
+                        print(f"   Failed: {result.get('error', 'Unknown error')}")
                         
                 except Exception as e:
-                    print(f"  ❌ Exception: {e}")
+                    print(f"   Exception: {e}")
             
             return True
             
     except Exception as e:
-        print(f"❌ Sync test failed: {e}")
+        print(f" Sync test failed: {e}")
         return False
 
 def main():
     """Main fix function"""
-    print("🚀 COMPREHENSIVE SYNC SYSTEM FIX")
+    print(" COMPREHENSIVE SYNC SYSTEM FIX")
     print("=" * 60)
     
     # Fix change tracking
@@ -379,18 +379,18 @@ def main():
     
     if change_tracking_ok:
         print("\n" + "=" * 60)
-        print("✅ CHANGE TRACKING FIXES APPLIED")
+        print(" CHANGE TRACKING FIXES APPLIED")
         
         # Test the complete sync
         sync_test_ok = test_complete_sync()
         
         if sync_test_ok:
-            print("\n🎉 SYNC SYSTEM FULLY OPERATIONAL!")
+            print("\n SYNC SYSTEM FULLY OPERATIONAL!")
             print("User changes and other database changes will now sync properly.")
         else:
-            print("\n⚠️ Sync test had issues - check logs above")
+            print("\n️ Sync test had issues - check logs above")
     else:
-        print("\n❌ CHANGE TRACKING FIXES FAILED")
+        print("\n CHANGE TRACKING FIXES FAILED")
         print("Manual intervention required")
 
 if __name__ == "__main__":

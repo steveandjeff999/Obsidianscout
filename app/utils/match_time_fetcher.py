@@ -69,22 +69,22 @@ def fetch_match_times_from_first(event_code, event_timezone=None):
                                 # Fallback: try parsing assuming the event local timezone
                                 scheduled_time = parse_iso_with_timezone(scheduled_time_str, event_timezone)
                                 if scheduled_time:
-                                    print(f"⚠️  FIRST: parsed naive time '{scheduled_time_str}' using event timezone fallback {event_timezone}: {scheduled_time.isoformat()}")
+                                    print(f"️  FIRST: parsed naive time '{scheduled_time_str}' using event timezone fallback {event_timezone}: {scheduled_time.isoformat()}")
                             elif scheduled_time:
                                 # Normal case: parsed as-aware or assumed-UTC
-                                print(f"✅ FIRST: parsed time '{scheduled_time_str}' -> {scheduled_time.isoformat()}")
+                                print(f" FIRST: parsed time '{scheduled_time_str}' -> {scheduled_time.isoformat()}")
 
                             if scheduled_time:
                                 match_times[(match_type, match_num)] = scheduled_time
                         except Exception as e:
                             print(f"Error parsing time '{scheduled_time_str}': {e}")
                 
-                print(f"✅ Fetched {len(matches)} {match_type} match times from FIRST API")
+                print(f" Fetched {len(matches)} {match_type} match times from FIRST API")
             else:
-                print(f"⚠️  FIRST API returned {response.status_code} for {endpoint}")
+                print(f"️  FIRST API returned {response.status_code} for {endpoint}")
                 
         except Exception as e:
-            print(f"❌ Error fetching match times from FIRST API: {e}")
+            print(f" Error fetching match times from FIRST API: {e}")
     
     return match_times
 
@@ -170,12 +170,12 @@ def fetch_match_times_from_tba(event_code, event_timezone=None):
                 if scheduled or predicted:
                     match_times[(match_type, match_num)] = (scheduled, predicted)
             
-            print(f"✅ Fetched {len(matches)} match times from TBA")
+            print(f" Fetched {len(matches)} match times from TBA")
         else:
-            print(f"⚠️  TBA API returned {response.status_code}")
+            print(f"️  TBA API returned {response.status_code}")
             
     except Exception as e:
-        print(f"❌ Error fetching match times from TBA: {e}")
+        print(f" Error fetching match times from TBA: {e}")
     
     return match_times
 
@@ -192,7 +192,7 @@ def update_match_times(event_code, scouting_team_number=None):
     Returns:
         Number of matches updated
     """
-    print(f"\n📅 Updating match times for event {event_code}...")
+    print(f"\n Updating match times for event {event_code}...")
     
     # Get event from database first to get timezone info
     query = Event.query.filter_by(code=event_code)
@@ -201,15 +201,15 @@ def update_match_times(event_code, scouting_team_number=None):
     
     event = query.first()
     if not event:
-        print(f"❌ Event {event_code} not found in database")
+        print(f" Event {event_code} not found in database")
         return 0
     
     # Get event timezone for proper conversion
     event_timezone = event.timezone
     if event_timezone:
-        print(f"📍 Event timezone: {event_timezone}")
+        print(f" Event timezone: {event_timezone}")
     else:
-        print(f"⚠️  No timezone set for event, times will be treated as UTC")
+        print(f"️  No timezone set for event, times will be treated as UTC")
     
     # Get preferred API source
     preferred_api = get_preferred_api_source()
@@ -222,13 +222,13 @@ def update_match_times(event_code, scouting_team_number=None):
         first_times = fetch_match_times_from_first(event_code, event_timezone)
         if not first_times:
             # Fallback to TBA
-            print("⚠️  No times from FIRST API, trying TBA...")
+            print("️  No times from FIRST API, trying TBA...")
             tba_times = fetch_match_times_from_tba(event_code, event_timezone)
     else:
         tba_times = fetch_match_times_from_tba(event_code, event_timezone)
         if not tba_times:
             # Fallback to FIRST
-            print("⚠️  No times from TBA, trying FIRST API...")
+            print("️  No times from TBA, trying FIRST API...")
             first_times = fetch_match_times_from_first(event_code, event_timezone)
     
     # Get all matches for this event
@@ -294,7 +294,7 @@ def update_match_times(event_code, scouting_team_number=None):
     
     if updated_count > 0:
         db.session.commit()
-        print(f"✅ Updated times for {updated_count} matches (stored in UTC)")
+        print(f" Updated times for {updated_count} matches (stored in UTC)")
     else:
         print(f"ℹ️  No match time updates needed")
     
@@ -327,7 +327,7 @@ def normalize_event_match_times(event_code, dry_run=True):
 
     event = Event.query.filter_by(code=event_code).first()
     if not event:
-        print(f"❌ Event {event_code} not found")
+        print(f" Event {event_code} not found")
         return {'event_code': event_code, 'checked': 0, 'would_fix': 0, 'fixed': 0}
 
     matches = Match.query.filter_by(event_id=event.id).all()
@@ -382,14 +382,14 @@ def normalize_event_match_times(event_code, dry_run=True):
             # Decide: if B maps into event and A does not, we should fix
             if b_in and not a_in:
                 would_fix += 1
-                print(f"⚠️  Would fix Match {m.match_type}#{m.match_number} field {field}: naive stored {dt} interpreted as local {event.timezone} -> UTC {dt_b}")
+                print(f"️  Would fix Match {m.match_type}#{m.match_number} field {field}: naive stored {dt} interpreted as local {event.timezone} -> UTC {dt_b}")
                 if not dry_run:
                     # Store as naive UTC (DB convention)
                     try:
                         setattr(m, field, dt_b.replace(tzinfo=None))
                         fixed += 1
                     except Exception as e:
-                        print(f"❌ Failed to fix match {m.id} {field}: {e}")
+                        print(f" Failed to fix match {m.id} {field}: {e}")
 
     if not dry_run and fixed > 0:
         db.session.commit()
@@ -427,10 +427,10 @@ def update_all_active_event_times():
             event_code = game_config.get('current_event_code')
             
             if event_code:
-                print(f"\n🏢 Processing team {team_number}, event {event_code}")
+                print(f"\n Processing team {team_number}, event {event_code}")
                 updated = update_match_times(event_code, team_number)
                 total_updated += updated
         except Exception as e:
-            print(f"❌ Error updating times for team {team_number}: {e}")
+            print(f" Error updating times for team {team_number}: {e}")
     
     return total_updated
