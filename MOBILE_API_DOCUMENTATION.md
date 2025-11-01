@@ -361,6 +361,140 @@ Client behavior tips
 - Ensure your client sends a non-empty `emoji` string. The server will reject empty or missing emoji with a 400 error.
 - The server enforces team/alliance scope and message ownership; expect `403` when attempting to edit/delete others' messages.
 
+
+Group management (mobile)
+-------------------------
+
+Mobile clients can create and manage named group conversations (team-scoped). These endpoints are JWT-protected and operate on the same file-backed group storage used by the web UI and Socket.IO handlers (under `instance/chat/groups/<team_number>/`). Group names are sanitized (for example `/` is replaced with `_`) when stored.
+
+Common headers:
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+1) List groups
+
+Endpoint: `GET /api/mobile/chat/groups`
+
+Query params: none
+
+Success response (200):
+```json
+{
+  "success": true,
+  "groups": [
+    { "name": "pit_team", "member_count": 3, "is_member": true },
+    { "name": "strategy", "member_count": 5, "is_member": false }
+  ]
+}
+```
+
+Notes:
+- `is_member` indicates whether the authenticated mobile user is currently a member of the group.
+
+2) Create a group
+
+Endpoint: `POST /api/mobile/chat/groups`
+
+Request body:
+```json
+{
+  "group": "scouting_team_chat",
+  "members": [ "alice", "bob", "carol" ]
+}
+```
+
+Members should be provided as an array of usernames (team-scoped). The server will persist the group's member list and ensure a group chat history file exists.
+
+Success response (201):
+```json
+{
+  "success": true,
+  "group": { "name": "scouting_team_chat", "members": ["alice","bob","carol"] }
+}
+```
+
+Errors:
+- `400` - `MISSING_DATA` (missing `group` or `members`)
+- `401` - `AUTH_REQUIRED` / `INVALID_TOKEN`
+- `403` - `USER_NOT_IN_SCOPE` (attempt to add users not on the team)
+
+3) Manage group members
+
+Endpoint: `GET /api/mobile/chat/groups/{group}/members`
+Purpose: return the list of members for the named group.
+
+Success response (200):
+```json
+{ "success": true, "members": ["alice","bob","carol"] }
+```
+
+Add members:
+
+Endpoint: `POST /api/mobile/chat/groups/{group}/members`
+
+Request body:
+```json
+{ "members": ["dave","erin"] }
+```
+
+Success response (200):
+```json
+{ "success": true, "members": ["alice","bob","carol","dave","erin"] }
+```
+
+Remove members:
+
+Endpoint: `DELETE /api/mobile/chat/groups/{group}/members`
+
+Request body:
+```json
+{ "members": ["erin"] }
+```
+
+Success response (200):
+```json
+{ "success": true, "members": ["alice","bob","carol","dave"] }
+```
+
+Notes / behavior details:
+
+- Request body is optional. If you provide a JSON body with a `members` array the server will attempt to remove those usernames from the group. Example:
+
+```json
+{ "members": ["erin"] }
+```
+
+- If the request body is omitted or `members` is empty (for example, sending `{}` or an empty body), the API will default to removing the requesting user from the group. This makes it easy for clients to implement a "Leave group" action without needing to know the caller's username.
+
+- Member removal is performed case-insensitively (the server compares trimmed, lowercased usernames) so casing mismatches in client-provided names won't prevent removal.
+
+- The server persists the updated members list. If the group's members file did not previously exist, the handler treats that as an empty list, applies the removal, and writes the resulting list (it may write an empty list). The handler does not reliably return 404 for a missing members file — instead it persists the new state.
+
+Example: curl to remove yourself (empty body / no members array)
+
+```bash
+curl -X DELETE "https://your-server.com/api/mobile/chat/groups/pit_team/members" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Return codes and errors:
+
+- `200` — success; body contains the updated members list.
+- `401` — `AUTH_REQUIRED` / `INVALID_TOKEN` when the JWT is missing or invalid.
+- `403` — `USER_NOT_IN_SCOPE` when the requested removal would affect users not in the token's team or otherwise out of scope.
+- `500` — `GROUP_SAVE_ERROR` if the server fails to persist the updated members list.
+
+Note: unlike earlier doc wording, `400 MISSING_DATA` is not guaranteed for deletes — an empty or missing members array is intentionally interpreted as "remove the caller".
+
+Notes and tips:
+- Group messages may be sent using the existing `POST /api/mobile/chat/send` endpoint by including a `group` field in the payload, for example: `{ "group": "scouting_team_chat", "body": "Let's meet at the pit" }`.
+- Group names are team-scoped; the same group name can exist on different teams without conflict because files are stored under the team's `instance/chat/groups/<team_number>/` directory.
+- Current behavior: any authenticated team member may create groups and add/remove members. If you require stricter permissions (admins or leads only), implement role checks on the server side before calling these endpoints.
+
 Real-time delivery (optional)
 ----------------------------
 

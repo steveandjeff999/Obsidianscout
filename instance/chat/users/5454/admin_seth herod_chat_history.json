@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "id": "b7973814-8155-439f-9b40-02bbf8b42ab8",
+    "sender": "Seth Herod",
+    "recipient": "admin",
+    "text": "testdm",
+    "body": "test",
+    "timestamp": "2025-10-31T04:15:11.106017+00:00",
+    "offline_id": null,
+    "edited": true,
+    "edited_timestamp": "2025-10-31T16:26:13.910458+00:00"
+  }
+]
