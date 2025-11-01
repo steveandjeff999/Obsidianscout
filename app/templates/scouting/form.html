@@ -36,6 +36,11 @@
                                 </option>
                                 {% endfor %}
                             </select>
+                            <!-- Match navigation (+ / -) -->
+                            <div class="mt-2 d-flex gap-2" aria-hidden="false">
+                                <button type="button" id="match-decrement" class="btn btn-outline-secondary btn-sm" title="Previous match" aria-label="Previous match">&minus;</button>
+                                <button type="button" id="match-increment" class="btn btn-outline-secondary btn-sm" title="Next match" aria-label="Next match">+</button>
+                            </div>
                         </div>
                         <div class="col-md-6 mb-2">
                             <label for="team-selector" class="form-label">Select Team</label>
@@ -123,9 +128,13 @@
             const formContent = document.getElementById('form-content');
             const { team, match, html, cached, needsReset } = offlineData;
             
-            // Update subheading
-            document.getElementById('form-subheading').textContent = 
-                `${team.team_number} - ${team.team_name} | ${match.match_type} ${match.match_number}`;
+            // Update subheading (guarded)
+            try {
+                const _sub = document.getElementById('form-subheading');
+                if (_sub) {
+                    _sub.textContent = `${team.team_number} - ${team.team_name} | ${match.match_type} ${match.match_number}`;
+                }
+            } catch (e) { /* ignore if DOM not ready */ }
             
             let formHTML;
             
@@ -278,45 +287,48 @@
                 indicator.classList.add('bg-danger');
                 indicator.querySelector('.alliance-icon i')?.classList.remove('fa-tint');
                 indicator.querySelector('.alliance-icon i')?.classList.add('fa-fire');
-                indicator.querySelector('.alliance-details h4').textContent = 'Red Alliance';
+                const _h_red = indicator.querySelector('.alliance-details h4');
+                if (_h_red) _h_red.textContent = 'Red Alliance';
                 
                 // Update text colors for red alliance
-                const h4 = indicator.querySelector('.alliance-details h4');
-                const teamDiv = indicator.querySelector('.alliance-details > div:last-child');
-                if (h4) h4.classList.add('text-white');
-                if (teamDiv) {
-                    teamDiv.classList.remove('text-muted', 'text-dark');
-                    teamDiv.classList.add('text-white-50');
+                const h4_red = indicator.querySelector('.alliance-details h4');
+                const teamDiv_red = indicator.querySelector('.alliance-details > div:last-child');
+                if (h4_red) h4_red.classList.add('text-white');
+                if (teamDiv_red) {
+                    teamDiv_red.classList.remove('text-muted', 'text-dark');
+                    teamDiv_red.classList.add('text-white-50');
                 }
                 indicator.querySelector('.alliance-icon i')?.classList.add('text-white');
             } else if (alliance === 'blue') {
                 indicator.classList.add('bg-primary');
                 indicator.querySelector('.alliance-icon i')?.classList.remove('fa-fire');
                 indicator.querySelector('.alliance-icon i')?.classList.add('fa-tint');
-                indicator.querySelector('.alliance-details h4').textContent = 'Blue Alliance';
+                const _h_blue = indicator.querySelector('.alliance-details h4');
+                if (_h_blue) _h_blue.textContent = 'Blue Alliance';
                 
                 // Update text colors for blue alliance
-                const h4 = indicator.querySelector('.alliance-details h4');
-                const teamDiv = indicator.querySelector('.alliance-details > div:last-child');
-                if (h4) h4.classList.add('text-white');
-                if (teamDiv) {
-                    teamDiv.classList.remove('text-muted', 'text-dark');
-                    teamDiv.classList.add('text-white-50');
+                const h4_blue = indicator.querySelector('.alliance-details h4');
+                const teamDiv_blue = indicator.querySelector('.alliance-details > div:last-child');
+                if (h4_blue) h4_blue.classList.add('text-white');
+                if (teamDiv_blue) {
+                    teamDiv_blue.classList.remove('text-muted', 'text-dark');
+                    teamDiv_blue.classList.add('text-white-50');
                 }
                 indicator.querySelector('.alliance-icon i')?.classList.add('text-white');
             } else {
                 indicator.classList.add('bg-warning', 'alliance-unknown');
                 indicator.querySelector('.alliance-icon i')?.classList.remove('fa-fire');
                 indicator.querySelector('.alliance-icon i')?.classList.add('fa-tint');
-                indicator.querySelector('.alliance-details h4').textContent = 'Unknown Alliance';
+                const _h_unknown = indicator.querySelector('.alliance-details h4');
+                if (_h_unknown) _h_unknown.textContent = 'Unknown Alliance';
                 
                 // Update text colors for unknown alliance
-                const h4 = indicator.querySelector('.alliance-details h4');
-                const teamDiv = indicator.querySelector('.alliance-details > div:last-child');
-                if (h4) h4.classList.add('text-dark');
-                if (teamDiv) {
-                    teamDiv.classList.remove('text-white-50');
-                    teamDiv.classList.add('text-muted');
+                const h4_unknown = indicator.querySelector('.alliance-details h4');
+                const teamDiv_unknown = indicator.querySelector('.alliance-details > div:last-child');
+                if (h4_unknown) h4_unknown.classList.add('text-dark');
+                if (teamDiv_unknown) {
+                    teamDiv_unknown.classList.remove('text-white-50');
+                    teamDiv_unknown.classList.add('text-muted');
                 }
                 indicator.querySelector('.alliance-icon i')?.classList.add('text-dark');
             }
@@ -1482,9 +1494,13 @@
                             formContent.insertBefore(warningAlert, formContent.firstChild);
                         }
 
-                        // Update subheading
-                        document.getElementById('form-subheading').textContent = 
-                            `${data.team_number} - ${data.team_name} | ${data.match_type} ${data.match_number}`;
+                        // Update subheading (guarded)
+                        try {
+                            const _sub = document.getElementById('form-subheading');
+                            if (_sub) {
+                                _sub.textContent = `${data.team_number} - ${data.team_name} | ${data.match_type} ${data.match_number}`;
+                            }
+                        } catch (e) { /* ignore if DOM not ready */ }
 
                         // Initialize form components AFTER the form is loaded and restore previous scroll/focus
                         setTimeout(() => {
@@ -1731,6 +1747,62 @@
 
             // Initialize custom selects after dom wiring
             try { createCustomSelects(); syncCustomSelectVisibility(teamSelector); syncCustomSelectVisibility(matchSelector); } catch (e) { /* ignore */ }
+
+            // Match +/- navigation handlers: move to previous/next VISIBLE option and trigger change
+            try {
+                const matchDecr = document.getElementById('match-decrement');
+                const matchIncr = document.getElementById('match-increment');
+
+                function changeMatchBy(offset) {
+                    if (!matchSelector) return;
+                    const visibleOptions = Array.from(matchSelector.querySelectorAll('option'))
+                        .filter(opt => opt.value && !opt.hidden);
+                    if (visibleOptions.length === 0) return;
+
+                    const currentValue = matchSelector.value;
+                    let currentIndex = visibleOptions.findIndex(o => o.value === currentValue);
+                    if (currentIndex === -1) {
+                        // If nothing selected, pick first/last depending on direction
+                        currentIndex = offset > 0 ? -1 : 0;
+                    }
+
+                    let newIndex = Math.min(Math.max(currentIndex + offset, 0), visibleOptions.length - 1);
+                    const newOpt = visibleOptions[newIndex];
+                    if (!newOpt) return;
+
+                    matchSelector.value = newOpt.value;
+
+                    // If a custom wrapper exists, update its display text and selected classes
+                    try {
+                        if (matchSelector._customWrapper) {
+                            const wrapper = matchSelector._customWrapper;
+                            const valueLabel = wrapper.querySelector('.custom-select-value');
+                            if (valueLabel) valueLabel.textContent = newOpt.textContent;
+                            const items = wrapper.querySelectorAll('.custom-select-item');
+                            items.forEach(it => {
+                                try { it.classList.toggle('selected', it.dataset.value === newOpt.value); } catch (e) { /* ignore */ }
+                            });
+                        }
+                    } catch (e) { /* ignore */ }
+
+                    matchSelector.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+
+                if (matchDecr) matchDecr.addEventListener('click', function() { changeMatchBy(-1); });
+                if (matchIncr) matchIncr.addEventListener('click', function() { changeMatchBy(1); });
+
+                // Keyboard support when focus is on the match selector: left/right or +/- keys
+                matchSelector.addEventListener('keydown', function(e) {
+                    if (e.key === 'ArrowLeft' || e.key === '-' || e.key === 'Subtract') {
+                        e.preventDefault(); changeMatchBy(-1);
+                    } else if (e.key === 'ArrowRight' || e.key === '+' || e.key === 'Add') {
+                        e.preventDefault(); changeMatchBy(1);
+                    }
+                });
+            } catch (e) {
+                // Non-fatal; don't break other behaviors
+                console.warn('Match navigation init failed', e);
+            }
         }
         
         // Initialize existing form components if present on page load
