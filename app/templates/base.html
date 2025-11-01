@@ -1061,6 +1061,20 @@
                 document.body.classList.remove('sidebar-collapsed');
             }
             try { localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? '1' : '0'); } catch(e){}
+
+            // Notify other parts of the UI and force layout recalculation.
+            try { document.dispatchEvent(new CustomEvent('obsidian:sidebar:toggled')); } catch (e) {}
+
+            // Attempt immediate recalculation (RAF) and trigger a resize event so
+            // third-party widgets that listen for resize update their layout.
+            try {
+                window.requestAnimationFrame(function(){
+                    try { if (window.applySidebarMargin) window.applySidebarMargin(); } catch(e){}
+                    try { window.dispatchEvent(new Event('resize')); } catch(e){}
+                });
+                // Fallback after transition end
+                window.setTimeout(function(){ try { if (window.applySidebarMargin) window.applySidebarMargin(); window.dispatchEvent(new Event('resize')); } catch(e){} }, 360);
+            } catch (e) { /* ignore */ }
         }
 
         function getStoredSidebarCollapsed() {
@@ -1072,6 +1086,11 @@
                 sidebar.classList.add('open');
                 body.classList.add('sidebar-open');
                 lockBodyScroll();
+                try {
+                    document.dispatchEvent(new CustomEvent('obsidian:sidebar:toggled'));
+                    window.requestAnimationFrame(function(){ try{ if(window.applySidebarMargin) window.applySidebarMargin(); window.dispatchEvent(new Event('resize')); }catch(e){} });
+                    window.setTimeout(function(){ try{ if(window.applySidebarMargin) window.applySidebarMargin(); window.dispatchEvent(new Event('resize')); }catch(e){} }, 360);
+                } catch(e) {}
             } else {
                 setSidebarCollapsed(false);
             }
@@ -1083,6 +1102,11 @@
                 sidebar.classList.remove('open');
                 body.classList.remove('sidebar-open');
                 try { unlockBodyScroll(); } catch(e){}
+                try {
+                    document.dispatchEvent(new CustomEvent('obsidian:sidebar:toggled'));
+                    window.requestAnimationFrame(function(){ try{ if(window.applySidebarMargin) window.applySidebarMargin(); window.dispatchEvent(new Event('resize')); }catch(e){} });
+                    window.setTimeout(function(){ try{ if(window.applySidebarMargin) window.applySidebarMargin(); window.dispatchEvent(new Event('resize')); }catch(e){} }, 360);
+                } catch(e) {}
             } else {
                 setSidebarCollapsed(true);
             }
@@ -2518,20 +2542,29 @@
                     // Remove mobile overlay state if present
                     if (document.body.classList.contains('sidebar-open')) document.body.classList.remove('sidebar-open');
 
-                    // Apply inline margins so the main area is pushed over
-                    mainEl.style.marginLeft = sbWidth + 'px';
-                    if (footerEl) footerEl.style.marginLeft = sbWidth + 'px';
+                    // Update the CSS variable so stylesheet rules that use
+                    // var(--sidebar-width) (including !important rules) update.
+                    try { document.body.style.setProperty('--sidebar-width', sbWidth + 'px'); } catch (e) {}
+
+                    // Apply inline margins (use !important priority as a fallback
+                    // for any stubborn stylesheet rules). Prefer calling the CSS
+                    // variable above so the majority of rules update automatically.
+                    try { mainEl.style.setProperty('margin-left', sbWidth + 'px', 'important'); } catch(e){ mainEl.style.marginLeft = sbWidth + 'px'; }
+                    if (footerEl) {
+                        try { footerEl.style.setProperty('margin-left', sbWidth + 'px', 'important'); } catch(e){ footerEl.style.marginLeft = sbWidth + 'px'; }
+                    }
                     if (topbar) {
-                        topbar.style.marginLeft = sbWidth + 'px';
-                        topbar.style.width = 'calc(100% - ' + sbWidth + 'px)';
+                        try { topbar.style.setProperty('margin-left', sbWidth + 'px', 'important'); } catch(e){ topbar.style.marginLeft = sbWidth + 'px'; }
+                        try { topbar.style.setProperty('width', 'calc(100% - ' + sbWidth + 'px)', 'important'); } catch(e){ topbar.style.width = 'calc(100% - ' + sbWidth + 'px)'; }
                     }
                 } else {
                     // Clear inline margins on small screens
-                    mainEl.style.marginLeft = '';
-                    if (footerEl) footerEl.style.marginLeft = '';
+                    try { document.body.style.removeProperty('--sidebar-width'); } catch(e) {}
+                    try { mainEl.style.removeProperty('margin-left'); } catch(e){ mainEl.style.marginLeft = ''; }
+                    if (footerEl) { try { footerEl.style.removeProperty('margin-left'); } catch(e){ footerEl.style.marginLeft = ''; } }
                     if (topbar) {
-                        topbar.style.marginLeft = '';
-                        topbar.style.width = '';
+                        try { topbar.style.removeProperty('margin-left'); } catch(e){ topbar.style.marginLeft = ''; }
+                        try { topbar.style.removeProperty('width'); } catch(e){ topbar.style.width = ''; }
                     }
                 }
             } catch (e) {
@@ -2545,6 +2578,10 @@
             if (resizeTimer) clearTimeout(resizeTimer);
             resizeTimer = setTimeout(function(){ applySidebarMargin(); }, 120);
         }
+
+        // Expose the helper globally so other scripts (and toggle handlers)
+        // can force a layout recalculation immediately when needed.
+        try { window.applySidebarMargin = applySidebarMargin; } catch (e) { /* ignore */ }
 
         // Adjust on key events
         document.addEventListener('DOMContentLoaded', function(){
