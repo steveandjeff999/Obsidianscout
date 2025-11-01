@@ -1,4 +1,9 @@
 {
+  "joinedGroups": [
+    "8998",
+    "bob"
+  ],
   "lastDmUser": "admin",
-  "unreadCount": 0
+  "unreadCount": 0,
+  "currentGroup": "bob"
 }

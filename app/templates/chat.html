@@ -1036,12 +1036,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
     leaveGroupBtn && leaveGroupBtn.addEventListener('click', async function() {
         if (!currentGroup) return;
-        socket.emit('leave_group', { group: currentGroup });
-        socket.emit('remove_user_from_group', { group: currentGroup, username: currentUsername });
-        // Give server a moment to update persisted membership, then refresh
+        // Emit socket events for real-time removal
+        try {
+            socket.emit('leave_group', { group: currentGroup });
+            socket.emit('remove_user_from_group', { group: currentGroup, username: currentUsername });
+        } catch (e) { console.warn('Socket emit failed for leave_group', e); }
+
+        // Also call HTTP fallback to ensure persistent removal in case socket handlers
+        // are unavailable or race with client state.
+        try {
+            await fetch(`/chat/groups/${encodeURIComponent(currentGroup)}/leave`, { method: 'POST' });
+        } catch (e) { console.warn('HTTP leave group failed', e); }
+
+        // Clear local UI state and refresh members (use the group name we just left)
+        const leftGroup = currentGroup;
         setCurrentGroup('');
         groupChatContainer.innerHTML = '';
-        await refreshGroupMembers(currentGroup);
+        await refreshGroupMembers(leftGroup);
         groupMembersList.innerHTML = '';
     });
 

@@ -880,6 +880,60 @@ def chat_group_members():
         members = []
     return jsonify({'members': members})
 
+
+@bp.route('/chat/groups/<group>/leave', methods=['POST'])
+@login_required
+def leave_group_web(group):
+    """Remove the current user from a named group (HTTP fallback for clients).
+
+    This complements the Socket.IO handlers and the mobile API by providing a
+    synchronous endpoint that ensures the user's membership is removed from the
+    persisted group members file.
+    """
+    try:
+        from app import load_group_members, save_group_members
+        from flask_login import current_user
+        team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+        safe_group = str(group).replace('/', '_')
+        members = set(load_group_members(team_number, safe_group) or [])
+        # Use exact username matching as stored; best-effort normalize common variants
+        uname = current_user.username
+        # Attempt removal with original case, then lowercase fallback
+        if uname in members:
+            members.discard(uname)
+        else:
+            members = {m for m in members if str(m).strip().lower() != str(uname).strip().lower()}
+
+        save_group_members(team_number, safe_group, sorted(members))
+
+        # Also remove this group from the current user's persisted chat state
+        try:
+            state_file = get_user_chat_state_file(uname)
+            state = {}
+            if os.path.exists(state_file):
+                try:
+                    with open(state_file, 'r', encoding='utf-8') as sf:
+                        state = json.load(sf) or {}
+                except Exception:
+                    state = {}
+
+            joined = state.get('joinedGroups', []) or []
+            try:
+                new_joined = [g for g in joined if str(g).strip().lower() != str(safe_group).strip().lower()]
+            except Exception:
+                new_joined = joined
+            state['joinedGroups'] = new_joined
+            with open(state_file, 'w', encoding='utf-8') as sf:
+                json.dump(state, sf, ensure_ascii=False, indent=2)
+        except Exception:
+            # Non-fatal; leaving the group itself already persisted
+            pass
+
+        return jsonify({'success': True, 'group': safe_group, 'members': sorted(members)})
+    except Exception as e:
+        current_app.logger.error(f"leave_group_web error: {e}")
+        return jsonify({'success': False, 'error': 'Failed to leave group'}), 500
+
 @bp.route('/chat/dm', methods=['POST'])
 @login_required
 def send_dm():
@@ -1273,6 +1327,32 @@ def chat_state():
                 state = json.load(f)
                 if 'unreadCount' not in state:
                     state['unreadCount'] = 0
+                # Augment persisted state with authoritative group membership
+                try:
+                    team_number = getattr(current_user, 'scouting_team_number', 'no_team')
+                    groups_folder = os.path.join(current_app.instance_path, 'chat', 'groups', str(team_number))
+                    real_groups = set()
+                    if os.path.exists(groups_folder):
+                        for fname in os.listdir(groups_folder):
+                            if fname.endswith('_members.json'):
+                                group_name = fname.replace('_members.json', '')
+                                try:
+                                    with open(os.path.join(groups_folder, fname), 'r', encoding='utf-8') as gf:
+                                        members = json.load(gf) or []
+                                        # members may be list or dict; normalize
+                                        if isinstance(members, dict):
+                                            members = members.get('members', []) or []
+                                        if isinstance(members, list) and current_user.username in members:
+                                            real_groups.add(group_name)
+                                except Exception:
+                                    continue
+                    # Merge authoritative groups into joinedGroups for UI convenience
+                    joined = state.get('joinedGroups', []) or []
+                    merged = list(dict.fromkeys(list(joined) + sorted(real_groups)))
+                    state['joinedGroups'] = merged
+                except Exception:
+                    # If anything goes wrong while discovering groups, fall back to persisted state
+                    pass
                 return jsonify(state)
         else:
             return jsonify({'joinedGroups': [], 'currentGroup': '', 'lastDmUser': '', 'unreadCount': 0})

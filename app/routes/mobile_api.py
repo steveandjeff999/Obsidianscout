@@ -16,7 +16,7 @@ from app.models import (
     User, Team, Event, Match, ScoutingData, PitScoutingData, 
     DoNotPickEntry, AvoidEntry, ScoutingAllianceChat, TeamAllianceStatus, ScoutingDirectMessage, db
 )
-from app import load_user_chat_history, load_group_chat_history, load_assistant_chat_history, save_user_chat_history, save_group_chat_history, get_user_chat_file_path
+from app import load_user_chat_history, load_group_chat_history, load_assistant_chat_history, save_user_chat_history, save_group_chat_history, get_user_chat_file_path, load_group_members, save_group_members, get_group_members_file_path
 from app.models_misc import NotificationQueue, NotificationSubscription
 from app.utils.team_isolation import get_current_scouting_team_number
 from app.utils.analysis import calculate_team_metrics
@@ -1855,6 +1855,213 @@ def chat_members():
         current_app.logger.error(f"chat_members error: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'success': False, 'error': 'Failed to retrieve chat members', 'error_code': 'CHAT_MEMBERS_ERROR'}), 500
 
+@mobile_api.route('/chat/groups', methods=['GET'])
+@token_required
+def chat_groups():
+    """
+    List groups for the authenticated user's scouting team and whether the user is a member.
+
+    Response:
+    {
+      "success": true,
+      "groups": [ { "name": "main", "member_count": 3, "is_member": true }, ... ],
+      "count": 3
+    }
+    """
+    try:
+        user = request.mobile_user
+        team_number = request.mobile_team_number
+
+        groups = []
+        # Group files stored under instance/chat/groups/<team_number>/
+        group_dir = os.path.join(current_app.instance_path, 'chat', 'groups', str(team_number))
+        if os.path.exists(group_dir):
+            for fname in os.listdir(group_dir):
+                if not fname:
+                    continue
+                # Consider both history and members files
+                if fname.endswith('_group_chat_history.json') or fname.endswith('_members.json'):
+                    name = fname.replace('_group_chat_history.json', '').replace('_members.json', '')
+                    if any(g['name'] == name for g in groups):
+                        continue
+                    try:
+                        members = load_group_members(team_number, name) or []
+                    except Exception:
+                        members = []
+
+                    # Determine membership case-insensitively to tolerate casing differences
+                    try:
+                        uname_norm = str(user.username).strip().lower()
+                        is_member = any(str(m).strip().lower() == uname_norm for m in (members or []))
+                    except Exception:
+                        is_member = False
+
+                    # Only expose groups where the requesting user is actually a member.
+                    # This prevents history-only groups (where the user has past messages)
+                    # from appearing in the user's visible group list after they've left.
+                    if not is_member:
+                        continue
+
+                    groups.append({
+                        'name': name,
+                        'member_count': len(members),
+                        'is_member': is_member
+                    })
+
+        return jsonify({'success': True, 'groups': groups, 'count': len(groups)}), 200
+    except Exception as e:
+        current_app.logger.error(f"chat_groups error: {e}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Failed to list groups', 'error_code': 'GROUPS_ERROR'}), 500
+
+
+@mobile_api.route('/chat/groups', methods=['POST'])
+@token_required
+def chat_create_group():
+    """
+    Create a named group for the team. Body: { "group": "pit", "members": ["user1","user2"] }
+
+    The creator will be added as a member if not present.
+    """
+    try:
+        user = request.mobile_user
+        team_number = request.mobile_team_number
+        data = request.get_json() or {}
+        group = (data.get('group') or data.get('name') or '').strip()
+        if not group:
+            return jsonify({'success': False, 'error': 'Group name required', 'error_code': 'MISSING_GROUP'}), 400
+
+        # sanitize group name
+        safe_group = str(group).replace('/', '_')
+
+        members = data.get('members') or []
+        if not isinstance(members, list):
+            return jsonify({'success': False, 'error': 'members must be a list'}, 400)
+
+        # Ensure creator is member
+        if user.username not in members:
+            members.append(user.username)
+
+        # Persist members list
+        try:
+            save_group_members(team_number, safe_group, members)
+        except Exception as e:
+            current_app.logger.error(f"Failed saving group members: {e}")
+            return jsonify({'success': False, 'error': 'Save failed', 'error_code': 'GROUP_SAVE_ERROR'}), 500
+
+        # Ensure history file exists (empty list) so clients can fetch messages
+        try:
+            hist = load_group_chat_history(team_number, safe_group) or []
+            save_group_chat_history(team_number, safe_group, hist)
+        except Exception:
+            pass
+
+        return jsonify({'success': True, 'group': {'name': safe_group, 'member_count': len(members)}}), 201
+    except Exception as e:
+        current_app.logger.error(f"chat_create_group error: {e}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Failed to create group', 'error_code': 'GROUP_CREATE_ERROR'}), 500
+
+
+@mobile_api.route('/chat/groups/<group>/members', methods=['GET', 'POST', 'DELETE'])
+@token_required
+def chat_group_members_api(group):
+    """
+    Manage members of a named group.
+    - GET: return current members
+    - POST: add members (body: {"members": ["a","b"]})
+    - DELETE: remove members (body: {"members": ["a"]})
+    """
+    try:
+        user = request.mobile_user
+        team_number = request.mobile_team_number
+        safe_group = str(group).replace('/', '_')
+
+        if request.method == 'GET':
+            members = load_group_members(team_number, safe_group) or []
+            return jsonify({'success': True, 'group': safe_group, 'members': members, 'count': len(members)}), 200
+
+        payload = request.get_json() or {}
+        change = payload.get('members') if isinstance(payload.get('members'), list) else []
+
+        if request.method == 'POST':
+            # add members
+            members = set(load_group_members(team_number, safe_group) or [])
+            for m in change:
+                members.add(str(m))
+            # ensure requester remains a member
+            members.add(user.username)
+            save_group_members(team_number, safe_group, sorted(members))
+            return jsonify({'success': True, 'group': safe_group, 'members': sorted(members)}), 200
+
+        if request.method == 'DELETE':
+            # remove members. If no members provided in payload, remove the requesting user.
+            try:
+                existing = load_group_members(team_number, safe_group) or []
+            except Exception:
+                existing = []
+
+            # If client didn't specify members to remove, default to removing the caller
+            if not change:
+                change = [user.username]
+
+            # Perform case-insensitive removal to be tolerant of casing differences
+            members_set = set(existing)
+            try:
+                for m in change:
+                    targ = str(m).strip().lower()
+                    # remove any matching member ignoring case
+                    members_set = {mm for mm in members_set if str(mm).strip().lower() != targ}
+            except Exception:
+                # Fallback: attempt best-effort discard
+                try:
+                    for m in change:
+                        members_set.discard(str(m))
+                except Exception:
+                    pass
+
+            # Persist updated members list (allow empty groups)
+            result_members = sorted(members_set)
+            try:
+                save_group_members(team_number, safe_group, result_members)
+            except Exception as e:
+                current_app.logger.error(f"Failed saving group members (DELETE): {e}")
+                return jsonify({'success': False, 'error': 'Save failed', 'error_code': 'GROUP_SAVE_ERROR'}), 500
+
+            # Also remove this group from the requesting user's persisted chat state
+            try:
+                from app import normalize_username
+                # user.username is the canonical name; state files are stored per-team
+                state_folder = os.path.join(current_app.instance_path, 'chat', 'users', str(team_number))
+                os.makedirs(state_folder, exist_ok=True)
+                state_file = os.path.join(state_folder, f'chat_state_{normalize_username(user.username)}.json')
+                state = {}
+                if os.path.exists(state_file):
+                    try:
+                        with open(state_file, 'r', encoding='utf-8') as sf:
+                            state = json.load(sf) or {}
+                    except Exception:
+                        state = {}
+
+                joined = state.get('joinedGroups', []) or []
+                # Remove group case-insensitively
+                try:
+                    new_joined = [g for g in joined if str(g).strip().lower() != str(safe_group).strip().lower()]
+                except Exception:
+                    new_joined = joined
+                state['joinedGroups'] = new_joined
+                # Persist updated state
+                with open(state_file, 'w', encoding='utf-8') as sf:
+                    json.dump(state, sf, ensure_ascii=False, indent=2)
+            except Exception:
+                # Non-fatal: continue even if chat state update fails
+                pass
+
+            return jsonify({'success': True, 'group': safe_group, 'members': result_members}), 200
+
+        return jsonify({'success': False, 'error': 'Unsupported method'}), 405
+    except Exception as e:
+        current_app.logger.error(f"chat_group_members_api error: {e}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Group members operation failed', 'error_code': 'GROUP_MEMBERS_ERROR'}), 500
+
 
 @mobile_api.route('/chat/messages', methods=['GET'])
 @token_required
@@ -1878,6 +2085,7 @@ def chat_messages():
         limit = min(request.args.get('limit', 50, type=int), 2000)
         offset = request.args.get('offset', 0, type=int)
 
+        # Support direct messages
         if msg_type == 'dm':
             # Read direct messages from per-user JSON files under instance/chat/users/<team_number>/
             import os, glob
@@ -1929,6 +2137,31 @@ def chat_messages():
                     filtered.append(m)
             all_messages = filtered
             all_sorted = sorted(all_messages, key=lambda m: (m.get('timestamp') or m.get('created_at') or ''), reverse=True)
+            total = len(all_sorted)
+            messages = all_sorted[offset:offset + limit]
+
+            return jsonify({'success': True, 'count': len(messages), 'total': total, 'messages': messages}), 200
+
+        # Support fetching named group histories via query param or via type=group|team
+        if msg_type in ('group', 'team') or request.args.get('group'):
+            # Example: ?group=pit_team or ?group=554
+            group = request.args.get('group') or request.args.get('name')
+            if not group:
+                return jsonify({'success': False, 'error': 'Group parameter required', 'error_code': 'MISSING_GROUP'}), 400
+
+            safe_group = str(group).replace('/', '_')
+
+            # If a members file exists, enforce membership
+            try:
+                members = load_group_members(team_number, safe_group) or []
+                if members and user.username not in members:
+                    return jsonify({'success': False, 'error': 'User not a member of the group', 'error_code': 'USER_NOT_IN_SCOPE'}), 403
+            except Exception:
+                # If members cannot be loaded, continue and try to return history
+                members = []
+
+            grp_history = load_group_chat_history(team_number, safe_group) or []
+            all_sorted = sorted(grp_history, key=lambda m: (m.get('timestamp') or m.get('created_at') or ''), reverse=True)
             total = len(all_sorted)
             messages = all_sorted[offset:offset + limit]
 
