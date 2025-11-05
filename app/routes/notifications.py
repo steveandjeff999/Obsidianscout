@@ -885,3 +885,163 @@ def clear_all_history():
         db.session.rollback()
         current_app.logger.error(f"Error clearing all notification history for user {getattr(current_user,'id',None)}: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/mobile-schedule', methods=['GET'])
+@login_required
+def mobile_schedule_ui():
+    """UI page to create test scheduled and past notifications for mobile API testing."""
+    # Gather user's subscriptions and recent matches for current event
+    subs = NotificationSubscription.query.filter_by(user_id=current_user.id).order_by(NotificationSubscription.created_at.desc()).all()
+
+    # Try to find current event and matches
+    from app.utils.config_manager import get_current_game_config
+    game_config = get_current_game_config()
+    event_code = game_config.get('current_event_code')
+
+    matches = []
+    current_event = None
+    if event_code:
+        current_event = Event.query.filter_by(code=event_code, scouting_team_number=current_user.scouting_team_number).first()
+        if current_event:
+            matches = Match.query.filter_by(event_id=current_event.id, scouting_team_number=current_user.scouting_team_number).order_by(Match.match_number).all()
+
+    return render_template('notifications/mobile_schedule.html', subscriptions=subs, matches=matches, event_code=event_code)
+
+
+@bp.route('/mobile-schedule/create', methods=['POST'])
+@login_required
+def mobile_schedule_create():
+    """Create a scheduled NotificationQueue entry for testing.
+
+    Expected JSON fields:
+      - subscription_id (optional) OR subscription (object with fields to create subscription)
+      - match_id (required)
+      - scheduled_for (ISO 8601 datetime string, interpreted as local time in the browser and converted to UTC by client)
+    """
+    try:
+        data = request.get_json() or {}
+        subscription_id = data.get('subscription_id')
+        match_id = data.get('match_id')
+        scheduled_for = data.get('scheduled_for')
+
+        if not match_id or not scheduled_for:
+            return jsonify({'success': False, 'error': 'match_id and scheduled_for are required'}), 400
+
+        # If subscription_id missing, create a subscription from provided object
+        if not subscription_id:
+            sub_data = data.get('subscription') or {}
+            if not sub_data.get('notification_type') or not sub_data.get('target_team_number'):
+                return jsonify({'success': False, 'error': 'Either subscription_id or subscription object with notification_type and target_team_number is required'}), 400
+
+            subscription = NotificationSubscription(
+                user_id=current_user.id,
+                scouting_team_number=current_user.scouting_team_number,
+                notification_type=sub_data.get('notification_type'),
+                target_team_number=int(sub_data.get('target_team_number')),
+                event_code=sub_data.get('event_code'),
+                email_enabled=bool(sub_data.get('email_enabled', True)),
+                push_enabled=bool(sub_data.get('push_enabled', True)),
+                minutes_before=int(sub_data.get('minutes_before', 20)),
+                is_active=True
+            )
+            db.session.add(subscription)
+            db.session.flush()  # get id
+            subscription_id = subscription.id
+
+        # Parse scheduled_for (client sends ISO in UTC)
+        from datetime import datetime, timezone
+        try:
+            sched_dt = datetime.fromisoformat(scheduled_for)
+            # Ensure naive UTC stored in NotificationQueue to match existing behavior
+            sched_dt = sched_dt.astimezone(timezone.utc).replace(tzinfo=None)
+        except Exception:
+            return jsonify({'success': False, 'error': 'Invalid scheduled_for datetime format'}), 400
+
+        # Create queue entry
+        from app.models_misc import NotificationQueue
+        queue_entry = NotificationQueue(
+            subscription_id=subscription_id,
+            match_id=int(match_id),
+            scheduled_for=sched_dt,
+            status='pending',
+            attempts=0
+        )
+        db.session.add(queue_entry)
+        db.session.commit()
+
+        return jsonify({'success': True, 'queue_id': queue_entry.id})
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error creating mobile schedule entry: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/mobile-schedule/create-past', methods=['POST'])
+@login_required
+def mobile_schedule_create_past():
+    """Create a past NotificationLog entry for testing.
+
+    Expected JSON fields:
+      - notification_type (required)
+      - title
+      - message
+      - match_id (optional)
+      - event_code (optional)
+      - team_number (optional)
+      - email_sent (bool)
+      - push_sent_count (int)
+      - sent_at (ISO datetime string) -- if omitted, now is used
+    """
+    try:
+        data = request.get_json() or {}
+        notif_type = data.get('notification_type')
+        if not notif_type:
+            return jsonify({'success': False, 'error': 'notification_type is required'}), 400
+
+        title = data.get('title') or f'Test {notif_type}'
+        message = data.get('message') or ''
+        match_id = data.get('match_id')
+        event_code = data.get('event_code')
+        team_number = data.get('team_number')
+        email_sent = bool(data.get('email_sent', False))
+        push_sent_count = int(data.get('push_sent_count', 0) or 0)
+        email_error = data.get('email_error')
+        push_error = data.get('push_error')
+
+        from datetime import datetime, timezone
+        sent_at_raw = data.get('sent_at')
+        if sent_at_raw:
+            try:
+                sent_at = datetime.fromisoformat(sent_at_raw).astimezone(timezone.utc)
+            except Exception:
+                return jsonify({'success': False, 'error': 'Invalid sent_at format'}), 400
+        else:
+            sent_at = datetime.now(timezone.utc)
+
+        # Create log
+        log = NotificationLog(
+            user_id=current_user.id,
+            subscription_id=data.get('subscription_id'),
+            notification_type=notif_type,
+            title=title,
+            message=message,
+            match_id=match_id,
+            team_number=team_number,
+            event_code=event_code,
+            email_sent=email_sent,
+            email_error=email_error,
+            push_sent_count=push_sent_count,
+            push_error=push_error,
+            sent_at=sent_at
+        )
+        db.session.add(log)
+        db.session.commit()
+
+        return jsonify({'success': True, 'log_id': log.id})
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error creating past notification log: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500

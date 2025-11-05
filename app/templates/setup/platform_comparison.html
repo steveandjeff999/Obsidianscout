@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}Platform Comparison — ObsidianScout{% endblock %}
+
+{% block heading %}Platform Comparison{% endblock %}
+
+{% block content %}
+<div class="container mt-3">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h3 class="mb-0">Platform Comparison</h3>
+            <p class="small text-muted mb-0">A detailed comparison of ObsidianScout vs other approaches. Editable JSON at <code>/static/data/platform_features.json</code>.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('setup.features') }}" class="btn btn-outline-secondary">Back to Features</a>
+            <button id="export-csv-full" class="btn btn-primary">Export CSV</button>
+            <button id="themeModeBtnFull" class="btn btn-outline-secondary">Toggle Theme</button>
+        </div>
+    </div>
+
+    <div id="pc-full-container" style="overflow:auto; border:1px solid var(--bs-border-color); border-radius:8px; padding:12px; background:var(--card-bg);">
+        <table id="pc-table" class="table table-sm table-striped table-bordered" style="min-width:1100px;">
+            <thead><tr id="pc-head"></tr></thead>
+            <tbody id="pc-body"></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Full page comparison table (client-side JSON load)
+(function(){
+    const dataUrl = '/static/data/platform_features.json';
+    const head = document.getElementById('pc-head');
+    const body = document.getElementById('pc-body');
+    const exportBtn = document.getElementById('export-csv-full');
+    const themeBtn = document.getElementById('themeModeBtnFull');
+
+    function render(data){
+        head.innerHTML = '';
+        body.innerHTML = '';
+        if(!Array.isArray(data) || data.length === 0){ head.innerHTML = '<th>No data</th>'; return; }
+        const cols = Object.keys(data[0]);
+        cols.forEach(c => { const th = document.createElement('th'); th.textContent = c; head.appendChild(th); });
+        data.forEach(r => {
+            const tr = document.createElement('tr');
+            cols.forEach(c => { const td = document.createElement('td'); td.textContent = r[c] !== undefined ? r[c] : ''; tr.appendChild(td); });
+            body.appendChild(tr);
+        });
+    }
+
+    function toCSV(data){
+        if(!Array.isArray(data) || data.length === 0) return '';
+        const cols = Object.keys(data[0]);
+        const esc = v => { if(v===null||v===undefined) return ''; const s = String(v); if(s.includes(',')||s.includes('\"')||s.includes('\n')) return '"'+s.replace(/"/g,'""')+'"'; return s; };
+        const rows = [cols.join(',')];
+        data.forEach(r => rows.push(cols.map(c => esc(r[c])).join(',')));
+        return rows.join('\n');
+    }
+
+    fetch(dataUrl, {cache: 'no-store'}).then(r => r.ok ? r.json() : Promise.reject('load')).then(data => {
+        render(data);
+        exportBtn.addEventListener('click', () => { const csv = toCSV(data); const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'platform_comparison.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); });
+    }).catch(e => { head.innerHTML = '<th>Error loading data</th>'; body.innerHTML = '<tr><td>Please check /static/data/platform_features.json</td></tr>'; console.warn(e); });
+
+    // Theme button simple toggle to mirror site-wide behavior
+    if(themeBtn){ themeBtn.addEventListener('click', ()=>{ try{ const cur = localStorage.getItem('darkMode'); if(cur === null) localStorage.setItem('darkMode','true'); else if(cur === 'true') localStorage.setItem('darkMode','false'); else localStorage.removeItem('darkMode'); window.location.reload(); } catch(e){} }); }
+})();
+</script>
+{% endblock %}

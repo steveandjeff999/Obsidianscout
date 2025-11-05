@@ -1,0 +1,101 @@
+[
+   {
+    "Platform": "ObsidianScout",
+    "Focus": "Full-featured, customizable, open-source platform",
+    "Match Scouting": "Yes",
+    "Pit Scouting": "Yes",
+    "Analytics": "Advanced charts, predictions and data validation",
+    "Offline": "Scouts can be offline (internet needed for analysis)",
+    "Export": "CSV, PDF, Excel, JSON, QR Code",
+    "Integrations": "FIRST API, The Blue Alliance API",
+    "Notes": "Web and can be installed as a PWA on any platform."
+  },
+  {
+    "Platform": "Lovat",
+    "Focus": "Global database and innovative analysis platform",
+    "Match Scouting": "Yes (via Android and iOS app)",
+    "Pit Scouting": "Yes (via Android and iOS app)",
+    "Analytics": "Innovative analysis, global database.",
+    "Offline": "Both On/Offline",
+    "Export": "CSV Export",
+    "Integrations": "API sync (via global database system).",
+    "Notes": "Cross-platform support for Android and iOS devices."
+  },
+  {
+    "Platform": "Resolute",
+    "Focus": "Integrated mobile-first app for form creation, scouting, and analysis",
+    "Match Scouting": "Yes (Customizable forms)",
+    "Pit Scouting": "Yes (Customizable forms)",
+    "Analytics": "7 interactive visuals, automatic calculations, modify data on the fly.",
+    "Offline": "Low-Internet, Online (works well with intermittent connectivity)",
+    "Export": "JSON, CSV",
+    "Integrations": "The Blue Alliance (FRC), The Orange Alliance (FTC)",
+    "Notes": "Allows form creation, scout assignments/shifts, and data modification all on a mobile device. Scouts can enter data for events not on TBA."
+  },
+  {
+    "Platform": "Scoutradioz™",
+    "Focus": "Per-team customizable, browser based scouting platform",
+    "Match Scouting": "Yes (Configurable Forms)",
+    "Pit Scouting": "Yes (Configurable Forms)",
+    "Analytics": "Browser based, analytics and match predictions.",
+    "Offline": "Both On/Offline (via Voyager module)",
+    "Export": "CSV Export, QR codes",
+    "Integrations": "FIRST API, The Blue Alliance (mentioned in original list).",
+    "Notes": "Multilingual support, includes tools for form design and event management."
+  },
+  {
+    "Platform": "ScoutingPASS",
+    "Focus": "Fully configurable, low-bandwidth web page scouter",
+    "Match Scouting": "Yes (5 swipeable pages)",
+    "Pit Scouting": "Yes (Separate pit page)",
+    "Analytics": "None (Relies on external spreadsheet analysis)",
+    "Offline": "Offline (Fully functional after initial load)",
+    "Export": "QR data transfer",
+    "Integrations": "Yes (The Blue Alliance for schedule/team names).",
+    "Notes": "Universal, works on any device with a web browser. Simple setup via GitHub Pages."
+  },
+  {
+    "Platform": "SPOT",
+    "Focus": "Web-based, fully configurable scouting system",
+    "Match Scouting": "Yes",
+    "Pit Scouting": "Yes",
+    "Analytics": "Team analytics and match simulations.",
+    "Offline": "Both On/Offline",
+    "Export": "QR codes (API sync)",
+    "Integrations": "",
+    "Notes": "Web-based and fully configurable for team needs."
+  },
+  {
+    "Platform": "The Purple Warehouse",
+    "Focus": "Collaborative Scouting App and Analyzer",
+    "Match Scouting": "Yes",
+    "Pit Scouting": "Yes",
+    "Analytics": "Analyzer capabilities (likely built-in).",
+    "Offline": "Both On/Offline",
+    "Export": "API sync",
+    "Integrations": "Yes (API sync).",
+    "Notes": "Largest collaborative scouting app; encourages data sharing among teams."
+  },
+  {
+    "Platform": "Viper Scout",
+    "Focus": "Free, open-source, web-based system with robust analytics and multiple data transfer options",
+    "Match Scouting": "Yes (Configurable Forms)",
+    "Pit Scouting": "Yes (Includes robot picture upload support)",
+    "Analytics": "Built-in data analysis with graphs, alliance selection app, match planning whiteboard",
+    "Offline": "Yes (Web-based; works online or offline via local network/client caching)",
+    "Export": "Wireless/Wired sync, QR Code",
+    "Integrations": "The Blue Alliance API (for schedules/team lists), Google Sheets (direct data sending)",
+    "Notes": "Open-source (MIT license). Offers free private cloud hosting for teams and supports both FRC and FTC."
+  },
+  {
+    "Platform": "VScouter",
+    "Focus": "Custom app with unique graphics and powerful analytics",
+    "Match Scouting": "Yes",
+    "Pit Scouting": "Yes",
+    "Analytics": "Unique graphics and Power BI analytics for strategic decisions.",
+    "Offline": "Both On/Offline",
+    "Export": "API sync",
+    "Integrations": "Yes (API sync).",
+    "Notes": "Leverages Power BI for strategic decision-making."
+  }
+]

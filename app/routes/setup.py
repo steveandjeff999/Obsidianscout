@@ -220,6 +220,17 @@ def features():
     """Feature overview and quick start guide"""
     return render_template('setup/features.html', **get_theme_context())
 
+
+@bp.route('/features/compare')
+def features_compare():
+    """Dedicated full-page platform comparison table.
+
+    This page loads `static/data/platform_features.json` client-side and renders
+    a full-width table. Kept client-side so the JSON can be edited without
+    restarting the server.
+    """
+    return render_template('setup/platform_comparison.html', **get_theme_context())
+
 @bp.route('/api/check-database')
 def api_check_database():
     """API endpoint to check database status"""

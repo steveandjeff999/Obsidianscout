@@ -303,13 +303,51 @@ class Visualizer:
         if len(teams) < 1:
             raise ValueError("Need at least one team for radar chart")
         
-        # Metrics for radar chart
-        metrics = ['auto_points', 'teleop_points', 'endgame_points', 
-                   'scoring_efficiency', 'defense_rating', 'climb_success_rate']
-        metric_labels = ['Auto', 'Teleop', 'Endgame', 'Scoring', 'Defense', 'Climb']
-        
+        # Metrics for radar chart (label, stats key, optional fallback max)
+        metric_config = [
+            ('Auto', 'auto_points', None),
+            ('Teleop', 'teleop_points', None),
+            ('Endgame', 'endgame_points', None),
+            ('Total', 'total_points', None),
+            ('Quality', 'data_quality_score', 100),
+            ('Confidence', 'prediction_confidence', 100),
+        ]
+
+        def safe_number(value, default=0.0):
+            try:
+                if value is None:
+                    return default
+                if isinstance(value, (int, float)):
+                    return float(value)
+                if isinstance(value, str):
+                    return float(value.strip())
+            except (ValueError, TypeError):
+                pass
+            return default
+
+        # Pre-compute max values across all teams for normalization
+        max_values = {}
+        for _, metric_key, fallback_max in metric_config:
+            values = []
+            for team in teams:
+                stats = team.get('stats', {}) or {}
+                raw_val = stats.get(metric_key)
+                # Some metrics may be stored as 0-1 fractions; scale to percentages if appropriate
+                if metric_key in ('data_quality_score', 'prediction_confidence') and raw_val is not None and raw_val <= 1:
+                    raw_val = raw_val * 100
+                values.append(safe_number(raw_val))
+
+            candidate_max = max(values) if values else 0
+            if fallback_max is not None:
+                candidate_max = max(candidate_max, fallback_max)
+            if candidate_max <= 0:
+                candidate_max = fallback_max or 1
+            max_values[metric_key] = candidate_max
+
+        metric_labels = [label for label, _, _ in metric_config]
+
         # Set up radar chart
-        angles = np.linspace(0, 2*np.pi, len(metrics), endpoint=False).tolist()
+        angles = np.linspace(0, 2*np.pi, len(metric_config), endpoint=False).tolist()
         angles += angles[:1]  # Close the loop
         
         fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
@@ -317,11 +355,19 @@ class Visualizer:
         # Add lines for each team
         for i, team in enumerate(teams):
             stats = team.get('stats', {})
-            values = [stats.get(m, 0) for m in metrics]
-            
-            # Normalize values for radar chart (0-1)
-            max_values = [30, 50, 20, 1, 5, 1]  # Example max values for each metric
-            norm_values = [min(v/max_v, 1) for v, max_v in zip(values, max_values)]
+            norm_values = []
+            for label, metric_key, _ in metric_config:
+                value = stats.get(metric_key)
+                # Scale fractional scores to percentage when appropriate so the radial scale is intuitive
+                if metric_key in ('data_quality_score', 'prediction_confidence') and value is not None and value <= 1:
+                    value = value * 100
+                numeric_val = safe_number(value)
+                max_val = max_values.get(metric_key, 1)
+                normalized = numeric_val / max_val if max_val else 0
+                # Clamp to 0-1 range to avoid matplotlib warnings
+                normalized = max(0.0, min(normalized, 1.0))
+                norm_values.append(normalized)
+
             norm_values += norm_values[:1]  # Close the loop
             
             # Plot the team

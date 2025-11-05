@@ -6,7 +6,12 @@ from app import db
 import json
 import re
 import math
-from app.utils.config_manager import get_id_to_perm_id_mapping, get_scoring_element_by_perm_id, get_current_game_config
+from app.utils.config_manager import (
+    get_id_to_perm_id_mapping,
+    get_scoring_element_by_perm_id,
+    get_current_game_config,
+    load_game_config,
+)
 from app.utils.concurrent_models import ConcurrentModelMixin
 
 # Association table for user roles (many-to-many)
@@ -324,12 +329,13 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
     def calculate_metric(self, formula_or_id):
         """Calculate metrics based on formulas or metric IDs defined in game config"""
         data = self.data
-        game_config = get_current_game_config()
-        
-        # Fallback: If game config is empty, try to load config for the scouting team
-        if not game_config and hasattr(self, 'scouting_team_number') and self.scouting_team_number:
-            from app.utils.config_manager import load_game_config
-            game_config = load_game_config(team_number=self.scouting_team_number)
+        game_config = get_current_game_config() or {}
+
+        # Prefer the scouting team's config when available so metric math matches their setup
+        if hasattr(self, 'scouting_team_number') and self.scouting_team_number:
+            team_config = load_game_config(team_number=self.scouting_team_number)
+            if team_config:
+                game_config = team_config
         
         # Check if this is a metric ID (not a formula)
         metric_config = None
@@ -362,7 +368,7 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
             local_dict = self._initialize_data_dict(game_config)
             
             # Add all data fields from the actual scouting data
-            id_map = get_id_to_perm_id_mapping()
+            id_map = get_id_to_perm_id_mapping(game_config)
             for key, value in data.items():
                 perm_id = id_map.get(key, key) # Use perm_id if available
                 # For boolean fields that might be stored as string, ensure they're actual booleans
@@ -378,6 +384,24 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
                 else:
                     local_dict[perm_id] = value
             
+            # NOW calculate derived metrics after actual form data is loaded
+            # This allows formulas to reference auto_points, teleop_points, etc.
+            try:
+                auto_pts = self._calculate_auto_points_dynamic(local_dict, game_config)
+                teleop_pts = self._calculate_teleop_points_dynamic(local_dict, game_config)
+                endgame_pts = self._calculate_endgame_points_dynamic(local_dict, game_config)
+                
+                local_dict['auto_points'] = auto_pts
+                local_dict['teleop_points'] = teleop_pts
+                local_dict['endgame_points'] = endgame_pts
+                local_dict['total_points'] = auto_pts + teleop_pts + endgame_pts
+            except Exception:
+                # If calculation fails, provide zeros to prevent formula errors
+                local_dict['auto_points'] = 0
+                local_dict['teleop_points'] = 0
+                local_dict['endgame_points'] = 0
+                local_dict['total_points'] = 0
+            
             # Get the metric ID if we have it
             metric_id = None
             if metric_config:
@@ -388,10 +412,17 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
             
             if metric_id:
                 # Call the appropriate handler method for this metric
-                return self._calculate_specific_metric(metric_id, formula, local_dict)
+                result = self._calculate_specific_metric(metric_id, formula, local_dict, game_config)
+                # Debug logging for metric calculations
+                try:
+                    from flask import current_app
+                    current_app.logger.debug(f"ScoutingData {self.id} metric {metric_id} -> {result}")
+                except Exception:
+                    pass
+                return result
             
             # For other formulas or if specific handler not found, use general evaluation
-            id_map = get_id_to_perm_id_mapping()
+            id_map = get_id_to_perm_id_mapping(game_config)
             id_to_perm_id = {v: k for k, v in id_map.items()}
             
             # Replace all occurrences of perm_id with id in the formula
@@ -473,10 +504,9 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
                     return metric.get('id')
         return None
     
-    def _calculate_specific_metric(self, metric_id, formula, local_dict):
-        """Calculate a specific metric based on its ID"""
-        # Get game configuration
-        game_config = get_current_game_config()
+    def _calculate_specific_metric(self, metric_id, formula, local_dict, game_config):
+        """Calculate a specific metric based on its ID using the provided game configuration."""
+        game_config = game_config or get_current_game_config() or {}
         
         if metric_id == 'tot':
             # Calculate total points dynamically based on components marked with is_total_component=true
@@ -696,6 +726,12 @@ class ScoutingData(ConcurrentModelMixin, db.Model):
         # Add points from endgame period scoring elements
         for element in game_config.get('endgame_period', {}).get('scoring_elements', []):
             element_id = element.get('id')
+            # Debug: show element and value
+            try:
+                from flask import current_app
+                current_app.logger.debug(f"Endgame calc: element_id={element_id}, value={local_dict.get(element_id)}")
+            except Exception:
+                pass
             if element_id not in local_dict:
                 continue
                 
