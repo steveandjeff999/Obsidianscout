@@ -9,9 +9,20 @@ from sqlalchemy import or_, func
 
 
 def get_current_scouting_team_number():
-    """Get the current user's scouting team number."""
+    """Get the current user's scouting team number.
+    
+    Checks Flask's g object first (for mobile API requests), then falls back to current_user.
+    """
+    from flask import g
+    
+    # First check if scouting_team_number was set in Flask's g object (mobile API)
+    if hasattr(g, 'scouting_team_number') and g.scouting_team_number is not None:
+        return g.scouting_team_number
+    
+    # Fall back to Flask-Login's current_user
     if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and hasattr(current_user, 'scouting_team_number'):
         return current_user.scouting_team_number
+    
     return None
 
 

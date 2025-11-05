@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+{% block title %}Mobile Notifications Scheduler{% endblock %}
+
+{% block content %}
+<h1>Mobile Notifications Scheduler (Test UI)</h1>
+<p>Use this page to create scheduled (future) notifications and past logs for testing mobile clients.</p>
+
+<section>
+  <h2>Create Scheduled Notification</h2>
+  <form id="schedule-form">
+    <label>Use existing subscription:
+      <select id="subscription_id">
+        <option value="">-- select --</option>
+        {% for s in subscriptions %}
+        <option value="{{ s.id }}">{{ s.notification_type }} — team {{ s.target_team_number }} (id {{ s.id }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <p>Or create a temporary subscription:</p>
+    <label>Notification type: <input id="tmp_notification_type" value="match_reminder"></label>
+    <label>Target team number: <input id="tmp_target_team_number" type="number"></label>
+    <label>Minutes before: <input id="tmp_minutes_before" type="number" value="20"></label>
+    <label>Email enabled: <input id="tmp_email_enabled" type="checkbox" checked></label>
+    <label>Push enabled: <input id="tmp_push_enabled" type="checkbox" checked></label>
+
+    <p>Select match:</p>
+    <select id="match_id">
+      <option value="">-- select match --</option>
+      {% for m in matches %}
+      <option value="{{ m.id }}">{{ m.match_type }} {{ m.match_number }} (id {{ m.id }})</option>
+      {% endfor %}
+    </select>
+
+    <p>Scheduled for (local browser time): <input id="scheduled_for" type="datetime-local"></p>
+
+    <button type="button" id="create-scheduled">Create Scheduled Notification</button>
+    <div id="schedule-result"></div>
+  </form>
+</section>
+
+<hr>
+
+<section>
+  <h2>Create Past Notification Log</h2>
+  <form id="past-form">
+    <label>Notification type: <input id="past_notification_type" value="match_reminder"></label>
+    <label>Title: <input id="past_title" value="Test Notification"></label>
+    <label>Message: <input id="past_message" value="This is a test log entry."></label>
+    <label>Match (optional):
+      <select id="past_match_id">
+        <option value="">-- none --</option>
+        {% for m in matches %}
+        <option value="{{ m.id }}">{{ m.match_type }} {{ m.match_number }} (id {{ m.id }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Team number (optional): <input id="past_team_number" type="number"></label>
+    <label>Sent at (local): <input id="past_sent_at" type="datetime-local"></label>
+    <label>Email sent: <input id="past_email_sent" type="checkbox"></label>
+    <label>Push sent count: <input id="past_push_sent_count" type="number" value="0"></label>
+
+    <button type="button" id="create-past">Create Past Notification</button>
+    <div id="past-result"></div>
+  </form>
+</section>
+
+<script>
+async function toUtcIsoLocal(datetimeLocal) {
+  // datetimeLocal: "YYYY-MM-DDTHH:MM" (no timezone)
+  if (!datetimeLocal) return null;
+  const dt = new Date(datetimeLocal);
+  // Convert to ISO in UTC
+  return new Date(dt.getTime() - (dt.getTimezoneOffset() * 60000)).toISOString();
+}
+
+document.getElementById('create-scheduled').addEventListener('click', async () => {
+  const subscription_id = document.getElementById('subscription_id').value || null;
+  const match_id = document.getElementById('match_id').value;
+  const scheduled_local = document.getElementById('scheduled_for').value;
+  if (!match_id || !scheduled_local) {
+    document.getElementById('schedule-result').innerText = 'Match and scheduled time are required';
+    return;
+  }
+
+  const scheduled_for = await toUtcIsoLocal(scheduled_local);
+
+  let payload = { match_id: parseInt(match_id), scheduled_for };
+  if (subscription_id) {
+    payload.subscription_id = parseInt(subscription_id);
+  } else {
+    payload.subscription = {
+      notification_type: document.getElementById('tmp_notification_type').value,
+      target_team_number: parseInt(document.getElementById('tmp_target_team_number').value) || null,
+      minutes_before: parseInt(document.getElementById('tmp_minutes_before').value) || 20,
+      email_enabled: document.getElementById('tmp_email_enabled').checked,
+      push_enabled: document.getElementById('tmp_push_enabled').checked
+    }
+  }
+
+  const resp = await fetch('{{ url_for("notifications.mobile_schedule_create") }}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const j = await resp.json();
+  if (j.success) {
+    document.getElementById('schedule-result').innerText = 'Created queue id ' + j.queue_id;
+  } else {
+    document.getElementById('schedule-result').innerText = 'Error: ' + (j.error || JSON.stringify(j));
+  }
+});
+
+document.getElementById('create-past').addEventListener('click', async () => {
+  const notif_type = document.getElementById('past_notification_type').value;
+  const title = document.getElementById('past_title').value;
+  const message = document.getElementById('past_message').value;
+  const match_id = document.getElementById('past_match_id').value || null;
+  const team_number = document.getElementById('past_team_number').value || null;
+  const sent_local = document.getElementById('past_sent_at').value;
+  const sent_at = sent_local ? await toUtcIsoLocal(sent_local) : null;
+  const email_sent = document.getElementById('past_email_sent').checked;
+  const push_sent_count = parseInt(document.getElementById('past_push_sent_count').value) || 0;
+
+  const payload = {
+    notification_type: notif_type,
+    title,
+    message,
+    match_id: match_id ? parseInt(match_id) : null,
+    team_number: team_number ? parseInt(team_number) : null,
+    sent_at,
+    email_sent,
+    push_sent_count
+  };
+
+  const resp = await fetch('{{ url_for("notifications.mobile_schedule_create_past") }}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const j = await resp.json();
+  if (j.success) {
+    document.getElementById('past-result').innerText = 'Created log id ' + j.log_id;
+  } else {
+    document.getElementById('past-result').innerText = 'Error: ' + (j.error || JSON.stringify(j));
+  }
+});
+</script>
+
+{% endblock %}

@@ -220,15 +220,26 @@ def get_scoring_element_by_perm_id(perm_id):
                     return element
     return None
 
-def get_id_to_perm_id_mapping():
-    """Returns a dictionary mapping current IDs to permanent IDs."""
-    config = get_current_game_config()
+def get_id_to_perm_id_mapping(config=None):
+    """Return a dictionary mapping the current config element IDs to their permanent IDs."""
+    if config is None:
+        config = get_current_game_config()
+
     mapping = {}
+    if not config:
+        return mapping
+
     for period in ['auto_period', 'teleop_period', 'endgame_period']:
         if period in config:
             for element in config[period].get('scoring_elements', []):
                 if 'id' in element and 'perm_id' in element:
                     mapping[element['id']] = element['perm_id']
+
+    # Legacy configs may define scoring elements at the top level
+    for element in config.get('scoring_elements', []):
+        if 'id' in element and 'perm_id' in element:
+            mapping[element['id']] = element['perm_id']
+
     return mapping
 
 # ======== ALLIANCE-AWARE CONFIG FUNCTIONS ========

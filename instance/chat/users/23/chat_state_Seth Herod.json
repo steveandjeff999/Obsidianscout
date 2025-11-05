@@ -1,9 +1,14 @@
 {
-  "joinedGroups": [
-    "8998",
-    "bob"
-  ],
-  "lastDmUser": "admin",
+  "lastDmUser": "5454",
   "unreadCount": 0,
-  "currentGroup": "bob"
+  "lastSource": {
+    "type": "dm",
+    "id": "5454"
+  },
+  "notified": true,
+  "lastNotified": "2025-11-05T03:49:21.346496+00:00",
+  "lastRead": {
+    "dm:admin": "b7973814-8155-439f-9b40-02bbf8b42ab8",
+    "dm:5454": "5885ef81-1f8e-4380-9eef-5ec0d7a81d92"
+  }
 }

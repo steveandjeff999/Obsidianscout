@@ -2,7 +2,7 @@
 Mobile App API
 Comprehensive REST API for mobile applications with authentication, data access, and offline sync
 """
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, g
 from flask_login import login_user, logout_user, current_user
 from datetime import datetime, timezone, timedelta
 import os
@@ -10,20 +10,47 @@ from functools import wraps
 import traceback
 import json
 import jwt
+import base64
 import uuid
+import math
+import statistics
 
 from app.models import (
     User, Team, Event, Match, ScoutingData, PitScoutingData, 
     DoNotPickEntry, AvoidEntry, ScoutingAllianceChat, TeamAllianceStatus, ScoutingDirectMessage, db
 )
 from app import load_user_chat_history, load_group_chat_history, load_assistant_chat_history, save_user_chat_history, save_group_chat_history, get_user_chat_file_path, load_group_members, save_group_members, get_group_members_file_path
-from app.models_misc import NotificationQueue, NotificationSubscription
+from app.models_misc import NotificationQueue, NotificationSubscription, NotificationLog
 from app.utils.team_isolation import get_current_scouting_team_number
 from app.utils.analysis import calculate_team_metrics
 from werkzeug.security import check_password_hash
+from app.assistant.visualizer import Visualizer
 
 # Create blueprint
 mobile_api = Blueprint('mobile_api', __name__, url_prefix='/api/mobile')
+
+# Blueprint error handlers: return JSON for common HTTP errors so mobile clients
+# don't receive HTML error pages. These apply to errors raised while handling
+# requests under this blueprint.
+
+
+@mobile_api.app_errorhandler(404)
+def _mobile_api_not_found(err):
+    try:
+        current_app.logger.info(f"mobile_api 404: path={request.path} method={request.method}")
+    except Exception:
+        current_app.logger.info("mobile_api 404 encountered")
+    return jsonify({'success': False, 'error': 'Not found', 'error_code': 'NOT_FOUND'}), 404
+
+
+@mobile_api.app_errorhandler(500)
+def _mobile_api_internal_error(err):
+    # Log the exception with traceback if available
+    try:
+        current_app.logger.error(f"mobile_api internal error: {str(err)}\n{traceback.format_exc()}")
+    except Exception:
+        current_app.logger.error("mobile_api internal error occurred")
+    return jsonify({'success': False, 'error': 'Internal server error', 'error_code': 'INTERNAL_ERROR'}), 500
 
 
 # Blueprint-wide enforcement: ensure mobile clients are authenticated for all
@@ -1288,22 +1315,59 @@ def mobile_graphs_compare():
         if not team_numbers or not isinstance(team_numbers, (list, tuple)):
             return jsonify({'success': False, 'error': 'team_numbers list required', 'error_code': 'MISSING_TEAMS'}), 400
 
-        event_id = payload.get('event_id')
+        token_team_number = request.mobile_team_number
+
+        graph_types_raw = payload.get('graph_types') or ['line', 'bar', 'radar']
+        graph_types_normalized = [str(gt).lower() for gt in graph_types_raw if isinstance(gt, (str, bytes))]
+        graph_types_set = set(graph_types_normalized)
+        if not graph_types_set:
+            graph_types_set = {'line'}
+
         metric = payload.get('metric') or 'total_points'
+        metric_title = metric.replace('_', ' ').title()
         metric_alias = 'tot' if metric in ('total_points', 'points', 'tot') else metric
-        graph_types = payload.get('graph_types') or ['line', 'bar', 'radar']
         data_view = payload.get('data_view') or 'averages'
+
+        event_identifier = payload.get('event_id')
+        event_obj = None
+        resolved_event_id = None
+        if event_identifier not in (None, ''):
+            try:
+                resolved_event_id = int(event_identifier)
+            except Exception:
+                resolved_event_id = None
+            if resolved_event_id is not None:
+                event_obj = Event.query.filter_by(id=resolved_event_id, scouting_team_number=token_team_number).first()
+                if not event_obj:
+                    event_obj = Event.query.get(resolved_event_id)
+            if event_obj is None and isinstance(event_identifier, str):
+                event_obj = Event.query.filter_by(code=event_identifier, scouting_team_number=token_team_number).first()
+                if event_obj:
+                    resolved_event_id = event_obj.id
 
         # Colors for datasets
         palette = ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40"]
 
         teams_response = []
         line_labels = set()
-        line_datasets = []
+        team_series_entries = []
         radar_datasets = []
 
-        # For each requested team number, resolve Team (respecting scouting team isolation)
-        token_team_number = request.mobile_team_number
+        # Ensure downstream helpers see the correct scouting team context (for calculate_team_metrics, etc.)
+        try:
+            g.scouting_team_number = token_team_number
+        except Exception:
+            pass
+
+        mobile_user = getattr(request, 'mobile_user', None)
+        if mobile_user:
+            try:
+                login_user(mobile_user, remember=False, force=True)
+            except Exception:
+                pass
+
+        from app.utils.config_manager import load_game_config
+        team_config = load_game_config(team_number=token_team_number) if token_team_number else None
 
         for idx, tn in enumerate(team_numbers):
             try:
@@ -1320,34 +1384,40 @@ def mobile_graphs_compare():
                 continue
 
             # Compute aggregate metrics
-            analytics = calculate_team_metrics(team.id, event_id=event_id)
+            analytics = calculate_team_metrics(team.id, event_id=resolved_event_id, game_config=team_config)
             metrics = analytics.get('metrics', {})
+
+            metric_value = metrics.get(metric)
+            if metric_value is None and metric_alias != metric:
+                metric_value = metrics.get(metric_alias)
+            if metric_value is None:
+                metric_value = metrics.get('total_points') or metrics.get('tot') or 0
+
+            std_candidates = [f"{metric_alias}_std", f"{metric}_std", 'total_points_std', 'tot_std']
+            std_value = next((metrics.get(k) for k in std_candidates if metrics.get(k) is not None), 0)
 
             # Build basic team entry
             team_entry = {
                 'team_number': team.team_number,
                 'team_name': team.team_name,
                 'color': palette[idx % len(palette)],
-                'value': metrics.get('total_points') or metrics.get('tot') or 0,
-                'std_dev': metrics.get('total_points_std') or metrics.get('tot_std') or 0,
+                'value': metric_value,
+                'std_dev': std_value or 0,
                 'match_count': analytics.get('match_count') or 0
             }
             teams_response.append(team_entry)
 
-            # Build per-match series for line chart
-            # Query scouting data for this team, scope to the token_team_number and join Match once
-            # Joining Match once avoids duplicate JOINs which can lead to ambiguous column errors.
+            # Build per-match series for downstream chart handling
             q = ScoutingData.query.join(Match, ScoutingData.match_id == Match.id).filter(
                 ScoutingData.team_id == team.id,
                 ScoutingData.scouting_team_number == token_team_number
             )
-            if event_id:
-                q = q.filter(Match.event_id == event_id)
+            if resolved_event_id is not None:
+                q = q.filter(Match.event_id == resolved_event_id)
             scouting_rows = q.order_by(Match.match_number).all()
 
-            # Collect labels and values
-            labels = []
-            values = []
+            per_match_records = []
+            metric_id_to_use = 'tot' if metric_alias == 'tot' else metric_alias
             for row in scouting_rows:
                 try:
                     mnum = row.match.match_number if row.match else None
@@ -1355,23 +1425,31 @@ def mobile_graphs_compare():
                     mnum = None
                 if mnum is None:
                     continue
-                # label is match number
-                labels.append(f"Match {mnum}")
-                # compute metric per-row
-                if metric_alias == 'tot':
-                    val = row.calculate_metric('tot')
-                else:
-                    val = row.calculate_metric(metric_alias)
-                values.append(val)
-                line_labels.add(f"Match {mnum}")
 
-            # Add dataset for this team
-            line_datasets.append({
-                'label': f"{team.team_number} - {team.team_name}",
-                'data': values,
-                'borderColor': palette[idx % len(palette)],
-                'backgroundColor': f"{palette[idx % len(palette)]}",
-                'tension': 0.4
+                match_label = f"Match {mnum}"
+                try:
+                    raw_val = row.calculate_metric(metric_id_to_use)
+                except Exception:
+                    raw_val = 0
+
+                try:
+                    numeric_val = float(raw_val)
+                except (TypeError, ValueError):
+                    numeric_val = 0
+
+                per_match_records.append({
+                    'match_number': mnum,
+                    'label': match_label,
+                    'value': numeric_val
+                })
+                line_labels.add(match_label)
+
+            team_series_entries.append({
+                'team_number': team.team_number,
+                'team_name': team.team_name,
+                'color': palette[idx % len(palette)],
+                'per_match': per_match_records,
+                'values': [record['value'] for record in per_match_records if record['value'] is not None]
             })
 
             # Radar dataset: use a small set of core metrics if available
@@ -1389,36 +1467,135 @@ def mobile_graphs_compare():
                 'backgroundColor': palette[idx % len(palette)]
             })
 
-        # Build labels sorted
-        labels_sorted = sorted(list(line_labels), key=lambda s: int(s.replace('Match ', ''))) if line_labels else []
+        def _line_label_sort_key(label):
+            try:
+                return int(str(label).replace('Match ', ''))
+            except Exception:
+                return label
+
+        labels_sorted = sorted(list(line_labels), key=_line_label_sort_key) if line_labels else []
+
+        line_datasets = []
+        for series in team_series_entries:
+            label_to_value = {record['label']: record['value'] for record in series['per_match'] if record.get('label')}
+            if labels_sorted:
+                data_aligned = [label_to_value.get(label) for label in labels_sorted]
+            else:
+                data_aligned = [record['value'] for record in series['per_match']]
+
+            line_datasets.append({
+                'label': f"{series['team_number']} - {series['team_name']}",
+                'data': data_aligned,
+                'borderColor': series['color'],
+                'backgroundColor': series['color'],
+                'tension': 0.4,
+                'per_match': series['per_match']
+            })
 
         graphs = {}
-        if 'line' in graph_types:
+        if 'line' in graph_types_set:
             graphs['line'] = {
                 'type': 'line',
                 'labels': labels_sorted,
                 'datasets': line_datasets
             }
-        if 'bar' in graph_types:
+        if 'bar' in graph_types_set:
             graphs['bar'] = {
                 'type': 'bar',
                 'labels': [str(t['team_number']) for t in teams_response],
                 'datasets': [
                     {
-                        'label': 'Average Total Points',
+                        'label': f'Average {metric_title}',
                         'data': [t['value'] for t in teams_response],
                         'backgroundColor': [t['color'] for t in teams_response]
                     }
                 ]
             }
-        if 'radar' in graph_types:
+        if 'radar' in graph_types_set:
             graphs['radar'] = {
                 'type': 'radar',
-                'labels': ['Total Points', 'Auto Points', 'Teleop Points', 'Endgame Points', 'Consistency'],
+                'labels': ['Total Points', 'Auto Points', 'Teleop Points', 'Endgame Points', 'Consistency (%)'],
                 'datasets': radar_datasets
             }
 
-        event_obj = Event.query.get(event_id) if event_id else None
+        histogram_requested = graph_types_set & {'hist', 'histogram'}
+        if histogram_requested:
+            histogram_datasets = []
+            all_values = []
+            for series in team_series_entries:
+                if not series['values']:
+                    continue
+                values = series['values']
+                dataset_entry = {
+                    'team_number': series['team_number'],
+                    'team_name': series['team_name'],
+                    'color': series['color'],
+                    'values': values,
+                    'count': len(values),
+                    'mean': sum(values) / len(values)
+                }
+                histogram_datasets.append(dataset_entry)
+                all_values.extend(values)
+
+            if histogram_datasets:
+                if len(all_values) <= 1:
+                    bin_suggestion = len(all_values)
+                else:
+                    bin_suggestion = max(5, min(20, int(math.sqrt(len(all_values)))))
+
+                histogram_payload = {
+                    'type': 'histogram',
+                    'metric': metric,
+                    'total_samples': len(all_values),
+                    'overall_mean': (sum(all_values) / len(all_values)) if all_values else 0,
+                    'bin_suggestion': bin_suggestion,
+                    'datasets': histogram_datasets
+                }
+                graphs['histogram'] = histogram_payload
+                if 'hist' in graph_types_set:
+                    graphs['hist'] = histogram_payload
+
+        if 'box' in graph_types_set:
+            box_datasets = []
+            for series in team_series_entries:
+                values = series['values']
+                if not values:
+                    continue
+
+                stats_summary = {
+                    'count': len(values),
+                    'min': min(values),
+                    'max': max(values),
+                    'median': statistics.median(values)
+                }
+
+                try:
+                    quartiles = statistics.quantiles(values, n=4, method='inclusive')
+                    if len(quartiles) >= 3:
+                        stats_summary['q1'] = quartiles[0]
+                        stats_summary['median'] = quartiles[1]
+                        stats_summary['q3'] = quartiles[2]
+                except Exception:
+                    stats_summary['q1'] = stats_summary['median']
+                    stats_summary['q3'] = stats_summary['median']
+
+                box_datasets.append({
+                    'team_number': series['team_number'],
+                    'team_name': series['team_name'],
+                    'color': series['color'],
+                    'values': values,
+                    'stats': stats_summary
+                })
+
+            if box_datasets:
+                graphs['box'] = {
+                    'type': 'box',
+                    'metric': metric,
+                    'datasets': box_datasets
+                }
+
+        if not event_obj and resolved_event_id is not None:
+            event_obj = Event.query.get(resolved_event_id)
 
         return jsonify({
             'success': True,
@@ -1469,10 +1646,46 @@ def mobile_graphs_image():
             return jsonify({'success': False, 'error': 'team_number(s) required', 'error_code': 'MISSING_TEAMS'}), 400
 
         graph_type = (payload.get('graph_type') or 'line').lower()
+        if graph_type == 'hist':
+            graph_type = 'histogram'
         metric = payload.get('metric') or 'total_points'
+        metric_title = metric.replace('_', ' ').title()
         mode = (payload.get('mode') or 'match_by_match')
 
         token_team_number = request.mobile_team_number
+
+        event_identifier = payload.get('event_id')
+        event_obj = None
+        resolved_event_id = None
+        if event_identifier not in (None, ''):
+            try:
+                resolved_event_id = int(event_identifier)
+            except Exception:
+                resolved_event_id = None
+            if resolved_event_id is not None:
+                event_obj = Event.query.filter_by(id=resolved_event_id, scouting_team_number=token_team_number).first()
+                if not event_obj:
+                    event_obj = Event.query.get(resolved_event_id)
+            if event_obj is None and isinstance(event_identifier, str):
+                event_obj = Event.query.filter_by(code=event_identifier, scouting_team_number=token_team_number).first()
+                if event_obj:
+                    resolved_event_id = event_obj.id
+
+        # Mirror the visualize endpoint: set team context so calculate_team_metrics and form helpers work
+        try:
+            g.scouting_team_number = token_team_number
+        except Exception:
+            pass
+
+        mobile_user = getattr(request, 'mobile_user', None)
+        if mobile_user:
+            try:
+                login_user(mobile_user, remember=False, force=True)
+            except Exception:
+                pass
+
+        from app.utils.config_manager import load_game_config
+        team_config = load_game_config(team_number=token_team_number) if token_team_number else None
 
         # Resolve teams (respect team isolation like compare endpoint)
         teams = []
@@ -1488,11 +1701,31 @@ def mobile_graphs_image():
 
         # Build minimal team_data dict compatible with graphs.py helpers
         team_ids = [t.id for t in teams]
-        scouting_rows = ScoutingData.query.join(Match, ScoutingData.match_id == Match.id).filter(
+        scouting_query = ScoutingData.query.join(Match, ScoutingData.match_id == Match.id).filter(
             ScoutingData.team_id.in_(team_ids),
             ScoutingData.scouting_team_number == token_team_number
-        ).order_by(Match.match_number).all()
+        )
+        if resolved_event_id is not None:
+            scouting_query = scouting_query.filter(Match.event_id == resolved_event_id)
+        scouting_rows = scouting_query.order_by(Match.match_number).all()
 
+        # Map common metric names to metric IDs used by calculate_metric()
+        metric_id_map = {
+            'total_points': 'tot',
+            'auto_points': 'apt',
+            'teleop_points': 'tpt',
+            'endgame_points': 'ept',
+            'points': 'tot',
+            'tot': 'tot',
+            'apt': 'apt',
+            'tpt': 'tpt',
+            'ept': 'ept'
+        }
+        
+        metric_id = metric_id_map.get(metric, metric)
+        current_app.logger.info(f"Building team_data for metric '{metric}' (mapped to ID '{metric_id}')")
+        current_app.logger.info(f"Found {len(scouting_rows)} scouting rows to process")
+        
         team_data = {}
         for row in scouting_rows:
             teamnum = row.team.team_number if row.team else None
@@ -1500,14 +1733,40 @@ def mobile_graphs_image():
                 continue
             if teamnum not in team_data:
                 team_data[teamnum] = {'team_name': row.team.team_name if row.team else '', 'matches': []}
-            if metric in ('total_points', 'points', 'tot'):
-                val = row.calculate_metric('tot')
-            else:
+            
+            # Calculate the specific metric requested for this match
+            try:
+                # Log the raw data to see what we're working with
+                current_app.logger.info(f"Team {teamnum}, Match {row.match.match_number if row.match else '?'}: data keys = {list(row.data.keys())[:10] if hasattr(row, 'data') else 'NO DATA'}")
+                
+                raw_val = row.calculate_metric(metric_id)
+
                 try:
-                    val = row.calculate_metric(metric)
-                except Exception:
-                    val = 0
-            team_data[teamnum]['matches'].append({'match_number': row.match.match_number if row.match else None, 'metric_value': val})
+                    val = float(raw_val)
+                except (TypeError, ValueError):
+                    val = 0.0
+
+                current_app.logger.info(f"Team {teamnum}, Match {row.match.match_number if row.match else '?'}: {metric_id} = {val}")
+
+                # Also try calculating tot to compare
+                if metric_id != 'tot':
+                    tot_val_raw = row.calculate_metric('tot')
+                    try:
+                        tot_val = float(tot_val_raw)
+                    except (TypeError, ValueError):
+                        tot_val = tot_val_raw
+                    current_app.logger.info(f"  (total points for comparison: {tot_val})")
+            except Exception as e:
+                import traceback
+                current_app.logger.error(f"Error calculating metric '{metric_id}' for team {teamnum}: {e}\n{traceback.format_exc()}")
+                val = 0
+                
+            team_data[teamnum]['matches'].append({
+                'match_number': row.match.match_number if row.match else None,
+                'metric_value': val
+            })
+        
+        current_app.logger.info(f"Final team_data: {json.dumps({k: {'matches': len(v['matches'])} for k, v in team_data.items()})}")
 
         # Create a plotly figure using existing helper functions where possible
         import plotly.graph_objects as go
@@ -1527,6 +1786,7 @@ def mobile_graphs_image():
                     labels.append(str(t.team_number))
                     values.append(avg)
                 fig = go.Figure(data=[go.Bar(x=labels, y=values)])
+                fig.update_layout(xaxis_title='Team', yaxis_title=metric_title)
             elif graph_type in ('line', 'scatter'):
                 # line per team across matches
                 for idx, t in enumerate(teams):
@@ -1539,12 +1799,14 @@ def mobile_graphs_image():
                     else:
                         fig = fig or go.Figure()
                         fig.add_trace(go.Scatter(x=x, y=y, mode='markers', name=str(t.team_number)))
+                fig = fig or go.Figure()
+                fig.update_layout(xaxis_title='Match', yaxis_title=metric_title)
             elif graph_type == 'radar':
                 # radar: reuse compare radar labels
-                labels = ['Total Points', 'Auto Points', 'Teleop Points', 'Endgame Points', 'Consistency']
+                labels = ['Total Points', 'Auto Points', 'Teleop Points', 'Endgame Points', 'Consistency (%)']
                 fig = go.Figure()
                 for t in teams:
-                    analytics = calculate_team_metrics(t.id)
+                    analytics = calculate_team_metrics(t.id, event_id=resolved_event_id, game_config=team_config)
                     metrics = analytics.get('metrics', {})
                     radar_metrics = [
                         metrics.get('total_points') or metrics.get('tot') or 0,
@@ -1554,6 +1816,24 @@ def mobile_graphs_image():
                         round((metrics.get('consistency') or 0) * 100, 2) if metrics.get('consistency') is not None else 0
                     ]
                     fig.add_trace(go.Scatterpolar(r=radar_metrics, theta=labels, fill='toself', name=str(t.team_number)))
+            elif graph_type == 'histogram':
+                fig = go.Figure()
+                for t in teams:
+                    matches = team_data.get(t.team_number, {}).get('matches', [])
+                    values = [m['metric_value'] for m in matches if m['metric_value'] is not None]
+                    if not values:
+                        continue
+                    fig.add_trace(go.Histogram(x=values, name=str(t.team_number), opacity=0.75))
+                fig.update_layout(barmode='overlay', xaxis_title=metric_title, yaxis_title='Frequency')
+            elif graph_type == 'box':
+                fig = go.Figure()
+                for t in teams:
+                    matches = team_data.get(t.team_number, {}).get('matches', [])
+                    values = [m['metric_value'] for m in matches if m['metric_value'] is not None]
+                    if not values:
+                        continue
+                    fig.add_trace(go.Box(y=values, name=str(t.team_number), boxmean=True))
+                fig.update_layout(xaxis_title='Team', yaxis_title=metric_title)
             else:
                 fig = go.Figure()
 
@@ -1593,6 +1873,202 @@ def mobile_graphs_image():
     except Exception as e:
         current_app.logger.error(f"mobile_graphs_image top-level error: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'success': False, 'error': 'Invalid request', 'error_code': 'INVALID_REQUEST'}), 400
+
+
+@mobile_api.route('/graphs/visualize', methods=['POST'])
+@token_required
+def mobile_graphs_visualize():
+    """
+    Generate a visualization using the Assistant Visualizer and return PNG bytes.
+
+    Request JSON:
+    {
+      "vis_type": "team_performance",  # visualization type supported by Visualizer
+      "team_numbers": [5454, 1234],     # optional list of team numbers
+      "team_number": 5454,              # optional single team_number
+      "visualization_data": {...}       # optional pre-built visualization_data to pass through
+    }
+
+    Response: image/png bytes
+    """
+    try:
+        payload = request.get_json() or {}
+        # Log payload for easier debugging in case of failures
+        try:
+            current_app.logger.debug(f"mobile_graphs_visualize payload: {json.dumps(payload)[:1000]}")
+        except Exception:
+            current_app.logger.debug("mobile_graphs_visualize payload (unserializable)")
+
+        # If the payload looks like the Plotly-style /api/mobile/graphs request
+        # (contains graph_type / graph_types / metric / mode), delegate to the
+        # existing mobile_graphs_image implementation so we support all of its
+        # options and fallbacks without duplicating the logic.
+        if any(k in payload for k in ('graph_type', 'graph_types', 'metric', 'mode')):
+            # mobile_graphs_image returns a Flask Response; just return it.
+            return mobile_graphs_image()
+
+        vis_type = (payload.get('vis_type') or payload.get('type') or 'team_performance')
+
+        # If client provided visualization_data directly, use it
+        data = payload.get('visualization_data') or {}
+
+        token_team_number = request.mobile_team_number
+        
+        # CRITICAL FIX: Store scouting_team_number in Flask's g object
+        # This allows get_current_scouting_team_number() to access it reliably
+        # Flask-Login doesn't work properly for API requests, so we use g instead
+        g.scouting_team_number = token_team_number
+        
+        mobile_user = request.mobile_user
+        current_app.logger.info(f"mobile_graphs_visualize: user={mobile_user.username if mobile_user else 'None'}, scouting_team={token_team_number}")
+        current_app.logger.info(f"Set g.scouting_team_number = {g.scouting_team_number} for team isolation")
+        
+        # Also log in the mobile user for Flask-Login compatibility (some code might still use current_user)
+        if mobile_user:
+            login_user(mobile_user, remember=False, force=True)
+            current_app.logger.debug(f"Logged in mobile user: {mobile_user.username} (scouting_team={mobile_user.scouting_team_number})")
+
+        # Get current event for this scouting team to scope data correctly
+        from app.utils.config_manager import load_game_config
+        game_config = load_game_config(team_number=token_team_number)
+        event_code = game_config.get('current_event_code') if isinstance(game_config, dict) else None
+        
+        # Resolve event_id from payload or from config
+        event_id = payload.get('event_id')
+        event = None
+        if event_id:
+            try:
+                event = Event.query.filter_by(id=int(event_id), scouting_team_number=token_team_number).first()
+            except Exception:
+                pass
+        
+        if not event and event_code:
+            event = Event.query.filter_by(code=event_code, scouting_team_number=token_team_number).first()
+        
+        if not event:
+            event = Event.query.filter_by(scouting_team_number=token_team_number).order_by(Event.start_date.desc().nullslast(), Event.id.desc()).first()
+        
+        event_id = event.id if event else None
+        current_app.logger.debug(f"mobile_graphs_visualize using event_id={event_id} for team {token_team_number}")
+
+        # Build simple team/teams data if not provided
+        team_numbers = []
+        if not data:
+            if 'team_numbers' in payload and isinstance(payload.get('team_numbers'), (list, tuple)):
+                team_numbers = [t for t in payload.get('team_numbers')]
+            elif 'team_number' in payload:
+                team_numbers = [payload.get('team_number')]
+
+            # If no visualization_data and no team identifiers were provided, return informative error
+            if not data and not team_numbers:
+                return jsonify({'success': False, 'error': 'No team_number(s) or visualization_data provided', 'error_code': 'MISSING_TEAMS_OR_DATA'}), 400
+
+            teams = []
+            for tn in team_numbers:
+                try:
+                    tn_int = int(tn)
+                except Exception:
+                    continue
+                t = Team.query.filter_by(team_number=tn_int, scouting_team_number=token_team_number).first()
+                if not t:
+                    t = Team.query.filter_by(team_number=tn_int).first()
+                if not t:
+                    continue
+
+                # Pass event_id to get scoped metrics
+                current_app.logger.debug(f"Calculating metrics for team {t.team_number} (id={t.id}) with event_id={event_id}")
+                analytics = calculate_team_metrics(t.id, event_id=event_id)
+                stats = analytics.get('metrics', {})
+                match_count = analytics.get('match_count', 0)
+                current_app.logger.info(f"Team {t.team_number}: match_count={match_count}, stats_keys={list(stats.keys())[:5] if stats else 'none'}")
+                
+                # Get actual match data for visualizations that need it
+                matches_data = []
+                if event_id:
+                    scouting_rows = ScoutingData.query.join(Match, ScoutingData.match_id == Match.id).filter(
+                        ScoutingData.team_id == t.id,
+                        ScoutingData.scouting_team_number == token_team_number,
+                        Match.event_id == event_id
+                    ).order_by(Match.match_number).all()
+                    current_app.logger.debug(f"Found {len(scouting_rows)} scouting rows for team {t.team_number}")
+                    
+                    for row in scouting_rows:
+                        try:
+                            match_num = row.match.match_number if row.match else None
+                            if match_num:
+                                # Calculate actual points from this match's scouting data using dynamic calculation
+                                try:
+                                    auto = row.calculate_metric('apt') if hasattr(row, 'calculate_metric') else 0
+                                    teleop = row.calculate_metric('tpt') if hasattr(row, 'calculate_metric') else 0
+                                    endgame = row.calculate_metric('ept') if hasattr(row, 'calculate_metric') else 0
+                                    total = row.calculate_metric('tot') if hasattr(row, 'calculate_metric') else (auto + teleop + endgame)
+                                except Exception as calc_err:
+                                    current_app.logger.warning(f"Error calculating metrics for match {match_num}: {calc_err}")
+                                    auto = teleop = endgame = total = 0
+                                
+                                matches_data.append({
+                                    'match_number': match_num,
+                                    'score': total,  # visualizer expects 'score' or 'total'
+                                    'auto_points': auto,
+                                    'teleop_points': teleop,
+                                    'endgame_points': endgame
+                                })
+                        except Exception as e:
+                            current_app.logger.warning(f"Error processing match data: {e}")
+                            continue
+                
+                # Ensure we have the required stats - if empty or no data, create minimal valid stats
+                if not stats or match_count == 0:
+                    current_app.logger.warning(f"No scouting data for team {t.team_number} - using zero stats")
+                    stats = {
+                        'auto_points': 0,
+                        'teleop_points': 0,
+                        'endgame_points': 0,
+                        'total_points': 0,
+                        'data_quality_score': 0,
+                        'prediction_confidence': 0
+                    }
+                
+                teams.append({
+                    'number': t.team_number,
+                    'team_name': t.team_name,
+                    'stats': stats,
+                    'match_count': match_count,
+                    'matches': matches_data
+                })
+
+            # If we couldn't resolve any teams, return a clear JSON 404 rather than letting a later error produce HTML
+            if not teams:
+                current_app.logger.info(f"mobile_graphs_visualize: no teams resolved for payload: {payload}")
+                return jsonify({'success': False, 'error': 'No teams found', 'error_code': 'NO_TEAMS'}), 404
+
+            # Decide whether visualization expects a single team or multiple
+            if teams and (str(vis_type).startswith('team') or 'team' in vis_type or vis_type in ('team_performance', 'match_breakdown', 'team_ranking', 'ranking_comparison')):
+                data = {'team': teams[0]}
+            else:
+                data = {'teams': teams}
+
+        viz = Visualizer()
+        result = viz.generate_visualization(vis_type, data)
+
+        if result.get('error'):
+            return jsonify({'success': False, 'error': result.get('message', 'Visualization error'), 'error_code': 'VIS_ERROR'}), 500
+
+        img_b64 = result.get('image')
+        if not img_b64:
+            return jsonify({'success': False, 'error': 'No image produced', 'error_code': 'NO_IMAGE'}), 500
+
+        img_bytes = base64.b64decode(img_b64)
+
+        from flask import make_response
+        resp = make_response(img_bytes)
+        resp.headers.set('Content-Type', 'image/png')
+        resp.headers.set('Content-Disposition', 'inline; filename=visualization.png')
+        return resp
+
+    except Exception as e:
+        current_app.logger.error(f"mobile_graphs_visualize error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Failed to generate visualization', 'error_code': 'VIS_GEN_ERROR'}), 500
 
 
 # ============================================================================
@@ -1734,6 +2210,89 @@ def get_scheduled_notifications():
         return jsonify({'success': False, 'error': 'Failed to retrieve scheduled notifications', 'error_code': 'NOTIFICATIONS_ERROR'}), 500
 
 
+@mobile_api.route('/notifications/past', methods=['GET'])
+@token_required
+def get_past_notifications():
+    """
+    Return past/sent notifications (NotificationLog) for the scouting team.
+
+    Query params (optional):
+    - limit (int) - max results (default 200, max 1000)
+    - offset (int) - pagination offset (default 0)
+
+    Response:
+    {
+      "success": true,
+      "count": 1,
+      "total": 12,
+      "notifications": [
+        {
+          "id": 123,
+          "subscription_id": 5,
+          "notification_type": "match_reminder",
+          "match_id": 10,
+          "match_number": 3,
+          "event_code": "CALA",
+          "sent_at": "2025-04-12T18:20:00+00:00",
+          "email_sent": true,
+          "push_sent_count": 2,
+          "email_error": null,
+          "push_error": null,
+          "title": "Match reminder",
+          "message": "Match 3 coming up in 20 minutes",
+          "target_team_number": 5454
+        }
+      ]
+    }
+    """
+    try:
+        team_number = request.mobile_team_number
+
+        q = NotificationLog.query.join(NotificationSubscription, NotificationLog.subscription_id == NotificationSubscription.id).filter(
+            NotificationSubscription.scouting_team_number == team_number
+        ).order_by(NotificationLog.sent_at.desc())
+
+        limit = min(request.args.get('limit', 200, type=int), 1000)
+        offset = request.args.get('offset', 0, type=int)
+
+        total = q.count()
+        rows = q.offset(offset).limit(limit).all()
+
+        notifications = []
+        for row in rows:
+            try:
+                sub = NotificationSubscription.query.get(row.subscription_id) if row.subscription_id else None
+            except Exception:
+                sub = None
+
+            match_obj = Match.query.get(row.match_id) if row.match_id else None
+
+            delivery = {'email': bool(getattr(row, 'email_sent', False)), 'push': bool(getattr(row, 'push_sent_count', 0) > 0)}
+
+            notifications.append({
+                'id': row.id,
+                'subscription_id': row.subscription_id,
+                'notification_type': row.notification_type,
+                'match_id': row.match_id,
+                'match_number': match_obj.match_number if match_obj else None,
+                'event_code': row.event_code if row.event_code else (match_obj.event.code if match_obj and hasattr(match_obj, 'event') and match_obj.event else None),
+                'sent_at': row.sent_at.isoformat() if row.sent_at else None,
+                'email_sent': bool(row.email_sent),
+                'push_sent_count': int(row.push_sent_count or 0),
+                'email_error': row.email_error,
+                'push_error': row.push_error,
+                'title': row.title,
+                'message': row.message,
+                'target_team_number': sub.target_team_number if sub else row.team_number
+            })
+
+        return jsonify({'success': True, 'count': len(notifications), 'total': total, 'notifications': notifications}), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Get past notifications error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Failed to retrieve past notifications', 'error_code': 'NOTIFICATIONS_ERROR'}), 500
+
+
 @mobile_api.route('/chat/all', methods=['GET'])
 @token_required
 def get_user_and_team_chats():
@@ -1854,6 +2413,187 @@ def chat_members():
     except Exception as e:
         current_app.logger.error(f"chat_members error: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'success': False, 'error': 'Failed to retrieve chat members', 'error_code': 'CHAT_MEMBERS_ERROR'}), 500
+
+
+@mobile_api.route('/chat/state', methods=['GET'])
+@token_required
+def mobile_chat_state():
+    """
+    Return the per-user persisted chat state (unread count, joined groups, last source, etc.)
+
+    Response:
+    {
+      "success": true,
+      "state": {
+         "joinedGroups": [],
+         "currentGroup": "",
+         "lastDmUser": "",
+         "unreadCount": 0,
+         "lastSource": {"type": "dm", "id": "other_user"},
+         "notified": true,
+         "lastNotified": "2025-04-12T18:20:00+00:00"
+      }
+    }
+    """
+    try:
+        user = request.mobile_user
+        # Prefer token-scoped team number but fall back to user's stored scouting_team_number
+        team_number = request.mobile_team_number or getattr(user, 'scouting_team_number', 'no_team') or 'no_team'
+
+        # Use the canonical helper from main to locate the user's state file so
+        # we honor legacy filenames and team-resolution logic.
+        try:
+            from app.routes.main import get_user_chat_state_file
+            state_file = get_user_chat_state_file(user.username)
+        except Exception:
+            from app import normalize_username
+            state_folder = os.path.join(current_app.instance_path, 'chat', 'users', str(team_number))
+            os.makedirs(state_folder, exist_ok=True)
+            state_file = os.path.join(state_folder, f'chat_state_{normalize_username(user.username)}.json')
+
+        state = {}
+        if os.path.exists(state_file):
+            try:
+                with open(state_file, 'r', encoding='utf-8') as sf:
+                    state = json.load(sf) or {}
+            except Exception:
+                state = {}
+
+        # Ensure minimal expected fields exist for mobile clients
+        if 'unreadCount' not in state:
+            state['unreadCount'] = 0
+        if 'joinedGroups' not in state:
+            state['joinedGroups'] = []
+        if 'currentGroup' not in state:
+            state['currentGroup'] = ''
+        if 'lastDmUser' not in state:
+            state['lastDmUser'] = ''
+
+        # Include the actual unread message objects when possible. The persisted
+        # state contains only an unreadCount and an optional lastSource pointer
+        # (e.g. {type: 'dm', id: '<username>'}). We'll attempt to load the
+        # corresponding history and return up to `unreadCount` messages that are
+        # intended for the requesting user. This is a best-effort approach when
+        # no explicit last-read marker is available.
+        unread_messages = []
+        try:
+            from app import load_user_chat_history, load_group_chat_history
+
+            n_unread = int(state.get('unreadCount', 0) or 0)
+            last_src = state.get('lastSource') if isinstance(state.get('lastSource'), dict) else None
+
+            if n_unread > 0 and last_src:
+                src_type = str(last_src.get('type') or '').lower()
+                src_id = last_src.get('id')
+
+                # Direct messages: load the DM history between the two users and
+                # pick the most recent messages that were sent to the requester
+                # by the lastSource user.
+                if src_type == 'dm' and src_id:
+                    try:
+                        history = load_user_chat_history(user.username, src_id, team_number) or []
+                        # Sort chronologically by timestamp (oldest -> newest)
+                        hist_sorted = sorted(history, key=lambda m: (m.get('timestamp') or m.get('created_at') or ''))
+                        uname_l = str(user.username).strip().lower()
+                        partner_l = str(src_id).strip().lower()
+                        # Select messages where recipient is the requesting user and
+                        # sender matches the partner (case-insensitive)
+                        candidate = [m for m in hist_sorted if str(m.get('recipient') or '').strip().lower() == uname_l and str(m.get('sender') or '').strip().lower() == partner_l]
+                        if candidate:
+                            # Return the last N of these messages
+                            unread_messages = candidate[-n_unread:]
+                    except Exception:
+                        unread_messages = []
+
+                # Group messages: load the group history and return the most
+                # recent N messages not authored by the requesting user.
+                elif src_type == 'group' and src_id:
+                    try:
+                        grp_hist = load_group_chat_history(team_number, src_id) or []
+                        grp_sorted = sorted(grp_hist, key=lambda m: (m.get('timestamp') or m.get('created_at') or ''))
+                        candidate = [m for m in grp_sorted if str(m.get('sender') or '').strip().lower() != str(user.username).strip().lower()]
+                        if candidate:
+                            unread_messages = candidate[-n_unread:]
+                    except Exception:
+                        unread_messages = []
+
+            # If the lastSource-based selection returned fewer messages than
+            # the persisted unreadCount, fall back to scanning all DM and
+            # group histories for messages addressed to the user and return
+            # the most recent N across all conversations. This handles cases
+            # where unreadCount aggregates across multiple conversations.
+            if n_unread > 0 and (not unread_messages or len(unread_messages) < n_unread):
+                try:
+                    import glob
+                    import os as _os
+
+                    uname_norm = str(user.username).strip().lower()
+                    team_dir = _os.path.join(current_app.instance_path, 'chat', 'users', str(team_number))
+                    dm_pattern = _os.path.join(team_dir, f'*_chat_history.json')
+                    dm_files = glob.glob(dm_pattern) if _os.path.exists(team_dir) else []
+
+                    candidates_all = []
+                    for fp in dm_files:
+                        try:
+                            with open(fp, 'r', encoding='utf-8') as fh:
+                                data = json.load(fh)
+                                if isinstance(data, list):
+                                    for m in data:
+                                        try:
+                                            sender_norm = str(m.get('sender') or '').strip().lower()
+                                            recip_norm = str(m.get('recipient') or '').strip().lower()
+                                            # Exclude messages authored by the requesting user
+                                            if recip_norm == uname_norm and sender_norm != uname_norm:
+                                                candidates_all.append(m)
+                                        except Exception:
+                                            continue
+                        except Exception:
+                            continue
+
+                    # Also include recent group messages where the user is not the sender.
+                    group_dir = _os.path.join(current_app.instance_path, 'chat', 'groups', str(team_number))
+                    if _os.path.exists(group_dir):
+                        for gf in _os.listdir(group_dir):
+                            if not gf.endswith('_group_chat_history.json'):
+                                continue
+                            gpath = _os.path.join(group_dir, gf)
+                            try:
+                                with open(gpath, 'r', encoding='utf-8') as gh:
+                                    gdata = json.load(gh)
+                                    if isinstance(gdata, list):
+                                        for m in gdata:
+                                            try:
+                                                if str(m.get('sender') or '').strip().lower() != uname_norm:
+                                                    candidates_all.append(m)
+                                            except Exception:
+                                                continue
+                            except Exception:
+                                continue
+
+                    # Sort by timestamp and return the most recent n_unread
+                    def _ts_key(m):
+                        return (m.get('timestamp') or m.get('created_at') or '')
+
+                    candidates_sorted = sorted(candidates_all, key=_ts_key)
+                    if candidates_sorted:
+                        unread_messages = candidates_sorted[-n_unread:]
+                except Exception:
+                    # Keep prior unread_messages if fallback fails
+                    pass
+
+            # Attach to response state using camelCase key for mobile clients
+            state['unreadMessages'] = unread_messages
+        except Exception:
+            # Non-fatal: if any error occurs while collecting unread messages,
+            # fall back to returning the persisted state without the messages.
+            state['unreadMessages'] = []
+
+        return jsonify({'success': True, 'state': state}), 200
+
+    except Exception as e:
+        current_app.logger.error(f"mobile_chat_state error: {e}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Failed to retrieve chat state', 'error_code': 'CHAT_STATE_ERROR'}), 500
+
 
 @mobile_api.route('/chat/groups', methods=['GET'])
 @token_required
@@ -2320,12 +3060,17 @@ def chat_send():
 
             # Also increment recipient's chat state unread count so their UI poll picks it up
             try:
-                # Use error-level logging temporarily so messages appear in test output logs
                 current_app.logger.error(f"mobile chat_send: incrementing chat state for recipient={other.username}")
-                from app import normalize_username
-                state_folder = os.path.join(current_app.instance_path, 'chat', 'users', str(other.scouting_team_number or team_number))
-                os.makedirs(state_folder, exist_ok=True)
-                state_file = os.path.join(state_folder, f'chat_state_{normalize_username(other.username)}.json')
+                # Use canonical helper so we don't write to a different filename than the web UI reads
+                try:
+                    from app.routes.main import get_user_chat_state_file
+                    state_file = get_user_chat_state_file(other.username)
+                except Exception:
+                    from app import normalize_username
+                    state_folder = os.path.join(current_app.instance_path, 'chat', 'users', str(other.scouting_team_number or team_number))
+                    os.makedirs(state_folder, exist_ok=True)
+                    state_file = os.path.join(state_folder, f'chat_state_{normalize_username(other.username)}.json')
+
                 state = {}
                 if os.path.exists(state_file):
                     try:
@@ -2405,6 +3150,7 @@ def chat_send():
 def mobile_edit_message():
     try:
         user = request.mobile_user
+        
         data = request.get_json() or {}
         message_id = data.get('message_id')
         new_text = data.get('text')
@@ -2456,6 +3202,359 @@ def mobile_edit_message():
         current_app.logger.error(f"mobile_edit_message error: {e}\n{traceback.format_exc()}")
         return jsonify({'success': False, 'error': 'Edit failed'}), 500
 
+
+# Internal helper for marking a conversation read. Returns (response_dict, status_code)
+def _mark_conversation_read(user, team_number, conv_type, conv_id, last_read_message_id):
+    try:
+        # Print to terminal for debugging so incoming read requests are visible
+        try:
+            print(f"[mobile_mark_read] user={getattr(user,'username',None)} team={team_number} type={conv_type} id={conv_id} last_read={last_read_message_id}", flush=True)
+        except Exception:
+            pass
+        # Validate membership/scope
+        if conv_type == 'dm':
+            other = None
+            try:
+                if isinstance(conv_id, int) or (str(conv_id).isdigit() and len(str(conv_id)) < 10):
+                    other = User.query.get(int(conv_id))
+                    if not other:
+                        # Fallback: maybe it's a username that looks like a number
+                        other = User.query.filter_by(username=str(conv_id)).first()
+                else:
+                    other = User.query.filter_by(username=str(conv_id)).first()
+            except Exception as e:
+                current_app.logger.error(f"_mark_conversation_read: user lookup error conv_id={conv_id}: {e}")
+                other = None
+            if not other:
+                current_app.logger.error(f"_mark_conversation_read: user not found conv_id={conv_id} current_user={getattr(user,'username',None)}")
+                return ({'success': False, 'error': 'Other user not found', 'error_code': 'USER_NOT_FOUND'}, 404)
+            if getattr(other, 'scouting_team_number', None) != team_number:
+                current_app.logger.error(f"_mark_conversation_read: team mismatch other_team={getattr(other,'scouting_team_number',None)} expected={team_number}")
+                return ({'success': False, 'error': 'User not in same team', 'error_code': 'USER_NOT_IN_SCOPE'}, 403)
+
+        elif conv_type in ('group', 'alliance'):
+            safe_group = str(conv_id).replace('/', '_')
+            try:
+                members = load_group_members(team_number, safe_group) or []
+                if members and user.username not in members:
+                    return ({'success': False, 'error': 'User not a member of the group', 'error_code': 'USER_NOT_IN_SCOPE'}, 403)
+            except Exception:
+                pass
+
+        # Locate canonical state file
+        try:
+            from app.routes.main import get_user_chat_state_file
+            state_file = get_user_chat_state_file(user.username)
+        except Exception:
+            from app import normalize_username
+            state_folder = os.path.join(current_app.instance_path, 'chat', 'users', str(team_number))
+            os.makedirs(state_folder, exist_ok=True)
+            state_file = os.path.join(state_folder, f'chat_state_{normalize_username(user.username)}.json')
+
+        state = {}
+        if os.path.exists(state_file):
+            try:
+                with open(state_file, 'r', encoding='utf-8') as sf:
+                    state = json.load(sf) or {}
+            except Exception:
+                state = {}
+
+        last_read_map = state.get('lastRead', {}) or {}
+        conv_key = f"{('group' if conv_type != 'dm' else 'dm')}:{str(conv_id)}"
+        last_read_map[conv_key] = last_read_message_id
+        state['lastRead'] = last_read_map
+        state['lastSource'] = {'type': conv_type if conv_type != 'alliance' else 'group', 'id': str(conv_id)}
+
+        # Resolve timestamps for last-read markers when possible
+        last_read_ts_map = {}
+        try:
+            from app import find_message_in_user_files
+            for k, mid in last_read_map.items():
+                try:
+                    mi = find_message_in_user_files(mid, user.username, team_number)
+                    if mi and isinstance(mi.get('message'), dict):
+                        last_read_ts_map[k] = (mi['message'].get('timestamp') or mi['message'].get('created_at'))
+                    else:
+                        last_read_ts_map[k] = None
+                except Exception:
+                    last_read_ts_map[k] = None
+        except Exception:
+            last_read_ts_map = {}
+
+        # Recompute unreadCount using message-id positions where possible.
+        # Normalize last-read keys to lowercase to avoid casing mismatches.
+        unread_total = 0
+        try:
+            import glob
+            import os as _os
+
+            uname_norm = str(user.username).strip().lower()
+
+            # Build a normalized last-read map keyed by lowercased conversation keys
+            normalized_last_mid = {}
+            try:
+                for k, mid in last_read_map.items():
+                    if not k:
+                        continue
+                    try:
+                        typ, ident = k.split(':', 1)
+                        nkey = f"{typ}:{str(ident).strip().lower()}"
+                    except Exception:
+                        nkey = str(k).strip().lower()
+                    normalized_last_mid[nkey] = mid
+            except Exception:
+                normalized_last_mid = {}
+
+            team_dir = _os.path.join(current_app.instance_path, 'chat', 'users', str(team_number))
+            dm_pattern = _os.path.join(team_dir, f'*_chat_history.json')
+            dm_files = glob.glob(dm_pattern) if _os.path.exists(team_dir) else []
+
+            def _msg_id(m):
+                return (m.get('id') or m.get('message_id') or m.get('uuid') or m.get('offline_id') or m.get('mid'))
+
+            for fp in dm_files:
+                try:
+                    with open(fp, 'r', encoding='utf-8') as fh:
+                        data_list = json.load(fh) or []
+                except Exception:
+                    continue
+
+                base = _os.path.basename(fp)
+                nm = base.replace('_chat_history.json', '')
+                parts = nm.split('_')
+                other_norm = None
+                if len(parts) >= 2:
+                    if parts[0].strip().lower() == uname_norm:
+                        other_norm = parts[1].strip().lower()
+                    elif parts[1].strip().lower() == uname_norm:
+                        other_norm = parts[0].strip().lower()
+
+                if not other_norm:
+                    # Couldn't detect other participant; conservative count
+                    for m in (data_list or []):
+                        try:
+                            sender = str(m.get('sender') or '').strip().lower()
+                            recip = str(m.get('recipient') or '').strip().lower()
+                            if recip != uname_norm or sender == uname_norm:
+                                continue
+                            unread_total += 1
+                        except Exception:
+                            continue
+                    continue
+
+                convk = f"dm:{other_norm}"
+                last_mid = normalized_last_mid.get(convk)
+
+                if last_mid:
+                    # Try to find message by id in the history and count messages after it
+                    idx = None
+                    try:
+                        for i, m in enumerate(data_list or []):
+                            try:
+                                if str(_msg_id(m)) == str(last_mid):
+                                    idx = i
+                                    break
+                            except Exception:
+                                continue
+                    except Exception:
+                        idx = None
+
+                    if idx is not None:
+                        for m in (data_list or [])[idx+1:]:
+                            try:
+                                sender = str(m.get('sender') or '').strip().lower()
+                                recip = str(m.get('recipient') or '').strip().lower()
+                                if recip != uname_norm or sender == uname_norm:
+                                    continue
+                                unread_total += 1
+                            except Exception:
+                                continue
+                        continue
+
+                # Fallback: no last_mid or not found — count messages newer than last_read_ts_map entry if present,
+                # otherwise conservative count all inbound messages
+                last_ts = None
+                try:
+                    last_ts = last_read_ts_map.get(f"dm:{other_norm}")
+                except Exception:
+                    last_ts = None
+
+                for m in (data_list or []):
+                    try:
+                        sender = str(m.get('sender') or '').strip().lower()
+                        recip = str(m.get('recipient') or '').strip().lower()
+                        ts = (m.get('timestamp') or m.get('created_at') or '')
+                        if recip != uname_norm or sender == uname_norm:
+                            continue
+                        if last_ts:
+                            if ts > last_ts:
+                                unread_total += 1
+                        else:
+                            unread_total += 1
+                    except Exception:
+                        continue
+
+            group_dir = _os.path.join(current_app.instance_path, 'chat', 'groups', str(team_number))
+            if _os.path.exists(group_dir):
+                for gf in _os.listdir(group_dir):
+                    if not gf.endswith('_group_chat_history.json'):
+                        continue
+                    gname = gf.replace('_group_chat_history.json', '')
+                    try:
+                        with open(_os.path.join(group_dir, gf), 'r', encoding='utf-8') as gh:
+                            gdata = json.load(gh) or []
+                    except Exception:
+                        continue
+
+                    try:
+                        members = load_group_members(team_number, gname) or []
+                        if members and user.username not in members:
+                            continue
+                    except Exception:
+                        pass
+
+                    convk = f"group:{gname.strip().lower()}"
+                    last_mid = normalized_last_mid.get(convk)
+
+                    if last_mid:
+                        idx = None
+                        try:
+                            for i, m in enumerate(gdata or []):
+                                try:
+                                    if str(_msg_id(m)) == str(last_mid):
+                                        idx = i
+                                        break
+                                except Exception:
+                                    continue
+                        except Exception:
+                            idx = None
+
+                        if idx is not None:
+                            for m in (gdata or [])[idx+1:]:
+                                try:
+                                    sender = str(m.get('sender') or '').strip().lower()
+                                    if sender == uname_norm:
+                                        continue
+                                    unread_total += 1
+                                except Exception:
+                                    continue
+                            continue
+
+                    # Fallback: count all messages from others
+                    for m in (gdata or []):
+                        try:
+                            sender = str(m.get('sender') or '').strip().lower()
+                            if sender == uname_norm:
+                                continue
+                            unread_total += 1
+                        except Exception:
+                            continue
+
+        except Exception:
+            try:
+                unread_total = int(state.get('unreadCount', 0) or 0)
+            except Exception:
+                unread_total = 0
+
+        state['unreadCount'] = unread_total
+
+        try:
+            with open(state_file, 'w', encoding='utf-8') as sf:
+                json.dump(state, sf, ensure_ascii=False, indent=2)
+        except Exception:
+            current_app.logger.error(f"Failed to persist chat state file: {state_file}")
+
+        try:
+            from app import socketio
+            socketio.emit('conversation_read', {'conversation': conv_key, 'user': user.username, 'last_read': last_read_message_id}, room=user.username)
+        except Exception:
+            pass
+
+        return ({'success': True}, 200)
+
+    except Exception as e:
+        current_app.logger.error(f"_mark_conversation_read error: {e}\n{traceback.format_exc()}")
+        return ({'success': False, 'error': 'Failed to mark conversation read', 'error_code': 'MARK_READ_ERROR'}, 500)
+
+
+# Mark conversation read endpoint (mobile) - preferred JSON form
+@mobile_api.route('/chat/conversations/read', methods=['POST'])
+@token_required
+def mobile_mark_conversation_read():
+    """Mark a conversation as read for the authenticated mobile user using the JSON payload form."""
+    data = request.get_json() or {}
+    conv_type = (data.get('type') or data.get('conversation_type') or 'dm')
+    conv_type = str(conv_type).strip().lower()
+    conv_id = data.get('id') or data.get('conversation_id') or data.get('user') or data.get('group')
+    last_read_message_id = data.get('last_read_message_id')
+
+    if not conv_id or not last_read_message_id:
+        return jsonify({'success': False, 'error': 'conversation id and last_read_message_id required', 'error_code': 'MISSING_DATA'}), 400
+
+    user = request.mobile_user
+    team_number = request.mobile_team_number
+    try:
+        print(f"[mobile_mark_read_route] payload={data} user={getattr(user,'username',None)} team={team_number}", flush=True)
+    except Exception:
+        pass
+    
+    try:
+        resp, status = _mark_conversation_read(user, team_number, conv_type, conv_id, last_read_message_id)
+        return jsonify(resp), status
+    except Exception as e:
+        current_app.logger.error(f"mobile_mark_conversation_read error: {e}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': str(e), 'error_code': 'MARK_READ_ERROR'}), 500
+
+
+# Legacy route: support URL form /chat/conversations/{conversation_id}/read
+@mobile_api.route('/chat/conversations/<path:conversation_id>/read', methods=['POST'])
+@token_required
+def mobile_mark_conversation_read_legacy(conversation_id):
+    """Legacy compatibility: accept conversation id in the URL and last_read_message_id in the body.
+
+    Examples of URL conversation_id values:
+      - dm_5454
+      - group_pit_team
+      - alliance_12
+    """
+    data = request.get_json() or {}
+    last_read_message_id = data.get('last_read_message_id') or data.get('last_read') or request.args.get('last_read_message_id')
+    if not last_read_message_id:
+        return jsonify({'success': False, 'error': 'last_read_message_id required in body or query', 'error_code': 'MISSING_DATA'}), 400
+
+    # Heuristic to derive type and id from the path portion
+    cid = str(conversation_id)
+    conv_type = 'dm'
+    conv_id = cid
+    if cid.startswith('dm_'):
+        conv_type = 'dm'
+        conv_id = cid[len('dm_'):]
+    elif cid.startswith('group_'):
+        conv_type = 'group'
+        conv_id = cid[len('group_'):]
+    elif cid.startswith('alliance_'):
+        conv_type = 'alliance'
+        conv_id = cid[len('alliance_'):]
+    elif cid.startswith('dm:'):
+        conv_type = 'dm'
+        conv_id = cid.split(':', 1)[1]
+    elif cid.startswith('group:'):
+        conv_type = 'group'
+        conv_id = cid.split(':', 1)[1]
+
+    user = request.mobile_user
+    team_number = request.mobile_team_number
+    try:
+        print(f"[mobile_mark_read_legacy] url_conversation_id={conversation_id} body={data} user={getattr(user,'username',None)} team={team_number}", flush=True)
+    except Exception:
+        pass
+    
+    try:
+        resp, status = _mark_conversation_read(user, team_number, conv_type, conv_id, last_read_message_id)
+        return jsonify(resp), status
+    except Exception as e:
+        current_app.logger.error(f"mobile_mark_conversation_read_legacy error: {e}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': str(e), 'error_code': 'MARK_READ_ERROR'}), 500
 
 # Mobile-side message deletion (mirror web /chat/delete-message)
 @mobile_api.route('/chat/delete-message', methods=['POST'])

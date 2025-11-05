@@ -282,6 +282,32 @@
             </div>
         </div>
     </div>
+
+    <!-- External Platforms Comparison -->
+    <div class="row mb-5">
+        <div class="col-md-12">
+            <h4 class="mb-3"><i class="fas fa-table me-2"></i>Platform Comparison</h4>
+            <p class="text-muted">Compare ObsidianScout with other common approaches. Data is loaded from a JSON file so it can be edited or extended easily.</p>
+
+            <div class="mb-2 d-flex justify-content-between align-items-center">
+                <div class="d-flex gap-2">
+                    <button id="export-csv" class="btn btn-outline-primary btn-sm"><i class="fas fa-file-csv me-1"></i>Export CSV</button>
+                    <a href="/setup/features/compare" class="btn btn-outline-info btn-sm"><i class="fas fa-external-link-alt me-1"></i>Open Full Page</a>
+                    <button id="themeModeBtn" class="btn btn-outline-secondary btn-sm" title="Theme: Auto/Dark/Light">
+                        <i id="themeModeIcon" class="fas fa-adjust me-1"></i><span id="themeModeLabel">Auto</span>
+                    </button>
+                </div>
+                <div class="text-muted small align-self-center">Editable JSON located at <code>/static/data/platform_features.json</code></div>
+            </div>
+
+            <div id="pf-container" style="overflow:auto; max-height:420px; border:1px solid var(--bs-border-color); padding:8px; border-radius:6px; background:var(--card-bg, #ffffff);">
+                <table id="platform-features-table" class="table table-sm table-striped table-bordered mb-0" style="min-width:900px;">
+                    <thead><tr id="pf-head"></tr></thead>
+                    <tbody id="pf-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -317,4 +343,171 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 }
 </style>
+
+<style>
+/* Page-specific dark-mode friendly table styles */
+#pf-container { transition: background-color 200ms ease, border-color 200ms ease; }
+#platform-features-table { color: var(--bs-body-color); }
+#platform-features-table thead th { background: rgba(0,0,0,0.03); }
+body.dark-mode #platform-features-table thead th { background: rgba(255,255,255,0.04); color: var(--bs-body-color); }
+body.dark-mode #pf-container { border-color: rgba(255,255,255,0.06); }
+#platform-features-table td, #platform-features-table th { vertical-align: middle; }
+</style>
+
+<script>
+// Load platform comparison JSON and render as a table with CSV export
+document.addEventListener('DOMContentLoaded', function() {
+    const dataUrl = '/static/data/platform_features.json';
+    const headRow = document.getElementById('pf-head');
+    const body = document.getElementById('pf-body');
+    const exportBtn = document.getElementById('export-csv');
+    const themeBtn = document.getElementById('themeModeBtn');
+    const themeIcon = document.getElementById('themeModeIcon');
+    const themeLabel = document.getElementById('themeModeLabel');
+
+    function renderTable(data) {
+        headRow.innerHTML = '';
+        body.innerHTML = '';
+
+        if (!Array.isArray(data) || data.length === 0) {
+            headRow.innerHTML = '<th>No data</th>';
+            return;
+        }
+
+        // Build columns from keys of the first item
+        const columns = Object.keys(data[0]);
+
+        // Header
+        for (const col of columns) {
+            const th = document.createElement('th');
+            th.textContent = col;
+            headRow.appendChild(th);
+        }
+
+        // Body rows
+        for (const row of data) {
+            const tr = document.createElement('tr');
+            for (const col of columns) {
+                const td = document.createElement('td');
+                const v = row[col] !== undefined ? row[col] : '';
+                td.textContent = v;
+                tr.appendChild(td);
+            }
+            body.appendChild(tr);
+        }
+    }
+
+    function toCSV(data) {
+        if (!Array.isArray(data) || data.length === 0) return '';
+        const cols = Object.keys(data[0]);
+        const escape = (v) => {
+            if (v === null || v === undefined) return '';
+            const s = String(v);
+            if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+                return '"' + s.replace(/"/g, '""') + '"';
+            }
+            return s;
+        };
+
+        const rows = [cols.join(',')];
+        for (const r of data) {
+            rows.push(cols.map(c => escape(r[c])).join(','));
+        }
+        return rows.join('\n');
+    }
+
+    fetch(dataUrl, {cache: 'no-store'})
+        .then(res => res.ok ? res.json() : Promise.reject('Failed to load'))
+        .then(data => {
+            renderTable(data);
+
+            exportBtn.addEventListener('click', function() {
+                const csv = toCSV(data);
+                const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'platform_features.csv';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            });
+        })
+        .catch(err => {
+            console.warn('Could not load platform comparison data:', err);
+            headRow.innerHTML = '<th>Error loading data</th>';
+            body.innerHTML = '<tr><td>Please check <code>/static/data/platform_features.json</code> exists and contains valid JSON.</td></tr>';
+        });
+});
+</script>
+
+<script>
+// Page-level theme mode control (Auto / Dark / Light)
+document.addEventListener('DOMContentLoaded', function(){
+    const btn = document.getElementById('themeModeBtn');
+    const icon = document.getElementById('themeModeIcon');
+    const label = document.getElementById('themeModeLabel');
+
+    if(!btn) return;
+
+    function getStored(){ try { return localStorage.getItem('darkMode'); } catch(e){ return null; } }
+    function setStored(v){ try { if (v === null) localStorage.removeItem('darkMode'); else localStorage.setItem('darkMode', v); } catch(e){} }
+    function applyModeFromStore(){
+        const stored = getStored();
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        let useDark = null; // null = auto
+        if (stored === 'true') useDark = true;
+        else if (stored === 'false') useDark = false;
+        else useDark = prefersDark;
+
+        // Apply classes
+        if (useDark) {
+            document.documentElement.classList.add('dark-mode');
+            document.body.classList.add('dark-mode');
+        } else {
+            document.documentElement.classList.remove('dark-mode');
+            document.body.classList.remove('dark-mode');
+        }
+
+        // Update label/icon
+        if (stored === null) { icon.className = 'fas fa-adjust me-1'; label.textContent = 'Auto'; }
+        else if (stored === 'true') { icon.className = 'fas fa-moon me-1'; label.textContent = 'Dark'; }
+        else { icon.className = 'fas fa-sun me-1'; label.textContent = 'Light'; }
+
+        // Also update global sidebar button if present
+        try {
+            const globalIcon = document.getElementById('darkModeIcon');
+            const globalLabel = document.getElementById('darkModeLabel');
+            if (globalIcon && globalLabel) {
+                if (stored === null) { globalIcon.className = 'fas fa-adjust'; globalLabel.textContent = 'Auto'; }
+                else if (stored === 'true') { globalIcon.className = 'fas fa-sun'; globalLabel.textContent = 'Light Mode'; }
+                else { globalIcon.className = 'fas fa-moon'; globalLabel.textContent = 'Dark Mode'; }
+            }
+        } catch(e){}
+    }
+
+    // Cycle through modes: Auto -> Dark -> Light -> Auto
+    btn.addEventListener('click', function(){
+        const cur = getStored();
+        let next = null;
+        if (cur === null) next = 'true';
+        else if (cur === 'true') next = 'false';
+        else next = null;
+        setStored(next);
+        applyModeFromStore();
+        // notify other tabs via storage event
+        try { window.dispatchEvent(new Event('storage')); } catch(e){}
+    });
+
+    // Also respond to system preference changes if user hasn't chosen
+    try {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+            if (getStored() === null) applyModeFromStore();
+        });
+    } catch(e){}
+
+    applyModeFromStore();
+});
+</script>
 {% endblock %}

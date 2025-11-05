@@ -256,17 +256,40 @@ Success Response (200):
 Mark messages read
 ------------------
 
-Endpoint: `POST /api/mobile/chat/conversations/{conversation_id}/read`
+Mobile clients can inform the server which messages the user has read so the server can persist per-conversation read markers and keep `GET /api/mobile/chat/state` accurate (this updates the per-user chat state file used by the web UI as well). This is the recommended mobile-friendly endpoint.
 
-Body:
-```json
-{ "last_read_message_id": 987 }
+Endpoint: `POST /api/mobile/chat/conversations/read`
+
+Headers:
+```
+Authorization: Bearer <token>
+Content-Type: application/json
 ```
 
-Response:
+Request Body (recommended shape):
+```json
+{
+  "type": "dm" | "group" | "alliance",
+  "id": "<username_or_group_or_alliance_id>",
+  "last_read_message_id": "<message-id>"
+}
+```
+
+Behavior:
+- The server validates the caller's membership for the requested conversation (team membership for DMs/groups or alliance membership for alliance chats).
+- The server writes a per-conversation last-read marker into the user's canonical chat state file (the server stores entries under `state['lastRead']` using keys like `"dm:alice"` or `"group:pit_team"`).
+- When possible the server resolves the message timestamp and recomputes `state['unreadCount']` deterministically by scanning relevant DM/group history files; if message timestamps are unavailable the server performs a conservative update.
+- The server persists the updated chat state to `instance/chat/users/<team_number>/chat_state_<normalized_username>.json` and emits a Socket.IO `conversation_read` event so other connected clients can update UI badges in real time.
+- The endpoint is idempotent: posting the same `last_read_message_id` repeatedly does not change server state beyond the initial write.
+
+Success Response (200):
 ```json
 { "success": true }
 ```
+
+Legacy note:
+- Older implementations also accept `POST /api/mobile/chat/conversations/{conversation_id}/read` with body `{ "last_read_message_id": <id> }`. The new form above is preferred for mobile clients because it explicitly declares conversation `type` and `id` and maps cleanly to the server's file-backed conversation model.
+
 
 Edit / Delete / React to messages (mobile)
 -----------------------------------------
@@ -364,6 +387,40 @@ Client behavior tips
 
 Group management (mobile)
 -------------------------
+
+Chat state (unread count)
+-------------------------
+
+Mobile clients can poll a small, per-user chat state endpoint to obtain the current unread count and a light-weight pointer to the last message source. This is useful for keeping badges and notifications in sync without fetching full conversation histories.
+
+Endpoint: `GET /api/mobile/chat/state`
+
+Headers:
+```
+Authorization: Bearer <token>
+```
+
+Success response (200):
+```json
+{
+  "success": true,
+  "state": {
+    "joinedGroups": ["main","pit_team"],
+    "currentGroup": "main",
+    "lastDmUser": "other_user",
+    "unreadCount": 2,
+    "lastSource": { "type": "dm", "id": "other_user" },
+    "notified": true,
+    "lastNotified": "2025-04-12T18:20:00+00:00"
+  }
+}
+```
+
+Notes:
+- The endpoint reads the same per-user JSON used by the web UI: `instance/chat/users/<team_number>/chat_state_<normalized_username>.json`.
+- `unreadCount` is the primary field mobile clients should use to update badges. The server ensures `unreadCount` is present and defaults it to 0 when no state file exists.
+- `lastSource` is an optional pointer (e.g. `{ type: 'dm', id: '<username>' }`) that helps clients deep-link into the appropriate conversation when the user opens the app.
+- This endpoint is read-only. To mark messages as read, use the existing web endpoints that reset unread state (the web UI calls `/chat/reset-unread`). Mobile clients may also call the equivalent mobile actions that modify per-user state via the chat send/edit endpoints when appropriate.
 
 Mobile clients can create and manage named group conversations (team-scoped). These endpoints are JWT-protected and operate on the same file-backed group storage used by the web UI and Socket.IO handlers (under `instance/chat/groups/<team_number>/`). Group names are sanitized (for example `/` is replaced with `_`) when stored.
 
@@ -967,6 +1024,271 @@ Content-Type: application/json
 Notes:
 - The endpoint requires a valid mobile JWT token. Team isolation is respected (token's scouting_team_number).
 - If the server lacks image-generation dependencies (kaleido or plotly image engines), the endpoint will return an error indicating the missing dependency.
+
+### Visualizer Endpoint (Assistant-style PNGs)
+
+A complementary endpoint is available that uses the server-side Assistant Visualizer (matplotlib-based) to produce PNG images of a wider set of visualization types. This is useful when mobile clients want a ready-made image instead of rendering Plotly JSON or generating charts locally.
+
+Endpoint: `POST /api/mobile/graphs/visualize`
+
+Headers:
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+Request JSON (examples):
+```json
+{
+  "vis_type": "team_performance",          // visualization types supported by the Visualizer
+  "team_number": 5454,                      // single team OR
+  "team_numbers": [5454, 1234],             // list of teams
+  "visualization_data": { ... }             // optional: pre-built data payload matching the Visualizer's expectations
+}
+```
+
+Behavior:
+- If `visualization_data` is supplied the Visualizer will use it directly (this matches the assistant internal payload shape).
+- If only team numbers are provided the server will compute basic metrics for the teams and construct a minimal `visualization_data` to pass to the Visualizer.
+- The Visualizer supports types such as `team_performance`, `team_comparison`, `metric_comparison`, `match_breakdown`, `radar_chart`, `event_summary`, `match_schedule`, `team_ranking`, `ranking_comparison`, and `trend_chart`.
+
+Compatibility note:
+- This endpoint also accepts the full set of parameters supported by the Plotly-based `POST /api/mobile/graphs` endpoint (for example `graph_type`, `graph_types`, `metric`, `mode`, `event_id`, etc.). When the request payload contains Plotly-style keys the server will forward the request to the same handler used by `/api/mobile/graphs`, so you get identical behavior and the same PNG/fallback semantics. In other words, clients can use either `/api/mobile/graphs` or `/api/mobile/graphs/visualize` interchangeably for Plotly-style requests.
+
+Responses:
+- On success: HTTP 200 with Content-Type `image/png` and PNG bytes of the generated visualization.
+- On failure: JSON with `{ "success": false, "error": "...", "error_code": "..." }` and an appropriate HTTP status.
+
+Notes and dependencies:
+- This endpoint uses the server-side `app.assistant.visualizer.Visualizer` which relies on `matplotlib` (Agg backend). Optional plotting libraries (`seaborn`, `pandas`, `numpy`) may improve styling but are not required for many plot types.
+- If matplotlib or other required plotting libraries are missing the endpoint will return a JSON error indicating the missing dependency. For servers that prefer Plotly-based images, continue to use `POST /api/mobile/graphs` which uses Plotly and has a JSON fallback.
+
+Security and scoping:
+- The endpoint is JWT-protected and enforces the same team-isolation rules as other mobile endpoints. Requests that reference teams not accessible to the token's scouting_team_number will be ignored/skipped and may result in an error if no valid teams remain.
+
+Example usage (curl):
+```bash
+curl -X POST "https://your-server.com/api/mobile/graphs/visualize" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"vis_type":"team_performance","team_number":5454}' --output team_5454.png
+```
+
+## JSON examples — Graphs
+
+Copy-paste JSON examples for common graph requests and responses. These are the payloads to POST to `/api/mobile/graphs` or `/api/mobile/graphs/visualize` (when using Plotly-style parameters the visualize endpoint forwards to the same handler).
+
+1) Plotly-style request (time-series / multi-team)
+
+Request (POST /api/mobile/graphs or /api/mobile/graphs/visualize):
+```json
+{
+  "team_numbers": [5454, 1234],
+  "graph_type": "line",
+  "metric": "total_points",
+  "mode": "match_by_match",
+  "event_id": 7
+}
+```
+
+Successful server behavior:
+- If the server can render PNGs (kaleido available) it returns HTTP 200 with Content-Type `image/png` and the PNG bytes in the body.
+- If the server cannot render images, it returns HTTP 200 with JSON containing `fallback_plotly_json` (the Plotly figure JSON) so the client can render locally:
+
+Example fallback JSON response (HTTP 200):
+```json
+{
+  "success": true,
+  "fallback_plotly_json": {
+    "data": [ { "type": "scatter", "x": ["Match 1","Match 2"], "y": [45,52], "name": "5454" } ],
+    "layout": { "title": "Total Points (match by match)" }
+  }
+}
+```
+
+2) Plotly-style request (bar of averages)
+
+Request:
+```json
+{
+  "team_numbers": [5454, 1234, 9012],
+  "graph_type": "bar",
+  "metric": "total_points",
+  "mode": "averages"
+}
+```
+
+Success: HTTP 200 `image/png` (or fallback JSON as above).
+
+3) Visualizer-style request (Assistant Visualizer)
+
+Request (POST /api/mobile/graphs/visualize):
+```json
+{
+  "vis_type": "radar_chart",
+  "team_numbers": [5454, 1234]
+}
+```
+
+Success: HTTP 200 `image/png` with a matplotlib-generated image.
+
+4) Visualizer with `visualization_data` (client-provided payload)
+
+Request:
+```json
+{
+  "vis_type": "team_performance",
+  "visualization_data": {
+    "team": {
+      "number": 5454,
+      "team_name": "Team 5454",
+      "stats": {
+        "total_points": 48,
+        "auto_points": 12,
+        "teleop_points": 30,
+        "endgame_points": 6
+      },
+      "matches": [
+        { "match_number": 1, "metric_value": 45 },
+        { "match_number": 2, "metric_value": 52 }
+      ]
+    }
+  }
+}
+```
+
+Success: HTTP 200 `image/png` (Visualizer uses the supplied data directly).
+
+5) Error responses (examples)
+
+Missing teams / data (HTTP 400):
+```json
+{ "success": false, "error": "No team_number(s) or visualization_data provided", "error_code": "MISSING_TEAMS_OR_DATA" }
+```
+
+No teams resolved (HTTP 404):
+```json
+{ "success": false, "error": "No teams found", "error_code": "NO_TEAMS" }
+```
+
+Image-generation failure (HTTP 500):
+```json
+{ "success": false, "error": "Server cannot generate images (missing dependencies)", "error_code": "IMAGE_LIB_MISSING" }
+```
+
+Notes:
+- When a PNG is returned the response body is raw bytes — not JSON. Clients should inspect the `Content-Type` header. If it starts with `image/` treat the body as an image. If it's `application/json` parse JSON and check for `fallback_plotly_json` or an error object.
+- For easier debugging, run the `/api/mobile/auth/login` flow first and use the returned token in `Authorization: Bearer <token>` header for graph requests.
+
+## Graph options & combinations (complete reference)
+
+This section lists all supported parameters for the two graph/image endpoints and common combinations clients can use. Both endpoints accept JSON bodies and require a mobile JWT in `Authorization: Bearer <token>`.
+
+Top-level parameters (shared between `/api/mobile/graphs` and `/api/mobile/graphs/visualize` when using Plotly-style payloads):
+
+- `team_number` (int) — single team number (convenience for single-team charts). Optional when `team_numbers` is provided.
+- `team_numbers` (array[int]) — list of team numbers to include. When provided, charts will include data for each of these teams (comparison charts, multi-line, radar, etc.).
+- `event_id` (int or string code) — optional event id (or event code) used to scope match/scouting data for metrics.
+- `graph_type` (string) — primary chart type. Supported values (Plotly route):
+  - `line` — match-by-match time-series (lines + markers)
+  - `bar` — bar chart (averages or totals)
+  - `radar` — radar/polar comparison
+  - `scatter` — scatter plot (points only)
+  - `hist` / `histogram` — histogram (per-match value distribution)
+  - `box` — box plot (per-team distribution with quartiles)
+- `graph_types` (array[string]) — multiple graph types to return (compare endpoint uses this to return `line`, `bar`, `radar` payloads together).
+- `metric` (string) — metric id to plot (examples below). Common metrics:
+  - `total_points` / `points` / `tot` — total score per match or average total points
+  - `auto_points` — autonomous phase points
+  - `teleop_points` — teleop phase points
+  - `endgame_points` — endgame/climb points
+  - custom metric ids defined by your game's `gameconfig` (use the exact id)
+- `mode` (string) — data mode for the chart:
+  - `match_by_match` — plot each match's value in order (default for time-series)
+  - `averages` — use per-team average values (useful for bar charts)
+  - `aggregate` — aggregated totals across matches (if available)
+- `data_view` (string) — high-level data shape requested (examples used in compare): `averages`, `per_match`, `totals`.
+- `limit`, `offset` — pagination for endpoints that return dataset lists; not commonly used for image generation but accepted in some handlers.
+
+Visualizer-specific parameters (Assistant Visualizer uses these when `vis_type` style requests are sent):
+
+- `vis_type` (string) — visualization type for the Assistant Visualizer. Supported values:
+  - `team_performance` — bar breakdown of Auto / Teleop / Endgame / Total for a single team
+  - `team_comparison` — grouped bars comparing two or more teams
+  - `metric_comparison` — horizontal bars for top teams by metric
+  - `match_breakdown` — two-subplot match score comparison + phase breakdown
+  - `radar_chart` — radar comparison for several core metrics
+  - `event_summary` — multi-panel event summary (progress, coverage, timeline)
+  - `match_schedule` — schedule visualization (horizontal rows per match)
+  - `team_ranking` — ranked bar chart for a specific metric
+  - `ranking_comparison` — compare ranking positions across metrics for a team
+  - `trend_chart` — performance trend with regression/trend line
+- `visualization_data` (object) — a pre-built payload shaped exactly as the Visualizer expects (for example the `visualization_data` returned by assistant responses). If present, the Visualizer will use it directly (this enables clients or server-side logic to compute series or stats and pass them in).
+
+Metric/field notes and accepted values
+- `metric` ids are case-sensitive strings matching either internal metric IDs (like `total_points`, `auto_points`) or custom metric keys from your `gameconfig.json`. Mobile clients should inspect `config.scouting_form` for available custom metric IDs if their game exposes them.
+- Histogram responses return a `datasets` array with each team's `values`, `count`, and `mean`, plus top-level `total_samples`, `overall_mean`, and a `bin_suggestion` that mobile clients can use when constructing bins. When `graph_types` includes `"hist"`, the response contains both `histogram` and `hist` keys pointing to the same payload for convenience.
+- Box plot responses include a `datasets` array where each entry provides the raw `values` along with a `stats` object (`count`, `min`, `max`, `median`, `q1`, `q3`).
+- For `graph_type: radar` the Visualizer/Plotly handlers expect a small fixed label set (Total, Auto, Teleop, Endgame, Consistency (%)). For custom radar sets, use `visualization_data` to provide explicit labels and values.
+
+Examples of useful combinations
+
+1) Single-team trend image (Visualizer)
+
+```json
+{
+  "vis_type": "trend_chart",
+  "visualization_data": {
+    "team_number": 5454,
+    "match_scores": [ {"match_number":1, "score": 45}, {"match_number":2, "score": 52} ],
+    "slope": 3.5,
+    "intercept": 40
+  }
+}
+```
+
+2) Multi-team comparison (Plotly-style forwarded to `/api/mobile/graphs`):
+
+```json
+{
+  "team_numbers": [5454, 1234],
+  "graph_types": ["line","bar","radar"],
+  "metric": "total_points",
+  "event_id": 7
+}
+```
+
+3) Bar chart of averages per team:
+
+```json
+{
+  "team_numbers": [5454,1234,9012],
+  "graph_type": "bar",
+  "metric": "total_points",
+  "mode": "averages"
+}
+```
+
+4) Radar chart using Visualizer with server-computed metrics (preferred when you need normalized radar values):
+
+```json
+{
+  "team_numbers": [5454,1234],
+  "vis_type": "radar_chart"
+}
+```
+
+Behavioral details and fallbacks
+- If the server can produce PNG bytes (Plotly with kaleido or matplotlib available) the endpoint returns `Content-Type: image/png` and the PNG body.
+- If Plotly image backends are not available, `/api/mobile/graphs` returns JSON containing `fallback_plotly_json` so clients can render the figure client-side. `/api/mobile/graphs/visualize` will attempt to fall back to the Plotly handler when Plotly-style parameters are sent; if neither Plotly nor matplotlib image rendering is available the Visualizer handler returns a JSON error.
+- Team isolation: when requesting specific `team_numbers`, the server resolves Team records respecting the token's `scouting_team_number`. Unknown/unavailable teams are skipped; if no valid teams remain the request returns 404/empty-result.
+
+Implementation notes for clients
+- Prefer `team_numbers` when requesting multi-team charts. `team_number` is provided for convenience when requesting single-team charts.
+- Use `visualization_data` for advanced or custom payload shapes — it is the most explicit and bypasses server-side metric aggregation.
+- Use `graph_types` to request multiple chart variants in a single call (the `/graphs/compare` flow uses this pattern and the `/graphs` handler returns a JSON object containing each requested graph type when not returning a PNG).
+
+If you'd like, I can also produce a small matrix table (CSV or markdown) enumerating every permutation of short common combos (e.g., single-team vs multi-team × line/bar/radar × match_by_match vs averages) for quick copy-paste samples.
 
   - `required` (boolean, optional): whether field is required
   - `default` (any, optional): default value
