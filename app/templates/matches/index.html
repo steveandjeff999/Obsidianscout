@@ -132,13 +132,13 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {# If match has an actual_time (played), show that first using event timezone if available #}
-                                    {# Consider a match 'played' ONLY if there's an actual_time or a winner. #}
-                                    {# Don't rely on scores alone as they may be initialized to 0 before matches are played. #}
-                                    {% set has_played = (match.actual_time or match.winner) %}
+                                    {# Consider a match 'played' ONLY if it has valid scores (not None and >= 0) #}
+                                    {# Check if scores are available from display_scores dictionary #}
+                                    {% set ds = display_scores.get(match.id) if display_scores is defined else None %}
+                                    {% set has_played = ds and ds.red_score is not none and ds.red_score >= 0 and ds.blue_score is not none and ds.blue_score >= 0 %}
                                     {% if has_played %}
-                                        {# Pick a time to display: prefer actual_time, then scheduled_time, then predicted_time #}
-                                        {% set display_time = match.actual_time or match.scheduled_time or match.predicted_time %}
+                                        {# Pick a time to display: prefer scheduled_time, then predicted_time #}
+                                        {% set display_time = match.scheduled_time or match.predicted_time %}
                                             {% if display_time %}
                                             {% if match.event and match.event.timezone %}
                                                 <div class="text-nowrap">
