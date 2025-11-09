@@ -450,6 +450,14 @@ def save_simple_config():
                                 element['display_in_predictions'] = False
                         except Exception:
                             element['display_in_predictions'] = False
+                        # Preserve scored flag from payload when present (renamed to gamepiece_scoreible)
+                        try:
+                            if 'gamepiece_scoreible' in el:
+                                element['gamepiece_scoreible'] = bool(el.get('gamepiece_scoreible'))
+                            else:
+                                element['gamepiece_scoreible'] = False
+                        except Exception:
+                            element['gamepiece_scoreible'] = False
                         if element['type'] != 'select' and element['type'] != 'multiple_choice' and 'points' in el:
                             try:
                                 element['points'] = float(el.get('points'))
@@ -513,6 +521,11 @@ def save_simple_config():
                             element['display_in_predictions'] = bool(request.form.get(f'{period}_element_display_predictions_{index}'))
                         except Exception:
                             element['display_in_predictions'] = False
+                        # Read scored checkbox for this element if present (renamed to gamepiece_scoreible)
+                        try:
+                            element['gamepiece_scoreible'] = bool(request.form.get(f'{period}_element_gamepiece_scoreible_{index}'))
+                        except Exception:
+                            element['gamepiece_scoreible'] = False
 
                         # Add points if provided (for non-select and non-multiple-choice types)
                         points = request.form.get(f'{period}_element_points_{index}')
@@ -644,6 +657,10 @@ def save_simple_config():
                             if 'points' not in merged_el or not merged_el.get('points'):
                                 if match.get('points'):
                                     merged_el['points'] = match.get('points')
+                        # Preserve scored flag if missing from merged element (renamed to gamepiece_scoreible)
+                        if 'gamepiece_scoreible' not in merged_el or merged_el.get('gamepiece_scoreible') is None:
+                            if match.get('gamepiece_scoreible') is not None:
+                                merged_el['gamepiece_scoreible'] = match.get('gamepiece_scoreible')
                     merged.append(merged_el)
                 # Debug: log previous and merged elements
                 try:
@@ -688,7 +705,8 @@ def save_simple_config():
                     'name': piece_name,
                     'auto_points': float(request.form.get(f'game_piece_auto_points_{index}', 0)),
                     'teleop_points': float(request.form.get(f'game_piece_teleop_points_{index}', 0)),
-                    'bonus_points': float(request.form.get(f'game_piece_bonus_points_{index}', 0))
+                    'bonus_points': float(request.form.get(f'game_piece_bonus_points_{index}', 0)),
+                    'gamepiece_scoreible': True if request.form.get(f'game_piece_gamepiece_scoreible_{index}') else False
                 }
                 game_pieces.append(piece)
         
@@ -2007,21 +2025,37 @@ def analytics_config_averages():
             return {}
 
         # Build list of fields grouped by period
+        # Note: tuples now include a fifth element: gamepiece_scoreible flag (bool).
         periods = ['auto_period', 'teleop_period', 'endgame_period', 'post_match', 'game_pieces']
         fields_by_period = {p: [] for p in periods}
 
+        # For each period's scoring elements include the gamepiece_scoreible flag
         for period in ['auto_period', 'teleop_period', 'endgame_period']:
             period_cfg = game_config.get(period, {})
             for el in period_cfg.get('scoring_elements', []):
-                fields_by_period[period].append((el.get('id'), el.get('name'), el.get('type'), period))
+                fields_by_period[period].append((el.get('id'), el.get('name'), el.get('type'), period, bool(el.get('gamepiece_scoreible'))))
 
         for el in game_config.get('post_match', {}).get('rating_elements', []):
-            fields_by_period['post_match'].append((el.get('id'), el.get('name'), 'rating', 'post_match'))
+            fields_by_period['post_match'].append((el.get('id'), el.get('name'), 'rating', 'post_match', False))
         for el in game_config.get('post_match', {}).get('text_elements', []):
-            fields_by_period['post_match'].append((el.get('id'), el.get('name'), 'text', 'post_match'))
+            fields_by_period['post_match'].append((el.get('id'), el.get('name'), 'text', 'post_match', False))
 
         for gp in game_config.get('game_pieces', []):
-            fields_by_period['game_pieces'].append((gp.get('id'), gp.get('name'), 'game_piece', 'game_pieces'))
+            fields_by_period['game_pieces'].append((gp.get('id'), gp.get('name'), 'game_piece', 'game_pieces', bool(gp.get('gamepiece_scoreible'))))
+
+        # Add a "Cycles" synthetic column at the end of each play period and a total column
+        # Cycles are counted by summing how many configured gamepiece_scoreible elements were scored
+        # across the saved entries for that team.
+        # Only add Cycles synthetic columns for the main play periods (auto, teleop, endgame).
+        # Do NOT add cycles for post_match or game_pieces per request.
+        for p in ['auto_period', 'teleop_period', 'endgame_period']:
+            # use a unique id per period for the synthetic cycles column
+            fields_by_period[p].append((f'__cycles_{p}', 'Cycles', 'cycles', p, False))
+
+        # Add a total cycles pseudo-period and column
+        total_period_key = 'total'
+        periods.append(total_period_key)
+        fields_by_period[total_period_key] = [(f'__total_cycles', 'Total Cycles', 'total', total_period_key, False)]
 
         # Group entries by team
         teams_map = defaultdict(list)  # team_id -> list of data dicts
@@ -2056,14 +2090,121 @@ def analytics_config_averages():
 
             for period in periods:
                 team_result['periods'][period] = []
-                for fid, fname, ftype, fperiod in fields_by_period.get(period, []):
+                for tpl in fields_by_period.get(period, []):
+                    # tpl: (id, name, type, period, gamepiece_flag)
+                    if len(tpl) == 5:
+                        fid, fname, ftype, fperiod, f_gamepiece = tpl
+                    else:
+                        fid, fname, ftype, fperiod = tpl
+                        f_gamepiece = False
                     values = []
                     for d in data_list:
                         if fid in d:
                             values.append(d.get(fid))
 
-                    if not values:
+                    if not values and ftype not in ('cycles', 'total'):
                         team_result['periods'][period].append({'id': fid, 'name': fname, 'type': ftype, 'period': fperiod, 'count': 0, 'average': None, 'most_common': None})
+                        continue
+
+                    # Handle synthetic cycles and total columns
+                    if ftype == 'cycles':
+                        # Count how many configured scoreable elements were scored across entries
+                        # For this period, examine its scoring_elements (if any) and count occurrences per entry
+                        period_cycles = 0
+                        try:
+                            # Get list of scoreable element ids for this period from game_config
+                            scoreable_ids = []
+                            if fperiod in ('auto_period', 'teleop_period', 'endgame_period'):
+                                for el in game_config.get(fperiod, {}).get('scoring_elements', []):
+                                    if el.get('gamepiece_scoreible'):
+                                        scoreable_ids.append(el.get('id'))
+                            elif fperiod == 'game_pieces':
+                                for gp in game_config.get('game_pieces', []):
+                                    if gp.get('gamepiece_scoreible'):
+                                        scoreable_ids.append(gp.get('id'))
+
+                            for d in data_list:
+                                # For each entry, count how many of the scoreable_ids are present and truthy
+                                per_entry_count = 0
+                                for sid in scoreable_ids:
+                                    try:
+                                        v = d.get(sid)
+                                    except Exception:
+                                        v = None
+                                    if v is None:
+                                        continue
+                                    # Treat non-empty/non-zero as scored
+                                    try:
+                                        if isinstance(v, (int, float)):
+                                            if v != 0:
+                                                per_entry_count += 1
+                                        elif isinstance(v, bool):
+                                            if v:
+                                                per_entry_count += 1
+                                        elif isinstance(v, str):
+                                            if v.strip() != '' and v.strip() not in ('0','false','False'):
+                                                per_entry_count += 1
+                                        else:
+                                            # fallback truthiness
+                                            if v:
+                                                per_entry_count += 1
+                                    except Exception:
+                                        continue
+                                period_cycles += per_entry_count
+                        except Exception:
+                            period_cycles = 0
+
+                        team_result['periods'][period].append({'id': fid, 'name': fname, 'type': ftype, 'period': fperiod, 'count': period_cycles, 'average': None, 'most_common': None})
+                        continue
+
+                    if ftype == 'total':
+                        # Sum cycles across the main play periods and game_pieces
+                        try:
+                            total_cycles = 0
+                            for p in ['auto_period', 'teleop_period', 'endgame_period']:
+                                # find the synthetic cycles column id for that period
+                                for ttpl in fields_by_period.get(p, []):
+                                    if (isinstance(ttpl, tuple) and len(ttpl) >= 3 and ttpl[2] == 'cycles') or (len(ttpl) == 5 and ttpl[2] == 'cycles'):
+                                        # compute period cycles similarly to above
+                                        # reuse logic: simulate extracting the previously appended cycles value
+                                        # Instead of re-computing complex logic twice, compute inline here
+                                        scoreable_ids = []
+                                        if p in ('auto_period', 'teleop_period', 'endgame_period'):
+                                            for el in game_config.get(p, {}).get('scoring_elements', []):
+                                                if el.get('gamepiece_scoreible'):
+                                                    scoreable_ids.append(el.get('id'))
+                                        elif p == 'game_pieces':
+                                            for gp in game_config.get('game_pieces', []):
+                                                if gp.get('gamepiece_scoreible'):
+                                                    scoreable_ids.append(gp.get('id'))
+
+                                        for d in data_list:
+                                            per_entry_count = 0
+                                            for sid in scoreable_ids:
+                                                try:
+                                                    v = d.get(sid)
+                                                except Exception:
+                                                    v = None
+                                                if v is None:
+                                                    continue
+                                                if isinstance(v, (int, float)):
+                                                    if v != 0:
+                                                        per_entry_count += 1
+                                                elif isinstance(v, bool):
+                                                    if v:
+                                                        per_entry_count += 1
+                                                elif isinstance(v, str):
+                                                    if v.strip() != '' and v.strip() not in ('0','false','False'):
+                                                        per_entry_count += 1
+                                                else:
+                                                    if v:
+                                                        per_entry_count += 1
+                                            total_cycles += per_entry_count
+                                        break
+                        except Exception:
+                            total_cycles = 0
+                        team_result['periods'][period].append({'id': fid, 'name': fname, 'type': ftype, 'period': fperiod, 'count': total_cycles, 'average': None, 'most_common': None})
+                        continue
                         continue
 
                     if ftype in ('counter', 'rating'):

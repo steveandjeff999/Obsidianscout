@@ -86,6 +86,65 @@ def scan_json_files(root: Path) -> Dict[str, Dict[str, str]]:
 
 def scrub_json_from_scan(root: Path, scan_results: Dict[str, Dict[str, str]], backup_file: Optional[Path] = None) -> Tuple[Path, Dict[str, Dict[str, str]]]:
     backup: Dict[str, Dict[str, str]] = {}
+    # Special-case: always redact app_config.json JWT secret and set generate flag
+    try:
+        app_cfg_rel = 'app_config.json'
+        app_cfg_path = root / app_cfg_rel
+        if app_cfg_path.exists():
+            try:
+                content = json.loads(app_cfg_path.read_text(encoding='utf-8'))
+            except Exception:
+                content = {}
+
+            # Backup existing JWT_SECRET_KEY and JWT_GENERATE_NEW values (if any)
+            orig_jwt = content.get('JWT_SECRET_KEY') if isinstance(content, dict) else None
+            orig_gen = content.get('JWT_GENERATE_NEW') if isinstance(content, dict) else None
+            if orig_jwt is not None or orig_gen is not None:
+                backup.setdefault(app_cfg_rel, {})['JWT_SECRET_KEY'] = orig_jwt
+                backup.setdefault(app_cfg_rel, {})['JWT_GENERATE_NEW'] = orig_gen
+
+            # Also backup VAPID keys if present (so GUI scrub also redacts them)
+            orig_vapid_priv = content.get('VAPID_PRIVATE_KEY') if isinstance(content, dict) else None
+            orig_vapid_pub = content.get('VAPID_PUBLIC_KEY') if isinstance(content, dict) else None
+            orig_vapid_gen = content.get('VAPID_GENERATE_NEW') if isinstance(content, dict) else None
+            if orig_vapid_priv is not None or orig_vapid_pub is not None or orig_vapid_gen is not None:
+                backup.setdefault(app_cfg_rel, {})['VAPID_PRIVATE_KEY'] = orig_vapid_priv
+                backup.setdefault(app_cfg_rel, {})['VAPID_PUBLIC_KEY'] = orig_vapid_pub
+                backup.setdefault(app_cfg_rel, {})['VAPID_GENERATE_NEW'] = orig_vapid_gen
+
+            # Replace JWT and VAPID values with placeholders and enable generation on startup
+            try:
+                if not isinstance(content, dict):
+                    content = {}
+                changed = False
+                if content.get('JWT_SECRET_KEY'):
+                    content['JWT_SECRET_KEY'] = '[REDACTED_JWT_SECRET_KEY]'
+                    content['JWT_GENERATE_NEW'] = True
+                    changed = True
+                # redact VAPID keys if present
+                if content.get('VAPID_PRIVATE_KEY'):
+                    content['VAPID_PRIVATE_KEY'] = '[REDACTED_VAPID_PRIVATE_KEY]'
+                    changed = True
+                if content.get('VAPID_PUBLIC_KEY'):
+                    content['VAPID_PUBLIC_KEY'] = '[REDACTED_VAPID_PUBLIC_KEY]'
+                    changed = True
+                if not content.get('VAPID_GENERATE_NEW'):
+                    # set flag to force regeneration on startup
+                    content['VAPID_GENERATE_NEW'] = True
+                    changed = True
+                if changed:
+                    app_cfg_path.write_text(json.dumps(content, indent=2), encoding='utf-8')
+            except Exception:
+                pass
+
+            # If app_config.json was included in scan_results, remove it to avoid double-processing
+            try:
+                if app_cfg_rel in scan_results:
+                    del scan_results[app_cfg_rel]
+            except Exception:
+                pass
+    except Exception:
+        pass
     for rel_str, secrets in scan_results.items():
         target = root / rel_str
         if not target.exists():
@@ -684,7 +743,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parent
 
 # Patterns to look for: map keys to placeholder values and extraction logic
 JSON_KEYS = [
@@ -785,6 +844,54 @@ def replace_in_json_file(path: Path, replacements: Dict[str, str]) -> None:
 def scan_and_scrub(root: Path) -> Tuple[Path, Dict[str, Dict[str, str]]]:
     files = find_files(root)
     backup: Dict[str, Dict[str, str]] = {}
+
+    # Special-case: redact VAPID keys in app_config.json and set generate flag (CLI path)
+    try:
+        app_cfg_rel = 'app_config.json'
+        app_cfg_path = root / app_cfg_rel
+        if app_cfg_path.exists():
+            try:
+                content = json.loads(app_cfg_path.read_text(encoding='utf-8'))
+            except Exception:
+                content = {}
+
+            orig_priv = content.get('VAPID_PRIVATE_KEY') if isinstance(content, dict) else None
+            orig_pub = content.get('VAPID_PUBLIC_KEY') if isinstance(content, dict) else None
+            orig_gen = content.get('VAPID_GENERATE_NEW') if isinstance(content, dict) else None
+            if orig_priv is not None or orig_pub is not None or orig_gen is not None:
+                backup.setdefault(app_cfg_rel, {})['VAPID_PRIVATE_KEY'] = orig_priv
+                backup.setdefault(app_cfg_rel, {})['VAPID_PUBLIC_KEY'] = orig_pub
+                backup.setdefault(app_cfg_rel, {})['VAPID_GENERATE_NEW'] = orig_gen
+
+            try:
+                if not isinstance(content, dict):
+                    content = {}
+                # Only rewrite if values look non-empty to avoid unnecessary writes
+                changed = False
+                if content.get('VAPID_PRIVATE_KEY'):
+                    content['VAPID_PRIVATE_KEY'] = '[REDACTED_VAPID_PRIVATE_KEY]'
+                    changed = True
+                if content.get('VAPID_PUBLIC_KEY'):
+                    content['VAPID_PUBLIC_KEY'] = '[REDACTED_VAPID_PUBLIC_KEY]'
+                    changed = True
+                # Ensure generation flag is set so runtime regenerates keys
+                if not content.get('VAPID_GENERATE_NEW'):
+                    content['VAPID_GENERATE_NEW'] = True
+                    changed = True
+
+                if changed:
+                    app_cfg_path.write_text(json.dumps(content, indent=2), encoding='utf-8')
+                    print(f"Redacted VAPID keys in {app_cfg_path}")
+            except Exception as e:
+                print(f"Failed to redact VAPID keys in {app_cfg_path}: {e}")
+
+            # Remove from files list so we don't double-process
+            try:
+                files = [f for f in files if f.relative_to(root).as_posix() != app_cfg_rel]
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"VAPID redact pre-step failed: {e}")
 
     for f in files:
         rel = f.relative_to(root)

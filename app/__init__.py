@@ -688,6 +688,124 @@ def create_app(test_config=None):
             "preferred_api_source": "first"
         }
     
+    # Load top-level application config (app_config.json) and support auto-generation
+    try:
+        base = os.getcwd()
+        cfg_path = os.path.join(base, 'app_config.json')
+        if os.path.exists(cfg_path):
+            try:
+                with open(cfg_path, 'r', encoding='utf-8') as f:
+                    top_cfg = json.load(f) or {}
+            except Exception:
+                top_cfg = {}
+        else:
+            top_cfg = {}
+
+        # If the JWT secret is present in top-level config, import it into app.config
+        if top_cfg.get('JWT_SECRET_KEY'):
+            app.config['JWT_SECRET_KEY'] = top_cfg.get('JWT_SECRET_KEY')
+
+        # Support auto-generation flag: if true, generate a secure random secret,
+        # write it into app_config.json and flip the flag to false so it only runs once.
+        gen_flag = top_cfg.get('JWT_GENERATE_NEW')
+        if gen_flag:
+            import secrets as _secrets
+            new_secret = _secrets.token_urlsafe(48)
+            top_cfg['JWT_SECRET_KEY'] = new_secret
+            top_cfg['JWT_GENERATE_NEW'] = False
+            try:
+                with open(cfg_path, 'w', encoding='utf-8') as wf:
+                    json.dump(top_cfg, wf, ensure_ascii=False, indent=2)
+                app.config['JWT_SECRET_KEY'] = new_secret
+                try:
+                    app.logger.info('Generated new JWT secret and updated app_config.json')
+                except Exception:
+                    pass
+            except Exception as e:
+                try:
+                    app.logger.error(f'Failed to persist generated JWT secret to {cfg_path}: {e}')
+                except Exception:
+                    pass
+
+        # If config didn't provide JWT_SECRET_KEY, warn so operator notices they should set it for production.
+        if not app.config.get('JWT_SECRET_KEY'):
+            try:
+                app.logger.warning('JWT secret not set in app config. Using default placeholder; change for production')
+            except Exception:
+                pass
+        # Import VAPID keys from top-level config if present
+        if top_cfg.get('VAPID_PRIVATE_KEY') or top_cfg.get('VAPID_PUBLIC_KEY'):
+            app.config['VAPID_PRIVATE_KEY'] = top_cfg.get('VAPID_PRIVATE_KEY')
+            app.config['VAPID_PUBLIC_KEY'] = top_cfg.get('VAPID_PUBLIC_KEY')
+
+        # Support auto-generation flag for VAPID keys: if true, always generate
+        # fresh keys (replace existing) and persist them into app_config.json so
+        # the flag can be cleared. This ensures operators can trigger rotation
+        # by setting VAPID_GENERATE_NEW = true.
+        vapid_gen = top_cfg.get('VAPID_GENERATE_NEW')
+        if vapid_gen:
+            try:
+                from app.utils.push_notifications import get_vapid_keys
+
+                # Force generation even if app.config contains keys
+                try:
+                    with app.app_context():
+                        keys = get_vapid_keys(force_generate=True)
+                except Exception as ctx_e:
+                    try:
+                        app.logger.error(f'Error invoking get_vapid_keys() inside app context: {ctx_e}')
+                    except Exception:
+                        pass
+                    raise
+
+                priv = keys.get('private_key') if isinstance(keys, dict) else None
+                pub = keys.get('public_key') if isinstance(keys, dict) else None
+
+                # Consider keys valid when non-empty and not redacted placeholders
+                def _is_real_key(v):
+                    return isinstance(v, str) and v and not v.strip().startswith('[REDACTED')
+
+                if _is_real_key(priv) and _is_real_key(pub):
+                    top_cfg['VAPID_PRIVATE_KEY'] = priv
+                    top_cfg['VAPID_PUBLIC_KEY'] = pub
+                    top_cfg['VAPID_GENERATE_NEW'] = False
+                    try:
+                        with open(cfg_path, 'w', encoding='utf-8') as wf:
+                            json.dump(top_cfg, wf, ensure_ascii=False, indent=2)
+                        app.config['VAPID_PRIVATE_KEY'] = priv
+                        app.config['VAPID_PUBLIC_KEY'] = pub
+                        try:
+                            app.logger.info('Generated new VAPID keys and updated app_config.json')
+                        except Exception:
+                            pass
+                    except Exception as e:
+                        try:
+                            app.logger.error(f'Failed to persist generated VAPID keys to {cfg_path}: {e}')
+                        except Exception:
+                            pass
+                else:
+                    try:
+                        app.logger.warning('VAPID key generation returned empty keys; leaving VAPID_GENERATE_NEW = true')
+                    except Exception:
+                        pass
+            except Exception as inner_e:
+                try:
+                    app.logger.error(f'Failed to auto-generate VAPID keys via helper: {inner_e}')
+                except Exception:
+                    pass
+
+        # Warn if no VAPID keys configured
+        if not app.config.get('VAPID_PRIVATE_KEY') or not app.config.get('VAPID_PUBLIC_KEY'):
+            try:
+                app.logger.info('VAPID keys not fully set in app config; runtime will fallback to instance/vapid_keys.json or generate keys when needed')
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            app.logger.error(f'Error loading top-level app_config.json: {e}')
+        except Exception:
+            pass
+    
     # Initialize database
     db.init_app(app)
     migrate.init_app(app, db)

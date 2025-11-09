@@ -923,7 +923,40 @@ Content-Type: application/json
 
 Retrieve current game configuration for mobile app. This endpoint now returns the full gameconfig JSON used by the web UI for the scouting team (not a trimmed subset). Mobile clients should expect the complete configuration including sections, rules, validation, and any custom fields.
 
+This endpoint preferentially returns the saved per-team `game_config.json` file located at `instance/configs/<scouting_team_number>/game_config.json` if it exists. If that file isn't present or is invalid, the server falls back to the standard loader which may return default or merged configs (including alliance-shared configs when applicable).
+
 **Endpoint:** `GET /api/mobile/config/game`
+
+### Set / Update Game Configuration
+
+Admins can update the game configuration (team-scoped or global) via the Mobile API. Only users with the `admin` or `superadmin` role may perform this action.
+
+**Endpoint:** `POST /api/mobile/config/game` or `PUT /api/mobile/config/game`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request body:** Raw JSON representing the full game configuration (same shape returned by GET `/api/mobile/config/game`). Example payload is identical to the GET response's `config` object.
+
+**Success Response (200):**
+```json
+{
+  "success": true
+}
+```
+
+**Errors:**
+- 401 / AUTH_REQUIRED: Missing or invalid token
+- 403 / FORBIDDEN: Caller lacks admin permissions
+- 400 / MISSING_BODY: Missing or invalid JSON payload
+- 500 / SAVE_FAILED: Server failed to persist the configuration
+
+Notes:
+- The server will persist per-team configuration when the authenticated admin belongs to a scouting team. If the caller is a global admin without a scouting team, the configuration is saved to the global `config/game_config.json` file.
+- The server performs minimal validation; consider validating keys client-side before sending. The web UI includes additional form-level validation.
 
 **Headers:**
 ```

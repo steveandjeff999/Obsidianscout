@@ -251,6 +251,61 @@ def perform_update(release: str | Path, is_zip: bool = False, preserve_extra: se
             # For preserved paths, merge new files/dirs without overwriting existing content.
             if name in preserve:
                 try:
+                    # Special-case app_config.json: merge JSON keys so we don't overwrite
+                    # operator-managed secrets (preserve existing keys, add new keys from release)
+                    if name == 'app_config.json' and entry.is_file():
+                        try:
+                            src_text = entry.read_text(encoding='utf-8')
+                            src_json = json.loads(src_text)
+                        except Exception:
+                            src_json = {}
+
+                        if target.exists() and target.is_file():
+                            try:
+                                dst_text = target.read_text(encoding='utf-8')
+                                dst_json = json.loads(dst_text)
+                            except Exception:
+                                dst_json = {}
+
+                            # Backup existing target before modifying
+                            try:
+                                backup_target = backup_root / target.name
+                                if not dry_run:
+                                    backup_root.mkdir(parents=True, exist_ok=True)
+                                    if backup_target.exists():
+                                        backup_target = Path(str(backup_target) + f"_{int(time.time())}")
+                                    shutil.copy2(target, backup_target)
+                            except Exception:
+                                pass
+
+                            # Merge: keep dst values, only add keys from src that are missing
+                            added_keys = []
+                            for k, v in (src_json or {}).items():
+                                if k not in dst_json:
+                                    dst_json[k] = v
+                                    added_keys.append(k)
+
+                            if added_keys:
+                                if not dry_run:
+                                    try:
+                                        target.write_text(json.dumps(dst_json, indent=2), encoding='utf-8')
+                                    except Exception as e:
+                                        _log(f"ERROR writing merged app_config.json: {e}")
+                                skipped.append((name, f'preserved (merged {len(added_keys)} new key(s))'))
+                            else:
+                                skipped.append((name, 'preserved (no new keys)'))
+                        else:
+                            # Destination missing - copy the file over as-is (it's preserved path)
+                            if not dry_run:
+                                try:
+                                    target.parent.mkdir(parents=True, exist_ok=True)
+                                    shutil.copy2(entry, target)
+                                except Exception as e:
+                                    _log(f"ERROR copying new preserved file '{name}': {e}")
+                            skipped.append((name, 'preserved (new file added)'))
+                        continue
+
+                    # Default preserved-path behavior: add-only merge
                     added_items = merge_add_only(entry, target, dry_run=dry_run, log=_log, repo_root=repo_root)
                     if added_items:
                         summary = f'preserved (merged {len(added_items)} new item{"s" if len(added_items) > 1 else ""})'

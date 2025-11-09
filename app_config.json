@@ -1,7 +1,12 @@
 {
-    "version": "5.2.3",
-    "last_updated": "2025-07-25T18:47:00.516625",
-    "repository_url": "https://github.com/steveandjeff999/Obsidianscout.git",
-    "branch": "main",
-    "backup_enabled": true
+  "version": "5.2.4",
+  "last_updated": "2025-07-25T18:47:00.516625",
+  "repository_url": "https://github.com/steveandjeff999/Obsidianscout.git",
+  "branch": "main",
+  "backup_enabled": true,
+  "JWT_SECRET_KEY": "[REDACTED_JWT_SECRET_KEY]",
+  "JWT_GENERATE_NEW": true,
+  "VAPID_PRIVATE_KEY": "[REDACTED_VAPID_PRIVATE_KEY]",
+  "VAPID_PUBLIC_KEY": "[REDACTED_VAPID_PUBLIC_KEY]",
+  "VAPID_GENERATE_NEW": true
 }

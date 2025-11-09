@@ -6,13 +6,56 @@ from flask import current_app
 from .tba_api_utils import (
     TBAApiError, get_tba_teams_at_event, get_tba_event_matches, 
     get_tba_event_details, tba_team_to_db_format, tba_match_to_db_format,
-    tba_event_to_db_format, construct_tba_event_key, construct_tba_team_key
+    tba_event_to_db_format, construct_tba_event_key, construct_tba_team_key,
+    remap_team_number, get_event_team_remapping
 )
 from app.utils.config_manager import get_current_game_config
 
 class ApiError(Exception):
     """Exception for API errors"""
     pass
+
+
+def safe_int_team_number(team_value):
+    """
+    Safely convert a team identifier to an integer.
+    
+    Handles offseason team numbers with letters (e.g., '581B', '5454b').
+    Returns an integer if the value is purely numeric, otherwise returns 
+    the original value as a string (stripped and uppercased).
+    
+    Args:
+        team_value: The team identifier (could be int, str, or None)
+        
+    Returns:
+        int, str, or None: Integer if numeric, string if alphanumeric, None if empty
+        
+    Examples:
+        safe_int_team_number('5454') -> 5454
+        safe_int_team_number('581B') -> '581B'
+        safe_int_team_number(5454) -> 5454
+        safe_int_team_number('') -> None
+        safe_int_team_number(None) -> None
+    """
+    if team_value is None:
+        return None
+    
+    # If already an int, return it
+    if isinstance(team_value, int):
+        return team_value
+    
+    # Convert to string and strip whitespace
+    team_str = str(team_value).strip()
+    
+    if not team_str:
+        return None
+    
+    # Try to convert to int
+    try:
+        return int(team_str)
+    except ValueError:
+        # If it contains letters (offseason team like '581B'), return uppercase string
+        return team_str.upper()
 
 
 def _mask(val):
@@ -612,13 +655,23 @@ def api_to_db_match_conversion(api_match, event_id):
     elif 'alliances' in api_match:
         # TBA API format with alliances object
         # Format: {"red": {"team_keys": ["frc254", ...]}, "blue": {...}}
+        # Extract event_key from match key for remapping (format: 2025casj_qm1)
+        event_key = None
+        match_key = api_match.get('key', '')
+        if match_key and '_' in match_key:
+            event_key = match_key.split('_')[0]
+        
         alliances = api_match.get('alliances', {})
         if 'red' in alliances:
             for team in alliances.get('red', {}).get('team_keys', []):
-                red_alliance.append(team.replace('frc', ''))
+                team_str = team.replace('frc', '')
+                remapped = remap_team_number(team_str, event_key)
+                red_alliance.append(str(remapped))
         if 'blue' in alliances:
             for team in alliances.get('blue', {}).get('team_keys', []):
-                blue_alliance.append(team.replace('frc', ''))
+                team_str = team.replace('frc', '')
+                remapped = remap_team_number(team_str, event_key)
+                blue_alliance.append(str(remapped))
     
     # Extract scores if available (for completed matches)
     red_score = None
@@ -795,10 +848,10 @@ def get_teams_dual_api(event_code):
             # Get teams from TBA
             tba_teams = get_tba_teams_at_event(tba_event_key)
             
-            # Convert to database format
+            # Convert to database format with event_key for team remapping
             teams_db_format = []
             for tba_team in tba_teams:
-                team_data = tba_team_to_db_format(tba_team)
+                team_data = tba_team_to_db_format(tba_team, event_key=tba_event_key)
                 if team_data and team_data.get('team_number'):
                     teams_db_format.append(team_data)
             
@@ -834,7 +887,7 @@ def get_teams_dual_api(event_code):
 
                 teams_db_format = []
                 for tba_team in tba_teams:
-                    team_data = tba_team_to_db_format(tba_team)
+                    team_data = tba_team_to_db_format(tba_team, event_key=tba_event_key)
                     if team_data and team_data.get('team_number'):
                         teams_db_format.append(team_data)
 
@@ -873,7 +926,7 @@ def get_matches_dual_api(event_code):
             # Convert to database format (we'll need event_id later)
             matches_db_format = []
             for tba_match in tba_matches:
-                match_data = tba_match_to_db_format(tba_match, None)  # event_id will be set later
+                match_data = tba_match_to_db_format(tba_match, None, event_key=tba_event_key)  # event_id will be set later
                 if match_data:
                     matches_db_format.append(match_data)
             
@@ -894,7 +947,7 @@ def get_matches_dual_api(event_code):
                     tba_matches = get_tba_event_matches(tba_event_key)
                     matches_db_format = []
                     for tba_match in tba_matches:
-                        match_data = tba_match_to_db_format(tba_match, None)
+                        match_data = tba_match_to_db_format(tba_match, None, event_key=tba_event_key)
                         if match_data:
                             matches_db_format.append(match_data)
                     return matches_db_format
@@ -928,7 +981,7 @@ def get_matches_dual_api(event_code):
 
                 matches_db_format = []
                 for tba_match in tba_matches:
-                    match_data = tba_match_to_db_format(tba_match, None)
+                    match_data = tba_match_to_db_format(tba_match, None, event_key=tba_event_key)
                     if match_data:
                         matches_db_format.append(match_data)
 

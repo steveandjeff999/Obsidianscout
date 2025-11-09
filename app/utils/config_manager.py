@@ -108,9 +108,27 @@ def save_game_config(data):
     if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and hasattr(current_user, 'scouting_team_number'):
         team_number = current_user.scouting_team_number
 
+    # If no team number is present (for example an admin editing the global config),
+    # persist to the global config file under `config/game_config.json` so changes
+    # are not silently discarded. This preserves previous behavior for team-scoped
+    # configs while allowing admin/global saves.
     if team_number is None:
-        # Cannot save config for a non-team user
-        return False
+        try:
+            base_dir = os.getcwd()
+            config_dir = os.path.join(base_dir, 'config')
+            os.makedirs(config_dir, exist_ok=True)
+            config_path = os.path.join(config_dir, 'game_config.json')
+            # Make a backup of the previous global config if it exists
+            if os.path.exists(config_path):
+                try:
+                    shutil.copyfile(config_path, config_path + '.bak')
+                except Exception:
+                    pass
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception:
+            return False
 
     base_dir = os.getcwd()
     config_name = 'game_config.json'

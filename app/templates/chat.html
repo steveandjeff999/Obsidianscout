@@ -35,15 +35,12 @@
                         <div class="card-header">Conversations</div>
                         <div class="card-body d-flex flex-column">
                             <label for="dmUserList" class="form-label mb-1">Chat with:</label>
-                            <!-- Replaced dropdown with scrollable user panel -->
-                            <div id="dmUserList" class="list-group list-group-flush mb-2" style="max-height:240px; overflow:auto;">
+                            <!-- Replaced dropdown with a flexible, scrollable user panel that matches the messages height -->
+                            <div id="dmUserList" class="list-group list-group-flush mb-2 flex-grow-1 overflow-auto chat-messages-fixed-height">
                                 <!-- Populated dynamically with user list items -->
                             </div>
                             <div class="small text-muted mb-2">Click a user to open or continue a conversation.</div>
                             <div class="text-muted small mb-2">Select a user to open or continue a conversation.</div>
-                            <div class="flex-grow-1 overflow-auto" style="min-height: 180px;">
-                                <!-- Placeholder for recent conversations if needed -->
-                            </div>
                         </div>
                     </div>
                 </div>

@@ -7,6 +7,7 @@ from flask_login import login_required, current_user
 from app import db
 from app.models import Match, Team, Event
 from app.models_misc import NotificationSubscription, DeviceToken, NotificationLog
+from app.utils.api_utils import safe_int_team_number
 from app.utils.notification_service import (
     send_notification_for_subscription,
     get_user_notification_history,
@@ -938,7 +939,7 @@ def mobile_schedule_create():
                 user_id=current_user.id,
                 scouting_team_number=current_user.scouting_team_number,
                 notification_type=sub_data.get('notification_type'),
-                target_team_number=int(sub_data.get('target_team_number')),
+                target_team_number=safe_int_team_number(sub_data.get('target_team_number')),
                 event_code=sub_data.get('event_code'),
                 email_enabled=bool(sub_data.get('email_enabled', True)),
                 push_enabled=bool(sub_data.get('push_enabled', True)),

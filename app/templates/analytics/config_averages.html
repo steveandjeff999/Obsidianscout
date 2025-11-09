@@ -63,6 +63,11 @@
     table.table thead th { vertical-align: middle; }
     /* Reduce padding for many columns */
     table.table td, table.table th { padding: 0.35rem 0.6rem; }
+    /* Sorting indicator styling - always visible but dim until active */
+    .sort-indicator { margin-left: 0.35rem; color: #222; }
+    .sort-indicator .arrow-up, .sort-indicator .arrow-down { opacity: 0.25; display: inline-block; font-size: 0.8rem; line-height: 1; margin-left: 0.15rem; }
+    th[data-sort-dir="asc"] .sort-indicator .arrow-up { opacity: 1; }
+    th[data-sort-dir="desc"] .sort-indicator .arrow-down { opacity: 1; }
 </style>
 {% endblock %}
 {# Additional header styles merged into the primary head block to avoid duplicate block definition. #}
@@ -109,7 +114,14 @@
                                     <th>Team Name</th>
                                     {% for period in periods %}
                                         {% for f in fields_by_period.get(period, []) %}
-                                            <th class="period-header period-{{ period }}" title="{{ f[0] }} ({{ f[2] }})">{{ f[1] }}</th>
+                                            {# f may be a 5-tuple: (id, name, type, period, gamepiece_scoreible) #}
+                                            {% set fid = f[0] if f is iterable else f[0] %}
+                                            {% set fname = f[1] %}
+                                            {% set ftype = f[2] %}
+                                            <th class="period-header period-{{ period }} sortable" data-col-id="{{ fid }}" title="{{ fid }} ({{ ftype }})" data-sort-dir="none">
+                                                <span class="col-title">{{ fname }}</span>
+                                                <span class="sort-indicator"><span class="arrow-up">▴</span><span class="arrow-down">▾</span></span>
+                                            </th>
                                         {% endfor %}
                                     {% endfor %}
                                 </tr>
@@ -124,26 +136,28 @@
                                         <td class="period-cell period-{{ period }}">
                                             {% if f.count == 0 %}
                                                 -
-                                            {% else %}
-                                                {% if f.type in ['counter','rating'] %}
-                                                    {{ f.average }}
-                                                {% elif f.type == 'boolean' %}
-                                                    {{ f.most_common }}
-                                                {% elif f.type in ['select','multiple_choice','multiple-choice'] %}
-                                                    <ul class="mb-0">
-                                                        {% for item in f.most_common %}
-                                                        <li>{{ item[0] }} ({{ item[1] }})</li>
-                                                        {% endfor %}
-                                                    </ul>
-                                                {% elif f.type == 'game_piece' %}
-                                                    {{ f.count }}
                                                 {% else %}
-                                                    <ul class="mb-0">
-                                                        {% for item in f.most_common %}
-                                                        <li>{{ item[0] }} ({{ item[1] }})</li>
-                                                        {% endfor %}
-                                                    </ul>
-                                                {% endif %}
+                                                    {% if f.type in ['counter','rating'] %}
+                                                        {{ f.average }}
+                                                    {% elif f.type == 'boolean' %}
+                                                        {{ f.most_common }}
+                                                    {% elif f.type in ['select','multiple_choice','multiple-choice'] %}
+                                                        <ul class="mb-0">
+                                                            {% for item in f.most_common %}
+                                                            <li>{{ item[0] }} ({{ item[1] }})</li>
+                                                            {% endfor %}
+                                                        </ul>
+                                                    {% elif f.type == 'game_piece' %}
+                                                        {{ f.count }}
+                                                    {% elif f.type in ['cycles','total'] %}
+                                                        {{ f.count }}
+                                                    {% else %}
+                                                        <ul class="mb-0">
+                                                            {% for item in f.most_common %}
+                                                            <li>{{ item[0] }} ({{ item[1] }})</li>
+                                                            {% endfor %}
+                                                        </ul>
+                                                    {% endif %}
                                             {% endif %}
                                         </td>
                                         {% endfor %}
@@ -153,6 +167,64 @@
                             </tbody>
                         </table>
                     </div>
+                    <script>
+                        // Simple client-side column sort for the metrics table.
+                        (function(){
+                            function getCellText(cell){
+                                if(!cell) return '';
+                                // Prefer visible text
+                                return cell.innerText.trim();
+                            }
+
+                            function parseNumberLike(s){
+                                if(!s) return NaN;
+                                // remove non-numeric chars except . -
+                                var cleaned = s.replace(/[^0-9.\-]+/g,'');
+                                if(cleaned === '' || cleaned === '.' || cleaned === '-') return NaN;
+                                var n = parseFloat(cleaned);
+                                return isNaN(n) ? NaN : n;
+                            }
+
+                            document.addEventListener('DOMContentLoaded', function(){
+                                var table = document.querySelector('.metrics-table');
+                                if(!table) return;
+                                var thead = table.querySelector('thead');
+                                var tbody = table.querySelector('tbody');
+                                var headers = thead.querySelectorAll('th');
+
+                                headers.forEach(function(th, idx){
+                                    // only make headers clickable for sorting (skip if no index)
+                                    th.style.cursor = 'pointer';
+                                    th.addEventListener('click', function(){
+                                        var rows = Array.from(tbody.querySelectorAll('tr'));
+                                        // determine sort direction
+                                        var current = th.getAttribute('data-sort-dir') || 'none';
+                                        var dir = (current === 'asc') ? 'desc' : 'asc';
+                                        // reset indicators
+                                        headers.forEach(function(h){ h.setAttribute('data-sort-dir','none'); });
+                                        th.setAttribute('data-sort-dir', dir);
+
+                                        rows.sort(function(a,b){
+                                            var aCell = a.children[idx];
+                                            var bCell = b.children[idx];
+                                            var aText = getCellText(aCell);
+                                            var bText = getCellText(bCell);
+                                            var aNum = parseNumberLike(aText);
+                                            var bNum = parseNumberLike(bText);
+                                            if(!isNaN(aNum) && !isNaN(bNum)){
+                                                return dir === 'asc' ? aNum - bNum : bNum - aNum;
+                                            }
+                                            // fallback to string compare (natural)
+                                            return dir === 'asc' ? aText.localeCompare(bText, undefined, {numeric:true}) : bText.localeCompare(aText, undefined, {numeric:true});
+                                        });
+
+                                        // reattach rows
+                                        rows.forEach(function(r){ tbody.appendChild(r); });
+                                    });
+                                });
+                            });
+                        })();
+                    </script>
                 {% else %}
                     <div class="alert alert-info">No team data available to display.</div>
                 {% endif %}

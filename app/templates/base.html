@@ -148,6 +148,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-ui.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-force.css') }}">
+    <!-- Modern dark theme additions (more refined surfaces, softened shadows, updated accents) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-theme-modern.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-fixes.css') }}">
     <!-- Use UMD build of Chart.js for compatibility with non-module script loading -->
     <script src="{{ url_for('static', filename='js/vendor/chart.umd.min.js') }}"></script>
@@ -773,6 +775,140 @@
         }
     </style>
     
+    <!-- Global dark-mode background fix: ensure a single uniform page background and
+         make page-level layout containers transparent so the body background shows
+         through. This prevents multi-band background artifacts when dark-mode is active. -->
+    <style id="dark-mode-global-fix">
+        /* Force a single solid background color for dark mode (applies early via inline style) */
+        html.dark-mode, body.dark-mode {
+            background-color: #0b0b0d !important;
+            background-image: none !important;
+            color: #e6e6e6 !important;
+        }
+
+        /* Allow page content containers to be transparent so the body background is visible
+           (preserve topbar and sidebar glass surfaces so they keep their intended appearance). */
+        html.dark-mode main,
+        html.dark-mode footer,
+        html.dark-mode .container,
+        html.dark-mode .with-sidebar .container {
+            background: transparent !important;
+            background-image: none !important;
+        }
+
+        /* If any stylesheet injected a full-width background gradient on body > * elements,
+           make them transparent in dark mode to avoid stacked bands. */
+        html.dark-mode > body > *,
+        body.dark-mode > * {
+            background-image: none !important;
+        }
+
+        /* Tweak sidebar active indicator for dark mode: use a subtle neutral tint instead of vivid primary
+           so the thin left bar doesn't appear as a harsh blue. Also hide the left bar when the sidebar is
+           collapsed (it overlaps centered icons). */
+        .dark-mode .sidebar .nav-link.active::before {
+            background: rgba(255,255,255,0.10) !important;
+            box-shadow: none !important;
+        }
+
+        /* When the sidebar is collapsed, remove the left indicator and center icons to avoid overlap */
+        body.with-sidebar.sidebar-collapsed .sidebar .nav-link.active::before {
+            display: none !important;
+        }
+
+        /* Ensure icon-only links are centered when collapsed and maintain a consistent icon width */
+        body.with-sidebar.sidebar-collapsed .sidebar .nav-link {
+            justify-content: center !important;
+            padding-left: 0.25rem !important;
+            padding-right: 0.25rem !important;
+        }
+
+        body.with-sidebar.sidebar-collapsed .sidebar .nav-link i {
+            width: 28px !important;
+            text-align: center !important;
+            display: inline-block !important;
+        }
+
+        /* Center collapsed icons and the brand tile reliably.
+           Instead of nudging individual icons, make the brand anchor a full-width
+           flex container and center its contents; remove transforms so icon centering
+           is predictable across browsers. */
+        body.with-sidebar.sidebar-collapsed .sidebar .nav-link {
+            justify-content: center !important;
+            padding-left: 0.15rem !important;
+            padding-right: 0.15rem !important;
+        }
+
+        body.with-sidebar.sidebar-collapsed .sidebar .nav-link i {
+            width: 28px !important;
+            text-align: center !important;
+            display: inline-block !important;
+            transform: none !important;
+            margin: 0 !important;
+        }
+
+        /* Make the brand/anchor span the full width and center the brand-logo tile */
+        body.with-sidebar.sidebar-collapsed .sidebar .sidebar-header .brand,
+        body.with-sidebar.sidebar-collapsed .sidebar .brand {
+            width: 100% !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
+        body.with-sidebar.sidebar-collapsed .sidebar .brand-logo,
+        body.with-sidebar.sidebar-collapsed .sidebar .sidebar-header .brand-logo {
+            margin: 0 !important;
+            width: 44px !important;
+            height: 44px !important;
+            padding: 4px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+
+        body.with-sidebar.sidebar-collapsed .sidebar .brand-logo .brand-icon {
+            font-size: 1.15rem !important;
+            line-height: 1 !important;
+        }
+
+        /* Hide brand text and sub-labels when collapsed so only the icon shows */
+        body.with-sidebar.sidebar-collapsed .sidebar .brand-info,
+        body.with-sidebar.sidebar-collapsed .sidebar .brand-text,
+        body.with-sidebar.sidebar-collapsed .sidebar .brand-sub {
+            display: none !important;
+        }
+
+        /* Ensure nav link text is hidden and icons are perfectly centered in collapsed state */
+        body.with-sidebar.sidebar-collapsed .sidebar .nav-link span,
+        body.with-sidebar.sidebar-collapsed .sidebar .nav-link .nav-label {
+            display: none !important;
+            width: 0 !important;
+            opacity: 0 !important;
+        }
+
+        body.with-sidebar.sidebar-collapsed .sidebar .nav-link {
+            justify-content: center !important;
+            padding-top: .5rem !important;
+            padding-bottom: .5rem !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
+        body.with-sidebar.sidebar-collapsed .sidebar .nav-link i {
+            margin: 0 auto !important;
+            display: inline-block !important;
+            transform: none !important;
+            left: auto !important;
+        }
+
+        /* Remove browser/blue focus ring on nav links and use a very subtle visible focus state for keyboard users */
+        .sidebar .nav-link:focus { outline: none !important; box-shadow: none !important; }
+        .sidebar .nav-link:focus-visible { outline: 2px solid rgba(255,255,255,0.06) !important; outline-offset: 2px !important; }
+    </style>
+
     {% block head %}{% endblock %}
 </head>
 {# If an endpoint wants to render without the global chrome (topbar/sidebar)
@@ -878,10 +1014,19 @@
     <aside id="appSidebar" class="sidebar glass" role="navigation" aria-label="Main sidebar">
         <div class="sidebar-header d-flex align-items-center justify-content-between">
             <a class="brand d-flex align-items-center text-decoration-none" href="{% if user_has_role('scout') and not user_has_role('admin') and not user_has_role('analytics') %}{{ url_for('scouting.index') }}{% else %}{{ url_for('main.index') }}{% endif %}">
-                <i class="fas fa-clipboard brand-icon me-2"></i>
-                <span class="brand-text fw-bold"><span class="obsidian-gradient">Obsidian</span>Scout</span>
+                <div class="brand-logo d-flex align-items-center justify-content-center me-2" role="img" aria-label="ObsidianScout logo" tabindex="0">
+                    <!-- Use the original FontAwesome clipboard icon inside the round tile -->
+                    <i class="fas fa-clipboard brand-icon" aria-hidden="true"></i>
+                </div>
+                <div class="brand-info d-flex flex-column">
+                    <span class="brand-text fw-bold"><span class="obsidian-gradient">Obsidian</span>Scout</span>
+                    <small class="brand-sub text-muted">Modern FRC Scouting</small>
+                </div>
             </a>
-            <button id="sidebarClose" class="btn btn-link text-muted d-lg-none" aria-label="Close sidebar"><i class="fas fa-times"></i></button>
+            <button id="sidebarClose" class="btn btn-outline-secondary btn-close-sidebar text-muted d-lg-none" aria-label="Close sidebar">
+                <i class="fas fa-times" aria-hidden="true"></i>
+                <span class="visually-hidden">Close sidebar</span>
+            </button>
         </div>
     {# Removed quick search from sidebar (now in top bar) #}
         <nav class="sidebar-nav flex-grow-1" aria-label="Main navigation">
@@ -932,6 +1077,7 @@
                 <a class="nav-link {% if request.endpoint == 'matches.strategy' %}active{% endif %}" href="{{ url_for('matches.strategy') }}"><i class="fas fa-chess"></i><span>Strategy</span></a>
                 <a class="nav-link {% if request.endpoint == 'matches.strategy_all' %}active{% endif %}" href="{{ url_for('matches.strategy_all') }}"><i class="fas fa-th-large"></i><span>Strategy — All Matches</span></a>
                 <a class="nav-link {% if request.endpoint == 'matches.strategy_draw' %}active{% endif %}" href="{{ url_for('matches.strategy_draw') }}"><i class="fas fa-pen-ruler"></i><span>Strategy Draw</span></a>
+                <a class="nav-link {% if request.endpoint == 'matches.strategy_live' %}active{% endif %}" href="{{ url_for('matches.strategy_live') }}"><i class="fas fa-broadcast-tower"></i><span>Live Strategy</span></a>
                 <a class="nav-link {% if request.endpoint == 'graphs.my_shares' %}active{% endif %}" href="{{ url_for('graphs.my_shares') }}"><i class="fas fa-share-alt"></i><span>My Graph Shares</span></a>
                     <a class="nav-link {% if request.endpoint == 'teams.my_ranks_shares' %}active{% endif %}" href="{{ url_for('teams.my_ranks_shares') }}"><i class="fas fa-trophy"></i><span>My Ranking Shares</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('team_trends') %}active{% endif %}" href="{{ url_for('team_trends.index') }}"><i class="fas fa-chart-line"></i><span>Trends</span></a>

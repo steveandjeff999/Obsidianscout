@@ -75,11 +75,20 @@ class FetchMatchesUI(tk.Tk):
         password = self.password_var.get().strip()
 
         payload = {'password': password}
+        # Support alphanumeric team numbers for offseason (e.g., '581B')
+        if team:
+            try:
+                team_number = int(team)
+            except ValueError:
+                team_number = team.upper()
+        else:
+            team_number = None
+            
         if username:
             payload['username'] = username
-            payload['team_number'] = int(team) if team else None
+            payload['team_number'] = team_number
         else:
-            payload['team_number'] = int(team) if team else None
+            payload['team_number'] = team_number
 
         try:
             resp = requests.post(LOGIN_URL, json=payload, verify=False, timeout=10)

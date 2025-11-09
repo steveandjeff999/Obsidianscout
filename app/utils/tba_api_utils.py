@@ -15,6 +15,9 @@ class TBAApiError(Exception):
     """Exception for TBA API errors"""
     pass
 
+# Global cache for event remap_teams data to avoid repeated API calls
+_event_remap_cache = {}
+
 def get_tba_api_key():
     """Get TBA API key from config"""
     # Prefer team-specific instance config when available
@@ -251,6 +254,12 @@ def get_tba_event_details(event_key):
         if response.status_code == 200:
             event_data = response.json()
             print(f"Successfully fetched event details from TBA: {event_data.get('name', 'Unknown Event')}")
+            
+            # Cache remap_teams if present (for offseason events with B/C/D teams)
+            if 'remap_teams' in event_data and event_data['remap_teams']:
+                _event_remap_cache[event_key] = event_data['remap_teams']
+                print(f"Cached {len(event_data['remap_teams'])} team remappings for event {event_key}")
+            
             return event_data
         elif response.status_code == 304:
             print("TBA event data not modified (304)")
@@ -276,6 +285,89 @@ def get_tba_event_details(event_key):
         raise TBAApiError(f"Request failed: {str(e)}")
     except Exception as e:
         raise TBAApiError(f"Error getting event details from TBA: {str(e)}")
+
+def get_event_team_remapping(event_key):
+    """Get team remapping dictionary for an event (offseason B/C/D teams)
+    
+    Returns a dict mapping letter-suffix teams to their 99xx equivalents:
+    {'581B': 9989, '1678C': 9996, ...}
+    
+    The remapping is fetched from TBA's remap_teams field and cached.
+    """
+    global _event_remap_cache
+    
+    # Check cache first
+    if event_key in _event_remap_cache:
+        return _event_remap_cache[event_key]
+    
+    # Fetch event details to get remap_teams
+    try:
+        event_data = get_tba_event_details(event_key)
+        if event_data and 'remap_teams' in event_data:
+            remap = event_data['remap_teams']
+            # remap format from TBA: {"frc9989": "frc581B", ...}
+            # We need reverse: {"581B": 9989, ...}
+            result = {}
+            for numeric_key, letter_key in remap.items():
+                # Extract numbers: "frc9989" -> 9989, "frc581B" -> "581B"
+                numeric_num = numeric_key.replace('frc', '')
+                letter_team = letter_key.replace('frc', '')
+                try:
+                    result[letter_team.upper()] = int(numeric_num)
+                except ValueError:
+                    pass
+            
+            _event_remap_cache[event_key] = result
+            return result
+    except Exception as e:
+        print(f"Could not fetch team remapping for {event_key}: {e}")
+    
+    return {}
+
+def remap_team_number(team_identifier, event_key=None):
+    """Remap a team identifier using event's remap_teams if applicable
+    
+    Args:
+        team_identifier: Team number/identifier (int, str, or 'frcXXXX' format)
+        event_key: TBA event key (e.g., '2025casj') to lookup remapping
+        
+    Returns:
+        int: Remapped team number if found in remap_teams, otherwise original as int
+        
+    Examples:
+        remap_team_number('581B', '2025casj') -> 9989  (if remap exists)
+        remap_team_number('frc1678C', '2025casj') -> 9996  (if remap exists)
+        remap_team_number('5454', '2025casj') -> 5454
+        remap_team_number(5454, '2025casj') -> 5454
+    """
+    if team_identifier is None:
+        return None
+    
+    # Convert to string and strip 'frc' prefix if present
+    team_str = str(team_identifier).strip()
+    if team_str.lower().startswith('frc'):
+        team_str = team_str[3:]
+    
+    if not team_str:
+        return None
+    
+    # Try to convert to int first (normal case)
+    try:
+        return int(team_str)
+    except ValueError:
+        # Contains letters - check if we have a remapping for this event
+        if event_key:
+            remap = get_event_team_remapping(event_key)
+            team_upper = team_str.upper()
+            if team_upper in remap:
+                remapped = remap[team_upper]
+                print(f"Remapped team {team_str} -> {remapped} for event {event_key}")
+                return remapped
+        
+        # No remapping found - return original uppercase string
+        # (This will cause issues downstream, but at least it's consistent)
+        print(f"Warning: Team identifier '{team_str}' contains letters but no remapping found")
+        return team_str.upper()
 
 def get_tba_events_by_year(year):
     """Get all events for a specific year from TBA API"""
@@ -316,21 +408,44 @@ def get_tba_events_by_year(year):
     except Exception as e:
         raise TBAApiError(f"Error getting events from TBA: {str(e)}")
 
-def tba_team_to_db_format(tba_team):
-    """Convert TBA team format to database format"""
+def tba_team_to_db_format(tba_team, event_key=None):
+    """Convert TBA team format to database format
+    
+    Args:
+        tba_team: TBA team data dict
+        event_key: Optional TBA event key for team remapping (offseason events)
+    """
+    team_number = tba_team.get('team_number')
+    
+    # Handle potential letter-suffix teams (though TBA usually returns numeric)
+    if event_key and team_number:
+        team_number = remap_team_number(team_number, event_key)
+    
     return {
-        'team_number': tba_team.get('team_number'),
+        'team_number': team_number,
         'team_name': tba_team.get('nickname', ''),
-        'location': f"{tba_team.get('city', '')}, {tba_team.get('state_prov', '')}, {tba_team.get('country', '')}".strip(', ')
+        'location': f"{tba_team.get('city', '')}, {tba_team.get('state_prov', '')}, {tba_team.get('country', '')}" .strip(', ')
     }
 
-def tba_match_to_db_format(tba_match, event_id):
-    """Convert TBA match format to database format"""
+def tba_match_to_db_format(tba_match, event_id, event_key=None):
+    """Convert TBA match format to database format
+    
+    Args:
+        tba_match: TBA match data dict
+        event_id: Database event ID
+        event_key: Optional TBA event key for team remapping (offseason events)
+    """
     # Extract match details
     match_key = tba_match.get('key', '')
     comp_level = tba_match.get('comp_level', '')
     match_number = tba_match.get('match_number', 0)
     set_number = tba_match.get('set_number', 0)
+    
+    # Extract event_key from match_key if not provided (format: 2025casj_qm1)
+    if not event_key and match_key:
+        parts = match_key.split('_')
+        if parts:
+            event_key = parts[0]
     
     # Convert TBA comp_level to our match_type
     match_type_map = {
@@ -350,15 +465,21 @@ def tba_match_to_db_format(tba_match, event_id):
     
     alliances = tba_match.get('alliances', {})
     
-    # Red alliance
+    # Red alliance - remap team numbers for offseason events
     if 'red' in alliances:
         red_teams = alliances['red'].get('team_keys', [])
-        red_alliance = [team.replace('frc', '') for team in red_teams]
+        for team_key in red_teams:
+            team_str = team_key.replace('frc', '')
+            remapped = remap_team_number(team_str, event_key)
+            red_alliance.append(str(remapped))
     
-    # Blue alliance
+    # Blue alliance - remap team numbers for offseason events
     if 'blue' in alliances:
         blue_teams = alliances['blue'].get('team_keys', [])
-        blue_alliance = [team.replace('frc', '') for team in blue_teams]
+        for team_key in blue_teams:
+            team_str = team_key.replace('frc', '')
+            remapped = remap_team_number(team_str, event_key)
+            blue_alliance.append(str(remapped))
     
     # Extract scores
     red_score = None

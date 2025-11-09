@@ -8,6 +8,7 @@ except ImportError:
 from functools import wraps
 from app import db
 from app.models import User, Role, DatabaseChange
+from app.utils.api_utils import safe_int_team_number
 from sqlalchemy import or_, func
 from datetime import datetime, timezone
 from app.utils.system_check import SystemCheck
@@ -81,10 +82,10 @@ def login():
             flash('Team number is required.', 'error')
             return redirect(url_for('auth.login'))
         
-        try:
-            team_number = int(team_number)
-        except ValueError:
-            flash('Team number must be a valid number.', 'error')
+        # Support alphanumeric team numbers for offseason (e.g., '581B')
+        team_number = safe_int_team_number(team_number)
+        if team_number is None:
+            flash('Team number is required.', 'error')
             return redirect(url_for('auth.login'))
         
         user = User.query.filter_by(username=username, scouting_team_number=team_number).first()
@@ -280,7 +281,7 @@ def register():
 
         # Check if account creation is locked for this team
         from app.models import ScoutingTeamSettings
-        team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=int(team_number)).first()
+        team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=safe_int_team_number(team_number)).first()
         if team_settings and team_settings.account_creation_locked:
             flash('Account creation is currently locked for this team. Please contact your team administrator.', 'error')
             return redirect(url_for('auth.register'))
@@ -290,11 +291,8 @@ def register():
             return redirect(url_for('auth.register'))
 
         # Enforce username uniqueness within the specified scouting team only
-        try:
-            team_number = int(team_number)
-        except Exception:
-            # Keep original value if conversion fails; DB will accept NULL/strings
-            pass
+        # Support alphanumeric team numbers for offseason (e.g., '581B')
+        team_number = safe_int_team_number(team_number)
         user = User.query.filter_by(username=username, scouting_team_number=team_number).first()
         if user is not None:
             flash('Username already exists for that team.', 'error')
@@ -308,18 +306,14 @@ def register():
             flash('Email already exists.', 'error')
             return redirect(url_for('auth.register'))
 
-        # Ensure scouting_team_number is stored as an int where possible
-        try:
-            stored_team = int(team_number)
-        except Exception:
-            stored_team = team_number
-        new_user = User(username=username, email=email, scouting_team_number=stored_team)
+        # Team number already converted by safe_int_team_number above
+        new_user = User(username=username, email=email, scouting_team_number=team_number)
         new_user.set_password(password)
         db.session.add(new_user)
         db.session.commit()
 
         # Check if this is the first user for the team
-        team_user_count = User.query.filter_by(scouting_team_number=stored_team).count()
+        team_user_count = User.query.filter_by(scouting_team_number=team_number).count()
         if team_user_count == 1:
             # First user becomes admin
             admin_role = Role.query.filter_by(name='admin').first()
@@ -550,7 +544,7 @@ def add_user():
         
         # Check if username already exists for the target team
         try:
-            target_team = int(scouting_team_number) if scouting_team_number not in (None, '') else None
+            target_team = safe_int_team_number(scouting_team_number) if scouting_team_number not in (None, '') else None
         except Exception:
             target_team = scouting_team_number
         if User.query.filter_by(username=username, scouting_team_number=target_team).first():
@@ -638,10 +632,7 @@ def update_user(user_id):
         # Validate uniqueness before applying changes
         new_username = request.form.get('username')
         new_team_raw = request.form.get('scouting_team_number')
-        try:
-            new_team = int(new_team_raw) if new_team_raw not in (None, '') else None
-        except Exception:
-            new_team = new_team_raw
+        new_team = safe_int_team_number(new_team_raw) if new_team_raw not in (None, '') else None
         if new_username:
             conflict = User.query.filter(User.username == new_username, User.scouting_team_number == new_team, User.id != user.id).first()
             if conflict:

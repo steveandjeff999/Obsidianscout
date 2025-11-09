@@ -11,11 +11,34 @@ from datetime import datetime, timezone
 from cryptography.hazmat.primitives import serialization
 
 
-def get_vapid_keys():
+def get_vapid_keys(force_generate=False):
     """Get or generate VAPID keys for web push"""
     import os
     
     vapid_file = os.path.join(current_app.instance_path, 'vapid_keys.json')
+
+    # Prefer application-configured VAPID keys (e.g. from app_config.json or env-overrides)
+    # When force_generate is True we skip using existing app.config values and
+    # instead proceed to load or generate fresh keys.
+    try:
+        if not force_generate:
+            cfg_private = current_app.config.get('VAPID_PRIVATE_KEY')
+            cfg_public = current_app.config.get('VAPID_PUBLIC_KEY')
+
+            # Treat redacted placeholders (like "[REDACTED_...]") as absent so we
+            # fall back to the instance-backed keys or generate new ones when needed.
+            def _is_real_key(v):
+                return isinstance(v, str) and v and not v.strip().startswith('[REDACTED')
+
+            if _is_real_key(cfg_private) and _is_real_key(cfg_public):
+                return {
+                    'public_key': cfg_public,
+                    'private_key': cfg_private
+                }
+        # If either key is missing or looks like a placeholder, continue to file-backed behavior
+    except Exception:
+        # If current_app isn't available for some reason, continue to file-backed behavior
+        pass
     
     # Try to load existing keys
     if os.path.exists(vapid_file):
@@ -39,7 +62,26 @@ def get_vapid_keys():
         
         # Generate new VAPID instance
         vapid = Vapid()
-        vapid.generate_keys()
+        try:
+            vapid.generate_keys()
+        except TypeError as te:
+            # Handle cryptography API mismatch where generate_keys() calls
+            # ec.generate_private_key(ec.SECP256R1, ...) but the installed
+            # cryptography requires an instance (ec.SECP256R1()). Create
+            # the private key directly and set it on the vapid object.
+            msg = str(te)
+            if 'curve must be an EllipticCurve instance' in msg or 'EllipticCurve' in msg:
+                try:
+                    from cryptography.hazmat.primitives.asymmetric import ec as _ec
+                    from cryptography.hazmat.backends import default_backend as _default_backend
+                    priv = _ec.generate_private_key(_ec.SECP256R1(), _default_backend())
+                    vapid.private_key = priv
+                except Exception:
+                    # Re-raise original TypeError if fallback fails
+                    raise
+            else:
+                # Not the specific mismatch we're guarding for; re-raise
+                raise
         
         # Get keys in the correct format
         # Private key as base64url string (for pywebpush)
@@ -62,13 +104,53 @@ def get_vapid_keys():
             'public_key': public_key_b64,
             'private_key': private_key_str
         }
-        
-        # Save keys
-        os.makedirs(os.path.dirname(vapid_file), exist_ok=True)
-        with open(vapid_file, 'w') as f:
-            json.dump(keys, f, indent=2)
-        
-        print("Generated new VAPID keys for push notifications")
+
+        # Try to persist keys into top-level app_config.json if present. The
+        # project is moving away from instance/vapid_keys.json; prefer storing
+        # keys in app_config.json so they survive updates and are managed
+        # consistently with other secrets. If writing to app_config.json fails
+        # (missing file or permissions), fall back to instance/vapid_keys.json.
+        try:
+            base = os.getcwd()
+            cfg_path = os.path.join(base, 'app_config.json')
+            if os.path.exists(cfg_path):
+                try:
+                    with open(cfg_path, 'r', encoding='utf-8') as cf:
+                        top_cfg = json.load(cf) or {}
+                except Exception:
+                    top_cfg = {}
+
+                top_cfg['VAPID_PRIVATE_KEY'] = private_key_str
+                top_cfg['VAPID_PUBLIC_KEY'] = public_key_b64
+                # When writing from this helper, do not flip the GENERATE flag
+                # here; leave it to higher-level startup logic to mark it false
+                # once it's verified and intended to be persisted. But if no
+                # flag exists, set it to False to indicate keys are present.
+                if 'VAPID_GENERATE_NEW' not in top_cfg:
+                    top_cfg['VAPID_GENERATE_NEW'] = False
+
+                try:
+                    with open(cfg_path, 'w', encoding='utf-8') as wf:
+                        json.dump(top_cfg, wf, ensure_ascii=False, indent=2)
+                    print('Generated new VAPID keys and saved to app_config.json')
+                    return keys
+                except Exception as e:
+                    print(f"Warning: failed to persist VAPID keys to app_config.json: {e}")
+
+        except Exception:
+            # If anything goes wrong determining cfg_path, ignore and fall
+            # through to instance-backed persistence below.
+            pass
+
+        # Fallback: Save keys to instance/vapid_keys.json for backwards compatibility
+        try:
+            os.makedirs(os.path.dirname(vapid_file), exist_ok=True)
+            with open(vapid_file, 'w') as f:
+                json.dump(keys, f, indent=2)
+            print("Generated new VAPID keys for push notifications (saved to instance/vapid_keys.json)")
+        except Exception as e:
+            print(f"Warning: failed to save VAPID keys to instance file: {e}")
+
         print(f"Public key: {public_key_b64[:20]}...")
         return keys
         
