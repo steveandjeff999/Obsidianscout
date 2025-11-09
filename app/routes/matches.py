@@ -212,7 +212,8 @@ def index():
     except Exception:
         adjusted_predictions = {}
 
-    # Determine the next unplayed match (first match in sorted order without actual_time/winner/scores)
+    # Determine the next unplayed match (first match in sorted order without actual_time/winner)
+    # Note: Don't rely on scores alone as they may be initialized to 0 before matches are played
     next_unplayed_match_id = None
     try:
         now_utc = datetime.now(timezone.utc)
@@ -220,8 +221,6 @@ def index():
             finished = bool(
                 getattr(m, 'actual_time', None)
                 or getattr(m, 'winner', None)
-                or ((getattr(m, 'red_score', None) is not None and getattr(m, 'red_score', None) >= 0)
-                    or (getattr(m, 'blue_score', None) is not None and getattr(m, 'blue_score', None) >= 0))
             )
             if finished:
                 continue
