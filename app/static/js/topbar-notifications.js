@@ -3,6 +3,13 @@
 
     const STORAGE_KEY = 'obsidian_dismissed_notifications_v1';
 
+    // In-memory cache of fetched notifications to avoid waiting on network when
+    // user opens the dropdown. Cached for the page lifetime; can be invalidated
+    // by calling fetchRecentNotifications(true).
+    let notificationsCache = null;
+    let notificationsCacheAt = 0; // timestamp ms
+    const NOTIFICATIONS_CACHE_TTL = 1000 * 60; // 60s
+
     function loadDismissed() {
         try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e) { return []; }
     }
@@ -42,26 +49,42 @@
     function renderNotifications(items){
         const list = document.getElementById('notificationsList');
         if (!list) return;
+        // Batch DOM updates with a fragment to reduce layout thrashing
         list.innerHTML = '';
+        const frag = document.createDocumentFragment();
+        // Limit rendering to a reasonable number to avoid heavy work on slow devices
+        const MAX_RENDER = 25;
+        let rendered = 0;
         if (!items || items.length === 0) {
             const el = document.createElement('div');
             el.className = 'list-group-item text-muted small';
             el.textContent = 'No notifications';
-            list.appendChild(el);
+            frag.appendChild(el);
+            list.appendChild(frag);
             return;
         }
+        for (let i = 0; i < items.length && rendered < MAX_RENDER; i++) {
+            const n = items[i];
+            if (!n || !n.id) continue;
+            if (isDismissed(n.id)) continue; // skip dismissed
 
-        items.forEach(n => {
-            if (!n || !n.id) return;
-            if (isDismissed(n.id)) return; // skip dismissed
-
+            rendered += 1;
             const item = document.createElement('div');
             item.className = 'list-group-item notification-item';
+            item.setAttribute('data-notif-id', n.id);
 
             const content = document.createElement('div');
             content.style.flex = '1';
-            content.innerHTML = `<div class="fw-semibold">${escapeHtml(n.title || (n.message||'Notification'))}</div>
-                                 <div class="notif-meta">${escapeHtml(n.message||'')}</div>`;
+            // Use text nodes where possible to avoid re-parsing HTML
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'fw-semibold';
+            titleDiv.textContent = n.title || (n.message || 'Notification');
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'notif-meta';
+            metaDiv.textContent = n.message || '';
+
+            content.appendChild(titleDiv);
+            content.appendChild(metaDiv);
 
             const actions = document.createElement('div');
             actions.className = 'd-flex flex-column align-items-end';
@@ -72,7 +95,7 @@
             dismissBtn.addEventListener('click', function(e){
                 e.preventDefault();
                 markDismissed(n.id);
-                item.remove();
+                if (item && item.parentNode) item.parentNode.removeChild(item);
                 // update badge
                 updateBadgeFromList();
             });
@@ -80,8 +103,18 @@
             actions.appendChild(dismissBtn);
             item.appendChild(content);
             item.appendChild(actions);
-            list.appendChild(item);
-        });
+            frag.appendChild(item);
+        }
+
+        // If there were more items than we rendered, add a small footer line
+        if (items.length > MAX_RENDER) {
+            const more = document.createElement('div');
+            more.className = 'list-group-item small text-muted text-center';
+            more.textContent = `Showing ${MAX_RENDER} of ${items.length} notifications`;
+            frag.appendChild(more);
+        }
+
+        list.appendChild(frag);
 
         updateBadgeFromList();
     }
@@ -115,18 +148,36 @@
             const mapped = siteNotes.map(n => ({ id: n.id || ('site-'+(n.level||'')+'-'+(n.message||'').slice(0,12)), title: n.level ? (n.level.toUpperCase()) : 'Notice', message: n.message || '' }));
             renderNotifications(mapped);
         } else {
-            // Fallback: fetch chat unread state and show count only
+            // Show immediate lightweight chat-unread entry while we background-fetch the full list
             const state = await fetchChatState();
             if (state && typeof state.unreadCount !== 'undefined') {
                 const unread = state.unreadCount || 0;
-                // create a simple notification entry for unread chats when present
                 const entries = [];
                 if (unread > 0) entries.push({ id: 'chat-unread', title: `You have ${unread} unread chat message(s)`, message: 'Open chat to view messages' });
                 renderNotifications(entries);
             } else {
-                renderNotifications([]);
+                // keep the Loading... placeholder until background fetch completes
             }
         }
+
+        // Start a background preload of notifications so opening the dropdown is instant
+        // Do not await here; populate notificationsCache when available.
+        (async function preloadNotifications(){
+            try {
+                const resp = await fetch('/notifications/recent');
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (Array.isArray(data.notifications)) {
+                    notificationsCache = data.notifications.map(n => ({ id: n.id, title: n.title || n.level || 'Notice', message: n.message || '' }));
+                    notificationsCacheAt = Date.now();
+                    // If the current displayed list is still Loading... or empty, render now
+                    const list = document.getElementById('notificationsList');
+                    if (list && list.textContent && list.textContent.trim() === 'Loading...') {
+                        renderNotifications(notificationsCache);
+                    }
+                }
+            } catch(e){ /* ignore preload errors */ }
+        })();
 
         // Wire clear all button
         const clearBtn = document.getElementById('clearAllNotificationsBtn');
@@ -188,24 +239,34 @@
         const toggle = document.getElementById('notificationsToggle');
         if (toggle) {
             toggle.addEventListener('click', async function(){
-                // if dropdown becomes visible, refresh
+                // if dropdown becomes visible, refresh quickly using cached data if available
                 setTimeout(async function(){
                     const menu = document.getElementById('notificationsMenu');
                     if (!menu) return;
                     if (menu.classList.contains('show')) {
-                        // Re-fetch server state and site notifications (if available via endpoint)
                         try {
-                            // Try server endpoint for structured notifications if provided
+                            // Prefer cached notifications when available and fresh
+                            const now = Date.now();
+                            if (notificationsCache && (now - notificationsCacheAt) < NOTIFICATIONS_CACHE_TTL) {
+                                renderNotifications(notificationsCache);
+                                // Also refresh chat unread badge in background
+                                fetchChatState().then(state => { if (state && typeof state.unreadCount !== 'undefined') setBadge(state.unreadCount); });
+                                return;
+                            }
+
+                            // Try server endpoint for structured notifications
                             const resp = await fetch('/notifications/recent');
                             if (resp.ok) {
                                 const data = await resp.json();
                                 if (Array.isArray(data.notifications)) {
-                                    renderNotifications(data.notifications.map(n => ({ id: n.id, title: n.title || n.level || 'Notice', message: n.message || '' })));
+                                    notificationsCache = data.notifications.map(n => ({ id: n.id, title: n.title || n.level || 'Notice', message: n.message || '' }));
+                                    notificationsCacheAt = Date.now();
+                                    renderNotifications(notificationsCache);
                                     return;
                                 }
                             }
                         } catch(e){}
-                        // Fallback: poll chat state
+                        // Fallback: poll chat state if nothing else
                         const state = await fetchChatState();
                         if (state && typeof state.unreadCount !== 'undefined') {
                             const entries = [];

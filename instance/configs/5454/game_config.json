@@ -1,10 +1,10 @@
 {
-  "game_name": "REBUILT",
+  "game_name": "REBUILT\u2122\u202fpresented by Haas",
   "season": 2025,
-  "version": "1.0.0",
+  "version": "1.0.4",
   "alliance_size": 3,
   "scouting_stations": 6,
-  "current_event_code": "oktu",
+  "current_event_code": "mttd",
   "match_types": [
     "Practice",
     "Qualification",
@@ -17,10 +17,11 @@
       {
         "id": "elem_auto_1",
         "perm_id": "elem_auto_1",
-        "name": "Leave Strating Line5",
+        "name": "Leave Strating Lines",
         "type": "boolean",
         "default": false,
-        "display_in_predictions": true,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 3.0
       },
       {
@@ -30,6 +31,7 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 3.0
       },
       {
@@ -39,6 +41,7 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 4.0
       },
       {
@@ -48,6 +51,7 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 6.0
       },
       {
@@ -57,6 +61,7 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 7.0
       },
       {
@@ -66,6 +71,7 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 4.0
       },
       {
@@ -75,6 +81,7 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 6.0
       },
       {
@@ -84,7 +91,18 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 0.0
+      },
+      {
+        "id": "auto_06d68825",
+        "perm_id": "auto_06d68825",
+        "name": "New Element",
+        "type": "counter",
+        "default": 0,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 1.0
       }
     ]
   },
@@ -98,6 +116,7 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 2.0
       },
       {
@@ -107,6 +126,7 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 3.0
       },
       {
@@ -116,6 +136,7 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 4.0
       },
       {
@@ -125,6 +146,7 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 5.0
       },
       {
@@ -134,6 +156,7 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 7.0
       },
       {
@@ -143,6 +166,7 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 4.0
       },
       {
@@ -152,7 +176,18 @@
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 0.0
+      },
+      {
+        "id": "teleop_b1da7319",
+        "perm_id": "teleop_b1da7319",
+        "name": "New Element",
+        "type": "counter",
+        "default": 0,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 1.0
       }
     ]
   },
@@ -166,6 +201,7 @@
         "type": "multiple_choice",
         "default": "Park",
         "display_in_predictions": true,
+        "gamepiece_scoreible": false,
         "options": [
           {
             "name": "Park",
@@ -182,8 +218,22 @@
           {
             "name": "None",
             "points": 0.0
+          },
+          {
+            "name": "Option 5",
+            "points": 0.0
           }
         ]
+      },
+      {
+        "id": "endgame_f265b8fb",
+        "perm_id": "endgame_f265b8fb",
+        "name": "New Element",
+        "type": "rating",
+        "default": 0,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 1.0
       }
     ]
   },

@@ -9,6 +9,7 @@ import difflib
 import string
 from datetime import datetime, timezone
 from app.models import Team, ScoutingData, Match, Event, User
+from app.utils.api_utils import safe_int_team_number
 from app import db
 from flask_login import current_user
 from app.utils.analysis import calculate_team_metrics
@@ -1025,7 +1026,7 @@ class Assistant:
     def analyze_team_trends(self, team_number: str) -> Dict[str, Any]:
         """Analyze performance trends and trajectory for a team over time."""
         try:
-            team = Team.query.filter_by(team_number=int(team_number)).first()
+            team = Team.query.filter_by(team_number=safe_int_team_number(team_number)).first()
             if not team:
                 return {"text": f"Team {team_number} not found in the database."}
             
@@ -1226,14 +1227,14 @@ class Assistant:
             
             red_strength = 0
             for team_num in red_teams:
-                team = Team.query.filter_by(team_number=int(team_num)).first()
+                team = Team.query.filter_by(team_number=safe_int_team_number(team_num)).first()
                 if team:
                     metrics = calculate_team_metrics(team.id).get('metrics', {})
                     red_strength += metrics.get('total_points', 0) or 0
             
             blue_strength = 0
             for team_num in blue_teams:
-                team = Team.query.filter_by(team_number=int(team_num)).first()
+                team = Team.query.filter_by(team_number=safe_int_team_number(team_num)).first()
                 if team:
                     metrics = calculate_team_metrics(team.id).get('metrics', {})
                     blue_strength += metrics.get('total_points', 0) or 0
@@ -1278,7 +1279,7 @@ class Assistant:
     def analyze_consistency(self, team_number: str) -> Dict[str, Any]:
         """Analyze how consistent a team's performance is."""
         try:
-            team = Team.query.filter_by(team_number=int(team_number)).first()
+            team = Team.query.filter_by(team_number=safe_int_team_number(team_number)).first()
             if not team:
                 return {"text": f"Team {team_number} not found."}
             
@@ -1333,7 +1334,7 @@ class Assistant:
     def find_peak_performance(self, team_number: str) -> Dict[str, Any]:
         """Find the team's best match and optimal conditions."""
         try:
-            team = Team.query.filter_by(team_number=int(team_number)).first()
+            team = Team.query.filter_by(team_number=safe_int_team_number(team_number)).first()
             if not team:
                 return {"text": f"Team {team_number} not found."}
             
@@ -1374,7 +1375,7 @@ class Assistant:
     def analyze_weaknesses(self, team_number: str) -> Dict[str, Any]:
         """Identify team weaknesses based on data."""
         try:
-            team = Team.query.filter_by(team_number=int(team_number)).first()
+            team = Team.query.filter_by(team_number=safe_int_team_number(team_number)).first()
             if not team:
                 return {"text": f"Team {team_number} not found."}
             
@@ -1415,7 +1416,7 @@ class Assistant:
     def analyze_strengths(self, team_number: str) -> Dict[str, Any]:
         """Identify team strengths based on data."""
         try:
-            team = Team.query.filter_by(team_number=int(team_number)).first()
+            team = Team.query.filter_by(team_number=safe_int_team_number(team_number)).first()
             if not team:
                 return {"text": f"Team {team_number} not found."}
             
@@ -1477,8 +1478,8 @@ class Assistant:
         try:
             from app.utils.analytics import calculate_team_metrics
             
-            t1 = Team.query.filter_by(team_number=int(team1)).first()
-            t2 = Team.query.filter_by(team_number=int(team2)).first()
+            t1 = Team.query.filter_by(team_number=safe_int_team_number(team1)).first()
+            t2 = Team.query.filter_by(team_number=safe_int_team_number(team2)).first()
             
             if not t1 or not t2:
                 return {"text": f"One or both teams not found."}
@@ -1578,7 +1579,7 @@ class Assistant:
     def get_team_stats(self, team_number: str) -> Dict[str, Any]:
         """Get statistics for a specific team"""
         try:
-            team = Team.query.filter_by(team_number=int(team_number)).first()
+            team = Team.query.filter_by(team_number=safe_int_team_number(team_number)).first()
             if not team:
                 return {"text": f"Team {team_number} not found in the database."}
             # Calculate team statistics from scouting data
@@ -1831,8 +1832,8 @@ setTimeout(function() {{
     def compare_teams(self, team1: str, team2: str) -> Dict[str, Any]:
         """Compare statistics between two teams"""
         try:
-            team1_obj = Team.query.filter_by(team_number=int(team1)).first()
-            team2_obj = Team.query.filter_by(team_number=int(team2)).first()
+            team1_obj = Team.query.filter_by(team_number=safe_int_team_number(team1)).first()
+            team2_obj = Team.query.filter_by(team_number=safe_int_team_number(team2)).first()
             
             if not team1_obj:
                 return {"text": f"Team {team1} not found in the database."}
@@ -1916,7 +1917,7 @@ setTimeout(function() {{
             query = query.order_by(Match.match_number)
             
             if team_number:
-                team = Team.query.filter_by(team_number=int(team_number)).first()
+                team = Team.query.filter_by(team_number=safe_int_team_number(team_number)).first()
                 if not team:
                     return {"text": f"Team {team_number} not found in the database."}
                 
@@ -2041,7 +2042,7 @@ setTimeout(function() {{
     def get_team_last_match(self, team_number: str) -> Dict[str, Any]:
         """Get the most recent match for a specific team with intelligent analysis."""
         try:
-            team = Team.query.filter_by(team_number=int(team_number)).first()
+            team = Team.query.filter_by(team_number=safe_int_team_number(team_number)).first()
             if not team:
                 return {"text": f"Team {team_number} not found in the database."}
             

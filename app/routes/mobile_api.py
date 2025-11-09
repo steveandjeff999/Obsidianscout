@@ -23,6 +23,7 @@ from app import load_user_chat_history, load_group_chat_history, load_assistant_
 from app.models_misc import NotificationQueue, NotificationSubscription, NotificationLog
 from app.utils.team_isolation import get_current_scouting_team_number
 from app.utils.analysis import calculate_team_metrics
+from app.utils.api_utils import safe_int_team_number
 from werkzeug.security import check_password_hash
 from app.assistant.visualizer import Visualizer
 
@@ -100,6 +101,12 @@ def enforce_mobile_auth():
             'error': 'Invalid or expired token',
             'error_code': 'INVALID_TOKEN'
         }), 401
+    # Log decoded token payload for debugging token/team mismatches
+    try:
+        print('DECODED_TOKEN_PAYLOAD:')
+        print(json.dumps(payload, indent=2))
+    except Exception:
+        pass
 
     user = User.query.get(payload.get('user_id')) if payload.get('user_id') else None
     if not user or not user.is_active:
@@ -109,22 +116,28 @@ def enforce_mobile_auth():
             'error_code': 'USER_NOT_FOUND'
         }), 401
 
-    # Determine team_number securely: prefer the token value but if it is
-    # missing or looks suspicious (e.g. equals the user_id) fall back to the
-    # value from the DB to avoid treating user ids as team numbers.
+    # Determine team_number securely. For security, if the token includes a
+    # team_number it MUST match the user's DB scouting_team_number (when set).
+    # This prevents clients from presenting a token that claims to be one
+    # team while accessing another team's data. If the token omits a team
+    # number we fall back to the DB value.
     token_team = payload.get('team_number')
     team_number = None
     try:
-        if token_team is None:
-            team_number = getattr(user, 'scouting_team_number', None)
+        if token_team is not None:
+            db_team = getattr(user, 'scouting_team_number', None)
+            # If DB has a team and it doesn't match the token, reject the
+            # request (security failure).
+            if db_team is not None and str(token_team) != str(db_team):
+                current_app.logger.warning(
+                    f"mobile_api.auth: token team {token_team} does not match DB scouting_team_number {db_team} for user {user.id}; rejecting"
+                )
+                return jsonify({'success': False, 'error': 'Token team mismatch', 'error_code': 'TEAM_MISMATCH'}), 401
+            # Accept the token's team when provided (DB either matches or is unset)
+            team_number = token_team
         else:
-            # If token_team matches the user id, that's likely an encoding bug
-            # where the client accidentally put user_id into team_number.
-            if str(token_team) == str(payload.get('user_id')):
-                current_app.logger.warning(f"token team_number appears to equal user_id for user {payload.get('user_id')}; using DB scouting_team_number instead")
-                team_number = getattr(user, 'scouting_team_number', None)
-            else:
-                team_number = token_team
+            # No team in token: use the user's DB scouting_team_number
+            team_number = getattr(user, 'scouting_team_number', None)
     except Exception:
         team_number = payload.get('team_number')
 
@@ -132,11 +145,55 @@ def enforce_mobile_auth():
     # the token_required decorator does.
     request.mobile_user = user
     request.mobile_team_number = team_number
+    # Log the resolved team information to help debug requests where the
+    # token-provided team differs from the DB value. Keep this lightweight.
+    try:
+        current_app.logger.info(
+            f"mobile_api.auth: path={path} method={request.method} user_id={getattr(user,'id',None)} "
+            f"username={getattr(user,'username',None)} token_team={token_team} resolved_team={team_number} db_team={getattr(user,'scouting_team_number',None)}"
+        )
+    except Exception:
+        pass
+    # Also print a concise debug line to stdout so it's visible in simple
+    # dev server logs (some deployments only show access logs). This helps
+    # when troubleshooting which scouting team is used for a request.
+    try:
+        print(f"MOBILE_API_CALL: remote={request.remote_addr} path={path} method={request.method} user_id={getattr(user,'id',None)} username={getattr(user,'username',None)} token_team={token_team} resolved_team={team_number} db_team={getattr(user,'scouting_team_number',None)}")
+    except Exception:
+        pass
+    # Also print raw headers and body for full request visibility (best-effort).
+    try:
+        print('RAW_REQUEST_HEADERS:')
+        for k, v in request.headers.items():
+            print(f"{k}: {v}")
+    except Exception:
+        pass
+    try:
+        raw = request.get_data(cache=True, as_text=True)
+        if raw:
+            print('RAW_REQUEST_BODY:')
+            print(raw)
+    except Exception:
+        pass
+
+
+@mobile_api.after_request
+def _mobile_api_add_debug_headers(response):
+    """Add a small debug header indicating which scouting team the request was
+    resolved to. This helps clients and devs quickly see which team context
+    the server used when handling the request.
+    """
+    try:
+        team = getattr(request, 'mobile_team_number', None)
+        if team is not None:
+            response.headers['X-Mobile-Team'] = str(team)
+    except Exception:
+        pass
+    return response
 
 # JWT Configuration
-JWT_SECRET_KEY = 'your-secret-key-change-in-production'  # TODO: Move to config
 JWT_ALGORITHM = 'HS256'
-JWT_EXPIRATION_HOURS = 24 * 7  # 7 days
+JWT_EXPIRATION_HOURS = 24 * 1  # 1 day
 
 
 def create_token(user_id, username, team_number):
@@ -148,13 +205,31 @@ def create_token(user_id, username, team_number):
         'exp': datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS),
         'iat': datetime.now(timezone.utc)
     }
-    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    # Read secret from application config (set in app_config.json or environment)
+    try:
+        secret = current_app.config.get('JWT_SECRET_KEY')
+    except Exception:
+        secret = None
+    if not secret:
+        # Fallback placeholder (not secure) so development doesn't break
+        secret = 'your-secret-key-change-in-production'
+        try:
+            current_app.logger.warning('Using placeholder JWT secret; set JWT_SECRET_KEY in app_config.json for production')
+        except Exception:
+            pass
+    return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
 
 
 def verify_token(token):
     """Verify a JWT token and return the payload"""
     try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        try:
+            secret = current_app.config.get('JWT_SECRET_KEY')
+        except Exception:
+            secret = None
+        if not secret:
+            secret = 'your-secret-key-change-in-production'
+        payload = jwt.decode(token, secret, algorithms=[JWT_ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
         return None
@@ -261,42 +336,61 @@ def mobile_login():
                 'error_code': 'MISSING_CREDENTIALS'
             }), 400
         
-        # Find user - support multiple login forms:
-        # 1) username + password
-        # 2) username + team_number + password
-        # 3) team_number + password (find first user on that team with matching password)
+        # Find user - support multiple login forms but enforce strict matching
+        # when a team_number is provided to avoid issuing tokens for the wrong team.
+        # Supported flows:
+        # A) username + password
+        # B) username + team_number + password  (STRICT: must match username+team)
+        # C) team_number + password (find first user on that team with matching password)
         user = None
-        team_number = data.get('team_number')
+        team_number = data.get('team_number') if 'team_number' in data else None
 
-        # If both username and team_number provided, filter by both
+        # If both username and team_number provided, require an exact match on both
         if data.get('username') and team_number is not None:
-            try:
-                team_number = int(team_number)
-            except Exception:
-                team_number = None
-            if team_number is not None:
-                user = User.query.filter_by(username=data['username'], scouting_team_number=team_number).first()
+            # Support alphanumeric team numbers for offseason (e.g., '581B')
+            team_number = safe_int_team_number(team_number)
+            if team_number is None:
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid team_number',
+                    'error_code': 'INVALID_TEAM_NUMBER'
+                }), 400
 
-        # If username provided and no team_number, fallback to username-only lookup
-        if not user and data.get('username'):
+            # Strict username+team lookup. If no user found, reject rather than
+            # falling back to username-only lookup (prevents issuing a token for
+            # the wrong team).
+            user = User.query.filter_by(username=data['username'], scouting_team_number=team_number).first()
+            if not user:
+                return jsonify({
+                    'success': False,
+                    'error': 'User not found for provided team',
+                    'error_code': 'USER_NOT_FOUND_FOR_TEAM'
+                }), 401
+
+        # If username provided and no team_number specified, lookup by username
+        if not user and data.get('username') and team_number is None:
             user = User.query.filter_by(username=data['username']).first()
 
-        # If no username but team_number provided, attempt to find a user on that team with matching password
-        if not user and team_number is not None:
-            try:
-                team_number = int(team_number)
-            except Exception:
-                team_number = None
-            if team_number is not None:
-                candidates = User.query.filter_by(scouting_team_number=team_number, is_active=True).all()
-                for cand in candidates:
-                    # Only check candidates that have a password
-                    try:
-                        if cand.check_password(data['password']):
-                            user = cand
-                            break
-                    except Exception:
-                        continue
+        # If no username but team_number provided, attempt to find a user on that
+        # team with a matching password (team-based login)
+        if not user and team_number is not None and not data.get('username'):
+            # Support alphanumeric team numbers for offseason (e.g., '581B')
+            team_number = safe_int_team_number(team_number)
+            if team_number is None:
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid team_number',
+                    'error_code': 'INVALID_TEAM_NUMBER'
+                }), 400
+            candidates = User.query.filter_by(scouting_team_number=team_number, is_active=True).all()
+            for cand in candidates:
+                # Only check candidates that have a password
+                try:
+                    if cand.check_password(data['password']):
+                        user = cand
+                        break
+                except Exception:
+                    continue
 
         # Verify credentials
         if not user or not user.check_password(data['password']):
@@ -468,11 +562,11 @@ def get_teams():
                     team_nums.update(m.red_teams)
                     team_nums.update(m.blue_teams)
                 except Exception:
-                    # Fallback: parse comma-separated alliances
+                    # Fallback: parse comma-separated alliances (handle alphanumeric offseason teams)
                     if m.red_alliance:
-                        team_nums.update([int(x) for x in m.red_alliance.split(',') if x])
+                        team_nums.update([safe_int_team_number(x.strip()) for x in m.red_alliance.split(',') if x.strip()])
                     if m.blue_alliance:
-                        team_nums.update([int(x) for x in m.blue_alliance.split(',') if x])
+                        team_nums.update([safe_int_team_number(x.strip()) for x in m.blue_alliance.split(',') if x.strip()])
 
             if not team_nums:
                 return jsonify({'success': True, 'teams': [], 'count': 0, 'total': 0}), 200
@@ -1269,11 +1363,70 @@ def get_game_config():
     }
     """
     try:
-        team_number = request.mobile_team_number
-        
-        # Load game config for this team
+        # Determine which team number to use. Default to the DB-backed value
+        # on the authenticated user, but allow an explicit per-request override
+        # via header `X-Mobile-Requested-Team` or query param `team_number`.
+        token_team = getattr(request, 'mobile_team_number', None)
+        mobile_user = getattr(request, 'mobile_user', None)
+
+        # Prefer DB-backed team when available (more authoritative)
+        team_number = token_team
+        if mobile_user and getattr(mobile_user, 'scouting_team_number', None) is not None:
+            db_team = mobile_user.scouting_team_number
+            if token_team is not None and str(token_team) != str(db_team):
+                current_app.logger.info(f"mobile_api.get_game_config: token team {token_team} differs from DB scouting_team_number {db_team}; using DB value")
+            team_number = db_team
+
+        # Allow client to request a different team number explicitly for this
+        # request (useful for testing/overrides). This must be passed via the
+        # header X-Mobile-Requested-Team or the query parameter team_number.
+        requested_team = None
+        try:
+            hdr = request.headers.get('X-Mobile-Requested-Team')
+            if hdr:
+                requested_team = int(hdr)
+            else:
+                qp = request.args.get('team_number')
+                if qp is not None:
+                    try:
+                        requested_team = int(qp)
+                    except Exception:
+                        requested_team = None
+        except Exception:
+            requested_team = None
+
+        if requested_team is not None:
+            current_app.logger.info(f"mobile_api.get_game_config: request includes override requested_team={requested_team}; using it instead of resolved {team_number}")
+            team_number = requested_team
+
+        # Prefer the explicit per-team instance config file if it exists
+        # (instance/configs/<team_number>/game_config.json). This ensures the
+        # mobile API returns the exact saved file for the scouting team rather
+        # than an alliance-shared or merged/default view.
         from app.utils.config_manager import load_game_config
-        game_config = load_game_config(team_number=team_number)
+        game_config = None
+        try:
+            if team_number is not None:
+                base_dir = os.getcwd()
+                team_config_path = os.path.join(base_dir, 'instance', 'configs', str(team_number), 'game_config.json')
+                current_app.logger.debug(f"mobile_api.get_game_config: looking for team config at {team_config_path}")
+                if os.path.exists(team_config_path):
+                    with open(team_config_path, 'r', encoding='utf-8') as f:
+                        try:
+                            game_config = json.load(f)
+                        except Exception:
+                            # If the file exists but is invalid JSON, log and fall
+                            # back to the normal loader which may provide defaults.
+                            current_app.logger.warning(f"Invalid JSON in team game_config for team {team_number}")
+        except Exception:
+            # Non-fatal - fall back to loader below
+            game_config = None
+
+        # If no explicit team file, use the existing loader which may return
+        # defaults, global, or team-specific merged configs.
+        if game_config is None:
+            current_app.logger.debug(f"mobile_api.get_game_config: falling back to load_game_config for team {team_number}")
+            game_config = load_game_config(team_number=team_number)
         
         # Return the full game configuration (gameconfig.json) for this scouting team
         # This mirrors the web UI and ensures mobile clients receive the complete
@@ -1290,6 +1443,63 @@ def get_game_config():
             'error': 'Failed to retrieve game configuration',
             'error_code': 'CONFIG_ERROR'
         }), 500
+
+
+@mobile_api.route('/config/game', methods=['POST', 'PUT'])
+@token_required
+def set_game_config():
+    """
+    Set or update the game configuration for the mobile client's scouting team.
+
+    Security: requires the authenticated mobile user to have the 'admin' or
+    'superadmin' role.
+
+    Request body: JSON representing the full game configuration (same shape
+    as returned by GET /api/mobile/config/game).
+
+    Response:
+    {
+        "success": true
+    }
+    """
+    try:
+        user = getattr(request, 'mobile_user', None)
+        if not user:
+            return jsonify({'success': False, 'error': 'Authentication required', 'error_code': 'AUTH_REQUIRED'}), 401
+
+        # Require admin or superadmin role to modify config
+        if not (user.has_role('admin') or user.has_role('superadmin')):
+            return jsonify({'success': False, 'error': 'Forbidden', 'error_code': 'FORBIDDEN'}), 403
+
+        # Ensure flask-login current_user is set so save_game_config can infer team
+        try:
+            login_user(user, remember=False, force=True)
+        except Exception:
+            # non-fatal; save_game_config accepts explicit behavior for no current_user
+            pass
+
+        data = request.get_json()
+        if not data or not isinstance(data, dict):
+            return jsonify({'success': False, 'error': 'Missing or invalid JSON body', 'error_code': 'MISSING_BODY'}), 400
+
+        # Basic structural validation could be added here. For now, delegate
+        # to existing save_game_config which writes per-team or global files.
+        from app.utils.config_manager import save_game_config
+
+        saved = save_game_config(data)
+        if saved:
+            # Update running config in the Flask app (best-effort)
+            try:
+                current_app.config['GAME_CONFIG'] = data
+            except Exception:
+                pass
+            return jsonify({'success': True}), 200
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save configuration', 'error_code': 'SAVE_FAILED'}), 500
+
+    except Exception as e:
+        current_app.logger.error(f"Set game config error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Internal server error', 'error_code': 'INTERNAL_ERROR'}), 500
 
 
 @mobile_api.route('/graphs/compare', methods=['POST'])
@@ -1633,14 +1843,17 @@ def mobile_graphs_image():
     try:
         payload = request.get_json() or {}
         # Accept either team_number or team_numbers
+        from app.utils.api_utils import safe_int_team_number
         team_numbers = []
         if 'team_numbers' in payload and isinstance(payload.get('team_numbers'), (list, tuple)):
-            team_numbers = [int(t) for t in payload.get('team_numbers') if str(t).isdigit()]
+            for t in payload.get('team_numbers'):
+                parsed = safe_int_team_number(t)
+                if parsed is not None:
+                    team_numbers.append(parsed if isinstance(parsed, int) else str(parsed))
         elif 'team_number' in payload:
-            try:
-                team_numbers = [int(payload.get('team_number'))]
-            except Exception:
-                team_numbers = []
+            parsed = safe_int_team_number(payload.get('team_number'))
+            if parsed is not None:
+                team_numbers = [parsed if isinstance(parsed, int) else str(parsed)]
 
         if not team_numbers:
             return jsonify({'success': False, 'error': 'team_number(s) required', 'error_code': 'MISSING_TEAMS'}), 400

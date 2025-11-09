@@ -1,5 +1,7 @@
 <!-- Modern Now Brief Panel - redesigned for a cleaner, responsive UI -->
-<div class="now-brief card mb-4" id="nowBriefPanel" aria-live="polite">
+<!-- Wrapper provides a short-lived full-viewport surface behind the panel which hides on scroll -->
+<div class="now-brief-viewport mb-4" id="nowBriefViewport">
+  <div class="now-brief card mb-4" id="nowBriefPanel" aria-live="polite">
   <div class="now-brief__header d-flex align-items-center justify-content-between p-3">
     <div class="d-flex align-items-center gap-3">
       <div class="now-brief__logo bg-gradient rounded-3 d-flex align-items-center justify-content-center">
@@ -85,11 +87,14 @@
   <div class="now-brief__footer text-end p-2 px-3">
     <small class="text-muted">Updated <span id="briefLastUpdated">--</span></small>
   </div>
+  </div>
 </div>
 
 <style>
+/* (Now-brief surface removed to avoid changing page background across pages.) */
+
 /* Modern Now Brief styles (kept local to partial) */
-.now-brief { border-radius: 12px; overflow: visible; }
+.now-brief { border-radius: 12px; overflow: visible; position: relative; z-index: 2; }
 .now-brief__header { background: linear-gradient(90deg, rgba(102,126,234,0.12), rgba(118,75,162,0.12)); border-bottom: 1px solid rgba(0,0,0,0.04); }
 .now-brief__logo { width:44px; height:44px; background: linear-gradient(135deg,#667eea,#764ba2); }
 .kpi { border: none; }
@@ -415,4 +420,9 @@ document.addEventListener('DOMContentLoaded', () => {
   fetchBrief();
   setInterval(fetchBrief, 60000);
 });
+</script>
+
+<script>
+// Toggle the Now brief viewport surface on scroll and size it to the initial viewport/page height
+// Surface/viewport sizing removed to prevent page-wide background changes.
 </script>

@@ -1,0 +1,422 @@
+/* Modern Dark Theme — complements dark-mode-force.css with refined surfaces, softer shadows,
+   subtle gradients, and modern controls. Loaded after dark-mode-force.css so it can refine
+   and override specific visual details for a more modern dark UI. */
+
+:root.dark-mode, html.dark-mode {
+    /* Core palette */
+    --bg: #070709;
+    --surface: rgba(18,18,20,0.9);
+    --card-bg: rgba(20,20,22,0.78);
+    --glass-bg: rgba(22,22,24,0.54);
+    --glass-border: rgba(255,255,255,0.04);
+    --muted: #9aa0a6;
+    --text: #e6e6e6;
+
+    /* Accent */
+    --accent: #5aa6ff;
+    --accent-rgb: 90,166,255;
+    --accent-2: #7bd389;
+
+    /* Shadows */
+    --soft-shadow: 0 6px 20px rgba(2,6,23,0.55);
+    --lift-shadow: 0 10px 30px rgba(2,6,23,0.6);
+
+    /* Buttons */
+    --btn-radius: 12px;
+}
+
+/* Apply gentle global background and base text color */
+html.dark-mode, body.dark-mode {
+    background: linear-gradient(180deg, #050506 0%, #0b0b0d 100%);
+    color: var(--text);
+}
+
+/* Topbar: subtle glass with accent edge */
+.topbar {
+    background: linear-gradient(180deg, rgba(10,12,15,0.6), rgba(12,14,16,0.58));
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    backdrop-filter: blur(6px);
+}
+
+/* Cards: softer rounded corners, subtle elevation */
+.card, .stat-card, .dashboard-card {
+    border-radius: 12px !important;
+    background: var(--card-bg) !important;
+    box-shadow: var(--soft-shadow) !important;
+    border: 1px solid var(--glass-border) !important;
+}
+
+.card:hover, .stat-card.card-interactive:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--lift-shadow) !important;
+}
+
+/* Buttons: modern rounded, gentle gradient when primary */
+.btn {
+    border-radius: var(--btn-radius) !important;
+}
+
+/* Ensure sidebar controls (dark mode toggle and similar) remain rounded in light mode
+   Some theme overrides can make outline buttons square; force rounded corners with high
+   specificity for the sidebar so light-mode looks match dark-mode. */
+body:not(.dark-mode) #appSidebar .btn,
+html:not(.dark-mode) #appSidebar .btn,
+body:not(.dark-mode) #appSidebar .btn-sm,
+html:not(.dark-mode) #appSidebar .btn-sm,
+body:not(.dark-mode) #darkModeButton,
+html:not(.dark-mode) #darkModeButton {
+    border-radius: 12px !important;
+    overflow: hidden;
+}
+
+/* Also ensure outline variant's focus/active states stay rounded */
+body:not(.dark-mode) #appSidebar .btn-outline-secondary:focus,
+html:not(.dark-mode) #appSidebar .btn-outline-secondary:focus,
+body:not(.dark-mode) #darkModeButton:focus,
+html:not(.dark-mode) #darkModeButton:focus {
+    border-radius: 12px !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.06) !important;
+}
+
+.btn-primary, .btn-primary:focus, .btn-primary:active {
+    background: linear-gradient(90deg, rgba(var(--accent-rgb),0.12), rgba(24,138,255,0.12));
+    color: #fff !important;
+    border: 1px solid rgba(var(--accent-rgb),0.18) !important;
+    box-shadow: 0 6px 18px rgba(26,56,102,0.25) !important;
+}
+
+/* Outline primary: soft glow on focus */
+.btn-outline-primary {
+    color: var(--accent) !important;
+    border-radius: var(--btn-radius) !important;
+    border: 1px solid rgba(255,255,255,0.04) !important;
+}
+
+.btn-outline-primary:focus, .btn-outline-primary:hover {
+    box-shadow: 0 6px 20px rgba(var(--accent-rgb),0.12) !important;
+    transform: translateY(-1px);
+}
+
+/* Inputs and selects: higher contrast, pill-like */
+.form-control, .form-select, .enhanced-search-input {
+    background: rgba(255,255,255,0.02) !important;
+    border: 1px solid rgba(255,255,255,0.04) !important;
+    color: var(--text) !important;
+    border-radius: 10px !important;
+    padding: 10px 12px !important;
+}
+
+.form-control:focus, .form-select:focus, .enhanced-search-input:focus {
+    outline: none !important;
+    box-shadow: 0 6px 20px rgba(var(--accent-rgb),0.12) !important;
+    border-color: rgba(var(--accent-rgb),0.45) !important;
+}
+
+/* Sidebar adjustments: keep compact but modern */
+#appSidebar {
+    border-right: 1px solid rgba(255,255,255,0.02);
+    background: linear-gradient(180deg, rgba(8,8,10,0.85), rgba(12,12,14,0.85));
+}
+
+#appSidebar .nav-link {
+    border-radius: 8px;
+    padding: .55rem .7rem;
+}
+
+#appSidebar .nav-link.active {
+    background: linear-gradient(90deg, rgba(var(--accent-rgb),0.12), rgba(255,255,255,0.02));
+    box-shadow: 0 6px 18px rgba(2,6,23,0.45);
+}
+
+/* Toasts and notifications: slightly glassy */
+.toast {
+    background: rgba(20,20,22,0.86) !important;
+    border: 1px solid rgba(255,255,255,0.03) !important;
+    color: var(--text) !important;
+    border-radius: 10px !important;
+}
+
+/* Modern small helpers */
+.obsidian-gradient { /* tweak accent for dark */
+    background: linear-gradient(90deg, #7aa9ff 0%, #5aa6ff 100%);
+}
+
+/* Make small interactive controls more tappable */
+.search-submit-btn, .search-clear-btn {
+    border-radius: 10px !important;
+}
+
+/* Reduce visual noise of thin borders */
+* { -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+
+/* Respect prefers-color-scheme but ensure our variables apply when dark-mode is forced */
+@media (prefers-color-scheme: dark) {
+    :root {
+        /* leave defaults — our .dark-mode variables will be applied when JS toggles class */
+    }
+}
+
+/* Small card detail: subtle divider for list-group inside cards */
+.card .list-group-item { border-radius: 8px; margin: 6px 0; border: 1px solid rgba(255,255,255,0.03) !important; }
+
+/* Make modal footers slightly separated with glass line */
+.modal-content { border-radius: 12px; }
+.modal-footer { border-top: 1px solid rgba(255,255,255,0.03); }
+
+/* Keep charts with higher contrast axes/labels */
+.chartjs-render-monitor { filter: contrast(1.02) brightness(0.98); }
+
+/* Improve focus outlines for accessibility */
+:focus { outline: 3px solid rgba(var(--accent-rgb),0.12); outline-offset: 2px; }
+
+/* End of modern dark theme tweaks */
+
+/* -----------------------------
+   Sidebar & Topbar Modernization
+   ----------------------------- */
+
+/* Sidebar: narrow, elevated panel with soft shadow and clear group separation */
+#appSidebar {
+    width: 260px;
+    min-width: 220px;
+    max-width: 320px;
+    padding: 1rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    transition: width 220ms cubic-bezier(.2,.9,.2,1), transform 220ms ease, box-shadow 220ms ease;
+    box-shadow: 0 10px 30px rgba(2,6,23,0.45);
+}
+
+/* Collapsed sidebar is compact but allows hover reveal via CSS tooltip fallback */
+body.sidebar-collapsed #appSidebar { width: 72px !important; min-width: 72px !important; }
+
+#appSidebar .sidebar-header { padding: 0.5rem 0.5rem 0.25rem 0.5rem; }
+
+#appSidebar .brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px; }
+#appSidebar .brand-icon { font-size: 20px; color: var(--accent); }
+#appSidebar .brand-text { font-weight: 700; font-size: 1rem; color: var(--text); }
+
+/* Brand logo tile */
+#appSidebar .brand-logo {
+    width: 52px; height: 52px; border-radius: 50%; display:flex; align-items:center; justify-content:center;
+    /* Two-stop neutral grey gradient for a modern, understated tile */
+    background: linear-gradient(135deg, #3a3a3c 0%, #2a2a2c 100%);
+    /* Fallback base color (in case gradient isn't supported) */
+    background-color: #2f2f31;
+    border: 1px solid rgba(255,255,255,0.03);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.02);
+}
+
+#appSidebar .brand-logo .brand-icon { font-size: 18px; color: white !important; }
+#appSidebar .brand-logo .brand-svg { width: 26px; height: 26px; color: white; stroke: rgba(255,255,255,0.95); fill: none; }
+#appSidebar .brand-info { line-height: 1; }
+#appSidebar .brand-sub { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+
+/* Close button styling */
+.btn-close-sidebar { padding: 6px 8px; border-radius: 10px; color: var(--muted); border: 1px solid rgba(255,255,255,0.03); background: rgba(255,255,255,0.01); }
+.btn-close-sidebar i { color: var(--muted); }
+.btn-close-sidebar:hover { background: rgba(255,255,255,0.03); color: var(--text); }
+
+/* Focus state for keyboard users */
+.brand-logo:focus { box-shadow: 0 10px 24px rgba(var(--accent-rgb),0.16), 0 0 0 4px rgba(var(--accent-rgb),0.06); outline: none; }
+
+/* Light mode: make the brand tile white with a subtle border and darker icon */
+/* Light-mode: make the brand tile white with a subtle border and darker icon
+   Use higher-specificity selectors that include the sidebar ID so they override
+   the default #appSidebar .brand-logo rules. */
+body:not(.dark-mode) #appSidebar .brand-logo,
+html:not(.dark-mode) #appSidebar .brand-logo {
+    background: linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%); /* white -> very light grey */
+    background-color: #ffffff; /* fallback */
+    border: 1px solid rgba(0,0,0,0.06);
+    box-shadow: 0 6px 14px rgba(2,6,23,0.04), inset 0 1px 0 rgba(255,255,255,0.6);
+}
+
+body:not(.dark-mode) #appSidebar .brand-logo .brand-icon,
+html:not(.dark-mode) #appSidebar .brand-logo .brand-icon {
+    color: #1f2937 !important; /* dark slate for icon in light tile */
+}
+
+/* Light-mode focus state: subtle darker ring */
+body:not(.dark-mode) #appSidebar .brand-logo:focus,
+html:not(.dark-mode) #appSidebar .brand-logo:focus {
+    box-shadow: 0 10px 24px rgba(0,0,0,0.06), 0 0 0 4px rgba(0,0,0,0.04); outline: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Global: force rounded buttons in light mode site-wide
+   Use high-specificity selectors with :not(.dark-mode) and html/body to override
+   other theme rules that may make buttons square. Applied to primary/outline/
+   small variants and focus/hover states for consistent look.
+   --------------------------------------------------------------------------- */
+body:not(.dark-mode) .btn,
+html:not(.dark-mode) .btn,
+body:not(.dark-mode) .btn-sm,
+html:not(.dark-mode) .btn-sm {
+    border-radius: 12px !important;
+    overflow: hidden;
+}
+
+/* Outline variants keep rounded corners and subtle focus shadows */
+body:not(.dark-mode) .btn-outline-primary,
+html:not(.dark-mode) .btn-outline-primary,
+body:not(.dark-mode) .btn-outline-secondary,
+html:not(.dark-mode) .btn-outline-secondary,
+body:not(.dark-mode) .btn-outline-light,
+html:not(.dark-mode) .btn-outline-light {
+    border-radius: 12px !important;
+}
+
+/* Ensure close buttons and toggles are rounded in light mode */
+body:not(.dark-mode) .btn-close,
+html:not(.dark-mode) .btn-close,
+body:not(.dark-mode) .dropdown-toggle,
+html:not(.dark-mode) .dropdown-toggle {
+    border-radius: 10px !important;
+}
+
+/* Focus/hover states - subtle shadow and keep rounded corners */
+body:not(.dark-mode) .btn:focus,
+html:not(.dark-mode) .btn:focus,
+body:not(.dark-mode) .btn:hover,
+html:not(.dark-mode) .btn:hover {
+    box-shadow: 0 6px 18px rgba(0,0,0,0.06) !important;
+    border-radius: 12px !important;
+}
+
+/* Special-case input[type=submit] and similar actionable inputs that may be styled as buttons */
+body:not(.dark-mode) input[type="submit"],
+html:not(.dark-mode) input[type="submit"],
+body:not(.dark-mode) input[type="button"],
+html:not(.dark-mode) input[type="button"] {
+    border-radius: 10px !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Large outline primary button tweaks for light mode (Sync button, full-width
+   action buttons). These styles improve contrast and accessibility while
+   keeping the outline visual language. High-specificity selectors used so they
+   override Bootstrap defaults when not in dark mode.
+   --------------------------------------------------------------------------- */
+body:not(.dark-mode) .btn.btn-outline-primary.py-3,
+html:not(.dark-mode) .btn.btn-outline-primary.py-3,
+body:not(.dark-mode) .btn.btn-outline-primary.w-100.py-3,
+html:not(.dark-mode) .btn.btn-outline-primary.w-100.py-3 {
+    /* soft white surface with a subtle tint to separate from page background */
+    background: linear-gradient(180deg, #ffffff 0%, #fbfbfb 100%) !important;
+    color: #0f1724 !important; /* dark slate text */
+    border: 1px solid rgba(15,23,36,0.12) !important; /* subtle visible border */
+    box-shadow: 0 4px 12px rgba(2,6,23,0.04) !important;
+    transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+/* Icon color inside the button */
+body:not(.dark-mode) .btn.btn-outline-primary.py-3 .fa,
+html:not(.dark-mode) .btn.btn-outline-primary.py-3 .fa {
+    color: #0f1724 !important;
+}
+
+/* Spinner color: make the border top match the icon/text color for visible spinner */
+body:not(.dark-mode) .btn.btn-outline-primary.py-3 .spinner-border,
+html:not(.dark-mode) .btn.btn-outline-primary.py-3 .spinner-border {
+    border: 0.15em solid rgba(15,23,36,0.12) !important;
+    border-top-color: #0f1724 !important;
+}
+
+/* Hover and active states: slightly darker tint and lift */
+body:not(.dark-mode) .btn.btn-outline-primary.py-3:hover,
+html:not(.dark-mode) .btn.btn-outline-primary.py-3:hover {
+    background: linear-gradient(180deg, #fbfbfb 0%, #f2f4f6 100%) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 20px rgba(2,6,23,0.06) !important;
+}
+
+body:not(.dark-mode) .btn.btn-outline-primary.py-3:active,
+html:not(.dark-mode) .btn.btn-outline-primary.py-3:active {
+    transform: translateY(0) !important;
+    box-shadow: 0 4px 10px rgba(2,6,23,0.05) !important;
+}
+
+/* Focus state: visible ring while remaining subtle */
+body:not(.dark-mode) .btn.btn-outline-primary.py-3:focus,
+html:not(.dark-mode) .btn.btn-outline-primary.py-3:focus {
+    outline: none !important;
+    box-shadow: 0 6px 18px rgba(2,6,23,0.06), 0 0 0 4px rgba(15,23,36,0.04) !important;
+}
+
+/* Make the button icon and text vertically centered and slightly larger for emphasis */
+body:not(.dark-mode) .btn.btn-outline-primary.py-3 .fa-lg,
+html:not(.dark-mode) .btn.btn-outline-primary.py-3 .fa-lg {
+    font-size: 1.18em !important;
+}
+
+
+
+/* Group labels: subtle separators */
+#appSidebar .nav-group-title { background: transparent; color: var(--muted); font-weight: 600; padding: 0.45rem 0.6rem; border-radius: 8px; }
+
+#appSidebar .nav-group-items { padding: 0.25rem 0.25rem 0.75rem 0.25rem; }
+
+/* Nav links: modern pill with icon left, label right */
+#appSidebar .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    color: var(--text) !important;
+    background: transparent !important;
+    transition: background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+#appSidebar .nav-link i {
+    width: 34px; height: 34px; display:flex; align-items:center; justify-content:center; border-radius:10px; background: rgba(255,255,255,0.02); color: var(--muted); font-size: 0.95rem;
+}
+
+#appSidebar .nav-link:hover { background: rgba(255,255,255,0.02) !important; transform: translateX(4px); }
+
+#appSidebar .nav-link.active {
+    background: linear-gradient(90deg, rgba(var(--accent-rgb),0.10), rgba(255,255,255,0.01)) !important;
+    border-left: 3px solid rgba(var(--accent-rgb),0.9) !important;
+    padding-left: 8px !important;
+}
+
+/* Mini badges / unread dots in sidebar */
+#appSidebar .user-chat-dot { width: 8px; height: 8px; }
+
+/* Topbar: increase height, center search elegantly, compact actions on right */
+.topbar { height: 64px; align-items: center; padding: 0 16px; gap: 12px; }
+.topbar .top-search { max-width: 520px; width: 48%; }
+.topbar .navbar-actions { gap: 8px; align-items: center; }
+
+.topbar .btn { border-radius: 10px; }
+
+/* Notifications and user dropdown compact visual */
+.topbar-notifications .dropdown-toggle, .dropdown > .dropdown-toggle { padding: 8px 10px; border-radius: 10px; }
+.topbar-notifications .badge { transform: translateY(-2px); font-size: 0.65rem; }
+
+/* User button: avatar circle and name hidden on small screens */
+.navbar-actions #userToggle i.fa-user-circle { font-size: 20px; color: var(--text); }
+.navbar-actions #userToggle .d-none.d-md-inline { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Topbar mobile adaptations */
+@media (max-width: 992px) {
+    #appSidebar { transform: translateX(-6px); }
+    .topbar .top-search { display: none; }
+    .topbar { height: 56px; padding: 0 12px; }
+}
+
+/* Smooth transitions for layout changes */
+#appSidebar, .topbar, .card, .modal-content, .toast { transition: all 180ms ease; }
+
+/* Accessibility: ensure focus state looks consistent across the topbar & sidebar */
+#appSidebar .nav-link:focus, .topbar .btn:focus { outline: none; box-shadow: 0 6px 18px rgba(var(--accent-rgb),0.12) !important; }
+
+/* Ensure collapsed sidebar labels show on hover for accessible discovery */
+body.sidebar-collapsed #appSidebar .nav-link span { display: none; }
+body.sidebar-collapsed #appSidebar .nav-link::after {
+    content: attr(data-label);
+    position: absolute; left: 72px; background: rgba(10,12,15,0.96); color: var(--text); padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03); box-shadow: 0 4px 12px rgba(0,0,0,0.45); display: none; white-space: nowrap; z-index: 2200;
+}
+body.sidebar-collapsed #appSidebar .nav-link:hover::after { display: block; }
+

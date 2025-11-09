@@ -205,6 +205,12 @@
                                                                        value="1" {{ 'checked' if element.display_in_predictions }}>
                                                                 <label class="form-check-label">Show in Predictions</label>
                                                             </div>
+                                                            <div class="form-check form-check-inline mt-2 ms-3">
+                                                                <input class="form-check-input" type="checkbox"
+                                                                       name="auto_element_gamepiece_scoreible_{{ loop.index0 }}" value="1"
+                                                                       {% if element.gamepiece_scoreible %}checked{% endif %}>
+                                                                <label class="form-check-label">Is scored gamepiece</label>
+                                                            </div>
                                                             {% if element.type == 'multiple_choice' %}
                                                             <div class="multiple-choice-options mt-2" style="display: block;">
                                                                 <small class="text-muted">Multiple Choice Options:</small>
@@ -301,6 +307,12 @@
                                                                        name="teleop_element_display_predictions_{{ loop.index0 }}" 
                                                                        value="1" {{ 'checked' if element.display_in_predictions }}>
                                                                 <label class="form-check-label">Show in Predictions</label>
+                                                            </div>
+                                                            <div class="form-check form-check-inline mt-2 ms-3">
+                                                                <input class="form-check-input" type="checkbox"
+                                                                       name="teleop_element_gamepiece_scoreible_{{ loop.index0 }}" value="1"
+                                                                       {% if element.gamepiece_scoreible %}checked{% endif %}>
+                                                                <label class="form-check-label">Is scored gamepiece</label>
                                                             </div>
                                                             {% if element.type == 'multiple_choice' %}
                                                             <div class="multiple-choice-options mt-2" style="display: block;">
@@ -399,6 +411,12 @@
                                                                        value="1" {{ 'checked' if element.display_in_predictions }}>
                                                                 <label class="form-check-label">Show in Predictions</label>
                                                             </div>
+                                                            <div class="form-check form-check-inline mt-2 ms-3">
+                                                                <input class="form-check-input" type="checkbox"
+                                                                       name="endgame_element_gamepiece_scoreible_{{ loop.index0 }}" value="1"
+                                                                       {% if element.gamepiece_scoreible %}checked{% endif %}>
+                                                                <label class="form-check-label">Is scored gamepiece</label>
+                                                            </div>
                                                             {% if element.type == 'multiple_choice' %}
                                                             <div class="multiple-choice-options mt-2" style="display: block;">
                                                                 <small class="text-muted">Multiple Choice Options:</small>
@@ -484,6 +502,12 @@
                                                                        name="game_piece_teleop_points_{{ loop.index0 }}" 
                                                                        value="{{ piece.teleop_points }}" placeholder="Teleop pts" step="0.1">
                                                             </div>
+                                                        </div>
+                                                        <div class="form-check mt-2">
+                                                            <input class="form-check-input" type="checkbox"
+                                                                   name="game_piece_gamepiece_scoreible_{{ loop.index0 }}" value="1"
+                                                                   {% if piece.gamepiece_scoreible %}checked{% endif %}>
+                                                            <label class="form-check-label">Is scored gamepiece</label>
                                                         </div>
                                                         <input type="hidden" name="game_piece_id_{{ loop.index0 }}" value="{{ piece.id }}">
                                                     </div>
@@ -816,6 +840,14 @@ document.addEventListener('DOMContentLoaded', function() {
                             <i class="fas fa-plus me-1"></i>Add Option
                         </button>
                     </div>
+                    <div class="form-check form-check-inline mt-2">
+                        <input class="form-check-input" type="checkbox" name="${period}_element_display_predictions_${index}" value="1">
+                        <label class="form-check-label">Show in Predictions</label>
+                    </div>
+                    <div class="form-check form-check-inline mt-2 ms-3">
+                        <input class="form-check-input" type="checkbox" name="${period}_element_gamepiece_scoreible_${index}" value="1">
+                        <label class="form-check-label">Is scored gamepiece</label>
+                    </div>
                     <input type="hidden" name="${period}_element_id_${index}" value="elem_${period}_${index}">
                     <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-element">Remove</button>
                 </div>
@@ -874,6 +906,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             <input type="number" class="form-control form-control-sm" 
                                    name="game_piece_teleop_points_${index}" value="0" placeholder="Teleop pts" step="0.1">
                         </div>
+                    </div>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" name="game_piece_gamepiece_scoreible_${index}" value="1">
+                        <label class="form-check-label">Is scored gamepiece</label>
                     </div>
                     <input type="hidden" name="game_piece_id_${index}" value="piece_${index}">
                 </div>
@@ -986,6 +1022,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Show in predictions flag
                     const displayCheckbox = item.querySelector(`input[name^="${period}_element_display_predictions_"]`);
                     element.display_in_predictions = displayCheckbox ? !!displayCheckbox.checked : false;
+                    // Scored flag (renamed to gamepiece_scoreible)
+                    const scoredCheckbox = item.querySelector(`input[name^="${period}_element_gamepiece_scoreible_"]`);
+                    element.gamepiece_scoreible = scoredCheckbox ? !!scoredCheckbox.checked : false;
                     
                     // Handle multiple choice options with individual point values
                     if (typeSelect && typeSelect.value === 'multiple_choice') {

@@ -162,6 +162,7 @@ def index():
         return (red_sum, blue_sum)
 
 
+    # Build display scores for each match (normalize DB scores and fall back to local scouting data)
     for match in matches:
         # Normalize DB scores (treat negative scores like -1 as unplayed)
         red_db = norm_db_score(match.red_score)
@@ -185,72 +186,71 @@ def index():
             else:
                 display_scores[match.id] = {'red_score': None, 'blue_score': None, 'source': None}
 
-            # Compute per-event dynamic offset (minutes) from recent completed matches to improve predicted times
-            dynamic_offset_minutes = 0
+    # Compute per-event dynamic offset (minutes) from recent completed matches to improve predicted times
+    dynamic_offset_minutes = 0
+    try:
+        if event:
+            # Use matches sorted by most recent match_number descending to find recent completed matches
+            recent_matches = sorted(matches, key=lambda m: m.match_number, reverse=True)
+            dynamic_offset_minutes = compute_event_dynamic_offset_minutes(event, recent_matches, lookback=10)
+    except Exception:
+        dynamic_offset_minutes = 0
+
+    # Build adjusted predicted times map (match_id -> adjusted_datetime)
+    adjusted_predictions = {}
+    try:
+        for m in matches:
+            if getattr(m, 'predicted_time', None) is not None:
+                try:
+                    adj = m.predicted_time
+                    if dynamic_offset_minutes:
+                        from datetime import timedelta
+                        adj = adj + timedelta(minutes=dynamic_offset_minutes)
+                    adjusted_predictions[m.id] = adj
+                except Exception:
+                    adjusted_predictions[m.id] = m.predicted_time
+    except Exception:
+        adjusted_predictions = {}
+
+    # Determine the next unplayed match (first match in sorted order without actual_time/winner/scores)
+    next_unplayed_match_id = None
+    try:
+        now_utc = datetime.now(timezone.utc)
+        for m in matches:
+            finished = bool(
+                getattr(m, 'actual_time', None)
+                or getattr(m, 'winner', None)
+                or ((getattr(m, 'red_score', None) is not None and getattr(m, 'red_score', None) >= 0)
+                    or (getattr(m, 'blue_score', None) is not None and getattr(m, 'blue_score', None) >= 0))
+            )
+            if finished:
+                continue
+
+            # We only consider matches with an adjusted predicted_time for the 'starting soon' behavior
+            pred = adjusted_predictions.get(m.id) or getattr(m, 'predicted_time', None)
+            if not pred:
+                # If no predicted_time, this match is the next unplayed but we won't mark it 'starting soon' unless predicted_time exists
+                next_unplayed_match_id = m.id
+                break
+
+            # Convert event-local predicted_time to UTC for comparison
             try:
-                if event:
-                    # Use matches sorted by most recent match_number descending to find recent completed matches
-                    recent_matches = sorted(matches, key=lambda m: m.match_number, reverse=True)
-                    dynamic_offset_minutes = compute_event_dynamic_offset_minutes(event, recent_matches, lookback=10)
+                match_pred_utc = convert_local_to_utc(pred, m.event.timezone if getattr(m, 'event', None) else None)
             except Exception:
-                dynamic_offset_minutes = 0
+                match_pred_utc = pred if pred.tzinfo is not None else pred.replace(tzinfo=timezone.utc)
 
-            # Build adjusted predicted times map (match_id -> adjusted_datetime)
-            adjusted_predictions = {}
-            try:
-                for m in matches:
-                    if getattr(m, 'predicted_time', None) is not None:
-                        try:
-                            adj = m.predicted_time
-                            if dynamic_offset_minutes:
-                                from datetime import timedelta
-                                adj = adj + timedelta(minutes=dynamic_offset_minutes)
-                            adjusted_predictions[m.id] = adj
-                        except Exception:
-                            adjusted_predictions[m.id] = m.predicted_time
+            # If predicted time is in the past, mark this as the next unplayed to show 'Starting soon'
+            if now_utc > match_pred_utc:
+                next_unplayed_match_id = m.id
+                break
 
-            except Exception:
-                adjusted_predictions = {}
+            # If predicted time is not past, then the first unplayed match is this one but it's not yet 'starting soon'
+            next_unplayed_match_id = m.id
+            break
+    except Exception:
+        next_unplayed_match_id = None
 
-            # Determine the next unplayed match (first match in sorted order without actual_time/winner/scores)
-            next_unplayed_match_id = None
-            try:
-                now_utc = datetime.now(timezone.utc)
-                for m in matches:
-                    finished = bool(
-                        getattr(m, 'actual_time', None)
-                        or getattr(m, 'winner', None)
-                        or ((getattr(m, 'red_score', None) is not None and getattr(m, 'red_score', None) >= 0)
-                            or (getattr(m, 'blue_score', None) is not None and getattr(m, 'blue_score', None) >= 0))
-                    )
-                    if finished:
-                        continue
-
-                    # We only consider matches with an adjusted predicted_time for the 'starting soon' behavior
-                    pred = adjusted_predictions.get(m.id) or getattr(m, 'predicted_time', None)
-                    if not pred:
-                        # If no predicted_time, this match is the next unplayed but we won't mark it 'starting soon' unless predicted_time exists
-                        next_unplayed_match_id = m.id
-                        break
-
-                    # Convert event-local predicted_time to UTC for comparison
-                    try:
-                        match_pred_utc = convert_local_to_utc(pred, m.event.timezone if getattr(m, 'event', None) else None)
-                    except Exception:
-                        match_pred_utc = pred if pred.tzinfo is not None else pred.replace(tzinfo=timezone.utc)
-
-                    # If predicted time is in the past, mark this as the next unplayed to show 'Starting soon'
-                    if now_utc > match_pred_utc:
-                        next_unplayed_match_id = m.id
-                        break
-
-                    # If predicted time is not past, then the first unplayed match is this one but it's not yet 'starting soon'
-                    next_unplayed_match_id = m.id
-                    break
-            except Exception:
-                next_unplayed_match_id = None
-
-            return render_template('matches/index.html', matches=matches, events=events, selected_event=event, display_scores=display_scores, next_unplayed_match_id=next_unplayed_match_id, adjusted_predictions=adjusted_predictions, **get_theme_context())
+    return render_template('matches/index.html', matches=matches, events=events, selected_event=event, display_scores=display_scores, next_unplayed_match_id=next_unplayed_match_id, adjusted_predictions=adjusted_predictions, **get_theme_context())
 
 @bp.route('/sync_from_config')
 def sync_from_config():
@@ -424,6 +424,10 @@ def view(match_id):
     # Normalize stored scores so negative sentinel values don't mark the match as played
     red_db = norm_db_score(match.red_score)
     blue_db = norm_db_score(match.blue_score)
+    _predicted_dt = getattr(match, 'predicted_time', None)
+    _actual_dt = getattr(match, 'actual_time', None)
+    _scheduled_dt = getattr(match, 'scheduled_time', None)
+    _played_dt = _actual_dt or _scheduled_dt
     if red_db is not None or blue_db is not None:
         display_score = {'red_score': red_db, 'blue_score': blue_db, 'source': 'api'}
     else:
@@ -722,6 +726,38 @@ def strategy():
         preselected_match_id=preselected_match_id,
         **get_theme_context()
     )
+
+
+@bp.route('/strategy/live')
+@analytics_required
+def strategy_live():
+    """Live strategy page that automatically shows the selected team's next match
+    and advances to the following match 2 minutes after the scheduled start time
+    of the match it was showing.
+    """
+    # All events for dropdown
+    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+
+    # Determine selected event from query params or config
+    # Use the effective game config helper so defaults from config files are respected
+    game_config = get_effective_game_config()
+    current_event_code = game_config.get('current_event_code')
+    event_id = request.args.get('event_id', type=int)
+    event = None
+    if event_id:
+        event = Event.query.get(event_id)
+    elif current_event_code:
+        try:
+            event = get_event_by_code(current_event_code)
+        except Exception:
+            event = None
+
+    # Get teams for the event (scouting-team filtered)
+    teams = []
+    if event:
+        teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == event.id).order_by(Team.team_number).all()
+
+    return render_template('matches/strategy_live.html', events=events, selected_event=event, teams=teams, game_config=game_config, **get_theme_context())
 
 
 @bp.route('/strategy/all')
@@ -1392,6 +1428,8 @@ def get_strategy_background(filename):
 def matches_data():
     """AJAX endpoint for matches data - used for real-time config updates"""
     try:
+        # Allow optional event_id to request matches for a specific event (useful for strategy/live)
+        event_id_param = request.args.get('event_id', type=int)
         # Get event code from config (alliance-aware)
         game_config = get_effective_game_config()
         current_event_code = game_config.get('current_event_code')
@@ -1405,8 +1443,21 @@ def matches_data():
                 'timestamp': datetime.now().isoformat()
             })
         
-        # Get current event
-        current_event = get_event_by_code(current_event_code)
+        # Determine which event to return: prefer explicit event_id param if provided
+        current_event = None
+        if event_id_param:
+            # Respect scouting-team filtering
+            current_event = filter_events_by_scouting_team().filter(Event.id == event_id_param).first()
+            if not current_event:
+                return jsonify({
+                    'success': True,
+                    'matches': [],
+                    'current_event': None,
+                    'message': f'Event id {event_id_param} not found or not accessible',
+                    'timestamp': datetime.now().isoformat()
+                })
+        else:
+            current_event = get_event_by_code(current_event_code)
         if not current_event:
             return jsonify({
                 'success': True,
@@ -1428,36 +1479,81 @@ def matches_data():
             # Normalize scores so that negative sentinels like -1 are treated as None
             red_db = norm_db_score(match.red_score)
             blue_db = norm_db_score(match.blue_score)
+
+            # Build alliance team lists robustly to support multiple schema shapes
+            def _extract_alliance_teams(match_obj, prefix_red=True):
+                teams_out = []
+                try:
+                    if prefix_red:
+                        t1 = getattr(match_obj, 'red_1', None)
+                        t2 = getattr(match_obj, 'red_2', None)
+                        t3 = getattr(match_obj, 'red_3', None)
+                    else:
+                        t1 = getattr(match_obj, 'blue_1', None)
+                        t2 = getattr(match_obj, 'blue_2', None)
+                        t3 = getattr(match_obj, 'blue_3', None)
+                    for t in (t1, t2, t3):
+                        if t is not None:
+                            teams_out.append(t)
+                except Exception:
+                    teams_out = []
+
+                # Fallback: comma-separated alliance string (red_alliance / blue_alliance)
+                if not teams_out:
+                    try:
+                        s = getattr(match_obj, 'red_alliance' if prefix_red else 'blue_alliance', None)
+                        if s:
+                            teams_out = [x.strip() for x in str(s).split(',') if x.strip()]
+                    except Exception:
+                        teams_out = []
+
+                # Final fallback: list attribute like red_teams/blue_teams
+                if not teams_out:
+                    try:
+                        lt = getattr(match_obj, 'red_teams' if prefix_red else 'blue_teams', None)
+                        if lt:
+                            if isinstance(lt, (list, tuple)):
+                                teams_out = [str(x) for x in lt]
+                            else:
+                                teams_out = [x.strip() for x in str(lt).split(',') if x.strip()]
+                    except Exception:
+                        teams_out = []
+
+                return teams_out
+
+            # Robustly handle datetime-like fields that may be absent in some schemas
+            _predicted_dt = getattr(match, 'predicted_time', None)
+            _actual_dt = getattr(match, 'actual_time', None)
+            _scheduled_dt = getattr(match, 'scheduled_time', None)
+            _played_dt = _actual_dt or _scheduled_dt
+
             match_data = {
                 'id': match.id,
+                'event_id': match.event_id,
                 'match_number': match.match_number,
-                'comp_level': match.comp_level,
-                'set_number': match.set_number,
-                'predicted_time': match.predicted_time.isoformat() if match.predicted_time else None,
-                'actual_time': match.actual_time.isoformat() if match.actual_time else None,
-                # played_time is provided to explicitly indicate when the match was played (if available).
-                # Some API sources (TBA) may supply actual_time and our updater can store that into scheduled_time
-                # so fall back to scheduled_time when actual_time is not set.
-                'played_time': (match.actual_time.isoformat() if match.actual_time else (match.scheduled_time.isoformat() if match.scheduled_time else None)),
+                'comp_level': getattr(match, 'comp_level', None) or getattr(match, 'match_type', None),
+                'set_number': getattr(match, 'set_number', None),
+                'predicted_time': _predicted_dt.isoformat() if _predicted_dt else None,
+                'actual_time': _actual_dt.isoformat() if _actual_dt else None,
+                'played_time': (_played_dt.isoformat() if _played_dt else None),
                 'alliances': {
                     'red': {
-                        'teams': [match.red_1, match.red_2, match.red_3],
+                        'teams': _extract_alliance_teams(match, True),
                         'score': red_db
                     },
                     'blue': {
-                        'teams': [match.blue_1, match.blue_2, match.blue_3],
+                        'teams': _extract_alliance_teams(match, False),
                         'score': blue_db
                     }
                 },
-                'winner': match.winner,
-                # Consider a match "played" if an actual_time exists or a winner/score is present (after normalization)
-                'status': 'played' if (match.actual_time or match.winner or (red_db is not None or blue_db is not None)) else 'upcoming'
+                'winner': getattr(match, 'winner', None),
+                'status': 'completed' if (_actual_dt or getattr(match, 'winner', None) or (red_db is not None or blue_db is not None)) else 'upcoming'
             }
             matches_data.append(match_data)
-        
+
         # Get teams data
-        teams_data = [{'id': team.id, 'team_number': team.team_number, 'name': team.name or ''} for team in teams]
-        
+        teams_data = [{'id': team.id, 'team_number': team.team_number, 'name': getattr(team, 'team_name', None) or getattr(team, 'name', None) or ''} for team in teams]
+
         return jsonify({
             'success': True,
             'game_config': game_config,
@@ -1477,7 +1573,9 @@ def matches_data():
             },
             'timestamp': datetime.now().isoformat()
         })
-        
     except Exception as e:
-        current_app.logger.error(f"Error in matches_data endpoint: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        import traceback as _tb
+        tb = _tb.format_exc()
+        current_app.logger.error(f"Error in matches_data endpoint: {str(e)}\n{tb}")
+        # Return traceback in JSON to aid local debugging (safe for dev environments)
+        return jsonify({'success': False, 'error': str(e), 'trace': tb}), 500
