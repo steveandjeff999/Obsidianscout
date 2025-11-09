@@ -340,18 +340,18 @@
                             <br>
                             <small class="text-muted">
                                 {% if current_event and current_event.timezone %}
-                                    Will send: {{ queue.scheduled_for | format_time_tz(current_event.timezone, '%Y-%m-%d %I:%M %p %Z') }}
+                                    Will send: <strong>{{ queue.scheduled_for.strftime('%Y-%m-%d %H:%M') }} UTC</strong> (<span class="local-time" data-utc="{{ queue.scheduled_for.isoformat() }}Z">calculating...</span>)
                                     {% if match.predicted_time %}
-                                    |  Match time: ~{{ match.predicted_time | format_time_tz(current_event.timezone, '%I:%M %p') }} (predicted)
+                                    | Match time: ~{{ match.predicted_time | format_time_tz(current_event.timezone, '%I:%M %p %Z') }} (predicted)
                                     {% elif match.scheduled_time %}
-                                    |  Match time: {{ match.scheduled_time | format_time_tz(current_event.timezone, '%I:%M %p') }}
+                                    | Match time: {{ match.scheduled_time | format_time_tz(current_event.timezone, '%I:%M %p %Z') }}
                                     {% endif %}
                                 {% else %}
-                                    Will send: {{ queue.scheduled_for.strftime('%Y-%m-%d %I:%M %p') }} UTC
+                                    Will send: <strong>{{ queue.scheduled_for.strftime('%Y-%m-%d %H:%M') }} UTC</strong> (<span class="local-time" data-utc="{{ queue.scheduled_for.isoformat() }}Z">calculating...</span>)
                                     {% if match.predicted_time %}
-                                    |  Match time: ~{{ match.predicted_time.strftime('%I:%M %p') }} UTC (predicted)
+                                    | Match time: ~{{ match.predicted_time.strftime('%H:%M') }} UTC (predicted)
                                     {% elif match.scheduled_time %}
-                                    |  Match time: {{ match.scheduled_time.strftime('%I:%M %p') }} UTC
+                                    | Match time: {{ match.scheduled_time.strftime('%H:%M') }} UTC
                                     {% endif %}
                                 {% endif %}
                                 | Status: <span class="badge badge-info">{{ queue.status }}</span>
@@ -1097,6 +1097,29 @@ async function updateRegisterButton() {
 document.addEventListener('DOMContentLoaded', function() {
     // Register button is always visible, no need to check
     console.log('Notifications page loaded');
+    
+    // Convert all UTC times to user's local time
+    document.querySelectorAll('.local-time').forEach(function(elem) {
+        const utcStr = elem.getAttribute('data-utc');
+        if (utcStr) {
+            try {
+                const utcDate = new Date(utcStr);
+                const localStr = utcDate.toLocaleString(undefined, {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+                elem.textContent = localStr + ' (your time)';
+            } catch (e) {
+                elem.textContent = 'error converting time';
+                console.error('Error converting UTC time:', e);
+            }
+        }
+    });
+    
     // Initialize next-schedule countdown if server provided an initial value
     try {
         const initial = {{ next_schedule_seconds|default(0) }};
