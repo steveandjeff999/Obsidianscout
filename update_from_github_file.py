@@ -34,6 +34,7 @@ from datetime import datetime
 from pathlib import Path
 import socket
 import threading
+import json
 try:
     import tkinter as tk
     from tkinter import filedialog, messagebox, scrolledtext
@@ -163,8 +164,8 @@ def merge_add_only(src_path: Path, dst_path: Path, dry_run: bool, log: callable,
 
 
 def perform_update(release: str | Path, is_zip: bool = False, preserve_extra: set[str] | None = None,
-                   dry_run: bool = False, force: bool = False, repo_root: Path | None = None,
-                   log_callback=None):
+                   dry_run: bool = False, force: bool = False, overwrite: bool = False,
+                   repo_root: Path | None = None, log_callback=None):
     """Perform the update. log_callback, if provided, should be a callable that accepts a string."""
     def _log(m: str):
         if log_callback:
@@ -231,6 +232,14 @@ def perform_update(release: str | Path, is_zip: bool = False, preserve_extra: se
         # Iterate top-level entries in release_dir
         changed = []
         skipped = []
+        # Normalize preserve entries to POSIX-like strings without leading/trailing slashes
+        normalized_preserve = set()
+        for p in preserve:
+            if not p:
+                continue
+            pp = str(p).replace('\\', '/').lstrip('/').rstrip('/')
+            normalized_preserve.add(pp)
+
         for entry in release_dir.iterdir():
             name = entry.name
             target = repo_root / name
@@ -248,8 +257,26 @@ def perform_update(release: str | Path, is_zip: bool = False, preserve_extra: se
                 skipped.append((name, 'DATABASE PROTECTED - skipped to prevent corruption'))
                 continue
 
-            # For preserved paths, merge new files/dirs without overwriting existing content.
-            if name in preserve:
+            # If overwrite mode requested, replace everything except protected DBs and gameconfig.json
+            if overwrite:
+                if name == 'gameconfig.json':
+                    _log(f"Protected file in overwrite mode: Skipping '{name}'")
+                    skipped.append((name, 'protected (gameconfig.json - overwrite disabled)'))
+                    continue
+                try:
+                    copy_item(entry, target, backup_root, dry_run=dry_run, log=_log)
+                    changed.append(name)
+                except Exception as e:
+                    _log(f"ERROR copying {entry} -> {target}: {e}")
+                continue
+
+            # Determine if there are any preserve entries relevant to this top-level entry.
+            # Preserve entries may be top-level names (e.g. 'instance') or nested paths
+            # (e.g. 'app/utils' or 'app/utils/api_utils.py'). We handle both cases.
+            relevant_preserves = [p for p in normalized_preserve if p == name or p.startswith(f"{name}/")]
+
+            # If the entire top-level entry is preserved, perform the existing preserved behavior.
+            if any(p == name for p in relevant_preserves):
                 try:
                     # Special-case app_config.json: merge JSON keys so we don't overwrite
                     # operator-managed secrets (preserve existing keys, add new keys from release)
@@ -305,7 +332,7 @@ def perform_update(release: str | Path, is_zip: bool = False, preserve_extra: se
                             skipped.append((name, 'preserved (new file added)'))
                         continue
 
-                    # Default preserved-path behavior: add-only merge
+                    # Default preserved-path behavior for whole top-level preserved: add-only merge
                     added_items = merge_add_only(entry, target, dry_run=dry_run, log=_log, repo_root=repo_root)
                     if added_items:
                         summary = f'preserved (merged {len(added_items)} new item{"s" if len(added_items) > 1 else ""})'
@@ -314,6 +341,35 @@ def perform_update(release: str | Path, is_zip: bool = False, preserve_extra: se
                         skipped.append((name, 'preserved (no new files)'))
                 except Exception as e:
                     _log(f"ERROR merging preserved path '{entry.name}': {e}")
+                continue
+
+            # If there are preserve entries that target nested paths within this top-level entry,
+            # handle them individually (so you can preserve e.g. 'app/utils/api_utils.py' without
+            # preserving the entire 'app' tree).
+            if relevant_preserves:
+                # For each preserved nested path like 'app/utils' or 'app/utils/file.py'
+                nested_added = 0
+                for p in relevant_preserves:
+                    # p starts with 'name/' here
+                    sub_path_str = p[len(name) + 1:]
+                    if not sub_path_str:
+                        continue
+                    src_sub = entry / Path(sub_path_str)
+                    dst_sub = target / Path(sub_path_str)
+                    if not src_sub.exists():
+                        _log(f"[Preserve] release missing nested preserve path: '{src_sub}' (preserve entry: '{p}'). Skipping this nested preserve.")
+                        continue
+                    try:
+                        added_items = merge_add_only(src_sub, dst_sub, dry_run=dry_run, log=_log, repo_root=repo_root)
+                        if added_items:
+                            nested_added += len(added_items)
+                    except Exception as e:
+                        _log(f"ERROR merging preserved nested path '{p}': {e}")
+
+                if nested_added:
+                    skipped.append((name, f'preserved (merged {nested_added} new nested item(s))'))
+                else:
+                    skipped.append((name, 'preserved (no new nested files)'))
                 continue
 
             # For all other paths, perform a full backup and replace.
@@ -395,6 +451,8 @@ def launch_gui():
     tk.Checkbutton(frm, text='Dry run (preview)', variable=dry_run_var).grid(row=3, column=0, sticky='w')
     force_var = tk.BooleanVar(value=False)
     tk.Checkbutton(frm, text='Force (override running checks)', variable=force_var).grid(row=3, column=1, sticky='w')
+    overwrite_var = tk.BooleanVar(value=False)
+    tk.Checkbutton(frm, text='Overwrite (replace all files except DBs and gameconfig.json)', variable=overwrite_var).grid(row=3, column=2, sticky='w')
 
     log_box = scrolledtext.ScrolledText(frm, width=100, height=20)
     log_box.grid(row=4, column=0, columnspan=4, pady=8)
@@ -422,12 +480,14 @@ def launch_gui():
             return
 
         extra = set([p.strip() for p in preserve_var.get().split(',') if p.strip()])
+        overwrite_flag = overwrite_var.get()
 
         def worker():
             try:
                 gui_log('Starting update...')
                 rc = perform_update(release, is_zip=is_zip_var.get(), preserve_extra=extra,
-                                    dry_run=dry_run_var.get(), force=force_var.get(), log_callback=gui_log)
+                                    dry_run=dry_run_var.get(), force=force_var.get(), overwrite=overwrite_flag,
+                                    log_callback=gui_log)
                 gui_log(f'Update finished with exit code: {rc}')
             except Exception as e:
                 gui_log(f'Unhandled error: {e}')
@@ -452,6 +512,7 @@ def main():
     parser.add_argument('--preserve', help='Comma-separated extra top-level names to preserve', default='')
     parser.add_argument('--dry-run', action='store_true', help='Show actions without making changes')
     parser.add_argument('--force', action='store_true', help='Force update even if server ports seem in use')
+    parser.add_argument('--overwrite', action='store_true', help='Overwrite all files from the release except protected DB files and gameconfig.json')
     args = parser.parse_args()
 
     preserve = set(DEFAULT_PRESERVE)
@@ -462,7 +523,7 @@ def main():
                 preserve.add(p)
 
     rc = perform_update(args.release, is_zip=args.zip, preserve_extra=preserve,
-                        dry_run=args.dry_run, force=args.force)
+                        dry_run=args.dry_run, force=args.force, overwrite=args.overwrite)
     sys.exit(rc)
 
 
