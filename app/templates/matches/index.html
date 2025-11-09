@@ -133,8 +133,9 @@
                                 </td>
                                 <td>
                                     {# If match has an actual_time (played), show that first using event timezone if available #}
-                                    {# Consider a match 'played' if there's an actual_time, a winner, or recorded scores. #}
-                                    {% set has_played = (match.actual_time or match.winner or ((match.red_score is not none and match.red_score >= 0) or (match.blue_score is not none and match.blue_score >= 0))) %}
+                                    {# Consider a match 'played' ONLY if there's an actual_time or a winner. #}
+                                    {# Don't rely on scores alone as they may be initialized to 0 before matches are played. #}
+                                    {% set has_played = (match.actual_time or match.winner) %}
                                     {% if has_played %}
                                         {# Pick a time to display: prefer actual_time, then scheduled_time, then predicted_time #}
                                         {% set display_time = match.actual_time or match.scheduled_time or match.predicted_time %}
