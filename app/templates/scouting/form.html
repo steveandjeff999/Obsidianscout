@@ -334,10 +334,10 @@
             }
             
             // Update team info
-            const teamInfoDiv = indicator.querySelector('.alliance-details > div:last-child');
-            if (teamInfoDiv) {
-                teamInfoDiv.textContent = `Team ${team.team_number} - ${team.team_name}`;
-            }
+                const teamInfoDiv = indicator.querySelector('.alliance-details > div:last-child');
+                if (teamInfoDiv) {
+                    teamInfoDiv.innerHTML = `Team <span class="team-number" data-team-num="${team.team_number}">${team.team_number}</span> - ${team.team_name}`;
+                }
             
             console.log('[Offline Mode] Alliance indicator updated to:', alliance);
         }
@@ -1505,6 +1505,12 @@
                         // Initialize form components AFTER the form is loaded and restore previous scroll/focus
                         setTimeout(() => {
                             initializeFormComponents();
+                                // Ensure team-number display preference is applied after we inject/init the offline form
+                                try {
+                                    if (typeof window.applyTeamNumberDisplayPreference === 'function') {
+                                        window.applyTeamNumberDisplayPreference();
+                                    }
+                                } catch (e) { /* ignore */ }
 
                             // Copy quick prediction (if set) into loaded form's predicted_winner input
                             try {

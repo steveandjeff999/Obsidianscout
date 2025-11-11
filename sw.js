@@ -139,6 +139,8 @@ async function cacheFirst(req) {
 async function networkFirst(req) {
   try {
     const fresh = await fetch(req);
+    // We're online and serving a fresh network response — notify clients to hide any offline banner
+    try { notifyClientsOffline(false); } catch (e) { /* ignore */ }
     // Only cache successful responses for HTML pages
     if (fresh.ok && (req.url.endsWith('/') || req.url.includes('.html'))) {
       const cache = await caches.open(CACHE_NAME);
@@ -147,6 +149,8 @@ async function networkFirst(req) {
     return fresh;
   } catch (error) {
     console.warn('Network failed, trying cache:', error);
+    // Network failed -> notify clients to show offline banner
+    try { notifyClientsOffline(true); } catch (e) { /* ignore */ }
     const cache = await caches.open(CACHE_NAME);
     const cached = await cache.match(req);
     if (cached) {
@@ -166,11 +170,15 @@ async function networkFirst(req) {
 async function navigationHandler(req) {
   try {
     const fresh = await fetch(req);
+    // Online navigation response - tell clients we're online
+    try { notifyClientsOffline(false); } catch (e) { /* ignore */ }
     const cache = await caches.open(CACHE_NAME);
     // Cache successful navigation responses (HTML)
     if (fresh && fresh.ok) cache.put(req, fresh.clone());
     return fresh;
   } catch (err) {
+    // Navigation failed -> show offline banner
+    try { notifyClientsOffline(true); } catch (e) { /* ignore */ }
     const cache = await caches.open(CACHE_NAME);
     // Try to serve the requested page from cache
     const cached = await cache.match(req);
@@ -194,8 +202,26 @@ function isStaticAsset(url) {
   return /\.(?:js|css|png|jpg|jpeg|svg|gif|webp|woff2?|ttf|eot|json|map)$/.test(pathname) || pathname.startsWith('/static/');
 }
 
+// Notify clients whether they should show an offline banner
+async function notifyClientsOffline(show) {
+  try {
+    const all = await clients.matchAll({ includeUncontrolled: true });
+    for (const client of all) {
+      try {
+        client.postMessage({ type: 'offline-banner', show: !!show });
+      } catch (e) {
+        console.warn('Failed to postMessage to client', e);
+      }
+    }
+  } catch (e) {
+    console.warn('notifyClientsOffline error', e);
+  }
+}
+
 // Push Notification handlers
 self.addEventListener('push', event => {
+    // Cache-first fallback due to network/cache error -> notify clients about offline
+    try { notifyClientsOffline(true); } catch (e) { /* ignore */ }
   console.log('Push notification received:', event);
   
   let notificationData = {

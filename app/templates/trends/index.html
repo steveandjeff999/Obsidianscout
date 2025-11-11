@@ -7,7 +7,7 @@
 <p>Select a team to view historical points and a simple prediction.</p>
 <ul>
   {% for team in teams %}
-    <li><a href="{{ url_for('trends.team_trends', team_number=team.team_number) }}">Team {{ team.team_number }} - {{ team.team_name }}</a></li>
+    <li><a href="{{ url_for('trends.team_trends', team_number=team.team_number) }}">Team <span class="team-number" data-team-num="{{ team.team_number }}">{{ team.team_number }}</span> - {{ team.team_name }}</a></li>
   {% endfor %}
 </ul>
 {% endblock %}

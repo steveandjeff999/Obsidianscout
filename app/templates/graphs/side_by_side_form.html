@@ -6,10 +6,11 @@
 
 {% block content %}
 {% set viewer_disabled = user_has_role('viewer') %}
+<div class="graphs-side-by-side-page">
 
 <div class="row mb-4">
     <div class="col-md-12">
-        <div class="card">
+        <div class="card glass">
             <div class="card-header bg-primary text-white">
                 <h5 class="mb-0"><i class="fas fa-columns me-2"></i> Side-by-Side Team Comparison</h5>
             </div>
@@ -24,51 +25,133 @@
 <!-- Team Selection Form -->
 <div class="row mb-4">
     <div class="col-md-12">
-        <div class="card">
-            <div class="card-header bg-dark text-white">
-                <h5 class="mb-0"><i class="fas fa-users me-2"></i> Select Teams to Compare</h5>
+        <div class="card glass">
+            <div class="card-header bg-gradient-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-columns me-2"></i>Team Comparison Selection</h5>
+                <span class="badge bg-light text-dark" id="selection-summary-badge">No teams selected</span>
             </div>
             <div class="card-body">
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Tip:</strong> Select 2-6 teams for an optimal side-by-side comparison experience. More teams can be compared, but the display may become crowded.
+                </div>
+                
                 <form action="{{ url_for('graphs.side_by_side') }}" method="get" id="team-selection-form">
-                    <!-- Mobile-first responsive design -->
-                    <div class="row g-3">
-                        <!-- Team Selection Column -->
+                    <div class="row g-4">
+                        <!-- LEFT COLUMN: Team Selection -->
                         <div class="col-12 col-lg-6">
-                            <label for="teams" class="form-label fw-semibold">
-                                <i class="fas fa-users me-2 text-primary"></i>Select Teams (2-6 recommended)
-                            </label>
-                            <select name="teams" id="teams" class="form-select team-select" multiple required>
-                                {% for team in teams %}
-                                <option value="{{ team.team_number }}" 
-                                        data-team-name="{{ team.team_name or 'Unknown' }}"
-                                        data-points="{{ team_metrics.get(team.team_number, {}).get('total_points', 0) if team_metrics else 0 }}">
-                                    {{ team.team_number }} - {{ team.team_name or 'Unknown' }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                            <div class="form-text">
-                                <i class="fas fa-info-circle me-1"></i>
-                                Search by team number or name. Select 2-6 teams for optimal comparison.
-                                <span id="team-count-indicator" class="text-muted ms-2"></span>
-                            </div>
-                            
-                            <!-- Quick selection buttons -->
-                            <div class="mt-2">
-                                <div class="btn-group btn-group-sm" role="group">
-                                    <button type="button" class="btn btn-outline-secondary" id="select-all-teams">
-                                        <i class="fas fa-check-double me-1"></i>All
-                                    </button>
+                            <div class="team-selection-container">
+                                <!-- Hidden select for form submission -->
+                                <select name="teams" id="teams" class="d-none" multiple required aria-label="Selected teams"></select>
+                                
+                                <!-- Team Selection Interface -->
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label fw-bold text-primary mb-0">
+                                            <i class="fas fa-search me-2"></i>Search & Select Teams
+                                        </label>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="toggle-team-list">
+                                            <i class="fas fa-chevron-up" id="toggle-icon"></i>
+                                            <span class="d-none d-md-inline ms-1">Collapse</span>
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Event Filter -->
                                     {% if events %}
-                                    <button type="button" class="btn btn-outline-info" id="add-all-event-teams">
-                                        <i class="fas fa-plus-circle me-1"></i>Add Event Teams
-                                    </button>
+                                    <div class="mb-3">
+                                        <select id="event-filter" class="form-select">
+                                            <option value="">All Events</option>
+                                            {% for event in events %}
+                                            <option value="{{ event.id }}">
+                                                {{ event.name }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <div class="small text-muted mt-1">
+                                            <i class="fas fa-filter me-1"></i><span id="event-filter-status">Showing all teams</span>
+                                        </div>
+                                    </div>
                                     {% endif %}
-                                    <button type="button" class="btn btn-outline-secondary" id="clear-teams">
-                                        <i class="fas fa-times me-1"></i>Clear
-                                    </button>
-                                    <button type="button" class="btn btn-outline-secondary" id="select-top-teams">
-                                        <i class="fas fa-trophy me-1"></i>Top 6
-                                    </button>
+                                    
+                                    <!-- Search Box -->
+                                    <div class="input-group mb-3" id="team-search-section">
+                                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                        <input type="text" 
+                                               id="team-search-input" 
+                                               class="form-control form-control-lg" 
+                                               placeholder="Type team number or name..."
+                                               autocomplete="off"
+                                               aria-label="Search teams">
+                                        <button class="btn btn-outline-secondary" type="button" id="clear-search-btn" title="Clear search">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+
+                                    <!-- Quick Action Buttons -->
+                                    <div class="d-flex flex-wrap gap-2 mb-3">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" id="select-all-teams" title="Select all visible teams">
+                                            <i class="fas fa-check-double me-1"></i>Select All
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-success" id="select-top-teams" title="Select top 6 teams by points">
+                                            <i class="fas fa-trophy me-1"></i>Top 6
+                                        </button>
+                                        {% if events %}
+                                        <button type="button" class="btn btn-sm btn-outline-info" id="add-event-teams" title="Add all teams from selected event">
+                                            <i class="fas fa-calendar-plus me-1"></i>Add Event
+                                        </button>
+                                        {% endif %}
+                                        <button type="button" class="btn btn-sm btn-outline-danger" id="clear-teams" title="Clear all selections">
+                                            <i class="fas fa-times-circle me-1"></i>Clear All
+                                        </button>
+                                    </div>
+
+                                    <!-- Selected Teams Pills Display -->
+                                    <div class="selected-teams-display mb-3" id="selected-teams-pills">
+                                        <div class="d-flex flex-wrap gap-2" id="selected-pills-container">
+                                            <!-- Pills will be dynamically added here -->
+                                        </div>
+                                    </div>
+
+                                    <!-- Scrollable Team List (Collapsible) -->
+                                    <div class="team-list-scroll-container" id="team-list-container">
+                                        <div class="list-group" id="team-list">
+                                            {% for team in teams %}
+                                            <label class="list-group-item list-group-item-action team-list-item" 
+                                                   data-team-number="{{ team.team_number }}"
+                                                   data-team-name="{{ team.team_name or 'Unknown' }}"
+                                                   data-points="{{ team_metrics.get(team.team_number, {}).get('total_points', 0) if team_metrics else 0 }}">
+                                                <div class="d-flex align-items-center">
+                                                    <input class="form-check-input me-3 team-checkbox" 
+                                                           type="checkbox" 
+                                                           value="{{ team.team_number }}"
+                                                           id="team-{{ team.team_number }}">
+                                                    <div class="flex-grow-1">
+                                                        <div class="d-flex justify-content-between align-items-center">
+                                                            <div>
+                                                                <span class="fw-bold text-primary team-number">{{ team.team_number }}</span>
+                                                                <span class="text-muted ms-2 team-name">{{ team.team_name or 'Unknown' }}</span>
+                                                            </div>
+                                                            <span class="badge bg-secondary team-points">
+                                                                {{ "%.1f"|format(team_metrics.get(team.team_number, {}).get('total_points', 0) if team_metrics else 0) }} pts
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </label>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+
+                                    <!-- Status Text with Validation -->
+                                    <div class="mt-2" id="team-selection-status">
+                                        <div class="d-flex align-items-center justify-content-between">
+                                            <div class="small text-muted">
+                                                <i class="fas fa-info-circle me-1"></i>
+                                                <span id="status-text">0 teams selected from {{ teams|length }} available</span>
+                                            </div>
+                                            <div id="validation-indicator"></div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -171,7 +254,7 @@
 <!-- Available Metrics Preview -->
 <div class="row">
     <div class="col-md-12">
-        <div class="card">
+        <div class="card glass">
             <div class="card-header bg-success text-white">
                 <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i> Available Metrics for Comparison</h5>
             </div>
@@ -200,6 +283,8 @@
 </div>
 
 {% endblock %}
+
+</div>
 
 {% block scripts %}
 {{ super() }}
@@ -511,6 +596,464 @@
     });
 </script>
 
+<!-- Team Selection Styles -->
+<style>
+.team-selection-container {
+    position: relative;
+}
+
+.team-list-scroll-container {
+    max-height: 450px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    background: var(--bs-body-bg);
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+}
+
+.team-list-scroll-container.collapsed {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    border: none;
+    margin: 0;
+    padding: 0;
+}
+
+#team-search-section.collapsed,
+#selected-teams-pills.collapsed {
+    display: none;
+}
+
+.team-list-item {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    border-bottom: 1px solid #dee2e6;
+    padding: 0.75rem 1rem;
+}
+
+.team-list-item:hover {
+    background-color: rgba(13, 110, 253, 0.1);
+}
+
+.team-list-item.active,
+.team-list-item:has(.team-checkbox:checked) {
+    background-color: rgba(13, 110, 253, 0.15);
+    border-left: 3px solid #0d6efd;
+}
+
+.team-checkbox {
+    cursor: pointer;
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.selected-teams-display {
+    min-height: 60px;
+    padding: 0.75rem;
+    background: var(--bs-light);
+    border-radius: 0.375rem;
+    border: 1px dashed #dee2e6;
+}
+
+.selected-team-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: linear-gradient(135deg, #0d6efd 0%, #0056b3 100%);
+    color: white;
+    border-radius: 50px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.2s ease;
+}
+
+.selected-team-pill:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.selected-team-pill .remove-team-btn {
+    background: none;
+    border: none;
+    color: white;
+    padding: 0;
+    margin-left: 0.5rem;
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.selected-team-pill .remove-team-btn:hover {
+    opacity: 1;
+}
+
+#selection-summary-badge {
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.team-list-item.hidden {
+    display: none;
+}
+
+#validation-indicator {
+    font-size: 0.875rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 50px;
+}
+
+.validation-success {
+    background-color: #d1e7dd;
+    color: #0f5132;
+}
+
+.validation-warning {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.validation-error {
+    background-color: #f8d7da;
+    color: #842029;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+    .team-list-scroll-container {
+        max-height: 350px;
+    }
+    
+    .selected-teams-display {
+        min-height: 50px;
+    }
+    
+    .selected-team-pill {
+        font-size: 0.75rem;
+        padding: 0.4rem 0.6rem;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .team-list-scroll-container {
+        border-color: #495057;
+    }
+    
+    .team-list-item {
+        border-bottom-color: #495057;
+    }
+    
+    .selected-teams-display {
+        background: #343a40;
+        border-color: #495057;
+    }
+}
+</style>
+
+<!-- Enhanced Team Selection JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const teamCheckboxes = document.querySelectorAll('.team-checkbox');
+    const hiddenSelect = document.getElementById('teams');
+    const searchInput = document.getElementById('team-search-input');
+    const clearSearchBtn = document.getElementById('clear-search-btn');
+    const teamListItems = document.querySelectorAll('.team-list-item');
+    const selectedPillsContainer = document.getElementById('selected-pills-container');
+    const statusText = document.getElementById('status-text');
+    const summaryBadge = document.getElementById('selection-summary-badge');
+    const validationIndicator = document.getElementById('validation-indicator');
+    const compareBtn = document.getElementById('compare-teams-btn');
+    const eventFilter = document.getElementById('event-filter');
+    const eventFilterStatus = document.getElementById('event-filter-status');
+    const teamEventMapping = {{ team_event_mapping | tojson if team_event_mapping else {} }};
+    
+    // Initialize
+    updateSelection();
+    if (eventFilter) applyEventFilter();
+    
+    // Collapse/Expand functionality
+    const toggleBtn = document.getElementById('toggle-team-list');
+    const toggleIcon = document.getElementById('toggle-icon');
+    const teamListContainer = document.getElementById('team-list-container');
+    const searchSection = document.getElementById('team-search-section');
+    const pillsSection = document.getElementById('selected-teams-pills');
+    
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', function() {
+            const isCollapsed = teamListContainer.classList.toggle('collapsed');
+            searchSection.classList.toggle('collapsed');
+            pillsSection.classList.toggle('collapsed');
+            toggleIcon.className = isCollapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+            const label = this.querySelector('span');
+            if (label) label.textContent = isCollapsed ? 'Expand' : 'Collapse';
+        });
+    }
+    
+    // Event filter functionality
+    if (eventFilter) {
+        eventFilter.addEventListener('change', function() {
+            applyEventFilter();
+        });
+    }
+    
+    function applyEventFilter() {
+        const selectedEventId = eventFilter ? eventFilter.value : '';
+        let visibleCount = 0;
+        
+        teamListItems.forEach(item => {
+            let showByEvent = true;
+            
+            if (selectedEventId) {
+                const teamNumber = parseInt(item.dataset.teamNumber);
+                const teamEvents = teamEventMapping[teamNumber] || [];
+                showByEvent = teamEvents.includes(parseInt(selectedEventId));
+            }
+            
+            // Apply search filter too
+            const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+            const teamNumber = item.dataset.teamNumber;
+            const teamName = item.dataset.teamName.toLowerCase();
+            const matchesSearch = !query || teamNumber.includes(query) || teamName.includes(query);
+            
+            const shouldShow = showByEvent && matchesSearch;
+            item.classList.toggle('hidden', !shouldShow);
+            if (shouldShow) visibleCount++;
+        });
+        
+        // Update status text
+        if (eventFilterStatus) {
+            if (selectedEventId) {
+                const eventName = eventFilter.options[eventFilter.selectedIndex].text;
+                eventFilterStatus.textContent = `Showing ${visibleCount} teams from ${eventName}`;
+            } else {
+                eventFilterStatus.textContent = `Showing all teams (${visibleCount} visible)`;
+            }
+        }
+        
+        updateSelection();
+    }
+    
+    // Search functionality
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            applyEventFilter();
+        });
+    }
+    
+    if (clearSearchBtn) {
+        clearSearchBtn.addEventListener('click', function() {
+            searchInput.value = '';
+            searchInput.dispatchEvent(new Event('input'));
+            searchInput.focus();
+        });
+    }
+    
+    // Checkbox change handler
+    teamCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            updateSelection();
+        });
+    });
+    
+    // Click on list item to toggle checkbox
+    teamListItems.forEach(item => {
+        item.addEventListener('click', function(e) {
+            // Don't act if clicking the checkbox itself
+            if (e.target.classList.contains('team-checkbox')) return;
+            // Don't toggle if clicking a button or interactive control
+            if (e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.tagName === 'A') return;
+
+            // Prevent the native label-toggle behavior so we can toggle exactly once
+            try { e.preventDefault(); } catch (err) {}
+
+            const checkbox = this.querySelector('.team-checkbox');
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked;
+                updateSelection();
+            }
+        });
+    });
+    
+    // Quick action buttons
+    document.getElementById('select-all-teams')?.addEventListener('click', function() {
+        const visibleCheckboxes = Array.from(teamCheckboxes).filter(cb => 
+            !cb.closest('.team-list-item').classList.contains('hidden')
+        );
+        visibleCheckboxes.forEach(cb => cb.checked = true);
+        updateSelection();
+    });
+    
+    document.getElementById('clear-teams')?.addEventListener('click', function() {
+        teamCheckboxes.forEach(cb => cb.checked = false);
+        updateSelection();
+    });
+    
+    document.getElementById('select-top-teams')?.addEventListener('click', function() {
+        const sortedItems = Array.from(teamListItems)
+            .filter(item => !item.classList.contains('hidden'))
+            .sort((a, b) => parseFloat(b.dataset.points) - parseFloat(a.dataset.points))
+            .slice(0, 6);
+        
+        teamCheckboxes.forEach(cb => cb.checked = false);
+        sortedItems.forEach(item => {
+            const checkbox = item.querySelector('.team-checkbox');
+            if (checkbox) checkbox.checked = true;
+        });
+        updateSelection();
+    });
+    
+    document.getElementById('add-event-teams')?.addEventListener('click', function() {
+        const selectedEvent = eventFilter?.value;
+        
+        if (!selectedEvent) {
+            alert('Please select an event filter first');
+            eventFilter?.focus();
+            return;
+        }
+        
+        // Select all visible teams from the filtered event
+        const visibleCheckboxes = Array.from(teamCheckboxes).filter(cb => 
+            !cb.closest('.team-list-item').classList.contains('hidden')
+        );
+        visibleCheckboxes.forEach(cb => cb.checked = true);
+        updateSelection();
+    });
+    
+    // Update selection state
+    function updateSelection() {
+        const selectedTeams = Array.from(teamCheckboxes)
+            .filter(cb => cb.checked)
+            .map(cb => ({
+                number: cb.value,
+                name: cb.closest('.team-list-item')?.dataset.teamName || 'Unknown',
+                points: parseFloat(cb.closest('.team-list-item')?.dataset.points || 0)
+            }));
+        
+        // Update hidden select
+        const options = Array.from(hiddenSelect.options);
+        if (options.length === 0) {
+            // Create options if they don't exist
+            teamListItems.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item.dataset.teamNumber;
+                opt.text = `${item.dataset.teamNumber} - ${item.dataset.teamName}`;
+                hiddenSelect.appendChild(opt);
+            });
+        }
+        
+        Array.from(hiddenSelect.options).forEach(opt => {
+            opt.selected = selectedTeams.some(t => t.number == opt.value);
+        });
+        
+        // Update pills display
+        selectedPillsContainer.innerHTML = '';
+        if (selectedTeams.length === 0) {
+            selectedPillsContainer.innerHTML = '<div class="text-muted small"><i class="fas fa-info-circle me-2"></i>No teams selected. Select 2-6 teams for comparison.</div>';
+        } else {
+            selectedTeams.forEach(team => {
+                const pill = document.createElement('span');
+                pill.className = 'selected-team-pill';
+                pill.innerHTML = `
+                    <i class="fas fa-robot me-2"></i>
+                    <strong>${team.number}</strong>
+                    <span class="ms-1">${team.name}</span>
+                    <button class="remove-team-btn" data-team="${team.number}" title="Remove team">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                selectedPillsContainer.appendChild(pill);
+                
+                // Add remove handler
+                pill.querySelector('.remove-team-btn').addEventListener('click', function() {
+                    const teamNumber = this.dataset.team;
+                    const checkbox = document.querySelector(`.team-checkbox[value="${teamNumber}"]`);
+                    if (checkbox) {
+                        checkbox.checked = false;
+                        updateSelection();
+                    }
+                });
+            });
+        }
+        
+        // Update status text and validation
+        const total = teamListItems.length;
+        const visible = Array.from(teamListItems).filter(item => !item.classList.contains('hidden')).length;
+        statusText.textContent = `${selectedTeams.length} teams selected from ${visible} visible (${total} total)`;
+        
+        // Update summary badge and validation
+        if (selectedTeams.length === 0) {
+            summaryBadge.textContent = 'No teams selected';
+            summaryBadge.className = 'badge bg-light text-dark';
+            validationIndicator.textContent = 'Select at least 2 teams';
+            validationIndicator.className = 'validation-error';
+            if (compareBtn) compareBtn.disabled = true;
+        } else if (selectedTeams.length === 1) {
+            summaryBadge.textContent = '1 team selected';
+            summaryBadge.className = 'badge bg-warning text-dark';
+            validationIndicator.textContent = 'Need 1 more team';
+            validationIndicator.className = 'validation-warning';
+            if (compareBtn) compareBtn.disabled = true;
+        } else if (selectedTeams.length <= 6) {
+            summaryBadge.textContent = `${selectedTeams.length} teams selected`;
+            summaryBadge.className = 'badge bg-success text-white';
+            validationIndicator.textContent = '✓ Ready to compare';
+            validationIndicator.className = 'validation-success';
+            if (compareBtn) compareBtn.disabled = false;
+        } else {
+            summaryBadge.textContent = `${selectedTeams.length} teams selected`;
+            summaryBadge.className = 'badge bg-warning text-dark';
+            validationIndicator.textContent = `${selectedTeams.length} teams (6 recommended)`;
+            validationIndicator.className = 'validation-warning';
+            if (compareBtn) compareBtn.disabled = false;
+        }
+        
+        // Trigger change event on hidden select for other listeners
+        hiddenSelect.dispatchEvent(new Event('change'));
+    }
+    
+    // Form validation on submit
+    const form = document.getElementById('team-selection-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const selectedCount = Array.from(teamCheckboxes).filter(cb => cb.checked).length;
+            
+            if (selectedCount < 2) {
+                e.preventDefault();
+                alert('Please select at least 2 teams to compare.');
+                return false;
+            }
+            
+            if (selectedCount > 8) {
+                if (!confirm(`You've selected ${selectedCount} teams. The comparison may be crowded. Continue?`)) {
+                    e.preventDefault();
+                    return false;
+                }
+            }
+            
+            // Show loading indicator
+            if (compareBtn) {
+                compareBtn.disabled = true;
+                const spinner = compareBtn.querySelector('#loading-spinner');
+                if (spinner) spinner.classList.remove('d-none');
+            }
+            
+            return true;
+        });
+    }
+});
+</script>
+
 {% if viewer_disabled %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -525,4 +1068,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endif %}
-{% endblock %} 
+{% endblock %}

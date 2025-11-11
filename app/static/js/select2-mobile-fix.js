@@ -114,15 +114,28 @@
                 $dropdown.find('.select2-search__field').remove();
                 
                 // Handle option selection properly
-                $dropdown.find('.select2-results__option').off('touchend.select2Mobile click.select2Mobile')
-                    .on('touchend.select2Mobile click.select2Mobile', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        
-                        // Trigger selection
+                // Improve touch handling: trigger a sequence of events that Select2
+                // will respond to on mobile devices. Avoid preventing the default
+                // action (which can interfere with selection in some browsers),
+                // but stop propagation so outer handlers don't interfere.
+                $dropdown.find('.select2-results__option').off('touchend.select2Mobile click.select2Mobile touchstart.select2Mobile')
+                    .on('touchstart.select2Mobile touchend.select2Mobile click.select2Mobile', function(e) {
+                        // Allow default behavior for touch events in most browsers,
+                        // but stop propagation so other listeners don't cancel the action.
+                        try { e.stopPropagation(); } catch (err) {}
+
+                        // Trigger selection by emulating the pointer events Select2
+                        // expects. This sequence is more robust across browsers.
                         const $option = $(this);
-                        if (!$option.hasClass('select2-results__option--disabled')) {
+                        if ($option.hasClass('select2-results__option--disabled')) return;
+
+                        try {
+                            $option.trigger('mousedown');
                             $option.trigger('mouseup');
+                            $option.trigger('click');
+                        } catch (err) {
+                            // Fallback: attempt the original mouseup trigger
+                            try { $option.trigger('mouseup'); } catch (ignored) {}
                         }
                     });
             });
@@ -159,6 +172,52 @@
         
         return select2Instance;
     };
+
+    // Additional global helper: ensure tapping the visible Select2 selection
+    // container opens the dropdown on devices that block the native event.
+    // This is non-invasive and only attaches when running on mobile.
+    function bindTouchOpenFallback($element) {
+        try {
+            if (!isMobile()) return;
+            // Find the rendered container
+            const $container = $element.next('.select2-container');
+            if (!$container || $container.length === 0) return;
+            // Avoid binding multiple times
+            if ($container.data('mobile-open-handler')) return;
+            $container.data('mobile-open-handler', true);
+
+            // Use touchend so the tap completes; also listen for click as a fallback
+            $container.on('touchend.select2MobileOpen click.select2MobileOpen', function(e) {
+                try {
+                    // If Select2 is already open, let it handle closing
+                    if ($element.select2('isOpen')) return;
+
+                    // Stop propagation so outside handlers don't interfere
+                    e.stopPropagation();
+
+                    // Open after a tiny delay to allow native focus to settle
+                    setTimeout(function() {
+                        try { $element.select2('open'); } catch (err) { /* ignore */ }
+                    }, 10);
+                } catch (err) {
+                    // swallow errors to avoid breaking pages
+                }
+            });
+        } catch (err) {
+            // noop
+        }
+    }
+
+    // Auto-bind fallback for any Select2 elements already on the page
+    $(document).ready(function() {
+        try {
+            $('.select2-hidden-accessible').each(function() {
+                try {
+                    bindTouchOpenFallback($(this));
+                } catch(e) {}
+            });
+        } catch(e) {}
+    });
     
     // Global event handlers for mobile
     if (isMobile()) {

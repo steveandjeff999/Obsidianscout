@@ -12,11 +12,173 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Service Worker registered:', reg.scope);
                 // Force update check
                 reg.update();
+                // Listen for messages from the service worker (offline/online notifications)
+                try {
+                    navigator.serviceWorker.addEventListener('message', function(event) {
+                        if (event && event.data && event.data.type === 'offline-banner') {
+                            showOfflineBanner(!!event.data.show);
+                        }
+                    });
+                } catch (e) {
+                    // Some browsers may not support addEventListener on navigator.serviceWorker
+                    console.warn('Could not attach serviceWorker message listener', e);
+                }
             })
             .catch(err => {
                 console.warn('Service Worker registration failed:', err);
             });
     }
+
+    // Show or hide a small yellow offline banner across the top of the page
+    function showOfflineBanner(show) {
+        try {
+            let banner = document.getElementById('offline-banner');
+            if (show) {
+                if (!banner) {
+                    banner = document.createElement('div');
+                    banner.id = 'offline-banner';
+                    banner.setAttribute('role','status');
+                    // Position fixed so it stays at top; we'll offset below any topbar
+                    banner.style.position = 'fixed';
+                    banner.style.left = '0';
+                    banner.style.right = '0';
+                    banner.style.zIndex = '99999';
+
+                    // Stronger, high-contrast colors for dark mode and readability
+                    const prefersDark = document.body.classList.contains('dark-mode') || document.body.classList.contains('theme-dark') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                    banner.style.background = prefersDark ? '#ffb74d' : '#fff3bf';
+                    banner.style.color = '#0b0b0b';
+                    banner.style.padding = '8px 12px';
+                    banner.style.textAlign = 'center';
+                    banner.style.fontSize = '13px';
+                    banner.style.fontWeight = '600';
+                    banner.style.boxSizing = 'border-box';
+                    banner.style.boxShadow = prefersDark ? '0 2px 8px rgba(0,0,0,0.6)' : '0 2px 4px rgba(0,0,0,0.06)';
+                    banner.style.borderBottom = '1px solid rgba(0,0,0,0.12)';
+                    banner.style.opacity = '0';
+                    banner.style.transition = 'opacity 0.25s ease, transform 0.15s ease';
+                    banner.style.pointerEvents = 'auto';
+                    banner.textContent = 'You appear to be offline — showing cached content';
+
+                    // Append banner and measure
+                    document.body.appendChild(banner);
+                    const topbar = document.querySelector('.topbar') || document.querySelector('.navbar') || null;
+                    const sidebar = document.getElementById('appSidebar') || document.querySelector('.sidebar') || null;
+                    const topOffset = topbar ? topbar.offsetHeight : 0;
+                    // Position banner below topbar
+                    banner.style.top = topOffset + 'px';
+
+                    // Compute left offset to avoid overlapping sidebar (when visible)
+                    let leftOffset = 0;
+                    try {
+                        if (sidebar && window.getComputedStyle(sidebar).display !== 'none' && window.innerWidth >= 900) {
+                            const rect = sidebar.getBoundingClientRect();
+                            leftOffset = rect.width || 0;
+                        }
+                    } catch (e) { leftOffset = 0; }
+
+                    // Apply left offset and width so banner doesn't cross the sidebar
+                    banner.style.left = leftOffset + 'px';
+                    banner.style.width = `calc(100% - ${leftOffset}px)`;
+
+                    // Add padding to body so content isn't covered by the banner
+                    const measured = banner.offsetHeight || 36;
+                    const currentPadding = parseInt(window.getComputedStyle(document.body).paddingTop) || 0;
+                    banner.dataset._paddingAdded = String(measured);
+                    document.body.style.paddingTop = (currentPadding + measured) + 'px';
+
+                    // Make banner persistent (not closable) per request — no close button added
+
+                    // Attach resize and sidebar-toggle handlers once so banner repositions responsively
+                    if (!banner.dataset._listenerAttached) {
+                        const reposition = () => {
+                            try {
+                                const topbar = document.querySelector('.topbar') || document.querySelector('.navbar') || null;
+                                const sidebar = document.getElementById('appSidebar') || document.querySelector('.sidebar') || null;
+                                const topOffset = topbar ? topbar.offsetHeight : 0;
+                                banner.style.top = topOffset + 'px';
+
+                                let leftOffset = 0;
+                                if (sidebar && window.getComputedStyle(sidebar).display !== 'none' && window.innerWidth >= 900) {
+                                    const rect = sidebar.getBoundingClientRect();
+                                    leftOffset = rect.width || 0;
+                                }
+                                banner.style.left = leftOffset + 'px';
+                                banner.style.width = `calc(100% - ${leftOffset}px)`;
+
+                                // Adjust padding if height changed
+                                const measuredNow = banner.offsetHeight || 36;
+                                const previous = parseInt(banner.dataset._paddingAdded || '0') || 0;
+                                if (measuredNow !== previous) {
+                                    const currentPaddingNow = parseInt(window.getComputedStyle(document.body).paddingTop) || 0;
+                                    const basePadding = Math.max(0, currentPaddingNow - previous);
+                                    document.body.style.paddingTop = (basePadding + measuredNow) + 'px';
+                                    banner.dataset._paddingAdded = String(measuredNow);
+                                }
+                            } catch (e) { /* ignore */ }
+                        };
+
+                        window.addEventListener('resize', reposition);
+                        const sidebarToggle = document.getElementById('sidebarToggle');
+                        if (sidebarToggle) sidebarToggle.addEventListener('click', () => setTimeout(reposition, 260));
+                        banner.dataset._listenerAttached = '1';
+                    }
+                }
+                // Recalculate positioning in case layout changed since last show
+                try {
+                    const topbar = document.querySelector('.topbar') || document.querySelector('.navbar') || null;
+                    const sidebar = document.getElementById('appSidebar') || document.querySelector('.sidebar') || null;
+                    const topOffset = topbar ? topbar.offsetHeight : 0;
+                    banner.style.top = topOffset + 'px';
+
+                    let leftOffset = 0;
+                    if (sidebar && window.getComputedStyle(sidebar).display !== 'none' && window.innerWidth >= 900) {
+                        const rect = sidebar.getBoundingClientRect();
+                        leftOffset = rect.width || 0;
+                    }
+                    banner.style.left = leftOffset + 'px';
+                    banner.style.width = `calc(100% - ${leftOffset}px)`;
+
+                    // Adjust body padding if banner height changed
+                    const measured = banner.offsetHeight || 36;
+                    const previous = parseInt(banner.dataset._paddingAdded || '0') || 0;
+                    if (measured !== previous) {
+                        try {
+                            const currentPadding = parseInt(window.getComputedStyle(document.body).paddingTop) || 0;
+                            // remove previous then add new
+                            const basePadding = Math.max(0, currentPadding - previous);
+                            document.body.style.paddingTop = (basePadding + measured) + 'px';
+                            banner.dataset._paddingAdded = String(measured);
+                        } catch (e) {}
+                    }
+                } catch (e) {}
+
+                // Reveal
+                requestAnimationFrame(() => { banner.style.opacity = '1'; });
+            } else {
+                if (banner) {
+                    banner.style.opacity = '0';
+                    setTimeout(() => {
+                        try {
+                            const added = parseInt(banner.dataset._paddingAdded || '0');
+                            if (added) {
+                                const currentPadding = parseInt(window.getComputedStyle(document.body).paddingTop) || 0;
+                                const newPadding = Math.max(0, currentPadding - added);
+                                document.body.style.paddingTop = newPadding + 'px';
+                            }
+                        } catch (e) {}
+                        banner.remove();
+                    }, 300);
+                }
+            }
+        } catch (e) {
+            console.warn('showOfflineBanner error', e);
+        }
+    }
+
+    // Optional: react to browser online/offline events too
+    window.addEventListener('online', function() { showOfflineBanner(false); });
+    window.addEventListener('offline', function() { showOfflineBanner(true); });
     
     // Initialize all tooltips
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');

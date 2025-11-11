@@ -9,7 +9,7 @@
     <div class="col-md-6 mb-4">
         <div class="card">
             <div class="card-header {% if scouting_data.alliance == 'red' %}bg-danger text-white{% elif scouting_data.alliance == 'blue' %}bg-primary text-white{% else %}bg-secondary text-white{% endif %}">
-                <h5 class="mb-0">Team {{ team.team_number }} - {{ match.match_type }} Match {{ match.match_number }}</h5>
+                <h5 class="mb-0">Team <span class="team-number" data-team-num="{{ team.team_number }}">{{ team.team_number }}</span> - {{ match.match_type }} Match {{ match.match_number }}</h5>
             </div>
             <div class="card-body text-center">
                 <p class="lead">Scan this QR code to import the scouting data to another device.</p>
@@ -38,7 +38,7 @@
             <div class="card-body">
                 <dl class="row">
                     <dt class="col-sm-4">Team</dt>
-                    <dd class="col-sm-8">{{ team.team_number }} - {{ team.team_name }}</dd>
+                    <dd class="col-sm-8"><span class="team-number" data-team-num="{{ team.team_number }}">{{ team.team_number }}</span> - {{ team.team_name }}</dd>
                     
                     <dt class="col-sm-4">Match</dt>
                     <dd class="col-sm-8">{{ match.match_type }} {{ match.match_number }}</dd>

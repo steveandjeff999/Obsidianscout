@@ -146,6 +146,25 @@
         background: var(--input-bg, white);
         color: var(--text-color, black);
     }
+
+    /* Ensure native select dropdowns and their option lists follow the site's theme
+       Many browsers render option lists using native UI; this attempts to make
+       colors consistent in dark mode by forcing background and text colors that
+       derive from the theme variables. The !important flags help override some
+       browser defaults where allowed. */
+    select.form-control,
+    select.form-control option,
+    select.form-control optgroup {
+        background: var(--input-bg, white) !important;
+        color: var(--text-color, black) !important;
+    }
+
+    /* Selected option styling (may not be honored by all browsers, but helps where supported) */
+    select.form-control option:checked,
+    select.form-control option[selected] {
+        background: var(--primary-color, #007bff) !important;
+        color: var(--option-selected-text-color, #ffffff) !important;
+    }
     
     .form-group {
         margin-bottom: 15px;
@@ -257,7 +276,10 @@
                             <button class="test-button btn-warning" onclick="testSubscription('{{ sub.id }}')">
                                 Test
                             </button>
-                            <button class="test-button btn-danger" onclick="removeSubscription('{{ sub.id }}')">
+                            <button class="test-button btn-warning" id="toggle-push-{{ sub.id }}" onclick="togglePush('{{ sub.id }}', {{ 'true' if sub.push_enabled else 'false' }})">
+                                {% if sub.push_enabled %}Disable Push{% else %}Enable Push{% endif %}
+                            </button>
+                            <button class="test-button btn-danger" onclick="deleteSubscription('{{ sub.id }}')">
                                 Remove
                             </button>
                         </div>
@@ -640,25 +662,70 @@ document.getElementById('subscription-form').addEventListener('submit', async (e
     }
 });
 
-// Remove subscription
-async function removeSubscription(subscriptionId) {
-    if (!confirm('Remove this subscription?')) return;
-    
+// Delete subscription (permanently)
+async function deleteSubscription(subscriptionId) {
+    if (!confirm('Delete this subscription permanently? This cannot be undone.')) return;
+
     try {
-        const response = await fetch(`/notifications/unsubscribe/${subscriptionId}`, {
+        const response = await fetch(`/notifications/delete/${subscriptionId}`, {
             method: 'POST'
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success) {
-            alert(' Subscription removed');
-            location.reload();
+            alert(' Subscription deleted');
+            // Remove subscription element from DOM instantly
+            const elem = document.querySelector(`.subscription-item[data-subscription-id='${subscriptionId}']`);
+            if (elem) elem.remove();
         } else {
             alert(' Error: ' + result.error);
         }
     } catch (error) {
         alert(' Error: ' + error.message);
+    }
+}
+
+// Toggle push delivery for a subscription (enable/disable push only)
+async function togglePush(subscriptionId, currentlyEnabled) {
+    const desired = !Boolean(currentlyEnabled);
+    const action = desired ? 'Enable' : 'Disable';
+    if (!confirm(`${action} push notifications for this subscription?`)) return;
+
+    try {
+        const response = await fetch(`/notifications/toggle-push/${subscriptionId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ push_enabled: desired })
+        });
+
+        const result = await response.json();
+        if (response.ok && result.success) {
+            // Update button label
+            const btn = document.getElementById(`toggle-push-${subscriptionId}`);
+            if (btn) btn.textContent = result.push_enabled ? 'Disable Push' : 'Enable Push';
+
+            // Update the small text in subscription-info to reflect Push enabled/disabled
+            const subElem = document.querySelector(`.subscription-item[data-subscription-id='${subscriptionId}']`);
+            if (subElem) {
+                const small = subElem.querySelector('.subscription-info small.text-muted');
+                if (small) {
+                    // Ensure 'Push' token exists or removed
+                    if (result.push_enabled) {
+                        if (!small.textContent.includes('Push')) small.textContent = small.textContent.trim() + ' | Push';
+                    } else {
+                        small.textContent = small.textContent.replace('| Push', '').replace('Push', '').replace(/\s+\|\s+$/,'').trim();
+                    }
+                }
+            }
+
+            alert(`Push ${result.push_enabled ? 'enabled' : 'disabled'} for this subscription`);
+        } else {
+            alert(' Error: ' + (result.error || 'Failed to update subscription'));
+        }
+    } catch (err) {
+        console.error('Error toggling push:', err);
+        alert(' Error: ' + err.message);
     }
 }
 

@@ -7,6 +7,7 @@ import json
 import hashlib
 from datetime import datetime, timezone, timedelta
 from flask import Blueprint, request, jsonify, send_file, current_app
+from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from app import db
 from app.models import SyncServer, SyncLog, FileChecksum, SyncConfig
@@ -409,6 +410,124 @@ def get_enhanced_sync_status():
             'timestamp': datetime.now(timezone.utc).isoformat(),
             'overall_health': 'error'
         }), 500
+
+
+@sync_api.route('/synctimes', methods=['GET'])
+@login_required
+def get_sync_times():
+    """Return estimated next autosync times per scouting team/event.
+
+    This reads the shared in-memory sync_status cache populated by the
+    background worker and reports how long until the next autosync for each
+    team. It is read-only and intended for UI/status pages.
+    """
+    try:
+        from app.utils.sync_status import get_all_status
+
+        # Require superadmin for this endpoint (API -> return JSON 403 when not allowed)
+        if not getattr(current_user, 'has_role', None) or not current_user.has_role('superadmin'):
+            return jsonify({'error': 'superadmin access required'}), 403
+
+        now = datetime.now(timezone.utc)
+        status = get_all_status()
+
+        results = []
+        last_sync_times = status.get('last_sync_times', {})
+        event_cache = status.get('event_cache', {})
+
+        for team, ev in event_cache.items():
+            desired_interval = ev.get('desired_interval') or 0
+            last = last_sync_times.get(team)
+            if last:
+                seconds_since = (now - last).total_seconds()
+                next_in = int(max(0, desired_interval - seconds_since))
+                next_sync_time = (last + timedelta(seconds=desired_interval)).isoformat() if desired_interval else None
+            else:
+                # If we've never synced, suggest immediate (0) or desired_interval
+                next_in = 0
+                next_sync_time = None
+
+            results.append({
+                'scouting_team_number': team,
+                'event_code': ev.get('event_code'),
+                'event_start_date': ev.get('start_date').isoformat() if ev.get('start_date') else None,
+                'desired_interval_seconds': desired_interval,
+                'next_sync_in_seconds': next_in,
+                'next_sync_time': next_sync_time,
+                'last_checked': ev.get('checked_at').isoformat() if ev.get('checked_at') else None,
+                'last_sync_time': last.isoformat() if last else None
+            })
+
+        # Also report any teams that have last_sync_times but no cached event (legacy)
+        for team, last in last_sync_times.items():
+            if team in event_cache:
+                continue
+            results.append({
+                'scouting_team_number': team,
+                'event_code': None,
+                'event_start_date': None,
+                'desired_interval_seconds': None,
+                'next_sync_in_seconds': 0,
+                'next_sync_time': None,
+                'last_checked': None,
+                'last_sync_time': last.isoformat() if last else None
+            })
+
+        return jsonify({
+            'timestamp': now.isoformat(),
+            'items': results,
+            'count': len(results)
+        })
+    except Exception as e:
+        logger.error(f"Failed to get synctimes: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@sync_api.route('/synccache', methods=['GET'])
+@login_required
+def get_sync_cache():
+    """Admin-only debug endpoint: return raw in-memory sync cache.
+
+    Returns serialized `last_sync_times` and `event_cache` from
+    `app.utils.sync_status` so we can inspect why `/synctimes` is empty.
+    """
+    try:
+        from flask_login import current_user
+        if not getattr(current_user, 'has_role', None) or not current_user.has_role('admin'):
+            return jsonify({'error': 'admin access required'}), 403
+
+        from app.utils.sync_status import get_all_status
+        status = get_all_status()
+
+        # Serialize datetimes to ISO
+        serialized_last_sync = {}
+        for team, dt in (status.get('last_sync_times') or {}).items():
+            try:
+                serialized_last_sync[team] = dt.isoformat() if dt else None
+            except Exception:
+                serialized_last_sync[team] = str(dt)
+
+        serialized_event_cache = {}
+        for team, ev in (status.get('event_cache') or {}).items():
+            try:
+                serialized_event_cache[team] = {
+                    'event_code': ev.get('event_code'),
+                    'start_date': ev.get('start_date').isoformat() if ev.get('start_date') else None,
+                    'checked_at': ev.get('checked_at').isoformat() if ev.get('checked_at') else None,
+                    'desired_interval': ev.get('desired_interval')
+                }
+            except Exception:
+                serialized_event_cache[team] = { 'raw': str(ev) }
+
+        return jsonify({
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'last_sync_times': serialized_last_sync,
+            'event_cache': serialized_event_cache
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to get synccache: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @sync_api.route('/sync/status', methods=['GET'])

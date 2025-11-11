@@ -5,6 +5,8 @@
 {% block heading %}Side-by-Side Team Comparison{% endblock %}
 
 {% block content %}
+<div class="graphs-side-by-side-page">
+
 <div class="row mb-4">
     <div class="col-md-12">
         <div class="d-flex justify-content-between align-items-center">
@@ -25,7 +27,7 @@
 <div class="row mb-3">
     {% for team_data in teams_data %}
     <div class="col-md-{{ 12 // teams_data|length if teams_data|length <= 4 else 3 }}">
-        <div class="card h-100">
+        <div class="card glass h-100">
             <div class="card-header text-center {% if team_data.has_data %}bg-primary text-white{% else %}bg-warning text-dark{% endif %}">
                 <h4 class="mb-0">Team {{ team_data.team.team_number }}</h4>
                 <small>{{ team_data.team.team_name or 'Unknown' }}</small>
@@ -56,7 +58,7 @@
 <!-- Metrics Comparison -->
 <div class="row">
     <div class="col-md-12">
-        <div class="card">
+        <div class="card glass">
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-chart-bar me-2"></i> Detailed Metrics Comparison
@@ -128,7 +130,7 @@
 <!-- Individual Team Performance Charts -->
 <div class="row mt-4">
     <div class="col-md-12">
-        <div class="card">
+        <div class="card glass">
             <div class="card-header">
                 <h5 class="mb-0">
                     <i class="fas fa-chart-line me-2"></i> Match-by-Match Performance
@@ -138,7 +140,7 @@
                 <div class="row">
                     {% for team_data in teams_data %}
                     <div class="col-md-{{ 12 // teams_data|length if teams_data|length <= 2 else 6 }}">
-                        <div class="card mb-3">
+                        <div class="card mb-3 glass">
                             <div class="card-header">
                                 <h6 class="mb-0">Team {{ team_data.team.team_number }} - {{ team_data.team.team_name or 'Unknown' }}</h6>
                             </div>

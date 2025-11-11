@@ -139,6 +139,11 @@ class ScoutingTeamSettings(db.Model):
     locked_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    # Preference for how to display offseason teams when a 99xx remapping exists.
+    # '99xx' (default) -> show numeric 99xx placeholder (safe for int(team_number) usage)
+    # 'letter' -> show original letter-suffix (e.g., '254B') when available
+    # Note: display preference is now a client-side per-user setting stored in browser localStorage.
+    # Server-side storage was removed to avoid requiring DB migrations across deployments.
     
     # Accessor for the User who locked/unlocked accounts. We avoid an ORM
     # relationship here because User lives in a separate DB bind; instead

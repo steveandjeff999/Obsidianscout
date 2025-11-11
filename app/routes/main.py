@@ -1601,6 +1601,73 @@ def enhanced_sync_monitor():
     """Enhanced sync monitoring dashboard with reliability features"""
     return render_template('sync_monitor_enhanced.html', **get_theme_context())
 
+
+@bp.route('/synctimes')
+@login_required
+def synctimes_root():
+    """Public-facing endpoint that mirrors /api/sync/synctimes for convenience.
+
+    Returns the estimated next autosync times per scouting team/event. This reads
+    the shared in-memory sync_status cache populated by the background worker.
+    """
+    try:
+        # Restrict this endpoint to superadmins only (return JSON 403 for non-superadmin users)
+        if not getattr(current_user, 'has_role', None) or not current_user.has_role('superadmin'):
+            return jsonify({'error': 'superadmin access required'}), 403
+        from app.utils.sync_status import get_all_status
+        from datetime import timedelta
+
+        now = datetime.now(timezone.utc)
+        status = get_all_status()
+
+        results = []
+        last_sync_times = status.get('last_sync_times', {})
+        event_cache = status.get('event_cache', {})
+
+        for team, ev in event_cache.items():
+            desired_interval = ev.get('desired_interval') or 0
+            last = last_sync_times.get(team)
+            if last:
+                seconds_since = (now - last).total_seconds()
+                next_in = int(max(0, desired_interval - seconds_since))
+                next_sync_time = (last + timedelta(seconds=desired_interval)).isoformat() if desired_interval else None
+            else:
+                next_in = 0
+                next_sync_time = None
+
+            results.append({
+                'scouting_team_number': team,
+                'event_code': ev.get('event_code'),
+                'event_start_date': ev.get('start_date').isoformat() if ev.get('start_date') else None,
+                'desired_interval_seconds': desired_interval,
+                'next_sync_in_seconds': next_in,
+                'next_sync_time': next_sync_time,
+                'last_checked': ev.get('checked_at').isoformat() if ev.get('checked_at') else None,
+                'last_sync_time': last.isoformat() if last else None
+            })
+
+        for team, last in last_sync_times.items():
+            if team in event_cache:
+                continue
+            results.append({
+                'scouting_team_number': team,
+                'event_code': None,
+                'event_start_date': None,
+                'desired_interval_seconds': None,
+                'next_sync_in_seconds': 0,
+                'next_sync_time': None,
+                'last_checked': None,
+                'last_sync_time': last.isoformat() if last else None
+            })
+
+        return jsonify({'timestamp': now.isoformat(), 'items': results, 'count': len(results)})
+    except Exception as e:
+        try:
+            current_app.logger.error(f"synctimes_root error: {e}")
+        except Exception:
+            pass
+        return jsonify({'error': str(e)}), 500
+
 @bp.route('/api/sync-status')
 @login_required
 def api_sync_status():
@@ -1958,6 +2025,33 @@ def api_brief_data():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@bp.route('/api/event-remap/<event_key>', methods=['GET'])
+@login_required
+def api_event_remap(event_key):
+    """Return the TBA remap_teams mapping for the given event_key.
+
+    The mapping is returned as a dict where keys are the numeric placeholder
+    (99xx) used in the DB and values are the original letter-suffixed team
+    identifiers (e.g. '254B'). If no remapping exists for the event an empty
+    dict is returned.
+    """
+    try:
+        from app.utils.tba_api_utils import get_event_team_remapping
+
+        remap = get_event_team_remapping(event_key)
+        if not remap:
+            return jsonify({'success': True, 'event_key': event_key, 'remap': {}, 'message': 'No remapping found'}), 200
+
+        return jsonify({'success': True, 'event_key': event_key, 'remap': remap}), 200
+
+    except Exception as e:
+        try:
+            current_app.logger.exception(f'Error fetching event remap for {event_key}: {e}')
+        except Exception:
+            pass
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @bp.route('/analytics/config-averages')
@@ -2350,6 +2444,22 @@ def get_theme_context():
         'themes': theme_manager.get_available_themes(),
         'current_theme_id': theme_manager.current_theme
     }
+
+
+@bp.route('/settings')
+@login_required
+def settings():
+    """User-facing settings page stored client-side (localStorage).
+
+    This page does not persist settings on the server; preferences are saved
+    in the browser's localStorage so each user can customize their display.
+    """
+    try:
+        return render_template('settings.html', **get_theme_context())
+    except Exception as e:
+        current_app.logger.exception('Error rendering settings page')
+        flash('Unable to open settings page', 'danger')
+        return redirect(url_for('main.index'))
 
 def parse_default_value(value, element_type):
     """Parse default value based on element type"""

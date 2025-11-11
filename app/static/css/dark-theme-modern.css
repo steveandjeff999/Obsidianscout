@@ -420,3 +420,151 @@ body.sidebar-collapsed #appSidebar .nav-link::after {
 }
 body.sidebar-collapsed #appSidebar .nav-link:hover::after { display: block; }
 
+/* Notifications autocomplete dropdown (ns-autocomplete) - match scouting form custom selects */
+.ns-autocomplete-dropdown {
+    position: fixed; /* JS still sets left/top/minWidth */
+    z-index: 2147483630;
+    border-radius: 10px;
+    padding: 6px 4px;
+    max-height: 44vh;
+    overflow: auto;
+    background: var(--topbar-surface-dark, linear-gradient(180deg, rgba(12,16,20,0.60), rgba(12,16,20,0.42)));
+    -webkit-backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px));
+    backdrop-filter: blur(calc(var(--topbar-blur, 10px) - 2px));
+    border: 1px solid var(--topbar-border-dark, rgba(255,255,255,0.06));
+    box-shadow: 0 12px 36px rgba(2,6,23,0.08);
+}
+
+.ns-autocomplete-item {
+    padding: 10px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text, #e6e6e6);
+}
+.ns-autocomplete-item.placeholder { color: var(--muted, #9aa0a6); }
+.ns-autocomplete-item.disabled { opacity: .5; pointer-events: none }
+.ns-autocomplete-item:hover, .ns-autocomplete-item:focus { background: rgba(var(--bs-primary-rgb),0.06); transform: translateX(4px); }
+
+/* Selected/active visual */
+.ns-autocomplete-item.selected {
+    background: linear-gradient(90deg, rgba(var(--bs-primary-rgb),0.08), rgba(var(--bs-primary-rgb),0.03));
+    border-left: 4px solid rgba(var(--bs-primary-rgb),0.9);
+    padding-left: 8px;
+}
+
+/* Scrollbar styling to match custom-select-menu */
+.ns-autocomplete-dropdown::-webkit-scrollbar { width: 10px }
+.ns-autocomplete-dropdown::-webkit-scrollbar-track { background: rgba(2,6,23,0.02); border-radius:6px }
+.ns-autocomplete-dropdown::-webkit-scrollbar-thumb { background: rgba(2,6,23,0.12); border-radius:6px }
+.ns-autocomplete-dropdown::-webkit-scrollbar-thumb:hover { background: rgba(2,6,23,0.18) }
+
+/* Select2 and floating dropdown dark-mode overrides */
+/* Make Select2 controls and any appended dropdowns use the modern dark surfaces */
+:root.dark-mode .select2-container--bootstrap-5 .select2-selection,
+html.dark-mode .select2-container--bootstrap-5 .select2-selection,
+.dark-mode .select2-container--bootstrap-5 .select2-selection,
+:root.dark-mode .select2-container .select2-selection,
+html.dark-mode .select2-container .select2-selection,
+.dark-mode .select2-container .select2-selection {
+    background: var(--card-bg, rgba(20,20,22,0.78)) !important;
+    color: var(--text, #e6e6e6) !important;
+    border: 1px solid var(--glass-border, rgba(255,255,255,0.04)) !important;
+    box-shadow: none !important;
+}
+
+:root.dark-mode .select2-container--open .select2-dropdown,
+html.dark-mode .select2-container--open .select2-dropdown,
+.dark-mode .select2-container--open .select2-dropdown,
+:root.dark-mode .select2-dropdown,
+html.dark-mode .select2-dropdown,
+.dark-mode .select2-dropdown {
+    background: var(--card-bg, rgba(20,20,22,0.86)) !important;
+    color: var(--text, #e6e6e6) !important;
+    border: 1px solid var(--glass-border, rgba(255,255,255,0.04)) !important;
+    box-shadow: var(--soft-shadow, 0 6px 20px rgba(2,6,23,0.55)) !important;
+}
+
+:root.dark-mode .select2-results__option,
+html.dark-mode .select2-results__option,
+.dark-mode .select2-results__option {
+    color: var(--text, #e6e6e6) !important;
+}
+
+:root.dark-mode .select2-results__option--highlighted,
+html.dark-mode .select2-results__option--highlighted,
+.dark-mode .select2-results__option--highlighted,
+:root.dark-mode .select2-results__option:hover,
+html.dark-mode .select2-results__option:hover,
+.dark-mode .select2-results__option:hover {
+    background: rgba(255,255,255,0.03) !important;
+    color: var(--text, #e6e6e6) !important;
+}
+
+:root.dark-mode .select2-search__field,
+html.dark-mode .select2-search__field,
+.dark-mode .select2-search__field {
+    background: rgba(255,255,255,0.02) !important;
+    border: 1px solid rgba(255,255,255,0.03) !important;
+    color: var(--text, #e6e6e6) !important;
+}
+
+/* Portalled native dropdowns (Bootstrap dropdowns appended to body) */
+:root.dark-mode .dropdown-menu.navbar-glass,
+html.dark-mode .dropdown-menu.navbar-glass,
+.dark-mode .dropdown-menu.navbar-glass,
+:root.dark-mode .dropdown-menu,
+html.dark-mode .dropdown-menu,
+.dark-mode .dropdown-menu {
+    background: var(--card-bg, rgba(20,20,22,0.88)) !important;
+    color: var(--text, #e6e6e6) !important;
+    border: 1px solid var(--glass-border, rgba(255,255,255,0.04)) !important;
+    box-shadow: var(--soft-shadow, 0 6px 20px rgba(2,6,23,0.55)) !important;
+}
+
+:root.dark-mode .dropdown-item,
+html.dark-mode .dropdown-item,
+.dark-mode .dropdown-item {
+    color: var(--text, #e6e6e6) !important;
+}
+
+:root.dark-mode .dropdown-item:hover,
+html.dark-mode .dropdown-item:hover,
+.dark-mode .dropdown-item:hover {
+    background: rgba(255,255,255,0.03) !important;
+}
+
+/* Improve contrast for select placeholders and native selects where possible */
+:root.dark-mode select,
+html.dark-mode select,
+.dark-mode select {
+    background: rgba(255,255,255,0.02) !important;
+    color: var(--text, #e6e6e6) !important;
+    border: 1px solid rgba(255,255,255,0.03) !important;
+}
+
+/* Strong dark-mode overrides for notifications autocomplete (portalled dropdown) */
+/* Some legacy CSS (search-enhancements.css) sets a white background; ensure dark mode wins. */
+:root.dark-mode .ns-autocomplete-dropdown,
+html.dark-mode .ns-autocomplete-dropdown,
+body.dark-mode .ns-autocomplete-dropdown,
+.dark-mode .ns-autocomplete-dropdown {
+    background: var(--card-bg, rgba(20,20,22,0.86)) !important;
+    border: 1px solid var(--glass-border, rgba(255,255,255,0.06)) !important;
+    color: var(--text, #e6e6e6) !important;
+    box-shadow: var(--soft-shadow, 0 6px 20px rgba(2,6,23,0.55)) !important;
+}
+
+:root.dark-mode .ns-autocomplete-item,
+html.dark-mode .ns-autocomplete-item,
+body.dark-mode .ns-autocomplete-item,
+.dark-mode .ns-autocomplete-item {
+    color: var(--text, #e6e6e6) !important;
+}
+
+:root.dark-mode .ns-autocomplete-item:hover,
+html.dark-mode .ns-autocomplete-item:hover,
+body.dark-mode .ns-autocomplete-item:hover,
+.dark-mode .ns-autocomplete-item:hover {
+    background: rgba(255,255,255,0.03) !important;
+}
+

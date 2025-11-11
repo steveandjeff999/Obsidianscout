@@ -274,6 +274,46 @@ def unsubscribe(subscription_id):
     return jsonify({'success': True})
 
 
+@bp.route('/toggle-push/<int:subscription_id>', methods=['POST'])
+@login_required
+def toggle_push(subscription_id):
+    """Enable or disable push delivery for a subscription (keeps subscription record)."""
+    subscription = NotificationSubscription.query.get_or_404(subscription_id)
+    if subscription.user_id != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json() or {}
+    if 'push_enabled' not in data:
+        return jsonify({'error': 'push_enabled is required'}), 400
+
+    try:
+        subscription.push_enabled = bool(data.get('push_enabled'))
+        subscription.updated_at = datetime.now(timezone.utc)
+        db.session.commit()
+        return jsonify({'success': True, 'push_enabled': subscription.push_enabled})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/delete/<int:subscription_id>', methods=['POST', 'DELETE'])
+@login_required
+def delete_subscription(subscription_id):
+    """Permanently delete a subscription record."""
+    subscription = NotificationSubscription.query.get_or_404(subscription_id)
+    if subscription.user_id != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    try:
+        db.session.delete(subscription)
+        db.session.commit()
+        flash('Subscription deleted successfully!', 'success')
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
 @bp.route('/register-device', methods=['POST'])
 @login_required
 def register_push_device():
@@ -318,11 +358,16 @@ def remove_device(device_id):
     if device.user_id != current_user.id:
         return jsonify({'error': 'Unauthorized'}), 403
     
-    device.is_active = False
-    db.session.commit()
-    
-    flash('Device removed successfully!', 'success')
-    return jsonify({'success': True})
+    try:
+        # Permanently delete the device row so it does not reappear on refresh
+        db.session.delete(device)
+        db.session.commit()
+        flash('Device deleted successfully!', 'success')
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting device {device_id}: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @bp.route('/test-email', methods=['POST'])

@@ -650,3 +650,60 @@ def construct_tba_event_key(event_code, year=None):
 def construct_tba_team_key(team_number):
     """Construct TBA team key from team number"""
     return f"frc{team_number}"
+
+
+def get_display_label_for_team(team_identifier, event_key=None):
+    """Return a human-friendly display label for a team.
+
+    If an event remapping exists mapping a letter-suffix team (e.g. '581B') to a
+    99xx numeric placeholder (e.g. 9989), this helper will return the letter
+    suffix (e.g. '581B') when given the numeric placeholder. If no remapping is
+    available, it returns the numeric team_identifier as a string.
+
+    Args:
+        team_identifier: int or str team number (often 99xx numeric placeholder)
+        event_key: optional TBA event key to lookup remap_teams
+
+    Returns:
+        str: display label (e.g., '254B' or '9994')
+    """
+    if team_identifier is None:
+        return None
+
+    # Normalize to int when possible
+    try:
+        num = int(team_identifier)
+    except Exception:
+        # Not numeric; just return uppercased string
+        return str(team_identifier).upper()
+
+    # If event key provided, try to find a letter-suffix mapping that maps to this numeric
+    if event_key:
+        try:
+            # Use get_event_team_remapping which returns mapping letter->numeric
+            remap = get_event_team_remapping(event_key)
+            # remap: { '581B': 9989, ... }
+            for letter, numeric in remap.items():
+                if numeric == num:
+                    return letter  # letter already uppercased in remapping
+        except Exception:
+            pass
+
+    # If no mapping found or no event_key, try to inspect cached raw remap data
+    try:
+        # Some code paths cache the raw remap_teams dict (numeric->letter) in _event_remap_cache
+        if event_key in _event_remap_cache and isinstance(_event_remap_cache[event_key], dict):
+            # raw may be numeric->letter or letter->numeric; handle both
+            cache_val = _event_remap_cache[event_key]
+            # numeric->letter
+            key = f"frc{num}"
+            if key in cache_val:
+                return cache_val[key].replace('frc', '').upper()
+            # letter->numeric
+            for letter, numeric in cache_val.items():
+                if isinstance(numeric, int) and numeric == num:
+                    return letter
+    except Exception:
+        pass
+
+    return str(num)
