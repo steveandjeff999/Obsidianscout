@@ -114,7 +114,7 @@
                         <tbody>
                             {% for team in teams %}
                             <tr>
-                                <td class="fw-bold">{{ team.team_number }}</td>
+                                <td class="fw-bold"><span class="team-number" data-team-num="{{ team.team_number }}">{{ team.team_number }}</span></td>
                                 <td>{{ team.team_name or '-' }}</td>
                                 <td>{{ team.location or 'Unknown' }}</td>
                                 <td>

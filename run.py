@@ -196,17 +196,40 @@ if __name__ == '__main__':
 
     # Start periodic API data sync thread
     def api_data_sync_worker():
-        """Background thread for periodic API data synchronization"""
+        """Background thread for periodic API data synchronization with per-team throttling.
+
+        Behavior:
+        - If event start date is not known -> autosync every 20 minutes
+        - If event start date is > 1.5 weeks away -> autosync daily
+        - If event start date is within 1.5 weeks -> autosync at the existing (recent) interval
+        - This applies only to the automated periodic sync worker. Manual syncs are unaffected.
+        """
+        # Intervals (seconds)
+        RECENT_INTERVAL = 180           # keep existing frequent autosync (3 minutes)
+        UNKNOWN_DATE_INTERVAL = 20 * 60 # 20 minutes for N/A dates
+        DAILY_INTERVAL = 24 * 60 * 60   # daily for far-out events
+        # How often to re-check the configured event_code in game_config (seconds)
+        CHECK_EVENT_INTERVAL = 5 * 60  # 5 minutes
+
+        # Use shared sync status storage so routes can report sync times
+        from app.utils.sync_status import (
+            update_last_sync,
+            get_last_sync,
+            set_event_cache,
+            get_event_cache,
+        )
+
         while True:
             try:
-                time.sleep(180)  # Wait 3 minutes (180 seconds)
-                print("Starting periodic API data sync...")
-                
+                # Main loop ticks every minute to evaluate per-team schedules
+                time.sleep(60)
+                print("Starting periodic API data sync (evaluating per-team intervals)...")
+
                 # Import here to avoid circular imports
                 from app.utils.config_manager import load_game_config
                 from app.utils.api_utils import get_teams_dual_api, get_matches_dual_api
                 from app.models import Team, Match, Event, User, ScoutingTeamSettings, db
-                
+
                 with app.app_context():
                     try:
                         # Build a set of scouting team numbers to run sync for
@@ -248,15 +271,15 @@ if __name__ == '__main__':
                                 else:
                                     print(f"Running API sync for scouting team: {scouting_team_number}")
 
-                                # Load game config for this team and make it available to helpers
-                                # so background threads behave like UI requests (which set GAME_CONFIG)
+                                # Always load the latest game_config for the team (so changes like auto_sync_enabled
+                                # take effect promptly). We will only refresh the cached event_code/start_date
+                                # value every CHECK_EVENT_INTERVAL to reduce frequent event date checks.
                                 game_config = load_game_config(team_number=scouting_team_number)
                                 try:
-                                    # Ensure helper functions that call get_current_game_config()
-                                    # will see the team-scoped config when running in a background thread.
                                     app.config['GAME_CONFIG'] = game_config
                                 except Exception:
                                     pass
+
                                 # Check team's auto-sync setting (default True)
                                 api_settings = game_config.get('api_settings') or {}
                                 auto_sync_enabled = api_settings.get('auto_sync_enabled', True)
@@ -264,13 +287,61 @@ if __name__ == '__main__':
                                     print(f"  Auto-sync disabled for team {scouting_team_number}, skipping")
                                     continue
 
+                                # Use cached event info when recently checked; otherwise compute fresh values
+                                cached = get_event_cache(scouting_team_number)
+                                now_utc = datetime.now(timezone.utc)
                                 event_code = game_config.get('current_event_code')
+                                use_cached_event = cached and (now_utc - cached.get('checked_at')).total_seconds() < CHECK_EVENT_INTERVAL and cached.get('event_code') == event_code
+
+                                # If we have a recent cached event decision, ensure the cached desired_interval
+                                # follows the symmetric ±1.5 week rule: keep RECENT when within 1.5 weeks of
+                                # the event start (past or future), otherwise use DAILY. Update cache if needed.
+                                try:
+                                    if use_cached_event and cached:
+                                        cached_start = cached.get('start_date')
+                                        if cached_start:
+                                            try:
+                                                # cached_start may be a date or datetime
+                                                if hasattr(cached_start, 'year') and not getattr(cached_start, 'tzinfo', None):
+                                                    cached_start_dt = datetime.combine(cached_start, datetime.min.time()).replace(tzinfo=timezone.utc)
+                                                else:
+                                                    cached_start_dt = cached_start if getattr(cached_start, 'tzinfo', None) else cached_start.replace(tzinfo=timezone.utc)
+
+                                                # Determine whether the event is within ±1.5 weeks
+                                                delta_seconds_cached = (cached_start_dt - now_utc).total_seconds()
+                                                threshold_seconds = 1.5 * 7 * 24 * 60 * 60
+                                                if abs(delta_seconds_cached) <= threshold_seconds:
+                                                    # Within ±1.5 weeks -> recent
+                                                    try:
+                                                        set_event_cache(scouting_team_number, event_code, cached_start, RECENT_INTERVAL)
+                                                    except Exception:
+                                                        pass
+                                                    print(f"  Cached event {event_code} within ±1.5 weeks -> enforcing recent autosync")
+                                                else:
+                                                    # Outside ±1.5 weeks -> daily
+                                                    try:
+                                                        set_event_cache(scouting_team_number, event_code, cached_start, DAILY_INTERVAL)
+                                                    except Exception:
+                                                        pass
+                                                    print(f"  Cached event {event_code} outside ±1.5 weeks -> enforcing daily autosync")
+                                            except Exception:
+                                                # If cached start_date parsing fails, ignore and continue using cache
+                                                pass
+                                except Exception:
+                                    pass
 
                                 if not event_code:
+                                    # No event code configured for this team. Populate the cache
+                                    # so the /synctimes endpoint can report a desired interval
+                                    # (treat as unknown date -> use UNKNOWN_DATE_INTERVAL).
+                                    try:
+                                        set_event_cache(scouting_team_number, None, None, UNKNOWN_DATE_INTERVAL)
+                                    except Exception:
+                                        pass
                                     print(f"  No event code configured for team {scouting_team_number}, skipping")
                                     continue
 
-                                # Get or create event for this team and event code
+                                # Get or create event for this team and event code (so we can read start_date)
                                 event = Event.query.filter_by(code=event_code, scouting_team_number=scouting_team_number).first()
                                 if not event:
                                     print(f"  Event {event_code} not found for team {scouting_team_number}, fetching from API...")
@@ -278,13 +349,12 @@ if __name__ == '__main__':
                                         # Try to get full event details from API including timezone
                                         from app.utils.api_utils import get_event_details_dual_api
                                         event_details = get_event_details_dual_api(event_code)
-                                        
+
                                         if event_details:
-                                            # Create event with full details including timezone
                                             event = Event(
                                                 name=event_details.get('name', event_code),
                                                 code=event_code,
-                                                timezone=event_details.get('timezone'),  # Store timezone from API
+                                                timezone=event_details.get('timezone'),
                                                 location=event_details.get('location'),
                                                 start_date=event_details.get('start_date'),
                                                 end_date=event_details.get('end_date'),
@@ -294,9 +364,8 @@ if __name__ == '__main__':
                                             if event.timezone:
                                                 print(f"  Event timezone: {event.timezone}")
                                         else:
-                                            # Fallback to placeholder if API doesn't return details
                                             event = Event(name=event_code, code=event_code, year=game_config.get('season', None) or game_config.get('year', 0), scouting_team_number=scouting_team_number)
-                                        
+
                                         db.session.add(event)
                                         db.session.commit()
                                     except Exception as e:
@@ -304,7 +373,62 @@ if __name__ == '__main__':
                                         print(f"  Failed to create event {event_code} for team {scouting_team_number}: {e}")
                                         continue
 
-                                # Sync teams for this scouting team + event
+                                # Decide per-team desired autosync interval
+                                try:
+                                    # If we have a recently cached event decision, reuse it to avoid
+                                    # repeated API/event-date computations.
+                                    if 'use_cached_event' in locals() and use_cached_event and cached:
+                                        desired_interval = cached.get('desired_interval', RECENT_INTERVAL)
+                                        print(f"  Using cached desired interval for {event_code}: {desired_interval}s")
+                                        # Ensure event object is available in DB for associations
+                                        event = Event.query.filter_by(code=event_code, scouting_team_number=scouting_team_number).first()
+                                    else:
+                                        desired_interval = RECENT_INTERVAL
+                                        now_utc = datetime.now(timezone.utc)
+
+                                        if not getattr(event, 'start_date', None):
+                                            # Unknown / N/A event date -> autosync every 20 minutes
+                                            desired_interval = UNKNOWN_DATE_INTERVAL
+                                            print(f"  Event date unknown for {event_code} -> using {int(UNKNOWN_DATE_INTERVAL/60)} minute autosync")
+                                        else:
+                                            # Convert event.start_date (date) to a datetime at midnight UTC
+                                            try:
+                                                event_start_dt = datetime.combine(event.start_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+                                            except Exception:
+                                                # If it's already a datetime, coerce tzinfo
+                                                event_start_dt = event.start_date if event.start_date.tzinfo else event.start_date.replace(tzinfo=timezone.utc)
+
+                                            delta_seconds = (event_start_dt - now_utc).total_seconds()
+                                            # 1.5 weeks = 1.5 * 7 days
+                                            threshold_seconds = 1.5 * 7 * 24 * 60 * 60
+                                            # If the event is within ±1.5 weeks -> recent interval
+                                            if abs(delta_seconds) <= threshold_seconds:
+                                                desired_interval = RECENT_INTERVAL
+                                                print(f"  Event {event_code} within ±1.5 weeks -> using recent autosync interval")
+                                            else:
+                                                # Outside ±1.5 weeks -> daily
+                                                desired_interval = DAILY_INTERVAL
+                                                print(f"  Event {event_code} outside ±1.5 weeks -> using daily autosync")
+                                except Exception as e:
+                                    print(f"  Warning determining desired interval for team {scouting_team_number}: {e}")
+                                    desired_interval = RECENT_INTERVAL
+
+                                # Update cache with new event info and desired interval so other parts of app can read it
+                                try:
+                                    set_event_cache(scouting_team_number, event_code, getattr(event, 'start_date', None), desired_interval)
+                                except Exception:
+                                    pass
+
+                                # Check last sync time for this team and skip if within desired interval
+                                last = get_last_sync(scouting_team_number)
+                                if last:
+                                    seconds_since = (datetime.now(timezone.utc) - last).total_seconds()
+                                    if seconds_since < desired_interval:
+                                        next_in = int(desired_interval - seconds_since)
+                                        print(f"  Skipping autosync for team {scouting_team_number} (next in {next_in}s)")
+                                        continue
+
+                                # --- Perform the actual sync for this team ---
                                 try:
                                     team_data_list = get_teams_dual_api(event_code)
                                     teams_added = 0
@@ -318,12 +442,10 @@ if __name__ == '__main__':
                                         team = Team.query.filter_by(team_number=team_number, scouting_team_number=scouting_team_number).first()
 
                                         if team:
-                                            # Update existing team
                                             team.team_name = team_data.get('team_name', team.team_name)
                                             team.location = team_data.get('location', team.location)
                                             teams_updated += 1
                                         else:
-                                            # Add new team and assign scouting team
                                             team = Team(team_number=team_number,
                                                         team_name=team_data.get('team_name'),
                                                         location=team_data.get('location'),
@@ -331,7 +453,6 @@ if __name__ == '__main__':
                                             db.session.add(team)
                                             teams_added += 1
 
-                                        # Associate with event if not already associated
                                         if event not in team.events:
                                             try:
                                                 team.events.append(event)
@@ -342,7 +463,6 @@ if __name__ == '__main__':
                                 except Exception as e:
                                     print(f"  Error syncing teams for {scouting_team_number}: {str(e)}")
 
-                                # Sync matches for this scouting team + event
                                 try:
                                     match_data_list = get_matches_dual_api(event_code)
                                     matches_added = 0
@@ -362,7 +482,6 @@ if __name__ == '__main__':
                                         match = Match.query.filter_by(event_id=event.id, match_number=match_number, match_type=match_type, scouting_team_number=scouting_team_number).first()
 
                                         if match:
-                                            # Update existing match
                                             match.red_alliance = match_data.get('red_alliance', match.red_alliance)
                                             match.blue_alliance = match_data.get('blue_alliance', match.blue_alliance)
                                             match.winner = match_data.get('winner', match.winner)
@@ -370,7 +489,6 @@ if __name__ == '__main__':
                                             match.blue_score = match_data.get('blue_score', match.blue_score)
                                             matches_updated += 1
                                         else:
-                                            # Add new match and assign scouting team
                                             match = Match(match_number=match_number,
                                                           match_type=match_type,
                                                           event_id=event.id,
@@ -390,6 +508,11 @@ if __name__ == '__main__':
                                 # Commit changes for this team scope
                                 try:
                                     db.session.commit()
+                                    # Update last sync timestamp on success (shared)
+                                    try:
+                                        update_last_sync(scouting_team_number)
+                                    except Exception:
+                                        pass
                                 except Exception as e:
                                     db.session.rollback()
                                     print(f"  Failed to commit changes for team {scouting_team_number}: {e}")
@@ -397,12 +520,12 @@ if __name__ == '__main__':
                             except Exception as e:
                                 print(f"  Error processing scouting team {scouting_team_number}: {e}")
 
-                        print("API data sync completed for all teams")
+                        print("API data sync evaluation completed for all teams")
 
                     except Exception as e:
                         print(f"Error in API sync: {str(e)}")
                         db.session.rollback()
-                        
+
             except Exception as e:
                 print(f"Error in API data sync worker: {str(e)}")
                 time.sleep(180)  # Continue after error

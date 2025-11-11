@@ -1119,7 +1119,18 @@ def create_app(test_config=None):
     # Add a context processor to make game_config available in all templates
     @app.context_processor
     def inject_game_config():
-        return dict(game_config=get_current_game_config())
+        # Also provide a helper to get a display label for a team number that
+        # respects the current user's team display preference (99xx vs letter-suffix).
+        def display_team_label(team_number, event_key=None):
+            # Preference is now per-user and stored in browser localStorage. Server-side
+            # code should not attempt to read or persist this preference. Always return
+            # the canonical numeric team identifier for server-side rendering.
+            try:
+                return str(int(team_number))
+            except Exception:
+                return str(team_number)
+
+        return dict(game_config=get_current_game_config(), display_team_label=display_team_label)
     
     # Add a context processor to make theme data available in all templates
     @app.context_processor

@@ -1069,6 +1069,7 @@ def admin_settings():
     return render_template('auth/admin_settings.html',
                            account_creation_locked=account_creation_locked,
                            app_version=app_version,
+                           scouting_team_settings=team_settings,
                            **ctx)
 
 
@@ -1080,6 +1081,20 @@ def account_lock_status():
     team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
     locked = team_settings.account_creation_locked if team_settings else False
     return jsonify({'locked': bool(locked)})
+
+
+@bp.route('/admin/set-display-preference', methods=['POST'])
+@admin_required
+def set_display_preference():
+    """Set per-team preference for displaying offseason team identifiers.
+
+    Expects form data 'display_preference' with values '99xx' or 'letter'.
+    """
+    # This endpoint was removed in favor of a client-side per-user setting stored in
+    # browser localStorage. Keep the route for compatibility but do not persist any
+    # server-side state. Redirect back to admin settings.
+    flash('Display preference is now controlled per-user in your browser (Settings page).', 'info')
+    return redirect(url_for('auth.admin_settings'))
 
 @bp.route('/admin/toggle-account-lock', methods=['POST'])
 @admin_required

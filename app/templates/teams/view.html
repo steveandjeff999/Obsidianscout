@@ -2,7 +2,7 @@
 
 {% block title %}Team {{ team.team_number }} - {{ team.team_name }}{% endblock %}
 
-{% block heading %}Team {{ team.team_number }}{% if team.team_name %} - {{ team.team_name }}{% endif %}{% endblock %}
+{% block heading %}Team <span class="team-number" data-team-num="{{ team.team_number }}">{{ team.team_number }}</span>{% if team.team_name %} - {{ team.team_name }}{% endif %}{% endblock %}
 
 {% block content %}
 <div class="row mb-3">
@@ -35,7 +35,7 @@
                 <table class="table">
                     <tr>
                         <th>Team Number:</th>
-                        <td>{{ team.team_number }}</td>
+                        <td><span class="team-number" data-team-num="{{ team.team_number }}">{{ team.team_number }}</span></td>
                     </tr>
                     <tr>
                         <th>Team Name:</th>

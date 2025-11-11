@@ -75,7 +75,7 @@
                             {% for entry in team_rankings %}
                             <tr>
                                 <td>{{ loop.index }}</td>
-                                <td>{{ entry.team.team_number }}</td>
+                                <td><span class="team-number" data-team-num="{{ entry.team.team_number }}">{{ entry.team.team_number }}</span></td>
                                 <td>{{ entry.team.team_name }}</td>
                                 <td>
                                     {% if entry.num_entries and entry.num_entries > 0 %}

@@ -32,13 +32,7 @@
   // Use fixed positioning to avoid clipping by transformed/overflow parents
   d.style.position = 'fixed';
   d.style.zIndex = 99999;
-    d.style.background = 'white';
-    d.style.border = '1px solid #ccc';
-    d.style.maxHeight = '200px';
-    d.style.overflowY = 'auto';
-    d.style.minWidth = '200px';
-    d.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)';
-    d.style.padding = '4px 0';
+    // Visual styles are delegated to CSS via the .ns-autocomplete-dropdown class
     return d;
   }
 
@@ -78,8 +72,7 @@
         res.results.slice(0,50).forEach(function(item){
           var el = document.createElement('div');
           el.className = 'ns-autocomplete-item';
-          el.style.padding = '6px 10px';
-          el.style.cursor = 'pointer';
+          // Visual/padding/hover handled via CSS
           el.textContent = item;
           el.addEventListener('mousedown', function(ev){
             ev.preventDefault();

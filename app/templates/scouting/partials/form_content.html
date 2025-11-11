@@ -6,7 +6,7 @@
         </div>
         <div class="alliance-details">
             <h4 class="mb-0 {% if alliance == 'red' or alliance == 'blue' %}text-white{% else %}text-dark{% endif %}">{{ alliance|capitalize }} Alliance</h4>
-            <div class="{% if alliance == 'red' or alliance == 'blue' %}text-white-50{% else %}text-muted{% endif %}">Team {{ team.team_number }} - {{ team.team_name }}</div>
+            <div class="{% if alliance == 'red' or alliance == 'blue' %}text-white-50{% else %}text-muted{% endif %}">Team <span class="team-number" data-team-num="{{ team.team_number }}">{{ team.team_number }}</span> - {{ team.team_name }}</div>
         </div>
         <div class="ms-auto match-details">
             <span class="badge {% if match.match_type == 'Qualification' %}bg-primary{% elif match.match_type == 'Playoff' %}bg-danger{% elif match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %} fs-5">

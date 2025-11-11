@@ -1070,8 +1070,10 @@
                 <a class="nav-link {% if request.endpoint == 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.ranks') }}"><i class="fas fa-list-ol"></i><span>Team Rankings</span></a>
                 <a class="nav-link {% if request.endpoint == 'matches.index' %}active{% endif %}" href="{{ url_for('matches.index') }}"><i class="fas fa-gamepad"></i><span>Matches</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('alliances') %}active{% endif %}" href="{{ url_for('alliances.index') }}"><i class="fas fa-handshake"></i><span>Alliance Selection</span></a>
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') %}active{% endif %}" href="{{ url_for('graphs.index') }}"><i class="fas fa-chart-line"></i><span>Graphs</span></a>
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') and 'side-by-side' in request.endpoint %}active{% endif %}" href="{{ url_for('graphs.side_by_side') }}"><i class="fas fa-columns"></i><span>Comparison</span></a>
+                {# Main graphs link: treat as active for graphs pages except the dedicated side-by-side comparison page #}
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') and not request.endpoint.startswith('graphs.side_by_side') %}active{% endif %}" href="{{ url_for('graphs.index') }}"><i class="fas fa-chart-line"></i><span>Graphs</span></a>
+                {# Comparison (side-by-side) link: match the actual endpoint name using underscore #}
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs.side_by_side') %}active{% endif %}" href="{{ url_for('graphs.side_by_side') }}"><i class="fas fa-columns"></i><span>Comparison</span></a>
                 <a class="nav-link {% if request.endpoint == 'main.analytics_config_averages' %}active{% endif %}" href="{{ url_for('main.analytics_config_averages') }}"><i class="fas fa-calculator"></i><span>Config Averages</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs.pages') %}active{% endif %}" href="{{ url_for('graphs.pages_index') }}"><i class="fas fa-file-alt"></i><span>Custom Pages</span></a>
                 <a class="nav-link {% if request.endpoint == 'matches.strategy' %}active{% endif %}" href="{{ url_for('matches.strategy') }}"><i class="fas fa-chess"></i><span>Strategy</span></a>
@@ -1122,13 +1124,15 @@
                     </div>
                 </div>
             </div>
-            <div class="d-flex flex-column gap-2">
+                <div class="d-flex flex-column gap-2">
                 {% if user_has_role('admin') %}
                 <a class="btn btn-outline-primary btn-sm w-100 text-start {% if request.endpoint == 'auth.admin_settings' %}active{% endif %}" href="{{ url_for('auth.admin_settings') }}"><i class="fas fa-cog me-2"></i>Admin Settings</a>
                 {% endif %}
                 {% if user_has_role('admin') or user_has_role('analytics') %}
                 <a class="btn btn-outline-primary btn-sm w-100 text-start {% if request.endpoint == 'main.config' %}active{% endif %}" href="{{ url_for('main.config') }}"><i class="fas fa-wrench me-2"></i>Game Config</a>
                 {% endif %}
+                <!-- Per-user settings (stored locally in the browser) -->
+                <a class="btn btn-outline-primary btn-sm w-100 text-start {% if request.endpoint == 'main.settings' %}active{% endif %}" href="{{ url_for('main.settings') }}"><i class="fas fa-cog me-2"></i>Settings</a>
                 <button id="darkModeButton" class="btn btn-outline-secondary btn-sm w-100 text-start" type="button">
                     <i class="fas fa-moon me-2" id="darkModeIcon"></i><span id="darkModeLabel">Dark Mode</span>
                 </button>
@@ -1826,6 +1830,348 @@
     <!-- Dark mode handlers -->
     <script src="{{ url_for('static', filename='js/dark-mode-handlers.js') }}"></script>
     
+    <!-- Team-number display preference helper (client-side, per-user) -->
+    <script>
+    (function(){
+        // Expose a global helper to apply the user's display preference.
+        // Preference key: 'display_offseason_preference' -> '99xx' | 'letter'
+        // Enhancements:
+        // - Cache remap per-session
+        // - Immediately apply numeric->numeric restore without needing fetch
+        // - Observe DOM mutations so dynamically inserted elements are handled
+        // - Provide a setter helper to change the preference and apply immediately
+
+        window._teamRemapCache = window._teamRemapCache || {};
+
+        async function fetchRemap(eventKey){
+            if(!eventKey) return {};
+            if(window._teamRemapCache[eventKey]) return window._teamRemapCache[eventKey];
+            try{
+                // Normalize to a TBA event key (year + code) if caller passed only an event code
+                let tbaKey = String(eventKey || '').trim();
+                if(!/^\d{4}/.test(tbaKey)){
+                    // Try to get year from GAME_CONFIG (season or year), otherwise use current year
+                    const year = (window.GAME_CONFIG && (window.GAME_CONFIG.season || window.GAME_CONFIG.year)) ? (window.GAME_CONFIG.season || window.GAME_CONFIG.year) : (new Date()).getFullYear();
+                    tbaKey = String(year) + tbaKey.toLowerCase();
+                }
+
+                // Try localStorage first (persisted remaps)
+                try{
+                    const lsKey = 'team_remap_' + tbaKey;
+                    const rawLs = localStorage.getItem(lsKey);
+                    if(rawLs){
+                        try{
+                            const parsed = JSON.parse(rawLs);
+                            if(parsed && typeof parsed === 'object'){
+                                window._teamRemapCache[eventKey] = parsed;
+                                if(tbaKey !== eventKey) window._teamRemapCache[tbaKey] = parsed;
+                                return parsed;
+                            }
+                        }catch(e){}
+                    }
+                }catch(e){}
+
+                const resp = await fetch('/api/event-remap/' + encodeURIComponent(tbaKey), { credentials: 'same-origin' });
+                if(!resp.ok) return {};
+                const data = await resp.json();
+                const raw = (data && data.remap) ? data.remap : {};
+                // Server returns mapping letter->numeric (e.g., {'581B': 9989}). Invert to numeric->letter for fast lookup.
+                const map = {};
+                try{
+                    Object.keys(raw).forEach(k => {
+                        try{
+                            const v = raw[k];
+                            if(v !== null && v !== undefined){
+                                map[String(v)] = String(k).toUpperCase();
+                            }
+                        }catch(e){}
+                    });
+                }catch(e){}
+
+                // Cache in-memory
+                window._teamRemapCache[eventKey] = map;
+                if(tbaKey !== eventKey) window._teamRemapCache[tbaKey] = map;
+                // Persist to localStorage for offline/reload use
+                try{
+                    const lsKeyOut = 'team_remap_' + tbaKey;
+                    localStorage.setItem(lsKeyOut, JSON.stringify(map));
+                }catch(e){/* ignore storage errors */}
+                return map;
+            }catch(e){
+                console.warn('fetchRemap failed', e);
+                return {};
+            }
+        }
+
+        async function applyPreferenceToElement(el, map, pref){
+            try{
+                const num = el.getAttribute('data-team-num') || (el.textContent && el.textContent.trim());
+                if(!num) return;
+
+                const key = String(num);
+                const letter = (map && map[key]) ? map[key] : null;
+
+                if(pref === 'letter'){
+                    // show letter if available, else numeric
+                    el.textContent = letter || num;
+                    return;
+                }
+
+                if(pref === 'both'){
+                    // show numeric and parenthesized letter if available
+                    if(letter){
+                        el.textContent = `${num} (${letter})`;
+                    } else {
+                        el.textContent = num;
+                    }
+                    return;
+                }
+
+                // default: '99xx' or unknown -> numeric only
+                el.textContent = num;
+            }catch(e){ /* ignore per-element errors */ }
+        }
+
+        async function applyTeamNumberDisplayPreferenceImpl(){
+            try{
+                let pref = '99xx';
+                try{ pref = localStorage.getItem('display_offseason_preference') || '99xx'; }catch(e){ pref = '99xx'; }
+
+                const eventKey = (window.GAME_CONFIG && window.GAME_CONFIG.current_event_code) ? window.GAME_CONFIG.current_event_code : null;
+                let map = {};
+                // fetch remap when user asked for letter-style or 'both' display
+                if((pref === 'letter' || pref === 'both') && eventKey){
+                    map = await fetchRemap(eventKey);
+                }
+
+                // Always update existing elements immediately
+                const els = Array.from(document.querySelectorAll('.team-number'));
+                // For each element, determine the eventKey (per-element overrides global)
+                await Promise.all(els.map(async (el) => {
+                    try{
+                        const localEventKey = el.getAttribute('data-event-key') || eventKey || null;
+                        let localMap = {};
+                        if((pref === 'letter' || pref === 'both') && localEventKey){
+                            localMap = await fetchRemap(localEventKey);
+                        }
+                        await applyPreferenceToElement(el, localMap, pref);
+                    }catch(e){ /* ignore per-element errors */ }
+                }));
+
+                // Update native <select> option labels for team-selects so pickers show the chosen format
+                try{
+                    const selects = Array.from(document.querySelectorAll('select'));
+                    await Promise.all(selects.map(async (sel) => {
+                        try{
+                            // Determine if select looks like a team select: option dataset.teamNumber or select name/id
+                            let looksLikeTeam = false;
+                            for(let i=0;i<sel.options.length;i++){
+                                const o = sel.options[i];
+                                if(o && o.dataset && o.dataset.teamNumber){ looksLikeTeam = true; break; }
+                            }
+                            const nm = (sel.name||'').toLowerCase(); const id = (sel.id||'').toLowerCase();
+                            if(!looksLikeTeam && !(nm.includes('team') || id.includes('team'))) return;
+
+                            const localEventKey = sel.getAttribute('data-event-key') || eventKey || null;
+                            let localMap = {};
+                            if((pref === 'letter' || pref === 'both') && localEventKey){
+                                localMap = await fetchRemap(localEventKey);
+                            }
+
+                            // Update each option's visible text
+                            for(let i=0;i<sel.options.length;i++){
+                                try{
+                                    const opt = sel.options[i];
+                                    const num = opt.dataset && opt.dataset.teamNumber ? String(opt.dataset.teamNumber) : (opt.textContent||'').trim().split(' ')[0];
+                                    const name = opt.dataset && opt.dataset.teamName ? opt.dataset.teamName : (opt.textContent||'').split('-').slice(1).join('-').trim();
+                                    let letter = (localMap && localMap[num]) ? localMap[num] : null;
+                                    // If we couldn't fetch a per-event remap (page may not expose eventKey),
+                                    // try to find a cached remap in the in-memory cache so previously-fetched
+                                    // remaps still allow letter display on other pages.
+                                    if(!letter){
+                                        try{
+                                            const cache = window._teamRemapCache || {};
+                                            for(const k in cache){
+                                                if(cache[k] && cache[k][num]){ letter = cache[k][num]; break; }
+                                            }
+                                        }catch(e){}
+                                    }
+                                    // Last-resort: check persisted localStorage remaps
+                                    if(!letter){
+                                        try{
+                                            for(let i=0;i<localStorage.length;i++){
+                                                const key = localStorage.key(i);
+                                                if(!key || !key.startsWith('team_remap_')) continue;
+                                                try{
+                                                    const parsed = JSON.parse(localStorage.getItem(key));
+                                                    if(parsed && parsed[num]){ letter = parsed[num]; break; }
+                                                }catch(e){}
+                                            }
+                                        }catch(e){}
+                                    }
+
+                                    if(pref === 'letter'){
+                                        if(num){ opt.textContent = (letter || num) + (name ? (' - ' + name) : ''); }
+                                        else { /* leave */ }
+                                    } else if(pref === 'both'){
+                                        if(num){ opt.textContent = num + (letter ? (' ('+letter+')') : '') + (name ? (' - ' + name) : ''); }
+                                    } else {
+                                        if(num){ opt.textContent = num + (name ? (' - ' + name) : ''); }
+                                    }
+                                }catch(e){}
+                            }
+
+                        }catch(e){}
+                    }));
+                }catch(e){/* ignore select label updates on old browsers */}
+            }catch(e){ console.warn('applyTeamNumberDisplayPreference error', e); }
+        }
+
+        // Public API
+        window.applyTeamNumberDisplayPreference = applyTeamNumberDisplayPreferenceImpl;
+
+        // Setter to update preference and apply immediately without reload or resync
+        window.setTeamNumberDisplayPreference = function(pref){
+            try{
+                // Accept explicit values: '99xx', 'letter', 'both'
+                if(!['99xx','letter','both'].includes(pref)) pref = '99xx';
+                localStorage.setItem('display_offseason_preference', pref);
+                // apply locally immediately
+                try{ if (typeof window.applyTeamNumberDisplayPreference === 'function') window.applyTeamNumberDisplayPreference(); } catch(e){}
+                // Also broadcast storage event for other tabs
+                try{ window.dispatchEvent(new StorageEvent('storage', { key: 'display_offseason_preference', newValue: pref })); } catch(e){ /* some browsers restrict constructing StorageEvent; fallback */
+                    try{ localStorage.setItem('display_offseason_preference', pref); }catch(e){}
+                }
+            }catch(e){ console.warn('setTeamNumberDisplayPreference error', e); }
+        };
+
+        // Apply on DOM ready
+        if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ window.applyTeamNumberDisplayPreference(); }); else window.applyTeamNumberDisplayPreference();
+
+        // React to storage changes (other tabs)
+        window.addEventListener('storage', function(e){
+            if(e.key === 'display_offseason_preference') window.applyTeamNumberDisplayPreference();
+        });
+
+        // Observe DOM for new elements with class .team-number so dynamically added content updates
+        const observer = new MutationObserver((mutations) => {
+            let found = false;
+            mutations.forEach(m => {
+                m.addedNodes && m.addedNodes.forEach(node => {
+                    if(node.nodeType !== 1) return;
+                    if(node.classList && node.classList.contains('team-number')) found = true;
+                    else if(node.querySelector && node.querySelector('.team-number')) found = true;
+                });
+            });
+            if(found){
+                // Re-apply; small debounce
+                if(window._applyTeamNumberDebounce) clearTimeout(window._applyTeamNumberDebounce);
+                window._applyTeamNumberDebounce = setTimeout(() => { try{ window.applyTeamNumberDisplayPreference(); }catch(e){} }, 60);
+            }
+        });
+        try{ observer.observe(document.body, { childList: true, subtree: true }); }catch(e){ /* ignore if body not available */ }
+
+    })();
+    </script>
+
+        <!-- Select mapping helper: add adjacent mapped display for native <select> elements with team options -->
+        <script>
+        (function(){
+            // Debounce helper
+            function debounce(fn, wait){ let t; return function(){ clearTimeout(t); t = setTimeout(() => fn.apply(this, arguments), wait); }; }
+
+            function isTeamSelect(sel){
+                try{
+                    // Heuristic: any option with data-team-number attribute
+                    for(let i=0;i<sel.options.length;i++){
+                        if(sel.options[i].dataset && sel.options[i].dataset.teamNumber) return true;
+                    }
+                    // fallback: name or id contains 'team' or 'team_id'
+                    const nm = (sel.name||'').toLowerCase();
+                    const id = (sel.id||'').toLowerCase();
+                    if(nm.includes('team') || id.includes('team')) return true;
+                }catch(e){}
+                return false;
+            }
+
+            function createOrGetMappedDisplay(sel){
+                // Prefer a sibling element with class select-mapped-display
+                let container = sel.parentNode;
+                if(!container) return null;
+                let span = container.querySelector('.select-mapped-display');
+                if(span) return span;
+
+                span = document.createElement('div');
+                span.className = 'select-mapped-display team-number';
+                // Keep it inline and visually adjacent by default; templates may override with CSS
+                span.style.display = 'inline-block';
+                span.style.marginLeft = '0.5rem';
+                // Insert after the select
+                if(sel.nextSibling) container.insertBefore(span, sel.nextSibling); else container.appendChild(span);
+                return span;
+            }
+
+            function updateMappedDisplayForSelect(sel){
+                try{
+                    const span = createOrGetMappedDisplay(sel);
+                    if(!span) return;
+                    const opt = sel.options[sel.selectedIndex] || null;
+                    let num = '';
+                    if(opt){
+                        num = opt.dataset && opt.dataset.teamNumber ? opt.dataset.teamNumber : (opt.textContent || '').trim().split(' ')[0];
+                    }
+                    if(!num) { span.textContent = ''; span.removeAttribute('data-team-num'); return; }
+                    span.setAttribute('data-team-num', String(num));
+                    // Let the central mapper apply formatting for consistency
+                    if(typeof window.applyTeamNumberDisplayPreference === 'function'){
+                        // apply to this single element by calling the global re-apply (debounced)
+                        window.applyTeamNumberDisplayPreference();
+                    }
+                }catch(e){ /* ignore */ }
+            }
+
+            function attachToSelect(sel){
+                try{
+                    if(sel.__mappedDisplayAttached) return;
+                    sel.addEventListener('change', function(){ updateMappedDisplayForSelect(sel); });
+                    // initialize now
+                    updateMappedDisplayForSelect(sel);
+                    sel.__mappedDisplayAttached = true;
+                }catch(e){ /* ignore */ }
+            }
+
+            function scanAndAttach(){
+                try{
+                    document.querySelectorAll('select').forEach(sel => {
+                        try{
+                            if(isTeamSelect(sel)) attachToSelect(sel);
+                        }catch(e){}
+                    });
+                }catch(e){}
+            }
+
+            // Initial scan on DOM ready
+            if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', scanAndAttach); else scanAndAttach();
+
+            // Observe additions to attach to dynamically inserted selects
+            const selObserver = new MutationObserver(debounce((mutations) => {
+                let found = false;
+                mutations.forEach(m => {
+                    m.addedNodes && m.addedNodes.forEach(node => {
+                        if(node.nodeType !== 1) return;
+                        if(node.tagName === 'SELECT') { found = true; attachToSelect(node); }
+                        else if(node.querySelector && node.querySelector('select')) { found = true; scanAndAttach(); }
+                    });
+                });
+                if(found){ try{ if(window._applyTeamNumberDebounce) clearTimeout(window._applyTeamNumberDebounce); window._applyTeamNumberDebounce = setTimeout(() => { try{ window.applyTeamNumberDisplayPreference(); }catch(e){} }, 60); }catch(e){}
+            }, 60));
+
+            try{ selObserver.observe(document.body, { childList: true, subtree: true }); }catch(e){}
+
+            // Also re-run when preference changes (storage event will trigger global mapper, but ensure our selects have spans)
+            window.addEventListener('storage', function(e){ if(e.key === 'display_offseason_preference') scanAndAttach(); });
+        })();
+        </script>
 
     
     {% block scripts %}{% endblock %}

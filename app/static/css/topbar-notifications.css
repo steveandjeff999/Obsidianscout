@@ -31,3 +31,46 @@
   border-top: 1px solid var(--bs-border-color);
   background: transparent;
 }
+/* Dark-mode / modern theme overrides */
+:root.dark-mode .topbar-notifications .notifications-dropdown,
+html.dark-mode .topbar-notifications .notifications-dropdown,
+.dark-mode .topbar-notifications .notifications-dropdown {
+  background: var(--card-bg, rgba(20,20,22,0.78));
+  color: var(--text, #e6e6e6);
+  border: 1px solid var(--glass-border, rgba(255,255,255,0.04));
+  box-shadow: var(--soft-shadow, 0 6px 20px rgba(2,6,23,0.55));
+}
+
+:root.dark-mode .topbar-notifications .notifications-dropdown .dropdown-header,
+html.dark-mode .topbar-notifications .notifications-dropdown .dropdown-header,
+.dark-mode .topbar-notifications .notifications-dropdown .dropdown-header {
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--text, #e6e6e6);
+  background: transparent;
+}
+
+:root.dark-mode .topbar-notifications .notifications-dropdown .list-group-item,
+html.dark-mode .topbar-notifications .notifications-dropdown .list-group-item,
+.dark-mode .topbar-notifications .notifications-dropdown .list-group-item {
+  background: transparent;
+  color: var(--text, #e6e6e6);
+  border-bottom: 1px solid rgba(255,255,255,0.02);
+}
+
+:root.dark-mode .topbar-notifications .notifications-dropdown .notification-item .notif-meta,
+html.dark-mode .topbar-notifications .notifications-dropdown .notification-item .notif-meta,
+.dark-mode .topbar-notifications .notifications-dropdown .notification-item .notif-meta {
+  color: var(--muted, #9aa0a6);
+}
+
+:root.dark-mode .topbar-notifications .notifications-dropdown .notification-dismiss,
+html.dark-mode .topbar-notifications .notifications-dropdown .notification-dismiss,
+.dark-mode .topbar-notifications .notifications-dropdown .notification-dismiss {
+  color: var(--muted, #9aa0a6);
+}
+
+:root.dark-mode .topbar-notifications .notifications-dropdown .dropdown-footer,
+html.dark-mode .topbar-notifications .notifications-dropdown .dropdown-footer,
+.dark-mode .topbar-notifications .notifications-dropdown .dropdown-footer {
+  border-top: 1px solid rgba(255,255,255,0.03);
+}
