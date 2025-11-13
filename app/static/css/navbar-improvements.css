@@ -732,10 +732,10 @@ body.dark-mode .card.navbar-glass .custom-select-menu {
     padding-right: .9rem;
 }
 
-/* QR Code modal styling */
+/* QR Code modal styling - Mobile-first responsive design */
 .qr-container {
     background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-    padding: 1.5rem;
+    padding: 1rem;
     border-radius: .75rem;
     box-shadow: 0 10px 30px rgba(0,0,0,0.45);
     display: flex;
@@ -746,59 +746,92 @@ body.dark-mode .card.navbar-glass .custom-select-menu {
     backdrop-filter: blur(8px) saturate(120%);
     -webkit-backdrop-filter: blur(8px) saturate(120%);
     border: 1px solid rgba(255,255,255,0.06);
-    max-width: 440px;
+    width: 100%;
+    max-width: 95vw;
     margin: 0 auto;
+    box-sizing: border-box;
+}
+
+/* Tablet and up */
+@media (min-width: 768px) {
+    .qr-container {
+        padding: 1.5rem;
+        max-width: 540px;
+    }
+}
+
+/* Desktop */
+@media (min-width: 1024px) {
+    .qr-container {
+        max-width: 600px;
+    }
 }
 
 .qr-container #qrcode {
     position: relative;
     width: 100%;
-    max-width: 420px;
+    max-width: 100%;
     margin: 0 auto;
-    padding: .75rem;
+    padding: 0;
     box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 280px;
 }
 
-.qr-container #qrcode canvas {
-    /* If the QR generator emits a canvas and an img, prefer the image for styling/printing.
-       Hide the canvas so only the single backed image is visible. JS download will still be able
-       to use the canvas if needed (we're only hiding it visually). */
+/* Remove the problematic ::before pseudo-element that was causing display issues */
+.qr-container #qrcode::before {
     display: none !important;
 }
 
-.qr-container #qrcode::before {
-    /* White backing plate for the QR image so it reads well in dark mode. It sits behind the
-       generated <img> and the canvas (canvas is hidden). Adjusted to provide a small inset to
-       create a rounded white surround and allow a subtle cutout look. */
-    content: "";
-    position: absolute;
-    top: .5rem;
-    left: .5rem;
-    right: .5rem;
-    bottom: .5rem;
-    background: #ffffff;
-    border-radius: .5rem;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.35) inset;
-    z-index: 0;
-    pointer-events: none;
+/* Direct styling for QR elements - both canvas and img */
+.qr-container #qrcode canvas,
+.qr-container #qrcode img {
+    width: 100% !important;
+    height: auto !important;
+    max-width: 100% !important;
+    display: block !important;
+    margin: 0 auto !important;
+    image-rendering: -webkit-optimize-contrast !important;
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: crisp-edges !important;
+    image-rendering: pixelated !important;
 }
 
-.qr-container #qrcode img {
-    position: relative;
-    z-index: 2;
-    display: block;
+/* Ensure inner wrapper div is properly sized */
+.qr-container #qrcode > div {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+#qrDownloadContainer {
     width: 100%;
-    height: auto;
-    border-radius: .375rem;
-    /* Add a small inner white padding effect so the QR has breathing room from the backing plate */
-    padding: .375rem;
+    max-width: 100%;
+    padding: 0 1rem;
     box-sizing: border-box;
-    background: transparent;
 }
 
 #qrDownloadContainer .btn {
     margin-top: .75rem;
     box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+    width: 100%;
+    padding: 12px 24px;
+    font-size: 16px;
+}
+
+@media (min-width: 768px) {
+    #qrDownloadContainer .btn {
+        width: auto;
+    }
+}
+
+/* Modal body padding for QR display */
+.qr-modal-body {
+    padding: 1rem;
 }
 
 /* Dark mode specific tweaks - stronger glass and adjusted borders */
@@ -809,13 +842,8 @@ body.dark-mode .card.navbar-glass .custom-select-menu {
         box-shadow: 0 12px 40px rgba(0,0,0,0.7);
     }
 
-    .qr-container #qrcode::before {
-        background: #ffffff;
-        box-shadow: 0 8px 26px rgba(0,0,0,0.6) inset;
-    }
-
     #qrDownloadContainer .btn {
-        background-color: #2b70ff; /* slightly deeper blue in dark */
+        background-color: #2b70ff;
         border-color: rgba(255,255,255,0.06);
         color: #fff;
     }
@@ -845,23 +873,13 @@ body.dark-mode .card.navbar-glass .custom-select-menu {
     #qrDownloadContainer { display: none !important; }
 }
 
-/* Force dark-mode QR container override to beat legacy rules in styles.css which set
-   the QR container white under a `.dark-mode` class. Use high-specificity and
-   `!important` so dark-mode stays dark. Keep the white inner backing (the ::before)
-   for contrast of the QR itself. */
+/* Force dark-mode QR container override to beat legacy rules in styles.css */
 .dark-mode .qr-container,
 body.dark-mode .qr-container {
     background: linear-gradient(180deg, rgba(20,20,20,0.72) , rgba(18,18,18,0.62)) !important;
     border: 1px solid rgba(255,255,255,0.06) !important;
     box-shadow: 0 12px 40px rgba(0,0,0,0.7) !important;
     color: #fff !important;
-}
-
-/* Ensure inner #qrcode stays contained and backed by white plate; this prevents the
-   outer container from showing white edges in dark-mode. */
-.dark-mode .qr-container #qrcode::before,
-body.dark-mode .qr-container #qrcode::before {
-    background: #ffffff; /* keep plate white */
 }
 
 /* Make only the QR modal transparent so the qr-container supplies the visible

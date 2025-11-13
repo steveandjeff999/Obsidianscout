@@ -82,7 +82,7 @@
 
 <!-- QR Code Container (initially hidden) -->
 <div class="modal fade" id="qrModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
@@ -90,9 +90,9 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body qr-modal-body">
                 <div class="qr-container">
-                    <div id="qrcode" class="mb-3"></div>
+                    <div id="qrcode"></div>
                     <div id="qrDownloadContainer" class="text-center d-none">
                         <button type="button" class="btn btn-primary">
                             <i class="fas fa-download me-2"></i> Download QR Code
