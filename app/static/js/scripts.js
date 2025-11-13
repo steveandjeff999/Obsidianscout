@@ -679,8 +679,8 @@ function showToast(message, type = 'info', duration = 3000) {
 }
 
 /**
- * Generate QR code from form data with improved UX
- * Also supports offline mode by storing the data locally
+ * Generate QR code from form data with mobile-first responsive design
+ * Optimized for visibility on all screen sizes, especially mobile devices
  */
 function generateQRCode() {
     const form = document.getElementById('scouting-form');
@@ -774,63 +774,342 @@ function generateQRCode() {
             const jsonSizeKB = (jsonString.length / 1024).toFixed(2);
             console.log(`QR data size: ${jsonSizeKB} KB, ${jsonString.length} characters`);
             
-            // Prepare container for larger QR code
-            qrcodeContainer.style.minHeight = '300px';
-            qrcodeContainer.style.width = '100%';
-            qrcodeContainer.style.maxWidth = '400px';
-            qrcodeContainer.style.margin = '0 auto';
+            // Calculate responsive QR code size based on viewport
+            // Mobile-first: use smaller base size, scale up for larger screens
+            const viewportWidth = window.innerWidth;
+            const modalPadding = 80; // Account for modal padding and margins
+            const maxWidth = Math.min(viewportWidth - modalPadding, 500); // Max 500px on desktop
+            const minWidth = 280; // Minimum readable size on small phones
+            const qrSize = Math.max(minWidth, Math.min(maxWidth, 450));
             
-            // Generate QR code with improved settings for detailed data
+            console.log(`Viewport: ${viewportWidth}px, QR Size: ${qrSize}px`);
+            
+            // Clear any previous inline styles
+            qrcodeContainer.style.cssText = '';
+            
+            // Apply responsive container styles
+            qrcodeContainer.style.width = '100%';
+            qrcodeContainer.style.maxWidth = qrSize + 'px';
+            qrcodeContainer.style.margin = '0 auto';
+            qrcodeContainer.style.padding = '0';
+            qrcodeContainer.style.display = 'flex';
+            qrcodeContainer.style.alignItems = 'center';
+            qrcodeContainer.style.justifyContent = 'center';
+            qrcodeContainer.style.minHeight = qrSize + 'px';
+            
+            // Generate QR code with responsive sizing
             try {
                 // Clear previous content
                 qrcodeContainer.innerHTML = '';
                 
-                // Use QRCode with improved settings for high-density QR codes
-                new QRCode(qrcodeContainer, {
+                // Create wrapper div for better control
+                const qrWrapper = document.createElement('div');
+                qrWrapper.style.cssText = `
+                    width: 100%;
+                    max-width: ${qrSize}px;
+                    aspect-ratio: 1;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: #ffffff;
+                    padding: 16px;
+                    box-sizing: border-box;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                `;
+                qrcodeContainer.appendChild(qrWrapper);
+                
+                // Generate QR code inside wrapper
+                new QRCode(qrWrapper, {
                     text: jsonString,
-                    width: 400, // Increased size for better readability
-                    height: 400,
+                    width: qrSize - 32, // Account for padding
+                    height: qrSize - 32,
                     colorDark: "#000000",
                     colorLight: "#ffffff",
-                    correctLevel: QRCode.CorrectLevel.M, // Medium error correction for better scanning reliability
-                    typeNumber: 0 // Auto-determine version based on data size
+                    correctLevel: QRCode.CorrectLevel.M,
+                    typeNumber: 0
                 });
                 
-                // Add CSS to ensure the QR code is centered and properly sized
-                const qrImg = qrcodeContainer.querySelector('img');
-                if (qrImg) {
-                    qrImg.style.width = '100%';
-                    qrImg.style.maxWidth = '400px'; // Match the QR code size
-                    qrImg.style.height = 'auto';
-                    qrImg.style.display = 'block';
-                    qrImg.style.margin = '0 auto';
-                    console.log("QR Code image created successfully");
-                }
-            } catch (qrError) {
-                console.error('Error creating QR code with improved settings:', qrError);
-                
-                // If better quality version fails, try with less error correction
-                try {
-                    qrcodeContainer.innerHTML = ''; // Clear any partial results
+                // Style the generated elements for maximum visibility
+                setTimeout(() => {
+                    const qrCanvas = qrWrapper.querySelector('canvas');
+                    const qrImg = qrWrapper.querySelector('img');
                     
-                    new QRCode(qrcodeContainer, {
+                    // Detect Android
+                    const isAndroid = /Android/i.test(navigator.userAgent);
+                    console.log('Platform detected:', isAndroid ? 'Android' : 'iOS/Desktop');
+                    
+                    if (isAndroid) {
+                        // ANDROID-SPECIFIC: Use canvas directly, it renders better on Android
+                        if (qrImg && qrImg.parentNode) {
+                            qrImg.parentNode.removeChild(qrImg);
+                        }
+                        
+                        if (qrCanvas) {
+                            qrCanvas.style.cssText = `
+                                width: 100% !important;
+                                height: auto !important;
+                                max-width: ${qrSize - 32}px !important;
+                                display: block !important;
+                                margin: 0 auto !important;
+                                image-rendering: pixelated !important;
+                                -webkit-transform: translateZ(0) !important;
+                            `;
+                            console.log('Android: Using canvas for QR display');
+                        }
+                    } else {
+                        // iOS/DESKTOP: Remove canvas, use image
+                        if (qrCanvas && qrCanvas.parentNode) {
+                            qrCanvas.parentNode.removeChild(qrCanvas);
+                        }
+                        
+                        if (qrImg) {
+                            qrImg.style.cssText = `
+                                width: 100% !important;
+                                height: 100% !important;
+                                max-width: ${qrSize - 32}px !important;
+                                max-height: ${qrSize - 32}px !important;
+                                display: block !important;
+                                margin: 0 auto !important;
+                                object-fit: contain !important;
+                                image-rendering: -webkit-optimize-contrast !important;
+                                image-rendering: -moz-crisp-edges !important;
+                                image-rendering: crisp-edges !important;
+                                image-rendering: pixelated !important;
+                            `;
+                            console.log('iOS/Desktop: Using image for QR display');
+                        }
+                    }
+                    
+                    // Add tap-to-fullscreen hint for mobile
+                    if (viewportWidth < 768) {
+                        const hint = document.createElement('div');
+                        hint.style.cssText = `
+                            text-align: center;
+                            color: #6c757d;
+                            font-size: 14px;
+                            margin-top: 12px;
+                            padding: 8px;
+                        `;
+                        hint.innerHTML = '<i class="fas fa-expand me-2"></i>Tap QR code for fullscreen';
+                        qrcodeContainer.appendChild(hint);
+                        
+                        // Add click handler for true fullscreen
+                        qrWrapper.style.cursor = 'pointer';
+                        let fullscreenOverlay = null;
+                        
+                        qrWrapper.addEventListener('click', () => {
+                            if (fullscreenOverlay) {
+                                // Exit fullscreen mode
+                                if (fullscreenOverlay.parentNode) {
+                                    fullscreenOverlay.parentNode.removeChild(fullscreenOverlay);
+                                }
+                                fullscreenOverlay = null;
+                                document.documentElement.style.overflow = '';
+                                document.body.style.overflow = '';
+                                // Re-enable viewport scrolling
+                                const viewport = document.querySelector('meta[name="viewport"]');
+                                if (viewport && viewport._originalContent) {
+                                    viewport.setAttribute('content', viewport._originalContent);
+                                }
+                                hint.innerHTML = '<i class="fas fa-expand me-2"></i>Tap QR code for fullscreen';
+                            } else {
+                                // Detect platform
+                                const isAndroid = /Android/i.test(navigator.userAgent);
+                                
+                                // Get QR source based on platform
+                                let qrSourceElement, qrSourceData;
+                                
+                                if (isAndroid) {
+                                    // Android: Use canvas
+                                    qrSourceElement = qrWrapper.querySelector('canvas');
+                                    if (qrSourceElement) {
+                                        qrSourceData = qrSourceElement.toDataURL('image/png');
+                                        console.log('Android: Converting canvas to data URL for fullscreen');
+                                    }
+                                } else {
+                                    // iOS/Desktop: Use image
+                                    qrSourceElement = qrWrapper.querySelector('img');
+                                    if (qrSourceElement) {
+                                        qrSourceData = qrSourceElement.src;
+                                    }
+                                }
+                                
+                                if (!qrSourceElement || !qrSourceData) {
+                                    console.error('No QR code source found');
+                                    return;
+                                }
+                                
+                                // Lock viewport to prevent iOS zoom/scroll issues
+                                const viewport = document.querySelector('meta[name="viewport"]');
+                                if (viewport) {
+                                    viewport._originalContent = viewport.getAttribute('content');
+                                    viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+                                }
+                                
+                                // Create fullscreen overlay that covers everything including iOS chrome
+                                fullscreenOverlay = document.createElement('div');
+                                fullscreenOverlay.style.cssText = `
+                                    position: fixed;
+                                    top: 0;
+                                    left: 0;
+                                    right: 0;
+                                    bottom: 0;
+                                    width: 100%;
+                                    height: 100%;
+                                    background: rgba(0, 0, 0, 0.95);
+                                    z-index: 2147483647;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    flex-direction: column;
+                                    padding: 20px;
+                                    box-sizing: border-box;
+                                    -webkit-overflow-scrolling: touch;
+                                    overflow: hidden;
+                                `;
+                                
+                                // Create container for QR code
+                                const fullscreenQRContainer = document.createElement('div');
+                                const containerSize = Math.min(window.innerWidth, window.innerHeight) * 0.85;
+                                fullscreenQRContainer.style.cssText = `
+                                    width: ${containerSize}px;
+                                    height: ${containerSize}px;
+                                    background: #ffffff;
+                                    padding: 15px;
+                                    box-sizing: border-box;
+                                    border-radius: 12px;
+                                    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    position: relative;
+                                `;
+                                
+                                // Create fullscreen QR image from source data
+                                const fullscreenQR = document.createElement('img');
+                                fullscreenQR.src = qrSourceData;
+                                
+                                // Style the fullscreen QR code
+                                fullscreenQR.style.cssText = `
+                                    width: 100% !important;
+                                    height: 100% !important;
+                                    max-width: 100% !important;
+                                    max-height: 100% !important;
+                                    object-fit: contain !important;
+                                    display: block !important;
+                                    margin: 0 !important;
+                                    padding: 0 !important;
+                                    border: none !important;
+                                    image-rendering: -webkit-optimize-contrast !important;
+                                    image-rendering: -moz-crisp-edges !important;
+                                    image-rendering: crisp-edges !important;
+                                    image-rendering: pixelated !important;
+                                `;
+                                
+                                fullscreenQRContainer.appendChild(fullscreenQR);
+                                
+                                // Add close instruction
+                                const closeHint = document.createElement('div');
+                                closeHint.style.cssText = `
+                                    color: #ffffff;
+                                    font-size: 18px;
+                                    margin-top: 20px;
+                                    text-align: center;
+                                    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+                                    flex-shrink: 0;
+                                `;
+                                closeHint.innerHTML = '<i class="fas fa-times-circle me-2"></i>Tap anywhere to close';
+                                
+                                fullscreenOverlay.appendChild(fullscreenQRContainer);
+                                fullscreenOverlay.appendChild(closeHint);
+                                
+                                // Append to documentElement for true fullscreen on iOS
+                                document.documentElement.appendChild(fullscreenOverlay);
+                                document.documentElement.style.overflow = 'hidden';
+                                document.body.style.overflow = 'hidden';
+                                
+                                // Click anywhere to close
+                                fullscreenOverlay.addEventListener('click', (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (fullscreenOverlay.parentNode) {
+                                        fullscreenOverlay.parentNode.removeChild(fullscreenOverlay);
+                                    }
+                                    fullscreenOverlay = null;
+                                    document.documentElement.style.overflow = '';
+                                    document.body.style.overflow = '';
+                                    // Restore viewport
+                                    const viewport = document.querySelector('meta[name="viewport"]');
+                                    if (viewport && viewport._originalContent) {
+                                        viewport.setAttribute('content', viewport._originalContent);
+                                    }
+                                    hint.innerHTML = '<i class="fas fa-expand me-2"></i>Tap QR code for fullscreen';
+                                });
+                                
+                                hint.innerHTML = '<i class="fas fa-compress me-2"></i>Tap to exit fullscreen';
+                            }
+                        });
+                    }
+                }, 100);
+                
+            } catch (qrError) {
+                console.error('Error creating QR code:', qrError);
+                
+                // Fallback with lower error correction
+                try {
+                    qrcodeContainer.innerHTML = '';
+                    
+                    const qrWrapper = document.createElement('div');
+                    qrWrapper.style.cssText = `
+                        width: 100%;
+                        max-width: ${qrSize}px;
+                        aspect-ratio: 1;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        background: #ffffff;
+                        padding: 16px;
+                        box-sizing: border-box;
+                        border-radius: 12px;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    `;
+                    qrcodeContainer.appendChild(qrWrapper);
+                    
+                    new QRCode(qrWrapper, {
                         text: jsonString,
-                        width: 400,
-                        height: 400,
+                        width: qrSize - 32,
+                        height: qrSize - 32,
                         colorDark: "#000000",
                         colorLight: "#ffffff",
-                        correctLevel: QRCode.CorrectLevel.L // Lower error correction to fit more data
+                        correctLevel: QRCode.CorrectLevel.L
                     });
                     
-                    // Apply same styling
-                    const qrImg = qrcodeContainer.querySelector('img');
-                    if (qrImg) {
-                        qrImg.style.width = '100%';
-                        qrImg.style.maxWidth = '400px';
-                        qrImg.style.height = 'auto';
-                        qrImg.style.display = 'block';
-                        qrImg.style.margin = '0 auto';
-                    }
+                    setTimeout(() => {
+                        const qrCanvas = qrWrapper.querySelector('canvas');
+                        const qrImg = qrWrapper.querySelector('img');
+                        
+                        // Remove canvas to prevent duplicate display
+                        if (qrCanvas && qrCanvas.parentNode) {
+                            qrCanvas.parentNode.removeChild(qrCanvas);
+                        }
+                        
+                        // Style the image
+                        if (qrImg) {
+                            qrImg.style.cssText = `
+                                width: 100% !important;
+                                height: 100% !important;
+                                max-width: ${qrSize - 32}px !important;
+                                max-height: ${qrSize - 32}px !important;
+                                display: block !important;
+                                margin: 0 auto !important;
+                                object-fit: contain !important;
+                                image-rendering: -webkit-optimize-contrast !important;
+                                image-rendering: crisp-edges !important;
+                            `;
+                        }
+                    }, 100);
+                    
                 } catch (fallbackError) {
                     console.error('Error with fallback QR code generation:', fallbackError);
                     qrcodeContainer.innerHTML = `
@@ -844,26 +1123,32 @@ function generateQRCode() {
                 }
             }
             
-            // Show download button and confirmation
+            // Show download button
             const downloadContainer = document.getElementById('qrDownloadContainer');
             if (downloadContainer) {
                 downloadContainer.classList.remove('d-none');
                 
-                // Add download functionality
                 const downloadButton = downloadContainer.querySelector('button');
                 if (downloadButton) {
-                    // Remove any existing event listeners
                     const newButton = downloadButton.cloneNode(true);
                     downloadButton.parentNode.replaceChild(newButton, downloadButton);
                     
-                    // Add event listener to the new button
                     newButton.addEventListener('click', () => {
-                        // Get the QR code image
-                        const img = qrcodeContainer.querySelector('img');
+                        const qrWrapper = qrcodeContainer.querySelector('div');
+                        const img = qrWrapper ? qrWrapper.querySelector('img') : null;
+                        const canvas = qrWrapper ? qrWrapper.querySelector('canvas') : null;
+                        
                         if (img) {
-                            // Create a temporary link
                             const link = document.createElement('a');
                             link.href = img.src;
+                            link.download = `team_${formObject.team_id}_match_${formObject.match_id}_qr.png`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                        } else if (canvas) {
+                            // Convert canvas to image for download
+                            const link = document.createElement('a');
+                            link.href = canvas.toDataURL('image/png');
                             link.download = `team_${formObject.team_id}_match_${formObject.match_id}_qr.png`;
                             document.body.appendChild(link);
                             link.click();
