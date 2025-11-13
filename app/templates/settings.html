@@ -10,21 +10,21 @@
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title">Display Preferences</h5>
-                <p class="text-muted">Control how offseason teams with letter suffixes are shown in the UI. This preference is saved in your browser only.</p>
+                <p class="text-muted">Choose how offseason placeholder team numbers are shown in the UI. This setting is stored in your browser.</p>
 
                 <div class="mb-3">
-                    <label class="form-label">Team number display</label>
+                    <label class="form-label">Offseason team number display</label>
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="display_pref" id="pref_99xx" value="99xx">
-                        <label class="form-check-label" for="pref_99xx">Show numeric 99xx placeholder (default)</label>
+                        <label class="form-check-label" for="pref_99xx">Show numeric placeholders only (e.g. 99xx) — default</label>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="display_pref" id="pref_letter" value="letter">
-                        <label class="form-check-label" for="pref_letter">Show original letter-suffixed team IDs (when available)</label>
+                        <label class="form-check-label" for="pref_letter">Show original letter-suffixed IDs when available (e.g. 254B)</label>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="display_pref" id="pref_both" value="both">
-                        <label class="form-check-label" for="pref_both">Show both: numeric 99xx (and letter in parentheses when available)</label>
+                        <label class="form-check-label" for="pref_both">Show both: numeric placeholder and letter ID (e.g. 99xx (254B))</label>
                     </div>
                 </div>
 
@@ -33,6 +33,46 @@
                     <button id="resetSettingsBtn" class="btn btn-outline-secondary">Reset to default</button>
                     <div id="settingsStatus" class="mt-2" style="display:none;"></div>
                 </div>
+                <hr />
+                <h5 class="card-title mt-3">UI Animations</h5>
+                <p class="text-muted">Control whether numeric count-up animations run on this device. This preference is saved in your browser.</p>
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="countupEnabledToggle">
+                    <label class="form-check-label" for="countupEnabledToggle">Enable numeric count-up animations</label>
+                </div>
+                <hr />
+                <h5 class="card-title mt-3">Appearance & Layout</h5>
+                <p class="text-muted">Additional per-user preferences stored locally in your browser.</p>
+
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="darkModeToggle">
+                    <label class="form-check-label" for="darkModeToggle">Enable dark mode</label>
+                </div>
+
+                <!-- Theme selection removed: controlled via system or server-side theme manager -->
+
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="sidebarCollapsedToggle">
+                    <label class="form-check-label" for="sidebarCollapsedToggle">Collapse sidebar by default on desktop</label>
+                </div>
+
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="compactDensityToggle">
+                    <label class="form-check-label" for="compactDensityToggle">Use compact layout density</label>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Font size <span id="fontSizeLabel" class="small text-muted ms-2"></span></label>
+                    <input type="range" id="fontSizeSlider" class="form-range" min="14" max="20" step="1" />
+                    <div class="form-text">Drag to adjust the base font size (px). Changes apply immediately.</div>
+                </div>
+
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="reducedMotionToggle">
+                    <label class="form-check-label" for="reducedMotionToggle">Reduce motion / disable animations</label>
+                </div>
+
+                <!-- 24-hour time preference removed -->
             </div>
         </div>
     </div>
@@ -42,34 +82,118 @@
 {% block scripts %}
 <script>
 (function(){
-    function readPref(){
-        try{ return localStorage.getItem('display_offseason_preference') || '99xx'; } catch(e){ return '99xx'; }
-    }
+    function readPref(){ try{ return localStorage.getItem('display_offseason_preference') || '99xx'; } catch(e){ return '99xx'; } }
     function writePref(v){ try{ localStorage.setItem('display_offseason_preference', v); }catch(e){} }
 
+    // Generic helpers for boolean prefs
+    function readBool(key, def){ try{ const v = localStorage.getItem(key); if(v === null) return def; return v === 'true' || v === '1'; }catch(e){ return def; } }
+    function writeBool(key, val){ try{ localStorage.setItem(key, val ? 'true' : 'false'); }catch(e){} }
+
     document.addEventListener('DOMContentLoaded', function(){
+        // Display pref
         var current = readPref();
-        document.getElementById('pref_99xx').checked = (current === '99xx');
-        document.getElementById('pref_letter').checked = (current === 'letter');
-        var prefBothEl = document.getElementById('pref_both'); if(prefBothEl) prefBothEl.checked = (current === 'both');
+        try{ document.getElementById('pref_99xx').checked = (current === '99xx'); }catch(e){}
+        try{ document.getElementById('pref_letter').checked = (current === 'letter'); }catch(e){}
+        try{ var prefBothEl = document.getElementById('pref_both'); if(prefBothEl) prefBothEl.checked = (current === 'both'); }catch(e){}
+
+        // Countup toggle
+        var toggle = document.getElementById('countupEnabledToggle');
+        try{ if(toggle) toggle.checked = readBool('countup_enabled', true); }catch(e){}
+
+        // Appearance / layout controls
+        var darkToggle = document.getElementById('darkModeToggle');
+        try{ if(darkToggle) darkToggle.checked = (localStorage.getItem('darkMode') === 'true'); }catch(e){}
+
+        var themeSelect = document.getElementById('themeSelect');
+        try{ if(themeSelect){ var t = localStorage.getItem('obsidian_theme'); if(t) themeSelect.value = t; } }catch(e){}
+
+        var sidebarToggle = document.getElementById('sidebarCollapsedToggle');
+        try{ if(sidebarToggle) sidebarToggle.checked = (localStorage.getItem('obsidian_sidebar_collapsed') === '1' || localStorage.getItem('obsidian_sidebar_collapsed') === 'true'); }catch(e){}
+
+        var compactToggle = document.getElementById('compactDensityToggle');
+        try{ if(compactToggle) compactToggle.checked = readBool('compact_density', false); }catch(e){}
+
+        var fontSlider = document.getElementById('fontSizeSlider');
+        var fontLabel = document.getElementById('fontSizeLabel');
+        function updateFontLabel(v){ try{ if(!fontLabel) return; var friendly = (String(v) === '14' ? 'Small' : (String(v) === '16' ? 'Normal' : (String(v) === '18' ? 'Large' : 'Custom'))); fontLabel.textContent = v + 'px ('+friendly+')'; }catch(e){} }
+        try{
+            var storedFont = localStorage.getItem('font_size');
+            var initialPx = 16;
+            if(storedFont){
+                if(/^[0-9]+$/.test(storedFont)) initialPx = parseInt(storedFont,10);
+                else if(storedFont === 'small') initialPx = 14;
+                else if(storedFont === 'large') initialPx = 18;
+                else initialPx = 16;
+            }
+            if(fontSlider){ fontSlider.value = initialPx; updateFontLabel(initialPx); }
+        }catch(e){}
+
+        var reducedToggle = document.getElementById('reducedMotionToggle');
+        try{ if(reducedToggle) reducedToggle.checked = readBool('reduced_motion', false); }catch(e){}
+
+        // 24-hour time preference removed; default to 12-hour throughout app
 
         var status = document.getElementById('settingsStatus');
-        function showStatus(msg, cls){ status.style.display='block'; status.className = 'mt-2 text-'+(cls||'success'); status.textContent = msg; setTimeout(function(){ status.style.display='none'; }, 2500); }
+        function showStatus(msg, cls){ if(!status) return; status.style.display='block'; status.className = 'mt-2 text-'+(cls||'success'); status.textContent = msg; setTimeout(function(){ status.style.display='none'; }, 2500); }
 
         document.getElementById('saveSettingsBtn').addEventListener('click', function(){
-            var v = document.querySelector('input[name="display_pref"]:checked').value;
-            writePref(v);
-            // Prefer to use the setter which broadcasts to other tabs and applies immediately
+            try{
+                var v = document.querySelector('input[name="display_pref"]:checked').value;
+                writePref(v);
+            }catch(e){}
+
+            try{ if (toggle) writeBool('countup_enabled', toggle.checked); } catch(e) {}
+
+            // Appearance options
+            try{ if(darkToggle){ writeBool('darkMode', darkToggle.checked); if(darkToggle.checked){ document.documentElement.classList.add('dark-mode'); document.body.classList.add('dark-mode'); } else { document.documentElement.classList.remove('dark-mode'); document.body.classList.remove('dark-mode'); } } }catch(e){}
+            try{ if(themeSelect && themeSelect.value){ localStorage.setItem('obsidian_theme', themeSelect.value); } }catch(e){}
+            try{ if(sidebarToggle){ localStorage.setItem('obsidian_sidebar_collapsed', sidebarToggle.checked ? '1' : '0'); if(typeof setSidebarCollapsed === 'function') setSidebarCollapsed(sidebarToggle.checked); } }catch(e){}
+            try{ if(compactToggle) writeBool('compact_density', compactToggle.checked); }catch(e){}
+            try{ if(fontSlider){ localStorage.setItem('font_size', String(fontSlider.value)); try{ window.dispatchEvent(new Event('storage')); }catch(e){} } }catch(e){}
+            try{ if(reducedToggle) writeBool('reduced_motion', reducedToggle.checked); }catch(e){}
+            // time_format_24h preference removed; nothing to save
+
+            // Broadcast storage event where browsers permit constructing StorageEvent
+            try{ window.dispatchEvent(new Event('storage')); }catch(e){}
+
+            // Apply team-number mapping immediately
             try{ if (typeof window.setTeamNumberDisplayPreference === 'function') window.setTeamNumberDisplayPreference(v); else if (typeof window.applyTeamNumberDisplayPreference === 'function') window.applyTeamNumberDisplayPreference(); } catch(e){}
-            showStatus('Preference saved locally. This setting is stored in your browser.', 'success');
+
+            showStatus('Preferences saved locally. These are stored in your browser.', 'success');
         });
 
         document.getElementById('resetSettingsBtn').addEventListener('click', function(){
             try{ localStorage.removeItem('display_offseason_preference'); } catch(e){}
-            document.getElementById('pref_99xx').checked = true;
+            try{ document.getElementById('pref_99xx').checked = true; }catch(e){}
+
+            // Reset newly added settings to defaults
+            try{ localStorage.removeItem('countup_enabled'); if (toggle) toggle.checked = true; } catch(e) {}
+            try{ localStorage.removeItem('darkMode'); if(darkToggle) darkToggle.checked = false; document.documentElement.classList.remove('dark-mode'); document.body.classList.remove('dark-mode'); }catch(e){}
+            try{ localStorage.removeItem('obsidian_theme'); if(themeSelect) themeSelect.value = ''; }catch(e){}
+            try{ localStorage.removeItem('obsidian_sidebar_collapsed'); if(sidebarToggle) sidebarToggle.checked = false; if(typeof setSidebarCollapsed === 'function') setSidebarCollapsed(false); }catch(e){}
+            try{ localStorage.removeItem('compact_density'); if(compactToggle) compactToggle.checked = false; document.body.classList.remove('compact-density'); }catch(e){}
+            try{ localStorage.removeItem('font_size'); if(fontSlider){ fontSlider.value = 16; updateFontLabel(16); } document.documentElement.style.fontSize = ''; document.body.style.fontSize = ''; try{ document.documentElement.style.removeProperty('--obsidian-base-font-size'); }catch(e){} try{ window.dispatchEvent(new Event('storage')); }catch(e){} }catch(e){}
+            try{ localStorage.removeItem('reduced_motion'); if(reducedToggle) reducedToggle.checked = false; var id='reducedMotionStyle'; var s=document.getElementById(id); if(s && s.parentNode) s.parentNode.removeChild(s); document.documentElement.classList.remove('reduced-motion'); }catch(e){}
+            try{ localStorage.removeItem('time_format_24h'); window.TIME_FORMAT_24H = false; }catch(e){}
+
             try{ if (typeof window.setTeamNumberDisplayPreference === 'function') window.setTeamNumberDisplayPreference('99xx'); else if (typeof window.applyTeamNumberDisplayPreference === 'function') window.applyTeamNumberDisplayPreference(); } catch(e){}
-            showStatus('Preference reset to default (99xx).', 'secondary');
+
+            showStatus('Preferences reset to defaults.', 'secondary');
         });
+
+        // Live handlers for some toggles
+        try{ if (darkToggle) darkToggle.addEventListener('change', function(){ try{ writeBool('darkMode', darkToggle.checked); if(darkToggle.checked){ document.documentElement.classList.add('dark-mode'); document.body.classList.add('dark-mode'); } else { document.documentElement.classList.remove('dark-mode'); document.body.classList.remove('dark-mode'); } showStatus('Dark mode preference saved locally.','success'); }catch(e){} }); }catch(e){}
+        try{ if (sidebarToggle) sidebarToggle.addEventListener('change', function(){ try{ localStorage.setItem('obsidian_sidebar_collapsed', sidebarToggle.checked ? '1' : '0'); if(typeof setSidebarCollapsed === 'function') setSidebarCollapsed(sidebarToggle.checked); showStatus('Sidebar collapse preference saved locally.','success'); }catch(e){} }); }catch(e){}
+        try{ if (compactToggle) compactToggle.addEventListener('change', function(){ try{ writeBool('compact_density', compactToggle.checked); if(compactToggle.checked) document.body.classList.add('compact-density'); else document.body.classList.remove('compact-density'); showStatus('Layout density preference saved locally.','success'); }catch(e){} }); }catch(e){}
+        try{ if (reducedToggle) reducedToggle.addEventListener('change', function(){ try{ writeBool('reduced_motion', reducedToggle.checked); // apply immediately
+                var id='reducedMotionStyle'; var s=document.getElementById(id);
+                if(reducedToggle.checked){ if(!s){ s=document.createElement('style'); s.id=id; s.textContent='* { transition-duration: 0s !important; animation-duration: 0s !important; animation-delay: 0s !important; }'; document.head.appendChild(s); } document.documentElement.classList.add('reduced-motion'); }
+                else { if(s && s.parentNode) s.parentNode.removeChild(s); document.documentElement.classList.remove('reduced-motion'); }
+                showStatus('Reduced-motion preference saved locally.','success'); }catch(e){} }); }catch(e){}
+
+        // Live font-size slider handler: save and broadcast so applyUserPreferences picks it up
+        try{ if (fontSlider) fontSlider.addEventListener('input', function(){ try{ var v = this.value; updateFontLabel(v); try{ localStorage.setItem('font_size', String(v)); }catch(e){} try{ window.dispatchEvent(new Event('storage')); }catch(e){} showStatus('Font size saved locally.','success'); }catch(e){} }); }catch(e){}
+
     });
 })();
 </script>
