@@ -33,7 +33,20 @@ CHAT_HISTORY_LOCK = threading.Lock()
 def ensure_chat_folder():
     """Ensure the chat folder exists"""
     if not os.path.exists(CHAT_FOLDER):
-        os.makedirs(CHAT_FOLDER, exist_ok=True)
+        try:
+            os.makedirs(CHAT_FOLDER, exist_ok=True)
+        except (OSError, PermissionError) as e:
+            print(f"Warning: Could not create chat folder at {CHAT_FOLDER}: {e}")
+            # Fall back to using the app's instance path if available
+            try:
+                from flask import current_app
+                alt_chat = os.path.join(current_app.instance_path, 'chat')
+                os.makedirs(alt_chat, exist_ok=True)
+                globals()['CHAT_FOLDER'] = alt_chat
+                globals()['CHAT_HISTORY_FILE'] = os.path.join(alt_chat, 'assistant_chat_history.json')
+                print(f"Using alternative chat folder: {alt_chat}")
+            except Exception:
+                pass
 
 
 def normalize_username(username):
@@ -659,8 +672,28 @@ def create_app(test_config=None):
     try:
         os.makedirs(app.instance_path, exist_ok=True)
         os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    except OSError:
-        pass
+    except (OSError, PermissionError) as e:
+        # If directory creation fails, log the error but don't crash
+        print(f"Warning: Could not create instance directory at {app.instance_path}: {e}")
+        print("The application will attempt to continue, but some features may not work.")
+        # Try to use an alternative path in the user's temp directory
+        import tempfile
+        try:
+            alt_instance = os.path.join(tempfile.gettempdir(), 'obsidian_scout_instance')
+            os.makedirs(alt_instance, exist_ok=True)
+            app.instance_path = alt_instance
+            app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(alt_instance, 'scouting.db')
+            app.config['SQLALCHEMY_BINDS'] = {
+                'users': 'sqlite:///' + os.path.join(alt_instance, 'users.db'),
+                'pages': 'sqlite:///' + os.path.join(alt_instance, 'pages.db'),
+                'misc': 'sqlite:///' + os.path.join(alt_instance, 'misc.db')
+            }
+            app.config['UPLOAD_FOLDER'] = os.path.join(alt_instance, 'uploads')
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+            print(f"Using alternative instance path: {alt_instance}")
+        except Exception as temp_error:
+            print(f"Critical: Could not create alternative instance directory: {temp_error}")
+            print("Application may not function correctly.")
     
     # Load game configuration from JSON file
     try:

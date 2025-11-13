@@ -4,6 +4,35 @@ import sys
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+
+# Print diagnostics for debugging directory/permission issues
+print("=== Startup Diagnostics ===")
+print(f"Current working directory: {os.getcwd()}")
+print(f"Script directory: {os.path.dirname(os.path.abspath(__file__))}")
+print(f"Python executable: {sys.executable}")
+
+# Change to the script's directory to ensure consistent paths
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if os.getcwd() != script_dir:
+    print(f"Changing directory to: {script_dir}")
+    try:
+        os.chdir(script_dir)
+        print(f"Successfully changed to: {os.getcwd()}")
+    except Exception as e:
+        print(f"Warning: Could not change directory: {e}")
+
+# Check if instance directory exists and is accessible
+instance_path = os.path.join(script_dir, 'instance')
+print(f"Instance path: {instance_path}")
+print(f"Instance directory exists: {os.path.exists(instance_path)}")
+if os.path.exists(instance_path):
+    print(f"Instance directory is writable: {os.access(instance_path, os.W_OK)}")
+else:
+    parent_dir = os.path.dirname(instance_path)
+    print(f"Parent directory writable: {os.access(parent_dir, os.W_OK)}")
+
+print("===========================\n")
+
 from app import create_app, socketio, db
 from flask import redirect, url_for, request, flash
 from sqlalchemy.exc import IntegrityError, OperationalError
