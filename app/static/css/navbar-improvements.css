@@ -928,4 +928,99 @@ body.dark-mode .qr-container #qrcode::before {
     display: none !important;
 }
 
+/* ------------------------------------------------------------------ */
+/* iOS-specific fixes for user dropdown visibility                     */
+/* Addresses issues with fixed positioning on iOS Safari               */
+/* ------------------------------------------------------------------ */
+
+/* Target iOS devices using WebKit-specific features */
+@supports (-webkit-touch-callout: none) {
+    /* iOS Safari specific fixes */
+    
+    /* Ensure user dropdown is properly contained and visible on iOS */
+    #userMenu.dropdown-menu {
+        /* Use absolute positioning on iOS to avoid fixed position bugs */
+        position: absolute !important;
+        /* Ensure proper stacking */
+        z-index: 1060 !important;
+        /* Prevent viewport clipping */
+        transform: translate3d(0, 0, 0) !important;
+        -webkit-transform: translate3d(0, 0, 0) !important;
+        /* Force hardware acceleration for smoother rendering */
+        will-change: transform;
+        /* Ensure dropdown stays within viewport */
+        max-width: calc(100vw - 32px) !important;
+        /* Add overflow handling for long content */
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    
+    /* Fix parent container to allow absolute positioning to work correctly */
+    #userMenu.dropdown-menu.dropdown-menu-end {
+        /* Right-align to prevent overflow on right edge */
+        right: 8px !important;
+        left: auto !important;
+        /* Position below the toggle button */
+        top: 100% !important;
+        margin-top: 8px !important;
+    }
+    
+    /* Ensure the dropdown parent has proper positioning context on iOS */
+    .navbar-actions .dropdown {
+        position: relative !important;
+    }
+    
+    /* In landscape mode on iOS, use smaller max-height to ensure visibility */
+    @media (max-height: 500px) and (orientation: landscape) {
+        #userMenu.dropdown-menu {
+            max-height: 60vh !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+    }
+    
+    /* Additional safeguard for very small viewports */
+    @media (max-width: 767px) {
+        #userMenu.dropdown-menu {
+            /* On small screens, limit width to prevent horizontal overflow */
+            max-width: calc(100vw - 20px) !important;
+            /* Ensure dropdown is visible even in landscape */
+            max-height: 80vh !important;
+        }
+    }
+    
+    /* Fix for landscape mode specifically - more aggressive constraints */
+    @media (orientation: landscape) and (max-height: 600px) {
+        #userMenu.dropdown-menu {
+            /* Further constrain height in landscape */
+            max-height: 50vh !important;
+            /* Ensure scrolling works smoothly */
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            /* Position more carefully to avoid viewport edge */
+            top: auto !important;
+            bottom: auto !important;
+            /* Use transform to adjust position if needed */
+            transform: translateY(0) !important;
+            -webkit-transform: translateY(0) !important;
+        }
+        
+        /* Ensure dropdown doesn't get pushed off screen */
+        #userMenu.dropdown-menu.dropdown-menu-end {
+            right: 4px !important;
+            margin-top: 4px !important;
+        }
+    }
+}
+
+/* Additional iOS fix: Prevent body scroll when dropdown is open */
+@supports (-webkit-touch-callout: none) {
+    body.dropdown-open {
+        position: fixed !important;
+        width: 100% !important;
+        overflow: hidden !important;
+    }
+}
+
+
 
