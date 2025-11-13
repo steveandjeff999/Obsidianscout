@@ -4062,6 +4062,17 @@
     function positionFixedDropdown(toggle, menu) {
         if (window.innerWidth < 992) return; // Don't apply to mobile
         
+        // Skip positioning for user dropdown on iOS - let CSS handle it
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const isUserDropdown = menu.id === 'userMenu';
+        if (isIOS && isUserDropdown) {
+            // On iOS, use absolute positioning for user dropdown (handled by CSS)
+            menu.style.position = 'absolute';
+            menu.style.zIndex = '1060';
+            return;
+        }
+        
         // Force the menu to be visible but transparent to measure it
         menu.style.opacity = '0';
         menu.style.display = 'block';
