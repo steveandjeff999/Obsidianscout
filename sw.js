@@ -1,7 +1,7 @@
 // Service Worker for ObsidianScout - Simplified version without offline analytics
 
 // Increment the CACHE_VERSION to force clients to update caches when you change assets
-const CACHE_VERSION = 7;
+const CACHE_VERSION = 8;
 const CACHE_NAME = `scout-app-cache-v${CACHE_VERSION}`;
 
 // Core site shell files to pre-cache. Add any top-level routes or critical files here.
@@ -23,6 +23,18 @@ const STATIC_ASSETS = [
   '/static/offline.html',
   '/scouting/form'
 ];
+
+// Additional top-level pages the app should precache for offline use
+STATIC_ASSETS.push('/teams/');
+STATIC_ASSETS.push('/sponsors/');
+STATIC_ASSETS.push('/help/');
+STATIC_ASSETS.push('/pit-scouting/');
+// Also cache no-trailing-slash variants so navigation requests match regardless of
+// whether the browser or server redirects to or from a trailing slash form.
+STATIC_ASSETS.push('/teams');
+STATIC_ASSETS.push('/sponsors');
+STATIC_ASSETS.push('/help');
+STATIC_ASSETS.push('/pit-scouting');
 
 // Common image fallbacks to pre-cache so we can serve a reliable placeholder
 // when individual icon requests fail. Add any frequently used icons here.

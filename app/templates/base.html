@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" class="h-100">
 <head>
+    <meta charset="UTF-8">
     <!-- Early theme detection: apply dark-mode class to <html> before CSS loads to prevent white flash -->
     <script>
         (function(){
@@ -115,8 +116,7 @@
         }, 100);
     })();
     </script>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, shrink-to-fit=no">
     <title>{% block title %}ObsidianScout{% endblock %}</title>
     
     {% if game_config %}
@@ -1133,9 +1133,6 @@
                 {% endif %}
                 <!-- Per-user settings (stored locally in the browser) -->
                 <a class="btn btn-outline-primary btn-sm w-100 text-start {% if request.endpoint == 'main.settings' %}active{% endif %}" href="{{ url_for('main.settings') }}"><i class="fas fa-cog me-2"></i>Settings</a>
-                <button id="darkModeButton" class="btn btn-outline-secondary btn-sm w-100 text-start" type="button">
-                    <i class="fas fa-moon me-2" id="darkModeIcon"></i><span id="darkModeLabel">Dark Mode</span>
-                </button>
                 {% if user_has_role('superadmin') %}
                 <a class="btn btn-outline-secondary btn-sm w-100 text-start" href="{{ url_for('db_admin.database_status') }}"><i class="fas fa-database me-2"></i>DB Admin</a>
                 {% endif %}
@@ -1705,6 +1702,7 @@
     
     <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
     <script src="{{ url_for('static', filename='js/topbar-notifications.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/countup-site.js') }}"></script>
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -1767,8 +1765,7 @@
                 }
             }, 200);
             
-            // Dark mode button logic
-            const darkModeBtn = document.getElementById('darkModeButton');
+            // Dark mode handling (UI toggle removed; still apply class from stored preference)
             const body = document.body;
             const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
             const storedPreference = localStorage.getItem('darkMode');
@@ -1795,20 +1792,88 @@
                 }
             }
             applyState(isDarkMode);
+            // Apply other persisted per-user preferences (localStorage keys)
+            function applyUserPreferences(){
+                try{
+                    // Font size: small | normal | large
+                    try{
+                        // Accept legacy tokens ('small'|'large') or a numeric pixel value stored as a string (e.g. '16')
+                        const fs = localStorage.getItem('font_size');
+                        let size = '';
+                        if (fs === 'small') size = '14px';
+                        else if (fs === 'large') size = '18px';
+                        else if (fs && /^[0-9]+$/.test(fs)) size = fs + 'px';
+                        else size = '';
+
+                        try {
+                            if (size) {
+                                document.documentElement.style.fontSize = size;
+                                document.body.style.fontSize = size;
+                                document.documentElement.style.setProperty('--obsidian-base-font-size', size);
+                            } else {
+                                document.documentElement.style.fontSize = '';
+                                document.body.style.fontSize = '';
+                                document.documentElement.style.removeProperty('--obsidian-base-font-size');
+                            }
+                        } catch (e) {}
+                    }catch(e){}
+
+                    // Reduced motion
+                    try{
+                        const reduced = localStorage.getItem('reduced_motion');
+                        const should = reduced === 'true';
+                        const id = 'reducedMotionStyle';
+                        let style = document.getElementById(id);
+                        if(should){
+                            if(!style){
+                                style = document.createElement('style'); style.id = id;
+                                style.textContent = `* { transition-duration: 0s !important; animation-duration: 0s !important; animation-delay: 0s !important; }`;
+                                document.head.appendChild(style);
+                            }
+                            try{ document.documentElement.classList.add('reduced-motion'); }catch(e){}
+                        } else {
+                            if(style && style.parentNode) style.parentNode.removeChild(style);
+                            try{ document.documentElement.classList.remove('reduced-motion'); }catch(e){}
+                        }
+                    }catch(e){}
+
+                    // Compact density
+                    try{
+                        const compact = localStorage.getItem('compact_density');
+                        if(compact === 'true') document.body.classList.add('compact-density'); else document.body.classList.remove('compact-density');
+                    }catch(e){}
+
+                    // Time format: preference removed. Force 12-hour format by default.
+                    try{ window.TIME_FORMAT_24H = false; }catch(e){ window.TIME_FORMAT_24H = false; }
+
+                    // Theme selection (client-side): map light/dark preference
+                    try{
+                        const th = localStorage.getItem('obsidian_theme');
+                        if(th === 'dark'){
+                            localStorage.setItem('darkMode','true');
+                            document.documentElement.classList.add('dark-mode'); document.body.classList.add('dark-mode');
+                        } else if(th === 'light'){
+                            localStorage.setItem('darkMode','false');
+                            document.documentElement.classList.remove('dark-mode'); document.body.classList.remove('dark-mode');
+                        }
+                    }catch(e){}
+
+                    // Sidebar collapsed: stored key used elsewhere, but if setSidebarCollapsed is available apply immediately
+                    try{
+                        const s = localStorage.getItem('obsidian_sidebar_collapsed');
+                        if(s !== null && typeof setSidebarCollapsed === 'function') setSidebarCollapsed(s === '1' || s === 'true');
+                    }catch(e){}
+                }catch(e){ console.warn('applyUserPreferences failed', e); }
+            }
+            try{ applyUserPreferences(); }catch(e){}
+            // Listen for storage changes in other tabs and re-apply prefs
+            try{ window.addEventListener('storage', function(e){
+                try{ applyUserPreferences(); }catch(err){}
+            }); }catch(e){}
             
             // Server-side theme management was removed; rely on client preference (localStorage) only.
             
-            if(darkModeBtn){
-                darkModeBtn.addEventListener('click', ()=>{
-                    const now = !body.classList.contains('dark-mode');
-                    localStorage.setItem('darkMode', now ? 'true':'false');
-                    // Keep both html and body in sync so early loaded scripts and observers react
-                    try { if (now) { document.documentElement.classList.add('dark-mode'); } else { document.documentElement.classList.remove('dark-mode'); } } catch(e) {}
-                    applyState(now);
-
-                    // Persist only locally; no server-side theme endpoints are available.
-                });
-            }
+            // Dark mode toggle removed from UI; users can still set `darkMode` in localStorage
             // System preference changes only if user hasn't chosen
             window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
                 if (localStorage.getItem('darkMode') === null) {
@@ -2608,12 +2673,7 @@
     })();
     </script>
 
-    {# Add a floating button for the assistant modal #}
-    {# Remove the floating assistant button:
-    <button id="openAssistantModalBtn" class="btn btn-primary rounded-circle shadow position-fixed" style="bottom: 32px; right: 32px; z-index: 1050; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center;">
-        <i class="fas fa-robot fa-lg"></i>
-    </button>
-    #}
+    {# Add a floating button for the assistant modal (removed) #}
 
     {# Assistant Chat Modal #}
     {# Remove the Assistant Chat Modal HTML and its script block. #}
