@@ -22,8 +22,6 @@
             overflow: hidden;
             max-width: 500px;
             width: 100%;
-            /* Safari requires the -webkit- prefix for backdrop-filter */
-            -webkit-backdrop-filter: blur(5px);
             backdrop-filter: blur(5px);
         }
         .login-header {
@@ -54,7 +52,7 @@
                         {% for category, message in messages %}
                             <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
                                 {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                             </div>
                         {% endfor %}
                     {% endif %}

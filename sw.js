@@ -24,7 +24,12 @@ const STATIC_ASSETS = [
   '/scouting/form'
 ];
 
-// Additional top-level pages the app should precache for offline use
+// Common image fallbacks to pre-cache so we can serve a reliable placeholder
+// when individual icon requests fail. Add any frequently used icons here.
+STATIC_ASSETS.push('/static/img/avatars/default.png');
+STATIC_ASSETS.push('/static/img/obsidian.png');
+STATIC_ASSETS.push('/static/assets/obsidian.png');
+
 STATIC_ASSETS.push('/teams/');
 STATIC_ASSETS.push('/sponsors/');
 STATIC_ASSETS.push('/help/');
@@ -35,12 +40,6 @@ STATIC_ASSETS.push('/teams');
 STATIC_ASSETS.push('/sponsors');
 STATIC_ASSETS.push('/help');
 STATIC_ASSETS.push('/pit-scouting');
-
-// Common image fallbacks to pre-cache so we can serve a reliable placeholder
-// when individual icon requests fail. Add any frequently used icons here.
-STATIC_ASSETS.push('/static/img/avatars/default.png');
-STATIC_ASSETS.push('/static/img/obsidian.png');
-STATIC_ASSETS.push('/static/assets/obsidian.png');
 
 // Install event: pre-cache site shell
 self.addEventListener('install', event => {
