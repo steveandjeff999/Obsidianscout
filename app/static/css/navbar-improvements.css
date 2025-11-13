@@ -928,32 +928,4 @@ body.dark-mode .qr-container #qrcode::before {
     display: none !important;
 }
 
-/* Small-screen dropdown placement fix
-   On very narrow viewports some dropdowns were positioned off-screen due to
-   fixed/escaped positioning. Anchor navbar/topbar dropdowns to the right edge
-   and limit width so they remain visible and do not overlap the scrollbar. */
-@media (max-width: 600px) {
-    .navbar-actions .dropdown-menu,
-    .topbar .dropdown-menu,
-    .navbar .dropdown-menu,
-    .dropdown-menu.navbar-glass {
-        position: absolute !important; /* keep dropdown in flow near the trigger */
-        right: 8px !important;         /* anchor to right edge of viewport/container */
-        left: auto !important;
-        top: calc(100% + 6px) !important; /* sit just below the toggle */
-        transform: none !important;
-        width: auto !important;
-        max-width: calc(100% - 16px) !important; /* prevent overflow past viewport */
-        box-shadow: 0 8px 20px rgba(0,0,0,0.12) !important;
-        border-radius: 8px !important;
-        z-index: 1070 !important;
-    }
-
-    /* Ensure right-aligned menus keep their end alignment inside viewport */
-    .navbar .dropdown-menu.dropdown-menu-end {
-        right: 8px !important;
-        left: auto !important;
-    }
-}
-
 

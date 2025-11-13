@@ -11,20 +11,21 @@
             <div class="card-body">
                 <h5 class="card-title">Display Preferences</h5>
                 <p class="text-muted">Choose how offseason placeholder team numbers are shown in the UI. This setting is stored in your browser.</p>
+                <p class="text-muted">Control how offseason teams with letter suffixes are shown in the UI. This preference is saved in your browser only.</p>
 
                 <div class="mb-3">
-                    <label class="form-label">Offseason team number display</label>
+                    <label class="form-label">Team number display</label>
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="display_pref" id="pref_99xx" value="99xx">
-                        <label class="form-check-label" for="pref_99xx">Show numeric placeholders only (e.g. 99xx) — default</label>
+                        <label class="form-check-label" for="pref_99xx">Show numeric 99xx placeholder (default)</label>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="display_pref" id="pref_letter" value="letter">
-                        <label class="form-check-label" for="pref_letter">Show original letter-suffixed IDs when available (e.g. 254B)</label>
+                        <label class="form-check-label" for="pref_letter">Show original letter-suffixed team IDs (when available)</label>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="display_pref" id="pref_both" value="both">
-                        <label class="form-check-label" for="pref_both">Show both: numeric placeholder and letter ID (e.g. 99xx (254B))</label>
+                        <label class="form-check-label" for="pref_both">Show both: numeric 99xx (and letter in parentheses when available)</label>
                     </div>
                 </div>
 
@@ -33,6 +34,7 @@
                     <button id="resetSettingsBtn" class="btn btn-outline-secondary">Reset to default</button>
                     <div id="settingsStatus" class="mt-2" style="display:none;"></div>
                 </div>
+
                 <hr />
                 <h5 class="card-title mt-3">UI Animations</h5>
                 <p class="text-muted">Control whether numeric count-up animations run on this device. This preference is saved in your browser.</p>
@@ -40,8 +42,9 @@
                     <input class="form-check-input" type="checkbox" id="countupEnabledToggle">
                     <label class="form-check-label" for="countupEnabledToggle">Enable numeric count-up animations</label>
                 </div>
+
                 <hr />
-                <h5 class="card-title mt-3">Appearance & Layout</h5>
+                <h5 class="card-title mt-3">Appearance &amp; Layout</h5>
                 <p class="text-muted">Additional per-user preferences stored locally in your browser.</p>
 
                 <div class="form-check form-switch mb-2">
@@ -132,6 +135,9 @@
         try{ if(reducedToggle) reducedToggle.checked = readBool('reduced_motion', false); }catch(e){}
 
         // 24-hour time preference removed; default to 12-hour throughout app
+        try{ document.getElementById('pref_99xx').checked = (current === '99xx'); }catch(e){}
+        try{ document.getElementById('pref_letter').checked = (current === 'letter'); }catch(e){}
+        try{ var prefBothEl2 = document.getElementById('pref_both'); if(prefBothEl2) prefBothEl2.checked = (current === 'both'); }catch(e){}
 
         var status = document.getElementById('settingsStatus');
         function showStatus(msg, cls){ if(!status) return; status.style.display='block'; status.className = 'mt-2 text-'+(cls||'success'); status.textContent = msg; setTimeout(function(){ status.style.display='none'; }, 2500); }
@@ -151,13 +157,13 @@
             try{ if(compactToggle) writeBool('compact_density', compactToggle.checked); }catch(e){}
             try{ if(fontSlider){ localStorage.setItem('font_size', String(fontSlider.value)); try{ window.dispatchEvent(new Event('storage')); }catch(e){} } }catch(e){}
             try{ if(reducedToggle) writeBool('reduced_motion', reducedToggle.checked); }catch(e){}
-            // time_format_24h preference removed; nothing to save
 
             // Broadcast storage event where browsers permit constructing StorageEvent
             try{ window.dispatchEvent(new Event('storage')); }catch(e){}
 
             // Apply team-number mapping immediately
-            try{ if (typeof window.setTeamNumberDisplayPreference === 'function') window.setTeamNumberDisplayPreference(v); else if (typeof window.applyTeamNumberDisplayPreference === 'function') window.applyTeamNumberDisplayPreference(); } catch(e){}
+            try{ var tv = document.querySelector('input[name="display_pref"]:checked').value; writePref(tv); }catch(e){}
+            try{ if (typeof window.setTeamNumberDisplayPreference === 'function') window.setTeamNumberDisplayPreference(tv); else if (typeof window.applyTeamNumberDisplayPreference === 'function') window.applyTeamNumberDisplayPreference(); } catch(e){}
 
             showStatus('Preferences saved locally. These are stored in your browser.', 'success');
         });

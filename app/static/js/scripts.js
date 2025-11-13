@@ -3,121 +3,200 @@
  * Team 5454 Scout 2026
  * Modern UI and Interaction JavaScript
  */
-                // Make sure menu is in the document so measurements work
-                if (!document.body.contains(menu)) document.body.appendChild(menu);
 
-                // Compute bounding rects
-                const toggleRect = toggle.getBoundingClientRect();
-                const topbar = document.querySelector('.topbar') || document.querySelector('.navbar');
-                // Use visualViewport offset when available (iOS Safari shrinks/offsets the visual
-                // viewport when the address bar is shown/hidden). Subtracting offsetTop avoids
-                // the menu being positioned too far down when visualViewport is in use.
-                const viewportOffsetTop = (window.visualViewport && typeof window.visualViewport.offsetTop === 'number') ? window.visualViewport.offsetTop : 0;
-                const topbarBottom = topbar ? topbar.getBoundingClientRect().bottom - viewportOffsetTop : 0;
+/**
+ * Apply per-user preferences stored in localStorage across the site.
+ * - font_size: number => sets root font-size and CSS variable
+ * - reduced_motion: true/false => disables animations/transitions when enabled
+ * - compact_density: true/false => toggles compact-density class on body
+ * - darkMode: true/false => toggles dark-mode classes
+ * - obsidian_sidebar_collapsed: 1/0 or true/false => calls setSidebarCollapsed if available
+ */
+function applyUserPreferences() {
+    try {
+        // Font size
+        try {
+            const fs = localStorage.getItem('font_size');
+            if (fs && /^[0-9]+$/.test(fs)) {
+                document.documentElement.style.setProperty('--obsidian-base-font-size', fs + 'px');
+                document.documentElement.style.fontSize = fs + 'px';
+                // Don't force body font-size unless explicitly needed
+                document.body.style.fontSize = '';
+            } else {
+                document.documentElement.style.removeProperty('--obsidian-base-font-size');
+                document.documentElement.style.fontSize = '';
+                document.body.style.fontSize = '';
+            }
+        } catch (e) { console.warn('applyUserPreferences font_size error', e); }
 
-                // Desired top is just below the toggle or the topbar bottom (whichever is larger).
-                // Subtract visualViewport offset from toggle rect as well to keep coordinates aligned
-                // with fixed positioning relative to the visual viewport.
-                const toggleBottom = (toggleRect.bottom - viewportOffsetTop) || 0;
-                let top = Math.max(toggleBottom, topbarBottom, 48);
+        // Reduced motion
+        try {
+            const reduced = localStorage.getItem('reduced_motion');
+            const id = 'reducedMotionStyle';
+            let s = document.getElementById(id);
+            if (reduced === 'true') {
+                if (!s) {
+                    s = document.createElement('style');
+                    s.id = id;
+                    s.textContent = '* { transition-duration: 0s !important; animation-duration: 0s !important; animation-delay: 0s !important; }';
+                    document.head.appendChild(s);
+                }
+                document.documentElement.classList.add('reduced-motion');
+            } else {
+                if (s && s.parentNode) s.parentNode.removeChild(s);
+                document.documentElement.classList.remove('reduced-motion');
+            }
+        } catch (e) { console.warn('applyUserPreferences reduced_motion error', e); }
 
-                // Safety clamp: on some iOS WebViews the computed coordinates can be
-                // unexpectedly large (placing the menu halfway down). If top is farther than
-                // ~35% of the viewport height, prefer the topbar bottom as a sensible fallback.
+        // Compact density
+        try {
+            const compact = localStorage.getItem('compact_density');
+            if (compact === 'true') document.body.classList.add('compact-density'); else document.body.classList.remove('compact-density');
+        } catch (e) { console.warn('applyUserPreferences compact_density error', e); }
+
+        // Dark mode
+        try {
+            const dark = localStorage.getItem('darkMode');
+            if (dark === 'true') { document.documentElement.classList.add('dark-mode'); document.body.classList.add('dark-mode'); }
+            else { document.documentElement.classList.remove('dark-mode'); document.body.classList.remove('dark-mode'); }
+        } catch (e) { console.warn('applyUserPreferences darkMode error', e); }
+
+        // Sidebar collapsed (use existing helper if available)
+        try {
+            const sb = localStorage.getItem('obsidian_sidebar_collapsed');
+            if (typeof setSidebarCollapsed === 'function') {
+                setSidebarCollapsed(sb === '1' || sb === 'true');
+            } else {
+                // Fallback: toggle a class so CSS can adapt
+                if (sb === '1' || sb === 'true') document.body.classList.add('sidebar-collapsed'); else document.body.classList.remove('sidebar-collapsed');
+            }
+        } catch (e) { console.warn('applyUserPreferences sidebar error', e); }
+
+    } catch (e) {
+        console.warn('applyUserPreferences error', e);
+    }
+}
+
+// Run on initial load and whenever localStorage changes in another tab
+document.addEventListener('DOMContentLoaded', function(){ try{ applyUserPreferences(); }catch(e){} });
+window.addEventListener('storage', function(){ try{ applyUserPreferences(); }catch(e){} });
+// Expose globally
+window.applyUserPreferences = applyUserPreferences;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Register service worker for offline support
+    if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(reg => {
+                console.log('Service Worker registered:', reg.scope);
+                // Force update check
+                reg.update();
+                // Listen for messages from the service worker (offline/online notifications)
                 try {
-                    if (top > (window.innerHeight * 0.35)) {
-                        const fallbackTop = topbar ? (topbar.getBoundingClientRect().bottom - viewportOffsetTop) : 48;
-                        // Only apply fallback if it moves the menu upward
-                        if (fallbackTop && fallbackTop < top) {
-                            top = Math.max(fallbackTop, 48);
+                    navigator.serviceWorker.addEventListener('message', function(event) {
+                        if (event && event.data && event.data.type === 'offline-banner') {
+                            showOfflineBanner(!!event.data.show);
                         }
-                    }
-                } catch (e) { /* ignore */ }
-
-                // Aggressive iOS fallback: if we still have a topbar element, anchor the
-                // dropdown directly under the topbar. This avoids strange visual-viewport
-                // interactions that push the menu lower on some iOS versions/devices.
-                try {
-                    if (topbar) {
-                        const anchored = Math.max(48, (topbar.getBoundingClientRect().bottom - viewportOffsetTop) + 6);
-                        // Use anchored position if it is above the computed top (move upward)
-                        if (anchored < top) top = anchored;
-                    }
-                } catch (e) { /* ignore */ }
-
-                // Decide container: prefer attaching to the topbar so the menu moves with it when
-                // the topbar is fixed/sticky. Otherwise append to body and use fixed positioning.
-                let attachToTopbar = false;
-                try {
-                    const tbStyle = topbar ? window.getComputedStyle(topbar) : null;
-                    if (topbar && tbStyle && (tbStyle.position === 'fixed' || tbStyle.position === 'sticky')) {
-                        attachToTopbar = true;
-                    }
-                } catch (e) { attachToTopbar = false; }
-
-                const container = attachToTopbar ? topbar : document.body;
-
-                // Determine menu width: measure natural width then clamp to available viewport
-                const prevDisplay = menu.style.display;
-                menu.style.display = '';
-                menu.style.position = 'absolute';
-                menu.style.top = '0px';
-                menu.style.left = '-9999px';
-                menu.style.right = 'auto';
-                menu.style.width = '';
-                const naturalWidth = Math.min(menu.getBoundingClientRect().width || 260, window.innerWidth - 20);
-                menu.style.left = '';
-                menu.style.display = prevDisplay;
-
-                const margin = 10; // viewport inset
-                const viewportAvailable = Math.max(window.innerWidth - (margin * 2), 120);
-                let menuWidth = Math.min(naturalWidth, viewportAvailable);
-                if (window.innerWidth <= 480 || menuWidth > viewportAvailable) {
-                    menuWidth = viewportAvailable;
+                    });
+                } catch (e) {
+                    // Some browsers may not support addEventListener on navigator.serviceWorker
+                    console.warn('Could not attach serviceWorker message listener', e);
                 }
+            })
+            .catch(err => {
+                console.warn('Service Worker registration failed:', err);
+            });
+    }
 
-                // Compute left relative to viewport
-                let left = Math.round(toggleRect.right - menuWidth);
-                if (left < margin) left = margin;
-                if (left + menuWidth > window.innerWidth - margin) left = window.innerWidth - margin - menuWidth;
+    // Show or hide a small yellow offline banner across the top of the page
+    function showOfflineBanner(show) {
+        try {
+            let banner = document.getElementById('offline-banner');
+            if (show) {
+                if (!banner) {
+                    banner = document.createElement('div');
+                    banner.id = 'offline-banner';
+                    banner.setAttribute('role','status');
+                    // Position fixed so it stays at top; we'll offset below any topbar
+                    banner.style.position = 'fixed';
+                    banner.style.left = '0';
+                    banner.style.right = '0';
+                    banner.style.zIndex = '99999';
 
-                // If attaching to topbar, convert left to be relative to topbar's left
-                if (attachToTopbar) {
+                    // Stronger, high-contrast colors for dark mode and readability
+                    const prefersDark = document.body.classList.contains('dark-mode') || document.body.classList.contains('theme-dark') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                    banner.style.background = prefersDark ? '#ffb74d' : '#fff3bf';
+                    banner.style.color = '#0b0b0b';
+                    banner.style.padding = '8px 12px';
+                    banner.style.textAlign = 'center';
+                    banner.style.fontSize = '13px';
+                    banner.style.fontWeight = '600';
+                    banner.style.boxSizing = 'border-box';
+                    banner.style.boxShadow = prefersDark ? '0 2px 8px rgba(0,0,0,0.6)' : '0 2px 4px rgba(0,0,0,0.06)';
+                    banner.style.borderBottom = '1px solid rgba(0,0,0,0.12)';
+                    banner.style.opacity = '0';
+                    banner.style.transition = 'opacity 0.25s ease, transform 0.15s ease';
+                    banner.style.pointerEvents = 'auto';
+                    banner.textContent = 'You appear to be offline — showing cached content';
+
+                    // Append banner and measure
+                    document.body.appendChild(banner);
+                    const topbar = document.querySelector('.topbar') || document.querySelector('.navbar') || null;
+                    const sidebar = document.getElementById('appSidebar') || document.querySelector('.sidebar') || null;
+                    const topOffset = topbar ? topbar.offsetHeight : 0;
+                    // Position banner below topbar
+                    banner.style.top = topOffset + 'px';
+
+                    // Compute left offset to avoid overlapping sidebar (when visible)
+                    let leftOffset = 0;
                     try {
-                        const topbarRect = topbar.getBoundingClientRect();
-                        // Ensure menu is in the container
-                        if (menu.parentNode !== container) container.appendChild(menu);
+                        if (sidebar && window.getComputedStyle(sidebar).display !== 'none' && window.innerWidth >= 900) {
+                            const rect = sidebar.getBoundingClientRect();
+                            leftOffset = rect.width || 0;
+                        }
+                    } catch (e) { leftOffset = 0; }
 
-                        const leftRelative = left - Math.round(topbarRect.left);
-                        menu.style.position = 'absolute';
-                        menu.style.top = (topbar.offsetHeight + 6) + 'px';
-                        menu.style.left = Math.max(6, leftRelative) + 'px';
-                        menu.style.width = menuWidth + 'px';
-                        menu.style.maxWidth = 'calc(100vw - 20px)';
-                        menu.style.zIndex = '3000';
-                        menu.style.margin = '0';
-                    } catch (e) {
-                        // Fallback to body-fixed if anything goes wrong
-                        if (menu.parentNode !== document.body) document.body.appendChild(menu);
-                        menu.style.position = 'fixed';
-                        menu.style.top = Math.round(top) + 'px';
-                        menu.style.left = left + 'px';
-                        menu.style.width = menuWidth + 'px';
-                        menu.style.zIndex = '3000';
-                    }
-                } else {
-                    // Ensure menu is appended to body
-                    if (menu.parentNode !== document.body) document.body.appendChild(menu);
-                    // Apply fixed positioning
-                    menu.style.position = 'fixed';
-                    menu.style.top = Math.round(top) + 'px';
-                    menu.style.left = left + 'px';
-                    menu.style.right = 'auto';
-                    menu.style.width = menuWidth + 'px';
-                    menu.style.maxWidth = 'calc(100vw - 20px)';
-                    menu.style.zIndex = '3000';
-                    menu.style.margin = '0';
-                }
+                    // Apply left offset and width so banner doesn't cross the sidebar
+                    banner.style.left = leftOffset + 'px';
+                    banner.style.width = `calc(100% - ${leftOffset}px)`;
+
+                    // Add padding to body so content isn't covered by the banner
+                    const measured = banner.offsetHeight || 36;
+                    const currentPadding = parseInt(window.getComputedStyle(document.body).paddingTop) || 0;
+                    banner.dataset._paddingAdded = String(measured);
+                    document.body.style.paddingTop = (currentPadding + measured) + 'px';
+
+                    // Make banner persistent (not closable) per request — no close button added
+
+                    // Attach resize and sidebar-toggle handlers once so banner repositions responsively
+                    if (!banner.dataset._listenerAttached) {
+                        const reposition = () => {
+                            try {
+                                const topbar = document.querySelector('.topbar') || document.querySelector('.navbar') || null;
+                                const sidebar = document.getElementById('appSidebar') || document.querySelector('.sidebar') || null;
+                                const topOffset = topbar ? topbar.offsetHeight : 0;
+                                banner.style.top = topOffset + 'px';
+
+                                let leftOffset = 0;
+                                if (sidebar && window.getComputedStyle(sidebar).display !== 'none' && window.innerWidth >= 900) {
+                                    const rect = sidebar.getBoundingClientRect();
+                                    leftOffset = rect.width || 0;
+                                }
+                                banner.style.left = leftOffset + 'px';
+                                banner.style.width = `calc(100% - ${leftOffset}px)`;
+
+                                // Adjust padding if height changed
+                                const measuredNow = banner.offsetHeight || 36;
+                                const previous = parseInt(banner.dataset._paddingAdded || '0') || 0;
+                                if (measuredNow !== previous) {
+                                    const currentPaddingNow = parseInt(window.getComputedStyle(document.body).paddingTop) || 0;
+                                    const basePadding = Math.max(0, currentPaddingNow - previous);
+                                    document.body.style.paddingTop = (basePadding + measuredNow) + 'px';
+                                    banner.dataset._paddingAdded = String(measuredNow);
+                                }
+                            } catch (e) { /* ignore */ }
+                        };
+
                         window.addEventListener('resize', reposition);
                         const sidebarToggle = document.getElementById('sidebarToggle');
                         if (sidebarToggle) sidebarToggle.addEventListener('click', () => setTimeout(reposition, 260));
@@ -179,14 +258,6 @@
     // Optional: react to browser online/offline events too
     window.addEventListener('online', function() { showOfflineBanner(false); });
     window.addEventListener('offline', function() { showOfflineBanner(true); });
-
-    // Initial load: if the browser is currently offline, show the offline banner
-    try {
-        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-            // Show banner immediately on page load when offline (covers reload case)
-            showOfflineBanner(true);
-        }
-    } catch (e) { /* ignore */ }
     
     // Initialize all tooltips
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
@@ -278,187 +349,6 @@
     
     // Initialize offline data manager
     setupOfflineDataManager();
-
-    // iOS-specific fix: some iOS browsers treat positioned dropdowns oddly and they can render off-screen.
-    // Stronger approach: detach navbar dropdown menus to document.body on show and position fixed under
-    // the topbar. This avoids clipping by overflow:hidden ancestors (common cause on iOS/Safari).
-    (function(){
-        function isIOS() {
-            return (/iP(hone|od|ad)/.test(navigator.platform) || (navigator.userAgent.includes('Mac') && 'ontouchend' in document));
-        }
-
-        if (!isIOS()) return;
-
-        // Use a WeakMap to remember original parent/nextSibling so we can restore on hide
-        const menuStore = new WeakMap();
-
-        function restoreMenu(menu) {
-            try {
-                const info = menuStore.get(menu);
-                if (!info) return;
-                // Remove our inline styles
-                menu.style.position = '';
-                menu.style.top = '';
-                menu.style.left = '';
-                menu.style.right = '';
-                menu.style.width = '';
-                menu.style.maxWidth = '';
-                menu.style.zIndex = '';
-                menu.style.margin = '';
-                // Put back into original parent at the original location
-                if (info.parent) {
-                    if (info.nextSibling && info.nextSibling.parentNode === info.parent) {
-                        info.parent.insertBefore(menu, info.nextSibling);
-                    } else {
-                        info.parent.appendChild(menu);
-                    }
-                }
-                menuStore.delete(menu);
-            } catch (e) {
-                // ignore
-            }
-        }
-
-        function positionMenuForToggle(menu, toggle) {
-            try {
-                // Make sure menu is in the document so measurements work
-                if (!document.body.contains(menu)) document.body.appendChild(menu);
-
-                // Compute bounding rects
-                const toggleRect = toggle.getBoundingClientRect();
-                const topbar = document.querySelector('.topbar') || document.querySelector('.navbar');
-                // Use visualViewport offset when available (iOS Safari shrinks/offsets the visual
-                // viewport when the address bar is shown/hidden). Subtracting offsetTop avoids
-                // the menu being positioned too far down when visualViewport is in use.
-                const viewportOffsetTop = (window.visualViewport && typeof window.visualViewport.offsetTop === 'number') ? window.visualViewport.offsetTop : 0;
-                const topbarBottom = topbar ? topbar.getBoundingClientRect().bottom - viewportOffsetTop : 0;
-
-                // Desired top is just below the toggle or the topbar bottom (whichever is larger).
-                // Subtract visualViewport offset from toggle rect as well to keep coordinates aligned
-                // with fixed positioning relative to the visual viewport.
-                const toggleBottom = (toggleRect.bottom - viewportOffsetTop) || 0;
-                let top = Math.max(toggleBottom, topbarBottom, 48);
-
-                // Safety clamp: on some iOS WebViews the computed coordinates can be
-                // unexpectedly large (placing the menu halfway down). If top is farther than
-                // ~35% of the viewport height, prefer the topbar bottom as a sensible fallback.
-                try {
-                    if (top > (window.innerHeight * 0.35)) {
-                        const fallbackTop = topbar ? (topbar.getBoundingClientRect().bottom - viewportOffsetTop) : 48;
-                        // Only apply fallback if it moves the menu upward
-                        if (fallbackTop && fallbackTop < top) {
-                            top = Math.max(fallbackTop, 48);
-                        }
-                    }
-                } catch (e) { /* ignore */ }
-
-                // Aggressive iOS fallback: if we still have a topbar element, anchor the
-                // dropdown directly under the topbar. This avoids strange visual-viewport
-                // interactions that push the menu lower on some iOS versions/devices.
-                try {
-                    if (topbar) {
-                        const anchored = Math.max(48, (topbar.getBoundingClientRect().bottom - viewportOffsetTop) + 6);
-                        // Use anchored position if it is above the computed top (move upward)
-                        if (anchored < top) top = anchored;
-                    }
-                } catch (e) { /* ignore */ }
-
-                // Determine menu width: try to measure natural width, but clamp to viewport with margins
-                // If menu not visible yet, add a temporary visibility to measure
-                const prevDisplay = menu.style.display;
-                menu.style.display = '';
-                menu.style.position = 'fixed';
-                menu.style.top = '0px';
-                menu.style.left = '-9999px';
-                menu.style.right = 'auto';
-                menu.style.width = '';
-                const naturalWidth = Math.min(menu.getBoundingClientRect().width || 260, window.innerWidth - 20);
-                // Reset temporary measurement artifacts
-                menu.style.left = '';
-                menu.style.display = prevDisplay;
-
-                const margin = 10; // viewport inset
-
-                // If the viewport is narrow, prefer using most of the viewport width to avoid
-                // misalignment and pushing the menu off the right edge. Compute a clamped width
-                // and left offset that fits inside the viewport with a small safe margin.
-                const viewportAvailable = Math.max(window.innerWidth - (margin * 2), 120);
-                let menuWidth = Math.min(naturalWidth, viewportAvailable);
-
-                // If the viewport itself is narrow (phones), force menu to use nearly full width
-                if (window.innerWidth <= 480 || menuWidth > viewportAvailable) {
-                    menuWidth = viewportAvailable;
-                }
-
-                // Prefer aligning the menu's right edge with the toggle's right edge if space allows,
-                // otherwise clamp to viewport. Start by trying to align right-edge to toggle's right.
-                let left = Math.round(toggleRect.right - menuWidth);
-
-                // If that would push it off-screen, clamp to the left margin
-                if (left < margin) left = margin;
-                if (left + menuWidth > window.innerWidth - margin) left = window.innerWidth - margin - menuWidth;
-
-                // Final safety: if computed menuWidth is nearly viewport width, align to left margin
-                if (menuWidth >= window.innerWidth - (margin * 2) - 2) {
-                    left = margin;
-                    menuWidth = Math.max(window.innerWidth - (margin * 2), 120);
-                }
-
-                // Apply fixed positioning
-                menu.style.position = 'fixed';
-                menu.style.top = Math.round(top) + 'px';
-                menu.style.left = left + 'px';
-                menu.style.right = 'auto';
-                menu.style.width = menuWidth + 'px';
-                menu.style.maxWidth = 'calc(100vw - 20px)';
-                menu.style.zIndex = '3000';
-                menu.style.margin = '0';
-
-            } catch (e) {
-                // ignore measurement errors
-            }
-        }
-
-        // Attach handlers for navbar dropdowns
-        document.querySelectorAll('.navbar-actions .dropdown').forEach(function(drop){
-            const toggle = drop.querySelector('[data-bs-toggle="dropdown"]');
-            const menu = drop.querySelector('.dropdown-menu');
-            if (!toggle || !menu) return;
-
-            toggle.addEventListener('show.bs.dropdown', function(){
-                try {
-                    // Remember original parent/nextSibling so we can restore later
-                    if (!menuStore.has(menu)) {
-                        menuStore.set(menu, { parent: menu.parentNode, nextSibling: menu.nextSibling });
-                    }
-
-                    // Append menu to body so it's not clipped by overflow ancestors
-                    if (menu.parentNode !== document.body) document.body.appendChild(menu);
-
-                    // Position it relative to the toggle under the topbar
-                    positionMenuForToggle(menu, toggle);
-
-                    // Reposition on window resize while open
-                    const onResize = () => positionMenuForToggle(menu, toggle);
-                    menu._tmpResizeHandler = onResize;
-                    window.addEventListener('resize', onResize);
-                } catch (e) { /* ignore */ }
-            });
-
-            toggle.addEventListener('hide.bs.dropdown', function(){
-                try {
-                    // Remove resize handler
-                    if (menu._tmpResizeHandler) {
-                        window.removeEventListener('resize', menu._tmpResizeHandler);
-                        delete menu._tmpResizeHandler;
-                    }
-
-                    // Restore back to original parent position
-                    restoreMenu(menu);
-                } catch (e) { /* ignore */ }
-            });
-        });
-    })();
     
     // Initialize scouting form with save functionality
     initScoutingForm();
@@ -548,43 +438,6 @@ function initPageTransitions() {
         }
     };
 }
-
-// Additional iOS-specific: initialize Bootstrap Dropdown with Popper on navbar toggles.
-// Popper's collision/flip/preventOverflow logic is more reliable across iOS visual
-// viewport states than manual positioning. This runs on DOM ready as a safety fallback.
-document.addEventListener('DOMContentLoaded', function() {
-    function isIOSPlatform() {
-        return (/iP(hone|od|ad)/.test(navigator.platform) || (navigator.userAgent.includes('Mac') && 'ontouchend' in document));
-    }
-
-    if (!isIOSPlatform() || typeof bootstrap === 'undefined' || typeof bootstrap.Dropdown === 'undefined') return;
-
-    document.querySelectorAll('.navbar-actions [data-bs-toggle="dropdown"]').forEach(function(toggle) {
-        try {
-            // Dispose existing instance if any, then recreate with Popper config
-            const existing = bootstrap.Dropdown.getInstance(toggle);
-            if (existing) existing.dispose();
-
-            new bootstrap.Dropdown(toggle, {
-                popperConfig: function(defaultBsPopperConfig) {
-                    // Merge with defaults but force fixed strategy and strong collision handling
-                    const cfg = Object.assign({}, defaultBsPopperConfig || {}, {
-                        placement: 'bottom-end',
-                        strategy: 'fixed',
-                        modifiers: [
-                            { name: 'offset', options: { offset: [0, 6] } },
-                            { name: 'preventOverflow', options: { boundary: document.body, padding: 8 } },
-                            { name: 'flip', options: { fallbackPlacements: ['bottom-start','top-end','top-start'] } }
-                        ]
-                    });
-                    return cfg;
-                }
-            });
-        } catch (e) {
-            // ignore initialization errors
-        }
-    });
-});
 
 /**
  * Initialize counter buttons for scouting form with improved UX
@@ -1441,10 +1294,11 @@ function validateForms() {
                 if (submitButton && !submitButton.classList.contains('no-loading-state')) {
                     const originalText = submitButton.innerHTML;
                     submitButton.disabled = true;
-                    // Allow buttons to specify their own loading text via data-loading-text
-                    const loadingText = submitButton.getAttribute('data-loading-text') || 'Saving...';
-                    submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ${loadingText}`;
-
+                    submitButton.innerHTML = `
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        Saving...
+                    `;
+                    
                     // Reset button after a delay
                     setTimeout(() => {
                         submitButton.disabled = false;
@@ -1929,35 +1783,21 @@ function setupLoadingBehavior() {
     document.querySelectorAll('[data-loading-text]').forEach(button => {
         button.addEventListener('click', function() {
             if (this.classList.contains('no-loading-state') || this.disabled) return;
-
-            // If this button is a submit button inside a form that uses the centralized
-            // form submit handler ('.needs-validation'), avoid disabling/replacing HTML here
-            // because doing so in the click handler can prevent the browser from submitting
-            // the form on some platforms (notably mobile browsers). Let the form submit
-            // handler take care of the loading state for submit buttons.
-            const isSubmit = (this.getAttribute('type') || '').toLowerCase() === 'submit';
-            const parentForm = this.closest('form');
-            if (isSubmit && parentForm && parentForm.classList.contains('needs-validation')) {
-                // Just record the original HTML so other code can restore it if needed,
-                // but do not disable or change innerHTML here.
-                try { this.setAttribute('data-original-html', this.innerHTML); } catch(e) {}
-                return;
-            }
-
+            
             const loadingText = this.getAttribute('data-loading-text');
             const originalHtml = this.innerHTML;
             const originalWidth = this.offsetWidth;
-
+            
             // Set minimum width to prevent button size change
             this.style.minWidth = originalWidth + 'px';
-
+            
             // Save original HTML for restoration
             this.setAttribute('data-original-html', originalHtml);
-
+            
             // Update button with loading state
             this.disabled = true;
             this.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>${loadingText || 'Loading...'}`;
-
+            
             // Restore original state after action completes
             // This requires manually calling resetLoadingButton(buttonElement) from your AJAX handlers
         });

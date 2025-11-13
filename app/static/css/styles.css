@@ -1972,6 +1972,23 @@ body:not(.dark-mode) .toast .btn-close {
     }
 }
 
+/* Compact density adjustments (applied when user enables compact layout) */
+.compact-density .card { padding: 0.4rem; }
+.compact-density .card .card-body { padding: 0.5rem; }
+.compact-density .stat-card, .compact-density .dashboard-stat, .compact-density .data-card { padding: 0.6rem; margin-bottom: 0.5rem; }
+.compact-density .stat-value { font-size: 1.25rem; }
+.compact-density .team-card .team-number { font-size: 1.25rem; }
+.compact-density .btn, .compact-density .btn-primary, .compact-density .btn-outline-secondary { padding: 0.35rem 0.6rem; font-size: 0.9rem; }
+.compact-density .navbar .nav-link { padding: 0.35rem 0.6rem; }
+.compact-density .table th, .compact-density .table td { padding: 0.35rem 0.5rem; }
+.compact-density .counter-container .btn-counter, .compact-density .counter-container .btn-counter { width: 38px !important; height: 38px !important; }
+.compact-density .counter-container .counter-input { height: 40px; min-width: 64px; }
+.compact-density .match-card { margin-bottom: 0.5rem; }
+
+/* Reduced-motion helper class (fallback if JS can't inject styles) */
+.reduced-motion * { transition-duration: 0s !important; animation-duration: 0s !important; animation-delay: 0s !important; }
+
+
 /* Fix for dropdown positioning when navbar is scrolled */
 @media (max-width: 767.98px) {
     .navbar-scrolled .navbar-actions .dropdown-menu {
