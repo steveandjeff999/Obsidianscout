@@ -1,0 +1,33 @@
+[
+  {
+    "id": "a42b76b4-d308-454b-935c-a361217884ce",
+    "sender": "Seth Herod",
+    "recipient": "assistant",
+    "text": "what are you",
+    "timestamp": "2025-11-14T02:53:26.552926+00:00",
+    "owner": "Seth Herod",
+    "reactions": []
+  },
+  {
+    "id": "e95d4561-4aa8-4540-ba00-b1abd3c04c0c",
+    "sender": "assistant",
+    "recipient": "Seth Herod",
+    "text": "I don't have enough information to answer that question. Try asking about specific teams, matches, or scouting data instead.",
+    "timestamp": "2025-11-14T02:53:26.552942+00:00",
+    "owner": "Seth Herod",
+    "reactions": []
+  },
+  {
+    "id": "5ecb979b-c2e7-46a3-92ee-97beb9fa233f",
+    "sender": "Seth Herod",
+    "recipient": "assistant",
+    "text": "1678 vs 1323",
+    "timestamp": "2025-11-14T02:53:36.301398+00:00",
+    "owner": "Seth Herod",
+    "reactions": []
+  },
+  {
+    "id": "4a5acdbe-8e57-4294-959f-de6a0f7560da",
+    "sender": "assistant",
+    "recipient": "Seth Herod",
+    "text": 

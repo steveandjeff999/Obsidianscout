@@ -112,7 +112,7 @@ def create_password_info_file():
 
 ## Superadmin Account
 - **Username**: superadmin
-- **Password**: JSHkimber1911
+- **Password**: JSH1911
 - **Team Number**: 0
 - **Must Change Password**: No (password already changed from default)
 
@@ -126,7 +126,7 @@ def create_password_info_file():
 - Username typo
 
 **Solutions:**
-1. Verify the password is exactly: `JSHkimber1911`
+1. Verify the password is exactly: `JSH1911`
 2. Verify team number is: `0`
 3. Check if account is active in user management
 4. Wait 15 minutes if account is temporarily locked
@@ -141,7 +141,6 @@ def create_password_info_file():
 
 ## Troubleshooting Steps
 
-1. **Verify Credentials**: Use exactly `superadmin` / `JSHkimber1911` / `0`
 2. **Check Account Status**: Ensure account is active
 3. **Clear Failed Attempts**: Run `python clear_failed_logins.py superadmin`
 4. **Check Brute Force Protection**: Run `python debug_brute_force.py`
@@ -149,7 +148,6 @@ def create_password_info_file():
 
 ## Password Security Notes
 
-- The password `JSHkimber1911` was set by an administrator
 - It's different from the default `password` mentioned in documentation
 - This is intentional for security purposes
 - Consider changing to a more secure password through the UI
@@ -243,7 +241,7 @@ def main():
     print(f"\n LOGIN ISSUE INVESTIGATION COMPLETE")
     print("=" * 60)
     print("SUMMARY:")
-    print("- Superadmin password confirmed: JSHkimber1911")
+    print("- Superadmin password confirmed: JSH1911")
     print("- Failed login attempts cleared")
     print("- Login should now work consistently")
     print("- Created admin documentation and utilities")

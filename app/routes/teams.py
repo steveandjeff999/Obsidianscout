@@ -103,6 +103,7 @@ def sync_from_config():
         if not event:
             try:
                 # Try to get event details from dual API
+                from app.routes.data import get_or_create_event
                 event_details = get_event_details_dual_api(event_code)
                 
                 # Convert date strings to datetime.date objects
@@ -126,25 +127,32 @@ def sync_from_config():
                     except ValueError:
                         print(f"Could not parse end date: {end_date_str}")
                 
-                event = Event(
+                # Get current scouting team number
+                from app.utils.team_isolation import get_current_scouting_team_number
+                current_scouting_team = get_current_scouting_team_number()
+                
+                # Use get_or_create_event to properly handle race conditions
+                event = get_or_create_event(
                     name=event_details.get('name', f"Event {event_code}"),
                     code=event_code,
                     year=event_details.get('year', current_year),
                     location=event_details.get('location', ''),
                     start_date=start_date,
-                    end_date=end_date
+                    end_date=end_date,
+                    scouting_team_number=current_scouting_team
                 )
-            except:
-                # If API call fails, create minimal event
-                event = Event(
+            except Exception:
+                # If API call fails, create minimal event using get_or_create_event
+                from app.routes.data import get_or_create_event
+                from app.utils.team_isolation import get_current_scouting_team_number
+                current_scouting_team = get_current_scouting_team_number()
+                event = get_or_create_event(
                     name=f"Event {event_code}",
                     code=event_code,
-                    year=current_year
+                    year=current_year,
+                    scouting_team_number=current_scouting_team
                 )
             
-            # Assign scouting team number to the new event
-            assign_scouting_team_to_model(event)
-            db.session.add(event)
             db.session.commit()  # Commit to get the ID
 
         # Fetch teams from the dual API using the event code
@@ -209,6 +217,15 @@ def sync_from_config():
             
             # Commit all changes
             db.session.commit()
+        
+        # Merge any duplicate events that may have been created
+        try:
+            from app.routes.data import merge_duplicate_events
+            from app.utils.team_isolation import get_current_scouting_team_number
+            current_scouting_team = get_current_scouting_team_number()
+            merge_duplicate_events(current_scouting_team)
+        except Exception as merge_err:
+            print(f"  Warning: Could not merge duplicate events: {merge_err}")
         
         # After bulk sync, queue a single replication event for the team sync
         if teams_added > 0 or teams_updated > 0:

@@ -19,7 +19,7 @@ with app.app_context():
     else:
         # Create superadmin user
         superadmin_user = User(username='superadmin', scouting_team_number=5454)
-        superadmin_user.set_password('kimber1911')
+        superadmin_user.set_password('1911')
 
         # Get or create superadmin role
         superadmin_role = Role.query.filter_by(name='superadmin').first()

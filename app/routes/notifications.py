@@ -221,9 +221,10 @@ def subscribe():
             ).first()
             
             if event:
-                # Get matches with this team
+                # Get matches for this event that belong to the user's scouting team
                 matches = Match.query.filter_by(
-                    event_id=event.id
+                    event_id=event.id,
+                    scouting_team_number=current_user.scouting_team_number
                 ).all()
                 
                 scheduled_count = 0
@@ -631,8 +632,8 @@ def refresh_schedule():
         if not event:
             return jsonify({'error': f'Event {event_code} not found'}), 404
         
-        # Get all matches for this event first (from scouting.db)
-        matches = Match.query.filter_by(event_id=event.id).all()
+        # Get all matches for this event and scope to the current user's scouting team
+        matches = Match.query.filter_by(event_id=event.id, scouting_team_number=current_user.scouting_team_number).all()
         match_ids = [m.id for m in matches]
         
         print(f" Found {len(matches)} matches for event {event_code}")

@@ -3,6 +3,11 @@ from flask_login import login_required
 from app.models import User, Team, ScoutingData, Event, Match
 from app import db
 from app.utils.theme_manager import ThemeManager
+from app.utils.team_isolation import (
+    filter_teams_by_scouting_team, filter_matches_by_scouting_team,
+    filter_events_by_scouting_team, filter_users_by_scouting_team,
+    filter_scouting_data_by_scouting_team, get_current_scouting_team_number
+)
 import difflib
 import re
 from datetime import datetime
@@ -16,25 +21,23 @@ import time
 
 bp = Blueprint('search', __name__, url_prefix='/search')
 
-# Cache for team data to improve search performance
-@lru_cache(maxsize=128)
+# Note: Caching disabled for team isolation - queries must be filtered per request based on current user
 def get_cached_teams():
-    """Get cached team data for search suggestions"""
+    """Get team data for search suggestions (team-isolated)"""
     try:
-        teams = Team.query.limit(200).all()
+        teams = filter_teams_by_scouting_team().limit(200).all()
         return [(team.team_number, team.team_name, team.location) for team in teams]
     except Exception as e:
-        current_app.logger.error(f"Error caching teams: {e}")
+        current_app.logger.error(f"Error getting teams: {e}")
         return []
 
-@lru_cache(maxsize=64)
 def get_cached_users():
-    """Get cached user data for search suggestions"""
+    """Get user data for search suggestions (team-isolated)"""
     try:
-        users = User.query.limit(100).all()
+        users = filter_users_by_scouting_team().limit(100).all()
         return [(user.username, user.email, getattr(user, 'team_number', None)) for user in users]
     except Exception as e:
-        current_app.logger.error(f"Error caching users: {e}")
+        current_app.logger.error(f"Error getting users: {e}")
         return []
 
 def get_theme_context():
@@ -169,7 +172,7 @@ def search_teams(query):
         # Step 1: Exact team number matches (highest priority)
         if extracted_numbers:
             for team_number in extracted_numbers:
-                teams_by_exact_number = Team.query.filter(Team.team_number == team_number).all()
+                teams_by_exact_number = filter_teams_by_scouting_team().filter(Team.team_number == team_number).all()
                 for team in teams_by_exact_number:
                     results.append({
                         'type': 'team',
@@ -182,7 +185,7 @@ def search_teams(query):
         
         # Step 2: If query is purely numeric, also do partial number matching
         if query.isdigit():
-            teams_by_partial_number = Team.query.filter(
+            teams_by_partial_number = filter_teams_by_scouting_team().filter(
                 func.cast(Team.team_number, db.String).ilike(f'%{query}%')
             ).limit(15).all()
             
@@ -200,7 +203,7 @@ def search_teams(query):
                     })
         
         # Step 3: Exact and partial name/location matches
-        teams_by_text = Team.query.filter(
+        teams_by_text = filter_teams_by_scouting_team().filter(
             or_(
                 Team.team_name.ilike(f'%{query}%'),
                 Team.location.ilike(f'%{query}%')
@@ -230,7 +233,7 @@ def search_teams(query):
         # Step 4: Fuzzy matching for spelling errors (if we don't have many results)
         if len(results) < 5:
             # Get all teams for fuzzy matching (limit to reasonable number)
-            all_teams = Team.query.limit(500).all()
+            all_teams = filter_teams_by_scouting_team().limit(500).all()
             fuzzy_matches = fuzzy_match_teams(query_original, all_teams, threshold=50)
             
             added_team_ids = {result['title'].split(' - ')[0].replace('Team ', '') for result in results}
@@ -268,7 +271,7 @@ def search_users(query):
         query_lower = query.lower().strip()
         
         # Step 1: Exact matches (highest priority)
-        exact_users = User.query.filter(
+        exact_users = filter_users_by_scouting_team().filter(
             or_(
                 func.lower(User.username) == query_lower,
                 func.lower(User.email) == query_lower
@@ -286,7 +289,7 @@ def search_users(query):
             })
         
         # Step 2: Partial matches
-        partial_users = User.query.filter(
+        partial_users = filter_users_by_scouting_team().filter(
             or_(
                 User.username.ilike(f'%{query}%'),
                 User.email.ilike(f'%{query}%')
@@ -308,7 +311,7 @@ def search_users(query):
         
         # Step 3: Fuzzy matching for spelling errors (if we don't have many results)
         if len(results) < 3:
-            all_users = User.query.limit(100).all()  # Limit for performance
+            all_users = filter_users_by_scouting_team().limit(100).all()  # Limit for performance
             
             for user in all_users:
                 if user.username not in added_user_ids:
@@ -348,7 +351,7 @@ def search_scouting_data(query):
         # .ilike on integer columns causes errors. Cast numeric columns to
         # string for ilike comparisons and also support exact numeric matches
         # when the query contains digits.
-        scouting_query = ScoutingData.query\
+        scouting_query = filter_scouting_data_by_scouting_team()\
             .join(Match, ScoutingData.match_id == Match.id)\
             .join(Team, ScoutingData.team_id == Team.id)
 
@@ -421,7 +424,7 @@ def search_events(query):
     results = []
     
     try:
-        events = Event.query.filter(
+        events = filter_events_by_scouting_team().filter(
             or_(
                 Event.name.ilike(f'%{query}%'),
                 Event.code.ilike(f'%{query}%')
@@ -455,12 +458,12 @@ def search_matches(query):
         # Prefer numeric match number searches when numbers are present
         if extracted_numbers:
             nums = list({int(n) for n in extracted_numbers})[:5]
-            matches = Match.query.filter(Match.match_number.in_(nums)).limit(25).all()
+            matches = filter_matches_by_scouting_team().filter(Match.match_number.in_(nums)).limit(25).all()
         elif query_str.isdigit():
-            matches = Match.query.filter(Match.match_number == int(query_str)).limit(25).all()
+            matches = filter_matches_by_scouting_team().filter(Match.match_number == int(query_str)).limit(25).all()
         else:
             # Text search across match_type, event name, and alliance strings
-            matches = Match.query.join(Event, Match.event_id == Event.id).filter(
+            matches = filter_matches_by_scouting_team().join(Event, Match.event_id == Event.id).filter(
                 or_(
                     Match.match_type.ilike(f'%{query}%'),
                     Event.name.ilike(f'%{query}%'),
@@ -621,13 +624,13 @@ def get_search_suggestions(query, types_filter=None):
         
         # Get team suggestions
         if 'team' in allowed_types:
-            teams = Team.query.limit(50).all()
+            teams = filter_teams_by_scouting_team().limit(50).all()
             team_suggestions = [f"Team {team.team_number}" for team in teams] + [team.team_name for team in teams if team.team_name]
             all_suggestions.extend(team_suggestions)
         
         # Get user suggestions
         if 'user' in allowed_types:
-            users = User.query.limit(30).all()
+            users = filter_users_by_scouting_team().limit(30).all()
             user_suggestions = [user.username for user in users]
             all_suggestions.extend(user_suggestions)
         
@@ -701,7 +704,7 @@ def api_suggestions():
             # Priority 1: Exact team number matches from extracted numbers
             if extracted_numbers:
                 for team_number in extracted_numbers[:3]:  # Limit to 3 extracted numbers
-                    exact_team = Team.query.filter(Team.team_number == team_number).first()
+                    exact_team = filter_teams_by_scouting_team().filter(Team.team_number == team_number).first()
                     if exact_team:
                         display_text = f"Team {exact_team.team_number}"
                         if exact_team.team_name:
@@ -718,7 +721,7 @@ def api_suggestions():
             
             # Priority 2: Direct numeric matches (if query is purely numeric)
             if query.isdigit() and not extracted_numbers:
-                exact_team = Team.query.filter(Team.team_number == int(query)).first()
+                exact_team = filter_teams_by_scouting_team().filter(Team.team_number == int(query)).first()
                 if exact_team:
                     display_text = f"Team {exact_team.team_number}"
                     if exact_team.team_name:
@@ -734,7 +737,7 @@ def api_suggestions():
                     })
                 
                 # Partial number matches
-                partial_teams = Team.query.filter(
+                partial_teams = filter_teams_by_scouting_team().filter(
                     func.cast(Team.team_number, db.String).ilike(f'%{query}%')
                 ).filter(Team.team_number != int(query)).limit(4).all()
                 
@@ -753,7 +756,7 @@ def api_suggestions():
                     })
             
             # Priority 3: Name and location matches
-            text_teams = Team.query.filter(
+            text_teams = filter_teams_by_scouting_team().filter(
                 or_(
                     Team.team_name.ilike(f'%{query}%'),
                     Team.location.ilike(f'%{query}%')
@@ -787,7 +790,7 @@ def api_suggestions():
             
             # Priority 4: Fuzzy matching (if we don't have enough suggestions)
             if len([s for s in suggestions if s['type'] == 'team']) < 3:
-                all_teams = Team.query.limit(200).all()  # Limit for performance
+                all_teams = filter_teams_by_scouting_team().limit(200).all()  # Limit for performance
                 fuzzy_matches = fuzzy_match_teams(query, all_teams, threshold=55)
                 
                 for team, fuzzy_score in fuzzy_matches[:3]:  # Limit fuzzy results
@@ -815,7 +818,7 @@ def api_suggestions():
             query_lower = query.lower().strip()
             
             # Exact matches first
-            exact_users = User.query.filter(
+            exact_users = filter_users_by_scouting_team().filter(
                 or_(
                     func.lower(User.username) == query_lower,
                     func.lower(User.email) == query_lower
@@ -833,7 +836,7 @@ def api_suggestions():
                 })
             
             # Partial matches
-            partial_users = User.query.filter(
+            partial_users = filter_users_by_scouting_team().filter(
                 or_(
                     User.username.ilike(f'%{query}%'),
                     User.email.ilike(f'%{query}%')
@@ -857,7 +860,7 @@ def api_suggestions():
             
             # Fuzzy matching for users (if not enough results)
             if len([s for s in suggestions if s['type'] == 'user']) < 2:
-                all_users = User.query.limit(50).all()
+                all_users = filter_users_by_scouting_team().limit(50).all()
                 
                 for user in all_users:
                     if user.username not in existing_usernames:

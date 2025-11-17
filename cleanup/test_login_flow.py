@@ -25,7 +25,7 @@ def test_login_flow():
             
             # Test credentials
             username = 'superadmin'
-            password = 'JSHkimber1911'
+            password = 'JSH1911'
             team_number = 0
             
             print(f"Testing login with:")
@@ -180,7 +180,7 @@ def test_actual_http_login():
             print("Submitting login form...")
             login_data = {
                 'username': 'superadmin',
-                'password': 'JSHkimber1911',
+                'password': 'JSH1911',
                 'team_number': '0'
             }
             

@@ -34,7 +34,7 @@ def fix_superadmin_password():
             
             # Test some common passwords that might have been set
             test_passwords = [
-                'JSHkimber1911', # Current actual password
+                'JSH1911', # Current actual password
                 'password',      # Expected default
                 'Password',      # Capitalized
                 'password123',   # With numbers
@@ -159,7 +159,7 @@ def test_fixed_login():
                 # Test POST request with superadmin credentials
                 response = client.post('/auth/login', data={
                     'username': 'superadmin',
-                    'password': 'JSHkimber1911',  # Use actual password
+                    'password': 'JSH1911',  # Use actual password
                     'team_number': '0',
                     'remember_me': False
                 }, follow_redirects=False)

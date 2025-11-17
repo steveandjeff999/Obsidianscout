@@ -31,7 +31,7 @@ def check_login_status():
                 print(f" Active: {user.is_active}")
                 print(f" Must change password: {user.must_change_password}")
                 print(f" Last login: {user.last_login}")
-                print(f" Password works: {user.check_password('JSHkimber1911')}")
+                print(f" Password works: {user.check_password('JSH1911')}")
             else:
                 print(" User not found!")
                 return
