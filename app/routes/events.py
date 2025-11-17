@@ -1,16 +1,17 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from app.models import Event, Match, ScoutingData, Team
 from app import db
-from datetime import datetime
+from datetime import datetime, date
 from app.utils.config_manager import get_current_game_config, get_effective_game_config, save_game_config
-from app.utils.team_isolation import get_event_by_code
+from app.utils.team_isolation import get_event_by_code, filter_events_by_scouting_team
+from sqlalchemy.exc import IntegrityError
 
 bp = Blueprint('events', __name__, url_prefix='/events')
 
 @bp.route('/')
 def index():
-    """Display all events"""
-    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+    """Display all events (filtered by current scouting team)"""
+    events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
     # Add current datetime to fix the 'now is undefined' error in the template
     now = datetime.now()
     return render_template('events/index.html', events=events, now=now)
@@ -23,15 +24,32 @@ def add():
         code = request.form.get('code')
         year = request.form.get('year', type=int)
         location = request.form.get('location')
-        start_date = request.form.get('start_date')
-        end_date = request.form.get('end_date')
+        start_date_raw = request.form.get('start_date')
+        end_date_raw = request.form.get('end_date')
+
+        # Parse incoming date strings into Python date objects (sqlite requires date objects)
+        def _parse_date(d):
+            if not d:
+                return None
+            try:
+                # Expecting YYYY-MM-DD from <input type="date">
+                return datetime.strptime(d, "%Y-%m-%d").date()
+            except Exception:
+                return None
+
+        start_date = _parse_date(start_date_raw)
+        end_date = _parse_date(end_date_raw)
         
         if not name or not year:
             flash('Event name and year are required!', 'danger')
             return render_template('events/add.html')
         
-        # Check if event code already exists
+        # Normalize code and check if event code already exists
         if code:
+            try:
+                code = code.strip().upper()
+            except Exception:
+                pass
             existing_event = get_event_by_code(code)
             if existing_event:
                 flash(f'Event with code {code} already exists!', 'danger')
@@ -51,6 +69,11 @@ def add():
             db.session.commit()
             flash('Event added successfully!', 'success')
             return redirect(url_for('events.index'))
+        except IntegrityError:
+            db.session.rollback()
+            # Another process/user created an event with this code concurrently
+            flash(f'Event with code {code} already exists (concurrent creation).', 'danger')
+            return render_template('events/add.html')
         except Exception as e:
             db.session.rollback()
             flash(f'Error adding event: {str(e)}', 'danger')
@@ -63,28 +86,58 @@ def edit(event_id):
     event = Event.query.get_or_404(event_id)
     
     if request.method == 'POST':
-        event.name = request.form.get('name')
-        event.code = request.form.get('code')
-        event.year = request.form.get('year', type=int)
-        event.location = request.form.get('location')
-        event.start_date = request.form.get('start_date')
-        event.end_date = request.form.get('end_date')
+        # Read raw form values and do validation/normalization before assigning to the mapped `event` object
+        name = request.form.get('name')
+        new_code = request.form.get('code')
+        year = request.form.get('year', type=int)
+        location = request.form.get('location')
+        start_date_raw = request.form.get('start_date')
+        end_date_raw = request.form.get('end_date')
+
+        # Helper to parse YYYY-MM-DD strings into date objects
+        def _parse_date(d):
+            if not d:
+                return None
+            try:
+                return datetime.strptime(d, "%Y-%m-%d").date()
+            except Exception:
+                return None
+
+        start_date = _parse_date(start_date_raw)
+        end_date = _parse_date(end_date_raw)
         
-        if not event.name or not event.year:
+        if not name or not year:
             flash('Event name and year are required!', 'danger')
             return render_template('events/edit.html', event=event)
         
-        # Check if event code already exists on a different event
-        if event.code:
-            existing_event = get_event_by_code(event.code)
+        # Normalize and check if event code already exists on a different event
+        # Normalize and check event code uniqueness using the proposed new value (don't assign to `event` yet)
+        if new_code:
+            try:
+                new_code = new_code.strip().upper()
+            except Exception:
+                pass
+            existing_event = get_event_by_code(new_code)
             if existing_event and existing_event.id != event_id:
-                flash(f'Another event with code {event.code} already exists!', 'danger')
+                flash(f'Another event with code {new_code} already exists!', 'danger')
                 return render_template('events/edit.html', event=event)
         
+        # All validation passed; assign values to the event object and commit
+        event.name = name
+        event.code = new_code
+        event.year = year
+        event.location = location
+        event.start_date = start_date
+        event.end_date = end_date
+
         try:
             db.session.commit()
             flash('Event updated successfully!', 'success')
             return redirect(url_for('events.index'))
+        except IntegrityError:
+            db.session.rollback()
+            flash(f'Another event with code {event.code} already exists (concurrent update).', 'danger')
+            return render_template('events/edit.html', event=event)
         except Exception as e:
             db.session.rollback()
             flash(f'Error updating event: {str(e)}', 'danger')
@@ -112,8 +165,8 @@ def delete(event_id):
             for team in event.teams:
                 team.events.remove(event)
             
-            # Delete all matches associated with this event
-            Match.query.filter_by(event_id=event_id).delete()
+            # Delete all matches associated with this event (filtered by scouting team)
+            filter_matches_by_scouting_team().filter_by(event_id=event_id).delete()
             
             # Finally delete the event itself
             db.session.delete(event)

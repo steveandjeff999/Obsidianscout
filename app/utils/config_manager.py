@@ -193,7 +193,16 @@ def load_config(config_name, team_number=None):
     return {}
 
 def load_game_config(team_number=None):
-    return load_config('game_config.json', team_number)
+    cfg = load_config('game_config.json', team_number)
+    # Normalize event code to uppercase for consistency across the app
+    try:
+        if isinstance(cfg, dict):
+            ce = cfg.get('current_event_code')
+            if isinstance(ce, str):
+                cfg['current_event_code'] = ce.upper()
+    except Exception:
+        pass
+    return cfg
 
 def load_pit_config(team_number=None):
     return load_config('pit_config.json', team_number)

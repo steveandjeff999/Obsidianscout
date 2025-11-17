@@ -89,7 +89,15 @@ def index():
     
     # Get matches filtered by the current event and scouting team
     if current_event:
-        matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).order_by(Match.match_type, Match.match_number).all()
+        matches_query = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id)
+        # Defensive check: ensure we only show matches for current scouting team
+        from app.utils.team_isolation import get_current_scouting_team_number
+        current_scouting_team = get_current_scouting_team_number()
+        if current_scouting_team is not None:
+            matches_query = matches_query.filter(Match.scouting_team_number == current_scouting_team)
+        else:
+            matches_query = matches_query.filter(Match.scouting_team_number.is_(None))
+        matches = matches_query.order_by(Match.match_type, Match.match_number).all()
     else:
         matches = []  # No matches if no current event is set
     

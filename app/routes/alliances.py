@@ -509,7 +509,7 @@ def update_alliance():
         return jsonify({'success': False, 'message': 'Alliance not found'})
     
     # Get the team
-    team = Team.query.filter_by(team_number=team_id).first()
+    team = filter_teams_by_scouting_team().filter_by(team_number=team_id).first()
     if not team:
         return jsonify({'success': False, 'message': 'Team not found'})
     
@@ -668,7 +668,7 @@ def add_to_list():
         return jsonify({'success': False, 'message': 'Invalid list type'})
     
     # Get the team
-    team = Team.query.filter_by(team_number=team_number).first()
+    team = filter_teams_by_scouting_team().filter_by(team_number=team_number).first()
     if not team:
         return jsonify({'success': False, 'message': 'Team not found'})
     

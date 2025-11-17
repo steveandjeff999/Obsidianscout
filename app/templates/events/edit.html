@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Event{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+	<h1 class="mb-3">Edit Event</h1>
+
+	<div class="card">
+		<div class="card-body">
+			<form method="POST">
+				<div class="mb-3">
+					<label for="name" class="form-label">Event Name</label>
+					<input type="text" class="form-control" id="name" name="name" value="{{ event.name }}" required>
+				</div>
+
+				<div class="mb-3">
+					<label for="code" class="form-label">Event Code</label>
+					<input type="text" class="form-control" id="code" name="code" value="{{ event.code or '' }}" maxlength="50">
+					<div class="form-text">Optional: Unique identifier (uppercased on save).</div>
+				</div>
+
+				<div class="row mb-3">
+					<div class="col-md-4">
+						<label for="year" class="form-label">Year</label>
+						<input type="number" class="form-control" id="year" name="year" min="2000" max="2100" value="{{ event.year }}" required>
+					</div>
+					<div class="col-md-8">
+						<label for="location" class="form-label">Location</label>
+						<input type="text" class="form-control" id="location" name="location" value="{{ event.location or '' }}">
+					</div>
+				</div>
+
+				<div class="row mb-3">
+					<div class="col-md-6">
+						<label for="start_date" class="form-label">Start Date</label>
+						<input type="date" class="form-control" id="start_date" name="start_date" value="{% if event.start_date %}{{ event.start_date.strftime('%Y-%m-%d') }}{% else %}{% endif %}">
+					</div>
+					<div class="col-md-6">
+						<label for="end_date" class="form-label">End Date</label>
+						<input type="date" class="form-control" id="end_date" name="end_date" value="{% if event.end_date %}{{ event.end_date.strftime('%Y-%m-%d') }}{% else %}{% endif %}">
+					</div>
+				</div>
+
+				<div class="d-flex justify-content-end gap-2">
+					<a href="{{ url_for('events.index') }}" class="btn btn-secondary">Cancel</a>
+					<button type="submit" class="btn btn-primary">Save Changes</button>
+				</div>
+			</form>
+		</div>
+	</div>
+</div>
+{% endblock %}

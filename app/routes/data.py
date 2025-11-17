@@ -34,6 +34,181 @@ def get_theme_context():
         'current_theme_id': theme_manager.current_theme
     }
 
+
+def merge_duplicate_events(scouting_team_number=None):
+    """Merge duplicate events that have the same code, name, or year.
+    
+    This function finds and merges duplicate events by:
+    1. Finding events with the same code (normalized) - across ALL scouting teams
+    2. Keeping the most complete event (with most data filled in)
+    3. Moving all teams and matches to the kept event
+    4. Updating scouting_team_number on kept event to match current team
+    5. Deleting the duplicate events
+    
+    Args:
+        scouting_team_number: Optional scouting team number to set on merged event
+    """
+    from collections import defaultdict
+    from sqlalchemy import func
+    
+    try:
+        # Query ALL events regardless of scouting team to find cross-team duplicates
+        all_events = Event.query.all()
+        
+        # Group events by normalized code
+        code_groups = defaultdict(list)
+        for evt in all_events:
+            if evt.code:
+                normalized_code = evt.code.strip().upper()
+                code_groups[normalized_code].append(evt)
+        
+        merged_count = 0
+        for code, events in code_groups.items():
+            if len(events) <= 1:
+                continue
+            
+            # Sort by completeness: prefer events with more filled fields
+            def event_score(e):
+                score = 0
+                if e.name: score += 10
+                if e.location: score += 5
+                if getattr(e, 'start_date', None): score += 5
+                if getattr(e, 'end_date', None): score += 3
+                if getattr(e, 'timezone', None): score += 2
+                if e.year: score += 1
+                return score
+            
+            events.sort(key=event_score, reverse=True)
+            keep_event = events[0]
+            duplicate_events = events[1:]
+            
+            # Set scouting_team_number if provided (prioritize the specified team)
+            if scouting_team_number is not None:
+                keep_event.scouting_team_number = scouting_team_number
+            
+            # Merge data from duplicates into the kept event
+            for dup in duplicate_events:
+                # Update fields if they're missing in keep_event
+                if not keep_event.name and dup.name:
+                    keep_event.name = dup.name
+                if not keep_event.location and dup.location:
+                    keep_event.location = dup.location
+                if not getattr(keep_event, 'start_date', None) and getattr(dup, 'start_date', None):
+                    keep_event.start_date = dup.start_date
+                if not getattr(keep_event, 'end_date', None) and getattr(dup, 'end_date', None):
+                    keep_event.end_date = dup.end_date
+                if not getattr(keep_event, 'timezone', None) and getattr(dup, 'timezone', None):
+                    keep_event.timezone = dup.timezone
+                if not keep_event.year and dup.year:
+                    keep_event.year = dup.year
+                
+                # Move all teams from duplicate to kept event
+                for team in dup.teams:
+                    if team not in keep_event.teams:
+                        keep_event.teams.append(team)
+                
+                # Move all matches from duplicate to kept event
+                Match.query.filter_by(event_id=dup.id).update({Match.event_id: keep_event.id})
+                
+                # Delete the duplicate event
+                db.session.delete(dup)
+                merged_count += 1
+            
+            db.session.add(keep_event)
+        
+        if merged_count > 0:
+            db.session.commit()
+            print(f"  Merged {merged_count} duplicate events")
+        
+        return merged_count
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"  Error merging duplicate events: {e}")
+        return 0
+
+
+def get_or_create_event(name=None, code=None, year=None, location=None, start_date=None, end_date=None, scouting_team_number=None):
+    """Find or create an Event with normalization and race-condition handling.
+
+    - Normalizes `code` to uppercase and stripped form before lookup/creation.
+    - Prefers lookup by `code`+`scouting_team_number` when `code` is provided.
+    - Falls back to `name`+`year`+`scouting_team_number` if `code` is not available.
+    - Handles `IntegrityError` during creation by rolling back and re-querying the existing record.
+    Returns an Event instance (persisted/flush may or may not have been called).
+    """
+    try:
+        code_norm = code.strip().upper() if code else None
+    except Exception:
+        code_norm = code
+
+    # Try lookup by code + scouting_team_number first (most specific)
+    if code_norm:
+        evt = Event.query.filter_by(code=code_norm, scouting_team_number=scouting_team_number).first()
+        if evt:
+            # Update basic fields if missing
+            try:
+                if not evt.name and name:
+                    evt.name = name
+                if location and not evt.location:
+                    evt.location = location
+                if start_date and not getattr(evt, 'start_date', None):
+                    evt.start_date = start_date
+                if end_date and not getattr(evt, 'end_date', None):
+                    evt.end_date = end_date
+                if year and not evt.year:
+                    evt.year = year
+                db.session.add(evt)
+            except Exception:
+                pass
+            return evt
+
+    # Fallback: try lookup by name+year+scouting_team_number
+    if name and year is not None:
+        evt = Event.query.filter_by(name=name, year=year, scouting_team_number=scouting_team_number).first()
+        if evt:
+            try:
+                if code_norm and not evt.code:
+                    evt.code = code_norm
+                if location and not evt.location:
+                    evt.location = location
+                if start_date and not getattr(evt, 'start_date', None):
+                    evt.start_date = start_date
+                if end_date and not getattr(evt, 'end_date', None):
+                    evt.end_date = end_date
+                db.session.add(evt)
+            except Exception:
+                pass
+            return evt
+
+    # Create new event, with normalized code if available
+    new_ev = Event(
+        name=name,
+        code=code_norm if code_norm else code,
+        location=location,
+        start_date=start_date,
+        end_date=end_date,
+        year=year,
+        scouting_team_number=scouting_team_number
+    )
+    try:
+        db.session.add(new_ev)
+        db.session.flush()
+        return new_ev
+    except IntegrityError:
+        # Race: someone else created it concurrently. Rollback and re-query.
+        db.session.rollback()
+        if code_norm:
+            evt = Event.query.filter_by(code=code_norm, scouting_team_number=scouting_team_number).first()
+            if evt:
+                return evt
+        if name and year is not None:
+            evt = Event.query.filter_by(name=name, year=year, scouting_team_number=scouting_team_number).first()
+            if evt:
+                return evt
+        # If still no event, re-raise to let caller decide
+        raise
+
 bp = Blueprint('data', __name__, url_prefix='/data')
 
 
@@ -129,17 +304,15 @@ def _process_portable_data(export_data):
                 report['updated'].setdefault('events', 0)
                 report['updated']['events'] = report['updated']['events'] + 1 if report['updated'].get('events') else 1
             else:
-                new_ev = Event(
+                new_ev = get_or_create_event(
                     name=ev.get('name'),
                     code=ev.get('code'),
+                    year=ev.get('year'),
                     location=ev.get('location'),
                     start_date=_sanitize_date(ev.get('start_date')),
                     end_date=_sanitize_date(ev.get('end_date')),
-                    year=ev.get('year'),
                     scouting_team_number=ev.get('scouting_team_number')
                 )
-                db.session.add(new_ev)
-                db.session.flush()
                 mapping['events'][ev['id']] = new_ev.id
                 report['created'].setdefault('events', 0)
                 report['created']['events'] = report['created']['events'] + 1 if report['created'].get('events') else 1
@@ -668,11 +841,7 @@ def import_excel():
                         if not match:
                             # Need to find or create an event first
                             event_name = row.get('event_name', 'Unknown Event')
-                            event = Event.query.filter_by(name=event_name).first()
-                            if not event:
-                                event = Event(name=event_name, year=game_config['season'])
-                                db.session.add(event)
-                                db.session.flush()
+                            event = get_or_create_event(name=event_name, year=game_config['season'])
                                 
                             # Create the match
                             match = Match(
@@ -847,11 +1016,7 @@ def import_qr():
                     # Need to find or create an event first
                     game_config = get_effective_game_config()
                     event_name = scouting_data_json.get('event_name', 'Unknown Event')
-                    event = Event.query.filter_by(name=event_name).first()
-                    if not event:
-                        event = Event(name=event_name, year=game_config['season'])
-                        db.session.add(event)
-                        db.session.flush()
+                    event = get_or_create_event(name=event_name, year=game_config['season'])
                     
                     # Create the match
                     match = Match(
@@ -898,11 +1063,7 @@ def import_qr():
                     # Need to find or create an event first
                     game_config = get_effective_game_config()
                     event_name = scouting_data_json.get('event_name', 'Unknown Event')
-                    event = Event.query.filter_by(name=event_name).first()
-                    if not event:
-                        event = Event(name=event_name, year=game_config['season'])
-                        db.session.add(event)
-                        db.session.flush()
+                    event = get_or_create_event(name=event_name, year=game_config['season'])
                     
                     # Create the match
                     match = Match(
@@ -1043,7 +1204,7 @@ def export_excel():
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         # 1) Events
         try:
-            events = Event.query.order_by(Event.year.desc(), Event.name).all()
+            events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
             events_rows = []
             for e in events:
                 events_rows.append({
@@ -1063,7 +1224,7 @@ def export_excel():
 
         # 2) Teams
         try:
-            teams = Team.query.order_by(Team.team_number).all()
+            teams = filter_teams_by_scouting_team().order_by(Team.team_number).all()
             team_rows = []
             for t in teams:
                 # Build a comma-separated list of event codes/names for the team
@@ -1541,17 +1702,15 @@ def import_portable():
                 report['updated'].setdefault('events', 0)
                 report['updated']['events'] = report['updated']['events'] + 1 if report['updated'].get('events') else 1
             else:
-                new_ev = Event(
+                new_ev = get_or_create_event(
                     name=ev.get('name'),
                     code=ev.get('code'),
+                    year=ev.get('year'),
                     location=ev.get('location'),
                     start_date=_sanitize_date(ev.get('start_date')),
                     end_date=_sanitize_date(ev.get('end_date')),
-                    year=ev.get('year'),
                     scouting_team_number=ev.get('scouting_team_number')
                 )
-                db.session.add(new_ev)
-                db.session.flush()
                 mapping['events'][ev['id']] = new_ev.id
                 report['created'].setdefault('events', 0)
                 report['created']['events'] = report['created']['events'] + 1 if report['created'].get('events') else 1
@@ -2087,9 +2246,9 @@ def validate_data():
     game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     event_id = request.args.get('event_id', type=int)
-    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+    events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
     if event_id:
-        event = Event.query.get_or_404(event_id)
+        event = filter_events_by_scouting_team().filter(Event.id == event_id).first_or_404()
     elif current_event_code:
         event = get_event_by_code(current_event_code)
     else:

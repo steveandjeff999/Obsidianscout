@@ -21,7 +21,7 @@ def test_database_login():
             
             # Test credentials
             username = 'superadmin'
-            password = 'JSHkimber1911'
+            password = 'JSH1911'
             team_number = 0
             
             print(f"Testing database login with:")

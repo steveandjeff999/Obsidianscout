@@ -78,7 +78,9 @@
         if(!txt) return false;
         const num = parseNumberFromText(txt);
         if(Number.isNaN(num)) return false;
-        // skip small/uninteresting numbers? We'll animate any positive number except season
+        // Only animate numbers greater than 10 — very small numbers are fast enough
+        // and animating them looks slow/jerky, so skip them.
+        if (num <= 10) return false;
         return true;
     }
 
@@ -111,6 +113,14 @@
                         return;
                     }
                     if(value <= 0){
+                        el.dataset._countup_done = '1';
+                        observer.unobserve(el);
+                        return;
+                    }
+
+                    // Don't animate small numbers — set them instantly for snappier UX
+                    if (value <= 10) {
+                        el.textContent = formatNumber(value, useGrouping);
                         el.dataset._countup_done = '1';
                         observer.unobserve(el);
                         return;

@@ -73,6 +73,14 @@ def index():
         }
         # Build base query for this event (filtered by scouting team)
         query = filter_matches_by_scouting_team().filter(Match.event_id == event.id)
+        
+        # Defensive check: ensure we only show matches for current scouting team
+        from app.utils.team_isolation import get_current_scouting_team_number
+        current_scouting_team = get_current_scouting_team_number()
+        if current_scouting_team is not None:
+            query = query.filter(Match.scouting_team_number == current_scouting_team)
+        else:
+            query = query.filter(Match.scouting_team_number.is_(None))
 
         # Apply optional filters from the request
         q = (request.args.get('q') or '').strip()
@@ -269,27 +277,34 @@ def sync_from_config():
         if not event:
             # Try to fetch full event details including timezone from API
             from app.utils.api_utils import get_event_details_dual_api
+            from app.routes.data import get_or_create_event
+            from app.utils.team_isolation import get_current_scouting_team_number
+            current_scouting_team = get_current_scouting_team_number()
             event_details = get_event_details_dual_api(event_code)
             
             if event_details:
-                event = Event(
+                # Use get_or_create_event to properly handle race conditions
+                event = get_or_create_event(
                     name=event_details.get('name', f"Event {event_code}"),
                     code=event_code,
-                    timezone=event_details.get('timezone'),  # Store timezone from API
+                    year=event_details.get('year', current_year),
                     location=event_details.get('location'),
                     start_date=event_details.get('start_date'),
                     end_date=event_details.get('end_date'),
-                    year=event_details.get('year', current_year)
+                    scouting_team_number=current_scouting_team
                 )
+                # Set timezone separately if available (not in get_or_create_event params)
+                if event_details.get('timezone') and not getattr(event, 'timezone', None):
+                    event.timezone = event_details.get('timezone')
+                    db.session.add(event)
             else:
-                # Fallback to placeholder
-                event = Event(
+                # Fallback to placeholder using get_or_create_event
+                event = get_or_create_event(
                     name=f"Event {event_code}",
                     code=event_code,
-                    year=current_year
+                    year=current_year,
+                    scouting_team_number=current_scouting_team
                 )
-            assign_scouting_team_to_model(event)  # Assign current scouting team
-            db.session.add(event)
             db.session.flush()  # Get the ID without committing yet
         
         # Fetch matches from the dual API using the event code
@@ -332,6 +347,8 @@ def sync_from_config():
                     match.winner = match_data.get('winner', match.winner)
                     match.red_score = match_data.get('red_score', match.red_score)
                     match.blue_score = match_data.get('blue_score', match.blue_score)
+                    # Ensure scouting_team_number is set (in case it was None before)
+                    assign_scouting_team_to_model(match)
                     matches_updated += 1
                 else:
                     # Add new match
@@ -342,6 +359,15 @@ def sync_from_config():
             
             # Commit all changes
             db.session.commit()
+        
+        # Merge any duplicate events that may have been created
+        try:
+            from app.routes.data import merge_duplicate_events
+            from app.utils.team_isolation import get_current_scouting_team_number
+            current_scouting_team = get_current_scouting_team_number()
+            merge_duplicate_events(current_scouting_team)
+        except Exception as merge_err:
+            print(f"  Warning: Could not merge duplicate events: {merge_err}")
         
         # Update match times from API after syncing matches
         try:
@@ -1467,7 +1493,15 @@ def matches_data():
             })
         
         # Get matches for this event
-        matches = filter_matches_by_scouting_team().filter_by(event_id=current_event.id).order_by(Match.match_number).all()
+        matches_query = filter_matches_by_scouting_team().filter_by(event_id=current_event.id)
+        # Defensive check: ensure we only show matches for current scouting team
+        from app.utils.team_isolation import get_current_scouting_team_number
+        current_scouting_team = get_current_scouting_team_number()
+        if current_scouting_team is not None:
+            matches_query = matches_query.filter(Match.scouting_team_number == current_scouting_team)
+        else:
+            matches_query = matches_query.filter(Match.scouting_team_number.is_(None))
+        matches = matches_query.order_by(Match.match_number).all()
         
         # Get team data for context
         teams = db.session.query(Team).join(Team.events).filter(Event.id == current_event.id).all()

@@ -1046,7 +1046,7 @@ def view_shared(share_id):
         # Swallow logging errors to avoid breaking view
         pass
 
-    teams = Team.query.filter(Team.team_number.in_(team_numbers)).all()
+    teams = filter_teams_by_scouting_team().filter(Team.team_number.in_(team_numbers)).all()
     
     if not teams:
         abort(404, description="No teams found for this shared graph.")
@@ -1142,7 +1142,7 @@ def view_shared(share_id):
     # Provide the same selection UI context as the main graphs index so
     # viewers can make selections just like regular graphs.
     try:
-        all_teams = Team.query.order_by(Team.team_number).all()
+        all_teams = filter_teams_by_scouting_team().order_by(Team.team_number).all()
     except Exception:
         all_teams = []
 
@@ -1446,17 +1446,17 @@ def public_page_widget_render(token, widget_index):
                                 except Exception:
                                         pass
                         if team_ids:
-                                teams = Team.query.filter(Team.id.in_(team_ids)).all()
+                                teams = filter_teams_by_scouting_team().filter(Team.id.in_(team_ids)).all()
                                 found_ids = {t.id for t in teams}
                                 missing = [tid for tid in team_ids if tid not in found_ids]
                                 if missing:
-                                        more_by_number = Team.query.filter(Team.team_number.in_(missing)).all()
+                                        more_by_number = filter_teams_by_scouting_team().filter(Team.team_number.in_(missing)).all()
                                         if more_by_number:
                                                 teams.extend(more_by_number)
                         else:
-                                teams = Team.query.order_by(Team.team_number).all()
+                                teams = filter_teams_by_scouting_team().order_by(Team.team_number).all()
                 else:
-                        teams = Team.query.order_by(Team.team_number).all()
+                        teams = filter_teams_by_scouting_team().order_by(Team.team_number).all()
 
                 team_data = {}
                 if teams:
@@ -1582,8 +1582,8 @@ def public_page_widget_render(token, widget_index):
                 comparison_data = None
                 if team1_num and team2_num:
                         try:
-                                team1 = Team.query.filter_by(team_number=int(team1_num)).first()
-                                team2 = Team.query.filter_by(team_number=int(team2_num)).first()
+                                team1 = filter_teams_by_scouting_team().filter_by(team_number=int(team1_num)).first()
+                                team2 = filter_teams_by_scouting_team().filter_by(team_number=int(team2_num)).first()
                                 if team1 and team2:
                                         event_id = None
                                         if event_filter and event_filter != 'all':
@@ -1670,7 +1670,7 @@ def public_page_widget_render(token, widget_index):
                                         event_id = int(event_filter)
                                 except ValueError:
                                         pass
-                        teams_query = Team.query.order_by(Team.team_number).all()
+                        teams_query = filter_teams_by_scouting_team().order_by(Team.team_number).all()
                         team_rankings = []
                         for team in teams_query:
                                 analytics_result = calculate_team_metrics(team.id, event_id=event_id)
@@ -1904,11 +1904,11 @@ def pages_create():
             scoring_elements.append({'period': period, 'id': el.get('perm_id', el.get('id')), 'name': el.get('name', el.get('id'))})
 
     # Provide teams list for team-selection dropdown in the widget builder
-    teams_q = Team.query.order_by(Team.team_number).all()
+    teams_q = filter_teams_by_scouting_team().order_by(Team.team_number).all()
     teams = [{'id': t.team_number, 'name': t.team_name or f'Team {t.team_number}'} for t in teams_q]
     
     # Fetch events and matches for dropdown population
-    events_q = Event.query.order_by(Event.name).limit(500).all()
+    events_q = filter_events_by_scouting_team().order_by(Event.name).limit(500).all()
     events = [{'id': e.id, 'name': e.name or e.code, 'code': e.code} for e in events_q]
     
     matches_q = Match.query.order_by(Match.event_id, Match.match_number).limit(1000).all()
@@ -1964,11 +1964,11 @@ def pages_edit(page_id):
     except Exception:
         initial_widgets = []
 
-    teams_q = Team.query.order_by(Team.team_number).all()
+    teams_q = filter_teams_by_scouting_team().order_by(Team.team_number).all()
     teams = [{'id': t.team_number, 'name': t.team_name or f'Team {t.team_number}'} for t in teams_q]
     
     # Fetch events and matches for dropdown population
-    events_q = Event.query.order_by(Event.name).limit(500).all()
+    events_q = filter_events_by_scouting_team().order_by(Event.name).limit(500).all()
     events = [{'id': e.id, 'name': e.name or e.code, 'code': e.code} for e in events_q]
     
     matches_q = Match.query.order_by(Match.event_id, Match.match_number).limit(1000).all()
@@ -2048,18 +2048,18 @@ def pages_widget_render(page_id, widget_index):
                     pass
             if team_ids:
                 # First try to find teams by database id
-                teams = Team.query.filter(Team.id.in_(team_ids)).all()
+                teams = filter_teams_by_scouting_team().filter(Team.id.in_(team_ids)).all()
                 found_ids = {t.id for t in teams}
                 # For any values not found as ids, try matching by team_number
                 missing = [tid for tid in team_ids if tid not in found_ids]
                 if missing:
-                    more_by_number = Team.query.filter(Team.team_number.in_(missing)).all()
+                    more_by_number = filter_teams_by_scouting_team().filter(Team.team_number.in_(missing)).all()
                     if more_by_number:
                         teams.extend(more_by_number)
             else:
-                teams = Team.query.order_by(Team.team_number).all()
+                teams = filter_teams_by_scouting_team().order_by(Team.team_number).all()
         else:
-            teams = Team.query.order_by(Team.team_number).all()
+            teams = filter_teams_by_scouting_team().order_by(Team.team_number).all()
         team_data = {}
         if teams:
             team_ids = [t.id for t in teams]
@@ -2193,8 +2193,8 @@ def pages_widget_render(page_id, widget_index):
         
         if team1_num and team2_num:
             try:
-                team1 = Team.query.filter_by(team_number=int(team1_num)).first()
-                team2 = Team.query.filter_by(team_number=int(team2_num)).first()
+                team1 = filter_teams_by_scouting_team().filter_by(team_number=int(team1_num)).first()
+                team2 = filter_teams_by_scouting_team().filter_by(team_number=int(team2_num)).first()
                 
                 if team1 and team2:
                     # Parse event_id for filtering
@@ -2294,7 +2294,7 @@ def pages_widget_render(page_id, widget_index):
                 except ValueError:
                     pass
             
-            teams_query = Team.query.order_by(Team.team_number).all()
+            teams_query = filter_teams_by_scouting_team().order_by(Team.team_number).all()
             team_rankings = []
             for team in teams_query:
                 # Pass event_id to calculate_team_metrics to filter data by event
@@ -2506,23 +2506,23 @@ def pages_view(page_id):
                     except Exception:
                         pass
                 if team_ids:
-                    teams = Team.query.filter(Team.id.in_(team_ids)).all()
+                    teams = filter_teams_by_scouting_team().filter(Team.id.in_(team_ids)).all()
                     found_ids = {t.id for t in teams}
                     missing = [tid for tid in team_ids if tid not in found_ids]
                     if missing:
-                        more_by_number = Team.query.filter(Team.team_number.in_(missing)).all()
+                        more_by_number = filter_teams_by_scouting_team().filter(Team.team_number.in_(missing)).all()
                         if more_by_number:
                             teams.extend(more_by_number)
                 else:
-                    teams = Team.query.order_by(Team.team_number).all()
+                    teams = filter_teams_by_scouting_team().order_by(Team.team_number).all()
             else:
-                teams = Team.query.order_by(Team.team_number).all()
+                teams = filter_teams_by_scouting_team().order_by(Team.team_number).all()
             # Ensure we have an entry for each requested team (even if no ScoutingData exists)
             if selected_teams and team_ids:
                 existing_ids = {t.id for t in teams}
                 missing_ids = [tid for tid in team_ids if tid not in existing_ids]
                 if missing_ids:
-                    more = Team.query.filter(Team.id.in_(missing_ids)).all()
+                    more = filter_teams_by_scouting_team().filter(Team.id.in_(missing_ids)).all()
                     teams.extend(more)
             # Deduplicate teams by team_number (some events may have duplicate rows)
             unique_map = {}
@@ -2638,8 +2638,8 @@ def pages_view(page_id):
             
             if team1_num and team2_num:
                 try:
-                    team1 = Team.query.filter_by(team_number=int(team1_num)).first()
-                    team2 = Team.query.filter_by(team_number=int(team2_num)).first()
+                    team1 = filter_teams_by_scouting_team().filter_by(team_number=int(team1_num)).first()
+                    team2 = filter_teams_by_scouting_team().filter_by(team_number=int(team2_num)).first()
                     
                     if team1 and team2:
                         from app.utils.analysis import calculate_team_metrics
@@ -2702,7 +2702,7 @@ def pages_view(page_id):
                         pass
                 
                 # Get all teams
-                teams_query = Team.query.order_by(Team.team_number).all()
+                teams_query = filter_teams_by_scouting_team().order_by(Team.team_number).all()
                 
                 # Calculate metrics for each team
                 team_rankings = []
@@ -2837,11 +2837,11 @@ def pages_view(page_id):
         for el in game_config.get(period, {}).get('scoring_elements', []):
             scoring_elements.append({'period': period, 'id': el.get('perm_id', el.get('id')), 'name': el.get('name', el.get('id'))})
 
-    teams_q = Team.query.order_by(Team.team_number).all()
+    teams_q = filter_teams_by_scouting_team().order_by(Team.team_number).all()
     teams = [{'id': t.team_number, 'name': t.team_name or f'Team {t.team_number}'} for t in teams_q]
 
     # Fetch events and matches for dropdown population
-    events_q = Event.query.order_by(Event.name).limit(500).all()
+    events_q = filter_events_by_scouting_team().order_by(Event.name).limit(500).all()
     events = [{'id': e.id, 'name': e.name or e.code, 'code': e.code} for e in events_q]
     
     matches_q = Match.query.order_by(Match.event_id, Match.match_number).limit(1000).all()

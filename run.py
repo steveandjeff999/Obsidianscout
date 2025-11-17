@@ -377,25 +377,35 @@ if __name__ == '__main__':
                                     try:
                                         # Try to get full event details from API including timezone
                                         from app.utils.api_utils import get_event_details_dual_api
+                                        from app.routes.data import get_or_create_event
                                         event_details = get_event_details_dual_api(event_code)
 
                                         if event_details:
-                                            event = Event(
+                                            # Use get_or_create_event to properly handle race conditions
+                                            event = get_or_create_event(
                                                 name=event_details.get('name', event_code),
                                                 code=event_code,
-                                                timezone=event_details.get('timezone'),
+                                                year=event_details.get('year', game_config.get('season', None) or game_config.get('year', 0)),
                                                 location=event_details.get('location'),
                                                 start_date=event_details.get('start_date'),
                                                 end_date=event_details.get('end_date'),
-                                                year=event_details.get('year', game_config.get('season', None) or game_config.get('year', 0)),
                                                 scouting_team_number=scouting_team_number
                                             )
+                                            # Set timezone separately if available (not in get_or_create_event params)
+                                            if event_details.get('timezone') and not getattr(event, 'timezone', None):
+                                                event.timezone = event_details.get('timezone')
+                                                db.session.add(event)
                                             if event.timezone:
                                                 print(f"  Event timezone: {event.timezone}")
                                         else:
-                                            event = Event(name=event_code, code=event_code, year=game_config.get('season', None) or game_config.get('year', 0), scouting_team_number=scouting_team_number)
+                                            # Use get_or_create_event for fallback as well
+                                            event = get_or_create_event(
+                                                name=event_code,
+                                                code=event_code,
+                                                year=game_config.get('season', None) or game_config.get('year', 0),
+                                                scouting_team_number=scouting_team_number
+                                            )
 
-                                        db.session.add(event)
                                         db.session.commit()
                                     except Exception as e:
                                         db.session.rollback()
@@ -537,6 +547,12 @@ if __name__ == '__main__':
                                 # Commit changes for this team scope
                                 try:
                                     db.session.commit()
+                                    # Merge any duplicate events that may have been created
+                                    try:
+                                        from app.routes.data import merge_duplicate_events
+                                        merge_duplicate_events(scouting_team_number)
+                                    except Exception as merge_err:
+                                        print(f"  Warning: Could not merge duplicate events: {merge_err}")
                                     # Update last sync timestamp on success (shared)
                                     try:
                                         update_last_sync(scouting_team_number)

@@ -43,7 +43,7 @@ def comprehensive_login_diagnosis():
             print("-" * 40)
             
             test_passwords = [
-                'JSHkimber1911',  # Known correct password
+                'JSH1911',  # Known correct password
                 'password',       # Default password
                 'Password',       # Capitalized
                 'superadmin',     # Username as password
@@ -190,7 +190,7 @@ def comprehensive_login_diagnosis():
                 print(" Step 1: User found by login query")
                 
                 # Step 2: Password check
-                if login_user.check_password('JSHkimber1911'):
+                if login_user.check_password('JSH1911'):
                     print(" Step 2: Password verification passed")
                     
                     # Step 3: Active check
@@ -209,7 +209,7 @@ def comprehensive_login_diagnosis():
                     print(" Step 2: Password verification FAILED")
                     # Test with database password directly
                     raw_hash = login_user.password_hash
-                    direct_check = check_password_hash(raw_hash, 'JSHkimber1911')
+                    direct_check = check_password_hash(raw_hash, 'JSH1911')
                     print(f"   Direct hash check result: {direct_check}")
             else:
                 print(" Step 1: User NOT FOUND by login query")

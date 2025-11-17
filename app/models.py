@@ -13,6 +13,7 @@ from app.utils.config_manager import (
     load_game_config,
 )
 from app.utils.concurrent_models import ConcurrentModelMixin
+from sqlalchemy.orm import validates
 
 # Association table for user roles (many-to-many)
 user_roles = db.Table('user_roles',
@@ -228,6 +229,15 @@ class Event(db.Model):
     
     def __repr__(self):
         return f"Event: {self.name} ({self.year})"
+
+    @validates('code')
+    def _validate_code(self, key, value):
+        if value is None:
+            return value
+        try:
+            return value.upper()
+        except Exception:
+            return value
 
 class Match(ConcurrentModelMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -1222,6 +1232,15 @@ class ScoutingAllianceEvent(db.Model):
     
     def __repr__(self):
         return f'<AllianceEvent {self.event_code} for Alliance {self.alliance_id}>'
+
+    @validates('event_code')
+    def _validate_event_code(self, key, value):
+        if value is None:
+            return value
+        try:
+            return value.upper()
+        except Exception:
+            return value
 
 class ScoutingAllianceSync(db.Model):
     """Model to track data synchronization between alliance members"""

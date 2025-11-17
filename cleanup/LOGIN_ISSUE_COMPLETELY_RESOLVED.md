@@ -13,7 +13,7 @@ must_change_password=True                        #  Forces password change
 
 **AFTER (FIXED):**
 ```python
-superadmin_user.set_password('JSHkimber1911')   #  Correct password!
+superadmin_user.set_password('JSH1911')   #  Correct password!
 must_change_password=False                       #  No forced change needed
 ```
 
@@ -22,8 +22,8 @@ must_change_password=False                       #  No forced change needed
 1. **Database gets deleted** (manually or during troubleshooting)
 2. **Server starts up** and detects no users exist
 3. **Auto-creates superadmin** with password `'password'`
-4. **User tries to login** with the known working password `'JSHkimber1911'`
-5. **Login fails** because database has `'password'` but user entered `'JSHkimber1911'`
+4. **User tries to login** with the known working password `'JSH1911'`
+5. **Login fails** because database has `'password'` but user entered `'JSH1911'`
 6. **"Invalid username, team or password" error** appears
 
 ### Additional Issues Fixed
@@ -56,8 +56,8 @@ must_change_password=False                       #  No forced change needed
 
 After this fix, when the database is deleted:
 
-1. **Server starts** → Auto-creates superadmin with `'JSHkimber1911'`
-2. **User logs in** → Uses `'JSHkimber1911'` 
+1. **Server starts** → Auto-creates superadmin with `'JSH1911'`
+2. **User logs in** → Uses `'JSH1911'` 
 3. **Passwords match** → Login succeeds immediately
 4. **No more "Invalid username, team or password" errors**
 
@@ -65,7 +65,7 @@ After this fix, when the database is deleted:
 
 ```
 Username: superadmin  
-Password: JSHkimber1911
+Password: JSH1911
 Team Number: 0
 ```
 
@@ -77,7 +77,7 @@ If you ever need to reset the system completely:
 2. **Delete database**: `rm instance/scouting.db*`
 3. **Clear cache**: `rm -rf __pycache__ app/__pycache__`
 4. **Start server** → Will auto-create superadmin with correct password
-5. **Login immediately** with `superadmin` / `JSHkimber1911` / `0`
+5. **Login immediately** with `superadmin` / `JSH1911` / `0`
 
 ## Monitoring Tools Available
 

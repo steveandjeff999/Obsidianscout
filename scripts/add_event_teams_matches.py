@@ -27,6 +27,7 @@ if PROJECT_ROOT not in sys.path:
 
 from app import create_app, db
 from app.models import Event, Team, Match
+from sqlalchemy.exc import IntegrityError
 
 
 # ========== CONFIG: edit these variables ===========
@@ -72,16 +73,43 @@ def parse_iso_to_utc(s):
 
 
 def ensure_event(session, name, code, year, scouting_team_number=None):
-    event = Event.query.filter_by(code=code, scouting_team_number=scouting_team_number).first()
+    # Normalize code to avoid duplicates due to casing/whitespace
+    try:
+        code_norm = code.strip().upper() if code else None
+    except Exception:
+        code_norm = code
+
+    event = Event.query.filter_by(code=code_norm, scouting_team_number=scouting_team_number).first()
     if event:
         print(f"Using existing event id={event.id} name={event.name} code={event.code}")
         return event
 
-    event = Event(name=name, code=code, year=year, scouting_team_number=scouting_team_number)
+    # Fallback: try by name+year
+    if name and year is not None:
+        event = Event.query.filter_by(name=name, year=year, scouting_team_number=scouting_team_number).first()
+        if event:
+            print(f"Using existing event by name id={event.id} name={event.name} code={event.code}")
+            return event
+
+    event = Event(name=name, code=code_norm if code_norm else code, year=year, scouting_team_number=scouting_team_number)
     session.add(event)
-    session.commit()
-    print(f"Created Event id={event.id} name={event.name} code={event.code}")
-    return event
+    try:
+        session.commit()
+        print(f"Created Event id={event.id} name={event.name} code={event.code}")
+        return event
+    except IntegrityError:
+        # Race: another process created the event concurrently. Rollback and re-query.
+        session.rollback()
+        event = Event.query.filter_by(code=code_norm, scouting_team_number=scouting_team_number).first()
+        if event:
+            print(f"Race-resolved: using existing event id={event.id} name={event.name} code={event.code}")
+            return event
+        # As last resort, try lookup by name/year
+        event = Event.query.filter_by(name=name, year=year, scouting_team_number=scouting_team_number).first()
+        if event:
+            return event
+        # Re-raise if we cannot resolve
+        raise
 
 
 def ensure_team(session, team_number, team_name=None, scouting_team_number=None):

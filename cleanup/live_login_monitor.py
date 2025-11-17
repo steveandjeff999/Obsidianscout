@@ -38,7 +38,7 @@ def live_login_monitor():
                 print(f"   Username: {user.username}")
                 print(f"   Team: {user.scouting_team_number}")
                 print(f"   Active: {user.is_active}")
-                print(f"   Password: {' CORRECT' if user.check_password('JSHkimber1911') else ' INCORRECT'}")
+                print(f"   Password: {' CORRECT' if user.check_password('JSH1911') else ' INCORRECT'}")
                 print(f"   Must change password: {user.must_change_password}")
                 print(f"   Last successful login: {user.last_login}")
             else:
@@ -99,7 +99,7 @@ def live_login_monitor():
                 print("2. Try a different browser or incognito mode")
                 print("3. Check that you're using:")
                 print("   - Username: superadmin")
-                print("   - Password: JSHkimber1911")
+                print("   - Password: JSH1911")
                 print("   - Team Number: 0")
                 print("4. The error message might be cached in your browser")
                 print()
