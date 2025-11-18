@@ -1,15 +1,16 @@
 {
+  "game_name": "REEFSCAPE",
+  "season": 2025,
+  "version": "1.0.1",
   "alliance_size": 3,
+  "scouting_stations": 6,
+  "current_event_code": "OKOK",
+  "match_types": [
+    "Practice",
+    "Qualification",
+    "Playoff"
+  ],
   "preferred_api_source": "tba",
-  "api_settings": {
-    "username": "your FIRST api username here",
-    "auth_token": "[REDACTED_auth_token]",
-    "base_url": "https://frc-api.firstinspires.org"
-  },
-  "tba_api_settings": {
-    "auth_key": "hae7pfixkaYpROTHhMx6XQ5qLkjT5v7jX7IymIp3sFadVOTsboxkSVJlYu4yoq9a",
-    "base_url": "https://www.thebluealliance.com/api/v3"
-  },
   "auto_period": {
     "duration_seconds": 15,
     "scoring_elements": [
@@ -19,6 +20,8 @@
         "name": "Leave Starting Zone",
         "type": "boolean",
         "default": false,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 3.0
       },
       {
@@ -27,8 +30,9 @@
         "name": "CORAL (L1)",
         "type": "counter",
         "default": 0,
-        "points": 3.0,
-        "game_piece_id": "cor"
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 3.0
       },
       {
         "id": "acl2",
@@ -36,8 +40,9 @@
         "name": "CORAL (L2)",
         "type": "counter",
         "default": 0,
-        "points": 4.0,
-        "game_piece_id": "cor"
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 4.0
       },
       {
         "id": "acl3",
@@ -45,8 +50,9 @@
         "name": "CORAL (L3)",
         "type": "counter",
         "default": 0,
-        "points": 6.0,
-        "game_piece_id": "cor"
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 6.0
       },
       {
         "id": "acl4",
@@ -54,8 +60,9 @@
         "name": "CORAL (L4)",
         "type": "counter",
         "default": 0,
-        "points": 7.0,
-        "game_piece_id": "cor"
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 7.0
       },
       {
         "id": "aap",
@@ -63,8 +70,9 @@
         "name": "ALGAE in Processor",
         "type": "counter",
         "default": 0,
-        "points": 6.0,
-        "game_piece_id": "alg"
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 6.0
       },
       {
         "id": "aan",
@@ -72,8 +80,9 @@
         "name": "ALGAE in Net",
         "type": "counter",
         "default": 0,
-        "points": 4.0,
-        "game_piece_id": "alg"
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 4.0
       },
       {
         "id": "aam",
@@ -81,6 +90,8 @@
         "name": "ALGAE Missed",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 0.0
       },
       {
@@ -89,71 +100,94 @@
         "name": "CORAL Gathered",
         "type": "counter",
         "default": 0,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
         "points": 0.0
       }
     ]
   },
-  "current_event_code": "okok",
-  "data_analysis": {
-    "key_metrics": [
+  "teleop_period": {
+    "duration_seconds": 120,
+    "scoring_elements": [
       {
-        "id": "apt",
-        "name": "Auto Points",
-        "aggregate": "average",
-        "display_in_predictions": true,
-        "auto_generated": true,
-        "is_total_component": true
-      },
-      {
-        "id": "tpt",
-        "name": "Teleop Points",
-        "aggregate": "average",
-        "display_in_predictions": true,
-        "auto_generated": true,
-        "is_total_component": true
-      },
-      {
-        "id": "ept",
-        "name": "Endgame Points",
-        "aggregate": "average",
-        "display_in_predictions": true,
-        "auto_generated": true,
-        "is_total_component": true
-      },
-      {
-        "id": "tot",
-        "name": "Total Points",
-        "aggregate": "average",
-        "display_in_predictions": true,
-        "auto_generated": true,
-        "is_total_component": false
-      },
-      {
-        "id": "caa",
-        "name": "CORAL & ALGAE Accuracy",
-        "aggregate": "average",
-        "display_in_predictions": true,
-        "auto_generated": false,
-        "is_total_component": false,
-        "formula": "(acl1 + acl2 + acl3 + acl4 + tcl1 + tcl2 + tcl3 + tcl4 + aap + aan + tap + tan) / (aam + 0.001 + acl1 + acl2 + acl3 + acl4 + tcl1 + tcl2 + tcl3 + tcl4 + aap + aan + tap + tan)"
-      },
-      {
-        "id": "dr",
-        "name": "Defense Rate",
-        "aggregate": "average",
+        "id": "tcl1",
+        "perm_id": "tcl1",
+        "name": "CORAL (L1)",
+        "type": "counter",
+        "default": 0,
         "display_in_predictions": false,
-        "auto_generated": false,
-        "is_total_component": false,
-        "formula": "tdp ? 1 : 0"
+        "gamepiece_scoreible": false,
+        "points": 2.0
       },
       {
-        "id": "ecp",
-        "name": "Endgame Capability",
-        "aggregate": "average",
-        "display_in_predictions": true,
-        "auto_generated": false,
-        "is_total_component": false,
-        "formula": "enp == 'Deep Cage' ? 3 : enp == 'Shallow Cage' ? 2 : enp == 'Barge Park' ? 1 : 0"
+        "id": "tcl2",
+        "perm_id": "tcl2",
+        "name": "CORAL (L2)",
+        "type": "counter",
+        "default": 0,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 3.0
+      },
+      {
+        "id": "tcl3",
+        "perm_id": "tcl3",
+        "name": "CORAL (L3)",
+        "type": "counter",
+        "default": 0,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 4.0
+      },
+      {
+        "id": "tcl4",
+        "perm_id": "tcl4",
+        "name": "CORAL (L4)",
+        "type": "counter",
+        "default": 0,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 5.0
+      },
+      {
+        "id": "tap",
+        "perm_id": "tap",
+        "name": "ALGAE in Processor",
+        "type": "counter",
+        "default": 0,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 6.0
+      },
+      {
+        "id": "tan",
+        "perm_id": "tan",
+        "name": "ALGAE in Net",
+        "type": "counter",
+        "default": 0,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 4.0
+      },
+      {
+        "id": "tdp",
+        "perm_id": "tdp",
+        "name": "Defense Played",
+        "type": "boolean",
+        "default": false,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 0.0
+      },
+      {
+        "id": "coo",
+        "perm_id": "coo",
+        "name": "Coopertition Activated",
+        "type": "boolean",
+        "default": false,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 0.0
       }
     ]
   },
@@ -164,32 +198,31 @@
         "id": "egh",
         "perm_id": "egh",
         "name": "Climb",
-        "type": "select",
-        "default": "0"
+        "type": "counter",
+        "default": 0,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 0.0
       }
     ]
   },
-  "game_name": "REEFSCAPE",
   "game_pieces": [
     {
       "id": "cor",
       "name": "CORAL",
       "auto_points": 3.0,
       "teleop_points": 2.0,
-      "bonus_points": 0.0
+      "bonus_points": 0.0,
+      "gamepiece_scoreible": false
     },
     {
       "id": "alg",
       "name": "ALGAE",
       "auto_points": 6.0,
       "teleop_points": 6.0,
-      "bonus_points": 0.0
+      "bonus_points": 0.0,
+      "gamepiece_scoreible": false
     }
-  ],
-  "match_types": [
-    "Practice",
-    "Qualification",
-    "Playoff"
   ],
   "post_match": {
     "rating_elements": [
@@ -225,82 +258,17 @@
       }
     ]
   },
-  "scouting_stations": 6,
-  "season": 2025,
-  "teleop_period": {
-    "duration_seconds": 120,
-    "scoring_elements": [
-      {
-        "id": "tcl1",
-        "perm_id": "tcl1",
-        "name": "CORAL (L1)",
-        "type": "counter",
-        "default": 0,
-        "points": 2.0,
-        "game_piece_id": "cor"
-      },
-      {
-        "id": "tcl2",
-        "perm_id": "tcl2",
-        "name": "CORAL (L2)",
-        "type": "counter",
-        "default": 0,
-        "points": 3.0,
-        "game_piece_id": "cor"
-      },
-      {
-        "id": "tcl3",
-        "perm_id": "tcl3",
-        "name": "CORAL (L3)",
-        "type": "counter",
-        "default": 0,
-        "points": 4.0,
-        "game_piece_id": "cor"
-      },
-      {
-        "id": "tcl4",
-        "perm_id": "tcl4",
-        "name": "CORAL (L4)",
-        "type": "counter",
-        "default": 0,
-        "points": 5.0,
-        "game_piece_id": "cor"
-      },
-      {
-        "id": "tap",
-        "perm_id": "tap",
-        "name": "ALGAE in Processor",
-        "type": "counter",
-        "default": 0,
-        "points": 6.0,
-        "game_piece_id": "alg"
-      },
-      {
-        "id": "tan",
-        "perm_id": "tan",
-        "name": "ALGAE in Net",
-        "type": "counter",
-        "default": 0,
-        "points": 4.0,
-        "game_piece_id": "alg"
-      },
-      {
-        "id": "tdp",
-        "perm_id": "tdp",
-        "name": "Defense Played",
-        "type": "boolean",
-        "default": false,
-        "points": 0.0
-      },
-      {
-        "id": "coo",
-        "perm_id": "coo",
-        "name": "Coopertition Activated",
-        "type": "boolean",
-        "default": false,
-        "points": 0.0
-      }
-    ]
+  "api_settings": {
+    "username": "your FIRST api username here",
+    "auth_token": "[REDACTED_auth_token]",
+    "base_url": "https://frc-api.firstinspires.org",
+    "auto_sync_enabled": true
   },
-  "version": "1.0.1"
+  "tba_api_settings": {
+    "auth_key": "hae7pfixkaYpROTHhMx6XQ5qLkjT5v7jX7IymIp3sFadVOTsboxkSVJlYu4yoq9a",
+    "base_url": "https://www.thebluealliance.com/api/v3"
+  },
+  "data_analysis": {
+    "key_metrics": []
+  }
 }

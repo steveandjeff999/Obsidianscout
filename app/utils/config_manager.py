@@ -104,6 +104,15 @@ def get_current_game_config():
 
 def save_game_config(data):
     """Saves the game configuration for the current user's team."""
+    # Normalize event code to uppercase before saving to prevent duplicates
+    try:
+        if isinstance(data, dict):
+            ce = data.get('current_event_code')
+            if isinstance(ce, str):
+                data['current_event_code'] = ce.strip().upper()
+    except Exception:
+        pass
+    
     team_number = None
     if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and hasattr(current_user, 'scouting_team_number'):
         team_number = current_user.scouting_team_number

@@ -67,6 +67,7 @@ On first run, use these credentials:
 - **Match Scouting**: Real-time data collection during matches
 - **Pit Scouting**: Detailed team information and robot capabilities
 - **Analytics Dashboard**: Comprehensive statistics and visualizations
+ - **Match Simulator**: New simulations dashboard allowing teams to assemble alliances from scouting data and run Monte Carlo simulations to estimate expected scores and win probabilities.
 - **Team Comparison**: Compare multiple teams side-by-side
 - **Alliance Selection**: Tools for strategic alliance selection
 - **Match Predictions**: AI-powered match outcome predictions

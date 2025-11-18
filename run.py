@@ -36,6 +36,7 @@ print("===========================\n")
 from app import create_app, socketio, db
 from flask import redirect, url_for, request, flash
 from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy import func
 from app.models import User, Role
 from app.utils.database_init import initialize_database, check_database_health
 # ============================================================================
@@ -371,7 +372,11 @@ if __name__ == '__main__':
                                     continue
 
                                 # Get or create event for this team and event code (so we can read start_date)
-                                event = Event.query.filter_by(code=event_code, scouting_team_number=scouting_team_number).first()
+                                # Use case-insensitive lookup to handle legacy lowercase event codes
+                                event = Event.query.filter(
+                                    func.upper(Event.code) == event_code.upper(),
+                                    Event.scouting_team_number == scouting_team_number
+                                ).first()
                                 if not event:
                                     print(f"  Event {event_code} not found for team {scouting_team_number}, fetching from API...")
                                     try:
@@ -420,7 +425,11 @@ if __name__ == '__main__':
                                         desired_interval = cached.get('desired_interval', RECENT_INTERVAL)
                                         print(f"  Using cached desired interval for {event_code}: {desired_interval}s")
                                         # Ensure event object is available in DB for associations
-                                        event = Event.query.filter_by(code=event_code, scouting_team_number=scouting_team_number).first()
+                                        # Use case-insensitive lookup to handle legacy lowercase event codes
+                                        event = Event.query.filter(
+                                            func.upper(Event.code) == event_code.upper(),
+                                            Event.scouting_team_number == scouting_team_number
+                                        ).first()
                                     else:
                                         desired_interval = RECENT_INTERVAL
                                         now_utc = datetime.now(timezone.utc)
