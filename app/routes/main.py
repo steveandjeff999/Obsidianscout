@@ -90,23 +90,16 @@ def index():
     # Get matches filtered by the current event and scouting team
     if current_event:
         matches_query = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id)
-        # Defensive check: ensure we only show matches for current scouting team
-        from app.utils.team_isolation import get_current_scouting_team_number
-        current_scouting_team = get_current_scouting_team_number()
-        if current_scouting_team is not None:
-            matches_query = matches_query.filter(Match.scouting_team_number == current_scouting_team)
-        else:
-            matches_query = matches_query.filter(Match.scouting_team_number.is_(None))
+        # filter_matches_by_scouting_team() already handles alliance mode and team isolation
         matches = matches_query.order_by(Match.match_type, Match.match_number).all()
     else:
         matches = []  # No matches if no current event is set
     
     # Only show scouting entries associated with the current event
     if current_event:
-        # Start with entries for matches in the current event
-        base_q = ScoutingData.query.join(Match).filter(Match.event_id == current_event.id)
-        # Keep the original behavior of scoping to the user's scouting_team_number (may be None)
-        base_q = base_q.filter(ScoutingData.scouting_team_number == current_user.scouting_team_number)
+        # Start with entries for matches in the current event using alliance-aware filtering
+        from app.utils.team_isolation import filter_scouting_data_by_scouting_team
+        base_q = filter_scouting_data_by_scouting_team().join(Match).filter(Match.event_id == current_event.id)
         scout_entries = base_q.order_by(ScoutingData.timestamp.desc()).limit(5).all()
 
         # Get total count of scouting entries for the current event
