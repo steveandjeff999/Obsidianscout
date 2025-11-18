@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+  <h2>Match Simulator</h2>
+  <p>Simulate match outcomes using your scouting data.</p>
+  <style>
+    .team-list-item.hidden { display: none !important; }
+    .team-list-item { cursor: pointer; border-bottom: 1px solid #dee2e6; padding: 0.75rem 1rem; }
+    .team-list-item:hover { background-color: rgba(0,0,0,0.03); }
+    .team-list-item:has(.team-checkbox:checked) { background-color: rgba(0,0,0,0.05); }
+    .team-list-item.red:has(.team-checkbox:checked) { background-color: rgba(220,53,69,0.08); border-left: 3px solid #dc3545; }
+    .team-list-item.blue:has(.team-checkbox:checked) { background-color: rgba(13,110,253,0.08); border-left: 3px solid #0d6efd; }
+
+    /* Dark mode overrides */
+    body.dark-mode .team-list-item { border-color: #495057; }
+    body.dark-mode .team-list-item { background-color: rgba(255,255,255,0.02); }
+    body.dark-mode .team-list-item.red:has(.team-checkbox:checked) { background-color: rgba(220,53,69,0.12); border-left: 3px solid #b82b2b; }
+    body.dark-mode .team-list-item.blue:has(.team-checkbox:checked) { background-color: rgba(13,110,253,0.12); border-left: 3px solid #0a58ca; }
+    body.dark-mode .selected-team-pill { background: #343a40; border-color: #495057; color: #f8f9fa; }
+    body.dark-mode .selected-team-pill .remove-team { color: #f8f9fa; }
+    .selected-team-pill { display: inline-flex; align-items: center; padding: 0.25rem 0.5rem; border-radius: 999px; background: #f8f9fa; border: 1px solid #dee2e6; }
+  </style>
+  <div class="row">
+    <div class="col-md-12">
+      <div class="row">
+        <div class="col-md-6">
+          <div class="card glass mb-3">
+            <div class="card-header bg-danger text-white">
+              <h5 class="mb-0"><i class="fas fa-users me-2"></i>Red Alliance</h5>
+            </div>
+            <div class="card-body">
+              <select name="red_teams" id="red_teams" class="d-none" multiple aria-label="Red alliance selected teams"></select>
+              <div class="mb-3">
+                <label class="form-label fw-bold">Search & select teams for Red alliance</label>
+                <div class="input-group mb-2">
+                  <input type="text" id="team-search-input-red" class="form-control" placeholder="Search team number or name" aria-label="Search red alliance teams">
+                  <button class="btn btn-outline-secondary" type="button" id="clear-search-red" title="Clear search"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="d-flex gap-2 mb-2">
+                  <button type="button" class="btn btn-sm btn-outline-primary" id="select-all-red" title="Select all visible">Select all visible</button>
+                  <button type="button" class="btn btn-sm btn-outline-danger" id="clear-red" title="Clear selections">Clear</button>
+                </div>
+                <div class="selected-teams-display mb-3" id="selected-pills-container-red"><div class="d-flex flex-wrap gap-2" id="selected-pills-red"></div></div>
+                <div class="team-list-scroll-container" id="team-list-red">
+                  <div class="list-group" id="team-list-items-red">
+                    {% for team in teams %}
+                    <label class="list-group-item list-group-item-action team-list-item red" data-team-number="{{ team.team_number }}" data-team-name="{{ team.team_name or 'Unknown' }}" data-points="{{ team_metrics.get(team.team_number, {}).get('total_points', 0) }}">
+                      <div class="d-flex align-items-center">
+                        <input class="form-check-input me-3 team-checkbox" type="checkbox" value="{{ team.team_number }}" id="team-red-{{ team.team_number }}">
+                        <div class="flex-grow-1">
+                          <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                              <span class="fw-bold text-danger team-number">{{ team.team_number }}</span>
+                              <span class="text-muted ms-2 team-name">{{ team.team_name or 'Unknown' }}</span>
+                            </div>
+                            <span class="badge bg-secondary team-points">{{ "%.1f"|format(team_metrics.get(team.team_number, {}).get('total_points', 0)) }} pts</span>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card glass mb-3">
+            <div class="card-header bg-primary text-white">
+              <h5 class="mb-0"><i class="fas fa-users me-2"></i>Blue Alliance</h5>
+            </div>
+            <div class="card-body">
+              <select name="blue_teams" id="blue_teams" class="d-none" multiple aria-label="Blue alliance selected teams"></select>
+              <div class="mb-3">
+                <label class="form-label fw-bold">Search & select teams for Blue alliance</label>
+                <div class="input-group mb-2">
+                  <input type="text" id="team-search-input-blue" class="form-control" placeholder="Search team number or name" aria-label="Search blue alliance teams">
+                  <button class="btn btn-outline-secondary" type="button" id="clear-search-blue" title="Clear search"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="d-flex gap-2 mb-2">
+                  <button type="button" class="btn btn-sm btn-outline-primary" id="select-all-blue" title="Select all visible">Select all visible</button>
+                  <button type="button" class="btn btn-sm btn-outline-primary" id="clear-blue" title="Clear selections">Clear</button>
+                </div>
+                <div class="selected-teams-display mb-3" id="selected-pills-container-blue"><div class="d-flex flex-wrap gap-2" id="selected-pills-blue"></div></div>
+                <div class="team-list-scroll-container" id="team-list-blue">
+                  <div class="list-group" id="team-list-items-blue">
+                    {% for team in teams %}
+                    <label class="list-group-item list-group-item-action team-list-item blue" data-team-number="{{ team.team_number }}" data-team-name="{{ team.team_name or 'Unknown' }}" data-points="{{ team_metrics.get(team.team_number, {}).get('total_points', 0) }}">
+                      <div class="d-flex align-items-center">
+                        <input class="form-check-input me-3 team-checkbox" type="checkbox" value="{{ team.team_number }}" id="team-blue-{{ team.team_number }}">
+                        <div class="flex-grow-1">
+                          <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                              <span class="fw-bold text-primary team-number">{{ team.team_number }}</span>
+                              <span class="text-muted ms-2 team-name">{{ team.team_name or 'Unknown' }}</span>
+                            </div>
+                            <span class="badge bg-secondary team-points">{{ "%.1f"|format(team_metrics.get(team.team_number, {}).get('total_points', 0)) }} pts</span>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="col-md-12">
+      <div class="row">
+        <div class="col-md-5">
+      <div class="card mb-3">
+        <div class="card-body">
+          <h5 class="card-title">Simulation Controls</h5>
+          <div class="mb-2">
+            <label for="event-select" class="form-label">Event (optional)</label>
+            <select id="event-select" class="form-select">
+              <option value="">All events</option>
+              {% for e in events %}
+              <option value="{{ e.id }}">{{ e.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Simulations</label>
+            <div class="form-text">This simulator uses a default Monte Carlo run count (server-configured). Remove controls for advanced options in the UI.</div>
+          </div>
+          <button id="run-sim" class="btn btn-primary">Run Simulation</button>
+        </div>
+      </div>
+
+        </div>
+
+        <div class="col-md-7">
+          <div class="card mb-3">
+        <div class="card-body">
+          <h5 class="card-title">Results</h5>
+          <div id="sim-results">No results yet.</div>
+        </div>
+      </div>
+        </div>
+      </div>
+    </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    const teamEventMapping = {{ team_event_mapping | tojson if team_event_mapping else {} }};
+    const allTeamsData = {{ all_teams_json | safe if all_teams_json else '[]' }};
+  </script>
+  <script src="{{ url_for('static', filename='js/simulations.js') }}"></script>
+{% endblock %}

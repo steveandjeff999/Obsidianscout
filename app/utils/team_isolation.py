@@ -169,8 +169,17 @@ def get_team_by_number(team_number):
 
 
 def get_event_by_code(event_code):
-    """Get an event by code, filtered by current scouting team."""
-    return filter_events_by_scouting_team().filter(Event.code == event_code).first()
+    """Get an event by code, filtered by current scouting team.
+    
+    Uses case-insensitive comparison to handle event codes consistently
+    regardless of how they were originally stored.
+    """
+    if not event_code:
+        return None
+    
+    # Normalize to uppercase for comparison
+    event_code_upper = event_code.upper()
+    return filter_events_by_scouting_team().filter(func.upper(Event.code) == event_code_upper).first()
 
 
 def filter_users_by_scouting_team(query=None):

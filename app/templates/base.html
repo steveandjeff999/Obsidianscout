@@ -1084,6 +1084,7 @@
                     <a class="nav-link {% if request.endpoint == 'teams.my_ranks_shares' %}active{% endif %}" href="{{ url_for('teams.my_ranks_shares') }}"><i class="fas fa-trophy"></i><span>My Ranking Shares</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('team_trends') %}active{% endif %}" href="{{ url_for('team_trends.index') }}"><i class="fas fa-chart-line"></i><span>Trends</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('data') %}active{% endif %}" href="{{ url_for('data.index') }}"><i class="fas fa-database"></i><span>Data</span></a>
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('simulations') %}active{% endif %}" href="{{ url_for('simulations.index') }}"><i class="fas fa-dice"></i><span>Simulations</span></a>
                 </div>
             </div>
             {% endif %}

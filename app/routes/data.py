@@ -39,7 +39,7 @@ def merge_duplicate_events(scouting_team_number=None):
     """Merge duplicate events that have the same code, name, or year.
     
     This function finds and merges duplicate events by:
-    1. Finding events with the same code (normalized) - across ALL scouting teams
+    1. Finding events with the same code (normalized) - ONLY within the same scouting team
     2. Keeping the most complete event (with most data filled in)
     3. Moving all teams and matches to the kept event
     4. Updating scouting_team_number on kept event to match current team
@@ -52,8 +52,11 @@ def merge_duplicate_events(scouting_team_number=None):
     from sqlalchemy import func
     
     try:
-        # Query ALL events regardless of scouting team to find cross-team duplicates
-        all_events = Event.query.all()
+        # Query events ONLY for the current scouting team to avoid cross-team contamination
+        if scouting_team_number is not None:
+            all_events = Event.query.filter_by(scouting_team_number=scouting_team_number).all()
+        else:
+            all_events = Event.query.filter_by(scouting_team_number=None).all()
         
         # Group events by normalized code
         code_groups = defaultdict(list)

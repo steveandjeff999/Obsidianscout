@@ -26,7 +26,7 @@ try {
 catch {
     Write-Host "ERROR: Python is not installed or not in PATH" -ForegroundColor Red
     Write-Host ""
-    Write-Host "Please install Python 3.8 or higher from:" -ForegroundColor Yellow
+    Write-Host "Please install Python 3.13 or higher from:" -ForegroundColor Yellow
     Write-Host "https://www.python.org/downloads/" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Make sure to check 'Add Python to PATH' during installation" -ForegroundColor Yellow
