@@ -22,7 +22,8 @@ from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_effective_game_config
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
-    filter_events_by_scouting_team, get_event_by_code
+    filter_events_by_scouting_team, filter_scouting_data_by_scouting_team, filter_pit_scouting_data_by_scouting_team,
+    get_event_by_code
 )
 from flask import jsonify
 from app.utils.api_auth import team_data_access_required
@@ -665,9 +666,9 @@ def _process_portable_data(export_data):
 def index():
     """Data import/export dashboard"""
     # Get database statistics
-    teams_count = Team.query.count()
-    matches_count = Match.query.count()
-    scouting_count = ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).count()
+    teams_count = filter_teams_by_scouting_team().count()
+    matches_count = filter_matches_by_scouting_team().count()
+    scouting_count = filter_scouting_data_by_scouting_team().count()
     
     return render_template('data/index.html', 
                           teams_count=teams_count,
@@ -2599,19 +2600,20 @@ def data_stats():
         if current_event_code:
             current_event = get_event_by_code(current_event_code)
         
-        # Get database statistics
-        teams_count = Team.query.count()
-        matches_count = Match.query.count()
-        scouting_count = ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).count()
-        pit_scouting_count = PitScoutingData.query.count()
-        events_count = Event.query.count()
+        # Get database statistics filtered by current scouting team
+        teams_count = filter_teams_by_scouting_team().count()
+        matches_count = filter_matches_by_scouting_team().count()
+        scouting_count = filter_scouting_data_by_scouting_team().count()
+        pit_scouting_count = filter_pit_scouting_data_by_scouting_team().count()
+        events_count = filter_events_by_scouting_team().count()
         
         # Event-specific stats if current event is set
         event_stats = {}
         if current_event:
-            event_teams = Team.query.join(Team.events).filter(Event.id == current_event.id).count()
-            event_matches = Match.query.filter_by(event_id=current_event.id).count()
-            event_scouting = ScoutingData.query.join(Match).filter(Match.event_id == current_event.id).filter_by(scouting_team_number=current_user.scouting_team_number).count()
+            event_teams = filter_teams_by_scouting_team(Team.query.join(Team.events)).filter(Event.id == current_event.id).count()
+            event_matches = filter_matches_by_scouting_team(Match.query.filter_by(event_id=current_event.id)).count()
+            # Use the student-friendly filter for event entries (includes unassigned entries when appropriate)
+            event_scouting = filter_scouting_data_by_scouting_team(ScoutingData.query.join(Match).filter(Match.event_id == current_event.id)).count()
             
             event_stats = {
                 'teams': event_teams,

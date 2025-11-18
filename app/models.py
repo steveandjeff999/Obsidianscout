@@ -1154,8 +1154,35 @@ class ScoutingAlliance(db.Model):
         return team_number in self.get_member_team_numbers()
     
     def get_shared_events(self):
-        """Get events this alliance is collaborating on"""
-        return [ae.event_code for ae in self.events if ae.is_active]
+        """Get events this alliance is collaborating on by extracting from member game configs"""
+        import json
+        from app.utils.config_manager import load_game_config
+        
+        event_codes = set()
+        
+        # First, check the alliance's shared game config
+        if self.shared_game_config:
+            try:
+                config = json.loads(self.shared_game_config)
+                event_code = config.get('current_event_code', '').strip().upper()
+                if event_code:
+                    event_codes.add(event_code)
+            except (json.JSONDecodeError, AttributeError):
+                pass
+        
+        # Then collect event codes from all active alliance members' configs
+        for member in self.get_active_members():
+            try:
+                member_config = load_game_config(member.team_number)
+                if isinstance(member_config, dict):
+                    event_code = member_config.get('current_event_code', '').strip().upper()
+                    if event_code:
+                        event_codes.add(event_code)
+            except Exception:
+                # Skip if member config can't be loaded
+                continue
+        
+        return list(event_codes)
     
     def get_config_summary(self):
         """Get a summary of configuration status"""
@@ -1180,7 +1207,17 @@ class ScoutingAlliance(db.Model):
     
     def is_config_complete(self):
         """Check if configuration is complete"""
-        return self.game_config_team is not None and self.pit_config_team is not None
+        has_game_config = (self.shared_game_config is not None and self.shared_game_config.strip() != '') or self.game_config_team is not None
+        has_pit_config = (self.shared_pit_config is not None and self.shared_pit_config.strip() != '') or self.pit_config_team is not None
+        return has_game_config and has_pit_config
+    
+    def update_config_status(self):
+        """Update config_status based on current configuration state"""
+        if self.is_config_complete():
+            self.config_status = 'configured'
+        else:
+            self.config_status = 'pending'
+        return self.config_status
 
 class ScoutingAllianceMember(db.Model):
     """Model to represent members of a scouting alliance"""

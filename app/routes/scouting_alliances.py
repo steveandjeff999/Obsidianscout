@@ -240,6 +240,9 @@ def toggle_alliance_mode(alliance_id):
                 pit_config = load_pit_config(team_number=alliance.pit_config_team)
                 alliance.shared_pit_config = json.dumps(pit_config)
             
+            # Update config status to 'configured'
+            alliance.update_config_status()
+            
             db.session.commit()
             
         else:
@@ -1241,12 +1244,23 @@ def api_specific_alliance_mode_status(alliance_id):
         
         current_team = get_current_scouting_team_number()
         
-        # Check if user is member of this alliance
-        member = ScoutingAllianceMember.query.filter_by(
-            alliance_id=alliance_id,
-            team_number=current_team,
-            status='accepted'
-        ).first()
+        # Handle case where user is alliance admin (team 0 or None)
+        if current_team is None or current_team == 0:
+            # For alliance admins, find any member they belong to for this alliance
+            member = ScoutingAllianceMember.query.join(User).filter(
+                ScoutingAllianceMember.alliance_id == alliance_id,
+                User.id == current_user.id,
+                ScoutingAllianceMember.status == 'accepted'
+            ).first()
+            if member:
+                current_team = member.team_number
+        else:
+            # Check if user is member of this alliance with their team number
+            member = ScoutingAllianceMember.query.filter_by(
+                alliance_id=alliance_id,
+                team_number=current_team,
+                status='accepted'
+            ).first()
         
         if not member:
             return jsonify({
@@ -1287,42 +1301,75 @@ def api_toggle_alliance_mode():
         is_active = data.get('is_active', False)
         current_team = get_current_scouting_team_number()
         
-        # Verify user is member of the alliance
-        member = ScoutingAllianceMember.query.filter_by(
-            alliance_id=alliance_id,
-            team_number=current_team
-        ).first()
-        
+        # Handle case where user is alliance admin (team 0 or None)
+        # Find member through user's membership in this alliance
+        if current_team is None or current_team == 0:
+            # For alliance admins, find any member they belong to for this alliance
+            member = ScoutingAllianceMember.query.join(User).filter(
+                ScoutingAllianceMember.alliance_id == alliance_id,
+                User.id == current_user.id,
+                ScoutingAllianceMember.status == 'accepted'
+            ).first()
+            if member:
+                current_team = member.team_number
+        else:
+            # Verify user is member of the alliance with their team number
+            member = ScoutingAllianceMember.query.filter_by(
+                alliance_id=alliance_id,
+                team_number=current_team,
+                status='accepted'
+            ).first()
+
         if not member:
-            return jsonify({'success': False, 'error': 'Not a member of this alliance'}), 403
+            return jsonify({'success': False, 'error': 'Not an accepted member of this alliance'}), 403
         
         # Update or create team alliance status
         team_status = TeamAllianceStatus.query.filter_by(
             team_number=current_team
         ).first()
+
+        # If activating, ensure alliance configuration is complete
+        alliance = ScoutingAlliance.query.get(alliance_id)
+        message = ''
         
-        if not team_status:
-            team_status = TeamAllianceStatus(
-                team_number=current_team,
-                active_alliance_id=alliance_id if is_active else None,
-                is_alliance_mode_active=is_active
-            )
-            db.session.add(team_status)
-        else:
-            team_status.active_alliance_id = alliance_id if is_active else None
-            team_status.is_alliance_mode_active = is_active
-            if is_active:
-                team_status.activated_at = datetime.now(timezone.utc)
-                team_status.deactivated_at = None
+        if is_active:
+            if not alliance or not alliance.is_config_complete():
+                return jsonify({'success': False, 'error': 'Alliance configuration must be complete before activation'}), 400
+            
+            # Check if team is currently active in a different alliance
+            current_status = TeamAllianceStatus.query.filter_by(team_number=current_team).first()
+            if current_status and current_status.is_alliance_mode_active and current_status.active_alliance_id != alliance_id:
+                current_alliance = current_status.active_alliance
+                message = f'Switched from "{current_alliance.alliance_name}" to "{alliance.alliance_name}"'
             else:
-                team_status.deactivated_at = datetime.now(timezone.utc)
-        
-        db.session.commit()
+                message = f'Alliance mode activated for {alliance.alliance_name}'
+            
+            # Activate alliance mode (this will automatically deactivate any other active alliance)
+            TeamAllianceStatus.activate_alliance_for_team(current_team, alliance_id)
+            
+            # Only load configs from team if alliance configs don't exist yet (first time setup)
+            if alliance.game_config_team and not alliance.shared_game_config:
+                game_config = load_game_config(team_number=alliance.game_config_team)
+                alliance.shared_game_config = json.dumps(game_config)
+            
+            if alliance.pit_config_team and not alliance.shared_pit_config:
+                pit_config = load_pit_config(team_number=alliance.pit_config_team)
+                alliance.shared_pit_config = json.dumps(pit_config)
+            
+            # Update config status
+            alliance.update_config_status()
+            
+            db.session.commit()
+        else:
+            # Deactivate alliance mode
+            TeamAllianceStatus.deactivate_alliance_for_team(current_team)
+            message = 'Alliance mode deactivated - using individual team configuration'
+            db.session.commit()
         
         return jsonify({
             'success': True,
             'is_active': is_active,
-            'message': f'Alliance mode {"activated" if is_active else "deactivated"} successfully'
+            'message': message
         })
         
     except Exception as e:
@@ -1808,7 +1855,11 @@ def save_game_config(alliance_id):
         
         # Validate and save the configuration
         alliance.shared_game_config = json.dumps(config_data, indent=2)
+        alliance.game_config_team = current_team  # Mark that config is set
         alliance.updated_at = datetime.now(timezone.utc)
+        
+        # Update config status
+        alliance.update_config_status()
         
         db.session.commit()
         
@@ -1820,12 +1871,23 @@ def save_game_config(alliance_id):
         }, room=f'alliance_{alliance_id}')
         
         flash('Alliance game configuration saved successfully!', 'success')
-        return jsonify({'success': True, 'config': config_data})
+        
+        # Handle JSON requests (API) vs form submissions
+        if request.is_json or request.headers.get('Accept') == 'application/json':
+            return jsonify({'success': True, 'config': config_data})
+        else:
+            return redirect(url_for('scouting_alliances.view_alliance', alliance_id=alliance_id))
         
     except Exception as e:
         current_app.logger.error(f"Error saving alliance game config: {str(e)}")
         db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        flash(f'Error saving configuration: {str(e)}', 'error')
+        
+        # Handle JSON requests (API) vs form submissions
+        if request.is_json or request.headers.get('Accept') == 'application/json':
+            return jsonify({'success': False, 'error': str(e)}), 500
+        else:
+            return redirect(url_for('scouting_alliances.edit_alliance_game_config', alliance_id=alliance_id))
 
 @bp.route('/<int:alliance_id>/config/pit')
 @login_required
@@ -1973,7 +2035,11 @@ def save_pit_config(alliance_id):
         
         # Validate and save the configuration
         alliance.shared_pit_config = json.dumps(config_data, indent=2)
+        alliance.pit_config_team = current_team  # Mark that config is set
         alliance.updated_at = datetime.now(timezone.utc)
+        
+        # Update config status
+        alliance.update_config_status()
         
         db.session.commit()
         
@@ -2017,6 +2083,7 @@ def copy_scouting_team_config(alliance_id, config_type):
             config_data = load_game_config(team_number=current_team)
             if config_data:
                 alliance.shared_game_config = json.dumps(config_data, indent=2)
+                alliance.game_config_team = current_team  # Mark that config is set
             else:
                 return jsonify({'success': False, 'error': 'No game configuration found for your scouting team.'}), 404
                 
@@ -2025,12 +2092,17 @@ def copy_scouting_team_config(alliance_id, config_type):
             config_data = load_pit_config(team_number=current_team)
             if config_data:
                 alliance.shared_pit_config = json.dumps(config_data, indent=2)
+                alliance.pit_config_team = current_team  # Mark that config is set
             else:
                 return jsonify({'success': False, 'error': 'No pit configuration found for your scouting team.'}), 404
         else:
             return jsonify({'success': False, 'error': 'Invalid configuration type.'}), 400
         
         alliance.updated_at = datetime.now(timezone.utc)
+        
+        # Update config status
+        alliance.update_config_status()
+        
         db.session.commit()
         
         # Emit Socket.IO event to notify alliance members
@@ -2307,3 +2379,134 @@ def perform_periodic_alliance_sync():
     
     except Exception as e:
         print(f"Error in perform_periodic_alliance_sync: {str(e)}")
+
+
+@bp.route('/api/<int:alliance_id>/member/<int:member_id>/promote', methods=['POST'])
+@login_required
+def api_promote_member(alliance_id, member_id):
+    """Promote a member to admin role"""
+    current_team = get_current_scouting_team_number()
+    
+    # Check if current user is admin of this alliance
+    admin_member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        role='admin'
+    ).first()
+    
+    if not admin_member:
+        return jsonify({'success': False, 'message': 'Only admins can promote members'}), 403
+    
+    # Get the member to promote
+    member = ScoutingAllianceMember.query.get_or_404(member_id)
+    
+    if member.alliance_id != alliance_id:
+        return jsonify({'success': False, 'message': 'Member not in this alliance'}), 400
+    
+    if member.role == 'admin':
+        return jsonify({'success': False, 'message': 'Member is already an admin'}), 400
+    
+    # Promote the member
+    member.role = 'admin'
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': f'Team {member.team_number} promoted to admin'
+    })
+
+
+@bp.route('/api/<int:alliance_id>/member/<int:member_id>/demote', methods=['POST'])
+@login_required
+def api_demote_member(alliance_id, member_id):
+    """Demote an admin to regular member"""
+    current_team = get_current_scouting_team_number()
+    
+    # Check if current user is admin of this alliance
+    admin_member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        role='admin'
+    ).first()
+    
+    if not admin_member:
+        return jsonify({'success': False, 'message': 'Only admins can demote members'}), 403
+    
+    # Get the member to demote
+    member = ScoutingAllianceMember.query.get_or_404(member_id)
+    
+    if member.alliance_id != alliance_id:
+        return jsonify({'success': False, 'message': 'Member not in this alliance'}), 400
+    
+    if member.role != 'admin':
+        return jsonify({'success': False, 'message': 'Member is not an admin'}), 400
+    
+    # Don't allow demoting yourself if you're the only admin
+    admin_count = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        role='admin',
+        status='accepted'
+    ).count()
+    
+    if admin_count <= 1 and member.id == admin_member.id:
+        return jsonify({'success': False, 'message': 'Cannot demote the only admin. Promote another member first.'}), 400
+    
+    # Demote the member
+    member.role = 'member'
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': f'Team {member.team_number} demoted to regular member'
+    })
+
+
+@bp.route('/api/<int:alliance_id>/member/<int:member_id>/remove', methods=['POST'])
+@login_required
+def api_remove_member(alliance_id, member_id):
+    """Remove a member from the alliance"""
+    current_team = get_current_scouting_team_number()
+    
+    # Check if current user is admin of this alliance
+    admin_member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        role='admin'
+    ).first()
+    
+    if not admin_member:
+        return jsonify({'success': False, 'message': 'Only admins can remove members'}), 403
+    
+    # Get the member to remove
+    member = ScoutingAllianceMember.query.get_or_404(member_id)
+    
+    if member.alliance_id != alliance_id:
+        return jsonify({'success': False, 'message': 'Member not in this alliance'}), 400
+    
+    # Don't allow removing yourself if you're the only admin
+    if member.role == 'admin':
+        admin_count = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance_id,
+            role='admin',
+            status='accepted'
+        ).count()
+        
+        if admin_count <= 1 and member.id == admin_member.id:
+            return jsonify({'success': False, 'message': 'Cannot remove the only admin. Promote another member first or delete the alliance.'}), 400
+    
+    team_number = member.team_number
+    
+    # Remove any active alliance status for this team
+    TeamAllianceStatus.query.filter_by(
+        team_number=team_number,
+        active_alliance_id=alliance_id
+    ).delete()
+    
+    # Remove the member
+    db.session.delete(member)
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': f'Team {team_number} removed from alliance'
+    })

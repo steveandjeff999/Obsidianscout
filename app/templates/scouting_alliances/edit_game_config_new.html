@@ -1,889 +1,1066 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 
 {% block title %}Edit Alliance Game Configuration - {{ alliance.alliance_name }}{% endblock %}
 
-{% block head %}
-<style>
-    .mode-toggle {
-        margin-bottom: 20px;
-    }
-    .config-editor {
-        margin-top: 20px;
-    }
-    #simple-mode .form-group {
-        margin-bottom: 15px;
-    }
-    #json-mode textarea {
-        font-family: 'Courier New', monospace;
-        background-color: #f8f9fa;
-        border: 1px solid #ced4da;
-        border-radius: 4px;
-        padding: 12px;
-        min-height: 400px;
-    }
-    .json-valid {
-        border-color: #28a745 !important;
-    }
-    .json-invalid {
-        border-color: #dc3545 !important;
-    }
-    .template-import {
-        background-color: #e9ecef;
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-    }
-    .template-dropdown {
-        max-width: 300px;
-        margin-right: 10px;
-    }
-    .form-section {
-        background-color: #f8f9fa;
-        padding: 20px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        border-left: 4px solid #007bff;
-    }
-    .form-section h5 {
-        margin-bottom: 15px;
-        color: #495057;
-    }
-    .nav-tabs .nav-link.active {
-        background-color: #17a2b8;
-        color: white;
-        border-color: #17a2b8;
-    }
-    .tab-content {
-        border: 1px solid #dee2e6;
-        border-top: 0;
-        padding: 20px;
-        border-radius: 0 0 8px 8px;
-    }
-    .add-section, .add-element {
-        margin-top: 15px;
-    }
-    .scoring-element {
-        border: 1px solid #dee2e6;
-        padding: 15px;
-        margin-bottom: 15px;
-        border-radius: 8px;
-        background-color: #fff;
-    }
-    .game-piece {
-        border: 1px solid #dee2e6;
-        padding: 15px;
-        margin-bottom: 15px;
-        border-radius: 8px;
-        background-color: #fff;
-    }
-    .rating-element, .text-element {
-        border: 1px solid #dee2e6;
-        padding: 15px;
-        margin-bottom: 15px;
-        border-radius: 8px;
-        background-color: #fff;
-    }
-</style>
-{% endblock %}
+{% block heading %}Edit Alliance Game Configuration{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="card mb-4">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="fas fa-cogs"></i> 
-                        Edit Alliance Game Configuration
-                        <small class="text-light">({{ alliance.alliance_name }})</small>
-                    </h5>
-                    <div>
-                        <a href="{{ url_for('scouting_alliances.view_alliance', alliance_id=alliance.id) }}" 
-                           class="btn btn-light btn-sm">
-                            <i class="fas fa-arrow-left me-1"></i> Back to Alliance
-                        </a>
-                    </div>
+<div class="row">
+    <div class="col-md-12">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-cogs"></i> 
+                    Edit Alliance Game Configuration
+                    <small class="text-light">({{ alliance.alliance_name }})</small>
+                </h5>
+                <div>
+                    <a href="{{ url_for('scouting_alliances.view_alliance', alliance_id=alliance.id) }}" class="btn btn-light btn-sm">
+                        <i class="fas fa-arrow-left me-1"></i> Back to Alliance
+                    </a>
                 </div>
-                <div class="card-body">
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        <strong>Note:</strong> This configuration will be used by all alliance members when alliance mode is active. 
-                        Changes will affect all alliance members' game scouting forms.
-                    </div>
-
-                    <!-- Copy Scouting Team Config Section -->
-                    <div class="template-import">
-                        <h5><i class="fas fa-copy"></i> Copy from Scouting Team Configuration</h5>
-                        <p class="text-muted">Copy your scouting team's game configuration as the alliance starting point.</p>
-                        <div class="d-flex align-items-center">
-                            <button type="button" id="copy-scouting-team-btn" class="btn btn-primary">
-                                <i class="fas fa-copy"></i> Copy from Scouting Team
-                            </button>
-                            <span class="ml-2 text-muted">This will copy the configuration from the alliance admin team.</span>
-                        </div>
-                    </div>
-
-                    <!-- Mode Toggle -->
-                    <div class="mode-toggle">
-                        <div class="btn-group btn-group-toggle" data-toggle="buttons">
-                            <label class="btn btn-outline-primary active" id="simple-mode-btn">
-                                <input type="radio" name="editMode" id="simple-mode-radio" checked> 
-                                <i class="fas fa-edit"></i> Simple Mode
-                            </label>
-                            <label class="btn btn-outline-primary" id="json-mode-btn">
-                                <input type="radio" name="editMode" id="json-mode-radio"> 
-                                <i class="fas fa-code"></i> JSON Mode
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Simple Mode Editor -->
-                    <div id="simple-mode" class="config-editor">
-                        <form id="game-config-form" method="POST">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                            <input type="hidden" name="simple_edit" value="true">
-                            
-                            <!-- Navigation Tabs -->
-                            <ul class="nav nav-tabs" id="configTabs" role="tablist">
-                                <li class="nav-item">
-                                    <a class="nav-link active" id="basic-tab" data-bs-toggle="tab" href="#basic" role="tab">Basic Settings</a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" id="periods-tab" data-bs-toggle="tab" href="#periods" role="tab">Game Periods</a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" id="gamepieces-tab" data-bs-toggle="tab" href="#gamepieces" role="tab">Game Pieces</a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" id="postmatch-tab" data-bs-toggle="tab" href="#postmatch" role="tab">Post Match</a>
-                                </li>
-                            </ul>
-                            
-                            <div class="tab-content" id="configTabsContent">
-                                <!-- Basic Settings Tab -->
-                                <div class="tab-pane fade show active" id="basic" role="tabpanel">
-                                    <div class="row mt-3">
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Note:</strong> This configuration will be used by all alliance members when alliance mode is active. 
+                    Changes will affect all alliance members' game scouting forms.
+                </div>
+                
+                <form method="POST" action="{{ url_for('scouting_alliances.save_game_config', alliance_id=alliance.id) }}" id="config-form">
+                    <input type="hidden" name="simple_edit" value="true">
+                    <input type="hidden" name="simple_payload" id="simple_payload" value="">
+                    
+                    <!-- Accordion Interface -->
+                    <div class="accordion" id="configAccordion">
+                        
+                        <!-- Game Setup Section -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="setupHeading">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#setupCollapse" aria-expanded="true" aria-controls="setupCollapse">
+                                    <i class="fas fa-cog me-2"></i>Game Setup
+                                </button>
+                            </h2>
+                            <div id="setupCollapse" class="accordion-collapse collapse show" 
+                                 aria-labelledby="setupHeading" data-bs-parent="#configAccordion">
+                                <div class="accordion-body">
+                                    <div class="row">
                                         <div class="col-md-6">
-                                            <h4>Game Information</h4>
-                                            <div class="form-group mb-3">
-                                                <label for="game_name">Game Name</label>
+                                            <h6 class="text-muted mb-3">Basic Information</h6>
+                                            <div class="mb-3">
+                                                <label for="game_name" class="form-label">Game Name</label>
                                                 <input type="text" class="form-control" id="game_name" name="game_name" 
                                                        value="{{ config.game_name or '' }}" required>
                                             </div>
-                                            <div class="form-group mb-3">
-                                                <label for="season">Season</label>
-                                                <input type="number" class="form-control" id="season" name="season" 
-                                                       value="{{ config.season or 2025 }}" min="2020" max="2030" required>
-                                            </div>
-                                            <div class="form-group mb-3">
-                                                <label for="version">Version</label>
-                                                <input type="text" class="form-control" id="version" name="version" 
-                                                       value="{{ config.version or '1.0.0' }}" placeholder="e.g., 1.0.0">
-                                            </div>
-                                            <div class="form-group mb-3">
-                                                <label for="alliance_size">Alliance Size</label>
-                                                <input type="number" class="form-control" id="alliance_size" name="alliance_size" 
-                                                       value="{{ config.alliance_size or 3 }}" min="1" max="6" required>
-                                            </div>
-                                            <div class="form-group mb-3">
-                                                <label for="scouting_stations">Scouting Stations</label>
-                                                <input type="number" class="form-control" id="scouting_stations" name="scouting_stations" 
-                                                       value="{{ config.scouting_stations or 6 }}" min="1" max="12" required>
-                                            </div>
-                                            <div class="form-group mb-3">
-                                                <label for="current_event_code">Current Event Code</label>
-                                                <input type="text" class="form-control" id="current_event_code" name="current_event_code" 
-                                                       value="{{ config.current_event_code or '' }}" placeholder="e.g., ARLI">
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="col-md-6">
-                                            <h4>Match Types</h4>
-                                            <div class="form-group mb-3">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" id="match_type_practice" 
-                                                           name="match_type_practice" value="1"
-                                                           {{ 'checked' if 'Practice' in (config.match_types or []) }}>
-                                                    <label class="form-check-label" for="match_type_practice">Practice</label>
-                                                </div>
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" id="match_type_qualification" 
-                                                           name="match_type_qualification" value="1"
-                                                           {{ 'checked' if 'Qualification' in (config.match_types or []) }}>
-                                                    <label class="form-check-label" for="match_type_qualification">Qualification</label>
-                                                </div>
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" id="match_type_playoff" 
-                                                           name="match_type_playoff" value="1"
-                                                           {{ 'checked' if 'Playoff' in (config.match_types or []) }}>
-                                                    <label class="form-check-label" for="match_type_playoff">Playoff</label>
-                                                </div>
-                                            </div>
-                                            
-                                            <h5>Period Durations</h5>
-                                            <div class="form-group mb-3">
-                                                <label for="auto_duration">Auto Period (seconds)</label>
-                                                <input type="number" class="form-control" id="auto_duration" name="auto_duration" 
-                                                       value="{{ config.get('auto_period', {}).get('duration_seconds', 15) }}" min="0" max="60" required>
-                                            </div>
-                                            <div class="form-group mb-3">
-                                                <label for="teleop_duration">Teleop Period (seconds)</label>
-                                                <input type="number" class="form-control" id="teleop_duration" name="teleop_duration" 
-                                                       value="{{ config.get('teleop_period', {}).get('duration_seconds', 135) }}" min="60" max="180" required>
-                                            </div>
-                                            <div class="form-group mb-3">
-                                                <label for="endgame_duration">Endgame Period (seconds)</label>
-                                                <input type="number" class="form-control" id="endgame_duration" name="endgame_duration" 
-                                                       value="{{ config.get('endgame_period', {}).get('duration_seconds', 30) }}" min="0" max="60" required>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Game Periods Tab -->
-                                <div class="tab-pane fade" id="periods" role="tabpanel">
-                                    <div class="mt-3">
-                                        <!-- Auto Period -->
-                                        <div class="card mb-3">
-                                            <div class="card-header">
-                                                <h5>Auto Period Scoring Elements</h5>
-                                                <small class="text-muted">Duration: {{ config.get('auto_period', {}).get('duration_seconds', 15) }} seconds</small>
-                                            </div>
-                                            <div class="card-body">
-                                                <div id="auto-elements">
-                                                    {% if config.get('auto_period', {}).get('scoring_elements') %}
-                                                        {% for element in config.auto_period.scoring_elements %}
-                                                        <div class="scoring-element" data-period="auto" data-index="{{ loop.index0 }}">
-                                                            <h6>{{ element.name or element.id }}</h6>
-                                                            <div class="row">
-                                                                <div class="col-md-3">
-                                                                    <label>Element ID</label>
-                                                                    <input type="text" class="form-control" name="auto_element_id_{{ loop.index0 }}" 
-                                                                           value="{{ element.id }}" required>
-                                                                </div>
-                                                                <div class="col-md-3">
-                                                                    <label>Name</label>
-                                                                    <input type="text" class="form-control" name="auto_element_name_{{ loop.index0 }}" 
-                                                                           value="{{ element.name }}" required>
-                                                                </div>
-                                                                <div class="col-md-2">
-                                                                    <label>Type</label>
-                                                                    <select class="form-control element-type" name="auto_element_type_{{ loop.index0 }}">
-                                                                        <option value="boolean" {{ 'selected' if element.type == 'boolean' }}>Boolean</option>
-                                                                        <option value="counter" {{ 'selected' if element.type == 'counter' }}>Counter</option>
-                                                                        <option value="select" {{ 'selected' if element.type == 'select' }}>Select</option>
-                                                                        <option value="rating" {{ 'selected' if element.type == 'rating' }}>Rating</option>
-                                                                    </select>
-                                                                </div>
-                                                                <div class="col-md-2">
-                                                                    <label>Points</label>
-                                                                    <input type="number" class="form-control" name="auto_element_points_{{ loop.index0 }}" 
-                                                                           value="{{ element.get('points', 0) if element.get('points') is number else 0 }}" step="0.1">
-                                                                </div>
-                                                                <div class="col-md-2">
-                                                                    <button type="button" class="btn btn-sm btn-danger remove-element">Remove</button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        {% endfor %}
-                                                    {% endif %}
-                                                </div>
-                                                <button type="button" class="btn btn-success add-element" data-period="auto">Add Auto Element</button>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Teleop Period -->
-                                        <div class="card mb-3">
-                                            <div class="card-header">
-                                                <h5>Teleop Period Scoring Elements</h5>
-                                                <small class="text-muted">Duration: {{ config.get('teleop_period', {}).get('duration_seconds', 120) }} seconds</small>
-                                            </div>
-                                            <div class="card-body">
-                                                <div id="teleop-elements">
-                                                    {% if config.get('teleop_period', {}).get('scoring_elements') %}
-                                                        {% for element in config.teleop_period.scoring_elements %}
-                                                        <div class="scoring-element" data-period="teleop" data-index="{{ loop.index0 }}">
-                                                            <h6>{{ element.name or element.id }}</h6>
-                                                            <div class="row">
-                                                                <div class="col-md-3">
-                                                                    <label>Element ID</label>
-                                                                    <input type="text" class="form-control" name="teleop_element_id_{{ loop.index0 }}" 
-                                                                           value="{{ element.id }}" required>
-                                                                </div>
-                                                                <div class="col-md-3">
-                                                                    <label>Name</label>
-                                                                    <input type="text" class="form-control" name="teleop_element_name_{{ loop.index0 }}" 
-                                                                           value="{{ element.name }}" required>
-                                                                </div>
-                                                                <div class="col-md-2">
-                                                                    <label>Type</label>
-                                                                    <select class="form-control element-type" name="teleop_element_type_{{ loop.index0 }}">
-                                                                        <option value="boolean" {{ 'selected' if element.type == 'boolean' }}>Boolean</option>
-                                                                        <option value="counter" {{ 'selected' if element.type == 'counter' }}>Counter</option>
-                                                                        <option value="select" {{ 'selected' if element.type == 'select' }}>Select</option>
-                                                                        <option value="rating" {{ 'selected' if element.type == 'rating' }}>Rating</option>
-                                                                    </select>
-                                                                </div>
-                                                                <div class="col-md-2">
-                                                                    <label>Points</label>
-                                                                    <input type="number" class="form-control" name="teleop_element_points_{{ loop.index0 }}" 
-                                                                           value="{{ element.get('points', 0) if element.get('points') is number else 0 }}" step="0.1">
-                                                                </div>
-                                                                <div class="col-md-2">
-                                                                    <button type="button" class="btn btn-sm btn-danger remove-element">Remove</button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        {% endfor %}
-                                                    {% endif %}
-                                                </div>
-                                                <button type="button" class="btn btn-success add-element" data-period="teleop">Add Teleop Element</button>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Endgame Period -->
-                                        <div class="card mb-3">
-                                            <div class="card-header">
-                                                <h5>Endgame Period Scoring Elements</h5>
-                                                <small class="text-muted">Duration: {{ config.get('endgame_period', {}).get('duration_seconds', 30) }} seconds</small>
-                                            </div>
-                                            <div class="card-body">
-                                                <div id="endgame-elements">
-                                                    {% if config.get('endgame_period', {}).get('scoring_elements') %}
-                                                        {% for element in config.endgame_period.scoring_elements %}
-                                                        <div class="scoring-element" data-period="endgame" data-index="{{ loop.index0 }}">
-                                                            <h6>{{ element.name or element.id }}</h6>
-                                                            <div class="row">
-                                                                <div class="col-md-3">
-                                                                    <label>Element ID</label>
-                                                                    <input type="text" class="form-control" name="endgame_element_id_{{ loop.index0 }}" 
-                                                                           value="{{ element.id }}" required>
-                                                                </div>
-                                                                <div class="col-md-3">
-                                                                    <label>Name</label>
-                                                                    <input type="text" class="form-control" name="endgame_element_name_{{ loop.index0 }}" 
-                                                                           value="{{ element.name }}" required>
-                                                                </div>
-                                                                <div class="col-md-2">
-                                                                    <label>Type</label>
-                                                                    <select class="form-control element-type" name="endgame_element_type_{{ loop.index0 }}">
-                                                                        <option value="boolean" {{ 'selected' if element.type == 'boolean' }}>Boolean</option>
-                                                                        <option value="counter" {{ 'selected' if element.type == 'counter' }}>Counter</option>
-                                                                        <option value="select" {{ 'selected' if element.type == 'select' }}>Select</option>
-                                                                        <option value="rating" {{ 'selected' if element.type == 'rating' }}>Rating</option>
-                                                                    </select>
-                                                                </div>
-                                                                <div class="col-md-2">
-                                                                    <label>Points</label>
-                                                                    <input type="number" class="form-control" name="endgame_element_points_{{ loop.index0 }}" 
-                                                                           value="{{ element.get('points', 0) if element.get('points') is number else 0 }}" step="0.1">
-                                                                </div>
-                                                                <div class="col-md-2">
-                                                                    <button type="button" class="btn btn-sm btn-danger remove-element">Remove</button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        {% endfor %}
-                                                    {% endif %}
-                                                </div>
-                                                <button type="button" class="btn btn-success add-element" data-period="endgame">Add Endgame Element</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Game Pieces Tab -->
-                                <div class="tab-pane fade" id="gamepieces" role="tabpanel">
-                                    <div class="mt-3">
-                                        <div class="card">
-                                            <div class="card-header">
-                                                <h5>Game Pieces</h5>
-                                            </div>
-                                            <div class="card-body">
-                                                <div id="game-pieces">
-                                                    {% if config.get('game_pieces') %}
-                                                        {% for piece in config.game_pieces %}
-                                                        <div class="game-piece" data-index="{{ loop.index0 }}">
-                                                            <h6>{{ piece.name or piece.id }}</h6>
-                                                            <div class="row">
-                                                                <div class="col-md-3">
-                                                                    <label>ID</label>
-                                                                    <input type="text" class="form-control" name="game_piece_id_{{ loop.index0 }}" 
-                                                                           value="{{ piece.id }}" required>
-                                                                </div>
-                                                                <div class="col-md-3">
-                                                                    <label>Name</label>
-                                                                    <input type="text" class="form-control" name="game_piece_name_{{ loop.index0 }}" 
-                                                                           value="{{ piece.name }}" required>
-                                                                </div>
-                                                                <div class="col-md-2">
-                                                                    <label>Auto Points</label>
-                                                                    <input type="number" class="form-control" name="game_piece_auto_points_{{ loop.index0 }}" 
-                                                                           value="{{ piece.get('auto_points', 0) }}" step="0.1">
-                                                                </div>
-                                                                <div class="col-md-2">
-                                                                    <label>Teleop Points</label>
-                                                                    <input type="number" class="form-control" name="game_piece_teleop_points_{{ loop.index0 }}" 
-                                                                           value="{{ piece.get('teleop_points', 0) }}" step="0.1">
-                                                                </div>
-                                                                <div class="col-md-2">
-                                                                    <button type="button" class="btn btn-sm btn-danger remove-game-piece">Remove</button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        {% endfor %}
-                                                    {% endif %}
-                                                </div>
-                                                <button type="button" class="btn btn-success add-game-piece">Add Game Piece</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Post Match Tab -->
-                                <div class="tab-pane fade" id="postmatch" role="tabpanel">
-                                    <div class="mt-3">
-                                        <div class="card">
-                                            <div class="card-header">
-                                                <h5>Post Match Elements</h5>
-                                            </div>
-                                            <div class="card-body">
-                                                <div class="row">
-                                                    <div class="col-md-6">
-                                                        <h6>Rating Elements</h6>
-                                                        <div id="rating-elements">
-                                                            {% if config.get('post_match', {}).get('rating_elements') %}
-                                                                {% for element in config.post_match.rating_elements %}
-                                                                <div class="rating-element" data-index="{{ loop.index0 }}">
-                                                                    <div class="row">
-                                                                        <div class="col-md-6">
-                                                                            <label>Name</label>
-                                                                            <input type="text" class="form-control" name="rating_element_name_{{ loop.index0 }}" 
-                                                                                   value="{{ element.name }}" required>
-                                                                        </div>
-                                                                        <div class="col-md-3">
-                                                                            <label>Min</label>
-                                                                            <input type="number" class="form-control" name="rating_element_min_{{ loop.index0 }}" 
-                                                                                   value="{{ element.get('min', 1) }}">
-                                                                        </div>
-                                                                        <div class="col-md-3">
-                                                                            <label>Max</label>
-                                                                            <input type="number" class="form-control" name="rating_element_max_{{ loop.index0 }}" 
-                                                                                   value="{{ element.get('max', 5) }}">
-                                                                        </div>
-                                                                    </div>
-                                                                    <button type="button" class="btn btn-sm btn-danger remove-rating-element mt-2">Remove</button>
-                                                                </div>
-                                                                {% endfor %}
-                                                            {% endif %}
-                                                        </div>
-                                                        <button type="button" class="btn btn-success add-rating-element">Add Rating Element</button>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="season" class="form-label">Season</label>
+                                                        <input type="number" class="form-control" id="season" name="season" 
+                                                               value="{{ config.season or 2024 }}" min="2020" max="2030" required>
                                                     </div>
-                                                    
-                                                    <div class="col-md-6">
-                                                        <h6>Text Elements</h6>
-                                                        <div id="text-elements">
-                                                            {% if config.get('post_match', {}).get('text_elements') %}
-                                                                {% for element in config.post_match.text_elements %}
-                                                                <div class="text-element" data-index="{{ loop.index0 }}">
-                                                                    <div class="row">
-                                                                        <div class="col-md-8">
-                                                                            <label>Name</label>
-                                                                            <input type="text" class="form-control" name="text_element_name_{{ loop.index0 }}" 
-                                                                                   value="{{ element.name }}" required>
-                                                                        </div>
-                                                                        <div class="col-md-4">
-                                                                            <label>Multiline</label>
-                                                                            <div class="form-check">
-                                                                                <input class="form-check-input" type="checkbox" name="text_element_multiline_{{ loop.index0 }}"
-                                                                                       {{ 'checked' if element.get('multiline') }}>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="version" class="form-label">Version</label>
+                                                        <input type="text" class="form-control" id="version" name="version" 
+                                                               value="{{ config.version or '1.0.0' }}" placeholder="1.0.0">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6 class="text-muted mb-3">Match Configuration</h6>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="alliance_size" class="form-label">Alliance Size</label>
+                                                        <input type="number" class="form-control" id="alliance_size" name="alliance_size" 
+                                                               value="{{ config.alliance_size or 3 }}" min="1" max="6" required>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="scouting_stations" class="form-label">Scouting Stations</label>
+                                                        <input type="number" class="form-control" id="scouting_stations" name="scouting_stations" 
+                                                               value="{{ config.scouting_stations or 6 }}" min="1" max="12" required>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="current_event_code" class="form-label">Current Event Code</label>
+                                                <input type="text" class="form-control" id="current_event_code" name="current_event_code" 
+                                                       value="{{ config.current_event_code or '' }}" placeholder="ARLI">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <hr class="my-4">
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6 class="text-muted mb-3">Match Types</h6>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="match_type_practice" 
+                                                       name="match_type_practice" value="1"
+                                                       {{ 'checked' if config.match_types and 'Practice' in config.match_types }}>
+                                                <label class="form-check-label" for="match_type_practice">Practice Matches</label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="match_type_qualification" 
+                                                       name="match_type_qualification" value="1"
+                                                       {{ 'checked' if config.match_types and 'Qualification' in config.match_types else 'checked' }}>
+                                                <label class="form-check-label" for="match_type_qualification">Qualification Matches</label>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="match_type_playoff" 
+                                                       name="match_type_playoff" value="1"
+                                                       {{ 'checked' if config.match_types and 'Playoff' in config.match_types }}>
+                                                <label class="form-check-label" for="match_type_playoff">Playoff Matches</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6 class="text-muted mb-3">Period Durations (seconds)</h6>
+                                            <div class="mb-3">
+                                                <label for="auto_duration" class="form-label">Autonomous Period</label>
+                                                <input type="number" class="form-control" id="auto_duration" name="auto_duration" 
+                                                       value="{{ (config.auto_period.duration_seconds if config.auto_period else 15) }}" min="0" max="60" required>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="teleop_duration" class="form-label">Teleoperated Period</label>
+                                                <input type="number" class="form-control" id="teleop_duration" name="teleop_duration" 
+                                                       value="{{ (config.teleop_period.duration_seconds if config.teleop_period else 135) }}" min="60" max="180" required>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="endgame_duration" class="form-label">Endgame Period</label>
+                                                <input type="number" class="form-control" id="endgame_duration" name="endgame_duration" 
+                                                       value="{{ (config.endgame_period.duration_seconds if config.endgame_period else 30) }}" min="0" max="60" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Scoring Elements Section -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="scoringHeading">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#scoringCollapse" aria-expanded="false" aria-controls="scoringCollapse">
+                                    <i class="fas fa-calculator me-2"></i>Scoring Elements
+                                </button>
+                            </h2>
+                            <div id="scoringCollapse" class="accordion-collapse collapse" 
+                                 aria-labelledby="scoringHeading" data-bs-parent="#configAccordion">
+                                <div class="accordion-body">
+                                    <p class="text-muted mb-4">
+                                        Configure scoring elements for each match period. Elements will appear in the scouting form.
+                                    </p>
+                                    
+                                    <!-- Simplified Scoring Element Management -->
+                                    <div class="row">
+                                        <div class="col-md-4 mb-4">
+                                            <div class="card h-100">
+                                                <div class="card-header bg-info text-white">
+                                                    <h6 class="mb-0">Autonomous Period</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div id="auto-elements-simple">
+                                                        {% if config.auto_period and config.auto_period.scoring_elements %}
+                                                        {% for element in config.auto_period.scoring_elements %}
+                                                        {% set outer_loop_index = loop.index0 %}
+                                                        <div class="element-item p-2 mb-2 border rounded" data-period="auto" data-index="{{ loop.index0 }}">
+                                                            <div class="mb-2">
+                                                                <input type="text" class="form-control form-control-sm" 
+                                                                       name="auto_element_name_{{ loop.index0 }}" 
+                                                                       value="{{ element.name }}" placeholder="Element name" required>
+                                                            </div>
+                                                            <div class="row">
+                                                                <div class="col-6">
+                                                                    <select class="form-control form-control-sm element-type-selector" name="auto_element_type_{{ loop.index0 }}" onchange="toggleMultipleChoiceOptions(this)">
+                                                                        <option value="counter" {{ 'selected' if element.type == 'counter' }}>Counter</option>
+                                                                        <option value="boolean" {{ 'selected' if element.type == 'boolean' }}>Yes/No</option>
+                                                                        <option value="rating" {{ 'selected' if element.type == 'rating' }}>Rating</option>
+                                                                        <option value="multiple_choice" {{ 'selected' if element.type == 'multiple_choice' }}>Multiple Choice</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div class="col-6">
+                                                                    <input type="number" class="form-control form-control-sm" 
+                                                                           name="auto_element_points_{{ loop.index0 }}" 
+                                                                           value="{{ element.points if element.points is number else 0 }}" 
+                                                                           placeholder="Points" step="0.1">
+                                                                </div>
+                                                            </div>
+                                                            <div class="form-check form-check-inline mt-2">
+                                                                <input class="form-check-input" type="checkbox" 
+                                                                       name="auto_element_display_predictions_{{ loop.index0 }}" 
+                                                                       value="1" {{ 'checked' if element.display_in_predictions }}>
+                                                                <label class="form-check-label">Show in Predictions</label>
+                                                            </div>
+                                                            <div class="form-check form-check-inline mt-2 ms-3">
+                                                                <input class="form-check-input" type="checkbox"
+                                                                       name="auto_element_gamepiece_scoreible_{{ loop.index0 }}" value="1"
+                                                                       {% if element.gamepiece_scoreible %}checked{% endif %}>
+                                                                <label class="form-check-label">Is scored gamepiece</label>
+                                                            </div>
+                                                            {% if element.type == 'multiple_choice' %}
+                                                            <div class="multiple-choice-options mt-2" style="display: block;">
+                                                                <small class="text-muted">Multiple Choice Options:</small>
+                                                                <div class="multiple-choice-list" data-period="auto" data-index="{{ loop.index0 }}">
+                                                                    {% if element.options %}
+                                                                        {% for option in element.options %}
+                                                                        <div class="row mb-2 multiple-choice-option">
+                                                                            <div class="col-7">
+                                                                                <input type="text" class="form-control form-control-sm" 
+                                                                                       name="auto_element_option_name_{{ outer_loop_index }}_{{ loop.index0 }}" 
+                                                                                       value="{{ option.name if option is mapping else option }}" 
+                                                                                       placeholder="Option name" required>
+                                                                            </div>
+                                                                            <div class="col-4">
+                                                                                <input type="number" class="form-control form-control-sm" 
+                                                                                       name="auto_element_option_points_{{ outer_loop_index }}_{{ loop.index0 }}" 
+                                                                                       value="{{ option.points if option is mapping and option.points is defined else 0 }}" 
+                                                                                       placeholder="Points" step="0.1">
+                                                                            </div>
+                                                                            <div class="col-1 d-flex flex-column align-items-end">
+                                                                                <button type="button" class="btn btn-sm btn-outline-secondary move-up mb-1" title="Move up" aria-label="Move option up">↑</button>
+                                                                                <button type="button" class="btn btn-sm btn-outline-secondary move-down mb-1" title="Move down" aria-label="Move option down">↓</button>
+                                                                                <button type="button" class="btn btn-sm btn-outline-danger remove-option" title="Remove Option" aria-label="Remove option"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
                                                                             </div>
                                                                         </div>
-                                                                    </div>
-                                                                    <button type="button" class="btn btn-sm btn-danger remove-text-element mt-2">Remove</button>
+                                                                        {% endfor %}
+                                                                    {% endif %}
                                                                 </div>
-                                                                {% endfor %}
+                                                                <button type="button" class="btn btn-sm btn-outline-success add-option" 
+                                                                        data-period="auto" data-index="{{ loop.index0 }}">
+                                                                    <i class="fas fa-plus me-1"></i>Add Option
+                                                                </button>
+                                                            </div>
+                                                            {% else %}
+                                                            <div class="multiple-choice-options mt-2" style="display: none;">
+                                                                <small class="text-muted">Multiple Choice Options:</small>
+                                                                <div class="multiple-choice-list" data-period="auto" data-index="{{ loop.index0 }}">
+                                                                </div>
+                                                                <button type="button" class="btn btn-sm btn-outline-success add-option" 
+                                                                        data-period="auto" data-index="{{ loop.index0 }}">
+                                                                    <i class="fas fa-plus me-1"></i>Add Option
+                                                                </button>
+                                                            </div>
                                                             {% endif %}
+                                                            <input type="hidden" name="auto_element_id_{{ loop.index0 }}" value="{{ element.id }}">
+                                                            <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-element">Remove</button>
                                                         </div>
-                                                        <button type="button" class="btn btn-success add-text-element">Add Text Element</button>
+                                                        {% endfor %}
+                                                        {% else %}
+                                                        <p class="text-muted mb-3">No autonomous scoring elements yet. Click "Add Element" to get started.</p>
+                                                        {% endif %}
                                                     </div>
+                                                    <button type="button" class="btn btn-sm btn-success add-element" data-period="auto">
+                                                        <i class="fas fa-plus me-1"></i>Add Element
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-4 mb-4">
+                                            <div class="card h-100">
+                                                <div class="card-header bg-primary text-white">
+                                                    <h6 class="mb-0">Teleoperated Period</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div id="teleop-elements-simple">
+                                                        {% if config.teleop_period and config.teleop_period.scoring_elements %}
+                                                        {% for element in config.teleop_period.scoring_elements %}
+                                                        {% set outer_loop_index = loop.index0 %}
+                                                        <div class="element-item p-2 mb-2 border rounded" data-period="teleop" data-index="{{ loop.index0 }}">
+                                                            <div class="mb-2">
+                                                                <input type="text" class="form-control form-control-sm" 
+                                                                       name="teleop_element_name_{{ loop.index0 }}" 
+                                                                       value="{{ element.name }}" placeholder="Element name" required>
+                                                            </div>
+                                                            <div class="row">
+                                                                <div class="col-6">
+                                                                    <select class="form-control form-control-sm element-type-selector" name="teleop_element_type_{{ loop.index0 }}" onchange="toggleMultipleChoiceOptions(this)">
+                                                                        <option value="counter" {{ 'selected' if element.type == 'counter' }}>Counter</option>
+                                                                        <option value="boolean" {{ 'selected' if element.type == 'boolean' }}>Yes/No</option>
+                                                                        <option value="rating" {{ 'selected' if element.type == 'rating' }}>Rating</option>
+                                                                        <option value="multiple_choice" {{ 'selected' if element.type == 'multiple_choice' }}>Multiple Choice</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div class="col-6">
+                                                                    <input type="number" class="form-control form-control-sm" 
+                                                                           name="teleop_element_points_{{ loop.index0 }}" 
+                                                                           value="{{ element.points if element.points is number else 0 }}" 
+                                                                           placeholder="Points" step="0.1">
+                                                                </div>
+                                                            </div>
+                                                            <div class="form-check form-check-inline mt-2">
+                                                                <input class="form-check-input" type="checkbox" 
+                                                                       name="teleop_element_display_predictions_{{ loop.index0 }}" 
+                                                                       value="1" {{ 'checked' if element.display_in_predictions }}>
+                                                                <label class="form-check-label">Show in Predictions</label>
+                                                            </div>
+                                                            <div class="form-check form-check-inline mt-2 ms-3">
+                                                                <input class="form-check-input" type="checkbox"
+                                                                       name="teleop_element_gamepiece_scoreible_{{ loop.index0 }}" value="1"
+                                                                       {% if element.gamepiece_scoreible %}checked{% endif %}>
+                                                                <label class="form-check-label">Is scored gamepiece</label>
+                                                            </div>
+                                                            {% if element.type == 'multiple_choice' %}
+                                                            <div class="multiple-choice-options mt-2" style="display: block;">
+                                                                <small class="text-muted">Multiple Choice Options:</small>
+                                                                <div class="multiple-choice-list" data-period="teleop" data-index="{{ loop.index0 }}">
+                                                                    {% if element.options %}
+                                                                        {% for option in element.options %}
+                                                                        <div class="row mb-2 multiple-choice-option">
+                                                                            <div class="col-7">
+                                                                                <input type="text" class="form-control form-control-sm" 
+                                                                                       name="teleop_element_option_name_{{ outer_loop_index }}_{{ loop.index0 }}" 
+                                                                                       value="{{ option.name if option is mapping else option }}" 
+                                                                                       placeholder="Option name" required>
+                                                                            </div>
+                                                                            <div class="col-4">
+                                                                                <input type="number" class="form-control form-control-sm" 
+                                                                                       name="teleop_element_option_points_{{ outer_loop_index }}_{{ loop.index0 }}" 
+                                                                                       value="{{ option.points if option is mapping and option.points is defined else 0 }}" 
+                                                                                       placeholder="Points" step="0.1">
+                                                                            </div>
+                                                                            <div class="col-1 d-flex flex-column align-items-end">
+                                                                                <button type="button" class="btn btn-sm btn-outline-secondary move-up mb-1" title="Move up" aria-label="Move option up">↑</button>
+                                                                                <button type="button" class="btn btn-sm btn-outline-secondary move-down mb-1" title="Move down" aria-label="Move option down">↓</button>
+                                                                                <button type="button" class="btn btn-sm btn-outline-danger remove-option" title="Remove Option" aria-label="Remove option"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                                                                            </div>
+                                                                        </div>
+                                                                        {% endfor %}
+                                                                    {% endif %}
+                                                                </div>
+                                                                <button type="button" class="btn btn-sm btn-outline-success add-option" 
+                                                                        data-period="teleop" data-index="{{ loop.index0 }}">
+                                                                    <i class="fas fa-plus me-1"></i>Add Option
+                                                                </button>
+                                                            </div>
+                                                            {% else %}
+                                                            <div class="multiple-choice-options mt-2" style="display: none;">
+                                                                <small class="text-muted">Multiple Choice Options:</small>
+                                                                <div class="multiple-choice-list" data-period="teleop" data-index="{{ loop.index0 }}">
+                                                                </div>
+                                                                <button type="button" class="btn btn-sm btn-outline-success add-option" 
+                                                                        data-period="teleop" data-index="{{ loop.index0 }}">
+                                                                    <i class="fas fa-plus me-1"></i>Add Option
+                                                                </button>
+                                                            </div>
+                                                            {% endif %}
+                                                            <input type="hidden" name="teleop_element_id_{{ loop.index0 }}" value="{{ element.id }}">
+                                                            <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-element">Remove</button>
+                                                        </div>
+                                                        {% endfor %}
+                                                        {% else %}
+                                                        <p class="text-muted mb-3">No teleoperated scoring elements yet. Click "Add Element" to get started.</p>
+                                                        {% endif %}
+                                                    </div>
+                                                    <button type="button" class="btn btn-sm btn-success add-element" data-period="teleop">
+                                                        <i class="fas fa-plus me-1"></i>Add Element
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-4 mb-4">
+                                            <div class="card h-100">
+                                                <div class="card-header bg-warning text-dark">
+                                                    <h6 class="mb-0">Endgame Period</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div id="endgame-elements-simple">
+                                                        {% if config.endgame_period and config.endgame_period.scoring_elements %}
+                                                        {% for element in config.endgame_period.scoring_elements %}
+                                                        {% set outer_loop_index = loop.index0 %}
+                                                        <div class="element-item p-2 mb-2 border rounded" data-period="endgame" data-index="{{ loop.index0 }}">
+                                                            <div class="mb-2">
+                                                                <input type="text" class="form-control form-control-sm" 
+                                                                       name="endgame_element_name_{{ loop.index0 }}" 
+                                                                       value="{{ element.name }}" placeholder="Element name" required>
+                                                            </div>
+                                                            <div class="row">
+                                                                <div class="col-6">
+                                                                    <select class="form-control form-control-sm element-type-selector" name="endgame_element_type_{{ loop.index0 }}" onchange="toggleMultipleChoiceOptions(this)">
+                                                                        <option value="counter" {{ 'selected' if element.type == 'counter' }}>Counter</option>
+                                                                        <option value="boolean" {{ 'selected' if element.type == 'boolean' }}>Yes/No</option>
+                                                                        <option value="rating" {{ 'selected' if element.type == 'rating' }}>Rating</option>
+                                                                        <option value="multiple_choice" {{ 'selected' if element.type == 'multiple_choice' }}>Multiple Choice</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div class="col-6">
+                                                                    <input type="number" class="form-control form-control-sm" 
+                                                                           name="endgame_element_points_{{ loop.index0 }}" 
+                                                                           value="{{ element.points if element.points is number else 0 }}" 
+                                                                           placeholder="Points" step="0.1">
+                                                                </div>
+                                                            </div>
+                                                            <div class="form-check form-check-inline mt-2">
+                                                                <input class="form-check-input" type="checkbox" 
+                                                                       name="endgame_element_display_predictions_{{ loop.index0 }}" 
+                                                                       value="1" {{ 'checked' if element.display_in_predictions }}>
+                                                                <label class="form-check-label">Show in Predictions</label>
+                                                            </div>
+                                                            <div class="form-check form-check-inline mt-2 ms-3">
+                                                                <input class="form-check-input" type="checkbox"
+                                                                       name="endgame_element_gamepiece_scoreible_{{ loop.index0 }}" value="1"
+                                                                       {% if element.gamepiece_scoreible %}checked{% endif %}>
+                                                                <label class="form-check-label">Is scored gamepiece</label>
+                                                            </div>
+                                                            {% if element.type == 'multiple_choice' %}
+                                                            <div class="multiple-choice-options mt-2" style="display: block;">
+                                                                <small class="text-muted">Multiple Choice Options:</small>
+                                                                <div class="multiple-choice-list" data-period="endgame" data-index="{{ loop.index0 }}">
+                                                                    {% if element.options %}
+                                                                        {% for option in element.options %}
+                                                                        <div class="row mb-2 multiple-choice-option">
+                                                                            <div class="col-7">
+                                                                                <input type="text" class="form-control form-control-sm" 
+                                                                                       name="endgame_element_option_name_{{ outer_loop_index }}_{{ loop.index0 }}" 
+                                                                                       value="{{ option.name if option is mapping else option }}" 
+                                                                                       placeholder="Option name" required>
+                                                                            </div>
+                                                                            <div class="col-4">
+                                                                                <input type="number" class="form-control form-control-sm" 
+                                                                                       name="endgame_element_option_points_{{ outer_loop_index }}_{{ loop.index0 }}" 
+                                                                                       value="{{ option.points if option is mapping and option.points is defined else 0 }}" 
+                                                                                       placeholder="Points" step="0.1">
+                                                                            </div>
+                                                                            <div class="col-1 d-flex flex-column align-items-end">
+                                                                                <button type="button" class="btn btn-sm btn-outline-secondary move-up mb-1" title="Move up" aria-label="Move option up">↑</button>
+                                                                                <button type="button" class="btn btn-sm btn-outline-secondary move-down mb-1" title="Move down" aria-label="Move option down">↓</button>
+                                                                                <button type="button" class="btn btn-sm btn-outline-danger remove-option" title="Remove Option" aria-label="Remove option"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                                                                            </div>
+                                                                        </div>
+                                                                        {% endfor %}
+                                                                    {% endif %}
+                                                                </div>
+                                                                <button type="button" class="btn btn-sm btn-outline-success add-option" 
+                                                                        data-period="endgame" data-index="{{ loop.index0 }}">
+                                                                    <i class="fas fa-plus me-1"></i>Add Option
+                                                                </button>
+                                                            </div>
+                                                            {% else %}
+                                                            <div class="multiple-choice-options mt-2" style="display: none;">
+                                                                <small class="text-muted">Multiple Choice Options:</small>
+                                                                <div class="multiple-choice-list" data-period="endgame" data-index="{{ loop.index0 }}">
+                                                                </div>
+                                                                <button type="button" class="btn btn-sm btn-outline-success add-option" 
+                                                                        data-period="endgame" data-index="{{ loop.index0 }}">
+                                                                    <i class="fas fa-plus me-1"></i>Add Option
+                                                                </button>
+                                                            </div>
+                                                            {% endif %}
+                                                            <input type="hidden" name="endgame_element_id_{{ loop.index0 }}" value="{{ element.id }}">
+                                                            <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-element">Remove</button>
+                                                        </div>
+                                                        {% endfor %}
+                                                        {% else %}
+                                                        <p class="text-muted mb-3">No endgame scoring elements yet. Click "Add Element" to get started.</p>
+                                                        {% endif %}
+                                                    </div>
+                                                    <button type="button" class="btn btn-sm btn-success add-element" data-period="endgame">
+                                                        <i class="fas fa-plus me-1"></i>Add Element
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
+                                    
+                                    <!-- Quick Game Pieces -->
+                                    <div class="card mt-4">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Game Pieces (Optional)</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="game-pieces-simple" class="row">
+                                                {% if config.game_pieces %}
+                                                {% for piece in config.game_pieces %}
+                                                <div class="col-md-4 mb-3">
+                                                    <div class="border p-2 rounded">
+                                                        <input type="text" class="form-control form-control-sm mb-2" 
+                                                               name="game_piece_name_{{ loop.index0 }}" 
+                                                               value="{{ piece.name }}" placeholder="Piece name">
+                                                        <div class="row">
+                                                            <div class="col-6">
+                                                                <input type="number" class="form-control form-control-sm" 
+                                                                       name="game_piece_auto_points_{{ loop.index0 }}" 
+                                                                       value="{{ piece.auto_points }}" placeholder="Auto pts" step="0.1">
+                                                            </div>
+                                                            <div class="col-6">
+                                                                <input type="number" class="form-control form-control-sm" 
+                                                                       name="game_piece_teleop_points_{{ loop.index0 }}" 
+                                                                       value="{{ piece.teleop_points }}" placeholder="Teleop pts" step="0.1">
+                                                            </div>
+                                                        </div>
+                                                        <div class="form-check mt-2">
+                                                            <input class="form-check-input" type="checkbox"
+                                                                   name="game_piece_gamepiece_scoreible_{{ loop.index0 }}" value="1"
+                                                                   {% if piece.gamepiece_scoreible %}checked{% endif %}>
+                                                            <label class="form-check-label">Is scored gamepiece</label>
+                                                        </div>
+                                                        <input type="hidden" name="game_piece_id_{{ loop.index0 }}" value="{{ piece.id }}">
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                                {% else %}
+                                                <div class="col-12">
+                                                    <p class="text-muted mb-3">No game pieces defined yet. Game pieces are optional but can help organize scoring elements.</p>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" id="add-game-piece">
+                                                <i class="fas fa-plus me-1"></i>Add Game Piece
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            
-                            <div class="form-group mt-3">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-save"></i> Save Configuration
+                        </div>
+                        
+                        <!-- Post-Match Section -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="postMatchHeading">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                        data-bs-target="#postMatchCollapse" aria-expanded="false" aria-controls="postMatchCollapse">
+                                    <i class="fas fa-comments me-2"></i>Post-Match & Comments
                                 </button>
-                                <a href="{{ url_for('scouting_alliances.view_alliance', alliance_id=alliance.id) }}" class="btn btn-secondary">
-                                    <i class="fas fa-arrow-left"></i> Back to Alliance
-                                </a>
+                            </h2>
+                            <div id="postMatchCollapse" class="accordion-collapse collapse"
+                                 aria-labelledby="postMatchHeading" data-bs-parent="#configAccordion">
+                                <div class="accordion-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6 class="text-muted mb-3">Post-Match Questions</h6>
+                                            <div id="rating-elements-simple">
+                                                {% if config.post_match and config.post_match.rating_elements %}
+                                                {% for element in config.post_match.rating_elements %}
+                                                <div class="rating-item p-2 mb-2 border rounded" data-index="{{ loop.index0 }}">
+                                                    <input type="text" class="form-control form-control-sm mb-2"
+                                                           name="rating_element_name_{{ loop.index0 }}"
+                                                           value="{{ element.name }}" placeholder="Rating question">
+                                                    <div class="row">
+                                                        <div class="col-4">
+                                                            <input type="number" class="form-control form-control-sm"
+                                                                   name="rating_element_min_{{ loop.index0 }}"
+                                                                   value="{{ element.min }}" placeholder="Min">
+                                                        </div>
+                                                        <div class="col-4">
+                                                            <input type="number" class="form-control form-control-sm"
+                                                                   name="rating_element_max_{{ loop.index0 }}"
+                                                                   value="{{ element.max }}" placeholder="Max">
+                                                        </div>
+                                                        <div class="col-4">
+                                                            <input type="number" class="form-control form-control-sm"
+                                                                   name="rating_element_default_{{ loop.index0 }}"
+                                                                   value="{{ element.default }}" placeholder="Default">
+                                                        </div>
+                                                    </div>
+                                                    <input type="hidden" name="rating_element_id_{{ loop.index0 }}" value="{{ element.id }}">
+                                                    <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-rating">Remove</button>
+                                                </div>
+                                                {% endfor %}
+                                                {% else %}
+                                                <p class="text-muted mb-3">No rating questions yet. These are useful for subjective evaluations like "Defense Rating" (1-5 scale).</p>
+                                                {% endif %}
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-success" id="add-rating-element">
+                                                <i class="fas fa-plus me-1"></i>Add Rating
+                                            </button>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6 class="text-muted mb-3">Text Comments</h6>
+                                            <div id="text-elements-simple">
+                                                {% if config.post_match and config.post_match.text_elements %}
+                                                {% for element in config.post_match.text_elements %}
+                                                <div class="text-item p-2 mb-2 border rounded" data-index="{{ loop.index0 }}">
+                                                    <input type="text" class="form-control form-control-sm mb-2"
+                                                           name="text_element_name_{{ loop.index0 }}"
+                                                           value="{{ element.name }}" placeholder="Comment field name">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox"
+                                                               name="text_element_multiline_{{ loop.index0 }}"
+                                                               value="1" {{ 'checked' if element.multiline }}>
+                                                        <label class="form-check-label">Allow multiple lines</label>
+                                                    </div>
+                                                    <input type="hidden" name="text_element_id_{{ loop.index0 }}" value="{{ element.id }}">
+                                                    <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-text">Remove</button>
+                                                </div>
+                                                {% endfor %}
+                                                {% else %}
+                                                <p class="text-muted mb-3">No comment fields yet. These allow scouts to leave notes like "Struggled with intake" or "Great defense".</p>
+                                                {% endif %}
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-success" id="add-text-element">
+                                                <i class="fas fa-plus me-1"></i>Add Comment Field
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                        </form>
-                    </div>
+                        </div>
 
-                    <!-- JSON Mode Editor -->
-                    <div id="json-mode" class="config-editor" style="display: none;">
-                        <form id="json-config-form" method="POST">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                            <div class="form-group">
-                                <label for="json-editor">JSON Configuration:</label>
-                                <textarea id="json-editor" name="json_config" class="form-control" rows="20" placeholder="Enter JSON configuration..."></textarea>
-                                <small class="form-text text-muted">Edit the configuration as JSON. The editor will validate your JSON syntax.</small>
-                            </div>
-                            <div class="form-group">
-                                <button type="submit" class="btn btn-primary" id="save-json-btn">
-                                    <i class="fas fa-save"></i> Save JSON Configuration
+                        <!-- Settings Section -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="settingsHeading">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#settingsCollapse" aria-expanded="false" aria-controls="settingsCollapse">
+                                    <i class="fas fa-sliders-h me-2"></i>Settings & APIs
                                 </button>
-                                <a href="{{ url_for('scouting_alliances.view_alliance', alliance_id=alliance.id) }}" class="btn btn-secondary">
-                                    <i class="fas fa-arrow-left"></i> Back to Alliance
-                                </a>
+                            </h2>
+                            <div id="settingsCollapse" class="accordion-collapse collapse" 
+                                 aria-labelledby="settingsHeading" data-bs-parent="#configAccordion">
+                                <div class="accordion-body">
+                                    
+                                    <!-- API Settings -->
+                                    <div class="row mb-4">
+                                        <div class="col-md-6">
+                                            <h6 class="text-muted mb-3">API Configuration</h6>
+                                            <div class="mb-3">
+                                                <label for="preferred_api_source" class="form-label">Preferred API Source</label>
+                                                <select class="form-select" id="preferred_api_source" name="preferred_api_source">
+                                                    <option value="first" {% if not config.preferred_api_source or config.preferred_api_source == 'first' %}selected{% endif %}>FIRST API (Official)</option>
+                                                    <option value="tba" {% if config.preferred_api_source == 'tba' %}selected{% endif %}>The Blue Alliance API</option>
+                                                </select>
+                                                <div class="form-text">
+                                                    Choose which API to use as primary source. The system automatically falls back to the other API if the primary fails.
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6 class="text-muted mb-3">The Blue Alliance API</h6>
+                                            <div class="alert alert-info alert-sm mb-3">
+                                                <i class="fas fa-info-circle me-2"></i>
+                                                <strong>Recommended:</strong> TBA API provides comprehensive FRC data with good rate limits. 
+                                                <a href="https://www.thebluealliance.com/account" target="_blank">Get API key</a>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="tba_auth_key" class="form-label">TBA API Key</label>
+                                                <input type="text" class="form-control" id="tba_auth_key" name="tba_auth_key" 
+                                                       value="{{ (config.tba_api_settings.auth_key if config.tba_api_settings else '') }}" 
+                                                       placeholder="Your TBA API key (optional but recommended)">
+                                                <div class="form-text">
+                                                    Optional but recommended for better rate limits and reliability.
+                                                </div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="tba_base_url" class="form-label">TBA Base URL</label>
+                                                <input type="url" class="form-control" id="tba_base_url" name="tba_base_url" 
+                                                       value="{{ (config.tba_api_settings.base_url if config.tba_api_settings else 'https://www.thebluealliance.com/api/v3') }}">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mb-4">
+                                        <div class="col-md-6"></div>
+                                        <div class="col-md-6">
+                                            <h6 class="text-muted mb-3">FIRST API (Official)</h6>
+                                            <div class="alert alert-warning alert-sm mb-3">
+                                                <i class="fas fa-certificate me-2"></i>
+                                                <strong>Official:</strong> FIRST API provides official event data. 
+                                                Requires registration with FIRST.
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="api_username" class="form-label">API Username</label>
+                                                <input type="text" class="form-control" id="api_username" name="api_username" 
+                                                       value="{{ (config.api_settings.username if config.api_settings else '') }}"
+                                                       placeholder="Your FIRST API username">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="api_auth_token" class="form-label">API Auth Token</label>
+                                                <input type="text" class="form-control" id="api_auth_token" name="api_auth_token" 
+                                                       value="{{ (config.api_settings.auth_token if config.api_settings else '') }}"
+                                                       placeholder="Your FIRST API auth token">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="api_base_url" class="form-label">FIRST API Base URL</label>
+                                                <input type="url" class="form-control" id="api_base_url" name="api_base_url" 
+                                                       value="{{ (config.api_settings.base_url if config.api_settings else 'https://frc-api.firstinspires.org') }}">
+                                            </div>
+                                            <div class="form-check mt-3">
+                                                <input class="form-check-input" type="checkbox" id="auto_sync_enabled" name="auto_sync_enabled" value="1"
+                                                       {% if config.api_settings is not defined or config.api_settings.auto_sync_enabled is undefined %}checked{% elif config.api_settings and config.api_settings.auto_sync_enabled %}checked{% endif %}>
+                                                <label class="form-check-label" for="auto_sync_enabled">Enable automatic API sync for this team</label>
+                                                <div class="form-text">When enabled, this team's configured event will be periodically synced from the selected API source.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Post Match Elements removed (moved to its own accordion item above) -->
+                                </div>
                             </div>
-                        </form>
+                        </div>
                     </div>
-                </div>
+                    
+                    <!-- Save Button -->
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                        <button type="button" class="btn btn-outline-warning me-md-2" data-bs-toggle="modal" data-bs-target="#resetModal">
+                            <i class="fas fa-undo me-1"></i> Reset to Default
+                        </button>
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-save me-1"></i> Save Configuration
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Reset Modal -->
+<div class="modal fade" id="resetModal" tabindex="-1" aria-labelledby="resetModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="resetModalLabel">Reset Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('main.reset_config') }}" method="POST">
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <strong>Warning:</strong> This will replace your current configuration with a default template.
+                    </div>
+                    <div class="mb-3">
+                        <label for="default_config" class="form-label">Select Default:</label>
+                        <select name="default_config" id="default_config" class="form-select" required>
+                            <option value="">-- Select a default configuration --</option>
+                            {% if default_configs %}
+                                {% for config in default_configs %}
+                                <option value="{{ config.filename }}">{{ config.display_name }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                    <input type="hidden" name="config_type" value="game">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Reset Configuration</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
+// Toggle multiple choice options visibility
+function toggleMultipleChoiceOptions(selectElement) {
+    const container = selectElement.closest('.element-item');
+    const optionsDiv = container.querySelector('.multiple-choice-options');
+    if (selectElement.value === 'multiple_choice') {
+        optionsDiv.style.display = 'block';
+    } else {
+        optionsDiv.style.display = 'none';
+    }
+}
+
+// Add a new multiple choice option
+function addMultipleChoiceOption(buttonElement) {
+    const period = buttonElement.dataset.period;
+    const elementIndex = buttonElement.dataset.index;
+    const optionsList = buttonElement.parentElement.querySelector('.multiple-choice-list');
+    const existingOptions = optionsList.querySelectorAll('.multiple-choice-option').length;
+    
+    const optionHtml = `
+        <div class="row mb-2 multiple-choice-option">
+            <div class="col-7">
+                <input type="text" class="form-control form-control-sm" 
+                       name="${period}_element_option_name_${elementIndex}_${existingOptions}" 
+                       placeholder="Option name" required>
+            </div>
+            <div class="col-4">
+                <input type="number" class="form-control form-control-sm" 
+                       name="${period}_element_option_points_${elementIndex}_${existingOptions}" 
+                       value="0" placeholder="Points" step="0.1">
+            </div>
+            <div class="col-1 d-flex flex-column align-items-end">
+                <button type="button" class="btn btn-sm btn-outline-secondary move-up mb-1" title="Move up" aria-label="Move option up">↑</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary move-down mb-1" title="Move down" aria-label="Move option down">↓</button>
+                <button type="button" class="btn btn-sm btn-outline-danger remove-option" title="Remove Option" aria-label="Remove option"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+            </div>
+        </div>
+    `;
+    optionsList.insertAdjacentHTML('beforeend', optionHtml);
+}
+
 document.addEventListener('DOMContentLoaded', function() {
-    let currentConfig = {{ config|tojson|safe }};
-
-    // Mode toggle functionality
-    const simpleModeBtn = document.getElementById('simple-mode-btn');
-    const jsonModeBtn = document.getElementById('json-mode-btn');
-    const simpleModeDiv = document.getElementById('simple-mode');
-    const jsonModeDiv = document.getElementById('json-mode');
-    const jsonEditor = document.getElementById('json-editor');
-
-    simpleModeBtn.addEventListener('click', function() {
-        simpleModeDiv.style.display = 'block';
-        jsonModeDiv.style.display = 'none';
-        this.classList.add('active');
-        jsonModeBtn.classList.remove('active');
-    });
-
-    jsonModeBtn.addEventListener('click', function() {
-        simpleModeDiv.style.display = 'none';
-        jsonModeDiv.style.display = 'block';
-        this.classList.add('active');
-        simpleModeBtn.classList.remove('active');
-        
-        // Populate JSON editor with current config
-        jsonEditor.value = JSON.stringify(currentConfig, null, 2);
-        validateJson();
-    });
-
-    // Copy from scouting team functionality
-    document.getElementById('copy-scouting-team-btn').addEventListener('click', function() {
-        if (confirm('This will replace the current alliance game configuration with your scouting team\'s configuration. Are you sure?')) {
-            fetch(`{{ url_for('scouting_alliances.copy_scouting_team_config', alliance_id=alliance.id, config_type='game') }}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Configuration copied successfully! Reloading page...');
-                    location.reload();
-                } else {
-                    alert('Error copying configuration: ' + (data.error || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error copying configuration');
-            });
-        }
-    });
-
-    // JSON validation
-    function validateJson() {
-        try {
-            JSON.parse(jsonEditor.value);
-            jsonEditor.classList.remove('json-invalid');
-            jsonEditor.classList.add('json-valid');
-            return true;
-        } catch (e) {
-            jsonEditor.classList.remove('json-valid');
-            jsonEditor.classList.add('json-invalid');
-            return false;
-        }
-    }
-
-    if (jsonEditor) {
-        jsonEditor.addEventListener('input', validateJson);
-    }
-
-    // Form submissions
-    const gameConfigForm = document.getElementById('game-config-form');
-    if (gameConfigForm) {
-        gameConfigForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            
-            fetch(`{{ url_for('scouting_alliances.save_game_config', alliance_id=alliance.id) }}`, {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Configuration saved successfully!');
-                    location.reload();
-                } else {
-                    alert('Error saving configuration: ' + (data.error || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error saving configuration');
-            });
-        });
-    }
-
-    const jsonConfigForm = document.getElementById('json-config-form');
-    if (jsonConfigForm) {
-        jsonConfigForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            if (!validateJson()) {
-                alert('Invalid JSON syntax. Please fix errors before saving.');
-                return;
-            }
-            
-            const formData = new FormData();
-            formData.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
-            formData.append('json_config', jsonEditor.value);
-            
-            fetch(`{{ url_for('scouting_alliances.save_game_config', alliance_id=alliance.id) }}`, {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Configuration saved successfully!');
-                    location.reload();
-                } else {
-                    alert('Error saving configuration: ' + (data.error || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error saving configuration');
-            });
-        });
-    }
-
-    // Initialize the JSON editor with current config
-    if (jsonEditor) {
-        jsonEditor.value = JSON.stringify(currentConfig, null, 2);
-        validateJson();
-    }
-
-    // Add element functionality for game periods
+    // Element counters for dynamic additions
+    let counters = {
+        auto: parseInt('{{ (config.auto_period.scoring_elements|length) if (config.auto_period and config.auto_period.scoring_elements) else 0 }}'),
+        teleop: parseInt('{{ (config.teleop_period.scoring_elements|length) if (config.teleop_period and config.teleop_period.scoring_elements) else 0 }}'),
+        endgame: parseInt('{{ (config.endgame_period.scoring_elements|length) if (config.endgame_period and config.endgame_period.scoring_elements) else 0 }}'),
+        gamepiece: parseInt('{{ (config.game_pieces|length) if config.game_pieces else 0 }}'),
+        rating: parseInt('{{ (config.post_match.rating_elements|length) if (config.post_match and config.post_match.rating_elements) else 0 }}'),
+        text: parseInt('{{ (config.post_match.text_elements|length) if (config.post_match and config.post_match.text_elements) else 0 }}')
+    };
+    
+    // Add scoring elements
     document.querySelectorAll('.add-element').forEach(button => {
         button.addEventListener('click', function() {
-            const period = this.getAttribute('data-period');
-            const container = document.getElementById(`${period}-elements`);
-            if (container) {
-                const index = container.querySelectorAll('.scoring-element').length;
-                
-                const elementDiv = document.createElement('div');
-                elementDiv.className = 'scoring-element';
-                elementDiv.setAttribute('data-period', period);
-                elementDiv.setAttribute('data-index', index);
-                
-                elementDiv.innerHTML = `
-                    <h6>New Element ${index + 1}</h6>
+            const period = this.dataset.period;
+            const container = document.getElementById(`${period}-elements-simple`);
+            const index = counters[period]++;
+            
+            const elementHtml = `
+                <div class="element-item p-2 mb-2 border rounded" data-period="${period}" data-index="${index}">
+                    <div class="mb-2">
+                        <input type="text" class="form-control form-control-sm" 
+                               name="${period}_element_name_${index}" placeholder="Element name" required>
+                    </div>
                     <div class="row">
-                        <div class="col-md-3">
-                            <label>Element ID</label>
-                            <input type="text" class="form-control" name="${period}_element_id_${index}" 
-                                   value="new_element_${index}" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label>Name</label>
-                            <input type="text" class="form-control" name="${period}_element_name_${index}" 
-                                   value="New Element ${index + 1}" required>
-                        </div>
-                        <div class="col-md-2">
-                            <label>Type</label>
-                            <select class="form-control element-type" name="${period}_element_type_${index}">
-                                <option value="boolean">Boolean</option>
-                                <option value="counter" selected>Counter</option>
-                                <option value="select">Select</option>
+                        <div class="col-6">
+                            <select class="form-control form-control-sm element-type-selector" name="${period}_element_type_${index}" onchange="toggleMultipleChoiceOptions(this)">
+                                <option value="counter">Counter</option>
+                                <option value="boolean">Yes/No</option>
                                 <option value="rating">Rating</option>
+                                <option value="multiple_choice">Multiple Choice</option>
                             </select>
                         </div>
-                        <div class="col-md-2">
-                            <label>Points</label>
-                            <input type="number" class="form-control" name="${period}_element_points_${index}" 
-                                   value="0" step="0.1">
-                        </div>
-                        <div class="col-md-2">
-                            <button type="button" class="btn btn-sm btn-danger remove-element">Remove</button>
+                        <div class="col-6">
+                            <input type="number" class="form-control form-control-sm" 
+                                   name="${period}_element_points_${index}" value="0" placeholder="Points" step="0.1">
                         </div>
                     </div>
-                `;
-                
-                container.appendChild(elementDiv);
-            }
+                    <div class="multiple-choice-options mt-2" style="display: none;">
+                        <small class="text-muted">Multiple Choice Options:</small>
+                        <div class="multiple-choice-list" data-period="${period}" data-index="${index}">
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-success add-option" 
+                                data-period="${period}" data-index="${index}">
+                            <i class="fas fa-plus me-1"></i>Add Option
+                        </button>
+                    </div>
+                    <div class="form-check form-check-inline mt-2">
+                        <input class="form-check-input" type="checkbox" name="${period}_element_display_predictions_${index}" value="1">
+                        <label class="form-check-label">Show in Predictions</label>
+                    </div>
+                    <div class="form-check form-check-inline mt-2 ms-3">
+                        <input class="form-check-input" type="checkbox" name="${period}_element_gamepiece_scoreible_${index}" value="1">
+                        <label class="form-check-label">Is scored gamepiece</label>
+                    </div>
+                    <input type="hidden" name="${period}_element_id_${index}" value="elem_${period}_${index}">
+                    <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-element">Remove</button>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', elementHtml);
         });
     });
-
-    // Add game piece functionality
-    const addGamePieceBtn = document.querySelector('.add-game-piece');
-    if (addGamePieceBtn) {
-        addGamePieceBtn.addEventListener('click', function() {
-            const container = document.getElementById('game-pieces');
-            if (container) {
-                const index = container.querySelectorAll('.game-piece').length;
-                
-                const pieceDiv = document.createElement('div');
-                pieceDiv.className = 'game-piece';
-                pieceDiv.setAttribute('data-index', index);
-                
-                pieceDiv.innerHTML = `
-                    <h6>New Game Piece ${index + 1}</h6>
-                    <div class="row">
-                        <div class="col-md-3">
-                            <label>ID</label>
-                            <input type="text" class="form-control" name="game_piece_id_${index}" 
-                                   value="piece_${index}" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label>Name</label>
-                            <input type="text" class="form-control" name="game_piece_name_${index}" 
-                                   value="Game Piece ${index + 1}" required>
-                        </div>
-                        <div class="col-md-2">
-                            <label>Auto Points</label>
-                            <input type="number" class="form-control" name="game_piece_auto_points_${index}" 
-                                   value="0" step="0.1">
-                        </div>
-                        <div class="col-md-2">
-                            <label>Teleop Points</label>
-                            <input type="number" class="form-control" name="game_piece_teleop_points_${index}" 
-                                   value="0" step="0.1">
-                        </div>
-                        <div class="col-md-2">
-                            <button type="button" class="btn btn-sm btn-danger remove-game-piece">Remove</button>
-                        </div>
-                    </div>
-                `;
-                
-                container.appendChild(pieceDiv);
-            }
-        });
-    }
-
-    // Add rating element functionality
-    const addRatingElementBtn = document.querySelector('.add-rating-element');
-    if (addRatingElementBtn) {
-        addRatingElementBtn.addEventListener('click', function() {
-            const container = document.getElementById('rating-elements');
-            if (container) {
-                const index = container.querySelectorAll('.rating-element').length;
-                
-                const ratingDiv = document.createElement('div');
-                ratingDiv.className = 'rating-element';
-                ratingDiv.setAttribute('data-index', index);
-                
-                ratingDiv.innerHTML = `
-                    <div class="row">
-                        <div class="col-md-6">
-                            <label>Name</label>
-                            <input type="text" class="form-control" name="rating_element_name_${index}" 
-                                   value="Rating ${index + 1}" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label>Min</label>
-                            <input type="number" class="form-control" name="rating_element_min_${index}" 
-                                   value="1">
-                        </div>
-                        <div class="col-md-3">
-                            <label>Max</label>
-                            <input type="number" class="form-control" name="rating_element_max_${index}" 
-                                   value="5">
-                        </div>
-                    </div>
-                    <button type="button" class="btn btn-sm btn-danger remove-rating-element mt-2">Remove</button>
-                `;
-                
-                container.appendChild(ratingDiv);
-            }
-        });
-    }
-
-    // Add text element functionality
-    const addTextElementBtn = document.querySelector('.add-text-element');
-    if (addTextElementBtn) {
-        addTextElementBtn.addEventListener('click', function() {
-            const container = document.getElementById('text-elements');
-            if (container) {
-                const index = container.querySelectorAll('.text-element').length;
-                
-                const textDiv = document.createElement('div');
-                textDiv.className = 'text-element';
-                textDiv.setAttribute('data-index', index);
-                
-                textDiv.innerHTML = `
-                    <div class="row">
-                        <div class="col-md-8">
-                            <label>Name</label>
-                            <input type="text" class="form-control" name="text_element_name_${index}" 
-                                   value="Text Field ${index + 1}" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label>Multiline</label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="text_element_multiline_${index}">
-                            </div>
-                        </div>
-                    </div>
-                    <button type="button" class="btn btn-sm btn-danger remove-text-element mt-2">Remove</button>
-                `;
-                
-                container.appendChild(textDiv);
-            }
-        });
-    }
     
-    // Remove element functionality using event delegation
+    // Remove elements and options
     document.addEventListener('click', function(e) {
         if (e.target.classList.contains('remove-element')) {
-            const elementDiv = e.target.closest('.scoring-element');
-            if (elementDiv) {
-                elementDiv.remove();
+            e.target.closest('.element-item').remove();
+        } else if (e.target.classList.contains('remove-rating')) {
+            e.target.closest('.rating-item').remove();
+        } else if (e.target.classList.contains('remove-text')) {
+            e.target.closest('.text-item').remove();
+        } else if (e.target.classList.contains('remove-option')) {
+            e.target.closest('.multiple-choice-option').remove();
+        } else if (e.target.classList.contains('move-up')) {
+            // Move the option row up
+            const row = e.target.closest('.multiple-choice-option');
+            if (!row) return;
+            const prev = row.previousElementSibling;
+            if (prev && prev.classList && prev.classList.contains('multiple-choice-option')) {
+                prev.parentNode.insertBefore(row, prev);
             }
-        } else if (e.target.classList.contains('remove-game-piece')) {
-            const pieceDiv = e.target.closest('.game-piece');
-            if (pieceDiv) {
-                pieceDiv.remove();
+        } else if (e.target.classList.contains('move-down')) {
+            // Move the option row down
+            const row = e.target.closest('.multiple-choice-option');
+            if (!row) return;
+            const next = row.nextElementSibling;
+            if (next && next.classList && next.classList.contains('multiple-choice-option')) {
+                next.parentNode.insertBefore(next, row);
             }
-        } else if (e.target.classList.contains('remove-rating-element')) {
-            const ratingDiv = e.target.closest('.rating-element');
-            if (ratingDiv) {
-                ratingDiv.remove();
-            }
-        } else if (e.target.classList.contains('remove-text-element')) {
-            const textDiv = e.target.closest('.text-element');
-            if (textDiv) {
-                textDiv.remove();
-            }
+        } else if (e.target.classList.contains('add-option')) {
+            addMultipleChoiceOption(e.target);
+        }
+    });
+    
+    // Add game piece
+    document.getElementById('add-game-piece').addEventListener('click', function() {
+        const container = document.getElementById('game-pieces-simple');
+        const index = counters.gamepiece++;
+        
+        const pieceHtml = `
+            <div class="col-md-4 mb-3">
+                <div class="border p-2 rounded">
+                    <input type="text" class="form-control form-control-sm mb-2" 
+                           name="game_piece_name_${index}" placeholder="Piece name">
+                    <div class="row">
+                        <div class="col-6">
+                            <input type="number" class="form-control form-control-sm" 
+                                   name="game_piece_auto_points_${index}" value="0" placeholder="Auto pts" step="0.1">
+                        </div>
+                        <div class="col-6">
+                            <input type="number" class="form-control form-control-sm" 
+                                   name="game_piece_teleop_points_${index}" value="0" placeholder="Teleop pts" step="0.1">
+                        </div>
+                    </div>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" name="game_piece_gamepiece_scoreible_${index}" value="1">
+                        <label class="form-check-label">Is scored gamepiece</label>
+                    </div>
+                    <input type="hidden" name="game_piece_id_${index}" value="piece_${index}">
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', pieceHtml);
+    });
+    
+    // Add rating element
+    document.getElementById('add-rating-element').addEventListener('click', function() {
+        const container = document.getElementById('rating-elements-simple');
+        const index = counters.rating++;
+        
+        const ratingHtml = `
+            <div class="rating-item p-2 mb-2 border rounded" data-index="${index}">
+                <input type="text" class="form-control form-control-sm mb-2" 
+                       name="rating_element_name_${index}" placeholder="Rating question">
+                <div class="row">
+                    <div class="col-4">
+                        <input type="number" class="form-control form-control-sm" 
+                               name="rating_element_min_${index}" value="1" placeholder="Min">
+                    </div>
+                    <div class="col-4">
+                        <input type="number" class="form-control form-control-sm" 
+                               name="rating_element_max_${index}" value="5" placeholder="Max">
+                    </div>
+                    <div class="col-4">
+                        <input type="number" class="form-control form-control-sm" 
+                               name="rating_element_default_${index}" value="3" placeholder="Default">
+                    </div>
+                </div>
+                <input type="hidden" name="rating_element_id_${index}" value="rating_${index}">
+                <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-rating">Remove</button>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', ratingHtml);
+    });
+    
+    // Add text element
+    document.getElementById('add-text-element').addEventListener('click', function() {
+        const container = document.getElementById('text-elements-simple');
+        const index = counters.text++;
+        
+        const textHtml = `
+            <div class="text-item p-2 mb-2 border rounded" data-index="${index}">
+                <input type="text" class="form-control form-control-sm mb-2" 
+                       name="text_element_name_${index}" placeholder="Comment field name">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" 
+                           name="text_element_multiline_${index}" value="1">
+                    <label class="form-check-label">Allow multiple lines</label>
+                </div>
+                <input type="hidden" name="text_element_id_${index}" value="text_${index}">
+                <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-text">Remove</button>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', textHtml);
+    });
+    
+    // Build simplified payload before submit
+    function buildSimplePayload() {
+        const payload = {};
+        
+        // Basic settings
+        payload.game_name = document.getElementById('game_name').value;
+        payload.season = parseInt(document.getElementById('season').value) || null;
+        payload.version = document.getElementById('version').value;
+        payload.alliance_size = parseInt(document.getElementById('alliance_size').value) || null;
+        payload.scouting_stations = parseInt(document.getElementById('scouting_stations').value) || null;
+        payload.current_event_code = document.getElementById('current_event_code').value;
+
+        // Include API auto-sync toggle in the payload so server-side processing
+        // that prefers simple_payload will still receive this setting.
+        try {
+            const autoSyncEl = document.getElementById('auto_sync_enabled');
+            payload.api_settings = payload.api_settings || {};
+            payload.api_settings.auto_sync_enabled = !!(autoSyncEl && autoSyncEl.checked);
+        } catch (err) {
+            // ignore - payload will fall back to form values
+        }
+        
+        // Match types
+        payload.match_types = [];
+        ['practice','qualification','playoff'].forEach(t => {
+            const el = document.getElementById('match_type_' + t);
+            if (el && el.checked) payload.match_types.push(t.charAt(0).toUpperCase() + t.slice(1));
+        });
+        
+        // Periods - simplified structure
+        ['auto','teleop','endgame'].forEach(period => {
+            payload[period] = [];
+            const container = document.getElementById(`${period}-elements-simple`);
+            if (!container) return;
+            
+            container.querySelectorAll('.element-item').forEach(item => {
+                const nameInput = item.querySelector(`input[name^="${period}_element_name_"]`);
+                const typeSelect = item.querySelector(`select[name^="${period}_element_type_"]`);
+                const pointsInput = item.querySelector(`input[name^="${period}_element_points_"]`);
+                const idInput = item.querySelector(`input[name^="${period}_element_id_"]`);
+                
+                if (nameInput && nameInput.value.trim()) {
+                    const element = {
+                        id: idInput ? idInput.value : `elem_${period}_${Date.now()}`,
+                        perm_id: idInput ? idInput.value : `elem_${period}_${Date.now()}`,
+                        name: nameInput.value.trim(),
+                        type: typeSelect ? typeSelect.value : 'counter',
+                        default: typeSelect && typeSelect.value === 'boolean' ? false : 0,
+                        points: pointsInput ? parseFloat(pointsInput.value) || 0 : 0
+                    };
+                    // Show in predictions flag
+                    const displayCheckbox = item.querySelector(`input[name^="${period}_element_display_predictions_"]`);
+                    element.display_in_predictions = displayCheckbox ? !!displayCheckbox.checked : false;
+                    // Scored flag (renamed to gamepiece_scoreible)
+                    const scoredCheckbox = item.querySelector(`input[name^="${period}_element_gamepiece_scoreible_"]`);
+                    element.gamepiece_scoreible = scoredCheckbox ? !!scoredCheckbox.checked : false;
+                    
+                    // Handle multiple choice options with individual point values
+                    if (typeSelect && typeSelect.value === 'multiple_choice') {
+                        const optionsList = item.querySelector('.multiple-choice-list');
+                        const optionElements = optionsList ? optionsList.querySelectorAll('.multiple-choice-option') : [];
+                        element.options = [];
+                        
+                        optionElements.forEach((optionElement, optionIndex) => {
+                            // Prefer selecting by DOM structure so order matches visual order after reordering
+                            const nameInput = optionElement.querySelector('input[type="text"]');
+                            const pointsInput = optionElement.querySelector('input[type="number"]');
+
+                            if (nameInput && nameInput.value.trim()) {
+                                element.options.push({
+                                    name: nameInput.value.trim(),
+                                    points: pointsInput ? parseFloat(pointsInput.value) || 0 : 0
+                                });
+                            }
+                        });
+                        
+                        element.default = element.options.length > 0 ? element.options[0].name : '';
+                    }
+                    
+                    payload[period].push(element);
+                }
+            });
+        });
+        
+        return payload;
+    }
+    
+    // Form submission
+    document.getElementById('config-form').addEventListener('submit', function(e) {
+        try {
+            const payload = buildSimplePayload();
+            document.getElementById('simple_payload').value = JSON.stringify(payload);
+        } catch (err) {
+            console.error('Failed to build payload:', err);
+            alert('Error preparing configuration data. Please check your inputs.');
+            e.preventDefault();
         }
     });
 });
 </script>
+
 {% endblock %}
