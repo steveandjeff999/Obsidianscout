@@ -94,7 +94,10 @@ def get_current_scouting_team():
 def filter_teams_by_scouting_team(query=None):
     """Filter teams by current user's scouting team number.
     If alliance mode is active, shows teams from all alliance members (not filtered by scouting_team_number).
+    Deduplicates by team_number at SQL level.
     """
+    from sqlalchemy import distinct
+    
     scouting_team_number = get_current_scouting_team_number()
     if query is None:
         query = Team.query
@@ -105,8 +108,9 @@ def filter_teams_by_scouting_team(query=None):
         if shared_event_codes:
             # Show all teams from any alliance member (don't filter by scouting_team_number)
             # Teams are shared across the alliance when alliance mode is active
+            # Use DISTINCT on team_number to prevent duplicates
             alliance_team_numbers = get_alliance_team_numbers()
-            return query.filter(Team.scouting_team_number.in_(alliance_team_numbers))
+            return query.filter(Team.scouting_team_number.in_(alliance_team_numbers)).distinct(Team.team_number)
         else:
             # Show only current team's teams
             return query.filter(Team.scouting_team_number == scouting_team_number)
@@ -116,7 +120,10 @@ def filter_teams_by_scouting_team(query=None):
 def filter_events_by_scouting_team(query=None):
     """Filter events by current user's scouting team number.
     If alliance mode is active, filters by alliance shared event codes.
+    Deduplicates by uppercase event code at SQL level.
     """
+    from sqlalchemy import distinct
+    
     scouting_team_number = get_current_scouting_team_number()
     if query is None:
         query = Event.query
@@ -127,8 +134,9 @@ def filter_events_by_scouting_team(query=None):
         if shared_event_codes:
             # Show only events that are in the alliance's shared event list
             # Use uppercase comparison to handle case-insensitive event codes
+            # Use DISTINCT on uppercase code to prevent duplicate events
             upper_codes = [code.upper() for code in shared_event_codes]
-            return query.filter(func.upper(Event.code).in_(upper_codes))
+            return query.filter(func.upper(Event.code).in_(upper_codes)).distinct(func.upper(Event.code))
         else:
             # Show only current team's events
             return query.filter(Event.scouting_team_number == scouting_team_number)
@@ -138,8 +146,11 @@ def filter_events_by_scouting_team(query=None):
 def filter_matches_by_scouting_team(query=None):
     """Filter matches by current user's scouting team number.
     If alliance mode is active, shows matches from all alliance members for shared events.
-    Deduplicates matches that appear in multiple alliance members' databases.
+    Deduplicates matches at SQL level using subquery with MIN(id) grouped by event code, match type, and match number.
     """
+    from sqlalchemy import select, and_
+    from app import db
+    
     scouting_team_number = get_current_scouting_team_number()
     if query is None:
         query = Match.query
@@ -152,42 +163,26 @@ def filter_matches_by_scouting_team(query=None):
             # Get event IDs for shared event codes from ANY alliance member
             upper_codes = [code.upper() for code in shared_event_codes]
             alliance_team_numbers = get_alliance_team_numbers()
-            # Get all events with matching codes from any alliance member
-            shared_events = Event.query.filter(
-                func.upper(Event.code).in_(upper_codes),
+            
+            # Create subquery that deduplicates at SQL level
+            # Select MIN(match.id) grouped by (UPPER(event.code), match_type, match_number)
+            from sqlalchemy import func as sql_func
+            
+            subq = db.session.query(
+                sql_func.min(Match.id).label('match_id')
+            ).join(
+                Event, Match.event_id == Event.id
+            ).filter(
+                sql_func.upper(Event.code).in_(upper_codes),
                 Event.scouting_team_number.in_(alliance_team_numbers)
-            ).all()
-            shared_event_ids = [event.id for event in shared_events]
-            if shared_event_ids:
-                # Build event code mapping to deduplicate matches
-                event_code_map = {}
-                for event in shared_events:
-                    event_code_map[event.id] = event.code.upper()
-                
-                # Get matches and deduplicate by (event_code, match_type, match_number)
-                # Using a subquery to get distinct matches by unique identifiers
-                from sqlalchemy import distinct
-                base_matches = query.filter(Match.event_id.in_(shared_event_ids))
-                
-                # Get all matches, then deduplicate in Python to preserve full Match objects
-                all_matches = base_matches.all()
-                seen = set()
-                unique_matches = []
-                for match in all_matches:
-                    event_code = event_code_map.get(match.event_id, '').upper()
-                    key = (event_code, match.match_type, match.match_number)
-                    if key not in seen:
-                        seen.add(key)
-                        unique_matches.append(match.id)
-                
-                # Return query filtered to unique match IDs
-                if unique_matches:
-                    return Match.query.filter(Match.id.in_(unique_matches))
-                else:
-                    return Match.query.filter(Match.id.in_([]))  # Empty result
-            else:
-                # No matching shared events found - fall back to showing current team's matches
-                return query.filter(Match.scouting_team_number == scouting_team_number)
+            ).group_by(
+                sql_func.upper(Event.code),
+                Match.match_type,
+                Match.match_number
+            ).subquery()
+            
+            # Return matches whose IDs are in the deduplicated subquery
+            return query.filter(Match.id.in_(select(subq.c.match_id)))
         else:
             # Show only current team's matches
             return query.filter(Match.scouting_team_number == scouting_team_number)
@@ -212,26 +207,30 @@ def filter_scouting_data_by_scouting_team(query=None):
         
         if alliance_team_numbers and shared_event_codes:
             # Show data from all alliance members, but only for shared events
-            # Get all event IDs from alliance members that match shared event codes
+            # Use SQL subquery instead of loading all events/matches into memory
+            from sqlalchemy import select
+            from app import db
             upper_codes = [code.upper() for code in shared_event_codes]
-            shared_events = Event.query.filter(
+            
+            # Subquery for event IDs
+            event_subq = db.session.query(Event.id).filter(
                 func.upper(Event.code).in_(upper_codes),
                 Event.scouting_team_number.in_(alliance_team_numbers)
-            ).all()
-            shared_event_ids = [event.id for event in shared_events]
+            ).subquery()
             
-            if shared_event_ids:
-                # Get all matches from these events
-                shared_match_ids = [match.id for match in Match.query.filter(Match.event_id.in_(shared_event_ids)).all()]
-                if shared_match_ids:
-                    # Show data from all alliance members for these matches, plus NULL entries
-                    return query.filter(
-                        or_(
-                            ScoutingData.scouting_team_number.in_(alliance_team_numbers),
-                            ScoutingData.scouting_team_number.is_(None)
-                        ),
-                        ScoutingData.match_id.in_(shared_match_ids)
-                    )
+            # Subquery for match IDs from those events
+            match_subq = db.session.query(Match.id).filter(
+                Match.event_id.in_(select(event_subq.c.id))
+            ).subquery()
+            
+            # Show data from all alliance members for these matches, plus NULL entries
+            return query.filter(
+                or_(
+                    ScoutingData.scouting_team_number.in_(alliance_team_numbers),
+                    ScoutingData.scouting_team_number.is_(None)
+                ),
+                ScoutingData.match_id.in_(select(match_subq.c.id))
+            )
             # No matches found in shared events - fall back to current team's data
             return query.filter(or_(ScoutingData.scouting_team_number == scouting_team_number,
                                     ScoutingData.scouting_team_number.is_(None)))
@@ -264,23 +263,27 @@ def filter_scouting_data_only_by_scouting_team(query=None):
         
         if alliance_team_numbers and shared_event_codes:
             # Show data from all alliance members, but only for shared events
-            # Get all event IDs from alliance members that match shared event codes
+            # Use SQL subquery instead of loading all events/matches into memory
+            from sqlalchemy import select
+            from app import db
             upper_codes = [code.upper() for code in shared_event_codes]
-            shared_events = Event.query.filter(
+            
+            # Subquery for event IDs
+            event_subq = db.session.query(Event.id).filter(
                 func.upper(Event.code).in_(upper_codes),
                 Event.scouting_team_number.in_(alliance_team_numbers)
-            ).all()
-            shared_event_ids = [event.id for event in shared_events]
+            ).subquery()
             
-            if shared_event_ids:
-                # Get all matches from these events
-                shared_match_ids = [match.id for match in Match.query.filter(Match.event_id.in_(shared_event_ids)).all()]
-                if shared_match_ids:
-                    # Show data from all alliance members for these matches
-                    return query.filter(
-                        ScoutingData.scouting_team_number.in_(alliance_team_numbers),
-                        ScoutingData.match_id.in_(shared_match_ids)
-                    )
+            # Subquery for match IDs from those events
+            match_subq = db.session.query(Match.id).filter(
+                Match.event_id.in_(select(event_subq.c.id))
+            ).subquery()
+            
+            # Show data from all alliance members for these matches
+            return query.filter(
+                ScoutingData.scouting_team_number.in_(alliance_team_numbers),
+                ScoutingData.match_id.in_(select(match_subq.c.id))
+            )
             # No matches found in shared events - fall back to current team's data
             return query.filter(ScoutingData.scouting_team_number == scouting_team_number)
         else:
