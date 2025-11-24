@@ -334,7 +334,7 @@
                     <p class="text-muted">Manage API keys for Team {{ current_user.scouting_team_number }}. Maximum 5 keys per team.</p>
                 </div>
                 <div>
-                    <button class="btn btn-outline-secondary btn-sm" id="debug-toggle-btn">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="debug-toggle-btn">
                         <i class="fas fa-bug"></i> Debug
                     </button>
                 </div>
@@ -344,7 +344,7 @@
             <div id="alert-container"></div>
             
             <!-- Debug Section (can be removed in production) -->
-            <div class="alert alert-info" id="debug-info" style="display: none;">
+            <div class="alert alert-info d-none" id="debug-info">
                 <strong><i class="fas fa-bug me-2"></i>Debug Info:</strong>
                 <br><strong>Current User:</strong> {{ current_user.username }}
                 <br><strong>Team:</strong> {{ current_user.scouting_team_number }}
@@ -395,7 +395,7 @@
                     
                     <button type="submit" class="btn btn-primary" id="create-key-btn">
                         <span class="btn-text">Create API Key</span>
-                        <span class="loading-spinner" style="display: none;"></span>
+                            <span class="loading-spinner d-none"></span>
                     </button>
                 </form>
             </div>
@@ -404,7 +404,7 @@
             <div id="api-keys-container">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h3><i class="fas fa-list me-2"></i>Your API Keys <span id="key-count-badge" class="badge badge-secondary">0</span></h3>
-                    <button class="btn btn-outline-primary btn-sm" id="refresh-keys-btn">
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="refresh-keys-btn">
                         <i class="fas fa-sync-alt"></i> Refresh
                     </button>
                 </div>
@@ -444,7 +444,7 @@
 
 <!-- Usage Details Modal -->
 <div id="usage-modal" class="modal">
-    <div class="modal-content" style="max-width: 800px;">
+    <div class="modal-content modal-max-800">
     <span class="close" aria-hidden="true"><i class="fa-solid fa-xmark"></i></span>
         <h3>API Key Usage Details</h3>
         <div id="usage-details-content">
@@ -1060,9 +1060,9 @@ function renderApiKeys() {
                     <p class="text-muted mb-2">${key.description ? escapeHtml(key.description) : 'No description'}</p>
                     <p class="mb-2">
                         <strong>Key:</strong> <span class="api-key-prefix">${escapeHtml(key.key_prefix)}...</span>
-            <button class="btn btn-sm btn-outline-primary btn-copy" 
+            <button type="button" class="btn btn-sm btn-outline-primary btn-copy" 
                 data-action="copy" data-target="key-prefix-${key.id}" onclick="copyToClipboard('key-prefix-${key.id}')">Copy Prefix</button>
-                        <span id="key-prefix-${key.id}" style="display: none;">${escapeHtml(key.key_prefix)}</span>
+                        <span id="key-prefix-${key.id}" class="d-none">${escapeHtml(key.key_prefix)}</span>
                     </p>
                     
                     <div class="usage-stats">
@@ -1099,18 +1099,18 @@ function renderApiKeys() {
                 </div>
                 
                     <div class="btn-group-vertical ml-3">
-                    <button class="btn btn-sm btn-info" data-action="viewUsage" data-key-id="${key.id}" onclick="viewUsage(${key.id})">
+                    <button type="button" class="btn btn-sm btn-info" data-action="viewUsage" data-key-id="${key.id}" onclick="viewUsage(${key.id})">
                         View Usage
                     </button>
-                    <button class="btn btn-sm btn-warning" data-action="editKey" data-key-id="${key.id}" onclick="editKey(${key.id})" 
+                    <button type="button" class="btn btn-sm btn-warning" data-action="editKey" data-key-id="${key.id}" onclick="editKey(${key.id})" 
                             ${!key.is_active ? 'disabled' : ''}>
                         Edit
                     </button>
                     ${key.is_active ? `
-                        <button class="btn btn-sm btn-danger" data-action="deleteKey" data-key-id="${key.id}" onclick="deleteKey(${key.id})">Deactivate</button>
+                        <button type="button" class="btn btn-sm btn-danger" data-action="deleteKey" data-key-id="${key.id}" onclick="deleteKey(${key.id})">Deactivate</button>
                     ` : `
-                        <button class="btn btn-sm btn-success" data-action="reactivateKey" data-key-id="${key.id}" onclick="reactivateKey(${key.id})">Reactivate</button>
-                        <button class="btn btn-sm btn-danger" data-action="deleteKeyPermanent" data-key-id="${key.id}" onclick="deleteKeyPermanent(${key.id})">Delete Permanently</button>
+                        <button type="button" class="btn btn-sm btn-success" data-action="reactivateKey" data-key-id="${key.id}" onclick="reactivateKey(${key.id})">Reactivate</button>
+                        <button type="button" class="btn btn-sm btn-danger" data-action="deleteKeyPermanent" data-key-id="${key.id}" onclick="deleteKeyPermanent(${key.id})">Delete Permanently</button>
                     `}
                 </div>
             </div>

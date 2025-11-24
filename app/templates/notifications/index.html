@@ -188,8 +188,8 @@
 <div class="container py-4">
     <div class="row mb-4">
         <div class="col-12">
-            <h1> Notifications <span class="badge badge-warning" style="font-size:1em;vertical-align:middle;">Beta</span></h1>
-            <p class="text-muted">Manage your match strategy notifications and devices<br><span style="color:#ffc107;font-weight:500;">Notification features are in beta and may change.</span></p>
+            <h1> Notifications <span class="badge badge-warning badge-small">Beta</span></h1>
+            <p class="text-muted">Manage your match strategy notifications and devices<br><span class="text-warning fw-semibold">Notification features are in beta and may change.</span></p>
         </div>
     </div>
 
@@ -298,8 +298,8 @@
     <div class="row mb-4">
         <div class="col-12">
             <div class="notification-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0;"> Registered Devices</h3>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="mb-0"> Registered Devices</h3>
                     <button id="register-device-btn" class="test-button btn-primary" onclick="registerThisDevice()">
                          Register This Device
                     </button>
@@ -336,17 +336,17 @@
     <div class="row mb-4">
         <div class="col-12">
             <div class="notification-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0;"> Scheduled Notifications</h3>
-                    <div style="display:flex;gap:12px;align-items:center;">
-                        <div id="next-schedule-container" style="font-size:0.95em;color:#6c757d;display:flex;align-items:center;gap:8px;">
-                            <span style="font-weight:600;">Next scheduling in</span>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="mb-0"> Scheduled Notifications</h3>
+                    <div class="d-flex align-items-center gap-3">
+                        <div id="next-schedule-container" class="small text-muted d-flex align-items-center gap-2">
+                            <span class="fw-semibold">Next scheduling in</span>
                             <span id="next-schedule-timer">{% if next_schedule_seconds is defined and next_schedule_seconds %}{{ next_schedule_seconds }}s{% else %}--:--{% endif %}</span>
                         </div>
                         <button id="refresh-schedule-btn" class="test-button btn-primary" onclick="refreshSchedule()">
                              Refresh Schedule
                         </button>
-                        <button id="clear-schedule-btn" class="test-button btn-danger" style="display:inline-block;" onclick="clearScheduledNotifications()">
+                        <button id="clear-schedule-btn" class="test-button btn-danger d-inline-block" onclick="clearScheduledNotifications()">
                              Clear Scheduled
                         </button>
                     </div>
@@ -354,7 +354,7 @@
                 {% if pending_notifications %}
                 <div id="pending-list">
                     {% for queue, subscription, match in pending_notifications %}
-                    <div class="history-item d-flex" style="border-left-color: #17a2b8; justify-content:space-between; align-items:center;">
+                    <div class="history-item d-flex justify-content-between align-items-center" style="border-left-color: #17a2b8;">
                         <div>
                             <strong>Team {{ subscription.target_team_number }} - Match #{{ match.match_number }}</strong>
                             <br>
@@ -379,7 +379,7 @@
                                 | Status: <span class="badge badge-info">{{ queue.status }}</span>
                             </small>
                         </div>
-                        <div style="display:flex;gap:8px;align-items:center;">
+                        <div class="d-flex align-items-center gap-2">
                             <button class="test-button btn-danger btn-sm" onclick="clearHistory({{ match.id }}, {{ subscription.id }}, false, false)">Clear Queue</button>
                             <button class="test-button btn-warning btn-sm" onclick="clearHistory({{ match.id }}, {{ subscription.id }}, true, false)">Clear + Logs</button>
                             <button class="test-button btn-success btn-sm" onclick="clearHistory({{ match.id }}, {{ subscription.id }}, true, true)">Clear + Reschedule</button>
@@ -416,8 +416,8 @@
     <div class="row">
         <div class="col-12">
             <div class="notification-card">
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <h3 style="margin:0;"> Notification History</h3>
+                <div class="d-flex justify-content-between align-items-center">
+                    <h3 class="mb-0"> Notification History</h3>
                     <div>
                         <button id="clear-history-all-btn" class="test-button btn-danger" onclick="clearAllHistory()"> Clear History</button>
                     </div>
@@ -425,11 +425,11 @@
                 {% if history %}
                 <div id="history-list">
                     {% for log in history %}
-                    <div class="history-item d-flex" style="justify-content:space-between;align-items:center;">
+                    <div class="history-item d-flex justify-content-between align-items-center">
                         <div>
                             <strong>{{ log.title }}</strong>
                             {% if log.team_number %}
-                            <span class="badge badge-info" style="margin-left: 8px;">Team {{ log.team_number }}</span>
+                            <span class="badge badge-info ms-2">Team {{ log.team_number }}</span>
                             {% endif %}
                             <br>
                             <small>{{ log.message[:100] }}{% if log.message|length > 100 %}...{% endif %}</small>
@@ -445,7 +445,7 @@
                                 {% if log.push_failed_count > 0 %} | <span class="badge badge-warning">️ {{ log.push_failed_count }} failed</span>{% endif %}
                             </small>
                         </div>
-                        <div style="display:flex;gap:8px;align-items:center;">
+                        <div class="d-flex gap-2 align-items-center">
                             <button class="test-button btn-danger btn-sm" onclick="clearLog({{ log.id }}, false, false)">Clear Log</button>
                             <button class="test-button btn-warning btn-sm" onclick="clearLog({{ log.id }}, true, false)">Clear Log + Queue</button>
                             <button class="test-button btn-success btn-sm" onclick="clearLog({{ log.id }}, true, true)">Clear + Reschedule</button>

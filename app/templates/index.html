@@ -11,9 +11,9 @@
 <!-- Modern KPI row -->
 <div class="row g-3 mb-4">
     <div class="col-sm-6 col-lg-3">
-        <div class="card h-100 shadow-sm">
+        <div class="card h-100">
             <div class="card-body d-flex align-items-center gap-3">
-                <div class="flex-shrink-0 display-6 text-primary"><i class="fas fa-users"></i></div>
+                <div class="flex-shrink-0"><i class="fas fa-users display-6 text-primary"></i></div>
                 <div class="flex-grow-1">
                     <div class="small text-muted">Teams</div>
                     <div class="h4 mb-1">{{ teams|length if teams else '0' }}</div>
@@ -23,9 +23,9 @@
         </div>
     </div>
     <div class="col-sm-6 col-lg-3">
-        <div class="card h-100 shadow-sm">
+        <div class="card h-100">
             <div class="card-body d-flex align-items-center gap-3">
-                <div class="flex-shrink-0 display-6 text-success"><i class="fas fa-gamepad"></i></div>
+                <div class="flex-shrink-0"><i class="fas fa-gamepad display-6 text-success"></i></div>
                 <div class="flex-grow-1">
                     <div class="small text-muted">Matches</div>
                     <div class="h4 mb-1">{{ matches|length if matches else '0' }}</div>
@@ -35,9 +35,9 @@
         </div>
     </div>
     <div class="col-sm-6 col-lg-3">
-        <div class="card h-100 shadow-sm">
+        <div class="card h-100">
             <div class="card-body d-flex align-items-center gap-3">
-                <div class="flex-shrink-0 display-6 text-danger"><i class="fas fa-clipboard-check"></i></div>
+                <div class="flex-shrink-0"><i class="fas fa-clipboard-check display-6 text-danger"></i></div>
                 <div class="flex-grow-1">
                     <div class="small text-muted">Scouting Entries</div>
                     <div class="h4 mb-1">{{ total_scout_entries if total_scout_entries is defined else '0' }}</div>
@@ -47,9 +47,9 @@
         </div>
     </div>
     <div class="col-sm-6 col-lg-3">
-        <div class="card h-100 shadow-sm">
+        <div class="card h-100">
             <div class="card-body d-flex align-items-center gap-3">
-                <div class="flex-shrink-0 display-6 text-info"><i class="fas fa-calendar-day"></i></div>
+                <div class="flex-shrink-0"><i class="fas fa-calendar-day display-6 text-info"></i></div>
                 <div class="flex-grow-1">
                     <div class="small text-muted">Current Event</div>
                     <div class="h5 mb-1 text-truncate">
@@ -91,7 +91,7 @@
                         <button id="syncEventBtn" class="btn btn-outline-primary w-100 py-3 d-flex align-items-center justify-content-center" aria-live="polite">
                             <i class="fas fa-sync-alt fa-lg me-2"></i>
                             <span>Sync Teams & Matches</span>
-                            <div id="syncSpinner" class="spinner-border spinner-border-sm ms-2" role="status" aria-hidden="true" style="display:none;"></div>
+                            <div id="syncSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></div>
                         </button>
                     </div>
                 </div>

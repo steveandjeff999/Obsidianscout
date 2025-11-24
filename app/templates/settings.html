@@ -32,7 +32,7 @@
                 <div class="mt-3">
                     <button id="saveSettingsBtn" class="btn btn-primary">Save</button>
                     <button id="resetSettingsBtn" class="btn btn-outline-secondary">Reset to default</button>
-                    <div id="settingsStatus" class="mt-2" style="display:none;"></div>
+                    <div id="settingsStatus" class="mt-2 d-none"></div>
                 </div>
 
                 <hr />
@@ -64,15 +64,101 @@
                     <label class="form-check-label" for="compactDensityToggle">Use compact layout density</label>
                 </div>
 
+                <!-- Rounded UI toggle removed from settings (sitewide control preserved) -->
+
+                <div class="mb-3">
+                    <label class="form-label">Control shapes</label>
+                    <p class="text-muted small">Choose a global shape profile for checkboxes, buttons and toggles.</p>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="ui_shape" id="shape_square" value="square">
+                        <label class="form-check-label" for="shape_square">Square (minimal radius)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="ui_shape" id="shape_rounded" value="rounded">
+                        <label class="form-check-label" for="shape_rounded">Rounded (subtle radius)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="ui_shape" id="shape_pill" value="pill">
+                        <label class="form-check-label" for="shape_pill">Pill (oval buttons, rounded inputs)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="ui_shape" id="shape_circle" value="circle">
+                        <label class="form-check-label" for="shape_circle">Circle (compact icon controls)</label>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Preview</label>
+                    <div class="card p-3 rounded">
+                        <div class="d-flex gap-2 align-items-center">
+                            <a class="btn btn-primary" href="#">Primary</a>
+                            <a class="btn btn-outline-primary" href="#">Outline</a>
+                            <button class="btn btn-sm btn-secondary">Small</button>
+                            <div class="form-check form-switch ms-3">
+                                <input class="form-check-input" type="checkbox" id="previewSwitch" role="switch">
+                                <label class="form-check-label small text-muted" for="previewSwitch">Switch</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-text">Preview updates immediately when you select a shape.</div>
+                </div>
+
+                <!-- Accent color setting removed - site uses theme defaults -->
+
+                <!-- Border radius slider removed from user settings (managed globally) -->
+
+                <div class="mb-3">
+                    <label class="form-label">Button size</label>
+                    <p class="text-muted small">Choose default button density/size.</p>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="btn_size" id="btnSizeSmall" value="small">
+                        <label class="form-check-label" for="btnSizeSmall">Small</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="btn_size" id="btnSizeNormal" value="normal">
+                        <label class="form-check-label" for="btnSizeNormal">Normal (default)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="btn_size" id="btnSizeLarge" value="large">
+                        <label class="form-check-label" for="btnSizeLarge">Large</label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Card elevation</label>
+                    <p class="text-muted small">Choose how pronounced card shadows should be.</p>
+                    <select id="cardElevationSelect" title="Card shadow intensity" class="form-select">
+                        <option value="default">Default (soft)</option>
+                        <option value="none">None (flat)</option>
+                        <option value="low">Low</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+
+                <!-- Glass control removed from Settings (controlled sitewide) -->
+
                 <div class="mb-3">
                     <label class="form-label">Font size <span id="fontSizeLabel" class="small text-muted ms-2"></span></label>
-                    <input type="range" id="fontSizeSlider" class="form-range" min="14" max="20" step="1" />
+                    <input type="range" id="fontSizeSlider" class="form-range" min="14" max="20" step="1" title="Adjust base font size" aria-label="Adjust base font size" />
                     <div class="form-text">Drag to adjust the base font size (px). Changes apply immediately.</div>
                 </div>
 
                 <div class="form-check form-switch mb-2">
                     <input class="form-check-input" type="checkbox" id="reducedMotionToggle">
                     <label class="form-check-label" for="reducedMotionToggle">Reduce motion / disable animations</label>
+                </div>
+
+                <hr />
+                <h5 class="card-title mt-3">Topbar & Accent Theme</h5>
+                <p class="text-muted">Choose a color theme for the top navigation bar and accent highlights across the site. Notifications, the user dropdown, buttons, badges, and other interactive elements will adopt the theme color.</p>
+                <div class="mb-3">
+                    <label for="navbarThemeSelect" class="form-label">Topbar theme</label>
+                    <select id="navbarThemeSelect" class="form-select">
+                        <option value="primary">Primary (blue)</option>
+                        <option value="neutral">Neutral (light)</option>
+                        <option value="indigo">Indigo (accent)</option>
+                        <option value="green">Green (success)</option>
+                    </select>
+                    <div class="form-text">Primary theme uses blue accents on Notifications and User dropdowns; topbar stays neutral.</div>
                 </div>
 
                 <!-- 24-hour time preference removed -->
@@ -133,6 +219,43 @@
 
         var reducedToggle = document.getElementById('reducedMotionToggle');
         try{ if(reducedToggle) reducedToggle.checked = readBool('reduced_motion', false); }catch(e){}
+        var navbarThemeSelect = document.getElementById('navbarThemeSelect');
+        try{ if(navbarThemeSelect) navbarThemeSelect.value = localStorage.getItem('navbar_theme') || 'neutral'; }catch(e){}
+
+        // Accent color control
+        // Accent color controls removed from UI
+        // Accent color feature removed; site uses theme defaults.
+
+        // border radius slider and helpers
+        var borderRadiusSlider = document.getElementById('borderRadiusSlider');
+        var borderRadiusLabel = document.getElementById('borderRadiusLabel');
+        function applyBorderRadius(px){ try{ document.documentElement.style.setProperty('--border-radius', px+'px'); document.body.style.setProperty('--border-radius', px+'px'); // also update modern theme card/control radii
+            try{ document.documentElement.style.setProperty('--card-radius', Math.max(px,4)+'px'); document.body.style.setProperty('--card-radius', Math.max(px,4)+'px'); }catch(e){}
+            try{ var ctrl = Math.max(px - 4, 4); document.documentElement.style.setProperty('--control-radius', ctrl+'px'); document.body.style.setProperty('--control-radius', ctrl+'px'); }catch(e){}
+            // Ensure rounded-ui class is enabled so rounded rules take effect
+            try { document.documentElement.classList.add('rounded-ui'); document.body.classList.add('rounded-ui'); localStorage.setItem('rounded_ui','true'); } catch(e){}
+            if(borderRadiusLabel) borderRadiusLabel.textContent = px; }catch(e){} }
+        try{ var storedBR = parseInt(localStorage.getItem('border_radius')||'8',10); if(borderRadiusSlider){ borderRadiusSlider.value = storedBR; applyBorderRadius(storedBR);} }catch(e){}
+        try{ if(borderRadiusSlider){ borderRadiusSlider.addEventListener('input', function(){ try{ var v = parseInt(this.value,10); applyBorderRadius(v); try{ localStorage.setItem('border_radius', String(v)); // toggle rounded-ui when user customizes radius
+                try{ localStorage.setItem('rounded_ui','true'); document.documentElement.classList.add('rounded-ui'); document.body.classList.add('rounded-ui'); }catch(e){} }catch(e){} }catch(e){} }); } }catch(e){}
+
+        // Button size
+        var btnSizeEls = document.querySelectorAll('input[name="btn_size"]');
+        function applyBtnSize(v){ try{ document.documentElement.classList.remove('btn-size-small','btn-size-normal','btn-size-large'); document.body.classList.remove('btn-size-small','btn-size-normal','btn-size-large'); var cls = 'btn-size-'+(v||'normal'); document.documentElement.classList.add(cls); document.body.classList.add(cls); }catch(e){} }
+        try{ var storedBtnSize = localStorage.getItem('btn_size') || 'normal'; if(btnSizeEls) btnSizeEls.forEach(function(el){ el.checked = (el.value === storedBtnSize); el.addEventListener('change', function(){ try{ if(this.checked){ applyBtnSize(this.value); try{ localStorage.setItem('btn_size', this.value); }catch(e){} showStatus('Button size saved locally.','success'); } }catch(e){} }); }); applyBtnSize(storedBtnSize); }catch(e){}
+
+        // Card elevation
+        var cardElevSelect = document.getElementById('cardElevationSelect');
+        function applyCardElevation(v){ try{ document.documentElement.classList.remove('card-elevation-none','card-elevation-low','card-elevation-default','card-elevation-high'); document.body.classList.remove('card-elevation-none','card-elevation-low','card-elevation-default','card-elevation-high'); document.documentElement.classList.add('card-elevation-'+(v||'default')); document.body.classList.add('card-elevation-'+(v||'default')); }catch(e){} }
+        try{ var storedCardElev = localStorage.getItem('card_elevation') || 'default'; if(cardElevSelect) cardElevSelect.value = storedCardElev; applyCardElevation(storedCardElev); }catch(e){}
+        try{ if(cardElevSelect) cardElevSelect.addEventListener('change', function(){ try{ localStorage.setItem('card_elevation', this.value); applyCardElevation(this.value); showStatus('Card elevation saved locally.','success'); }catch(e){} }); }catch(e){}
+
+        /* Glass toggle removed from Settings UI - sitewide handling remains in base.html */
+        // Rounded UI preference removed from Settings UI
+            // Shape control: read and apply
+            function applyUIShape(v){ try { document.documentElement.classList.remove('ui-shape-square','ui-shape-rounded','ui-shape-pill','ui-shape-circle'); document.body.classList.remove('ui-shape-square','ui-shape-rounded','ui-shape-pill','ui-shape-circle'); if(v) { document.documentElement.classList.add('ui-shape-'+v); document.body.classList.add('ui-shape-'+v); } }catch(e){} }
+            var curShape = localStorage.getItem('ui_shape') || 'rounded';
+            try{ var shapeRadios = document.querySelectorAll('input[name="ui_shape"]'); if(shapeRadios){ shapeRadios.forEach(function(r){ r.checked = (r.value === curShape); r.addEventListener('change', function(){ try{ applyUIShape(this.value); try{ localStorage.setItem('ui_shape', this.value); }catch(e){} showStatus('Shape preference saved locally.','success'); }catch(e){} }); }); applyUIShape(curShape); } }catch(e){}
 
         // 24-hour time preference removed; default to 12-hour throughout app
         try{ document.getElementById('pref_99xx').checked = (current === '99xx'); }catch(e){}
@@ -140,7 +263,7 @@
         try{ var prefBothEl2 = document.getElementById('pref_both'); if(prefBothEl2) prefBothEl2.checked = (current === 'both'); }catch(e){}
 
         var status = document.getElementById('settingsStatus');
-        function showStatus(msg, cls){ if(!status) return; status.style.display='block'; status.className = 'mt-2 text-'+(cls||'success'); status.textContent = msg; setTimeout(function(){ status.style.display='none'; }, 2500); }
+        function showStatus(msg, cls){ if(!status) return; status.className = 'mt-2 text-'+(cls||'success'); status.textContent = msg; status.classList.remove('d-none'); setTimeout(function(){ status.classList.add('d-none'); }, 2500); }
 
         document.getElementById('saveSettingsBtn').addEventListener('click', function(){
             try{
@@ -153,10 +276,18 @@
             // Appearance options
             try{ if(darkToggle){ writeBool('darkMode', darkToggle.checked); if(darkToggle.checked){ document.documentElement.classList.add('dark-mode'); document.body.classList.add('dark-mode'); } else { document.documentElement.classList.remove('dark-mode'); document.body.classList.remove('dark-mode'); } } }catch(e){}
             try{ if(themeSelect && themeSelect.value){ localStorage.setItem('obsidian_theme', themeSelect.value); } }catch(e){}
+            try{ if(navbarThemeSelect && navbarThemeSelect.value){ localStorage.setItem('navbar_theme', navbarThemeSelect.value); try{ document.documentElement.classList.remove('nav-theme-primary','nav-theme-neutral','nav-theme-indigo','nav-theme-green'); document.body.classList.remove('nav-theme-primary','nav-theme-neutral','nav-theme-indigo','nav-theme-green'); document.documentElement.classList.add('nav-theme-'+navbarThemeSelect.value); document.body.classList.add('nav-theme-'+navbarThemeSelect.value); }catch(e){} } }catch(e){}
             try{ if(sidebarToggle){ localStorage.setItem('obsidian_sidebar_collapsed', sidebarToggle.checked ? '1' : '0'); if(typeof setSidebarCollapsed === 'function') setSidebarCollapsed(sidebarToggle.checked); } }catch(e){}
             try{ if(compactToggle) writeBool('compact_density', compactToggle.checked); }catch(e){}
             try{ if(fontSlider){ localStorage.setItem('font_size', String(fontSlider.value)); try{ window.dispatchEvent(new Event('storage')); }catch(e){} } }catch(e){}
             try{ if(reducedToggle) writeBool('reduced_motion', reducedToggle.checked); }catch(e){}
+                try{ var s = document.querySelector('input[name="ui_shape"]:checked'); if(s){ try{ localStorage.setItem('ui_shape', s.value); applyUIShape(s.value); }catch(e){} } }catch(e){}
+            // Accent color removed — nothing to save here.
+            try{ var br = document.getElementById('borderRadiusSlider') && document.getElementById('borderRadiusSlider').value; if(br){ try{ localStorage.setItem('border_radius', String(br)); try{ localStorage.setItem('rounded_ui','true'); document.documentElement.classList.add('rounded-ui'); document.body.classList.add('rounded-ui'); }catch(e){} }catch(e){} } }catch(e){}
+            try{ var bs = document.querySelector('input[name="btn_size"]:checked'); if(bs){ try{ localStorage.setItem('btn_size', bs.value); }catch(e){} } }catch(e){}
+            try{ var ce = document.getElementById('cardElevationSelect') && document.getElementById('cardElevationSelect').value; if(ce){ try{ localStorage.setItem('card_elevation', ce); }catch(e){} } }catch(e){}
+            // Glass preference is managed globally; settings page no longer writes it here
+            // Rounded UI preference removal: handled sitewide via early script and not user-configurable here
 
             // Broadcast storage event where browsers permit constructing StorageEvent
             try{ window.dispatchEvent(new Event('storage')); }catch(e){}
@@ -178,9 +309,18 @@
             try{ localStorage.removeItem('obsidian_theme'); if(themeSelect) themeSelect.value = ''; }catch(e){}
             try{ localStorage.removeItem('obsidian_sidebar_collapsed'); if(sidebarToggle) sidebarToggle.checked = false; if(typeof setSidebarCollapsed === 'function') setSidebarCollapsed(false); }catch(e){}
             try{ localStorage.removeItem('compact_density'); if(compactToggle) compactToggle.checked = false; document.body.classList.remove('compact-density'); }catch(e){}
+            // Accent color removed — no stored value exists to clear.
+            try{ localStorage.removeItem('border_radius'); try{ localStorage.removeItem('rounded_ui'); }catch(e){} if(borderRadiusSlider) { borderRadiusSlider.value = 8; // clear inline overrides and remove rounded-ui class
+                document.documentElement.style.removeProperty('--border-radius'); document.body.style.removeProperty('--border-radius'); document.documentElement.style.removeProperty('--card-radius'); document.body.style.removeProperty('--card-radius'); document.documentElement.style.removeProperty('--control-radius'); document.body.style.removeProperty('--control-radius'); document.documentElement.classList.remove('rounded-ui'); document.body.classList.remove('rounded-ui'); } }catch(e){}
+            try{ localStorage.removeItem('btn_size'); document.documentElement.classList.remove('btn-size-small','btn-size-normal','btn-size-large'); document.body.classList.remove('btn-size-small','btn-size-normal','btn-size-large'); }catch(e){}
+            try{ localStorage.removeItem('card_elevation'); document.documentElement.classList.remove('card-elevation-none','card-elevation-low','card-elevation-default','card-elevation-high'); document.body.classList.remove('card-elevation-none','card-elevation-low','card-elevation-default','card-elevation-high'); }catch(e){}
+            try{ localStorage.removeItem('glass_effect'); }catch(e){}
             try{ localStorage.removeItem('font_size'); if(fontSlider){ fontSlider.value = 16; updateFontLabel(16); } document.documentElement.style.fontSize = ''; document.body.style.fontSize = ''; try{ document.documentElement.style.removeProperty('--obsidian-base-font-size'); }catch(e){} try{ window.dispatchEvent(new Event('storage')); }catch(e){} }catch(e){}
             try{ localStorage.removeItem('reduced_motion'); if(reducedToggle) reducedToggle.checked = false; var id='reducedMotionStyle'; var s=document.getElementById(id); if(s && s.parentNode) s.parentNode.removeChild(s); document.documentElement.classList.remove('reduced-motion'); }catch(e){}
+            // No longer stored via settings UI
+                try{ localStorage.removeItem('ui_shape'); applyUIShape('rounded'); var rs = document.querySelector('input[name="ui_shape"][value="rounded"]'); if(rs) rs.checked = true; }catch(e){}
             try{ localStorage.removeItem('time_format_24h'); window.TIME_FORMAT_24H = false; }catch(e){}
+            try{ localStorage.removeItem('navbar_theme'); if(navbarThemeSelect) navbarThemeSelect.value = 'neutral'; document.documentElement.classList.remove('nav-theme-primary','nav-theme-indigo','nav-theme-green'); document.documentElement.classList.add('nav-theme-neutral'); document.body.classList.remove('nav-theme-primary','nav-theme-indigo','nav-theme-green'); document.body.classList.add('nav-theme-neutral'); }catch(e){}
 
             try{ if (typeof window.setTeamNumberDisplayPreference === 'function') window.setTeamNumberDisplayPreference('99xx'); else if (typeof window.applyTeamNumberDisplayPreference === 'function') window.applyTeamNumberDisplayPreference(); } catch(e){}
 
@@ -199,6 +339,15 @@
 
         // Live font-size slider handler: save and broadcast so applyUserPreferences picks it up
         try{ if (fontSlider) fontSlider.addEventListener('input', function(){ try{ var v = this.value; updateFontLabel(v); try{ localStorage.setItem('font_size', String(v)); }catch(e){} try{ window.dispatchEvent(new Event('storage')); }catch(e){} showStatus('Font size saved locally.','success'); }catch(e){} }); }catch(e){}
+
+        try{ if (navbarThemeSelect) navbarThemeSelect.addEventListener('change', function(){ try{ var v = navbarThemeSelect.value; try{ localStorage.setItem('navbar_theme', v); }catch(e){} // apply immediately
+            document.documentElement.classList.remove('nav-theme-primary','nav-theme-neutral','nav-theme-indigo','nav-theme-green');
+            document.body.classList.remove('nav-theme-primary','nav-theme-neutral','nav-theme-indigo','nav-theme-green');
+            document.documentElement.classList.add('nav-theme-'+v);
+            document.body.classList.add('nav-theme-'+v);
+            showStatus('Navbar theme preference saved locally.','success'); }catch(e){} }); }catch(e){}
+
+        // Rounded UI toggle removed - no change listener required
 
     });
 })();

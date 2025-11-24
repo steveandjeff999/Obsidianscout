@@ -25,8 +25,8 @@
   <div class="now-brief__body px-3 pb-3">
     <div class="row g-3 mb-3">
       <div class="col-12 col-md-4">
-        <div class="kpi card shadow-sm p-3 h-100 d-flex align-items-center">
-          <div class="me-3 display-6 text-primary"><i class="fas fa-clipboard-check"></i></div>
+        <div class="kpi card p-3 h-100 d-flex align-items-center">
+          <div class="me-3"><i class="fas fa-clipboard-check display-6 text-primary"></i></div>
           <div class="flex-grow-1">
             <div class="small text-muted">Today's Scouts</div>
             <div class="h4 mb-0" id="briefTodayScouts">0</div>
@@ -37,8 +37,8 @@
       <!-- Upcoming Matches KPI removed -->
 
       <div class="col-12 col-md-4">
-        <div class="kpi card shadow-sm p-3 h-100 d-flex align-items-center">
-          <div class="me-3 display-6 text-warning"><i class="fas fa-users"></i></div>
+        <div class="kpi card p-3 h-100 d-flex align-items-center">
+          <div class="me-3"><i class="fas fa-users display-6 text-warning"></i></div>
           <div class="flex-grow-1">
             <div class="small text-muted">Teams Analyzed</div>
             <div class="h4 mb-0" id="briefTeamsAnalyzed">0</div>
@@ -116,7 +116,7 @@
   .team-card.small .team-label { display:none; }
 
 .alliance-red .team-card { background: rgba(220,53,69,0.04); color:#b02a37; border-color: rgba(220,53,69,0.09); }
-.alliance-blue .team-card { background: rgba(13,110,253,0.04); color:#0b5ed7; border-color: rgba(13,110,253,0.09); }
+.alliance-blue .team-card { background: rgba(var(--bs-primary-rgb,13,110,253),0.04); color: var(--bs-primary, #0d6efd); border-color: rgba(var(--bs-primary-rgb,13,110,253),0.09); }
 
 .team-card.winner { box-shadow: 0 4px 14px rgba(0,0,0,0.08); transform: translateY(-2px); border-width:2px; }
 
@@ -141,7 +141,7 @@ body.dark-mode .match-row .match-main {
 }
 
 .alliance-red .team-badge { background: rgba(220,53,69,0.06); color:#b02a37; border:1px solid rgba(220,53,69,0.12); }
-.alliance-blue .team-badge { background: rgba(13,110,253,0.06); color:#0b5ed7; border:1px solid rgba(13,110,253,0.12); }
+.alliance-blue .team-badge { background: rgba(var(--bs-primary-rgb,13,110,253),0.06); color: var(--bs-primary, #0d6efd); border:1px solid rgba(var(--bs-primary-rgb,13,110,253),0.12); }
 .predicted-winner { background: rgba(255,215,0,0.08); border-left:3px solid #ffd700; padding-left:8px; border-radius:6px; }
 .time-pill { font-size:0.8rem; padding:4px 8px; border-radius:999px; background:#f1f3f5; color:#495057; }
 
@@ -199,9 +199,9 @@ body.dark-mode .alliance-red .team-badge {
 
 [data-bs-theme="dark"] .alliance-blue .team-badge,
 body.dark-mode .alliance-blue .team-badge {
-  background: rgba(13,110,253,0.12);
+  background: rgba(var(--bs-primary-rgb,13,110,253),0.12);
   color: #d7e9ff;
-  border: 1px solid rgba(13,110,253,0.18);
+  border: 1px solid rgba(var(--bs-primary-rgb,13,110,253),0.18);
 }
 
 [data-bs-theme="dark"] .time-pill,

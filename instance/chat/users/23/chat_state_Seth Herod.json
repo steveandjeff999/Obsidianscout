@@ -2,5 +2,9 @@
   "lastRead": {
     "dm:admin": "63e583d3-2bae-4ab5-8d17-dff9583cfe66"
   },
-  "unreadCount": 0
+  "unreadCount": 3,
+  "lastSource": {
+    "type": "dm",
+    "id": "admin"
+  }
 }

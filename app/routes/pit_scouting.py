@@ -153,7 +153,18 @@ def index():
 @login_required
 def form():
     """Dynamic pit scouting form"""
-    pit_config = get_effective_pit_config()
+    team_param = request.args.get('team')
+    if team_param:
+        try:
+            team_param_int = int(team_param)
+        except Exception:
+            team_param_int = None
+    else:
+        team_param_int = None
+
+    # Always load the current user's scouting team pit config
+    # (ignore team parameter for form - form should always use current user's config)
+    pit_config = get_current_pit_config()
     
     # Get current event based on team-scoped/alliance-aware game configuration
     game_config = get_effective_game_config()
@@ -381,11 +392,28 @@ def api_list():
     if current_event_code:
         current_event = get_event_by_code(current_event_code)
     
-    # Filter by event if available
+    # Filter by event if available. Show both records for the current event
+    # and records with no event_id (locally collected entries). Also scope
+    # results to the current user's scouting team so users only see their
+    # team's pit data.
+    from flask_login import current_user
+    team_scope = None
+    try:
+        if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and hasattr(current_user, 'scouting_team_number'):
+            team_scope = current_user.scouting_team_number
+    except Exception:
+        team_scope = None
+
+    query = PitScoutingData.query
+    if team_scope is not None:
+        query = query.filter(PitScoutingData.scouting_team_number == team_scope)
+
     if current_event:
-        pit_data = PitScoutingData.query.filter_by(event_id=current_event.id).order_by(PitScoutingData.timestamp.desc()).all()
+        pit_data = query.filter(
+            (PitScoutingData.event_id == current_event.id) | (PitScoutingData.event_id.is_(None))
+        ).order_by(PitScoutingData.timestamp.desc()).all()
     else:
-        pit_data = PitScoutingData.query.order_by(PitScoutingData.timestamp.desc()).all()
+        pit_data = query.order_by(PitScoutingData.timestamp.desc()).all()
     
     # Convert to JSON format
     data_list = []
@@ -707,8 +735,38 @@ def config():
         flash('You must be an admin to view pit scouting configuration', 'error')
         return redirect(url_for('pit_scouting.index'))
     
-    pit_config = get_effective_pit_config()
-    return render_template('scouting/pit_config.html', pit_config=pit_config, **get_theme_context())
+    # Allow viewing a specific team's instance config via ?team=<team_number>
+    team_num = request.args.get('team')
+    if team_num:
+        try:
+            team_num_int = int(team_num)
+        except Exception:
+            team_num_int = None
+    else:
+        team_num_int = None
+
+    if team_num_int is not None:
+        from app.utils.config_manager import load_pit_config
+        pit_config = load_pit_config(team_number=team_num_int)
+    else:
+        # If the user has a scouting team preference, prefer the team's instance file
+        try:
+            if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and getattr(current_user, 'scouting_team_number', None):
+                from app.utils.config_manager import load_pit_config
+                candidate = load_pit_config(team_number=current_user.scouting_team_number)
+                if candidate:
+                    pit_config = candidate
+                else:
+                    pit_config = get_effective_pit_config()
+            else:
+                pit_config = get_effective_pit_config()
+        except Exception:
+            pit_config = get_effective_pit_config()
+
+    # Provide list of teams for admins to choose from in the UI
+    teams = Team.query.order_by(Team.team_number).all()
+
+    return render_template('scouting/pit_config.html', pit_config=pit_config, teams=teams, selected_team=team_num_int, **get_theme_context())
 
 @bp.route('/config/edit', methods=['GET', 'POST'])
 @login_required
@@ -722,8 +780,22 @@ def config_edit():
         # Import here to avoid circular imports
         from app.utils.config_manager import get_available_default_configs
         default_configs = get_available_default_configs()
+        # Allow admin to edit a specific team's instance config by passing
+        # ?team=<team_number> — falls back to current_user-scoped config.
+        team_num = request.args.get('team')
+        if team_num:
+            try:
+                team_num_int = int(team_num)
+            except Exception:
+                team_num_int = None
+        else:
+            team_num_int = None
+
+        # Always load the current user's scouting team pit config
         pit_config = get_current_pit_config()
-        return render_template('config/pit_editor.html', pit_config=pit_config, default_configs=default_configs, **get_theme_context())
+
+        teams = Team.query.order_by(Team.team_number).all()
+        return render_template('config/pit_editor.html', pit_config=pit_config, default_configs=default_configs, teams=teams, selected_team=None, **get_theme_context())
     
     if request.method == 'POST':
         try:
@@ -756,8 +828,17 @@ def config_edit():
                             flash(f'Element missing required field: {field}', 'error')
                             return redirect(url_for('pit_scouting.config_edit'))
             
-            # Save new configuration
-            if save_pit_config(pit_config):
+            # Save new configuration: always save to the current user's scouting
+            # team instance file (admins must belong to a team for this to work).
+            save_team = None
+            try:
+                if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and getattr(current_user, 'scouting_team_number', None):
+                    save_team = current_user.scouting_team_number
+            except Exception:
+                save_team = None
+
+            # Save to the user's team instance file
+            if save_pit_config(pit_config, team_number=save_team):
                 flash('Pit scouting configuration updated successfully!', 'success')
             else:
                 flash('Error saving pit scouting configuration.', 'danger')
@@ -768,12 +849,15 @@ def config_edit():
         except Exception as e:
             flash(f'Error saving configuration: {str(e)}', 'error')
     
-    # Load current configuration for editing
-    pit_config = get_effective_pit_config()
+    # Load current configuration for editing — always use current user's
+    # team-specific pit_config when available.
+    pit_config = get_current_pit_config()
     config_json = json.dumps(pit_config, indent=2)
-    
+    teams = Team.query.order_by(Team.team_number).all()
     return render_template('scouting/pit_config_edit.html', 
                           config_json=config_json,
+                          teams=teams,
+                          selected_team=team_num_int,
                           **get_theme_context())
 
 @bp.route('/config/reset', methods=['POST'])
@@ -814,8 +898,14 @@ def config_simple_edit():
         flash('You must be an admin to edit pit scouting configuration', 'error')
         return redirect(url_for('pit_scouting.index'))
     
-    pit_config = get_effective_pit_config()
-    return render_template('scouting/pit_config_simple.html', pit_config=pit_config, **get_theme_context())
+    # Always load the current user's scouting team pit config
+    pit_config = get_current_pit_config()
+
+    teams = Team.query.order_by(Team.team_number).all()
+    # Provide available defaults to the simple editor for reset capability
+    from app.utils.config_manager import get_available_default_configs
+    default_configs = get_available_default_configs()
+    return render_template('scouting/pit_config_simple.html', pit_config=pit_config, teams=teams, default_configs=default_configs, selected_team=None, **get_theme_context())
 
 @bp.route('/config/simple-save', methods=['POST'])
 @login_required
@@ -831,7 +921,11 @@ def config_simple_save():
         for key, value in request.form.items():
             print(f"  {key}: {value}")
         
-        # Get current config as base
+        # Always save to the current user's scouting team instance config
+        # Editors should operate on the current user's team only.
+        save_team = getattr(current_user, 'scouting_team_number', None)
+
+        # Build updated config
         updated_config = {
             "pit_scouting": {
                 "title": request.form.get('title', 'Pit Scouting'),
@@ -939,8 +1033,8 @@ def config_simple_save():
         
         print(f"Final config: {json.dumps(updated_config, indent=2)}")
         
-        # Save the configuration
-        if save_pit_config(updated_config):
+        # Save the configuration to the current user's team
+        if save_pit_config(updated_config, team_number=save_team):
             flash('Pit scouting configuration updated successfully!', 'success')
         else:
             flash('Error saving pit scouting configuration.', 'danger')
@@ -974,7 +1068,8 @@ def config_backup():
         return redirect(url_for('pit_scouting.index'))
     
     try:
-        pit_config = get_effective_pit_config()
+        # Download the current user's scouting team pit config
+        pit_config = get_current_pit_config()
         
         from flask import make_response
         response = make_response(json.dumps(pit_config, indent=2))

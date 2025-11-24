@@ -367,8 +367,8 @@ def profile():
             filename = secure_filename(file.filename)
             ext = os.path.splitext(filename)[1].lower()
             if ext in ['.jpg', '.jpeg', '.png']:
-                if len(file.read()) > 2 * 1024 * 1024:
-                    flash('Profile picture must be less than 2MB.', 'error')
+                if len(file.read()) > 10 * 1024 * 1024:
+                    flash('Profile picture must be less than 10MB.', 'error')
                     return redirect(request.url)
                 file.seek(0)
                 avatar_dir = os.path.join(current_app.root_path, 'static', 'img', 'avatars')
@@ -770,8 +770,8 @@ def edit_user(user_id):
                 filename = secure_filename(file.filename)
                 ext = os.path.splitext(filename)[1].lower()
                 if ext in ['.jpg', '.jpeg', '.png']:
-                    if len(file.read()) > 2 * 1024 * 1024:
-                        flash('Profile picture must be less than 2MB.', 'error')
+                    if len(file.read()) > 10 * 1024 * 1024:
+                        flash('Profile picture must be less than 10MB.', 'error')
                         return redirect(request.url)
                     file.seek(0)
                     avatar_dir = os.path.join(current_app.root_path, 'static', 'img', 'avatars')

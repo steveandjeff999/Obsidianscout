@@ -192,6 +192,7 @@ print(secrets.token_urlsafe(32))
 |----------|--------|-------------|
 | `/api/mobile/health` | GET | Health check |
 | `/api/mobile/auth/login` | POST | Login |
+| `/api/mobile/auth/register` | POST | Create a new user account (mobile) |
 | `/api/mobile/auth/refresh` | POST | Refresh token |
 | `/api/mobile/auth/verify` | GET | Verify token |
 | `/api/mobile/teams` | GET | List teams |
@@ -201,8 +202,10 @@ print(secrets.token_urlsafe(32))
 | `/api/mobile/scouting/submit` | POST | Submit scouting |
 | `/api/mobile/scouting/bulk-submit` | POST | Bulk submit |
 | `/api/mobile/scouting/history` | GET | User history |
-| `/api/mobile/pit-scouting/submit` | POST | Submit pit scouting |
+| `/api/mobile/pit-scouting/submit` | POST | Submit pit scouting (accepts `event_id`/`event_code` / `local_id` / `device_id`) |
 | `/api/mobile/config/game` | GET | Game config |
+| `/api/mobile/config/pit` | GET | Pit config |
+| `/api/mobile/config/pit` | POST,PUT | Update pit config (admin only) |
 | `/api/mobile/sync/status` | GET | Sync status |
 
 ##  Documentation

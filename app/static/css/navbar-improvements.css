@@ -732,10 +732,10 @@ body.dark-mode .card.navbar-glass .custom-select-menu {
     padding-right: .9rem;
 }
 
-/* QR Code modal styling - Mobile-first responsive design */
+/* QR Code modal styling */
 .qr-container {
     background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-    padding: 1rem;
+    padding: 1.5rem;
     border-radius: .75rem;
     box-shadow: 0 10px 30px rgba(0,0,0,0.45);
     display: flex;
@@ -746,92 +746,59 @@ body.dark-mode .card.navbar-glass .custom-select-menu {
     backdrop-filter: blur(8px) saturate(120%);
     -webkit-backdrop-filter: blur(8px) saturate(120%);
     border: 1px solid rgba(255,255,255,0.06);
-    width: 100%;
-    max-width: 95vw;
+    max-width: 440px;
     margin: 0 auto;
-    box-sizing: border-box;
-}
-
-/* Tablet and up */
-@media (min-width: 768px) {
-    .qr-container {
-        padding: 1.5rem;
-        max-width: 540px;
-    }
-}
-
-/* Desktop */
-@media (min-width: 1024px) {
-    .qr-container {
-        max-width: 600px;
-    }
 }
 
 .qr-container #qrcode {
     position: relative;
     width: 100%;
-    max-width: 100%;
+    max-width: 420px;
     margin: 0 auto;
-    padding: 0;
+    padding: .75rem;
     box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 280px;
 }
 
-/* Remove the problematic ::before pseudo-element that was causing display issues */
-.qr-container #qrcode::before {
+.qr-container #qrcode canvas {
+    /* If the QR generator emits a canvas and an img, prefer the image for styling/printing.
+       Hide the canvas so only the single backed image is visible. JS download will still be able
+       to use the canvas if needed (we're only hiding it visually). */
     display: none !important;
 }
 
-/* Direct styling for QR elements - both canvas and img */
-.qr-container #qrcode canvas,
+.qr-container #qrcode::before {
+    /* White backing plate for the QR image so it reads well in dark mode. It sits behind the
+       generated <img> and the canvas (canvas is hidden). Adjusted to provide a small inset to
+       create a rounded white surround and allow a subtle cutout look. */
+    content: "";
+    position: absolute;
+    top: .5rem;
+    left: .5rem;
+    right: .5rem;
+    bottom: .5rem;
+    background: #ffffff;
+    border-radius: .5rem;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35) inset;
+    z-index: 0;
+    pointer-events: none;
+}
+
 .qr-container #qrcode img {
-    width: 100% !important;
-    height: auto !important;
-    max-width: 100% !important;
-    display: block !important;
-    margin: 0 auto !important;
-    image-rendering: -webkit-optimize-contrast !important;
-    image-rendering: -moz-crisp-edges !important;
-    image-rendering: crisp-edges !important;
-    image-rendering: pixelated !important;
-}
-
-/* Ensure inner wrapper div is properly sized */
-.qr-container #qrcode > div {
-    width: 100% !important;
-    max-width: 100% !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-}
-
-#qrDownloadContainer {
+    position: relative;
+    z-index: 2;
+    display: block;
     width: 100%;
-    max-width: 100%;
-    padding: 0 1rem;
+    height: auto;
+    border-radius: .375rem;
+    /* Add a small inner white padding effect so the QR has breathing room from the backing plate */
+    padding: .375rem;
     box-sizing: border-box;
+    background: transparent;
 }
 
 #qrDownloadContainer .btn {
     margin-top: .75rem;
     box-shadow: 0 6px 18px rgba(0,0,0,0.2);
-    width: 100%;
-    padding: 12px 24px;
-    font-size: 16px;
-}
-
-@media (min-width: 768px) {
-    #qrDownloadContainer .btn {
-        width: auto;
-    }
-}
-
-/* Modal body padding for QR display */
-.qr-modal-body {
-    padding: 1rem;
 }
 
 /* Dark mode specific tweaks - stronger glass and adjusted borders */
@@ -842,8 +809,13 @@ body.dark-mode .card.navbar-glass .custom-select-menu {
         box-shadow: 0 12px 40px rgba(0,0,0,0.7);
     }
 
+    .qr-container #qrcode::before {
+        background: #ffffff;
+        box-shadow: 0 8px 26px rgba(0,0,0,0.6) inset;
+    }
+
     #qrDownloadContainer .btn {
-        background-color: #2b70ff;
+        background-color: #2b70ff; /* slightly deeper blue in dark */
         border-color: rgba(255,255,255,0.06);
         color: #fff;
     }
@@ -873,13 +845,23 @@ body.dark-mode .card.navbar-glass .custom-select-menu {
     #qrDownloadContainer { display: none !important; }
 }
 
-/* Force dark-mode QR container override to beat legacy rules in styles.css */
+/* Force dark-mode QR container override to beat legacy rules in styles.css which set
+   the QR container white under a `.dark-mode` class. Use high-specificity and
+   `!important` so dark-mode stays dark. Keep the white inner backing (the ::before)
+   for contrast of the QR itself. */
 .dark-mode .qr-container,
 body.dark-mode .qr-container {
     background: linear-gradient(180deg, rgba(20,20,20,0.72) , rgba(18,18,18,0.62)) !important;
     border: 1px solid rgba(255,255,255,0.06) !important;
     box-shadow: 0 12px 40px rgba(0,0,0,0.7) !important;
     color: #fff !important;
+}
+
+/* Ensure inner #qrcode stays contained and backed by white plate; this prevents the
+   outer container from showing white edges in dark-mode. */
+.dark-mode .qr-container #qrcode::before,
+body.dark-mode .qr-container #qrcode::before {
+    background: #ffffff; /* keep plate white */
 }
 
 /* Make only the QR modal transparent so the qr-container supplies the visible
@@ -946,99 +928,32 @@ body.dark-mode .qr-container {
     display: none !important;
 }
 
-/* ------------------------------------------------------------------ */
-/* iOS-specific fixes for user dropdown visibility                     */
-/* Addresses issues with fixed positioning on iOS Safari               */
-/* ------------------------------------------------------------------ */
-
-/* Target iOS devices using WebKit-specific features */
-@supports (-webkit-touch-callout: none) {
-    /* iOS Safari specific fixes */
-    
-    /* Ensure user dropdown is properly contained and visible on iOS */
-    #userMenu.dropdown-menu {
-        /* Use absolute positioning on iOS to avoid fixed position bugs */
-        position: absolute !important;
-        /* Ensure proper stacking */
-        z-index: 1060 !important;
-        /* Prevent viewport clipping */
-        transform: translate3d(0, 0, 0) !important;
-        -webkit-transform: translate3d(0, 0, 0) !important;
-        /* Force hardware acceleration for smoother rendering */
-        will-change: transform;
-        /* Ensure dropdown stays within viewport */
-        max-width: calc(100vw - 32px) !important;
-        /* Add overflow handling for long content */
-        overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch !important;
+/* Small-screen dropdown placement fix
+   On very narrow viewports some dropdowns were positioned off-screen due to
+   fixed/escaped positioning. Anchor navbar/topbar dropdowns to the right edge
+   and limit width so they remain visible and do not overlap the scrollbar. */
+@media (max-width: 600px) {
+    .navbar-actions .dropdown-menu,
+    .topbar .dropdown-menu,
+    .navbar .dropdown-menu,
+    .dropdown-menu.navbar-glass {
+        position: absolute !important; /* keep dropdown in flow near the trigger */
+        right: 8px !important;         /* anchor to right edge of viewport/container */
+        left: auto !important;
+        top: calc(100% + 6px) !important; /* sit just below the toggle */
+        transform: none !important;
+        width: auto !important;
+        max-width: calc(100% - 16px) !important; /* prevent overflow past viewport */
+        box-shadow: 0 8px 20px rgba(0,0,0,0.12) !important;
+        border-radius: 8px !important;
+        z-index: 1070 !important;
     }
-    
-    /* Fix parent container to allow absolute positioning to work correctly */
-    #userMenu.dropdown-menu.dropdown-menu-end {
-        /* Right-align to prevent overflow on right edge */
+
+    /* Ensure right-aligned menus keep their end alignment inside viewport */
+    .navbar .dropdown-menu.dropdown-menu-end {
         right: 8px !important;
         left: auto !important;
-        /* Position below the toggle button */
-        top: 100% !important;
-        margin-top: 8px !important;
-    }
-    
-    /* Ensure the dropdown parent has proper positioning context on iOS */
-    .navbar-actions .dropdown {
-        position: relative !important;
-    }
-    
-    /* In landscape mode on iOS, use smaller max-height to ensure visibility */
-    @media (max-height: 500px) and (orientation: landscape) {
-        #userMenu.dropdown-menu {
-            max-height: 60vh !important;
-            overflow-y: auto !important;
-            -webkit-overflow-scrolling: touch !important;
-        }
-    }
-    
-    /* Additional safeguard for very small viewports */
-    @media (max-width: 767px) {
-        #userMenu.dropdown-menu {
-            /* On small screens, limit width to prevent horizontal overflow */
-            max-width: calc(100vw - 20px) !important;
-            /* Ensure dropdown is visible even in landscape */
-            max-height: 80vh !important;
-        }
-    }
-    
-    /* Fix for landscape mode specifically - more aggressive constraints */
-    @media (orientation: landscape) and (max-height: 600px) {
-        #userMenu.dropdown-menu {
-            /* Further constrain height in landscape */
-            max-height: 50vh !important;
-            /* Ensure scrolling works smoothly */
-            overflow-y: auto !important;
-            -webkit-overflow-scrolling: touch !important;
-            /* Position more carefully to avoid viewport edge */
-            top: auto !important;
-            bottom: auto !important;
-            /* Use transform to adjust position if needed */
-            transform: translateY(0) !important;
-            -webkit-transform: translateY(0) !important;
-        }
-        
-        /* Ensure dropdown doesn't get pushed off screen */
-        #userMenu.dropdown-menu.dropdown-menu-end {
-            right: 4px !important;
-            margin-top: 4px !important;
-        }
     }
 }
-
-/* Additional iOS fix: Prevent body scroll when dropdown is open */
-@supports (-webkit-touch-callout: none) {
-    body.dropdown-open {
-        position: fixed !important;
-        width: 100% !important;
-        overflow: hidden !important;
-    }
-}
-
 
 

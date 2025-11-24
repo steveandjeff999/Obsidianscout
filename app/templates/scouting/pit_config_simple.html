@@ -11,10 +11,13 @@
                     <h2 class="card-title">
                         <i class="fas fa-wrench"></i> Simple Pit Configuration Editor
                     </h2>
-                    <div class="card-tools">
+                    <div class="card-tools d-flex gap-2">
                         <a href="{{ url_for('pit_scouting.config') }}" class="btn btn-secondary">
                             <i class="fas fa-arrow-left"></i> Back to Config
                         </a>
+                        <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#resetModal">
+                            <i class="fas fa-undo me-1"></i> Reset to Default
+                        </button>
                     </div>
                 </div>
                 
@@ -143,7 +146,7 @@
                                                     </div>
                                                     
                                                     <!-- Number validation fields -->
-                                                    <div class="number-validation row" style="display: {% if element.type == 'number' %}block{% else %}none{% endif %}">
+                                                    <div class="number-validation row {% if element.type != 'number' %}d-none{% endif %}">
                                                         <div class="col-md-6">
                                                             <div class="form-group">
                                                                 <label>Min Value</label>
@@ -163,7 +166,7 @@
                                                     </div>
                                                     
                                                     <!-- Select/Multiselect options -->
-                                                    <div class="select-options" style="display: {% if element.type in ['select', 'multiselect'] %}block{% else %}none{% endif %}">
+                                                    <div class="select-options {% if element.type not in ['select', 'multiselect'] %}d-none{% endif %}">
                                                         <div class="form-group">
                                                             <label>Options and Points (value|label|points)</label>
                                                             <table class="table table-bordered option-points-table">
@@ -283,23 +286,24 @@ document.addEventListener('DOMContentLoaded', function() {
             const selectOptions = elementItem.querySelector('.select-options');
             
             if (elementType === 'number') {
-                numberValidation.style.display = 'block';
+                if (numberValidation) numberValidation.classList.remove('d-none');
             } else {
-                numberValidation.style.display = 'none';
+                if (numberValidation) numberValidation.classList.add('d-none');
             }
             
             if (elementType === 'select' || elementType === 'multiselect') {
-                selectOptions.style.display = 'block';
+                if (selectOptions) selectOptions.classList.remove('d-none');
             } else {
-                selectOptions.style.display = 'none';
+                if (selectOptions) selectOptions.classList.add('d-none');
             }
         }
     });
 
-    document.querySelectorAll('.add-option').forEach(button => {
-        button.addEventListener('click', function() {
-            const sectionIndex = this.dataset.sectionIndex;
-            const elementIndex = this.dataset.elementIndex;
+    document.addEventListener('click', function(e) {
+        const addOptionBtn = e.target.closest && e.target.closest('.add-option');
+        if (addOptionBtn) {
+            const sectionIndex = addOptionBtn.dataset.sectionIndex;
+            const elementIndex = addOptionBtn.dataset.elementIndex;
             const container = document.querySelector(`.section-item[data-section-index="${sectionIndex}"] .element-item[data-element-index="${elementIndex}"] .option-points-table tbody`);
             if (!container) {
                 console.error(`Tbody for options not found for section ${sectionIndex} element ${elementIndex}`);
@@ -308,7 +312,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const newOptionIndex = container.querySelectorAll('tr').length;
             const template = createOptionTemplate(sectionIndex, elementIndex, newOptionIndex);
             container.insertAdjacentHTML('beforeend', template);
-        });
+        }
     });
 });
 function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
@@ -421,7 +425,7 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
                     </div>
                 </div>
             </div>
-            <div class="number-validation row" style="display: none">
+            <div class="number-validation row d-none">
                 <div class="col-md-6">
                     <div class="form-group">
                         <label>Min Value</label>
@@ -435,7 +439,7 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
                     </div>
                 </div>
             </div>
-            <div class="select-options" style="display: none">
+            <div class="select-options d-none">
                 <div class="form-group">
                     <label>Options (one per line, format: value|label or just value)</label>
                     <textarea class="form-control" rows="4" name="element_options_${sectionIdx}_${elementIdx}"></textarea>
@@ -487,6 +491,45 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
             });
         }
     </script>
+    <!-- Reset to Default Modal for simple pit editor -->
+    <div class="modal fade" id="resetModal" tabindex="-1" aria-labelledby="resetModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="resetModalLabel">Reset Pit Configuration to Default</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form action="{{ url_for('pit_scouting.config_reset') }}" method="POST">
+                    <div class="modal-body">
+                        <div class="alert alert-warning">
+                            <strong>Warning:</strong> This will replace the current pit config with the selected default and cannot be undone.
+                        </div>
+                        <div class="mb-3">
+                            <label for="default_config" class="form-label">Select Default Configuration:</label>
+                            <select name="default_config" id="default_config" class="form-select" required>
+                                <option value="">-- Select a default configuration --</option>
+                                {% if default_configs %}
+                                    {% for config in default_configs %}
+                                        {% if config.type == 'pit' %}
+                                            <option value="{{ config.filename }}">{{ config.display_name }} ({{ config.basename or config.filename }})</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    <option value="" disabled>No default configurations found</option>
+                                {% endif %}
+                            </select>
+                            <small class="form-text text-muted">Choose from pre-configured pit setups for different seasons.</small>
+                        </div>
+                        <input type="hidden" name="config_type" value="pit">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-warning">Reset Configuration</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 <style>
 /* Small dark-mode and spacing improvements */
 body.dark-mode .card { background: var(--card-bg) !important; color: var(--bs-body-color) !important; }

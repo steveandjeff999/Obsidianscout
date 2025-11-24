@@ -2,7 +2,7 @@
 {# Only show notifications that apply to the current viewer (site-wide, their team, or their username) #}
 {% if site_notifications %}
   {# Hide wrapper initially to avoid flashes of banners that have been dismissed in localStorage. #}
-  <div id="site-notification-wrapper" class="site-notification-container" style="display:none;"> 
+  <div id="site-notification-wrapper" class="site-notification-container d-none"> 
     {% for n in site_notifications %}
       {%- set show = False -%}
       {# Site-wide always shows #}
@@ -41,12 +41,12 @@
     .site-notification .notification-message { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* Importance colors - literal values to resist theme overrides */
-    .notification-level-info { background-color: #0d6efd !important; color: #ffffff !important; }
+    .notification-level-info { background-color: var(--bs-primary, #0d6efd) !important; color: #ffffff !important; }
     .notification-level-important { background-color: #ffc107 !important; color: #222222 !important; }
     .notification-level-urgent { background-color: #dc3545 !important; color: #ffffff !important; }
 
     /* Dark mode overrides to keep contrast correct */
-    .dark-mode .notification-level-info { background-color: #0b5ed7 !important; color: #ffffff !important; }
+    .dark-mode .notification-level-info { background-color: var(--bs-primary, #0b5ed7) !important; color: #ffffff !important; }
     .dark-mode .notification-level-important { background-color: #ffca2c !important; color: #111111 !important; }
     .dark-mode .notification-level-urgent { background-color: #c82333 !important; color: #ffffff !important; }
 
@@ -96,7 +96,7 @@
         }
         // If there are any notifications remaining, reveal the wrapper; otherwise keep it hidden.
         var any = wrapper.querySelector('.site-notification');
-        if (any) wrapper.style.display = '';
+        if (any) wrapper.classList.remove('d-none');
       } catch (e) { /* fail silently */ }
     })();
   </script>

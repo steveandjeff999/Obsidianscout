@@ -14,10 +14,19 @@
             </div>
             <div>
                 <!-- Sync and Test buttons removed as sync config is deprecated for pit scouting -->
-                <a href="{{ url_for('pit_scouting.config_simple_edit') }}" class="btn btn-success me-2">
+                <div class="d-inline-block me-2">
+                    <label class="me-2 mb-0 align-middle">Target:</label>
+                    <select id="teamSelectView" class="form-select form-select-sm d-inline-block w-auto" aria-label="Select team to view">
+                        <option value="">Global</option>
+                        {% for t in teams %}
+                            <option value="{{ t.team_number }}" {% if selected_team and selected_team == t.team_number %}selected{% endif %}>Team {{ t.team_number }}{% if t.team_name %} — {{ t.team_name }}{% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <a href="{{ url_for('pit_scouting.config_simple_edit') }}{% if selected_team %}?team={{ selected_team }}{% endif %}" class="btn btn-success me-2">
                     <i class="fas fa-wrench me-1"></i> Simple Editor
                 </a>
-                <a href="{{ url_for('pit_scouting.config_edit') }}" class="btn btn-primary">
+                <a href="{{ url_for('pit_scouting.config_edit') }}{% if selected_team %}?team={{ selected_team }}{% endif %}" class="btn btn-primary">
                     <i class="fas fa-edit me-1"></i> JSON Editor
                 </a>
                 <a href="{{ url_for('pit_scouting.index') }}" class="btn btn-outline-secondary">
@@ -27,6 +36,15 @@
         </div>
     </div>
 </div>
+
+<script>
+document.getElementById('teamSelectView')?.addEventListener('change', function(){
+    const val = this.value;
+    const url = new URL(window.location.href);
+    if (val) url.searchParams.set('team', val); else url.searchParams.delete('team');
+    window.location.href = url.toString();
+});
+</script>
 
 <!-- Configuration Overview -->
 <div class="row">

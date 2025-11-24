@@ -18,6 +18,27 @@ pip install PyJWT>=2.8.0
 
 Or install from requirements.txt:
 
+### Register a New Account (Mobile)
+
+Create a new account scoped to a team. If you run into `ACCOUNT_CREATION_LOCKED` ask your team's administrator to unlock account creation.
+
+```bash
+curl -X POST https://localhost:8080/api/mobile/auth/register -k \
+  -H "Content-Type: application/json" \
+  -d '{"username":"new_scout","password":"Pa55word!","confirm_password":"Pa55word!","team_number":5454,"email":"new@scout.example"}'
+```
+
+Expected response (201):
+
+```json
+{
+  "success": true,
+  "token": "eyJ...",
+  "user": {"id": 123, "username": "new_scout", "team_number": 5454, "roles": ["scout"]},
+  "expires_at": "2025-01-01T00:00:00Z"
+}
+```
+
 ```bash
 pip install -r requirements.txt
 ```

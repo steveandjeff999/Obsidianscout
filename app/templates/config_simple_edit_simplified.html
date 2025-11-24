@@ -14,10 +14,53 @@
                     <a href="{{ url_for('main.edit_config') }}" class="btn btn-warning btn-sm me-2">
                         <i class="fas fa-code me-1"></i> Advanced JSON Editor
                     </a>
-                    <a href="{{ url_for('main.config') }}" class="btn btn-light btn-sm">
+                    <a href="{{ url_for('main.config') }}" class="btn btn-light btn-sm me-2">
                         <i class="fas fa-eye me-1"></i> View Configuration
                     </a>
+                    <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#resetModal">
+                        <i class="fas fa-undo me-1"></i> Reset to Default
+                    </button>
                 </div>
+            <!-- Reset to Default Modal (simple editor) -->
+            <div class="modal fade z-high" id="resetModal" tabindex="-1" aria-labelledby="resetModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="resetModalLabel"><i class="fas fa-undo me-2"></i>Reset Configuration to Default</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <form action="{{ url_for('main.reset_config') }}" method="POST">
+                            <div class="modal-body">
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    <strong>Warning:</strong> This will completely replace your current configuration with the selected default. This action cannot be undone!
+                                </div>
+                                <div class="mb-3">
+                                    <label for="default_config" class="form-label">Select Default Configuration:</label>
+                                    <select name="default_config" id="default_config" class="form-select" required>
+                                        <option value="">-- Select a default configuration --</option>
+                                        {% if default_configs %}
+                                            {% for config in default_configs %}
+                                                {% if config.type == 'game' %}
+                                                    <option value="{{ config.filename }}">{{ config.display_name }} ({{ config.basename or config.filename }})</option>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            <option value="" disabled>No default configurations found</option>
+                                        {% endif %}
+                                    </select>
+                                    <small class="form-text text-muted">Choose from pre-configured game setups for different seasons.</small>
+                                </div>
+                                <input type="hidden" name="config_type" value="game">
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" class="btn btn-warning"><i class="fas fa-undo me-1"></i>Reset Configuration</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
             </div>
             <div class="card-body">
                 {% if not game_config.game_name %}
@@ -212,7 +255,7 @@
                                                                 <label class="form-check-label">Is scored gamepiece</label>
                                                             </div>
                                                             {% if element.type == 'multiple_choice' %}
-                                                            <div class="multiple-choice-options mt-2" style="display: block;">
+                                                            <div class="multiple-choice-options mt-2 d-block">
                                                                 <small class="text-muted">Multiple Choice Options:</small>
                                                                 <div class="multiple-choice-list" data-period="auto" data-index="{{ loop.index0 }}">
                                                                     {% if element.options %}
@@ -245,7 +288,7 @@
                                                                 </button>
                                                             </div>
                                                             {% else %}
-                                                            <div class="multiple-choice-options mt-2" style="display: none;">
+                                                            <div class="multiple-choice-options mt-2 d-none">
                                                                 <small class="text-muted">Multiple Choice Options:</small>
                                                                 <div class="multiple-choice-list" data-period="auto" data-index="{{ loop.index0 }}">
                                                                 </div>
@@ -315,7 +358,7 @@
                                                                 <label class="form-check-label">Is scored gamepiece</label>
                                                             </div>
                                                             {% if element.type == 'multiple_choice' %}
-                                                            <div class="multiple-choice-options mt-2" style="display: block;">
+                                                            <div class="multiple-choice-options mt-2 d-block">
                                                                 <small class="text-muted">Multiple Choice Options:</small>
                                                                 <div class="multiple-choice-list" data-period="teleop" data-index="{{ loop.index0 }}">
                                                                     {% if element.options %}
@@ -348,7 +391,7 @@
                                                                 </button>
                                                             </div>
                                                             {% else %}
-                                                            <div class="multiple-choice-options mt-2" style="display: none;">
+                                                            <div class="multiple-choice-options mt-2 d-none">
                                                                 <small class="text-muted">Multiple Choice Options:</small>
                                                                 <div class="multiple-choice-list" data-period="teleop" data-index="{{ loop.index0 }}">
                                                                 </div>
@@ -717,40 +760,7 @@
     </div>
 </div>
 
-<!-- Reset Modal -->
-<div class="modal fade" id="resetModal" tabindex="-1" aria-labelledby="resetModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="resetModalLabel">Reset Configuration</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form action="{{ url_for('main.reset_config') }}" method="POST">
-                <div class="modal-body">
-                    <div class="alert alert-warning">
-                        <strong>Warning:</strong> This will replace your current configuration with a default template.
-                    </div>
-                    <div class="mb-3">
-                        <label for="default_config" class="form-label">Select Default:</label>
-                        <select name="default_config" id="default_config" class="form-select" required>
-                            <option value="">-- Select a default configuration --</option>
-                            {% if default_configs %}
-                                {% for config in default_configs %}
-                                <option value="{{ config.filename }}">{{ config.display_name }}</option>
-                                {% endfor %}
-                            {% endif %}
-                        </select>
-                    </div>
-                    <input type="hidden" name="config_type" value="game">
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-warning">Reset Configuration</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+<!-- second reset modal removed to avoid duplicate IDs -->
 
 <script>
 // Toggle multiple choice options visibility

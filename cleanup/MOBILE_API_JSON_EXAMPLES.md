@@ -50,6 +50,35 @@ This document provides JSON request/response examples for integrating with the O
 }
 ```
 
+### Register
+**Endpoint:** `POST /api/mobile/auth/register`
+
+**Request:**
+```json
+{
+  "username": "new_scout",
+  "password": "verySecurePassword",
+  "confirm_password": "verySecurePassword",
+  "team_number": 5454,
+  "email": "new@scout.example"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "token": "eyJ...",
+  "user": {
+    "id": 123,
+    "username": "new_scout",
+    "team_number": 5454,
+    "roles": ["scout"]
+  },
+  "expires_at": "2025-10-25T12:00:00Z"
+}
+```
+
 ### Using the Token
 All subsequent requests must include the token in the Authorization header:
 ```
