@@ -1,0 +1,269 @@
+/* Glass Theme - modern glassmorphism and rounded UI overrides */
+:root {
+    --glass-border: rgba(255,255,255,0.08);
+    --glass-bg: rgba(255,255,255,0.78);
+    --glass-bg-dark: rgba(22,22,24,0.70);
+    --accent-1: #4e73df; /* primary accent */
+    --accent-2: #764ba2; /* secondary gradient */
+    --muted-text: rgba(0,0,0,0.6);
+    --card-radius: 14px;
+    --control-radius: 10px;
+    --control-padding: 10px 14px;
+    --soft-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    --soft-shadow-inner: inset 0 1px 0 rgba(255,255,255,0.02);
+}
+
+/* Apply rounded glass look to cards, panels and surfaces */
+.modern-layout .card,
+.modern-layout .stat-card,
+.modern-layout .dashboard-card,
+.modern-layout .notifications-dropdown,
+.modern-layout .toast,
+.modern-layout .modal-content,
+.modern-layout .dropdown-menu,
+.modern-layout .search-input-wrapper,
+.modern-layout .sidebar,
+.modern-layout .topbar {
+    border-radius: var(--card-radius) !important;
+    background: linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(255,255,255,0.6) 100%); /* light glass */
+    border: 1px solid rgba(255,255,255,0.6);
+    box-shadow: var(--soft-shadow), var(--soft-shadow-inner);
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
+    backdrop-filter: blur(8px) saturate(120%);
+}
+
+/* Dark-mode variants */
+body.modern-layout.dark-mode .modern-layout .card,
+body.dark-mode .card,
+body.dark-mode .modal-content,
+body.dark-mode .dropdown-menu,
+body.dark-mode .topbar,
+body.dark-mode .sidebar {
+    background: var(--glass-bg-dark) !important;
+    border: 1px solid rgba(255,255,255,0.04) !important;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important;
+    color: var(--bs-body-color) !important;
+}
+
+/* Subtle, smooth rounded buttons */
+.modern-layout .btn,
+.modern-layout .btn-primary,
+.modern-layout .btn-outline-primary,
+.modern-layout .btn-outline-secondary,
+.modern-layout .btn-outline-danger,
+.modern-layout .btn-outline-success,
+.modern-layout .btn-outline-warning {
+    border-radius: var(--control-radius) !important;
+    padding: var(--control-padding) !important;
+    transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+.modern-layout .btn:active { transform: translateY(1px) scale(0.996); }
+.modern-layout .btn:hover { transform: translateY(-1px) scale(1.002); }
+
+/* Inputs, selects, textareas */
+.modern-layout input.form-control,
+.modern-layout select.form-control,
+.modern-layout textarea.form-control,
+.modern-layout .form-control,
+.modern-layout .form-select {
+    border-radius: calc(var(--control-radius) - 2px) !important;
+    padding: 10px 12px !important;
+    border: 1px solid rgba(0,0,0,0.08) !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06) inset;
+}
+body.dark-mode .modern-layout input.form-control,
+body.dark-mode .modern-layout .form-control,
+body.dark-mode .modern-layout .form-select {
+    border: 1px solid rgba(255,255,255,0.04) !important;
+    background: rgba(255,255,255,0.02) !important;
+    color: #fff !important;
+}
+
+/* Navbar / topbar alignment and look */
+.modern-layout .topbar {
+    border-radius: 12px;
+    padding: 8px 12px !important;
+    margin: 0 !important; /* removed gap between navbar and top of page */
+    align-items: center;
+}
+.modern-layout .brand-logo { border-radius: 10px !important; background: linear-gradient(135deg, rgba(97, 85, 145, 0.95), rgba(99, 68, 160, 0.95)); color: #fff; }
+.modern-layout .brand-text { color: #111827 !important; }
+body.dark-mode .modern-layout .brand-text { color: #e6e6e6 !important; }
+
+/* Sidebar: translucent, slightly narrower, rounded edges */
+.modern-layout .sidebar {
+    width: 260px !important;
+    min-width: 260px !important;
+    border-radius: 12px !important;
+    overflow: hidden;
+    padding: 10px 8px !important;
+}
+.modern-layout .sidebar .nav-link {
+    border-radius: 10px !important;
+    padding: 8px 12px !important;
+    transition: background 140ms ease, transform 140ms ease;
+}
+.modern-layout .sidebar .nav-link:hover { transform: translateX(4px); background: rgba(255,255,255,0.04); }
+
+/* Accents and focus states */
+.modern-layout .btn:focus-visible, .modern-layout a:focus-visible, .modern-layout .form-control:focus-visible {
+    outline: none !important; box-shadow: 0 0 0 4px rgba(78,115,223,0.12) !important; border-color: var(--accent-1) !important;
+}
+
+/* Table rows: rounded cards look */
+.modern-layout table.table tbody tr td { background: transparent; }
+.modern-layout table.table tbody tr { margin-bottom: 8px; display: table-row; }
+.modern-layout table.table tbody tr:hover td { background: rgba(78,115,223,0.02); }
+
+/* inputs and selects with focus depth */
+.modern-layout input.form-control:focus, .modern-layout .form-select:focus { box-shadow: 0 6px 18px rgba(78,115,223,0.06) !important; }
+
+/* Dropdowns and menus glass */
+.modern-layout .dropdown-menu, .modern-layout .notifications-dropdown, .modern-layout .navbar-glass { border-radius: 10px; border: 1px solid rgba(0,0,0,0.04); box-shadow: 0 6px 18px rgba(0,0,0,0.12); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+
+/* Toast modern look */
+.modern-layout .toast { border-radius: 12px; overflow: hidden; }
+
+/* Make small helper badges less visually aggressive */
+.modern-layout .badge { font-weight: 600; }
+
+/* Cards: softer rounded and translucent surfaces */
+.modern-layout .card { border-radius: var(--card-radius, 14px) !important; overflow: hidden; }
+.modern-layout .card .card-header,
+.modern-layout .card .card-body { padding: 12px 16px !important; }
+
+/* Form controls within cards get stronger glass surface */
+.modern-layout .card .form-control { background: rgba(255,255,255,0.02) !important; }
+
+/* Make modals feel like floating glass panels */
+.modal-backdrop.show { opacity: 0.35 !important; }
+.modern-layout .modal-content { border-radius: var(--card-radius, var(--border-radius, 14px)) !important; padding: 8px; }
+
+/* UI micro-interactions */
+.modern-layout a.nav-link, .modern-layout .nav-link { transition: color 180ms ease, background 180ms ease; }
+.modern-layout .dropdown-menu a.dropdown-item:hover { background: rgba(255,255,255,0.04); }
+
+/* Improve default table styling: rounded rows/cells */
+.modern-layout table.table { border-collapse: separate !important; border-spacing: 0 8px !important; }
+.modern-layout table.table tbody tr { background: transparent; }
+.modern-layout table.table td, .modern-layout table.table th { background: rgba(255,255,255,0.02); border: none; border-radius: 8px; padding: 10px 12px; }
+
+/* Small responsive layout tweaks */
+@media (max-width: 991px) {
+    .modern-layout .sidebar { width: 220px !important; min-width: 220px !important; }
+}
+@media (max-width: 767px) {
+    .modern-layout .sidebar { display: none; }
+    .modern-layout .topbar { margin: 0 !important; border-radius: 0 !important; }
+}
+
+/* Make toast header softer and more modern */
+.modern-layout .toast-header { border-radius: 10px 10px 0 0; }
+/* Small rounded pills for badges and notifications */
+.modern-layout .badge { border-radius: 999px; }
+
+/* Search bar special treatment */
+.modern-layout .search-input-wrapper { border-radius: 999px; padding: 6px 10px !important; }
+.modern-layout .search-icon { left: 12px; }
+
+/* Topbar-specific search tweaks: ensure adequate padding so icon doesn't overlap input text */
+.modern-layout .topbar .enhanced-search-input { padding-left: 48px !important; padding-right: 48px !important; }
+.modern-layout .topbar .search-icon { left: 12px; z-index: 3; }
+.modern-layout .topbar .search-clear-btn { right: 52px; }
+.modern-layout .topbar .search-submit-btn { right: 10px; }
+
+/* When topbar is compact (mobile), adjust values */
+@media (max-width: 768px) {
+    .modern-layout .topbar .enhanced-search-input { padding-left: 44px !important; padding-right: 44px !important; }
+    .modern-layout .topbar .search-clear-btn { right: 48px; }
+    .modern-layout .topbar .search-submit-btn { right: 6px; }
+}
+.modern-layout .search-submit-btn { border-radius: 50%; }
+
+/* Subtle accent gradient for primary buttons */
+.modern-layout .btn-primary { background-image: linear-gradient(135deg, rgba(24, 144, 255, 0.95), rgba(70, 67, 255, 0.95)); border: none; box-shadow: 0 6px 18px rgba(24,144,255,0.12); }
+.modern-layout .btn-primary:hover { filter: brightness(1.05); }
+
+/* Accessibility contrast enhancements for dark mode */
+body.dark-mode .modern-layout .btn-primary { box-shadow: 0 6px 22px rgba(30,130,255,0.18); }
+
+/* Add a thin glass border to header icons and minor UI elements */
+.modern-layout .topbar i, .modern-layout .sidebar i { padding: 6px; border-radius: 8px; background: rgba(255,255,255,0.03); }
+
+/* Rounded progress bars */
+.modern-layout .progress { height: 12px; border-radius: 999px; overflow: hidden; }
+.modern-layout .progress .progress-bar { border-radius: 999px; }
+
+/* Reduce heavy shadows on small devices for better legibility */
+@media (max-width: 600px) {
+    .modern-layout .card, .modern-layout .topbar { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+}
+
+/* Minor: ensure modals and dropdowns use glass look in dark mode */
+body.dark-mode .modern-layout .modal-content { background: rgba(22,22,24,0.7); border: 1px solid rgba(255,255,255,0.04); }
+
+/* Utility classes */
+.initially-hidden { display: none !important; }
+.assistant-fab { position: fixed; bottom: 32px; right: 32px; z-index: 1050; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; }
+.chat-container { max-height: 300px; overflow-y: auto; border: 1px solid rgba(0,0,0,0.06); border-radius: 8px; padding: 10px; margin-bottom: 10px; background: rgba(255,255,255,0.02); }
+body.dark-mode .chat-container { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.03); }
+.time-text { font-size: 0.8em; color: var(--bs-secondary); }
+.w-200 { width: 200px !important; }
+.search-loading { padding: 16px; text-align: center; color: var(--bs-secondary); }
+.assistant-fab .btn { width: 100%; height: 100%; border-radius: 999px; }
+.rounded-pill-soft { border-radius: 999px !important; }
+
+/* Utilities used across templates */
+.badge-small { font-size: 0.65rem; }
+.notifications-list { max-height: 320px; overflow: auto; }
+.min-vh-60 { min-height: 60vh; }
+.min-vh-70 { min-height: 70vh; }
+.auth-card { max-width: 520px; width: 100%; border-radius: var(--card-radius, 12px); }
+.auth-card-small { max-width: 420px; width: 100%; border-radius: 12px; }
+.img-fit-cover { object-fit: cover; }
+.modal-max-800 { max-width: 800px; }
+.data-hidden { display: none !important; }
+.global-config-notification { position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 400px; }
+
+/* Rounded list group items inside modern cards (dashboard panels) */
+.modern-layout .card .list-group.list-group-flush {
+    padding: 12px !important; /* keep a small inner gutter */
+    overflow: visible !important; /* allow children to have visible shadows/rounded corners */
+}
+.modern-layout .card .list-group.list-group-flush .list-group-item,
+.modern-layout .card .list-group.list-group-flush a.list-group-item.list-group-item-action {
+    display: block !important;
+    border-radius: 12px !important;
+    margin: 8px 0 !important; /* vertical spacing between items */
+    padding: 12px 16px !important;
+    border: 1px solid rgba(0,0,0,0.06) !important; /* soft border to separate items */
+    background: rgba(255,255,255,0.02) !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.06) !important;
+    transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+    overflow: hidden !important;
+}
+.modern-layout .card .list-group .list-group-item:last-child { margin-bottom: 0 !important; }
+.modern-layout .card .list-group.list-group-flush .list-group-item:hover,
+.modern-layout .card .list-group.list-group-flush a.list-group-item.list-group-item-action:hover,
+.modern-layout .card .list-group.list-group-flush .list-group-item:focus,
+.modern-layout .card .list-group.list-group-flush a.list-group-item.list-group-item-action:focus {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.12) !important;
+}
+
+/* Dark mode variant for list items */
+body.dark-mode .modern-layout .card .list-group .list-group-item {
+    background: rgba(22,22,24,0.6) !important;
+    border: 1px solid rgba(255,255,255,0.03) !important;
+}
+
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+    .modern-layout *, .modern-layout .btn, .modern-layout .card, .modern-layout .search-input-wrapper { transition: none !important; animation: none !important; }
+}
+
+/* Respect user's color-scheme; ensure our CSS variables adapt */
+@media (prefers-color-scheme: dark) {
+    :root { color-scheme: dark; }
+}

@@ -71,7 +71,7 @@
         </div>
     </div>
 
-    <div id="current_match_card" style="display:none;" class="row">
+    <div id="current_match_card" class="row d-none">
         <div class="col-12">
             <div class="card">
                 <div class="card-header bg-secondary text-white">
@@ -89,21 +89,21 @@
         </div>
     </div>
 
-    <div id="strategy_json" class="row mt-3" style="display:none;">
+    <div id="strategy_json" class="row mt-3 d-none">
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
                     <strong>Strategy JSON (raw)</strong>
                 </div>
                 <div class="card-body">
-                    <pre id="strategy_pre" style="white-space:pre-wrap; word-wrap:break-word;">-</pre>
+                    <pre id="strategy_pre" class="pre-wrap">-</pre>
                 </div>
             </div>
         </div>
     </div>
     
     <!-- Rich strategy results (hidden until analysis loads) -->
-    <div id="strategyResults" class="row mt-3" style="display:none;">
+    <div id="strategyResults" class="row mt-3 d-none">
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
@@ -127,13 +127,13 @@
 
                     <div class="row mt-3">
                         <div class="col-md-4">
-                            <canvas id="allianceComparisonChart" style="height:200px;"></canvas>
+                            <canvas id="allianceComparisonChart" class="chart-h-200"></canvas>
                         </div>
                         <div class="col-md-4">
-                            <canvas id="performanceRadarChart" style="height:200px;"></canvas>
+                            <canvas id="performanceRadarChart" class="chart-h-200"></canvas>
                         </div>
                         <div class="col-md-4">
-                            <canvas id="teamComparisonChart" style="height:200px;"></canvas>
+                            <canvas id="teamComparisonChart" class="chart-h-200"></canvas>
                         </div>
                     </div>
 

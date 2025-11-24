@@ -1,0 +1,665 @@
+/* Override file for Rounded UI preference
+   Loaded after other theme files to ensure specificity.
+*/
+
+:root { }
+
+/* Default site variables that settings can override */
+:root {
+    --border-radius: 8px; /* default radius (px) */
+}
+
+/* Ensure every card-like component uses the --card-radius variable so the
+   border radius preference applies sitewide (default falls back to --border-radius). */
+.card, .stat-card, .dashboard-card, .panel.card, .kpi.card, .data-card, .match-card, .team-card, .auth-card, .widget-card, .widget-view-card, .api-key-card, .notification-card { 
+    border-radius: var(--card-radius, var(--border-radius)) !important;
+}
+
+/* More specific overrides to catch theme-specific selectors that may have
+   higher specificity or inline-like rules. These ensure --card-radius is
+   authoritative for card corners across all layout modes. */
+html .modern-layout .card,
+body.modern-layout .card,
+html .card,
+body .card,
+.card .card,
+.card .card-header,
+.card .card-footer,
+.card .list-group-item,
+.panel,
+.panel.card {
+    border-radius: var(--card-radius, var(--border-radius)) !important;
+}
+
+.accent-color-input { width: 64px; height: 38px; padding: 0; border-radius: 6px; }
+
+.rounded-ui {
+    --border-radius: 1.25rem; /* increased global radius */
+    --pill-radius: 9999px;
+    --btn-oval-height: 34px; /* slightly thinner target height for oval buttons */
+    --btn-oval-padding-y: .32rem;
+    --btn-oval-padding-x: .9rem;
+}
+
+.rounded-ui .topbar,
+.rounded-ui .navbar {
+    border-radius: 14px !important;
+}
+
+/* Make topbar action buttons pill-shaped */
+.rounded-ui .navbar-actions .btn,
+.rounded-ui .rounded-pill-soft { border-radius: var(--pill-radius) !important; }
+
+/* Thin oval (pill) button styles applied sitewide when rounded-ui is enabled */
+.rounded-ui .btn {
+    border-radius: var(--pill-radius) !important;
+    padding: var(--btn-oval-padding-y) var(--btn-oval-padding-x) !important;
+    min-height: var(--btn-oval-height) !important;
+    height: auto !important; /* allow vertical alignment but still set min */
+    line-height: 1.05 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+}
+
+/* Apply pill/oval styling to many interactive UI components */
+.rounded-ui .nav-link,
+.rounded-ui .nav-group-title,
+.rounded-ui .nav-link span,
+.rounded-ui .sidebar .nav-link,
+.rounded-ui .sidebar .brand,
+.rounded-ui .list-group-item,
+.rounded-ui .dropdown-item,
+.rounded-ui .page-link,
+.rounded-ui .btn,
+.rounded-ui .btn-outline-primary,
+.rounded-ui .btn-outline-secondary,
+.rounded-ui .badge,
+.rounded-ui .form-control,
+.rounded-ui .form-select,
+.rounded-ui .select2-selection__choice,
+.rounded-ui .select2-selection__rendered .select2-selection__choice,
+.rounded-ui .input-group-text,
+.rounded-ui .list-group-item-action,
+.rounded-ui .alert { border-radius: var(--border-radius) !important; }
+
+/* Make dropdowns and select2 choices pill-like */
+.rounded-ui .select2-selection__choice,
+.rounded-ui .select2-selection__choice__remove { border-radius: 999px !important; padding: 0.25rem 0.5rem !important; }
+.rounded-ui .select2-selection__choice { margin-top: 0.2rem !important; }
+
+/* Make tabs and pills rounder and thinner */
+.rounded-ui .nav-tabs .nav-link,
+.rounded-ui .nav-pills .nav-link { border-radius: 999px !important; padding: 0.35rem 0.85rem !important; }
+
+/* Tables: keep hover and selected row highlight subtle and rounded in cells */
+.rounded-ui .table thead th { border-top-left-radius: calc(var(--border-radius) - 6px); border-top-right-radius: calc(var(--border-radius) - 6px); }
+.rounded-ui .table td, .rounded-ui .table th { border-radius: 4px; }
+
+/* Tooling: dropdowns and popovers rounded and slightly thinner padding */
+.rounded-ui .dropdown-menu, .rounded-ui .popover { border-radius: calc(var(--border-radius) - 6px) !important; padding: 6px !important; }
+.rounded-ui .dropdown-item { padding: 8px 12px !important; }
+
+/* Large quick-action CTA's: make slim pill but keep weight */
+.rounded-ui .btn-cta, .rounded-ui .btn-primary { padding: 0.4rem 1rem !important; border-radius: 999px !important; }
+
+/* Form feedback elements (badges/alerts) use pill radius */
+.rounded-ui .alert .badge, .rounded-ui .badge { border-radius: 999px !important; padding: 0.25rem 0.6rem !important; }
+
+/* Input groups and chips */
+.rounded-ui .input-group .input-group-text, .rounded-ui .input-group .form-control { border-radius: 999px !important; }
+.rounded-ui .chip, .rounded-ui .crumb, .rounded-ui .tag { border-radius: 999px !important; padding: 0.2rem 0.5rem !important; }
+
+/* Action rows and table toolbars: make icons in thin pills */
+.rounded-ui .toolbar .btn, .rounded-ui .table-toolbar .btn { padding: 0.25rem 0.5rem !important; min-height: 32px !important; }
+
+/* Toast actions and toasts themselves */
+.rounded-ui .toast { border-radius: calc(var(--border-radius) - 6px) !important; }
+.rounded-ui .toast .btn { border-radius: 999px !important; padding: 0.2rem 0.45rem !important; }
+
+/* Make small helper buttons like close toggles thin-rounded */
+.rounded-ui .btn-close, .rounded-ui .btn-close-white { border-radius: 999px !important; width: 30px !important; height: 30px !important; display: inline-flex; align-items: center; justify-content: center; }
+
+/* Make icons and avatar tiles circle but slightly smaller */
+.rounded-ui .brand-logo, .rounded-ui .user-mini i, .rounded-ui .avatar { border-radius: 50% !important; width: 44px !important; height: 44px !important; padding: 6px !important; }
+
+/* Rounded UI: make close button circular and blend with sidebar brand */
+.rounded-ui .btn-close-sidebar { border-radius: 50% !important; width: 36px !important; height: 36px !important; padding: 0 !important; }
+.rounded-ui .btn-close-sidebar i { font-size: 1.05rem !important; }
+
+/* Make input placeholders not excessive when pill-shaped */
+.rounded-ui ::placeholder { opacity: 0.8; }
+
+/* Make the floating assistant fab slightly smaller to match 34px aesthetic */
+.rounded-ui .assistant-fab { width: 44px !important; height: 44px !important; }
+
+/* Ensure the sidebar remains scrollable and pointer-interactive in all themes */
+.sidebar, #appSidebar, .sidebar.open { height: 100vh !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; touch-action: pan-y !important; overscroll-behavior: contain !important; pointer-events: auto !important; }
+.sidebar { box-sizing: border-box; }
+
+/* Mobile overlay fix: allow the sidebar region to accept pointer events while preserving backdrop */
+.sidebar.open, body.with-sidebar.sidebar-open .sidebar { pointer-events: auto !important; }
+
+/* On very small devices, prefer full-height scroll container for the nav list so physical scroll works reliably */
+@media (max-width: 991.98px) {
+    .sidebar { max-height: 100vh !important; height: 100vh !important; }
+    .sidebar .sidebar-nav { overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
+}
+
+/* When a modal or dropdown is open, CSS sometimes disables body scroll for stability.
+   Ensure the sidebar itself is still scrollable and on top so users can interact with it. */
+body.modal-open .sidebar, body.dropdown-open .sidebar, body.with-sidebar.sidebar-open .sidebar {
+    position: fixed !important;
+    overflow-y: auto !important;
+    height: 100vh !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+    pointer-events: auto !important;
+    z-index: 1100 !important; /* ensure it sits above backdrops */
+}
+
+/* Ensure all elements inside the sidebar allow pointer events, including if global styles disable them */
+.sidebar * { pointer-events: auto !important; }
+
+/* ============================ */
+/* Aggressive global rounding */
+/* ============================ */
+/* Apply a soft rounding to many base elements; keep more dramatic pill radii for buttons and badges */
+.rounded-ui div,
+.rounded-ui section,
+.rounded-ui article,
+.rounded-ui header,
+.rounded-ui footer,
+.rounded-ui nav,
+.rounded-ui aside,
+.rounded-ui main,
+.rounded-ui ul,
+.rounded-ui ol,
+.rounded-ui li,
+.rounded-ui p,
+.rounded-ui h1,
+.rounded-ui h2,
+.rounded-ui h3,
+.rounded-ui h4,
+.rounded-ui h5,
+.rounded-ui h6,
+.rounded-ui figure,
+.rounded-ui table,
+.rounded-ui thead,
+.rounded-ui tbody,
+.rounded-ui tr,
+.rounded-ui th,
+.rounded-ui td,
+.rounded-ui section .panel,
+.rounded-ui .panel__body,
+.rounded-ui .panel__header,
+.rounded-ui .row,
+.rounded-ui .cell { border-radius: calc(var(--border-radius) - 8px) !important; }
+
+/* Slight rounding for generic inputs/controls */
+.rounded-ui input,
+.rounded-ui textarea,
+.rounded-ui select,
+.rounded-ui .form-control,
+.rounded-ui .form-select,
+.rounded-ui .input-group-text,
+.rounded-ui .form-floating { border-radius: calc(var(--border-radius) / 3) !important; }
+
+/* Make code blocks and precontent visually less jarring while still rounded */
+.rounded-ui pre,
+.rounded-ui code { border-radius: calc(var(--border-radius) / 2) !important; }
+
+/* Images and media should carry subtle rounding */
+.rounded-ui img,
+.rounded-ui picture,
+.rounded-ui video,
+.rounded-ui iframe,
+.rounded-ui svg { border-radius: calc(var(--border-radius) / 3) !important; }
+
+/* Make table cells slightly rounded without breaking grid alignment */
+.rounded-ui table td,
+.rounded-ui table th { border-radius: 6px !important; }
+
+/* Keep small circular elements as perfect circles */
+.rounded-ui .avatar,
+.rounded-ui .brand-logo,
+.rounded-ui .user-mini i,
+.rounded-ui .btn-counter,
+.rounded-ui .counter-btn,
+.rounded-ui .assistant-fab { border-radius: 50% !important; }
+
+/* Keep icon-only controls circular */
+.rounded-ui .btn-icon, .rounded-ui .btn-icon-lg, .rounded-ui .btn-icon-sm { border-radius: 999px !important; }
+
+/* Exclude elements where corner rounding can cause visual artifacts */
+.rounded-ui .modal-backdrop, .rounded-ui .progress, .rounded-ui .progress-bar, .rounded-ui .card .card-header, .rounded-ui .card .card-footer { border-radius: 0 !important; }
+
+/* Accordions and list items: keep pill-like active states but not huge rounding on the entire control */
+.rounded-ui .accordion-button,
+.rounded-ui .list-group-item { border-radius: 12px !important; }
+
+/* Breadcrumb items: apply lower radius for compact appearance */
+.rounded-ui .breadcrumb-item { border-radius: 8px !important; }
+
+/* Tooltips and popovers: ensure rounded look */
+.rounded-ui .tooltip-inner, .rounded-ui .popover { border-radius: 10px !important; }
+
+/* Ensure form-grid rows remain flush while inputs are rounded */
+.rounded-ui .form-row { overflow: visible !important; }
+
+.rounded-ui .btn-sm { padding: 0.22rem 0.6rem !important; min-height: 30px !important; }
+.rounded-ui .btn-lg { padding: 0.5rem 1.2rem !important; min-height: 44px !important; }
+
+/* Ensure topbar-specific buttons are slimmer */
+.rounded-ui .topbar .btn { padding: 0.28rem 0.75rem !important; min-height: 34px !important; }
+
+/* Make the pill-style search submit and clear buttons lower profile */
+.rounded-ui .enhanced-search-input,
+.rounded-ui .search-input-wrapper,
+.rounded-ui .search-submit-btn,
+.rounded-ui .search-clear-btn { padding: 6px 10px !important; min-height: 34px !important; }
+
+/* Reduce size of persistent action buttons like sync and other large CTA's */
+.rounded-ui .btn-primary, .rounded-ui .btn-success, .rounded-ui .btn-warning, .rounded-ui .btn-danger { padding: var(--btn-oval-padding-y) var(--btn-oval-padding-x) !important; }
+
+.rounded-ui .enhanced-search-input,
+.rounded-ui .search-input-wrapper,
+.rounded-ui .search-submit-btn{ border-radius: var(--pill-radius) !important; }
+
+.rounded-ui .dropdown-menu.navbar-glass,
+.rounded-ui .notifications-dropdown{ border-radius: 12px !important; }
+
+/* Keep floating assistant fab circular */
+.rounded-ui .assistant-fab{ border-radius: 50% !important; }
+
+/* ============================ */
+/* Button size profiles         */
+/* ============================ */
+html.btn-size-small .btn { padding: 0.18rem 0.4rem !important; font-size: 0.82rem !important; }
+html.btn-size-normal .btn { padding: 0.28rem 0.75rem !important; font-size: 0.9rem !important; }
+html.btn-size-large .btn { padding: 0.45rem 1rem !important; font-size: 1.02rem !important; }
+
+/* Card elevation controls */
+html.card-elevation-none .card, html.card-elevation-none .stat-card, html.card-elevation-none .dashboard-card { box-shadow: none !important; }
+html.card-elevation-low .card, html.card-elevation-low .stat-card, html.card-elevation-low .dashboard-card { box-shadow: 0 2px 6px rgba(0,0,0,0.08) !important; }
+html.card-elevation-default .card, html.card-elevation-default .stat-card, html.card-elevation-default .dashboard-card { box-shadow: 0 6px 20px rgba(0,0,0,0.12) !important; }
+html.card-elevation-high .card, html.card-elevation-high .stat-card, html.card-elevation-high .dashboard-card { box-shadow: 0 12px 36px rgba(0,0,0,0.16) !important; }
+
+/* Glass theme toggle: disable glass/background blur when class present */
+html.glass-off .modern-layout .card,
+html.glass-off .modern-layout .stat-card,
+html.glass-off .modern-layout .dashboard-card,
+html.glass-off .modern-layout .notifications-dropdown,
+html.glass-off .modern-layout .modal-content,
+html.glass-off .modern-layout .dropdown-menu,
+html.glass-off .modern-layout .search-input-wrapper,
+html.glass-off .modern-layout .sidebar,
+html.glass-off .modern-layout .topbar {
+    background: var(--card-bg) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06) !important;
+    border: 1px solid rgba(0,0,0,0.04) !important;
+}
+
+/* Also disable glass gradients for nav-theme accent when glass is off */
+html.glass-off .nav-theme-primary .topbar,
+html.glass-off .nav-theme-indigo .topbar,
+html.glass-off .nav-theme-green .topbar { background: var(--bs-body-bg) !important; }
+
+/* Counters, small circle buttons should remain compact and circular */
+.rounded-ui .btn-counter, .rounded-ui .counter-btn, .rounded-ui .btn-counter.btn-outline, .rounded-ui .btn-counter.btn-primary {
+    width: 34px !important;
+    height: 34px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* ============================ */
+/* UI Shape Profiles           */
+/* - ui-shape-square: small radius across controls
+   - ui-shape-rounded: modern default radius (8px)
+   - ui-shape-pill: large pill for buttons / inputs
+   - ui-shape-circle: small controls appear circular
+*/
+
+.ui-shape-square .btn, .ui-shape-square .btn-primary, .ui-shape-square .btn-outline-primary, .ui-shape-square .btn-outline-secondary, .ui-shape-square .btn-cta, .ui-shape-square .navbar .btn, .ui-shape-square .form-control, .ui-shape-square .form-select, .ui-shape-square .input-group-text {
+    border-radius: 4px !important;
+}
+.ui-shape-square .form-check-input { border-radius: 4px !important; }
+.ui-shape-square .form-switch .form-check-input { border-radius: 12px !important; }
+
+/* Ensure CTAs and anchor buttons inside cards follow the selected shape */
+.ui-shape-rounded .btn, .ui-shape-rounded a.btn, .ui-shape-rounded button.btn, .ui-shape-rounded .btn-w-100, .ui-shape-rounded .btn.w-100, .ui-shape-rounded .card .btn, .ui-shape-rounded .card-body .btn, .ui-shape-rounded .btn-primary, .ui-shape-rounded .btn-outline-primary, .ui-shape-rounded .btn-outline-secondary, .ui-shape-rounded .btn-cta, .ui-shape-rounded .navbar .btn, .ui-shape-rounded .form-control, .ui-shape-rounded .form-select, .ui-shape-rounded .input-group-text {
+    border-radius: 8px !important;
+}
+.ui-shape-rounded .form-check-input { border-radius: 6px !important; }
+.ui-shape-rounded .form-switch .form-check-input { border-radius: 999px !important; }
+
+.ui-shape-pill .btn, .ui-shape-pill a.btn, .ui-shape-pill button.btn, .ui-shape-pill .btn-primary, .ui-shape-pill .btn-outline-primary, .ui-shape-pill .btn-outline-secondary, .ui-shape-pill .btn-cta, .ui-shape-pill .navbar .btn, .ui-shape-pill .btn-sm, .ui-shape-pill .btn-lg, .ui-shape-pill .btn.w-100, .ui-shape-pill .card .btn { border-radius: 9999px !important; }
+.ui-shape-pill .form-control, .ui-shape-pill .form-select, .ui-shape-pill .input-group-text { border-radius: 9999px !important; }
+.ui-shape-pill .form-check-input { border-radius: 8px !important; }
+.ui-shape-pill .form-switch .form-check-input { border-radius: 9999px !important; }
+
+.ui-shape-circle .btn, .ui-shape-circle a.btn, .ui-shape-circle button.btn, .ui-shape-circle .btn-primary, .ui-shape-circle .btn-outline-primary, .ui-shape-circle .btn-outline-secondary, .ui-shape-circle .btn-cta, .ui-shape-circle .navbar .btn, .ui-shape-circle .form-check-input { border-radius: 50% !important; }
+.ui-shape-circle .form-switch .form-check-input { border-radius: 50% !important; }
+.ui-shape-circle .btn-icon, .ui-shape-circle .btn-close, .ui-shape-circle .btn-sm, .ui-shape-circle .btn-counter { border-radius: 50% !important; }
+
+/* Smooth transitions for shape toggle (avoid flash) */
+.ui-shape-square .btn, .ui-shape-rounded .btn, .ui-shape-pill .btn, .ui-shape-circle .btn,
+.ui-shape-square .form-control, .ui-shape-rounded .form-control, .ui-shape-pill .form-control, .ui-shape-circle .form-control,
+.ui-shape-square .form-check-input, .ui-shape-rounded .form-check-input, .ui-shape-pill .form-check-input, .ui-shape-circle .form-check-input
+{ transition: border-radius 220ms ease; }
+
+.rounded-ui .counter-input .form-control { height: 34px !important; padding: 0.25rem 0.45rem !important; }
+
+/* Navbar color themes
+    Set a class of `nav-theme-<name>` on <body> or <html> to switch navbar colors.
+    Default is `nav-theme-neutral` when not explicitly set (keeps topbar neutral grey).
+*/
+.nav-theme-primary .topbar,
+.nav-theme-primary .navbar { background: linear-gradient(90deg, var(--nav-accent, #0d6efd), var(--nav-accent-2, #3d8bfd)) !important; color: var(--nav-accent-contrast, #fff) !important; box-shadow: none !important; }
+.nav-theme-primary .navbar .nav-link, .nav-theme-primary .navbar-actions .btn { color: var(--nav-accent-contrast, #fff) !important; }
+.nav-theme-primary .navbar-actions .btn-outline-secondary, .nav-theme-primary .navbar .btn-outline-secondary { color: rgba(255,255,255,0.9); border-color: rgba(255,255,255,0.12); }
+
+/* Make prepared blue accents apply sitewide under the primary theme */
+.nav-theme-primary {
+    --nav-accent: #0d6efd;
+    --nav-accent-2: #3d8bfd;
+    --nav-accent-contrast: #ffffff;
+}
+
+.nav-theme-indigo {
+    --nav-accent: #5b3be9;
+    --nav-accent-2: #764bff;
+    --nav-accent-contrast: #ffffff;
+}
+
+.nav-theme-indigo .btn-primary { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; border-color: var(--nav-accent) !important; box-shadow: 0 6px 18px rgba(91,59,233,0.12); }
+.nav-theme-indigo .btn-outline-primary { color: var(--nav-accent) !important; border-color: rgba(91,59,233,0.18) !important; }
+.nav-theme-indigo .badge.bg-primary, .nav-theme-indigo .badge-primary { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; }
+.nav-theme-indigo .toast .toast-header { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; }
+.nav-theme-indigo .progress .progress-bar { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; }
+
+.nav-theme-green {
+    --nav-accent: #198754;
+    --nav-accent-2: #20c997;
+    --nav-accent-contrast: #ffffff;
+}
+
+.nav-theme-green .btn-primary { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; border-color: var(--nav-accent) !important; box-shadow: 0 6px 18px rgba(25,135,84,0.12); }
+.nav-theme-green .btn-outline-primary { color: var(--nav-accent) !important; border-color: rgba(25,135,84,0.18) !important; }
+.nav-theme-green .badge.bg-primary, .nav-theme-green .badge-primary { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; }
+.nav-theme-green .toast .toast-header { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; }
+.nav-theme-green .progress .progress-bar { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; }
+
+/* ============================ */
+/* Additional sitewide accent rules */
+/* ============================ */
+
+/* Sidebar: active item highlight and brand accent */
+.nav-theme-primary .sidebar { background: linear-gradient(180deg,#ffffff,#f8f9fa) !important; }
+.nav-theme-primary .sidebar .nav-link.active { color: var(--nav-accent) !important; background: linear-gradient(90deg, rgba(var(--bs-primary-rgb, 13,110,253), 0.06), transparent) !important; border-radius: 6px; }
+.nav-theme-primary .sidebar .nav-link.active::before { background: var(--nav-accent) !important; box-shadow: none; }
+.nav-theme-primary .sidebar .brand-logo { border-radius: 8px; }
+
+/* Fix: ensure muted/subtext in sidebar is readable in light mode with primary (blue) theme */
+.nav-theme-primary:not(.dark-mode) .sidebar .text-muted,
+.nav-theme-primary:not(.dark-mode) .sidebar .tiny,
+.nav-theme-primary:not(.dark-mode) .sidebar .user-mini .text-muted,
+.nav-theme-primary:not(.dark-mode) .sidebar .user-mini .tiny {
+    color: rgba(0,0,0,0.7) !important; /* darken muted text for contrast on light backgrounds */
+}
+
+/* Ensure username label remains prominent in light primary theme */
+.nav-theme-primary:not(.dark-mode) .sidebar .user-mini .fw-semibold,
+.nav-theme-primary:not(.dark-mode) .sidebar .user-mini .small { color: #212529 !important; }
+
+/* Improve visibility of outline buttons inside sidebar when using primary theme and light mode */
+.nav-theme-primary:not(.dark-mode) .sidebar .btn-outline-primary,
+.nav-theme-primary:not(.dark-mode) .sidebar .btn-outline-primary:disabled {
+    color: var(--nav-accent) !important;
+    border-color: rgba(var(--bs-primary-rgb,13,110,253),0.18) !important;
+}
+
+.nav-theme-primary:not(.dark-mode) .sidebar .btn-outline-secondary,
+.nav-theme-primary:not(.dark-mode) .sidebar .btn-outline-secondary:disabled {
+    color: rgba(0,0,0,0.7) !important;
+    border-color: rgba(0,0,0,0.06) !important;
+}
+
+/* Card headers */
+.nav-theme-primary .card-header { background: linear-gradient(90deg, rgba(var(--bs-primary-rgb,13,110,253), 0.08), rgba(var(--bs-primary-rgb,13,110,253), 0.03)); color: var(--nav-accent-contrast); border-bottom: 1px solid rgba(var(--bs-primary-rgb,13,110,253), 0.06); }
+
+/* Table header and active rows */
+.nav-theme-primary table thead th { background: linear-gradient(90deg, rgba(var(--bs-primary-rgb,13,110,253), 0.06), rgba(var(--bs-primary-rgb,13,110,253), 0.02)) !important; color: var(--bs-primary) !important; }
+    .nav-theme-primary .table-hover tbody tr:hover td { background: linear-gradient(90deg, rgba(var(--bs-primary-rgb,13,110,253),0.03), rgba(var(--bs-primary-rgb,13,110,253),0.02)) !important; }
+
+/* Modal headers */
+.nav-theme-primary .modal .modal-header { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; }
+
+/* Select2 and selects */
+.nav-theme-primary .select2-container--bootstrap-5 .select2-selection--single { border-color: rgba(var(--bs-primary-rgb,13,110,253),0.16) !important; box-shadow: 0 0 0 0.12rem rgba(var(--bs-primary-rgb,13,110,253),0.06) !important; }
+.nav-theme-primary .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered { color: var(--nav-accent) !important; }
+
+/* Breadcrumbs */
+.nav-theme-primary .breadcrumb .breadcrumb-item.active { color: var(--nav-accent) !important; }
+
+/* Form helpers, toggles, checkboxes */
+.nav-theme-primary .form-check-input:checked { background: var(--nav-accent) !important; border-color: var(--nav-accent) !important; }
+.nav-theme-primary .form-switch .form-check-input:checked { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; }
+
+/* Small tag pills and chips */
+.nav-theme-primary .chip, .nav-theme-primary .tag { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; }
+
+/* Alerts and cards subtle border for information */
+.nav-theme-primary .alert-info { border-color: rgba(var(--bs-primary-rgb,13,110,253),0.1) !important; }
+
+/* Keep the neutral topbar but small topbar icon buttons get accent shadows */
+.nav-theme-primary .topbar .btn-primary, .nav-theme-primary .topbar .btn-outline-primary { box-shadow: 0 3px 10px rgba(var(--bs-primary-rgb,13,110,253),0.07); }
+
+/* Make small icon-only buttons in the topbar (e.g., search) slightly accent-filled */
+.nav-theme-primary .topbar .btn-icon-accent { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)); color: var(--nav-accent-contrast) !important; }
+
+/* Minimal dark-mode tweaks */
+.dark-mode.nav-theme-primary .sidebar { background: linear-gradient(180deg,#2b3136,#23282a) !important; }
+.dark-mode.nav-theme-primary .card-header { background: linear-gradient(90deg, rgba(var(--bs-primary-rgb,13,110,253),0.08), rgba(var(--bs-primary-rgb,13,110,253),0.02)) !important; }
+
+/* Buttons */
+.nav-theme-primary .btn-primary {
+    background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important;
+    color: var(--nav-accent-contrast) !important;
+    border-color: var(--nav-accent) !important;
+    box-shadow: 0 6px 18px rgba(var(--bs-primary-rgb,13,110,253),0.12);
+}
+
+/* ============================ */
+/* Cards, panels and KPI surfaces */
+/* ============================ */
+.rounded-ui .card { border-radius: var(--border-radius) !important; overflow: hidden !important; }
+.rounded-ui .card .card-header { border-radius: calc(var(--border-radius) - 6px) calc(var(--border-radius) - 6px) 0 0 !important; }
+.rounded-ui .card .card-body { border-radius: 0 0 calc(var(--border-radius) - 6px) calc(var(--border-radius) - 6px) !important; }
+
+.rounded-ui .kpi.card, .rounded-ui .kpi.card.shadow-sm { border-radius: calc(var(--border-radius) - 10px) !important; padding: 1rem !important; }
+.rounded-ui .now-brief, .rounded-ui .panel.card { border-radius: calc(var(--border-radius) - 8px) !important; overflow: hidden !important; }
+.rounded-ui .now-brief__header, .rounded-ui .panel__header { border-radius: 0 !important; }
+
+/* List group rounded corners on first/last items to keep soft edges */
+.rounded-ui .list-group { border-radius: calc(var(--border-radius) - 8px) !important; overflow: hidden !important; }
+.rounded-ui .list-group .list-group-item:first-child { border-top-left-radius: calc(var(--border-radius) - 8px) !important; border-top-right-radius: calc(var(--border-radius) - 8px) !important; }
+.rounded-ui .list-group .list-group-item:last-child { border-bottom-left-radius: calc(var(--border-radius) - 8px) !important; border-bottom-right-radius: calc(var(--border-radius) - 8px) !important; }
+
+/* Make CTA-like full-width pills a touch taller and central-aligned */
+.rounded-ui .btn.w-100.py-3 { padding-top: var(--btn-oval-padding-y) !important; padding-bottom: var(--btn-oval-padding-y) !important; min-height: 48px !important; border-radius: 999px !important; }
+
+/* Bring small header actions into pill shapes instead of blocky buttons */
+.rounded-ui .card-header .btn, .rounded-ui .card-header .btn-sm { border-radius: 999px !important; padding: 0.28rem 0.6rem !important; }
+
+/* Panel compact list items and list-group links should be pill-like */
+.rounded-ui .panel__header a.small, .rounded-ui .panel__body a.list-group-item { border-radius: 999px !important; }
+
+/* Accent border for highlighted cards (use subtle outline) */
+.nav-theme-primary .card.card-highlight, .nav-theme-primary .card.border-accent { border-left: 4px solid rgba(var(--bs-primary-rgb,13,110,253),0.12) !important; }
+
+/* KPI icons: make background circular and use accent variants where used */
+.rounded-ui .kpi .display-6 { background: transparent !important; border-radius: 999px !important; padding: 8px !important; width: 46px !important; height: 46px !important; display: inline-flex !important; align-items: center; justify-content: center; }
+.nav-theme-primary .kpi .display-6.text-primary { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: #fff !important; }
+
+/* Tiny fixes for breadcrumbs and inline chips in panels */
+.rounded-ui .breadcrumb { border-radius: calc(var(--border-radius) - 8px) !important; padding: .4rem .6rem !important; }
+.rounded-ui .chip, .rounded-ui .tag { border-radius: 999px !important; padding: 0.25rem 0.5rem !important; }
+.nav-theme-primary .btn-outline-primary {
+    color: var(--nav-accent) !important;
+    border-color: rgba(var(--bs-primary-rgb,13,110,253),0.18) !important;
+}
+.nav-theme-primary .btn-outline-primary:hover { background: rgba(var(--bs-primary-rgb,13,110,253),0.06); }
+
+/* Badges */
+.nav-theme-primary .badge.bg-primary, .nav-theme-primary .badge-primary { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; border-color: rgba(255,255,255,0.08) !important; }
+
+/* Toasts */
+.nav-theme-primary .toast .toast-header { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; }
+
+/* Nav link active */
+.nav-theme-primary .nav-link.active { color: var(--nav-accent-contrast) !important; background: linear-gradient(90deg, rgba(var(--bs-primary-rgb,13,110,253),0.12), rgba(var(--bs-primary-rgb,13,110,253),0.06)) !important; border-radius: 6px; }
+
+/* Form elements focus using accent */
+.nav-theme-primary input:focus, .nav-theme-primary select.form-select:focus, .nav-theme-primary .form-control:focus { box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb,13,110,253),0.12) !important; border-color: var(--nav-accent) !important; }
+
+/* Pagination active */
+.nav-theme-primary .pagination .page-item.active .page-link { background: var(--nav-accent) !important; border-color: var(--nav-accent) !important; color: var(--nav-accent-contrast) !important; }
+
+/* Links */
+.nav-theme-primary a:not(.btn):not(.dropdown-item):not(.nav-link) { color: var(--nav-accent) !important; }
+
+/* Use subtle highlight on cards using accent small border/outline for visibility */
+.nav-theme-primary .card.card-highlight, .nav-theme-primary .card.border-accent { box-shadow: 0 6px 18px rgba(var(--bs-primary-rgb,13,110,253),0.06); border-color: rgba(var(--bs-primary-rgb,13,110,253),0.12) !important; }
+
+/* Keep components readable in dark mode */
+.dark-mode.nav-theme-primary .btn-primary { box-shadow: 0 8px 28px rgba(var(--bs-primary-rgb,13,110,253),0.14); }
+.nav-theme-primary .alert-primary { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; border-color: rgba(255,255,255,0.08) !important; }
+.nav-theme-primary .list-group-item.active, .nav-theme-primary .list-group-item-action.active { background: linear-gradient(90deg, rgba(var(--bs-primary-rgb,13,110,253),0.16), rgba(var(--bs-primary-rgb,13,110,253),0.08)) !important; color: var(--nav-accent-contrast) !important; }
+.nav-theme-primary .list-group-item-action:hover { background: rgba(var(--bs-primary-rgb,13,110,253),0.06) !important; }
+
+.nav-theme-primary .progress .progress-bar { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; }
+
+.nav-theme-primary .btn-check:checked + .btn-primary, .nav-theme-primary .form-check-input:checked { box-shadow: 0 0 0 0.15rem rgba(var(--bs-primary-rgb,13,110,253),0.16) !important; }
+
+.nav-theme-primary .table .table-active, .nav-theme-primary .table tr.active td { background: linear-gradient(90deg, rgba(var(--bs-primary-rgb,13,110,253),0.06), rgba(var(--bs-primary-rgb,13,110,253),0.03)) !important; }
+
+.nav-theme-primary .accordion-button:not(.collapsed) { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; }
+
+.nav-theme-primary .badge.bg-primary.rounded-pill { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; }
+.dark-mode.nav-theme-primary .nav-link.active { background: linear-gradient(90deg, rgba(var(--bs-primary-rgb,13,110,253),0.14), rgba(var(--bs-primary-rgb,13,110,253),0.09)) !important; }
+
+.nav-theme-neutral .topbar,
+.nav-theme-neutral .navbar { background: linear-gradient(90deg,#f8f9fa,#e9ecef) !important; color: #212529 !important; box-shadow: none !important; }
+.nav-theme-neutral .navbar .nav-link, .nav-theme-neutral .navbar-actions .btn { color: #212529 !important; }
+.nav-theme-neutral .navbar-actions .btn-outline-secondary, .nav-theme-neutral .navbar .btn-outline-secondary { color: rgba(0,0,0,0.7); border-color: rgba(0,0,0,0.06); }
+
+.nav-theme-indigo .topbar,
+.nav-theme-indigo .navbar { background: linear-gradient(90deg, var(--nav-accent, #5b3be9), var(--nav-accent-2, #764bff)) !important; color: #fff !important; }
+.nav-theme-indigo .navbar .nav-link, .nav-theme-indigo .navbar-actions .btn { color: #fff !important; }
+.nav-theme-indigo .navbar-actions .btn-outline-secondary, .nav-theme-indigo .navbar .btn-outline-secondary { color: rgba(255,255,255,0.9); border-color: rgba(255,255,255,0.12); }
+
+.nav-theme-green .topbar,
+.nav-theme-green .navbar { background: linear-gradient(90deg, var(--nav-accent, #198754), var(--nav-accent-2, #20c997)) !important; color: #fff !important; }
+.nav-theme-green .navbar .nav-link, .nav-theme-green .navbar-actions .btn { color: #fff !important; }
+.nav-theme-green .navbar-actions .btn-outline-secondary, .nav-theme-green .navbar .btn-outline-secondary { color: rgba(255,255,255,0.9); border-color: rgba(255,255,255,0.12); }
+
+/* Dark mode friendly overrides for themes */
+.dark-mode.nav-theme-neutral .topbar, .dark-mode.nav-theme-neutral .navbar { background: linear-gradient(90deg,#1f2225,#2d3338) !important; color: #e6e6e6 !important; }
+.dark-mode.nav-theme-primary .topbar, .dark-mode.nav-theme-primary .navbar { background: linear-gradient(90deg, var(--nav-accent, #1f2124), var(--nav-accent-2, #2b3237)) !important; color: var(--nav-accent-contrast, #e6e6e6) !important; }
+.dark-mode.nav-theme-indigo .topbar, .dark-mode.nav-theme-indigo .navbar { background: linear-gradient(90deg, var(--nav-accent, #3a2fac), var(--nav-accent-2, #6a56ff)) !important; color: #ffffff !important; }
+.dark-mode.nav-theme-green .topbar, .dark-mode.nav-theme-green .navbar { background: linear-gradient(90deg, var(--nav-accent, #146a43), var(--nav-accent-2, #157347)) !important; color: #ffffff !important; }
+
+/* Subtle header accent and hover variants for primary theme */
+.nav-theme-primary .now-brief__header { background: linear-gradient(90deg, rgba(var(--bs-primary-rgb,13,110,253),0.12), rgba(var(--bs-primary-rgb,13,110,253),0.04)) !important; color: var(--nav-accent-contrast) !important; }
+.nav-theme-primary .panel__header { background: linear-gradient(90deg, rgba(var(--bs-primary-rgb,13,110,253),0.06), rgba(var(--bs-primary-rgb,13,110,253),0.02)) !important; color: inherit !important; }
+.nav-theme-primary .list-group .list-group-item-action:hover { background: linear-gradient(90deg, rgba(var(--bs-primary-rgb,13,110,253),0.06), rgba(var(--bs-primary-rgb,13,110,253),0.03)) !important; }
+.nav-theme-primary .kpi.card { background: linear-gradient(180deg, rgba(var(--bs-primary-rgb,13,110,253),0.02), rgba(var(--bs-primary-rgb,13,110,253),0.01)) !important; }
+
+/* Now Brief logo, team cards and match-main surface rounded adjustments when enabled */
+.rounded-ui .now-brief__logo { border-radius: 999px !important; width: 48px !important; height: 48px !important; }
+.rounded-ui .team-card { border-radius: 999px !important; }
+.rounded-ui .match-row .match-main { border-radius: calc(var(--border-radius) - 8px) !important; padding: 8px !important; }
+
+/* Ensure important action buttons and small topbar icons use the accent (but keep topbar neutral background) */
+.nav-theme-primary .navbar-actions .btn.btn-primary, .nav-theme-primary .navbar-actions .btn-outline-primary { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; border-color: var(--nav-accent) !important; }
+.nav-theme-primary .navbar .btn.btn-primary, .nav-theme-primary .navbar .btn-outline-primary { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; border-color: var(--nav-accent) !important; }
+
+/* Accent the counters and small badges used in cards and KPI tiles */
+.nav-theme-primary .badge.bg-primary.rounded-pill, .nav-theme-primary .kpi .badge { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; }
+
+/* Ensure full-width CTA and sync buttons remain readable and pill-shaped */
+.nav-theme-primary .btn.w-100 { color: var(--nav-accent-contrast, #fff) !important; }
+
+/* Make form-select, select2, and input focus have accent outlines */
+.nav-theme-primary select.form-select:focus, .nav-theme-primary .select2-container--bootstrap-5.select2-container--open .select2-selection--single { border-color: var(--nav-accent) !important; box-shadow: 0 0 0 0.15rem rgba(13,110,253,0.08) !important; }
+
+/* Navbar interactive accents */
+.nav-theme-primary .navbar .nav-link.active,
+.nav-theme-indigo .navbar .nav-link.active,
+.nav-theme-green .navbar .nav-link.active { box-shadow: inset 0 -3px 0 0 rgba(255,255,255,0.12); }
+
+.nav-theme-neutral .navbar .nav-link.active { box-shadow: inset 0 -3px 0 0 rgba(0,0,0,0.08); }
+
+/* Make brand-tile adapt to theme */
+.nav-theme-primary .brand-logo { background: rgba(255,255,255,0.06); border-radius: 10px !important; }
+.nav-theme-neutral .brand-logo { background: rgba(0,0,0,0.02); border-radius: 10px !important; }
+.nav-theme-indigo .brand-logo { background: rgba(255,255,255,0.06); border-radius: 10px !important; }
+.nav-theme-green .brand-logo { background: rgba(255,255,255,0.06); border-radius: 10px !important; }
+
+/* Topbar badges contrast better on themed backgrounds */
+.nav-theme-primary .navbar .badge { background: rgba(0,0,0,0.06); color: #212529 !important; border-color: rgba(0,0,0,0.06) !important; }
+.nav-theme-indigo .navbar .badge { background: rgba(255,255,255,0.1); color: #fff !important; border-color: rgba(255,255,255,0.12) !important; }
+.nav-theme-green .navbar .badge { background: rgba(255,255,255,0.1); color: #fff !important; border-color: rgba(255,255,255,0.12) !important; }
+.nav-theme-neutral .navbar .badge { background: rgba(0,0,0,0.06); color: #212529 !important; border-color: rgba(0,0,0,0.06) !important; }
+
+/* Search submit button gets a subtle glow for the theme */
+.nav-theme-primary .search-submit-btn { box-shadow: 0 2px 8px rgba(13,110,253,0.18); }
+.nav-theme-indigo .search-submit-btn { box-shadow: 0 2px 8px rgba(86,52,213,0.16); }
+.nav-theme-green .search-submit-btn { box-shadow: 0 2px 8px rgba(25,135,84,0.16); }
+.nav-theme-neutral .search-submit-btn { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+/* Primary theme: use blue for notifications and user dropdowns only */
+.nav-theme-primary .navbar .dropdown-menu.navbar-glass,
+.nav-theme-primary .navbar-actions .dropdown-menu,
+.nav-theme-primary .notifications-dropdown { background: linear-gradient(90deg,var(--nav-accent, #0d6efd),var(--nav-accent-2, #3d8bfd)) !important; color: var(--nav-accent-contrast, #fff) !important; border-color: rgba(255,255,255,0.06) !important; box-shadow: 0 8px 32px rgba(13,110,253,0.08) !important; }
+
+.nav-theme-primary .notifications-dropdown .dropdown-header,
+.nav-theme-primary .navbar .dropdown-menu.navbar-glass .dropdown-header { background: rgba(255,255,255,0.06) !important; color: #fff !important; }
+
+.nav-theme-primary #notificationsBadge,
+.nav-theme-primary #chatUnreadBadge,
+.nav-theme-primary .user-chat-dot { background: var(--nav-accent, #0d6efd) !important; color: var(--nav-accent-contrast, #fff) !important; border-color: rgba(255,255,255,0.08) !important; }
+
+/* Ensure dropdown items remain readable */
+.nav-theme-primary .navbar .dropdown-menu.navbar-glass .dropdown-item,
+.nav-theme-primary .notifications-dropdown .dropdown-item { color: #fff !important; }
+
+/* Make toggles themselves blue to match primary dropdown accent */
+.nav-theme-primary #notificationsToggle,
+.nav-theme-primary #userToggle {
+    background: linear-gradient(90deg,var(--nav-accent, #0d6efd),var(--nav-accent-2, #3d8bfd)) !important;
+    color: var(--nav-accent-contrast, #fff) !important;
+    border-color: rgba(255,255,255,0.12) !important;
+}
+.nav-theme-primary #notificationsToggle:hover,
+.nav-theme-primary #userToggle:hover {
+    filter: brightness(0.95);
+    transform: translateY(-1px);
+}
+/* Keep primary button outline variants readable in neutral topbar */
+.nav-theme-primary #notificationsToggle.btn-outline-secondary:focus,
+.nav-theme-primary #userToggle.btn-outline-primary:focus { box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.18) !important; }
+
+/* Dark-mode adjustments for toggle buttons */
+.dark-mode.nav-theme-primary #notificationsToggle,
+.dark-mode.nav-theme-primary #userToggle {
+    background: linear-gradient(90deg,#1b61ef,#3d8bfd) !important; /* slightly adjusted for contrast */
+    color: #fff !important;
+}

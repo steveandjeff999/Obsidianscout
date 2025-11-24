@@ -3,7 +3,7 @@
 /* Glass / semitransparent design variables and utility */
 :root {
     /* default glass colors - can be overridden by theming system or dark-mode */
-    --glass-bg: rgba(255,255,255,0.72);
+    --glass-bg: rgba(255,255,255,0.78);
     --glass-border: rgba(0,0,0,0.06);
     --glass-backdrop: rgba(255,255,255,0.35);
     --glass-blur: 8px;
@@ -763,7 +763,7 @@ div.bg-light {
 .viewer-controls .form-select:focus,
 .widget-card .form-select:focus {
     border-color: var(--primary, var(--primary-color, #0d6efd)) !important;
-    box-shadow: 0 0 0 0.18rem rgba(13,110,253,0.12) !important;
+    box-shadow: 0 0 0 0.18rem rgba(var(--bs-primary-rgb,13,110,253),0.12) !important;
     outline: none !important;
 }
 
@@ -843,7 +843,7 @@ div.bg-light {
 /* Hover / active option style should be a subtle tint over the card background */
 .select2-dropdown-large .select2-results__option--highlighted,
 .select2-dropdown-large .select2-results__option--selected {
-    background-color: rgba(13,110,253,0.06) !important; /* subtle primary tint */
+    background-color: rgba(var(--bs-primary-rgb,13,110,253),0.06) !important; /* subtle primary tint */
     color: var(--text-main, #212529) !important;
 }
 

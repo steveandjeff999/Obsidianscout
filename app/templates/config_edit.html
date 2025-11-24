@@ -31,7 +31,7 @@
                 <form id="configForm" action="{{ url_for('main.save_config') }}" method="POST">
                     <div class="mb-3">
                         <label for="configJsonEditor" class="form-label">Game Configuration JSON</label>
-                        <div id="configJsonEditor" style="height: 500px; border: 1px solid #ccc; border-radius: 4px;"></div>
+                        <div id="configJsonEditor" class="json-editor"></div>
                         <textarea id="config_json" name="config_json" hidden>{{ game_config | tojson }}</textarea>
                     </div>
                     
@@ -55,7 +55,7 @@
 </div>
 
 <!-- Reset to Default Modal - Moved outside main container to prevent positioning issues -->
-<div class="modal fade" id="resetModal" tabindex="-1" aria-labelledby="resetModalLabel" aria-hidden="true" style="z-index: 1055;">
+<div class="modal fade z-high" id="resetModal" tabindex="-1" aria-labelledby="resetModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -77,7 +77,9 @@
                             <option value="">-- Select a default configuration --</option>
                             {% if default_configs %}
                                 {% for config in default_configs %}
-                                <option value="{{ config.filename }}">{{ config.display_name }}</option>
+                                        {% if config.type == 'game' %}
+                                        <option value="{{ config.filename }}">{{ config.display_name }} ({{ config.basename or config.filename }})</option>
+                                    {% endif %}
                                 {% endfor %}
                             {% else %}
                                 <option value="" disabled>No default configurations found</option>
@@ -166,19 +168,33 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/vendor/ace.js') }}"></script>
-<script src="{{ url_for('static', filename='js/vendor/ace.js') }}"></script>
-<script src="{{ url_for('static', filename='js/vendor/ace.js') }}"></script>
+
+<style>
+/* Ensure ACE editor visible in the game JSON editor */
+#configJsonEditor {
+    min-height: 600px;
+    height: 600px;
+    width: 100%;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+body.dark-mode #configJsonEditor {
+    border-color: rgba(255,255,255,0.1);
+}
+</style>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize the JSON editor
         const editor = ace.edit("configJsonEditor");
         editor.setTheme("ace/theme/chrome");
         editor.session.setMode("ace/mode/json");
-        editor.setValue(JSON.stringify({{ game_config | tojson }}, null, 2));
+        // Parse the config safely (already JSON from Jinja tojson)
+        const configData = {{ game_config | tojson | safe }};
+        editor.setValue(JSON.stringify(configData, null, 2));
         editor.setOptions({
             fontSize: "14px",
             showPrintMargin: false,
-            showGutter: true,
+            showGutter: true
         });
         
         // Update the hidden form field when the form is submitted

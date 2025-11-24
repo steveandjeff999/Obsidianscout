@@ -28,7 +28,7 @@
             <!-- Tutorial Steps -->
             <div id="tutorial-container">
                 <!-- Step 1: Overview -->
-                <div class="tutorial-step" id="step-1" style="display: block;">
+                <div class="tutorial-step d-block active-step" id="step-1">
                     <div class="card shadow">
                         <div class="card-header bg-primary text-white">
                             <h5 class="mb-0">
@@ -118,7 +118,7 @@
                 </div>
 
                 <!-- Step 2: Navigation -->
-                <div class="tutorial-step" id="step-2" style="display: none;">
+                <div class="tutorial-step d-none" id="step-2">
                     <div class="card shadow">
                         <div class="card-header bg-info text-white">
                             <h5 class="mb-0">
@@ -299,7 +299,7 @@
                                     </div>
                                     
                                     <!-- Dynamic Hint Display -->
-                                    <div id="navHintDisplay" class="alert alert-info mb-3" style="display: none;">
+                                    <div id="navHintDisplay" class="alert alert-info mb-3 d-none">
                                         <i class="fas fa-info-circle me-2"></i>
                                         <span id="navHintText">Hover over buttons to see what each section does!</span>
                                     </div>
@@ -326,7 +326,7 @@
                 </div>
 
                 <!-- Step 3: Scouting -->
-                <div class="tutorial-step" id="step-3" style="display: none;">
+                <div class="tutorial-step d-none" id="step-3">
                     <div class="card shadow">
                         <div class="card-header bg-success text-white">
                             <h5 class="mb-0">
@@ -398,7 +398,7 @@
                                             </div>
                                             
                                             <!-- Dynamic Hint Display -->
-                                            <div id="scoutHintDisplay" class="alert alert-info mb-3" style="display: none;">
+                                            <div id="scoutHintDisplay" class="alert alert-info mb-3 d-none">
                                                 <i class="fas fa-info-circle me-2"></i>
                                                 <span id="scoutHintText">Hover over buttons to learn more!</span>
                                             </div>
@@ -418,7 +418,7 @@
                 </div>
 
                 <!-- Step 4: Analytics -->
-                <div class="tutorial-step" id="step-4" style="display: none;">
+                <div class="tutorial-step d-none" id="step-4">
                     <div class="card shadow">
                         <div class="card-header bg-warning text-white">
                             <h5 class="mb-0">
@@ -494,7 +494,7 @@
                                             </div>
                                             
                                             <!-- Dynamic Hint Display -->
-                                            <div id="analyticsHintDisplay" class="alert alert-info mb-3" style="display: none;">
+                                            <div id="analyticsHintDisplay" class="alert alert-info mb-3 d-none">
                                                 <i class="fas fa-info-circle me-2"></i>
                                                 <span id="analyticsHintText">Hover over buttons to learn what each tool does!</span>
                                             </div>
@@ -514,7 +514,7 @@
                 </div>
 
                 <!-- Step 5: Configuration -->
-                <div class="tutorial-step" id="step-5" style="display: none;">
+                <div class="tutorial-step d-none" id="step-5">
                     <div class="card shadow">
                         <div class="card-header bg-warning text-white">
                             <h5 class="mb-0">
@@ -591,7 +591,7 @@
                                             </div>
                                             
                                             <!-- Dynamic Hint Display -->
-                                            <div id="configHintDisplay" class="alert alert-info mb-3" style="display: none;">
+                                            <div id="configHintDisplay" class="alert alert-info mb-3 d-none">
                                                 <i class="fas fa-info-circle me-2"></i>
                                                 <span id="configHintText">Hover over buttons to see what each configuration area covers!</span>
                                             </div>
@@ -611,7 +611,7 @@
                 </div>
 
                 <!-- Step 6: User Roles -->
-                <div class="tutorial-step" id="step-6" style="display: none;">
+                <div class="tutorial-step d-none" id="step-6">
                     <div class="card shadow">
                         <div class="card-header bg-purple text-white">
                             <h5 class="mb-0">
@@ -670,7 +670,7 @@
                 </div>
 
                 <!-- Step 7: Tips -->
-                <div class="tutorial-step" id="step-7" style="display: none;">
+                <div class="tutorial-step d-none" id="step-7">
                     <div class="card shadow">
                         <div class="card-header bg-dark text-white">
                             <h5 class="mb-0">
@@ -821,12 +821,13 @@ const totalSteps = 7;
 function showStep(step) {
     // Hide all steps
     document.querySelectorAll('.tutorial-step').forEach(el => {
-        el.style.display = 'none';
+        el.classList.add('d-none');
+        el.classList.remove('active-step');
     });
     
     // Show current step
     const stepEl = document.getElementById(`step-${step}`);
-    if (stepEl) stepEl.style.display = 'block';
+    if (stepEl) { stepEl.classList.remove('d-none'); stepEl.classList.add('active-step'); }
     
     // Update controls
     document.getElementById('prev-btn').disabled = (step === 1);
@@ -893,13 +894,13 @@ function initLiveDemo(frameId, defaultUrl, buttonsSelector, openBtnId) {
             const hint = btn.getAttribute('data-hint');
             if (hint && hintDisplay && hintText) {
                 hintText.textContent = hint;
-                hintDisplay.style.display = 'block';
+                hintDisplay.classList.remove('d-none');
             }
         });
         
         btn.addEventListener('mouseleave', () => {
             if (hintDisplay) {
-                hintDisplay.style.display = 'none';
+                hintDisplay.classList.add('d-none');
             }
         });
     });
@@ -999,7 +1000,7 @@ document.addEventListener('DOMContentLoaded', function() {
     transition: all 0.3s ease-in-out;
 }
 
-.tutorial-step[style*="block"] {
+.tutorial-step.active-step {
     opacity: 1;
     transform: translateX(0);
 }

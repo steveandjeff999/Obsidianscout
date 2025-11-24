@@ -7,23 +7,21 @@
 {% block content %}
 <div class="row">
     <div class="col-md-8 offset-md-2">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">
-                    <i class="fas fa-user me-2"></i>
-                    Profile Information
-                </h5>
-            </div>
+        {% macro profile_inner() %}
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
                         <div class="mb-3 text-center">
                             <label class="form-label">Profile Picture</label><br>
-                            <img src="{{ url_for('static', filename=user.profile_picture or 'img/avatars/default.png') }}" class="rounded-circle mb-2" alt="Profile Picture" width="96" height="96" style="object-fit:cover;">
+                            <img src="{{ url_for('static', filename=user.profile_picture or 'img/avatars/default.png') }}" class="rounded-circle mb-2 img-fit-cover" alt="Profile Picture" width="96" height="96">
                             <form method="POST" enctype="multipart/form-data" class="mt-2">
                                 <input class="form-control" type="file" name="profile_picture" accept="image/*">
+                                {% if modern_ui %}
+                                    {{ ui_button.button('Upload New Picture', variant='primary', size='sm') }}
+                                {% else %}
                                 <button type="submit" class="btn btn-primary btn-sm mt-2">Upload New Picture</button>
-                                <div class="form-text">Max size: 2MB. JPG/PNG only.</div>
+                                {% endif %}
+                                <div class="form-text">Max size: 10MB. JPG/PNG only.</div>
                             </form>
                         </div>
                         <form method="POST">
@@ -39,12 +37,17 @@
                         </div>
                         
                         <div class="mb-3">
+                            {% if modern_ui %}
+                                {{ ui_button.button('Save Changes', variant='primary', size='md', icon='fas fa-save') }}
+                                {{ ui_button.button('Change Password', href=url_for('auth.change_password'), variant='secondary', size='md', icon='fas fa-key') }}
+                            {% else %}
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-save me-2"></i>Save Changes
                             </button>
                             <a href="{{ url_for('auth.change_password') }}" class="btn btn-warning ms-2">
                                 <i class="fas fa-key me-2"></i>Change Password
                             </a>
+                            {% endif %}
                         </div>
                         </form>
                         
@@ -142,7 +145,7 @@
                         </div>
                     </div>
                 </div>
-            </div>
+                
             <div class="card-footer">
                 <div class="d-flex justify-content-between">
                     <a href="{{ url_for('main.index') }}" class="btn btn-secondary">
@@ -163,7 +166,22 @@
                     </div>
                 </div>
             </div>
+        {% endmacro %}
+        {% if modern_ui %}
+            {% call ui_card.card('Profile Information') %}
+                {{ profile_inner() }}
+            {% endcall %}
+        {% else %}
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-user me-2"></i>
+                    Profile Information
+                </h5>
+            </div>
+            {{ profile_inner() }}
+            </div>
+        {% endif %}
         </div>
     </div>
-</div>
 {% endblock %}

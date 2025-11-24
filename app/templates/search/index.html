@@ -328,7 +328,7 @@
 .type-event { background: #e8f5e8; color: #388e3c; }
 .type-scouting_data { background: #fff3e0; color: #f57c00; }
 .type-scouting { background: #fff3e0; color: #f57c00; }
-.type-match { background: #eaf2ff; color: #0d6efd; }
+.type-match { background: #eaf2ff; color: var(--bs-primary, #0d6efd); }
 
 .no-results {
     text-align: center;
@@ -349,7 +349,7 @@ body.dark-mode .result-item {
 }
 
 body.dark-mode .result-icon {
-    background: rgba(13,110,253,0.12) !important;
+    background: rgba(var(--bs-primary-rgb,13,110,253),0.12) !important;
     color: #ffffff !important;
 }
 
@@ -388,7 +388,7 @@ body.dark-mode #suggestions .suggestion-item {
 body.dark-mode .search-stats {
     background: rgba(255,255,255,0.02) !important;
     color: #e6eefc !important;
-    border-left-color: rgba(13,110,253,0.6) !important;
+    border-left-color: rgba(var(--bs-primary-rgb,13,110,253),0.6) !important;
 }
 
 body.dark-mode .search-stats i {

@@ -31,6 +31,72 @@
         })();
     </script>
     <script>
+        (function(){
+            try {
+                // Check explicit user preference stored in localStorage for rounded UI
+                var storedRounded = null;
+                try { storedRounded = localStorage.getItem('rounded_ui'); } catch (e) { storedRounded = null; }
+                // Default to rounded UI (false) when user hasn't set a preference
+                var useRounded = null;
+                if (storedRounded === 'true') useRounded = true;
+                else if (storedRounded === 'false') useRounded = false;
+                else useRounded = false; // default: rounded UI disabled
+
+                if (useRounded) {
+                    document.documentElement.classList.add('rounded-ui');
+                    // Apply very small inline style to reduce flash and ensure early layout
+                        var css = 'html.rounded-ui, body.rounded-ui { --border-radius: 1.25rem; }';
+                    var s = document.createElement('style');
+                    s.setAttribute('data-ob-rounded','early');
+                    s.appendChild(document.createTextNode(css));
+                    var headEl = document.getElementsByTagName('head')[0];
+                    if (headEl) headEl.insertBefore(s, headEl.firstChild);
+                }
+                // Apply navbar theme early to avoid flash
+                try {
+                    var storedNavbar = null;
+                    try { storedNavbar = localStorage.getItem('navbar_theme'); } catch(e) { storedNavbar = null; }
+                    var themeVal = (storedNavbar !== null) ? storedNavbar : 'neutral';
+                    document.documentElement.classList.add('nav-theme-'+themeVal);
+                    document.body.classList.add('nav-theme-'+themeVal);
+                } catch(e) { /* ignore */ }
+                // Apply UI shape early to avoid flash (values: square|rounded|pill|circle)
+                try {
+                    var storedShape = null;
+                    try { storedShape = localStorage.getItem('ui_shape'); } catch(e) { storedShape = null; }
+                    if (!storedShape) storedShape = 'rounded';
+                    document.documentElement.classList.add('ui-shape-'+storedShape);
+                    document.body.classList.add('ui-shape-'+storedShape);
+                } catch(e) { /* ignore */ }
+                // Accent color is removed from per-user settings; rely on theme defaults.
+
+                    var br = null; try { br = localStorage.getItem('border_radius'); } catch(e) { br = null; }
+                    if (br) { try { document.documentElement.style.setProperty('--border-radius', br+'px'); document.body.style.setProperty('--border-radius', br+'px'); try{ document.documentElement.style.setProperty('--card-radius', Math.max(parseInt(br,10),4) + 'px'); document.body.style.setProperty('--card-radius', Math.max(parseInt(br,10),4) + 'px'); document.documentElement.style.setProperty('--control-radius', Math.max(parseInt(br,10) - 4,4) + 'px'); document.body.style.setProperty('--control-radius', Math.max(parseInt(br,10) - 4,4) + 'px'); }catch(e){} } catch(e) {} }
+
+                    var btn = null; try { btn = localStorage.getItem('btn_size'); } catch(e) { btn = null; }
+                    if (btn) { try { document.documentElement.classList.add('btn-size-'+btn); document.body.classList.add('btn-size-'+btn); } catch(e) {} }
+
+                    var elev = null; try { elev = localStorage.getItem('card_elevation'); } catch(e) { elev = null; }
+                    if (elev) { try { document.documentElement.classList.add('card-elevation-'+elev); document.body.classList.add('card-elevation-'+elev); } catch(e) {} }
+
+                    var glass = null; try { glass = localStorage.getItem('glass_effect'); } catch(e) { glass = null; }
+                    // Default: glass effects enabled unless user explicitly turns them off.
+                    // Treat several legacy 'false' variants as disabled so toggles remain consistent.
+                    try {
+                        var glassVal = String(glass || '').toLowerCase();
+                        var disabled = (glassVal === 'false' || glassVal === '0' || glassVal === 'off' || glassVal === 'disabled');
+                        // Debug: log early glass preference state when in development
+                        try { if(window && window.console && window.console.debug) console.debug('[early-theme] glass_effect=', glass, ' => disabled?', disabled); } catch(e) {}
+                        if (disabled) {
+                            document.documentElement.classList.add('glass-off');
+                            document.body.classList.add('glass-off');
+                        }
+                    } catch(e) {}
+                } catch(e) {}
+            } catch (e) { /* silently ignore */ }
+        })();
+    </script>
+    <script>
     // Ensure suggestion dropdowns use dark background when the app is in dark mode.
     (function(){
         function applyDarkToSuggestions(root){
@@ -150,6 +216,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode-force.css') }}">
     <!-- Modern dark theme additions (more refined surfaces, softened shadows, updated accents) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-theme-modern.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/glass-theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ui-rounded.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-fixes.css') }}">
     <!-- Use UMD build of Chart.js for compatibility with non-module script loading -->
     <script src="{{ url_for('static', filename='js/vendor/chart.umd.min.js') }}"></script>
@@ -164,7 +232,7 @@
         /* Ensure card-bg variable uses the neutral, non-blue glass color in dark mode */
         body.dark-mode, body.modern-layout.dark-mode {
             --card-bg: rgba(24,24,26,0.78) !important;
-            --glass-bg: rgba(22,22,24,0.6) !important;
+            --glass-bg: rgba(22,22,24,0.70) !important;
             --glass-border: rgba(255,255,255,0.035) !important;
         }
         /* Force nested cards and small panels to match the neutral card background in dark mode.
@@ -916,11 +984,11 @@
     When true we omit the sidebar/topbar helper classes so related JS/CSS
     won't add overlays or offsets on mobile which can cause tap/click
     coordinate mismatches. #}
-<body class="d-flex flex-column h-100 {% if not no_chrome %}with-sidebar topbar-fixed{% endif %}">
+<body class="d-flex flex-column h-100 modern-layout {% if not no_chrome %}with-sidebar topbar-fixed{% endif %}">
     <!-- Global Top Bar (search + user) -->
     <div class="topbar glass d-flex align-items-center gap-2 px-3 py-2 shadow-sm" role="banner">
         <div class="d-flex align-items-center gap-2 flex-shrink-0">
-            <button id="sidebarToggle" class="btn btn-outline-primary btn-sm" aria-label="Toggle navigation"><i class="fas fa-bars"></i></button>
+            <button id="sidebarToggle" class="btn btn-outline-primary btn-sm rounded-pill-soft" aria-label="Toggle navigation"><i class="fas fa-bars"></i></button>
         </div>
         {% if current_user.is_authenticated %}
         <div class="top-search d-none d-sm-block">
@@ -929,7 +997,7 @@
                     <div class="search-input-wrapper">
                         <i class="fas fa-search search-icon"></i>
                         <input type="text" class="form-control enhanced-search-input" name="q" placeholder="Search" id="quickSearchInputTop" autocomplete="off" aria-label="Search teams and users" aria-expanded="false" role="combobox">
-                        <button type="button" class="search-clear-btn" id="searchClearBtnTop" aria-label="Clear search" style="display:none;">
+                        <button type="button" class="search-clear-btn initially-hidden" id="searchClearBtnTop" aria-label="Clear search">
                             <i class="fas fa-times"></i>
                         </button>
                         <button class="search-submit-btn" type="submit" title="Search" aria-label="Submit search">
@@ -948,16 +1016,16 @@
                 <div class="d-flex align-items-center">
                     <!-- Notifications dropdown -->
                     <div class="dropdown me-2 topbar-notifications">
-                        <button id="notificationsToggle" class="btn btn-outline-secondary btn-sm d-flex align-items-center dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true" aria-controls="notificationsMenu" aria-label="Notifications">
+                        <button id="notificationsToggle" class="btn btn-outline-secondary btn-sm rounded-pill-soft d-flex align-items-center dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true" aria-controls="notificationsMenu" aria-label="Notifications">
                             <i class="fas fa-bell"></i>
-                            <span id="notificationsBadge" class="badge bg-danger ms-1" style="display:none; font-size:0.65rem;">0</span>
+                            <span id="notificationsBadge" class="badge bg-danger ms-1 initially-hidden badge-small">0</span>
                         </button>
                         <div id="notificationsMenu" class="dropdown-menu dropdown-menu-end shadow notifications-dropdown" aria-labelledby="notificationsToggle">
                             <div class="dropdown-header d-flex align-items-center justify-content-between px-3 py-2">
                                 <strong>Notifications</strong>
                                 <button id="clearAllNotificationsBtn" class="btn btn-sm btn-link small" title="Clear all">Clear all</button>
                             </div>
-                            <div id="notificationsList" class="list-group list-group-flush" style="max-height:320px; overflow:auto;">
+                            <div id="notificationsList" class="list-group list-group-flush notifications-list">
                                 <div class="list-group-item text-muted small">Loading...</div>
                             </div>
                             <div class="dropdown-footer text-center py-2">
@@ -966,13 +1034,13 @@
                         </div>
                     </div>
                     <div class="dropdown">
-                        <button id="userToggle" class="btn btn-outline-primary btn-sm d-flex align-items-center dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true" aria-controls="userMenu">
+                        <button id="userToggle" class="btn btn-outline-primary btn-sm rounded-pill-soft d-flex align-items-center dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true" aria-controls="userMenu">
                             <i class="fas fa-user-circle me-1"></i>
                             <span class="d-none d-md-inline">{{ current_user.username }}</span>
-                            <span id="userChatDot" class="user-chat-dot" style="display:none;" title="You have unread chat messages"></span>
+                            <span id="userChatDot" class="user-chat-dot initially-hidden" title="You have unread chat messages"></span>
                         </button>
                         <ul id="userMenu" class="dropdown-menu dropdown-menu-end shadow notifications-dropdown navbar-glass" aria-labelledby="userToggle">
-                            <li id="userDropdownUnreadItem" style="display:none;"><a id="openUnreadChatLink" class="dropdown-item py-2" href="{{ url_for('main.chat_page') }}"><i class="fas fa-comments me-2 text-danger"></i>Open unread chat</a></li>
+                            <li id="userDropdownUnreadItem" class="initially-hidden"><a id="openUnreadChatLink" class="dropdown-item py-2" href="{{ url_for('main.chat_page') }}"><i class="fas fa-comments me-2 text-danger"></i>Open unread chat</a></li>
                             <li><hr class="dropdown-divider my-1"></li>
                             <li>
                                 <div class="dropdown-user-header d-flex align-items-center px-3 py-2">
@@ -1094,7 +1162,7 @@
                 </button>
                 <div class="nav-group-items" id="group-community-items">
                 <a class="nav-link {% if request.endpoint == 'main.users_page' %}active{% endif %}" href="{{ url_for('main.users_page') }}"><i class="fas fa-users"></i><span>Users</span></a>
-                <a class="nav-link {% if request.endpoint == 'main.chat_page' %}active{% endif %}" href="{{ url_for('main.chat_page') }}"><i class="fas fa-comments"></i><span>Chat <span id="chatUnreadBadge" class="badge bg-danger ms-1" style="display:none;">0</span></span></a>
+                <a class="nav-link {% if request.endpoint == 'main.chat_page' %}active{% endif %}" href="{{ url_for('main.chat_page') }}"><i class="fas fa-comments"></i><span>Chat <span id="chatUnreadBadge" class="badge bg-danger ms-1 initially-hidden badge-small">0</span></span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('assistant') %}active{% endif %}" href="{{ url_for('assistant.index') }}"><i class="fas fa-robot"></i><span>Assistant</span></a>
                 <a class="nav-link {% if request.endpoint == 'notifications.index' %}active{% endif %}" href="{{ url_for('notifications.index') }}"><i class="fas fa-bell"></i><span>Notifications</span></a>
                 <a class="nav-link {% if request.endpoint == 'main.sponsors' %}active{% endif %}" href="{{ url_for('main.sponsors') }}"><i class="fas fa-handshake"></i><span>Sponsors</span></a>
@@ -1134,7 +1202,7 @@
                 {% endif %}
                 <!-- Per-user settings (stored locally in the browser) -->
                 <a class="btn btn-outline-primary btn-sm w-100 text-start {% if request.endpoint == 'main.settings' %}active{% endif %}" href="{{ url_for('main.settings') }}"><i class="fas fa-cog me-2"></i>Settings</a>
-                <button id="darkModeButton" class="btn btn-outline-secondary btn-sm w-100 text-start" type="button">
+                <button id="darkModeButton" class="btn btn-outline-secondary btn-sm rounded-pill-soft w-100 text-start" type="button">
                     <i class="fas fa-moon me-2" id="darkModeIcon"></i><span id="darkModeLabel">Dark Mode</span>
                 </button>
                 {% if user_has_role('superadmin') %}
@@ -1796,6 +1864,23 @@
                 }
             }
             applyState(isDarkMode);
+
+            // Apply rounded UI preference
+            try {
+                const roundedStored = localStorage.getItem('rounded_ui');
+                const isRounded = roundedStored !== null ? roundedStored === 'true' : false; // default to disabled
+                if (isRounded) { document.body.classList.add('rounded-ui'); document.documentElement.classList.add('rounded-ui'); }
+                else { document.body.classList.remove('rounded-ui'); document.documentElement.classList.remove('rounded-ui'); }
+            } catch(e) { /* ignore */ }
+            // Also apply navbar theme stored preference
+            try{
+                const navbarStored = localStorage.getItem('navbar_theme');
+                const navVal = navbarStored !== null ? navbarStored : 'neutral';
+                document.body.classList.remove('nav-theme-primary','nav-theme-neutral','nav-theme-indigo','nav-theme-green');
+                document.documentElement.classList.remove('nav-theme-primary','nav-theme-neutral','nav-theme-indigo','nav-theme-green');
+                document.body.classList.add('nav-theme-' + navVal);
+                document.documentElement.classList.add('nav-theme-' + navVal);
+            }catch(e){}
             
             // Server-side theme management was removed; rely on client preference (localStorage) only.
             
@@ -2611,7 +2696,7 @@
 
     {# Add a floating button for the assistant modal #}
     {# Remove the floating assistant button:
-    <button id="openAssistantModalBtn" class="btn btn-primary rounded-circle shadow position-fixed" style="bottom: 32px; right: 32px; z-index: 1050; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center;">
+    <button id="openAssistantModalBtn" class="btn btn-primary rounded-circle shadow position-fixed assistant-fab">
         <i class="fas fa-robot fa-lg"></i>
     </button>
     #}
@@ -2631,7 +2716,7 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
-            <ul class="nav nav-tabs" id="chatTab" role="tablist" style="margin-bottom: 1rem;">
+            <ul class="nav nav-tabs mb-3" id="chatTab" role="tablist">
               <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="dm-tab" data-bs-toggle="tab" data-bs-target="#dmTabPane" type="button" role="tab">DMs</button>
               </li>
@@ -2644,14 +2729,14 @@
             </ul>
             <div class="tab-content" id="chatTabContent">
               <div class="tab-pane fade show active" id="dmTabPane" role="tabpanel">
-                <div id="dmChatContainer" style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fff;"></div>
+                <div id="dmChatContainer" class="chat-container"></div>
                 <div class="input-group mt-3">
                   <input type="text" class="form-control" id="dmChatInput" placeholder="Type a message...">
                   <button class="btn btn-primary" id="dmSendBtn">Send</button>
                 </div>
               </div>
               <div class="tab-pane fade" id="assistantTabPane" role="tabpanel">
-                                <div id="assistantChatContainer" style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fff;"></div>
+                                <div id="assistantChatContainer" class="chat-container"></div>
                                 <div class="input-group mt-3">
                                     <input type="text" class="form-control" id="assistantChatInput" placeholder="Ask for help...">
                                     <button class="btn btn-primary" id="assistantSendBtn">Send</button>
@@ -2659,12 +2744,12 @@
               </div>
               <div class="tab-pane fade" id="groupTabPane" role="tabpanel">
                 <div class="mb-2">
-                  <input type="text" id="groupNameInput" class="form-control form-control-sm d-inline-block" style="width: 200px; display: inline-block;" placeholder="Group name">
+                  <input type="text" id="groupNameInput" class="form-control form-control-sm d-inline-block w-200" placeholder="Group name">
                   <button class="btn btn-outline-primary btn-sm" id="joinGroupBtn">Join/Create Group</button>
-                  <select id="currentGroupSelect" class="form-select form-select-sm d-inline-block" style="width: 200px; display: inline-block;"></select>
+                  <select id="currentGroupSelect" class="form-select form-select-sm d-inline-block w-200"></select>
                   <button class="btn btn-outline-danger btn-sm" id="leaveGroupBtn">Leave Group</button>
                 </div>
-                <div id="groupChatContainer" style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fff;"></div>
+                <div id="groupChatContainer" class="chat-container"></div>
                 <div class="input-group mt-3">
                   <input type="text" class="form-control" id="groupChatInput" placeholder="Type a group message...">
                   <button class="btn btn-primary" id="groupSendBtn">Send</button>
@@ -2893,7 +2978,7 @@
                 (msg.sender === window.currentUsername && msg.recipient === currentRecipient)) {
                 const div = document.createElement('div');
                 div.className = 'mb-2';
-                div.innerHTML = `<strong>${msg.sender}:</strong> <span>${msg.text}</span> <span class="text-muted" style="font-size:0.8em;">${new Date(msg.timestamp).toLocaleTimeString()}</span>`;
+                div.innerHTML = `<strong>${msg.sender}:</strong> <span>${msg.text}</span> <span class="text-muted time-text">${new Date(msg.timestamp).toLocaleTimeString()}</span>`;
                 chatContainer.appendChild(div);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }
@@ -3525,8 +3610,7 @@
             }
             
             const notificationHtml = `
-                <div id="${notificationId}" class="alert alert-info alert-dismissible fade show position-fixed" 
-                     style="top: 20px; right: 20px; z-index: 9999; max-width: 400px;">
+                <div id="${notificationId}" class="alert alert-info alert-dismissible fade show global-config-notification">
                     <div class="d-flex align-items-center">
                         <i class="fas fa-sync-alt me-2"></i>
                         <div>
@@ -4714,5 +4798,24 @@
     }
     </script>
     <script src="{{ url_for('static', filename='js/countup-site.js') }}"></script>
+        <script>
+        // Mobile viewport-height helper: write a --vh CSS variable that equals 1% of
+        // the current window.innerHeight. This avoids layout clipping caused by
+        // mobile browsers' dynamic UI (address bars/navigation bars). We call this
+        // on load and resize/orientation changes so 100 * var(--vh) matches the
+        // visible viewport.
+        (function(){
+            function setVh(){
+                try{
+                    var vh = (window.innerHeight || document.documentElement.clientHeight) * 0.01;
+                    document.documentElement.style.setProperty('--vh', vh + 'px');
+                }catch(e){}
+            }
+            setVh();
+            window.addEventListener('resize', setVh, { passive: true });
+            window.addEventListener('orientationchange', setVh, { passive: true });
+            document.addEventListener('visibilitychange', function(){ if(!document.hidden) setVh(); });
+        })();
+        </script>
 </body>
 </html>

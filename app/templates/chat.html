@@ -17,7 +17,7 @@
         </div>
     </div>
 
-    <ul class="nav nav-tabs" id="chatTab" role="tablist" style="margin-bottom: 1rem;">
+    <ul class="nav nav-tabs mb-3" id="chatTab" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="dm-tab" data-bs-toggle="tab" data-bs-target="#dmTabPane" type="button" role="tab">DMs</button>
         </li>
@@ -50,7 +50,7 @@
                         <div class="card-header">Messages</div>
                         <div class="card-body d-flex flex-column p-3">
                             <!-- Use a fixed height so the input remains visible and the messages area scrolls -->
-                            <div id="dmChatContainer" class="flex-grow-1 overflow-auto bg-light p-2 rounded chat-messages-fixed-height" style="min-height: 300px;" {% if last_read_message_id is defined and last_read_message_id %}data-last-read="{{ last_read_message_id }}"{% endif %}></div>
+                            <div id="dmChatContainer" class="flex-grow-1 overflow-auto bg-light p-2 rounded chat-messages-fixed-height u-min-h-300" {% if last_read_message_id is defined and last_read_message_id %}data-last-read="{{ last_read_message_id }}"{% endif %}></div>
                             <div class="mt-3">
                                 <div class="input-group">
                                     <input type="text" class="form-control" id="dmChatInput" placeholder="Type a message...">
@@ -92,7 +92,7 @@
                             <hr />
                             <div class="mt-2">
                                 <div class="fw-bold mb-1">Chats I'm in</div>
-                                <ul id="myChatsList" class="list-unstyled small text-muted" style="max-height:200px; overflow:auto;"></ul>
+                                <ul id="myChatsList" class="list-unstyled small text-muted u-scrollable-200 notifications-list"></ul>
                             </div>
                         </div>
                     </div>
@@ -102,7 +102,7 @@
                     <div class="card h-100">
                         <div class="card-header">Group Messages</div>
                         <div class="card-body d-flex flex-column p-3">
-                            <div id="groupChatContainer" class="flex-grow-1 overflow-auto bg-light p-2 rounded" style="min-height: 300px;"></div>
+                            <div id="groupChatContainer" class="flex-grow-1 overflow-auto bg-light p-2 rounded u-min-h-300"></div>
                             <div class="mt-3">
                                 <div class="input-group">
                                     <input type="text" class="form-control" id="groupChatInput" placeholder="Type a group message...">
@@ -293,13 +293,13 @@
             .dm-user-meta { color: #6c757d; }
             .dm-user-desc { color: #6c757d; }
         }
-        /* Global: non-rounded (sharp corners) */
-        .card { border-radius: 0; overflow: visible; }
-        .card-header { border-radius: 0; }
-        .chat-message { border-radius: 0; padding: 10px; }
-        .chat-messages-fixed-height { border-radius: 0; }
-        .form-control, .input-group .form-control { border-radius: 0; }
-        .btn { border-radius: 0; }
+        /* Rely on global modern theme for rounded UI - don't override card radii here */
+        .card { border-radius: var(--card-radius, 12px); overflow: visible; }
+        .card-header { border-radius: var(--card-radius, 12px); }
+        .chat-message { border-radius: 8px; padding: 10px; }
+        .chat-messages-fixed-height { border-radius: var(--card-radius, 12px); }
+        .form-control, .input-group .form-control { border-radius: 8px; }
+        .btn { border-radius: 8px; }
     `;
     document.head.appendChild(style);
     // Add a small stylesheet for fixed-height chat containers

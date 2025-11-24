@@ -70,8 +70,8 @@ body.sidebar-collapsed main.container { margin-left: 92px; }
 .form-control, .form-select { border-radius: 8px; }
 
 /* Cards & modals */
-.card { border-radius: var(--ui-radius); box-shadow: 0 6px 22px rgba(16,24,40,0.04); }
-.modal-content { border-radius: 12px; }
+.card { border-radius: var(--card-radius, var(--border-radius)); box-shadow: 0 6px 22px rgba(16,24,40,0.04); }
+.modal-content { border-radius: var(--card-radius, 12px); }
 
 /* Card header styles */
 .card-header { background: transparent; border-bottom: 1px solid var(--ui-border); padding: 0.85rem 1rem; font-weight: 600; }
@@ -135,8 +135,8 @@ body.dark-mode .table thead th { background: rgba(255,255,255,0.03); }
 }
 
 /* Toasts & Alerts */
-.toast { border-radius: 12px; box-shadow: 0 10px 30px rgba(2,6,23,0.08); }
-.alert { border-radius: 12px; }
+.toast { border-radius: var(--card-radius, 12px); box-shadow: 0 10px 30px rgba(2,6,23,0.08); }
+.alert { border-radius: var(--card-radius, 12px); }
 
 /* Chart container responsiveness */
 .chart-container { width: 100%; height: auto; }
@@ -497,7 +497,7 @@ a { color: var(--ui-accent); }
 a:hover { text-decoration: underline; }
 
 /* Ensure modals look modern */
-.modal-content { border-radius: 12px; overflow: hidden; }
+.modal-content { border-radius: var(--card-radius, 12px); overflow: hidden; }
 
 /* Improve file upload previews and badges */
 .file-preview { border:1px dashed var(--ui-border); padding: 8px; border-radius: 10px; }

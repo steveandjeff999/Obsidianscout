@@ -158,12 +158,20 @@
             <div class="chat-input-container">
                 <input type="text" class="form-control" id="questionInput" 
                        placeholder="Ask a question about teams, matches, or event data..." autocomplete="off">
+                {% if modern_ui %}
+                    {{ ui_button.button('Ask', variant='primary', size='md', attrs='id="askButton"') }}
+                {% else %}
                 <button class="btn btn-primary" id="askButton">Ask</button>
+                {% endif %}
             </div>
             <div class="d-flex justify-content-end mt-2">
+                {% if modern_ui %}
+                    {{ ui_button.button('Clear Chat', variant='ghost', size='sm', icon='fas fa-trash-alt', attrs='id="clearContextButton"') }}
+                {% else %}
                 <button class="btn btn-outline-secondary btn-sm" id="clearContextButton">
                     <i class="fas fa-trash-alt me-1"></i> Clear Chat
                 </button>
+                {% endif %}
             </div>
         </div>
     </div>

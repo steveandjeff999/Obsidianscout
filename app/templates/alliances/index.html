@@ -8,7 +8,7 @@
 {% block content %}
 <div class="row mb-4">
     <!-- Hidden holder for server-side values to avoid embedding Jinja directly in JS -->
-    <div id="current-event-id-holder" data-event-id="{{ current_event.id }}" style="display:none"></div>
+    <div id="current-event-id-holder" data-event-id="{{ current_event.id }}" class="d-none"></div>
     <div class="col-md-8">
         <div class="card">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">

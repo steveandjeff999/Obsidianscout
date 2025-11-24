@@ -7,7 +7,7 @@
     --bg: #070709;
     --surface: rgba(18,18,20,0.9);
     --card-bg: rgba(20,20,22,0.78);
-    --glass-bg: rgba(22,22,24,0.54);
+    --glass-bg: rgba(22,22,24,0.70);
     --glass-border: rgba(255,255,255,0.04);
     --muted: #9aa0a6;
     --text: #e6e6e6;
@@ -40,7 +40,7 @@ html.dark-mode, body.dark-mode {
 
 /* Cards: softer rounded corners, subtle elevation */
 .card, .stat-card, .dashboard-card {
-    border-radius: 12px !important;
+    border-radius: var(--card-radius, 12px) !important;
     background: var(--card-bg) !important;
     box-shadow: var(--soft-shadow) !important;
     border: 1px solid var(--glass-border) !important;
@@ -102,7 +102,7 @@ html:not(.dark-mode) #darkModeButton:focus {
     background: rgba(255,255,255,0.02) !important;
     border: 1px solid rgba(255,255,255,0.04) !important;
     color: var(--text) !important;
-    border-radius: 10px !important;
+    border-radius: var(--card-radius, 10px) !important;
     padding: 10px 12px !important;
 }
 
@@ -157,10 +157,10 @@ html:not(.dark-mode) #darkModeButton:focus {
 }
 
 /* Small card detail: subtle divider for list-group inside cards */
-.card .list-group-item { border-radius: 8px; margin: 6px 0; border: 1px solid rgba(255,255,255,0.03) !important; }
+.card .list-group-item { border-radius: var(--card-radius, 8px); margin: 6px 0; border: 1px solid rgba(255,255,255,0.03) !important; }
 
 /* Make modal footers slightly separated with glass line */
-.modal-content { border-radius: 12px; }
+.modal-content { border-radius: var(--card-radius, 12px); }
 .modal-footer { border-top: 1px solid rgba(255,255,255,0.03); }
 
 /* Keep charts with higher contrast axes/labels */
@@ -214,9 +214,27 @@ body.sidebar-collapsed #appSidebar { width: 72px !important; min-width: 72px !im
 #appSidebar .brand-sub { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
 
 /* Close button styling */
-.btn-close-sidebar { padding: 6px 8px; border-radius: 10px; color: var(--muted); border: 1px solid rgba(255,255,255,0.03); background: rgba(255,255,255,0.01); }
+.btn-close-sidebar { padding: 6px 8px; border-radius: 50%; color: var(--muted); border: 1px solid rgba(255,255,255,0.03); background: rgba(255,255,255,0.01); }
 .btn-close-sidebar i { color: var(--muted); }
 .btn-close-sidebar:hover { background: rgba(255,255,255,0.03); color: var(--text); }
+
+/* Light mode: integrate close button with sidebar's glass surface */
+body:not(.dark-mode) .btn-close-sidebar,
+html:not(.dark-mode) .btn-close-sidebar {
+    color: rgba(0,0,0,0.55);
+    background: rgba(0,0,0,0.02);
+    border: 1px solid rgba(0,0,0,0.04);
+    box-shadow: none;
+}
+body:not(.dark-mode) .btn-close-sidebar i,
+html:not(.dark-mode) .btn-close-sidebar i { color: rgba(0,0,0,0.6); }
+body:not(.dark-mode) .btn-close-sidebar:hover,
+        border-radius: var(--card-radius, 12px) !important;
+
+/* Make the close button more compact and aligned with brand tile on narrow screens */
+.btn-close-sidebar { padding: 6px 7px; height: 36px; width: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+/* subtle ring to help it sit beside brand tile */
+.btn-close-sidebar { box-shadow: 0 6px 18px rgba(2,6,23,0.04), inset 0 1px 0 rgba(255,255,255,0.03); }
 
 /* Focus state for keyboard users */
 .brand-logo:focus { box-shadow: 0 10px 24px rgba(var(--accent-rgb),0.16), 0 0 0 4px rgba(var(--accent-rgb),0.06); outline: none; }
@@ -229,19 +247,28 @@ body:not(.dark-mode) #appSidebar .brand-logo,
 html:not(.dark-mode) #appSidebar .brand-logo {
     background: linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%); /* white -> very light grey */
     background-color: #ffffff; /* fallback */
+    .card .list-group-item { border-radius: var(--card-radius, 8px); margin: 6px 0; border: 1px solid rgba(255,255,255,0.03) !important; }
     border: 1px solid rgba(0,0,0,0.06);
     box-shadow: 0 6px 14px rgba(2,6,23,0.04), inset 0 1px 0 rgba(255,255,255,0.6);
 }
 
 body:not(.dark-mode) #appSidebar .brand-logo .brand-icon,
 html:not(.dark-mode) #appSidebar .brand-logo .brand-icon {
-    color: #1f2937 !important; /* dark slate for icon in light tile */
+        border-radius: var(--card-radius, 10px) !important;
 }
 
 /* Light-mode focus state: subtle darker ring */
 body:not(.dark-mode) #appSidebar .brand-logo:focus,
 html:not(.dark-mode) #appSidebar .brand-logo:focus {
     box-shadow: 0 10px 24px rgba(0,0,0,0.06), 0 0 0 4px rgba(0,0,0,0.04); outline: none;
+}
+
+/* When sidebar is collapsed (desktop), tone down brand logo shadow and reduce size for a compact look */
+@media (min-width: 992px) {
+    body.with-sidebar.sidebar-collapsed #appSidebar .brand-logo,
+    html.with-sidebar.sidebar-collapsed #appSidebar .brand-logo {
+        width: 44px; height: 44px; box-shadow: none !important; border: 1px solid rgba(255,255,255,0.03); }
+    body.with-sidebar.sidebar-collapsed:not(.dark-mode) #appSidebar .brand-logo { border: 1px solid rgba(0,0,0,0.04); }
 }
 
 /* ---------------------------------------------------------------------------

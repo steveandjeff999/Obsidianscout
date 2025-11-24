@@ -17,7 +17,7 @@
                 <div class="row g-3">
                     <!-- Light Theme -->
                     <div class="col-6">
-                        <div class="card theme-preview {% if current_theme_id == 'light' %}border-primary{% endif %}" style="cursor: pointer;" onclick="applyTheme('light')">
+                        <div class="card theme-preview {% if current_theme_id == 'light' %}border-primary{% endif %} clickable" onclick="applyTheme('light')">
                             <div class="card-body p-3">
                                 <div class="theme-preview-colors mb-2">
                                     <div class="row g-1">
@@ -42,7 +42,7 @@
                     
                     <!-- Dark Theme -->
                     <div class="col-6">
-                        <div class="card theme-preview {% if current_theme_id == 'dark' %}border-primary{% endif %}" style="cursor: pointer;" onclick="applyTheme('dark')">
+                        <div class="card theme-preview {% if current_theme_id == 'dark' %}border-primary{% endif %} clickable" onclick="applyTheme('dark')">
                             <div class="card-body p-3">
                                 <div class="theme-preview-colors mb-2">
                                     <div class="row g-1">

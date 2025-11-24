@@ -57,10 +57,73 @@ Authenticate a user and receive a JWT token.
 - `401` - Invalid credentials
 - `401` - Account inactive
 
+
+### User Profile
+
+Retrieve the authenticated mobile user's profile information including the profile picture path and a token-protected URL suitable for mobile clients to fetch.
+Note: the profile picture URL returns a protected resource and requires the mobile JWT used to fetch the profile — include the `Authorization: Bearer <token>` header when requesting the picture.
+
+**Endpoint:** `GET /api/mobile/profiles/me`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "user": {
+    "id": 42,
+    "username": "scout123",
+    "team_number": 5454,
+    "profile_picture": "img/avatars/scout123.png",
+    "profile_picture_url": "https://your-server.com/api/mobile/profiles/me/picture"  # protected; requires Authorization: Bearer <token>
+  }
+}
+```
+
+Errors:
+- `401` - `AUTH_REQUIRED` (missing/invalid token)
+- `500` - `PROFILE_ERROR` (internal server error)
+
 **Error Codes:**
 - `MISSING_CREDENTIALS`
 - `INVALID_CREDENTIALS`
 - `ACCOUNT_INACTIVE`
+
+### Register (Create Account)
+
+Create a new user account scoped to a scouting team. Teams may have account creation locked by an administrator; this endpoint will return `ACCOUNT_CREATION_LOCKED` in that case.
+
+**Endpoint:** `POST /api/mobile/auth/register`
+
+**Request Body:**
+```json
+{
+  "username": "scout_new",
+  "password": "securePass1",
+  "confirm_password": "securePass1",  // optional, will be validated if provided
+  "team_number": 5454,
+  "email": "scout@example.com"        // optional
+}
+```
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "token": "eyJ...",
+  "user": { "id": 99, "username": "scout_new", "team_number": 5454, "roles": ["scout"] },
+  "expires_at": "2025-01-01T00:00:00Z"
+}
+```
+
+**Error Responses:**
+- `400` - `MISSING_FIELDS` or `PASSWORD_MISMATCH` or `INVALID_TEAM_NUMBER`
+- `403` - `ACCOUNT_CREATION_LOCKED`
+- `409` - `USERNAME_EXISTS` or `EMAIL_EXISTS`
 
 ### Refresh Token
 
@@ -906,6 +969,34 @@ Content-Type: application/json
 }
 ```
 
+Optional fields supported by the server to help associate and deduplicate uploads:
+
+- `event_id` (integer): associate this pit scouting entry with a specific Event (database id).
+- `event_code` (string): alternative to `event_id`, resolved to an Event for the current scouting team (case-insensitive).
+- `local_id` (string, UUID): a client-generated UUID used to deduplicate retries. If omitted the server will generate one.
+- `device_id` (string): optional device identifier that created the entry.
+
+Example including an event id and local_id:
+
+```json
+{
+  "team_id": 73,
+  "event_id": 5,
+  "local_id": "550e8400-e29b-41d4-a716-446655440000",
+  "device_id": "tablet-a-1",
+  "data": {
+    "team_name": "Team 73",
+    "drive_team_experience": "experienced",
+    "programming_language": "python",
+    "drivetrain_type": "west_coast"
+  }
+}
+```
+
+Notes:
+- If you want this entry to appear under a specific event in the web UI `/pit-scouting/list-dynamic`, include `event_id` (or `event_code`) in the upload request. The web listing shows entries associated with the current event or entries without an event_id (local-only data).
+- Always include a `local_id` on the client when creating entries so retries don't create duplicates; the server will accept `local_id` and will return an existing record if it already exists for your scouting team.
+
 **Success Response (201):**
 ```json
 {
@@ -957,6 +1048,41 @@ Content-Type: application/json
 Notes:
 - The server will persist per-team configuration when the authenticated admin belongs to a scouting team. If the caller is a global admin without a scouting team, the configuration is saved to the global `config/game_config.json` file.
 - The server performs minimal validation; consider validating keys client-side before sending. The web UI includes additional form-level validation.
+
+### Get Pit Configuration
+
+Retrieve current pit configuration for mobile app. This endpoint returns the full `pit_config.json` used by the web UI for the scouting team (includes sections, elements, and any options lists).
+
+This endpoint preferentially returns the saved per-team `pit_config.json` file located at `instance/configs/<scouting_team_number>/pit_config.json` if it exists. If that file isn't present or is invalid, the server falls back to the standard loader which may return defaults or merged configs.
+
+**Endpoint:** `GET /api/mobile/config/pit`
+
+### Set / Update Pit Configuration
+
+Admins can update the pit configuration for their team via the Mobile API. Only users with the `admin` or `superadmin` role may perform this action. Note: pit config saves are team-scoped; global saves are not supported by the server at this time.
+
+**Endpoint:** `POST /api/mobile/config/pit` or `PUT /api/mobile/config/pit`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request body:** Raw JSON representing the full pit configuration (same shape returned by GET `/api/mobile/config/pit`).
+
+**Success Response (200):**
+```json
+{
+  "success": true
+}
+```
+
+**Errors:**
+- 401 / AUTH_REQUIRED: Missing or invalid token
+- 403 / FORBIDDEN: Caller lacks admin permissions
+- 400 / MISSING_BODY: Missing or invalid JSON payload
+- 500 / SAVE_FAILED: Server failed to persist the configuration
 
 **Headers:**
 ```

@@ -2,7 +2,7 @@
 Mobile App API
 Comprehensive REST API for mobile applications with authentication, data access, and offline sync
 """
-from flask import Blueprint, request, jsonify, current_app, g
+from flask import Blueprint, request, jsonify, current_app, g, url_for, send_file
 from flask_login import login_user, logout_user, current_user
 from datetime import datetime, timezone, timedelta
 import os
@@ -497,6 +497,191 @@ def mobile_verify_token():
             'roles': user.get_role_names()
         }
     }), 200
+
+
+@mobile_api.route('/profiles/me', methods=['GET'])
+@token_required
+def mobile_get_my_profile():
+    """
+    Return basic profile information for the authenticated mobile user.
+
+    Response:
+    {
+      "success": true,
+      "user": {
+         "id": 1,
+         "username": "bob",
+         "team_number": 5454,
+         "profile_picture": "img/avatars/bob.png",
+             "profile_picture_url": "https://server.example/api/mobile/profiles/me/picture"  # protected; requires Authorization: Bearer <token>
+      }
+    }
+    """
+    try:
+        user = request.mobile_user
+        if not user:
+            return jsonify({'success': False, 'error': 'Authentication required', 'error_code': 'AUTH_REQUIRED'}), 401
+
+        # Use the stored profile path but provide a token-protected URL
+        # so mobile clients fetch the profile picture via the mobile API
+        # rather than the public static path. This keeps profile images
+        # accessible only to authenticated mobile clients.
+        pic_path = user.profile_picture or 'img/avatars/default.png'
+        try:
+            pic_url = url_for('mobile_api.mobile_get_my_profile_picture', _external=True)
+        except Exception:
+            pic_url = None
+
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'team_number': user.scouting_team_number,
+                'profile_picture': pic_path,
+                'profile_picture_url': pic_url
+            }
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"mobile_get_my_profile error: {str(e)}")
+        return jsonify({'success': False, 'error': 'Failed to retrieve profile', 'error_code': 'PROFILE_ERROR'}), 500
+
+
+@mobile_api.route('/profiles/me/picture', methods=['GET'])
+@token_required
+def mobile_get_my_profile_picture():
+    """Return the authenticated user's profile picture file (token-protected).
+
+    This endpoint only serves the profile image for the authenticated token
+    owner. It prevents exposing the public static path in mobile responses.
+    """
+    try:
+        user = request.mobile_user
+        if not user:
+            return jsonify({'success': False, 'error': 'Authentication required', 'error_code': 'AUTH_REQUIRED'}), 401
+
+        # Determine file path relative to the app's static folder
+        pic_rel = user.profile_picture or 'img/avatars/default.png'
+        static_dir = current_app.static_folder
+        # Resolve and sanitize path to prevent traversal
+        file_path = os.path.normpath(os.path.join(static_dir, pic_rel.lstrip('/\\')))
+
+        if not file_path.startswith(os.path.normpath(static_dir)):
+            return jsonify({'success': False, 'error': 'Invalid profile image path', 'error_code': 'INVALID_PICTURE_PATH'}), 400
+
+        if not os.path.exists(file_path):
+            return jsonify({'success': False, 'error': 'Profile image not found', 'error_code': 'PICTURE_NOT_FOUND'}), 404
+
+        # send_file will set a sensible Content-Type header
+        return send_file(file_path)
+
+    except Exception as e:
+        current_app.logger.exception(f"mobile_get_my_profile_picture error: {str(e)}")
+        return jsonify({'success': False, 'error': 'Failed to retrieve profile image', 'error_code': 'PICTURE_ERROR'}), 500
+
+
+@mobile_api.route('/auth/register', methods=['POST'])
+def mobile_register():
+    """
+    Mobile account creation endpoint.
+
+    Request body:
+    {
+        "username": "user123",
+        "password": "password123",
+        "confirm_password": "password123",  # optional
+        "team_number": 5454,
+        "email": "user@example.com"         # optional
+    }
+
+    Response (201):
+    {
+        "success": true,
+        "token": "eyJ...",             # token for immediate use
+        "user": { ... },
+        "expires_at": "2025-01-01T00:00:00Z"
+    }
+    """
+    try:
+        data = request.get_json() or {}
+
+        # Required fields
+        username = data.get('username')
+        password = data.get('password')
+        team_number = data.get('team_number')
+
+        if not username or not password or team_number is None:
+            return jsonify({'success': False, 'error': 'username, password, and team_number are required', 'error_code': 'MISSING_FIELDS'}), 400
+
+        # Optional confirmation check
+        confirm = data.get('confirm_password')
+        if confirm is not None and confirm != password:
+            return jsonify({'success': False, 'error': 'Passwords do not match', 'error_code': 'PASSWORD_MISMATCH'}), 400
+
+        # Normalize team number
+        team_number = safe_int_team_number(team_number)
+        if team_number is None:
+            return jsonify({'success': False, 'error': 'Invalid team_number', 'error_code': 'INVALID_TEAM_NUMBER'}), 400
+
+        # Respect per-team account creation lock
+        from app.models import ScoutingTeamSettings
+        team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=team_number).first()
+        if team_settings and team_settings.account_creation_locked:
+            return jsonify({'success': False, 'error': 'Account creation is locked for this team', 'error_code': 'ACCOUNT_CREATION_LOCKED'}), 403
+
+        # Enforce unique username scoped to scouting team
+        existing = User.query.filter_by(username=username, scouting_team_number=team_number).first()
+        if existing:
+            return jsonify({'success': False, 'error': 'Username already exists for that team', 'error_code': 'USERNAME_EXISTS'}), 409
+
+        # Normalize email
+        email = data.get('email')
+        if email == '':
+            email = None
+        if email and User.query.filter_by(email=email).first():
+            return jsonify({'success': False, 'error': 'Email already in use', 'error_code': 'EMAIL_EXISTS'}), 409
+
+        # Create the new user
+        new_user = User(username=username, email=email, scouting_team_number=team_number)
+        new_user.set_password(password)
+        db.session.add(new_user)
+        db.session.commit()
+
+        # If first user for this team -> grant admin role
+        from app.models import Role
+        try:
+            count = User.query.filter_by(scouting_team_number=team_number).count()
+            if count == 1:
+                admin_role = Role.query.filter_by(name='admin').first()
+                if admin_role:
+                    new_user.roles.append(admin_role)
+                    db.session.commit()
+        except Exception:
+            # Non-fatal if role assignment fails
+            current_app.logger.exception('Failed to assign admin role during mobile register')
+
+        # Issue token for immediate use
+        token = create_token(new_user.id, new_user.username, new_user.scouting_team_number)
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
+
+        return jsonify({
+            'success': True,
+            'token': token,
+            'user': {
+                'id': new_user.id,
+                'username': new_user.username,
+                'team_number': new_user.scouting_team_number,
+                'roles': new_user.get_role_names(),
+                'profile_picture': new_user.profile_picture
+            },
+            'expires_at': expires_at.isoformat()
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Mobile register error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Failed to create account', 'error_code': 'REGISTER_ERROR'}), 500
 
 
 # ============================================================================
@@ -1311,17 +1496,66 @@ def submit_pit_scouting_data():
                 'error_code': 'TEAM_NOT_FOUND'
             }), 404
         
-        # Create pit scouting entry
+        # Resolve local_id (clients should send a UUID to track local copies).
+        # If missing, generate one server-side to satisfy DB NOT NULL unique constraint.
+        import uuid
+        local_id = None
+        try:
+            local_id = data.get('local_id') if isinstance(data, dict) else None
+        except Exception:
+            local_id = None
+
+        if not local_id:
+            local_id = str(uuid.uuid4())
+
+        # If a record with the same local_id already exists for this scouting
+        # team we should return it instead of attempting a duplicate insert.
+        existing = PitScoutingData.query.filter_by(local_id=local_id, scouting_team_number=team_number).first()
+        if existing:
+            return jsonify({'success': True, 'pit_scouting_id': existing.id, 'message': 'Already exists'}), 200
+
+        # Accept optional event context for this submission. Mobile clients
+        # can pass either `event_id` (database id) or `event_code` (string)
+        # when they want the uploaded pit data associated with an event.
+        event_id = None
+        try:
+            if isinstance(data, dict):
+                # numeric id preferred
+                if data.get('event_id') is not None:
+                    try:
+                        candidate = int(data.get('event_id'))
+                        evt = Event.query.filter_by(id=candidate, scouting_team_number=team_number).first()
+                        if evt:
+                            event_id = evt.id
+                    except Exception:
+                        event_id = None
+
+                # allow event code lookup as fallback
+                if event_id is None and data.get('event_code'):
+                    code = str(data.get('event_code')).upper()
+                    evt = Event.query.filter_by(code=code, scouting_team_number=team_number).first()
+                    if evt:
+                        event_id = evt.id
+        except Exception:
+            event_id = None
         # PitScoutingData also exposes scout_name and scout_id columns. Avoid
         # assigning to the read-only `scout` property.
         pit_data = PitScoutingData(
             team_id=data['team_id'],
             data=data['data'],
+            event_id=event_id,
+            local_id=local_id,
             scout_name=user.username,
             scout_id=user.id,
             scouting_team_number=team_number,
             timestamp=datetime.now(timezone.utc)
         )
+        # device id if provided
+        try:
+            if isinstance(data, dict) and data.get('device_id'):
+                pit_data.device_id = data.get('device_id')
+        except Exception:
+            pass
         
         db.session.add(pit_data)
         db.session.commit()
@@ -1499,6 +1733,114 @@ def set_game_config():
 
     except Exception as e:
         current_app.logger.error(f"Set game config error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Internal server error', 'error_code': 'INTERNAL_ERROR'}), 500
+
+
+@mobile_api.route('/config/pit', methods=['GET'])
+@token_required
+def get_pit_config():
+    """
+    Return the pit configuration JSON for the mobile client's scouting team.
+
+    Mirrors GET /api/mobile/config/game but returns the team's `pit_config.json`.
+    Response:
+    {
+        "success": True,
+        "config": { ... }
+    }
+    """
+    try:
+        requested_team = request.args.get('team') if request.args.get('team') not in (None, '') else None
+        team_number = request.mobile_team_number if request.mobile_team_number else None
+        if requested_team is not None:
+            try:
+                team_number = int(requested_team)
+            except Exception:
+                # ignore malformed team param
+                pass
+
+        # Prefer explicit per-team instance file if it exists
+        from app.utils.config_manager import load_pit_config, merge_pit_configs
+        pit_config = None
+        try:
+            if team_number is not None:
+                base_dir = os.getcwd()
+                team_config_path = os.path.join(base_dir, 'instance', 'configs', str(team_number), 'pit_config.json')
+                current_app.logger.debug(f"mobile_api.get_pit_config: looking for team config at {team_config_path}")
+                if os.path.exists(team_config_path):
+                    with open(team_config_path, 'r', encoding='utf-8') as f:
+                        try:
+                            pit_config = json.load(f)
+                        except Exception:
+                            current_app.logger.warning(f"Invalid JSON in team pit_config for team {team_number}")
+        except Exception:
+            pit_config = None
+
+        raw_requested = str(request.args.get('raw', '')).lower() in ('1', 'true', 'yes')
+
+        if pit_config is None:
+            current_app.logger.debug(f"mobile_api.get_pit_config: falling back to load_pit_config for team {team_number}")
+            pit_config = load_pit_config(team_number=team_number)
+
+        # When serving to mobile clients we generally want select/multiselect option
+        # lists preserved. If the team's saved file omitted `options` then merge
+        # the team config with the default `config/pit_config.json` so option
+        # lists are available. If the caller requested raw JSON via `?raw=true`
+        # return the file exactly as saved.
+        if not raw_requested:
+            try:
+                default_cfg = load_pit_config(team_number=None)
+                merged = merge_pit_configs(default_cfg or {}, pit_config or {})
+                return jsonify({'success': True, 'config': merged}), 200
+            except Exception:
+                # Fall back to returning whatever we read if merging fails
+                return jsonify({'success': True, 'config': pit_config}), 200
+
+        return jsonify({'success': True, 'config': pit_config}), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Get pit config error: {str(e)}")
+        return jsonify({'success': False, 'error': 'Failed to retrieve pit configuration', 'error_code': 'CONFIG_ERROR'}), 500
+
+
+@mobile_api.route('/config/pit', methods=['POST', 'PUT'])
+@token_required
+def set_pit_config():
+    """
+    Set or update the pit configuration for the mobile client's scouting team.
+
+    Requires admin/superadmin roles. Request body must be a JSON object representing
+    the pit configuration (same shape as config/pit_config.json).
+    """
+    try:
+        user = getattr(request, 'mobile_user', None)
+        if not user:
+            return jsonify({'success': False, 'error': 'Authentication required', 'error_code': 'AUTH_REQUIRED'}), 401
+
+        # Require admin or superadmin role to modify config
+        if not (user.has_role('admin') or user.has_role('superadmin')):
+            return jsonify({'success': False, 'error': 'Forbidden', 'error_code': 'FORBIDDEN'}), 403
+
+        # Ensure flask-login current_user is set so save_pit_config can infer team
+        try:
+            login_user(user, remember=False, force=True)
+        except Exception:
+            pass
+
+        data = request.get_json()
+        if not data or not isinstance(data, dict):
+            return jsonify({'success': False, 'error': 'Missing or invalid JSON body', 'error_code': 'MISSING_BODY'}), 400
+
+        from app.utils.config_manager import save_pit_config
+
+        saved = save_pit_config(data)
+        if saved:
+            return jsonify({'success': True}), 200
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save configuration', 'error_code': 'SAVE_FAILED'}), 500
+
+    except Exception as e:
+        current_app.logger.error(f"Set pit config error: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'success': False, 'error': 'Internal server error', 'error_code': 'INTERNAL_ERROR'}), 500
 
 

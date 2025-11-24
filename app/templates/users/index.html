@@ -9,7 +9,7 @@
       <a href="{{ url_for('main.user_profile', user_id=user.id) }}" class="text-decoration-none text-reset">
       <div class="card h-100 shadow-sm">
         <div class="card-body d-flex align-items-center">
-          <img src="{{ url_for('static', filename=user.profile_picture or 'img/avatars/default.png') }}" class="rounded-circle me-3" alt="Profile" width="64" height="64" style="object-fit:cover;">
+          <img src="{{ url_for('static', filename=user.profile_picture or 'img/avatars/default.png') }}" class="rounded-circle me-3 img-fit-cover" alt="Profile" width="64" height="64">
           <div>
             <h5 class="card-title mb-1">{{ user.username }}</h5>
             {% if user.email %}

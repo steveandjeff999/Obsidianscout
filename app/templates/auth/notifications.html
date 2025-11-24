@@ -32,7 +32,7 @@
           <div class="form-text">Start typing a username to see suggestions.</div>
         </div>
         <div>
-          <button class="btn btn-primary">Create Notification</button>
+          <button type="submit" class="btn btn-primary">Create Notification</button>
         </div>
       </form>
 
@@ -47,11 +47,11 @@
               <div class="small text-muted">Audience: {{ n.audience }} Teams: {{ n.teams|join(', ') }} Users: {{ n.users|join(', ') }}</div>
             </div>
             <div>
-              <form method="POST" action="{{ url_for('auth.delete_notification', notif_id=n.id) }}" style="display:inline">
-                <button class="btn btn-sm btn-danger">Delete</button>
+              <form method="POST" action="{{ url_for('auth.delete_notification', notif_id=n.id) }}" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
               </form>
-              <form method="POST" action="{{ url_for('auth.send_notification_as_email', notif_id=n.id) }}" style="display:inline; margin-left:6px;">
-                <button class="btn btn-sm btn-primary">Send as Email</button>
+              <form method="POST" action="{{ url_for('auth.send_notification_as_email', notif_id=n.id) }}" class="d-inline ms-2">
+                <button type="submit" class="btn btn-sm btn-primary">Send as Email</button>
               </form>
             </div>
           </div>

@@ -14,7 +14,7 @@
 .form-section .form-section-header{margin-bottom:.6rem}
 .form-section .form-section-title{font-weight:600}
 
-.points-display .card{border-radius:12px;transition:transform .18s ease, box-shadow .18s ease}
+.points-display .card{border-radius:var(--card-radius,12px);transition:transform .18s ease, box-shadow .18s ease}
 .points-display .card:hover{transform:translateY(-4px);box-shadow:0 10px 30px rgba(0,0,0,0.06)}
 .points-value{letter-spacing:.6px}
 

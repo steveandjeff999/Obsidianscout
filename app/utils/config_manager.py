@@ -156,13 +156,15 @@ def get_current_pit_config():
         team_number = current_user.scouting_team_number
     return load_pit_config(team_number=team_number)
 
-def save_pit_config(data):
+def save_pit_config(data, team_number=None):
     """Saves the pit scouting configuration for the current user's team."""
-    team_number = None
-    if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and hasattr(current_user, 'scouting_team_number'):
-        team_number = current_user.scouting_team_number
+    # Resolve team_number preference: explicit param, current_user, else fail
+    if team_number is None:
+        if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and hasattr(current_user, 'scouting_team_number'):
+            team_number = current_user.scouting_team_number
 
     if team_number is None:
+        # No team to save to
         return False
 
     base_dir = os.getcwd()
@@ -171,8 +173,9 @@ def save_pit_config(data):
     os.makedirs(team_config_dir, exist_ok=True)
     team_config_path = os.path.join(team_config_dir, config_name)
 
-    with open(team_config_path, 'w') as f:
-        json.dump(data, f, indent=2)
+    # Persist with UTF-8 encoding
+    with open(team_config_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
     return True
 
 def load_config(config_name, team_number=None):
@@ -473,46 +476,106 @@ def get_active_alliance_info():
 def get_available_default_configs():
     """Get list of available default configuration files"""
     default_configs = []
-    default_config_dir = os.path.join(os.getcwd(), 'instance', 'defaultconfigs', 'years')
-    
-    if os.path.exists(default_config_dir):
-        for filename in os.listdir(default_config_dir):
-            if filename.endswith('.json'):
-                filepath = os.path.join(default_config_dir, filename)
-                try:
-                    with open(filepath, 'r') as f:
-                        config_data = json.load(f)
-                    
-                    # Extract year/name from filename and config
-                    year = filename.replace('.json', '')
-                    game_name = config_data.get('game_name', 'Unknown Game')
-                    season = config_data.get('season', year)
-                    
-                    default_configs.append({
-                        'filename': filename,
-                        'year': year,
-                        'game_name': game_name,
-                        'season': season,
-                        'display_name': f"{season} - {game_name}"
-                    })
-                except (json.JSONDecodeError, FileNotFoundError, KeyError):
-                    # Skip invalid config files
-                    continue
-    
-    # Sort by year (descending)
-    default_configs.sort(key=lambda x: x['year'], reverse=True)
+    base_defaults_dir = os.path.join(os.getcwd(), 'config', 'defaults')
+
+    if not os.path.exists(base_defaults_dir):
+        return default_configs
+
+    # Iterate year subfolders
+    for year_dir in sorted(os.listdir(base_defaults_dir), reverse=True):
+        year_path = os.path.join(base_defaults_dir, year_dir)
+        if not os.path.isdir(year_path):
+            continue
+
+        # Possible config files for each year
+        for cfg_name, cfg_type in (('game_config.json', 'game'), ('pit_config.json', 'pit')):
+            file_path = os.path.join(year_path, cfg_name)
+            if not os.path.exists(file_path):
+                continue
+
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except Exception:
+                # skip invalid JSON files
+                continue
+
+            display_name = f"{year_dir} - {cfg_name.replace('_', ' ').replace('.json','').title()}"
+            # If a game config, try to include game_name for more context
+            if cfg_type == 'game':
+                game_name = data.get('game_name') or data.get('game', {}).get('name')
+                if game_name:
+                    display_name = f"{year_dir} - {game_name}"
+
+            default_configs.append({
+                'filename': f"{year_dir}/{cfg_name}",
+                'year': year_dir,
+                'type': cfg_type,
+                'display_name': display_name,
+                'basename': cfg_name,
+            })
+    # Also include legacy defaults if present (older installs used instance/defaultconfigs/years)
+    legacy_dir = os.path.join(os.getcwd(), 'instance', 'defaultconfigs', 'years')
+    if os.path.exists(legacy_dir):
+        import re
+        for filename in sorted(os.listdir(legacy_dir), reverse=True):
+            if not filename.endswith('.json'):
+                continue
+            filepath = os.path.join(legacy_dir, filename)
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except Exception:
+                continue
+
+            # heuristics to detect type
+            if isinstance(data, dict) and 'pit_scouting' in data:
+                cfg_type = 'pit'
+            elif isinstance(data, dict) and ('game_name' in data or 'auto_period' in data):
+                cfg_type = 'game'
+            else:
+                # fallback by filename
+                lower = filename.lower()
+                if 'pit' in lower:
+                    cfg_type = 'pit'
+                else:
+                    cfg_type = 'game'
+
+            m = re.search(r"(20\d{2})", filename)
+            year_val = m.group(1) if m else None
+
+            display_name = filename
+            if year_val and cfg_type == 'game':
+                gname = data.get('game_name') or data.get('game', {}).get('name')
+                display_name = f"{year_val} - {gname or filename}"
+
+            default_configs.append({
+                'filename': filename,
+                'year': year_val,
+                'type': cfg_type,
+                'display_name': display_name,
+                'basename': filename,
+            })
+
     return default_configs
 
 def load_default_config(filename):
     """Load a specific default configuration file"""
-    default_config_dir = os.path.join(os.getcwd(), 'instance', 'defaultconfigs', 'years')
-    filepath = os.path.join(default_config_dir, filename)
-    
+    # Prefer config/defaults/<year>/file
+    base_defaults_dir = os.path.join(os.getcwd(), 'config', 'defaults')
+
+    if '/' in filename or os.path.sep in filename:
+        filepath = os.path.join(base_defaults_dir, *filename.replace('\\', '/').split('/'))
+    else:
+        # Legacy format - look in the older instance/defaultconfigs/years location
+        legacy_dir = os.path.join(os.getcwd(), 'instance', 'defaultconfigs', 'years')
+        filepath = os.path.join(legacy_dir, filename)
+
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Default config file not found: {filename}")
-    
+
     try:
-        with open(filepath, 'r') as f:
+        with open(filepath, 'r', encoding='utf-8') as f:
             return json.load(f)
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON in config file {filename}: {e}")

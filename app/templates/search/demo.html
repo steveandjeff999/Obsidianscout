@@ -96,7 +96,7 @@
                                        placeholder="Type 'team' or '5454' to see suggestions..."
                                        id="demoSearchInput"
                                        autocomplete="off">
-                                <button type="button" class="search-clear-btn-main" id="demoClearBtn" style="display: none;">
+                                <button type="button" class="search-clear-btn-main d-none" id="demoClearBtn">
                                     <i class="fas fa-times"></i>
                                 </button>
                                 <button class="search-submit-btn-main" type="button">
@@ -105,7 +105,7 @@
                             </div>
                         </div>
                     </form>
-                    <div class="enhanced-search-suggestions-main" id="demoSuggestions" style="display: none;"></div>
+                    <div class="enhanced-search-suggestions-main d-none" id="demoSuggestions"></div>
                 </div>
             </div>
             
@@ -217,7 +217,7 @@
                 searchInput.value = '';
                 searchInput.focus();
                 hideSuggestions();
-                this.style.display = 'none';
+                this.classList.add('d-none');
             });
             
             // Input handling
@@ -225,7 +225,7 @@
                 const query = this.value.trim().toLowerCase();
                 
                 // Show/hide clear button
-                clearBtn.style.display = query ? 'flex' : 'none';
+                clearBtn.classList.toggle('d-none', !query);
                 
                 if (query.length < 2) {
                     hideSuggestions();
@@ -308,6 +308,7 @@
                 
                 suggestions.innerHTML = html;
                 suggestions.classList.add('show');
+                suggestions.classList.remove('d-none');
                 selectedIndex = -1;
             }
             
@@ -319,10 +320,12 @@
                     </div>
                 `;
                 suggestions.classList.add('show');
+                suggestions.classList.remove('d-none');
             }
             
             function hideSuggestions() {
                 suggestions.classList.remove('show');
+                suggestions.classList.add('d-none');
                 selectedIndex = -1;
             }
             

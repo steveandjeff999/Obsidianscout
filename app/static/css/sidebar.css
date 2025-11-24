@@ -13,6 +13,26 @@ body.with-sidebar {
 	min-height: 100vh;
 }
 
+/* Collapsed nav-links: show only icon and add subtle circular background for balance */
+body.with-sidebar.sidebar-collapsed .sidebar .nav-link {
+	justify-content: center;
+	padding: 0.4rem 0;
+}
+
+body.with-sidebar.sidebar-collapsed .sidebar .nav-link i {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	margin: 0;
+	background: rgba(255,255,255,0.02);
+}
+
+/* Slightly darker background for collapsed sidebar in light mode */
+body.with-sidebar.sidebar-collapsed:not(.dark-mode) .sidebar .nav-link i { background: rgba(0,0,0,0.03); }
+
 .topbar { background: var(--bs-body-bg); border-bottom: 1px solid var(--sidebar-border); position: sticky; top: 0; z-index: 1030; transition: margin-left .25s ease, width .25s ease; }
 .topbar .dropdown { position: relative; }
 .topbar .dropdown-menu { margin-top: 6px; }
@@ -29,8 +49,21 @@ body.topbar-fixed main { padding-top: 0.75rem; }
 	body.with-sidebar.sidebar-collapsed footer { margin-left: 64px; }
 	body.with-sidebar.sidebar-collapsed .sidebar { width: 64px; }
 	body.with-sidebar.sidebar-collapsed .sidebar .nav-link span { display: none; }
+	/* Prevent text from touching the very edge in collapsed state */
+	body.with-sidebar.sidebar-collapsed .sidebar {
+		overflow-x: hidden; /* crop any accidental overflow */
+		padding-left: .25rem; /* small inset so icons never touch edge */
+		padding-right: .25rem;
+	}
 	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-header .brand-text { display: none; }
-	body.with-sidebar.sidebar-collapsed .sidebar .nav-group-title { display: none; }
+	/* Fade + slide group titles instead of hiding instantly so transitions work */
+	body.with-sidebar.sidebar-collapsed .sidebar .nav-group-title {
+		display: block; /* keep layout consistent */
+		opacity: 0;
+		transform: translateY(6px);
+		pointer-events: none;
+		transition: opacity 220ms ease, transform 220ms ease;
+	}
 	body.with-sidebar.sidebar-collapsed .user-mini { display: none; }
 	/* When collapsed, keep only icons visible in footer buttons and user-mini */
 	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer {
@@ -43,6 +76,39 @@ body.topbar-fixed main { padding-top: 0.75rem; }
 	}
 	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .user-mini .flex-grow-1 { display: none; }
 	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .user-mini i { margin-right: 0; }
+
+/* Center header brand icon in collapsed state and reduce top padding */
+body.with-sidebar.sidebar-collapsed .sidebar .sidebar-header {
+	justify-content: center;
+	padding-top: 0.4rem;
+	padding-bottom: 0.4rem;
+}
+
+/* Desktop: when collapsed, show group titles vertically so labels don't overflow */
+@media (min-width: 992px) {
+	body.with-sidebar.sidebar-collapsed .sidebar .nav-group-title {
+		display: block !important;
+		writing-mode: vertical-rl; /* vertical text along the right-to-left axis */
+			/* When collapsed, make title visible with animation */
+			opacity: 1 !important;
+			transform: none !important;
+			pointer-events: auto !important;
+		text-orientation: upright; /* keep glyphs right-side-up */
+		transform: none; /* don't rotate characters */
+		font-size: 0.72rem;
+		padding: 0.4rem 0.25rem;
+		margin: 0 auto; /* center inside narrow column */
+		width: 1.7rem; /* compact width to avoid overflow */
+		line-height: 1.05;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--bs-secondary);
+		cursor: pointer;
+		text-align: center;
+	}
+	/* Keep the chevron absolutely hidden in collapsed vertical text to avoid overlap */
+	body.with-sidebar.sidebar-collapsed .sidebar .nav-group-title .group-chevron { display: none; }
+}
 
 	/* Footer buttons: hide textual labels but keep icons centered */
 	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .btn {
@@ -60,6 +126,15 @@ body.topbar-fixed main { padding-top: 0.75rem; }
 	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .btn span,
 	body.with-sidebar.sidebar-collapsed .sidebar .sidebar-footer .btn .btn-text { display: none; }
 }
+
+	/* Hide the close button when the sidebar is collapsed (desktop/compressed state) */
+	body.with-sidebar.sidebar-collapsed #sidebarClose,
+	.sidebar-collapsed #sidebarClose {
+		display: none !important;
+	}
+
+	/* Keep nav icons slightly inset from outer edges on collapse */
+	body.with-sidebar.sidebar-collapsed .sidebar .nav-link { padding-left: 0.35rem; padding-right: 0.35rem; }
 .topbar form .search-input-wrapper { min-height: 36px; }
 .topbar .enhanced-search-input { padding-top: 6px !important; padding-bottom: 6px !important; }
 
@@ -258,6 +333,47 @@ body.topbar-fixed main { padding-top: 0.75rem; }
 	}
 }
 
+/* Mobile: make the entire sidebar flow as one scrollable column
+   including the user/footer area. On desktop we use flex-grow to push
+   the footer to the bottom; on narrow viewports that prevents scrolling
+   the footer into view, so disable that behavior here. */
+@media (max-width: 991.98px) {
+	/* Undo bootstrap utility flex-grow when inside the sidebar on mobile */
+	.sidebar .flex-grow-1 { flex: none !important; }
+
+	/* Ensure footer is part of the normal flow and scrolls with the sidebar */
+	.sidebar .sidebar-footer { margin-top: 0 !important; position: static !important; }
+
+	/* Let nav groups grow naturally and not push footer out of the scrollable flow */
+	.sidebar .sidebar-nav { flex: none !important; }
+
+	 /* Make sure the sidebar uses full available height for native scrolling
+		 and add extra bottom padding so the footer isn't clipped on devices
+		 with navigation bars / safe areas. Also ensure inner regions don't
+		 accidentally limit the scroll height. */
+	 /* Use a larger bottom padding to ensure controls are reachable under
+		 browsers with on-screen navigation bars. This value aims to be generous
+		 enough that the footer buttons can scroll fully into view. */
+	 /* Use the CSS variable-based viewport height to work around mobile
+		 browser address bars changing the effective viewport. The JS below
+		 updates --vh to be equal to window.innerHeight * 0.01 so calc(var(--vh)*100)
+		 equals the actual current viewport height. */
+	 .sidebar { height: calc(var(--vh, 1vh) * 100) !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; padding-bottom: calc(3rem + env(safe-area-inset-bottom)); }
+
+	 /* Remove any unwritten max-heights from nav internals and make room
+		 after content so the last element can be scrolled fully into view. */
+	.sidebar .sidebar-nav, .sidebar .nav-group-items { flex: none !important; max-height: none !important; overflow: visible !important; }
+
+	 /* Add a small spacer so the final footer buttons aren't hidden under
+		 overlays or device UI when scrolled to the very bottom. */
+	 /* Large spacer at the very end of the scroll region so the last button
+		 can be scrolled up above device chrome and is never visually clipped. */
+	 .sidebar::after { content: ''; display: block; height: calc(2.4rem + env(safe-area-inset-bottom)); }
+
+	 /* Make sure footer inner padding also creates visual space at the bottom */
+	 .sidebar .sidebar-footer { padding-bottom: calc(1.2rem + env(safe-area-inset-bottom)); }
+}
+
 /* Smooth transitions for main area shifting */
 body.with-sidebar main, body.with-sidebar footer { transition: margin-left .25s ease; }
 
@@ -365,16 +481,17 @@ body.with-sidebar main, body.with-sidebar footer { transition: margin-left .25s 
 }
 
 /* Icon-only centered in collapsed mode */
+.sidebar .nav-link { position: relative; }
 .sidebar .nav-link i { display: inline-block; width: 28px; text-align: center; }
 .sidebar .nav-link span { transition: opacity .12s ease; }
 
 /* Tooltip preview when collapsed: uses data-label attribute (set via JS) */
 .sidebar.sidebar-collapsed .nav-link[data-label]:hover::after {
-		content: attr(data-label);
-		position: fixed;
-		left: calc(var(--sidebar-width) + 12px);
-		top: 50%;
-		transform: translateY(-50%);
+	content: attr(data-label);
+	position: absolute; /* anchor to the hovered link */
+	left: calc(100% + 8px); /* 8px gap to the right of the icon */
+	top: 50%;
+	transform: translateY(-50%);
 		background: rgba(0,0,0,0.85);
 		color: #fff;
 		padding: 6px 10px;

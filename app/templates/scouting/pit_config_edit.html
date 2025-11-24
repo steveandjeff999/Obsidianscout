@@ -32,7 +32,17 @@
             </div>
             <div class="card-body">
                 <form method="POST" id="configForm">
-                    <div class="mb-3">
+                    <div class="mb-3 d-flex justify-content-end">
+                        <label class="me-2 align-self-center mb-0">Target:</label>
+                        <select id="teamSelect" name="team" class="form-select form-select-sm w-auto" aria-label="Target team select">
+                            <option value="">Global</option>
+                            {% if teams %}
+                                {% for t in teams %}
+                                    <option value="{{ t.team_number }}" {% if selected_team and selected_team == t.team_number %}selected{% endif %}>Team {{ t.team_number }}{% if t.team_name %} — {{ t.team_name }}{% endif %}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <label for="config_json" class="form-label">
                                 <strong>Configuration JSON</strong>
@@ -212,21 +222,25 @@ function resetToDefault() {
     }
 }
 
-// Preview form
-function previewForm() {
-    const textarea = document.getElementById('config_json');
-    try {
-        JSON.parse(textarea.value); // Validate JSON first
-        
-        // Store current config in localStorage for preview
-        localStorage.setItem('pit_config_preview', textarea.value);
-        
-        // Open form in new tab
-        window.open('{{ url_for("pit_scouting.form") }}?preview=1', '_blank');
-    } catch (error) {
-        showAlert('Cannot preview: Invalid JSON - ' + error.message, 'danger');
+    // Preview form
+    function previewForm() {
+        const textarea = document.getElementById('config_json');
+        try {
+            JSON.parse(textarea.value); // Validate JSON first
+
+            // Store current config in localStorage for preview
+            localStorage.setItem('pit_config_preview', textarea.value);
+
+            // Open form in new tab (include selected team if present)
+            const teamSelect = document.getElementById('teamSelect');
+            const teamVal = teamSelect ? teamSelect.value : '';
+            let url = '{{ url_for("pit_scouting.form") }}?preview=1';
+            if (teamVal) url += '&team=' + encodeURIComponent(teamVal);
+            window.open(url, '_blank');
+        } catch (error) {
+            showAlert('Cannot preview: Invalid JSON - ' + error.message, 'danger');
+        }
     }
-}
 
 // Show alert
 function showAlert(message, type) {

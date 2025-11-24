@@ -6,7 +6,7 @@
     <div class="col-md-7 col-lg-6">
       <div class="card shadow">
         <div class="card-body text-center">
-          <img src="{{ url_for('static', filename=user.profile_picture or 'img/avatars/default.png') }}" class="rounded-circle mb-3" alt="Profile Picture" width="96" height="96" style="object-fit:cover;">
+          <img src="{{ url_for('static', filename=user.profile_picture or 'img/avatars/default.png') }}" class="rounded-circle mb-3 img-fit-cover" alt="Profile Picture" width="96" height="96">
           <h2 class="mb-1">{{ user.username }}</h2>
           {% if user.email %}
           <p class="text-muted mb-2">{{ user.email }}</p>

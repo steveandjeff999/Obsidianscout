@@ -69,7 +69,7 @@
                 </div>
                 <div class="card-body">
                     <p>Control new account registration for your team.</p>
-                    <form method="POST" action="{{ url_for('auth.toggle_account_lock') }}" style="display: inline;">
+                    <form method="POST" action="{{ url_for('auth.toggle_account_lock') }}" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <button id="accountLockBtn" type="submit" class="btn btn-secondary">
                             <i id="accountLockIcon" class="fas fa-spinner fa-spin"></i>

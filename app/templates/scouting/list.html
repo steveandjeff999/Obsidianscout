@@ -83,7 +83,7 @@
                             </div>
                             
                             <!-- Hidden form for double-confirm delete behavior (scripts.js will submit on second click) -->
-                            <form id="delete-form-{{ data.id }}" action="{{ url_for('scouting.delete_data', id=data.id) }}" method="post" style="display:none;">
+                            <form id="delete-form-{{ data.id }}" action="{{ url_for('scouting.delete_data', id=data.id) }}" method="post" class="d-none">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             </form>
                         </td>

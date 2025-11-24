@@ -215,7 +215,7 @@
             </div>
             
             <!-- HTTPS Warning -->
-            <div id="https-warning" class="alert alert-warning d-flex align-items-center mb-4" style="display: none;">
+            <div id="https-warning" class="alert alert-warning d-flex align-items-center mb-4 d-none">
                 <i class="fas fa-lock me-2"></i>
                 <div>
                     Camera access requires a secure (HTTPS) connection. You appear to be using HTTP.
@@ -223,7 +223,7 @@
             </div>
             
             <!-- Camera Permission Warning -->
-            <div id="camera-permission-warning" class="alert alert-warning d-flex align-items-center camera-permission-warning">
+            <div id="camera-permission-warning" class="alert alert-warning d-flex align-items-center camera-permission-warning d-none">
                 <i class="fas fa-exclamation-triangle me-2"></i>
                 <div>
                     Camera permission denied or not available. Please check your browser settings or use the image upload method instead.
@@ -253,7 +253,7 @@
                     
                     <!-- Camera controls in a single row - dropdown directly next to button -->
                     <div class="d-flex flex-wrap align-items-center justify-content-center gap-2 mb-3">
-                        <div class="d-flex align-items-center bg-light p-2 rounded border" style="min-width: 200px;">
+                        <div class="d-flex align-items-center bg-light p-2 rounded border min-w-200">
                             <i class="fas fa-video text-primary me-2"></i>
                             <select id="camera-select" class="form-select" title="Select camera">
                                 <option value="">Loading cameras...</option>
@@ -320,7 +320,7 @@
                 </div>
             </div>
             
-            <form id="data-form" method="POST" action="{{ url_for('data.import_qr') }}" style="display: none;">
+            <form id="data-form" method="POST" action="{{ url_for('data.import_qr') }}" class="d-none">
                 <input type="hidden" name="qr_data" id="qr-data-input">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             </form>
@@ -345,6 +345,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
         document.getElementById('https-warning').style.display = 'flex';
     }
+        if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+            document.getElementById('https-warning').classList.remove('d-none');
+        }
     
     const videoElement = document.getElementById('qr-video');
     const canvas = document.getElementById('qr-canvas');
@@ -406,6 +409,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             updateFeedback('Your browser does not support camera access.', 'error');
             cameraPermissionWarning.style.display = 'flex';
+                cameraPermissionWarning.classList.remove('d-none');
             startButton.disabled = true;
             switchButton.disabled = true;
             return false;
@@ -488,6 +492,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
                 updateFeedback('Camera permission denied.', 'error');
                 cameraPermissionWarning.style.display = 'flex';
+                    cameraPermissionWarning.classList.remove('d-none');
             } else {
                 updateFeedback('Error accessing cameras: ' + error.message, 'error');
             }
@@ -544,6 +549,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Hide the permission warning if it was shown
             cameraPermissionWarning.style.display = 'none';
+                cameraPermissionWarning.classList.add('d-none');
             
             // Update UI state
             scanning = true;
@@ -561,6 +567,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
                 updateFeedback('Camera permission denied.', 'error');
                 cameraPermissionWarning.style.display = 'flex';
+                    cameraPermissionWarning.classList.remove('d-none');
             } else if (error.name === 'NotReadableError') {
                 updateFeedback('Camera is in use by another application.', 'error');
             } else {
@@ -889,6 +896,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Show the raw result in the pre tag
             qrContent.textContent = data;
             qrResult.style.display = 'block';
+                qrResult.classList.remove('d-none');
             
             // Determine the QR code format and process accordingly
             if (jsonData.offline_generated === true || jsonData.team_id) {
@@ -944,6 +952,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     clearDataButton.addEventListener('click', () => {
         qrResult.style.display = 'none';
+            qrResult.classList.add('d-none');
         qrContent.textContent = '';
         qrDataInput.value = '';
         startScanner();
