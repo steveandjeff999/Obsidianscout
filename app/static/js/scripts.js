@@ -775,12 +775,27 @@ function generateQRCode() {
             console.log(`QR data size: ${jsonSizeKB} KB, ${jsonString.length} characters`);
             
             // Calculate responsive QR code size based on viewport
-            // Mobile-first: use smaller base size, scale up for larger screens
+            // Mobile-first: allow the QR to grow to most of the available page area
             const viewportWidth = window.innerWidth;
-            const modalPadding = 80; // Account for modal padding and margins
-            const maxWidth = Math.min(viewportWidth - modalPadding, 500); // Max 500px on desktop
-            const minWidth = 280; // Minimum readable size on small phones
-            const qrSize = Math.max(minWidth, Math.min(maxWidth, 450));
+            const viewportHeight = window.innerHeight;
+            const modalPadding = 40; // smaller padding so QR can use more space
+
+            // Available area considering modal chrome/header/footer
+            const availableWidth = Math.max(160, viewportWidth - modalPadding);
+            const availableHeight = Math.max(160, viewportHeight - (modalPadding + 120));
+
+            // On small devices, favor filling most of the viewport (but keep some breathing room)
+            let qrSize;
+            if (viewportWidth <= 640) {
+                qrSize = Math.floor(Math.min(availableWidth * 0.92, availableHeight * 0.78));
+            } else if (viewportWidth <= 1200) {
+                qrSize = Math.floor(Math.min(availableWidth * 0.9, 640));
+            } else {
+                qrSize = Math.min(availableWidth, 520);
+            }
+
+            // Enforce sensible absolute bounds
+            qrSize = Math.max(160, Math.min(qrSize, 800));
             
             console.log(`Viewport: ${viewportWidth}px, QR Size: ${qrSize}px`);
             
@@ -795,7 +810,7 @@ function generateQRCode() {
             qrcodeContainer.style.display = 'flex';
             qrcodeContainer.style.alignItems = 'center';
             qrcodeContainer.style.justifyContent = 'center';
-            qrcodeContainer.style.minHeight = qrSize + 'px';
+            qrcodeContainer.style.minHeight = 'auto';
             
             // Generate QR code with responsive sizing
             try {
@@ -881,23 +896,11 @@ function generateQRCode() {
                         }
                     }
                     
-                    // Add tap-to-fullscreen hint for mobile
+                    // Add click handler for small-screen fullscreen overlay (no hint text)
                     if (viewportWidth < 768) {
-                        const hint = document.createElement('div');
-                        hint.style.cssText = `
-                            text-align: center;
-                            color: #6c757d;
-                            font-size: 14px;
-                            margin-top: 12px;
-                            padding: 8px;
-                        `;
-                        hint.innerHTML = '<i class="fas fa-expand me-2"></i>Tap QR code for fullscreen';
-                        qrcodeContainer.appendChild(hint);
-                        
-                        // Add click handler for true fullscreen
                         qrWrapper.style.cursor = 'pointer';
                         let fullscreenOverlay = null;
-                        
+
                         qrWrapper.addEventListener('click', () => {
                             if (fullscreenOverlay) {
                                 // Exit fullscreen mode
@@ -912,7 +915,6 @@ function generateQRCode() {
                                 if (viewport && viewport._originalContent) {
                                     viewport.setAttribute('content', viewport._originalContent);
                                 }
-                                hint.innerHTML = '<i class="fas fa-expand me-2"></i>Tap QR code for fullscreen';
                             } else {
                                 // Detect platform
                                 const isAndroid = /Android/i.test(navigator.userAgent);
@@ -1044,10 +1046,10 @@ function generateQRCode() {
                                     if (viewport && viewport._originalContent) {
                                         viewport.setAttribute('content', viewport._originalContent);
                                     }
-                                    hint.innerHTML = '<i class="fas fa-expand me-2"></i>Tap QR code for fullscreen';
+                                    // no hint to update here - we removed the small-screen hint element
                                 });
                                 
-                                hint.innerHTML = '<i class="fas fa-compress me-2"></i>Tap to exit fullscreen';
+                                // no inline hint text - overlay has its own close hint
                             }
                         });
                     }

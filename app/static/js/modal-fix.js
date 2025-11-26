@@ -33,8 +33,15 @@ document.addEventListener('DOMContentLoaded', function() {
         modalDialog.style.left = '50%';
         modalDialog.style.transform = 'translate(-50%, -50%)';
         modalDialog.style.margin = '0';
-        modalDialog.style.maxWidth = '500px';
-        modalDialog.style.width = '100%';
+        // If this modal is a small-screen fullscreen dialog allow it to use most of viewport
+        const isFullMobile = modalElement.classList && modalElement.classList.contains('modal-fullscreen-sm-down') || window.innerWidth <= 640;
+        if (isFullMobile) {
+            modalDialog.style.maxWidth = 'calc(100vw - 24px)';
+            modalDialog.style.width = 'auto';
+        } else {
+            modalDialog.style.maxWidth = '500px';
+            modalDialog.style.width = '100%';
+        }
         modalDialog.style.pointerEvents = 'auto';
         
         // Prevent body scrolling and shifting
@@ -160,8 +167,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 dialog.style.left = '50%';
                 dialog.style.transform = 'translate(-50%, -50%)';
                 dialog.style.margin = '0';
-                dialog.style.maxWidth = '500px';
-                dialog.style.width = '100%';
+                // Respect fullscreen-sm-down modals (don't force a small maxWidth)
+                const parentModal = dialog.closest('.modal');
+                const isFullMobileDialog = parentModal && parentModal.classList && parentModal.classList.contains('modal-fullscreen-sm-down') || window.innerWidth <= 640;
+                if (isFullMobileDialog) {
+                    dialog.style.maxWidth = 'calc(100vw - 24px)';
+                    dialog.style.width = 'auto';
+                } else {
+                    dialog.style.maxWidth = '500px';
+                    dialog.style.width = '100%';
+                }
                 dialog.style.pointerEvents = 'auto';
                 
                 // Add !important styles
