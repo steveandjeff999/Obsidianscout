@@ -60,7 +60,8 @@ def _mobile_api_internal_error(err):
 # accidentally expose data.
 EXEMPT_PATHS = [
     '/api/mobile/health',
-    '/api/mobile/auth/login'
+    '/api/mobile/auth/login',
+    '/api/mobile/auth/register'
 ]
 
 
