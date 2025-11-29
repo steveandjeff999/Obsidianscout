@@ -215,7 +215,8 @@
 <script id="page_builder_metrics_json" type="application/json">{{ metrics|tojson|safe }}</script>
 <script id="page_builder_scoring_json" type="application/json">{{ scoring_elements|tojson|safe }}</script>
 <script id="page_builder_teams_json" type="application/json">{{ teams|tojson|safe }}</script>
-<script id="page_builder_events_json" type="application/json">{{ events|default([])|tojson|safe }}</script>
+<script id="page_builder_events_json" type="application/json">{{ events|default([])|dedupe_events|tojson|safe }}</script>
+<script id="page_builder_shared_event_codes" type="application/json">{{ shared_event_codes|tojson|safe }}</script>
 <script id="page_builder_matches_json" type="application/json">{{ matches|default([])|tojson|safe }}</script>
 <script id="page_builder_initial_widgets" type="application/json">{{ initial_widgets|tojson|safe }}</script>
 <script id="page_builder_initial_page" type="application/json">{% if page is defined %}{{ {'title': page.title, 'id': page.id}|tojson|safe }}{% else %}{}{% endif %}</script>
@@ -1334,7 +1335,8 @@ document.addEventListener('DOMContentLoaded', function() {
       PAGE_BUILDER_EVENTS.forEach(event => {
         const opt = document.createElement('option');
         opt.value = event.id;
-        opt.textContent = event.name || event.code;
+        const isAlliance = event.is_alliance || (event.code && (JSON.parse(document.getElementById('page_builder_shared_event_codes').textContent || '[]').includes((event.code || '').toUpperCase())));
+        opt.textContent = (event.name || event.code) + (event.is_alliance ? ' (Alliance)' : '');
         if (userSelectOpt) {
           sel.insertBefore(opt, userSelectOpt);
         } else {

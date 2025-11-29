@@ -28,9 +28,9 @@
                             <label for="event_id" class="form-label">Event</label>
                             <select class="form-select" id="event_id" name="event_id" onchange="this.form.submit()">
                                 <option value="">Select an event...</option>
-                                {% for event in events %}
-                                <option value="{{ event.id }}" {% if selected_event and event.id == selected_event.id %}selected{% endif %}>
-                                    {{ event.name }} ({{ event.year }})
+                                {% for event in events|dedupe_events %}
+                                <option value="{{ event.id }}" data-event-code="{{ event.code|upper if event.code else '' }}" {% if selected_event and event.id == selected_event.id %}selected{% endif %}>
+                                    {{ event.name }} ({{ event.year }}){% if event.is_alliance %} (Alliance){% endif %}
                                 </option>
                                 {% endfor %}
                             </select>

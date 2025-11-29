@@ -1,6 +1,6 @@
-from flask import Blueprint, render_template, request, jsonify, current_app
+from flask import Blueprint, render_template, request, jsonify, current_app, url_for
 from flask_login import login_required
-from app.models import User, Team, ScoutingData, Event, Match
+from app.models import User, Team, ScoutingData, Event, Match, CustomPage
 from app import db
 from app.utils.theme_manager import ThemeManager
 from app.utils.team_isolation import (
@@ -14,6 +14,8 @@ from datetime import datetime
 from sqlalchemy import or_, and_, func, desc
 from flask_login import current_user
 from fuzzywuzzy import fuzz, process
+import os
+import html
 import re
 from difflib import SequenceMatcher
 from functools import lru_cache
@@ -157,6 +159,98 @@ def calculate_search_relevance(query, team, match_type='partial'):
         return max(name_score, number_score, location_score) * 0.6  # Fuzzy gets lower max score
     else:
         return 0.5
+
+
+def get_endpoint_for_url(url_path):
+    """Return the endpoint string for a given URL path if available, else None"""
+    try:
+        for rule in current_app.url_map.iter_rules():
+            if rule.rule == url_path and 'GET' in rule.methods:
+                return rule.endpoint
+    except Exception:
+        pass
+    return None
+
+
+def get_required_roles_for_endpoint(endpoint):
+    """Inspect the source file of the endpoint's blueprint and function, and return required role names.
+
+    This scans the function definition lines for decorators like @analytics_required, @admin_required, and @role_required('x','y').
+    Returns a set of role names expected for this endpoint (empty set => public).
+    """
+    roles = set()
+    try:
+        if not endpoint or '.' not in endpoint:
+            return roles
+        bp_name, func_name = endpoint.split('.', 1)
+        # Map blueprint -> routes file
+        routes_file = os.path.join(current_app.root_path, 'routes', f"{bp_name}.py")
+        if not os.path.exists(routes_file):
+            return roles
+
+        with open(routes_file, 'r', encoding='utf-8') as fh:
+            lines = fh.readlines()
+
+        # Find the line where `def func_name` occurs and look up for decorator lines
+        for idx, line in enumerate(lines):
+            if re.match(rf"\s*def\s+{re.escape(func_name)}\s*\(", line):
+                # look up previous lines for decorators up to 8 lines
+                start = max(0, idx - 12)
+                for dline in reversed(lines[start:idx]):
+                    dline = dline.strip()
+                    if not dline.startswith('@'):
+                        # stop when we leave decorator block
+                        break
+                    # analytics_required/admin_required
+                    if dline.startswith('@analytics_required'):
+                        roles.update({'admin', 'analytics'})
+                    elif dline.startswith('@admin_required'):
+                        roles.update({'admin', 'superadmin'})
+                    elif dline.startswith('@login_required'):
+                        # login_required => must be authenticated but no extra role
+                        roles.update({'authenticated'})
+                    elif dline.startswith('@role_required'):
+                        # parse roles inside parentheses
+                        m = re.search(r"role_required\((.*)\)", dline)
+                        if m:
+                            inside = m.group(1)
+                            # extract quoted values
+                            found = re.findall(r"['\"]([a-zA-Z0-9_ -]+)['\"]", inside)
+                            for r in found:
+                                roles.add(r)
+                break
+    except Exception as e:
+        current_app.logger.debug(f"Error determining roles for endpoint {endpoint}: {e}")
+    return roles
+
+
+def is_endpoint_accessible(endpoint):
+    """Return True if the current_user is allowed to access this endpoint, otherwise False."""
+    try:
+        # If endpoint is falsy, allow
+        if not endpoint:
+            return True
+        required_roles = get_required_roles_for_endpoint(endpoint)
+        # If only login required, allow if authenticated
+        if required_roles == {'authenticated'}:
+            return getattr(current_user, 'is_authenticated', False)
+        if not required_roles:
+            # public route
+            return True
+        # superadmin bypass
+        if current_user and getattr(current_user, 'has_role', None) and current_user.has_role('superadmin'):
+            return True
+        # Check if user has any of the required roles
+        for r in required_roles:
+            try:
+                if r and current_user.has_role(r):
+                    return True
+            except Exception:
+                continue
+        return False
+    except Exception as e:
+        current_app.logger.error(f"Error checking endpoint accessibility for {endpoint}: {e}")
+        return False
 
 def search_teams(query):
     """Enhanced search teams by number, name, or location with fuzzy matching"""
@@ -448,6 +542,133 @@ def search_events(query):
     return results
 
 
+def _parse_markdown_title(md_text):
+    """Extract the first H1/H2 from markdown text if present, otherwise None"""
+    for line in md_text.splitlines():
+        line = line.strip()
+        if line.startswith('# '):
+            return line[2:].strip()
+        if line.startswith('## '):
+            return line[3:].strip()
+    return None
+
+
+def _get_help_folder_paths():
+    """Return the help folder locations - primarily the help folder under repo root.
+    Use current_app.root_path to derive the repo root."""
+    try:
+        # current_app.root_path is <project>/app
+        repo_root = os.path.abspath(os.path.join(current_app.root_path, '..'))
+        help_folder = os.path.join(repo_root, 'help')
+        extra_folders = [os.path.join(repo_root, 'docs'), os.path.join(repo_root, 'cleanup')]
+        folders = [help_folder] + [f for f in extra_folders if os.path.exists(f)]
+        return folders
+    except Exception:
+        return []
+
+
+def load_doc_files(max_files=200):
+    """Load md doc files from help/docs/cleanup and return list of tuples (filename, title, content)
+    Cache files only for short-term performance by checking mtime on each call."""
+    results = []
+    for folder in _get_help_folder_paths():
+        try:
+            for f in os.listdir(folder):
+                if not f.lower().endswith('.md'):
+                    continue
+                full = os.path.join(folder, f)
+                try:
+                    with open(full, 'r', encoding='utf-8') as fh:
+                        content = fh.read()
+                        title = _parse_markdown_title(content) or os.path.splitext(f)[0]
+                        results.append((f, title, content, folder))
+                except Exception:
+                    continue
+                if len(results) >= max_files:
+                    break
+        except Exception:
+            continue
+    return results
+
+
+def search_help_docs(query):
+    """Search local help/docs markdown files and return results referencing the help route.
+    This function supports searching the `help` directory and optionally other doc folders.
+    Results will link to the `main.help_page` with `file` query parameter for `help/` files.
+    For `docs`/`cleanup` results we still return title and a non-clickable url (or link to help if available).
+    """
+    results = []
+    if not query:
+        return results
+    qlower = query.lower().strip()
+    try:
+        docs = load_doc_files(max_files=300)
+        for filename, title, content, folder in docs:
+            content_lower = content.lower()
+            title_lower = (title or '').lower()
+
+            # Check for direct match in title or filename
+            in_title = qlower in title_lower
+            in_filename = qlower in filename.lower()
+            in_content = qlower in content_lower
+
+            if not (in_title or in_filename or in_content):
+                # Try fuzzy match on title if no direct match
+                ratio = fuzz.partial_ratio(qlower, title_lower) / 100.0
+                if ratio < 0.6:
+                    continue
+                in_content = True
+
+            # Build a friendly URL. For help files, link to /help route with `file` param.
+            file_url = None
+            # If this is in the main `help/` folder, we can link to /help?file=...
+            repo_root = os.path.abspath(os.path.join(current_app.root_path, '..'))
+            help_folder = os.path.join(repo_root, 'help')
+            if os.path.abspath(folder) == os.path.abspath(help_folder):
+                file_url = url_for('main.help_page') + f'?file={filename}'
+            else:
+                # For other docs we don't have a direct route; link to help viewer as fallback
+                file_url = url_for('main.help_page')
+
+            # Compute a relevance score
+            if in_title:
+                relevance = 1.0
+            elif in_filename:
+                relevance = 0.9
+            elif in_content:
+                relevance = 0.7
+            else:
+                relevance = 0.5
+
+            # Add the snippet from content around the match
+            snippet = ''
+            try:
+                if in_content:
+                    pos = content_lower.find(qlower)
+                    if pos >= 0:
+                        start = max(0, pos - 80)
+                        end = min(len(content), pos + 80)
+                        snippet = content[start:end].strip().replace('\n', ' ')
+                        snippet = html.escape(snippet)
+            except Exception:
+                snippet = ''
+
+            results.append({
+                'type': 'help',
+                'title': title or filename,
+                'subtitle': f"{os.path.basename(folder)} - {filename}",
+                'icon': 'fas fa-book',
+                'url': file_url,
+                'relevance': relevance,
+                'snippet': snippet
+            })
+    except Exception as e:
+        current_app.logger.error(f"Error searching help/docs: {e}")
+    # Sort and limit
+    results.sort(key=lambda x: x.get('relevance', 0), reverse=True)
+    return results[:12]
+
+
 def search_matches(query):
     """Search matches by number, type, event, or participating teams"""
     results = []
@@ -595,6 +816,13 @@ def search_pages(query):
                 elif desc_match:
                     relevance = 0.6  # Description match
                 
+                # Check if the route behind this page is accessible before adding
+                try:
+                    endpoint = get_endpoint_for_url(page['url'])
+                    if endpoint and not is_endpoint_accessible(endpoint):
+                        continue
+                except Exception:
+                    pass
                 results.append({
                     'type': 'page',
                     'title': page['title'],
@@ -607,7 +835,82 @@ def search_pages(query):
     except Exception as e:
         current_app.logger.error(f"Error searching pages: {e}")
     
+    # Also search CustomPage entries owned by user's team to include dynamic pages
+    try:
+        team_num = getattr(current_user, 'scouting_team_number', None)
+        if team_num is not None:
+            custom_pages = CustomPage.query.filter_by(owner_team=team_num, is_active=True).filter(
+                CustomPage.title.ilike(f'%{query}%')
+            ).limit(20).all()
+            for page in custom_pages:
+                results.append({
+                    'type': 'page',
+                    'title': page.title,
+                    'subtitle': f'Custom Page - Owned by {page.owner_user}',
+                    'url': url_for('graphs.pages_view', page_id=page.id),
+                    'icon': 'fas fa-file-alt',
+                    'relevance': 1.0 if (query.lower().strip() == (page.title or '').lower()) else 0.75
+                })
+    except Exception as e:
+        current_app.logger.error(f"Error searching custom pages: {e}")
+
     return results
+
+
+def search_site_routes(query):
+    """Search all registered Flask URL rules (non-variable GET routes) for site pages
+    and return results that match the query in their path or inferred title.
+    This helps find routes not otherwise indexed by template or model searches.
+    """
+    results = []
+    try:
+        qlower = (query or '').lower().strip()
+        for rule in current_app.url_map.iter_rules():
+            # Consider only GET routes
+            if 'GET' not in rule.methods:
+                continue
+            # Skip static assets
+            if rule.rule.startswith('/static'):
+                continue
+            # Skip socket.io endpoints and API endpoints to avoid noise
+            if rule.endpoint and (rule.endpoint.startswith('socketio') or rule.endpoint.startswith('api') or rule.rule.startswith('/api')):
+                continue
+            # Skip variable routes; Custom pages are handled separately
+            if '<' in rule.rule:
+                continue
+
+            # Build a human friendly title from endpoint name
+            endpoint = rule.endpoint or ''
+            if '.' in endpoint:
+                _, name = endpoint.split('.', 1)
+            else:
+                name = endpoint
+            title = name.replace('_', ' ').title() if name else rule.rule
+
+            # Check trigger
+            if qlower in title.lower() or qlower in rule.rule.lower():
+                try:
+                    # Check permissions on the endpoint before creating a result
+                    if not is_endpoint_accessible(rule.endpoint):
+                        continue
+                    url = url_for(rule.endpoint)
+                except Exception:
+                    url = rule.rule
+
+                results.append({
+                    'type': 'page',
+                    'title': title,
+                    'subtitle': f'Route: {rule.rule}',
+                    'url': url,
+                    'icon': 'fas fa-file-alt',
+                    'relevance': 0.75
+                })
+    except Exception as e:
+        current_app.logger.error(f"Error searching site routes: {e}")
+
+    # Sort and limit
+    results.sort(key=lambda x: x.get('relevance', 0), reverse=True)
+    return results[:30]
 
 def get_search_suggestions(query, types_filter=None):
     """Get search suggestions based on partial query"""
@@ -618,7 +921,7 @@ def get_search_suggestions(query, types_filter=None):
         if types_filter:
             allowed_types = [t.strip() for t in types_filter.split(',')]
         else:
-            allowed_types = ['team', 'user']  # Default to teams and users only
+            allowed_types = ['team', 'user', 'help', 'page']  # Default to teams, users, help/docs and pages
         
         all_suggestions = []
         
@@ -633,6 +936,33 @@ def get_search_suggestions(query, types_filter=None):
             users = filter_users_by_scouting_team().limit(30).all()
             user_suggestions = [user.username for user in users]
             all_suggestions.extend(user_suggestions)
+
+        # Get page suggestions (include static pages and CustomPage titles)
+        if 'page' in allowed_types:
+            try:
+                # Use the page search to generate titles based on query
+                page_results = search_pages(query)
+                # Filter results by endpoint access if possible
+                filtered = []
+                for p in page_results:
+                    try:
+                        ep = get_endpoint_for_url(p.get('url'))
+                        if ep and not is_endpoint_accessible(ep):
+                            continue
+                    except Exception:
+                        pass
+                    filtered.append(p['title'])
+                page_titles = filtered
+                all_suggestions.extend(page_titles)
+            except Exception:
+                pass
+            try:
+                team_num = getattr(current_user, 'scouting_team_number', None)
+                if team_num is not None:
+                    custom_pages = CustomPage.query.filter_by(owner_team=team_num, is_active=True).limit(30).all()
+                    all_suggestions.extend([cp.title for cp in custom_pages if cp.title])
+            except Exception:
+                pass
         
         # Get close matches
         suggestions = get_close_matches(query, all_suggestions, n=8, cutoff=0.4)
@@ -640,6 +970,18 @@ def get_search_suggestions(query, types_filter=None):
     except Exception as e:
         current_app.logger.error(f"Error getting search suggestions: {e}")
     
+    # Add help/doc suggestions (titles only) if allowed
+    try:
+        if 'help' in allowed_types:
+            help_items = load_doc_files(max_files=200)
+            help_titles = [item[1] for item in help_items if item[1]]
+            help_matches = get_close_matches(query, help_titles, n=6, cutoff=0.3)
+            # Add unique matches to suggestions
+            for ht in help_matches:
+                if ht not in suggestions:
+                    suggestions.append(ht)
+    except Exception as e:
+        current_app.logger.error(f"Error generating help doc suggestions: {e}")
     return suggestions
 
 @bp.route('/')
@@ -665,6 +1007,16 @@ def search_page():
     all_results.extend(search_scouting_data(query))
     all_results.extend(search_matches(query))
     all_results.extend(search_pages(query))
+    # Also include registered site routes
+    try:
+        all_results.extend(search_site_routes(query))
+    except Exception:
+        pass
+    # Include local help/docs markdown search
+    try:
+        all_results.extend(search_help_docs(query))
+    except Exception:
+        pass
     
     # Sort by relevance
     all_results.sort(key=lambda x: x.get('relevance', 0), reverse=True)
@@ -685,7 +1037,7 @@ def search_page():
 def api_suggestions():
     """Enhanced API endpoint for search suggestions with fuzzy matching"""
     query = request.args.get('q', '').strip()
-    types_filter = request.args.get('types', 'team,user,page,match,scouting')  # Default includes matches and scouting
+    types_filter = request.args.get('types', 'team,user,page,match,scouting,help')  # Default includes matches, scouting and help/docs
     
     if len(query) < 1:  # Allow single character searches for better UX
         return jsonify({'suggestions': []})
@@ -901,8 +1253,53 @@ def api_suggestions():
                     'search_query': page['title'].lower(),
                     'url': page['url']
                 })
+            # Also include custom pages owned by the current user's team
+            try:
+                team_num = getattr(current_user, 'scouting_team_number', None)
+                if team_num is not None:
+                    custom_pages = CustomPage.query.filter_by(owner_team=team_num, is_active=True).filter(CustomPage.title.ilike(f'%{query}%')).limit(5).all()
+                    for cp in custom_pages:
+                        suggestions.append({
+                            'text': cp.title,
+                            'type': 'page',
+                            'relevance': 0.9,
+                            'subtitle': f'Custom Page - {cp.owner_user}',
+                            'search_query': cp.title.lower(),
+                            'url': url_for('graphs.pages_view', page_id=cp.id)
+                        })
+            except Exception as e:
+                current_app.logger.error(f"Error adding custom page suggestions: {e}")
+            # Also add site routes as suggestions
+            try:
+                route_matches = search_site_routes(query)[:3]
+                for r in route_matches:
+                    suggestions.append({
+                        'text': r['title'],
+                        'type': 'page',
+                        'relevance': r.get('relevance', 0.7),
+                        'subtitle': r.get('subtitle', ''),
+                        'search_query': r.get('title', '').lower(),
+                        'url': r.get('url')
+                    })
+            except Exception as e:
+                current_app.logger.error(f"Error adding route suggestions: {e}")
         except Exception as e:
             current_app.logger.error(f"Error in page suggestions: {e}")
+    # Help/docs suggestions
+    if 'help' in allowed_types:
+        try:
+            help_results = search_help_docs(query)
+            for h in help_results[:3]:
+                suggestions.append({
+                    'text': h['title'],
+                    'type': 'help',
+                    'relevance': h.get('relevance', 0.7),
+                    'subtitle': h.get('snippet', '') or h.get('subtitle', ''),
+                    'search_query': h.get('title', '').lower(),
+                    'url': h.get('url')
+                })
+        except Exception as e:
+            current_app.logger.error(f"Error in help suggestions: {e}")
     
     # Sort by relevance and limit total results
     suggestions.sort(key=lambda x: x.get('relevance', 0), reverse=True)
@@ -958,6 +1355,11 @@ def api_quick_search():
     results.extend(search_matches(query)[:3])
     results.extend(search_scouting_data(query)[:3])
     results.extend(search_pages(query)[:2])
+    # Include local help/docs in quick search
+    try:
+        results.extend(search_help_docs(query)[:2])
+    except Exception:
+        pass
     
     # Sort by relevance and limit
     results.sort(key=lambda x: x.get('relevance', 0), reverse=True)

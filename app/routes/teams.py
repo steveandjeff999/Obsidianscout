@@ -13,6 +13,7 @@ from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_events_by_scouting_team, 
     assign_scouting_team_to_model, get_event_by_code, filter_scouting_data_by_scouting_team
 )
+from app.utils.team_isolation import get_combined_dropdown_events
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -35,22 +36,8 @@ def index():
     event = None
     event_id = request.args.get('event_id', type=int)
     
-    # Get all events for the dropdown (filtered by current scouting team)
-    events_query = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name)
-    events_all = events_query.all()
-    # Deduplicate by event.code case-insensitively (prefer earlier items from ordering)
-    seen_codes = set()
-    events = []
-    for ev in events_all:
-        code = (ev.code or '').strip().lower()
-        if code == '':
-            # keep events with empty code as-is
-            events.append(ev)
-            continue
-        if code in seen_codes:
-            continue
-        seen_codes.add(code)
-        events.append(ev)
+    # Get all events for the dropdown (combined/deduped like /events)
+    events = get_combined_dropdown_events()
     
     if event_id:
         # If a specific event ID is requested, use that (filtered by scouting team)
@@ -258,11 +245,11 @@ def sync_from_config():
 @bp.route('/add', methods=['GET', 'POST'])
 def add():
     """Add a new team"""
-    # Get all events for the form (filtered by current scouting team)
-    events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
+    # Get all events for the form (combined/deduped like /events)
+    events = get_combined_dropdown_events()
     
     # Get default event from config or URL parameter
-    game_config = get_current_game_config()
+    game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     default_event_id = None
     
@@ -374,20 +361,8 @@ def edit(team_number):
     """Edit a team"""
     team = Team.query.filter_by(team_number=team_number).first_or_404()
     
-    # Get all events for the form
-    events_query = Event.query.order_by(Event.year.desc(), Event.name)
-    events_all = events_query.all()
-    seen_codes = set()
-    events = []
-    for ev in events_all:
-        code = (ev.code or '').strip().lower()
-        if code == '':
-            events.append(ev)
-            continue
-        if code in seen_codes:
-            continue
-        seen_codes.add(code)
-        events.append(ev)
+    # Get all events for the form (combined/deduped like /events)
+    events = get_combined_dropdown_events()
     
     if request.method == 'POST':
         # new_team_number = request.form.get('team_number', type=int)
@@ -484,7 +459,7 @@ def view(team_number):
     scouting_data = filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team.id).order_by(ScoutingData.match_id).all()
     
     # Get game configuration for metrics calculation
-    game_config = get_current_game_config()
+    game_config = get_effective_game_config()
     
     # Fallback: If game config is empty, try to load config for the current scouting team
     if not game_config and current_scouting_team is not None:
@@ -619,10 +594,10 @@ def view(team_number):
 @analytics_required
 def ranks():
     """Display team rankings for the selected event based on average total points"""
-    game_config = get_current_game_config()
+    game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     event_id = request.args.get('event_id', type=int)
-    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+    events = get_combined_dropdown_events()
     event = None
     if event_id:
         event = Event.query.get_or_404(event_id)

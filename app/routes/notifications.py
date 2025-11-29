@@ -8,6 +8,7 @@ from app import db
 from app.models import Match, Team, Event
 from app.models_misc import NotificationSubscription, DeviceToken, NotificationLog
 from app.utils.api_utils import safe_int_team_number
+from app.utils.team_isolation import filter_matches_by_scouting_team, filter_teams_by_scouting_team
 from app.utils.notification_service import (
     send_notification_for_subscription,
     get_user_notification_history,
@@ -104,8 +105,8 @@ def index():
     vapid_public_key = vapid_keys.get('public_key', '')
     
     # Get available teams at current event
-    from app.utils.config_manager import get_current_game_config
-    game_config = get_current_game_config()
+    from app.utils.config_manager import get_effective_game_config
+    game_config = get_effective_game_config()
     event_code = game_config.get('current_event_code')
     
     available_teams = []
@@ -209,8 +210,8 @@ def subscribe():
         db.session.commit()
         
         # Schedule notifications for existing matches
-        from app.utils.config_manager import get_current_game_config
-        game_config = get_current_game_config()
+        from app.utils.config_manager import get_effective_game_config
+        game_config = get_effective_game_config()
         current_event_code = game_config.get('current_event_code')
         
         if current_event_code and event_code == current_event_code:
@@ -379,7 +380,7 @@ def test_email():
         return jsonify({'error': 'No email address configured'}), 400
     
     try:
-        from app.utils.config_manager import get_current_game_config
+        from app.utils.config_manager import get_effective_game_config
         from app.utils.notification_service import create_strategy_notification_message, format_match_description
         import random
         
@@ -397,7 +398,7 @@ Sent: {datetime.now(timezone.utc).strftime('%Y-%m-%d %I:%M %p UTC')}
         
         # Try to add a random match prediction from current event
         try:
-            game_config = get_current_game_config()
+            game_config = get_effective_game_config()
             current_event_code = game_config.get('current_event_code')
             
             if current_event_code:
@@ -523,8 +524,8 @@ def test_subscription(subscription_id):
     
     try:
         # Find a recent or upcoming match with this team
-        from app.utils.config_manager import get_current_game_config
-        game_config = get_current_game_config()
+        from app.utils.config_manager import get_effective_game_config
+        game_config = get_effective_game_config()
         event_code = game_config.get('current_event_code')
         
         if not event_code:
@@ -539,7 +540,7 @@ def test_subscription(subscription_id):
             return jsonify({'error': 'Event not found'}), 404
         
         # Find a match with this team
-        matches = Match.query.filter_by(event_id=event.id).all()
+        matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
         test_match = None
         
         for match in matches:
@@ -610,11 +611,11 @@ def history():
 def refresh_schedule():
     """Refresh notification schedule by fetching latest match times from FRC APIs"""
     try:
-        from app.utils.config_manager import get_current_game_config
+        from app.utils.config_manager import get_effective_game_config
         from app.utils.match_time_fetcher import update_match_times
         from app.models_misc import NotificationQueue
         
-        game_config = get_current_game_config()
+        game_config = get_effective_game_config()
         event_code = game_config.get('current_event_code')
         
         if not event_code:
@@ -633,7 +634,7 @@ def refresh_schedule():
             return jsonify({'error': f'Event {event_code} not found'}), 404
         
         # Get all matches for this event and scope to the current user's scouting team
-        matches = Match.query.filter_by(event_id=event.id, scouting_team_number=current_user.scouting_team_number).all()
+        matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
         match_ids = [m.id for m in matches]
         
         print(f" Found {len(matches)} matches for event {event_code}")
@@ -942,8 +943,8 @@ def mobile_schedule_ui():
     subs = NotificationSubscription.query.filter_by(user_id=current_user.id).order_by(NotificationSubscription.created_at.desc()).all()
 
     # Try to find current event and matches
-    from app.utils.config_manager import get_current_game_config
-    game_config = get_current_game_config()
+    from app.utils.config_manager import get_effective_game_config
+    game_config = get_effective_game_config()
     event_code = game_config.get('current_event_code')
 
     matches = []

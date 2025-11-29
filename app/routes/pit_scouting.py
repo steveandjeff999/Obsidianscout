@@ -634,7 +634,7 @@ def upload():
     """Mark all unuploaded pit scouting data as uploaded (for WebSocket sync)"""
     try:
         # Get current event
-        game_config = current_app.config.get('GAME_CONFIG', {})
+        game_config = get_effective_game_config()
         current_event_code = game_config.get('current_event_code')
         current_event = None
         if current_event_code:
@@ -1103,7 +1103,7 @@ def sync_download():
     
     try:
         # Get current event
-        game_config = current_app.config.get('GAME_CONFIG', {})
+        game_config = get_effective_game_config()
         current_event_code = game_config.get('current_event_code')
         current_event = None
         if current_event_code:
@@ -1213,7 +1213,7 @@ def sync_full():
     
     try:
         # Get current event
-        game_config = current_app.config.get('GAME_CONFIG', {})
+        game_config = get_effective_game_config()
         current_event_code = game_config.get('current_event_code')
         current_event = None
         if current_event_code:
@@ -1426,7 +1426,7 @@ def pit_data():
         pit_config = get_effective_pit_config()
         
         # Get current event based on main game configuration
-        game_config = current_app.config.get('GAME_CONFIG', {})
+        game_config = get_effective_game_config()
         current_event_code = game_config.get('current_event_code')
         current_event = None
         if current_event_code:

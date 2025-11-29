@@ -27,10 +27,10 @@
                             <i class="fas fa-calendar-alt me-1"></i> Select Event
                         </button>
                         <ul class="dropdown-menu" aria-labelledby="eventDropdown">
-                            {% for event in events %}
-                            <li><a class="dropdown-item {% if event.id == current_event.id %}active{% endif %}" 
+                            {% for event in events|dedupe_events %}
+                                <li><a class="dropdown-item {% if event.id == current_event.id %}active{% endif %}" 
                                 href="{{ url_for('events.set_current_event', event_id=event.id, redirect_to='alliances.index') }}">
-                                {{ event.name }} ({{ event.year }})
+                                {{ event.name }} ({{ event.year }}){% if event.is_alliance %} (Alliance){% endif %}
                             </a></li>
                             {% endfor %}
                         </ul>

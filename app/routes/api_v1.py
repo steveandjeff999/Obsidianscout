@@ -14,13 +14,14 @@ from app.utils.api_auth import (
 )
 from app.models import (
     Team, Event, Match, ScoutingData, User, Role, 
-    DoNotPickEntry, AvoidEntry
+    DoNotPickEntry, AvoidEntry, ScoutingAllianceEvent
 )
 from app import db
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team,
     filter_scouting_data_by_scouting_team, get_current_scouting_team_number
 )
+from sqlalchemy import func
 
 bp = Blueprint('api_v1', __name__, url_prefix='/api/v1')
 
@@ -214,9 +215,37 @@ def get_events():
         
         events = events_query.offset(offset).limit(limit).all()
         total_count = events_query.count()
-        
+
+        # Deduplicate by normalized code and tag alliance events
+        def event_score(e):
+            score = 0
+            if e.name: score += 10
+            if e.location: score += 5
+            if getattr(e, 'start_date', None): score += 5
+            if getattr(e, 'end_date', None): score += 3
+            if getattr(e, 'timezone', None): score += 2
+            if e.year: score += 1
+            return score
+
+        events_by_code = {}
+        for e in events:
+            key = (e.code or f'__id_{e.id}').strip().upper()
+            if key in events_by_code:
+                if event_score(e) > event_score(events_by_code[key]):
+                    events_by_code[key] = e
+            else:
+                events_by_code[key] = e
+
         events_data = []
-        for event in events:
+        for key, event in events_by_code.items():
+            is_alliance = False
+            try:
+                if not key.startswith('__id_'):
+                    sae = ScoutingAllianceEvent.query.filter(func.upper(ScoutingAllianceEvent.event_code) == key, ScoutingAllianceEvent.is_active == True).first()
+                    is_alliance = sae is not None
+            except Exception:
+                is_alliance = False
+
             event_data = {
                 'id': event.id,
                 'name': event.name,
@@ -224,7 +253,8 @@ def get_events():
                 'location': event.location,
                 'start_date': event.start_date.isoformat() if event.start_date else None,
                 'end_date': event.end_date.isoformat() if event.end_date else None,
-                'team_count': len(event.teams)
+                'team_count': len(event.teams),
+                'is_alliance': is_alliance
             }
             events_data.append(event_data)
         
@@ -429,7 +459,8 @@ def get_match_details(match_id):
             match_data['scouting_entries'].append({
                 'id': data.id,
                 'team_id': data.team_id,
-                'scout': data.scout,
+                'scout_id': data.scout_id,
+                'scout_name': data.scout_name,
                 'timestamp': data.timestamp.isoformat() if data.timestamp else None,
                 'scouting_team_number': data.scouting_team_number
             })
@@ -469,7 +500,13 @@ def get_scouting_data():
         
         scout = request.args.get('scout')
         if scout:
-            scouting_query = scouting_query.filter(ScoutingData.scout.ilike(f'%{scout}%'))
+            # If the provided scout arg is numeric, treat it as scout_id
+            try:
+                scout_id_val = int(scout)
+                scouting_query = scouting_query.filter(ScoutingData.scout_id == scout_id_val)
+            except Exception:
+                # Else treat as name substring match on scout_name
+                scouting_query = scouting_query.filter(ScoutingData.scout_name.ilike(f'%{scout}%'))
         
         # Add pagination
         limit = request.args.get('limit', 100, type=int)
@@ -519,7 +556,7 @@ def create_scouting_data():
             return jsonify({'error': 'No data provided'}), 400
         
         # Validate required fields
-        required_fields = ['team_id', 'match_id', 'data', 'scout']
+        required_fields = ['team_id', 'match_id', 'data']
         for field in required_fields:
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
@@ -534,11 +571,29 @@ def create_scouting_data():
             return jsonify({'error': 'Match not found'}), 404
         
         # Create scouting data entry
+        # Normalize scout fields: allow client to send scout, scout_name, and/or scout_id
+        scout_name = data.get('scout_name') or data.get('scout')
+        scout_id = None
+        if 'scout_id' in data and data.get('scout_id') is not None:
+            try:
+                scout_id = int(data.get('scout_id'))
+            except Exception:
+                scout_id = None
+        else:
+            # If scout is a string representation of an integer, interpret as scout_id
+            if isinstance(data.get('scout'), (str, int)):
+                try:
+                    scout_id = int(data.get('scout'))
+                    scout_name = None
+                except Exception:
+                    pass
+
         scouting_data = ScoutingData(
             team_id=data['team_id'],
             match_id=data['match_id'],
             data=data['data'],
-            scout=data['scout'],
+            scout_name=scout_name,
+            scout_id=scout_id,
             scouting_team_number=get_current_api_team()
         )
         

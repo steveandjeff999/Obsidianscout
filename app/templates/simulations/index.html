@@ -121,7 +121,7 @@
             <label for="event-select" class="form-label">Event (optional)</label>
             <select id="event-select" class="form-select">
               <option value="">All events</option>
-              {% for e in events %}
+              {% for e in events|dedupe_events %}
               <option value="{{ e.id }}">{{ e.name }}</option>
               {% endfor %}
             </select>

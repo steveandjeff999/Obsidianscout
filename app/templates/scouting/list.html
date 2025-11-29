@@ -18,7 +18,7 @@
                 <label class="form-label">Filter by event:</label>
                 <div class="d-flex gap-2">
                     <button type="button" class="btn btn-outline-secondary event-filter-btn active" data-filter="all">All Events</button>
-                    {% for event in events %}
+                    {% for event in events|dedupe_events %}
                     <button type="button" class="btn btn-outline-secondary event-filter-btn" data-filter="{{ event.code }}">{{ event.code }}</button>
                     {% endfor %}
                 </div>

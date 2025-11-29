@@ -490,8 +490,8 @@ def qr_code_display():
         scouting_team_number=current_user.scouting_team_number
     ).first_or_404()
     
-    # Get game configuration for default values
-    game_config = get_current_game_config()
+    # Get game configuration for default values (alliance-aware)
+    game_config = get_effective_game_config()
     
     # Process scouting data to minimize size
     compact_data = {}
@@ -1076,13 +1076,39 @@ def view_text_elements():
                 'text_data': text_data
             })
     
-    # Get all events that have scouting data for the filter
-    events = (Event.query
-             .join(Match)
-             .join(ScoutingData).filter(ScoutingData.scouting_team_number==current_user.scouting_team_number)
-             .distinct()
-             .order_by(Event.name)
-             .all())
+    # Get combined/deduped events but only include those that have scouting data
+    from app.utils.team_isolation import get_combined_dropdown_events, get_alliance_team_numbers
+    # Determine the set of team numbers to include in scouting data queries (current team + alliance members)
+    current_team = current_user.scouting_team_number
+    alliance_team_numbers = get_alliance_team_numbers() or []
+    team_filter_numbers = set(alliance_team_numbers)
+    if current_team is not None:
+        team_filter_numbers.add(current_team)
+
+    # Find all event codes or ids that have scouting data for this set of teams
+    try:
+        if team_filter_numbers:
+            event_ids_with_data = set([m.event_id for m in Match.query.join(ScoutingData).filter(ScoutingData.scouting_team_number.in_(list(team_filter_numbers))).all() if getattr(m, 'event_id', None)])
+            event_codes_with_data = set([getattr(m.event, 'code', '').upper() for m in Match.query.join(ScoutingData).filter(ScoutingData.scouting_team_number.in_(list(team_filter_numbers))).all() if getattr(m, 'event', None) and getattr(m.event, 'code', None)])
+        else:
+            event_ids_with_data = set([m.event_id for m in Match.query.join(ScoutingData).filter(ScoutingData.scouting_team_number == current_team).all() if getattr(m, 'event_id', None)])
+            event_codes_with_data = set([getattr(m.event, 'code', '').upper() for m in Match.query.join(ScoutingData).filter(ScoutingData.scouting_team_number == current_team).all() if getattr(m, 'event', None) and getattr(m.event, 'code', None)])
+    except Exception:
+        event_ids_with_data = set()
+        event_codes_with_data = set()
+
+    events_combined = get_combined_dropdown_events()
+    events = []
+    for ev in events_combined:
+        # Allow if actual ORM event id is known and present in data set
+        ev_id = getattr(ev, 'id', None)
+        ev_code = getattr(ev, 'code', '')
+        if ev_id and ev_id in event_ids_with_data:
+            events.append(ev)
+            continue
+        if ev_code and ev_code.upper() in event_codes_with_data:
+            events.append(ev)
+            continue
     
     return render_template('scouting/text_elements.html',
                          scouting_entries=scouting_entries_with_text,

@@ -65,7 +65,7 @@
                     {% for event in team_events %}
                     <div class="list-group-item d-flex justify-content-between align-items-center">
                         <div>
-                            <strong>{{ event.name }}</strong>
+                            <strong>{{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}</strong>
                             {% if event.event_code %}<span class="text-muted ms-2">({{ event.event_code }})</span>{% endif %}
                             <div class="small text-muted">
                                 {{ event.city }}{% if event.state_prov %}, {{ event.state_prov }}{% endif %}{% if event.country %}, {{ event.country }}{% endif %}
@@ -98,7 +98,7 @@
                     {% for event in team.events %}
                     <a href="{{ url_for('teams.index', event_id=event.id) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
                         <div>
-                            <strong>{{ event.name }}</strong>
+                            <strong>{{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}</strong>
                             {% if event.code %}<span class="text-muted ms-2">({{ event.code }})</span>{% endif %}
                             <div class="small text-muted">{{ event.location }}</div>
                         </div>

@@ -329,6 +329,8 @@
 .type-scouting_data { background: #fff3e0; color: #f57c00; }
 .type-scouting { background: #fff3e0; color: #f57c00; }
 .type-match { background: #eaf2ff; color: var(--bs-primary, #0d6efd); }
+.type-page { background: #e9f7ef; color: #198754; }
+.type-help { background: #faf0e6; color: #d35400; }
 
 .no-results {
     text-align: center;
@@ -371,6 +373,8 @@ body.dark-mode .result-type {
 }
 
 /* Ensure suggestion dropdown items on this page inherit dark colors */
+html.dark-mode .enhanced-search-suggestions-main,
+html.dark-mode #suggestions,
 body.dark-mode .enhanced-search-suggestions-main,
 body.dark-mode #suggestions {
     background: var(--card-bg, #0b0b0d) !important;
@@ -378,6 +382,8 @@ body.dark-mode #suggestions {
     border-color: rgba(255,255,255,0.04) !important;
 }
 
+html.dark-mode .enhanced-search-suggestions-main .suggestion-item,
+html.dark-mode #suggestions .suggestion-item,
 body.dark-mode .enhanced-search-suggestions-main .suggestion-item,
 body.dark-mode #suggestions .suggestion-item {
     background: transparent !important;
@@ -499,6 +505,9 @@ body.dark-mode .search-stats i {
                                 </div>
                                 <div class="result-subtitle">
                                     {{ result.subtitle }}
+                                    {% if result.snippet %}
+                                        <div><small class="text-muted">{{ result.snippet | safe }}</small></div>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -700,7 +709,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function fetchSuggestions(query) {
         // Request the same suggestion types as the global/topbar search so matches and scouting
         // appear on the main /search page as well.
-        fetch(`{{ url_for('search.api_suggestions') }}?q=${encodeURIComponent(query)}&types=team,user,match,scouting,event,page`)
+        fetch(`{{ url_for('search.api_suggestions') }}?q=${encodeURIComponent(query)}&types=team,user,match,scouting,event,page,help`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
@@ -738,13 +747,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let html = '';
         // Show matches and scouting alongside teams/users/events
-        const categoryOrder = ['team', 'user', 'match', 'scouting', 'event'];
+        const categoryOrder = ['team', 'user', 'match', 'scouting', 'event', 'page', 'help'];
         const categoryLabels = {
             'team': 'Teams',
             'user': 'Users',
             'match': 'Matches',
             'scouting': 'Scouting',
             'event': 'Events'
+            , 'page': 'Pages',
+            'help': 'Help & Docs'
         };
 
         categoryOrder.forEach(type => {

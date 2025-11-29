@@ -25,6 +25,7 @@ from app.utils.team_isolation import (
     filter_events_by_scouting_team, filter_scouting_data_by_scouting_team, filter_pit_scouting_data_by_scouting_team,
     get_event_by_code
 )
+from app.utils.team_isolation import get_combined_dropdown_events
 from flask import jsonify
 from app.utils.api_auth import team_data_access_required
 
@@ -1173,8 +1174,42 @@ def data_events():
         events = events_query.offset(offset).limit(limit).all()
         total_count = events_query.count()
 
+        # Deduplicate events by normalized code (prefer most complete record)
+        from app.models import ScoutingAllianceEvent
+        from sqlalchemy import func
+        events_by_code = {}
+        def event_score(e):
+            score = 0
+            if e.name: score += 10
+            if e.location: score += 5
+            if getattr(e, 'start_date', None): score += 5
+            if getattr(e, 'end_date', None): score += 3
+            if getattr(e, 'timezone', None): score += 2
+            if e.year: score += 1
+            return score
+
+        for e in events:
+            key = (e.code or f'__id_{e.id}').strip().upper()
+            if key in events_by_code:
+                # prefer higher score
+                if event_score(e) > event_score(events_by_code[key]):
+                    events_by_code[key] = e
+            else:
+                events_by_code[key] = e
+
         events_data = []
-        for event in events:
+        for key, event in events_by_code.items():
+            # Mark as alliance if any active ScoutingAllianceEvent exists with this code
+            is_alliance = False
+            try:
+                if key.startswith('__id_'):
+                    is_alliance = False
+                else:
+                    sae = ScoutingAllianceEvent.query.filter(func.upper(ScoutingAllianceEvent.event_code) == key, ScoutingAllianceEvent.is_active == True).first()
+                    is_alliance = sae is not None
+            except Exception:
+                is_alliance = False
+
             events_data.append({
                 'id': event.id,
                 'name': event.name,
@@ -1182,7 +1217,8 @@ def data_events():
                 'location': event.location,
                 'start_date': event.start_date.isoformat() if event.start_date else None,
                 'end_date': event.end_date.isoformat() if event.end_date else None,
-                'team_count': len(event.teams)
+                'team_count': len(event.teams),
+                'is_alliance': is_alliance
             })
 
         return jsonify({
@@ -1208,7 +1244,7 @@ def export_excel():
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         # 1) Events
         try:
-            events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
+            events = get_combined_dropdown_events()
             events_rows = []
             for e in events:
                 events_rows.append({
@@ -1472,8 +1508,8 @@ def export_portable():
     try:
         export_data = {}
 
-        # Events
-        events = Event.query.order_by(Event.year.desc(), Event.name).all()
+        # Events (use alliance-aware combined/deduped list)
+        events = get_combined_dropdown_events()
         export_data['events'] = []
         for e in events:
             export_data['events'].append({
@@ -2051,7 +2087,7 @@ def manage_entries():
         matches = []  # No matches if no current event is set
     # Always provide events list filtered by scouting team so the template can show Events tab
     try:
-        events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
+        events = get_combined_dropdown_events()
     except Exception:
         events = []
 
@@ -2250,7 +2286,7 @@ def validate_data():
     game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     event_id = request.args.get('event_id', type=int)
-    events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
+    events = get_combined_dropdown_events()
     if event_id:
         event = filter_events_by_scouting_team().filter(Event.id == event_id).first_or_404()
     elif current_event_code:
@@ -2260,8 +2296,9 @@ def validate_data():
     if not event:
         flash('No event selected or found.', 'danger')
         return redirect(url_for('data.index'))
-    # Get all matches for this event
-    matches = Match.query.filter_by(event_id=event.id).all()
+    # Get all matches for this event (respecting team/alliance isolation)
+    from app.utils.team_isolation import filter_matches_by_scouting_team
+    matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
     # Get API matches (official scores)
     try:
         api_matches = get_matches_dual_api(event.code)
@@ -2605,7 +2642,7 @@ def data_stats():
         matches_count = filter_matches_by_scouting_team().count()
         scouting_count = filter_scouting_data_by_scouting_team().count()
         pit_scouting_count = filter_pit_scouting_data_by_scouting_team().count()
-        events_count = filter_events_by_scouting_team().count()
+        events_count = len(get_combined_dropdown_events())
         
         # Event-specific stats if current event is set
         event_stats = {}

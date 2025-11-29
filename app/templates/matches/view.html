@@ -7,7 +7,7 @@
     <h1 class="mb-4">
         <span class="badge {% if match.match_type == 'Qualification' %}bg-primary{% elif match.match_type == 'Playoff' %}bg-danger{% elif match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %}">{{ match.match_type }}</span>
         Match {{ match.match_number }}
-        <span class="badge bg-info">{{ match.event.name }}</span>
+        <span class="badge bg-info">{{ match.event.name }}{% if match.event and match.event.is_alliance %} (Alliance){% endif %}</span>
     </h1>
     
     {% if match.scheduled_time or match.predicted_time %}

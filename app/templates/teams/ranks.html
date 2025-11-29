@@ -31,9 +31,9 @@
                         <form method="get" action="{{ url_for('teams.ranks') }}" class="d-flex">
                             <select id="event-selector" name="event_id" class="form-select me-2" onchange="this.form.submit()">
                                 <option value="">-- All Events --</option>
-                                {% for event in events %}
-                                <option value="{{ event.id }}" {% if selected_event and selected_event.id == event.id %}selected{% endif %}>
-                                    {{ event.name }} ({{ event.year }})
+                                    {% for event in events|dedupe_events %}
+                                    <option value="{{ event.id }}" data-event-code="{{ event.code|upper if event.code else '' }}" {% if selected_event and selected_event.id == event.id %}selected{% endif %}>
+                                        {{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}
                                 </option>
                                 {% endfor %}
                             </select>
