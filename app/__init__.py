@@ -978,6 +978,16 @@ def create_app(test_config=None):
     # Register chat history routes
     register_chat_history_routes(app)
 
+    # Inject combined all_events that includes both local and alliance entries
+    @app.context_processor
+    def inject_combined_all_events():
+        try:
+            from app.utils.team_isolation import get_combined_dropdown_events
+            events = get_combined_dropdown_events()
+            return {'all_events': events, 'events': events}
+        except Exception:
+            return {'all_events': []}
+
     # Serve service worker at root path so tools (and PWABuilder) can fetch it at /sw.js
     @app.route('/sw.js')
     def service_worker():
@@ -1052,6 +1062,18 @@ def create_app(test_config=None):
                 'is_alliance_mode_active': False,
                 'active_alliance_info': None
             }
+
+    # Inject shared alliance event codes into all templates so UI can label alliance events
+    @app.context_processor
+    def inject_alliance_shared_event_codes():
+        try:
+            from app.utils.team_isolation import get_alliance_shared_event_codes
+            shared = get_alliance_shared_event_codes() or []
+            # Use uppercase codes for simple comparisons in templates
+            upper_shared = [c.upper() for c in shared if isinstance(c, str)]
+            return {'shared_event_codes': upper_shared}
+        except Exception:
+            return {'shared_event_codes': []}
     
     @app.context_processor
     def inject_csrf_token():
@@ -1164,7 +1186,13 @@ def create_app(test_config=None):
             except Exception:
                 return str(team_number)
 
-        return dict(game_config=get_current_game_config(), display_team_label=display_team_label)
+        try:
+            from app.utils.config_manager import get_effective_game_config
+            effective_cfg = get_effective_game_config()
+        except Exception:
+            from app.utils.config_manager import get_current_game_config
+            effective_cfg = get_current_game_config()
+        return dict(game_config=effective_cfg, display_team_label=display_team_label)
     
     # Add a context processor to make theme data available in all templates
     @app.context_processor

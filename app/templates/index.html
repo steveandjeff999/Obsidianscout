@@ -97,7 +97,7 @@
                 </div>
             </div>
         </div>
-
+        
         <!-- Event management and charts -->
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -137,6 +137,23 @@
                 {% else %}
                     <div class="alert alert-warning">No event code configured. <a href="{{ url_for('main.simple_edit_config') }}">Set event code</a> to enable automatic syncs.</div>
                 {% endif %}
+            </div>
+        </div>
+        
+        <!-- Live Matches: fills previously empty space on the dashboard -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-crosshairs me-2 text-warning"></i> Live Matches</h5>
+                <small class="text-muted">Upcoming schedule</small>
+            </div>
+            <div class="card-body p-2" id="liveMatchesContainer">
+                <div class="text-center p-4 text-muted small">
+                    <div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div>
+                    <div class="mt-2">Loading live matches…</div>
+                </div>
+            </div>
+            <div class="card-footer bg-transparent text-end">
+                <a href="{{ url_for('matches.index') }}" class="btn btn-sm btn-outline-primary">View full schedule</a>
             </div>
         </div>
     </div>
@@ -265,6 +282,41 @@ document.addEventListener('DOMContentLoaded', function() {
             }).catch(err=>{ console.error(err); }).finally(()=>{ syncBtn.disabled=false; if (syncSpinner) syncSpinner.style.display='none'; });
         });
     }
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const liveContainer = document.getElementById('liveMatchesContainer');
+    async function loadLiveMatches(){
+        try{
+            const res = await fetch('/api/brief-data', { credentials: 'same-origin' });
+            if(!res.ok) throw new Error('Fetch failed');
+            const payload = await res.json();
+            if(!payload.success) throw new Error(payload.error || 'Failed to load');
+            renderMatches(payload.upcoming_matches || []);
+        }catch(e){
+            if(liveContainer) liveContainer.innerHTML = `<div class="text-center p-3 text-danger small">${e.message}</div>`;
+        }
+    }
+    function escapeHtml(text){ const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+    function formatMatchTime(ts){ const d = new Date(ts); return isNaN(d) ? '' : d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+    function renderMatches(matches){
+        if(!liveContainer) return;
+        if(!matches.length){
+            liveContainer.innerHTML = '<div class="text-center p-3 text-muted small">No upcoming matches at the moment</div>';
+            return;
+        }
+        liveContainer.innerHTML = matches.map(m => {
+            const red = (m.red_teams || []).map(t => `<div class="badge bg-light text-dark me-1">${escapeHtml(String(t))}</div>`).join('');
+            const blue = (m.blue_teams || []).map(t => `<div class="badge bg-light text-dark me-1">${escapeHtml(String(t))}</div>`).join('');
+            const time = m.scheduled_time ? `<div class="time-pill">${formatMatchTime(m.scheduled_time)}</div>` : '';
+            const pred = (m.prediction && m.prediction.winner) ? `<div class="small predicted-winner mt-1">Predicted: ${escapeHtml(m.prediction.winner)} (${escapeHtml(String(m.prediction.red_score))}-${escapeHtml(String(m.prediction.blue_score))})</div>` : '';
+            return `<div class="list-group-item d-flex justify-content-between align-items-start"><div><div class="fw-medium">${escapeHtml(m.match_type || '')} ${escapeHtml(String(m.match_number || ''))}</div><div class="small text-muted mt-1">${red}${blue}</div>${pred}</div><div class="text-end">${time}</div></div>`;
+        }).join('');
+    }
+
+    loadLiveMatches();
+    setInterval(loadLiveMatches, 30000);
 });
 </script>
 {% endblock %}

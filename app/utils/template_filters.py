@@ -103,3 +103,72 @@ def init_app(app):
         if dt_utc is None or not event_timezone:
             return dt_utc
         return convert_utc_to_local(dt_utc, event_timezone)
+
+    @app.template_filter('dedupe_events')
+    def dedupe_events(events):
+        """
+        Deduplicate a list of events for template rendering.
+
+        Rules:
+        - Events are considered duplicates when they share the same event code (case-insensitive)
+          and the same alliance status.
+        - If there are two entries with the same code but different alliance status, both should remain
+          (do not dedupe alliance vs non-alliance events of the same code).
+        - If code is not present, fall back to ID-based uniqueness.
+        """
+        try:
+            # Precompute shared event codes to ensure we treat alliance-labeled events properly
+            try:
+                from app.utils.team_isolation import get_alliance_shared_event_codes, get_current_scouting_team_number
+                shared_codes = set([str(c).strip().upper() for c in (get_alliance_shared_event_codes() or []) if isinstance(c, str)])
+                current_team = get_current_scouting_team_number()
+            except Exception:
+                shared_codes = set()
+                current_team = None
+            unique = []
+            seen = set()
+            for ev in (events or []):
+                # Normalize code (case-insensitive) and fallback to name+year if absent
+                code = None
+                if hasattr(ev, 'code'):
+                    code = getattr(ev, 'code')
+                elif isinstance(ev, dict):
+                    code = ev.get('code')
+                code_key = ''
+                if code:
+                    code_key = str(code).strip().upper()
+                else:
+                    # Fallback to name+year normalization when code is missing
+                    name = getattr(ev, 'name', '') if not isinstance(ev, dict) else ev.get('name', '')
+                    year = getattr(ev, 'year', '') if not isinstance(ev, dict) else ev.get('year', '')
+                    code_key = f'NAME:{str(name).strip().upper()}|{str(year)}'
+
+                # Determine alliance flag
+                is_alliance = False
+                # If the event object has an explicit 'is_alliance' flag, use it
+                if hasattr(ev, 'is_alliance'):
+                    is_alliance = bool(getattr(ev, 'is_alliance'))
+                elif isinstance(ev, dict):
+                    is_alliance = bool(ev.get('is_alliance', False))
+                # Determine if the event should be considered an alliance event by code
+                try:
+                    ev_code = getattr(ev, 'code', None) if not isinstance(ev, dict) else ev.get('code')
+                    event_sc_tn = getattr(ev, 'scouting_team_number', None) if not isinstance(ev, dict) else ev.get('scouting_team_number')
+                    if ev_code and str(ev_code).upper() in shared_codes:
+                        # If event belongs to the current user's team, mark as non-alliance copy
+                        if current_team is not None and event_sc_tn == current_team:
+                            # keep as non-alliance (explicit local copy)
+                            pass
+                        else:
+                            is_alliance = True
+                except Exception:
+                    pass
+
+                key = (code_key, bool(is_alliance))
+                if key not in seen:
+                    seen.add(key)
+                    unique.append(ev)
+            return unique
+        except Exception:
+            # On any failure, return events as-is to avoid breaking templates
+            return events or []

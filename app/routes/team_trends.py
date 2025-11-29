@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, current_app, jsonify
 from app.models import Team, ScoutingData, Event
-from app.utils.config_manager import get_current_game_config
+from app.utils.config_manager import get_effective_game_config
 from app.utils.team_isolation import filter_teams_by_scouting_team, get_event_by_code
 from statistics import mean
 import math
@@ -31,7 +31,7 @@ def index():
     # to that event (and filtered by scouting team isolation) will be shown.
     teams = []
     try:
-        game_config = get_current_game_config() or {}
+        game_config = get_effective_game_config() or {}
         event_code = game_config.get('current_event_code')
         if event_code:
             # Use the team isolation helper to respect multi-tenant filtering
@@ -136,7 +136,7 @@ def _analyze_team(team_number):
             # If no explicit total, compute from game config periods (auto + teleop + endgame)
             if total_points is None:
                 # Use game config scoring elements to compute point totals if available
-                game_config = get_current_game_config() or {}
+                game_config = get_effective_game_config() or {}
                 total_points = 0
 
                 def compute_period_points(period_name):

@@ -55,9 +55,9 @@
                                     <div class="mb-3">
                                         <select id="event-filter" class="form-select">
                                             <option value="">All Events</option>
-                                            {% for event in all_events %}
-                                            <option value="{{ event.id }}" {% if event.id == selected_event_id %}selected{% endif %}>
-                                                {{ event.name }}
+                                            {% for event in all_events|dedupe_events %}
+                                            <option value="{{ event.id }}" data-event-code="{{ event.code|upper if event.code else '' }}" {% if event.id == selected_event_id %}selected{% endif %}>
+                                                {{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}
                                             </option>
                                             {% endfor %}
                                         </select>
@@ -152,9 +152,9 @@
                                 </label>
                                 <select name="event_id" id="event_id" class="form-select event-select">
                                     <option value="">All Events</option>
-                                    {% for event in all_events %}
-                                    <option value="{{ event.id }}" {% if event.id == selected_event_id %}selected{% endif %}>
-                                        {{ event.name }}
+                                    {% for event in all_events|dedupe_events %}
+                                    <option value="{{ event.id }}" data-event-code="{{ event.code|upper if event.code else '' }}" {% if event.id == selected_event_id %}selected{% endif %}>
+                                        {{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}
                                     </option>
                                     {% endfor %}
                                 </select>
@@ -534,8 +534,8 @@
                                         <div class="col-12 mt-2">
                                             <strong class="small">Event:</strong>
                                             <div class="small text-muted">
-                                                {% for event in all_events %}
-                                                    {% if event.id == selected_event_id %}{{ event.name }}{% endif %}
+                                                {% for event in all_events|dedupe_events %}
+                                                    {% if event.id == selected_event_id %}{{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}{% endif %}
                                                 {% endfor %}
                                             </div>
                                         </div>

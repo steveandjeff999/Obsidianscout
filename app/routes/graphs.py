@@ -18,7 +18,7 @@ from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_effective_game_config
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
-    filter_events_by_scouting_team, get_event_by_code
+    filter_events_by_scouting_team, get_event_by_code, get_combined_dropdown_events
 )
 import os
 import secrets
@@ -242,8 +242,15 @@ def _build_page_context(page, scouting_team_number):
     teams_q = Team.query.order_by(Team.team_number).all()
     teams = [{'id': t.team_number, 'name': t.team_name or f'Team {t.team_number}'} for t in teams_q]
 
-    events_q = Event.query.order_by(Event.name).limit(500).all()
-    events = [{'id': e.id, 'name': e.name or e.code, 'code': e.code} for e in events_q]
+    # Use the combined dropdown events method which returns both local and
+    # alliance-synthetic entries. The template's `dedupe_events` filter will
+    # ensure duplicates are handled safely.
+    try:
+        events_q = get_combined_dropdown_events()
+    except Exception:
+        events_q = []
+    # Normalized to a list of simple dicts for templates
+    events = [{'id': getattr(e, 'id', None), 'name': getattr(e, 'name', getattr(e, 'code', None)), 'code': getattr(e, 'code', None)} for e in events_q]
 
     matches_q = Match.query.order_by(Match.event_id, Match.match_number).limit(1000).all()
     matches = [{'id': m.id, 'event_id': m.event_id, 'match_type': m.match_type, 'match_number': m.match_number} for m in matches_q]
@@ -327,7 +334,11 @@ def index():
     # Convert back to list, sorted by team number
     all_teams = sorted(teams_by_number.values(), key=lambda t: t.team_number)
     
-    all_events = filter_events_by_scouting_team().all()
+    # Provide a combined list of events for dropdowns (local + alliance entries)
+    try:
+        all_events = get_combined_dropdown_events()
+    except Exception:
+        all_events = []
     
     # Calculate team metrics for sorting
     team_metrics = {}
@@ -708,7 +719,7 @@ def graphs_data():
     # Convert back to list, sorted by team number
     all_teams = sorted(teams_by_number.values(), key=lambda t: t.team_number)
     
-    all_events = filter_events_by_scouting_team().all()
+    all_events = get_combined_dropdown_events()
     
     # Calculate team metrics
     team_metrics = {}
@@ -833,10 +844,10 @@ def side_by_side():
 
     # Prepare helper imports once
     from app.utils.team_isolation import filter_scouting_data_by_scouting_team, get_current_scouting_team_number
-    from app.utils.config_manager import get_current_game_config
+    from app.utils.config_manager import get_effective_game_config
 
     scouting_team_number = get_current_scouting_team_number()
-    game_config = get_current_game_config()
+    game_config = get_effective_game_config()
 
     for team_number, team_group in teams_by_number.items():
         # Use first Team object as representative (for team_name, id display, etc.)
@@ -1147,7 +1158,7 @@ def view_shared(share_id):
         all_teams = []
 
     try:
-        all_events = Event.query.order_by(Event.id).all()
+        all_events = get_combined_dropdown_events()
     except Exception:
         all_events = []
 
@@ -1908,8 +1919,11 @@ def pages_create():
     teams = [{'id': t.team_number, 'name': t.team_name or f'Team {t.team_number}'} for t in teams_q]
     
     # Fetch events and matches for dropdown population
-    events_q = filter_events_by_scouting_team().order_by(Event.name).limit(500).all()
-    events = [{'id': e.id, 'name': e.name or e.code, 'code': e.code} for e in events_q]
+    try:
+        events_q = get_combined_dropdown_events()
+    except Exception:
+        events_q = []
+    events = [{'id': getattr(e, 'id', None), 'name': getattr(e, 'name', getattr(e, 'code', None)), 'code': getattr(e, 'code', None)} for e in events_q]
     
     matches_q = Match.query.order_by(Match.event_id, Match.match_number).limit(1000).all()
     matches = [{'id': m.id, 'event_id': m.event_id, 'match_type': m.match_type, 'match_number': m.match_number} for m in matches_q]
@@ -1968,8 +1982,11 @@ def pages_edit(page_id):
     teams = [{'id': t.team_number, 'name': t.team_name or f'Team {t.team_number}'} for t in teams_q]
     
     # Fetch events and matches for dropdown population
-    events_q = filter_events_by_scouting_team().order_by(Event.name).limit(500).all()
-    events = [{'id': e.id, 'name': e.name or e.code, 'code': e.code} for e in events_q]
+    try:
+        events_q = get_combined_dropdown_events()
+    except Exception:
+        events_q = []
+    events = [{'id': getattr(e, 'id', None), 'name': getattr(e, 'name', getattr(e, 'code', None)), 'code': getattr(e, 'code', None)} for e in events_q]
     
     matches_q = Match.query.order_by(Match.event_id, Match.match_number).limit(1000).all()
     matches = [{'id': m.id, 'event_id': m.event_id, 'match_type': m.match_type, 'match_number': m.match_number} for m in matches_q]
@@ -2841,8 +2858,11 @@ def pages_view(page_id):
     teams = [{'id': t.team_number, 'name': t.team_name or f'Team {t.team_number}'} for t in teams_q]
 
     # Fetch events and matches for dropdown population
-    events_q = filter_events_by_scouting_team().order_by(Event.name).limit(500).all()
-    events = [{'id': e.id, 'name': e.name or e.code, 'code': e.code} for e in events_q]
+    try:
+        events_q = get_combined_dropdown_events()
+    except Exception:
+        events_q = []
+    events = [{'id': getattr(e, 'id', None), 'name': getattr(e, 'name', getattr(e, 'code', None)), 'code': getattr(e, 'code', None)} for e in events_q]
     
     matches_q = Match.query.order_by(Match.event_id, Match.match_number).limit(1000).all()
     matches = [{'id': m.id, 'event_id': m.event_id, 'match_type': m.match_type, 'match_number': m.match_number} for m in matches_q]

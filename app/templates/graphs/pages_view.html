@@ -598,7 +598,8 @@
   </style>
 
   <!-- Embed events and matches data for dropdown population -->
-  <script id="page_viewer_events_json" type="application/json">{{ events|default([])|tojson|safe }}</script>
+  <script id="page_viewer_events_json" type="application/json">{{ events|default([])|dedupe_events|tojson|safe }}</script>
+  <script id="page_viewer_shared_event_codes" type="application/json">{{ shared_event_codes|tojson|safe }}</script>
   <script id="page_viewer_matches_json" type="application/json">{{ matches|default([])|tojson|safe }}</script>
 
   <script>
@@ -747,7 +748,8 @@
       PAGE_VIEWER_EVENTS.forEach(event => {
         const opt = document.createElement('option');
         opt.value = event.id;
-        opt.textContent = event.name || event.code;
+        const isAlliance = event.is_alliance || (event.code && (JSON.parse(document.getElementById('page_viewer_shared_event_codes').textContent || '[]').includes((event.code || '').toUpperCase())));
+        opt.textContent = (event.name || event.code) + (isAlliance ? ' (Alliance)' : '');
         sel.appendChild(opt);
       });
     });

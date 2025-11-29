@@ -93,8 +93,8 @@
                         <div class="col-auto">
                             <select id="eventSelect" name="event_id" class="form-select form-select-sm">
                                 <option value="">(Use configured event)</option>
-                                {% for ev in events %}
-                                <option value="{{ ev.id }}" {% if selected_event_id and ev.id == selected_event_id|int %}selected{% endif %}>{{ ev.name or ev.code or ev.id }}</option>
+                                {% for ev in events|dedupe_events %}
+                                <option value="{{ ev.id }}" data-event-code="{{ ev.code|upper if ev.code else '' }}" {% if selected_event_id and ev.id == selected_event_id|int %}selected{% endif %}>{{ ev.name or ev.code or ev.id }}{% if ev.is_alliance %} (Alliance){% endif %}</option>
                                 {% endfor %}
                             </select>
                         </div>

@@ -55,11 +55,11 @@
                 <div class="mb-3">
                     <h6><i class="fas fa-file-code me-2"></i>Configuration Overview</h6>
                     <ul class="list-unstyled">
-                        <li><strong>Game Config Sections:</strong> {{ current_config.game_config.scouting.sections|length }}</li>
+                        <li><strong>Game Config Sections:</strong> {{ current_config.game_config.get('scouting', {}).get('sections', [])|length }}</li>
                         <li><strong>Pit Config Sections:</strong> {{ current_config.pit_config.pit_scouting.sections|length }}</li>
                         <li><strong>Total Game Elements:</strong> 
                             {% set total_game_elements = [] %}
-                            {% for section in current_config.game_config.scouting.sections %}
+                            {% for section in current_config.game_config.get('scouting', {}).get('sections', []) %}
                                 {% for element in section.elements %}
                                     {% if total_game_elements.append(element) %}{% endif %}
                                 {% endfor %}
@@ -68,7 +68,7 @@
                         </li>
                         <li><strong>Total Pit Elements:</strong>
                             {% set total_pit_elements = [] %}
-                            {% for section in current_config.pit_config.pit_scouting.sections %}
+                            {% for section in current_config.pit_config.get('pit_scouting', {}).get('sections', []) %}
                                 {% for element in section.elements %}
                                     {% if total_pit_elements.append(element) %}{% endif %}
                                 {% endfor %}
@@ -139,7 +139,7 @@
                     <div class="alert alert-info" id="status-indicator">
                         <i class="fas fa-circle text-success me-2"></i>
                         <strong>System Status:</strong> <span id="status-text">Connected and monitoring</span>
-                        <small class="text-muted ms-3">Last updated: <span id="last-updated">{{ moment().format('HH:mm:ss') }}</span></small>
+                        <small class="text-muted ms-3">Last updated: <span id="last-updated">--:--:--</span></small>
                     </div>
                 </div>
                 

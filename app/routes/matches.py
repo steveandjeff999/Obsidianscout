@@ -22,6 +22,7 @@ from app.utils.team_isolation import (
     filter_matches_by_scouting_team, filter_events_by_scouting_team,
     filter_teams_by_scouting_team, assign_scouting_team_to_model, get_event_by_code
 )
+from app.utils.team_isolation import get_combined_dropdown_events
 from sqlalchemy import or_
 
 def get_theme_context():
@@ -58,8 +59,8 @@ def index():
         # Otherwise use the current event from config (filtered by scouting team)
         event = get_event_by_code(current_event_code)
     
-    # Get all events for the dropdown (filtered by scouting team)
-    events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
+    # Get all events for the dropdown (combined/deduped like /events)
+        events = get_combined_dropdown_events()
     
     # Filter matches by the selected event and scouting team
     if event:
@@ -512,7 +513,7 @@ def add():
     if current_event_code:
         current_event = get_event_by_code(current_event_code)
     
-    events = filter_events_by_scouting_team().all()
+    events = get_combined_dropdown_events()
     
     # Get teams filtered by the current event if available
     if current_event:
@@ -634,7 +635,7 @@ def add():
 def edit(match_id):
     """Edit match details"""
     match = Match.query.get_or_404(match_id)
-    events = filter_events_by_scouting_team().all()
+    events = get_combined_dropdown_events()
     
     # Get game configuration
     game_config = get_effective_game_config()
@@ -703,8 +704,8 @@ def delete(match_id):
 @analytics_required
 def strategy():
     """Match strategy analysis page"""
-    # Get all events for the dropdown
-    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+    # Get all events for the dropdown (combined/deduped like /events)
+    events = get_combined_dropdown_events()
     
     # Get event from URL parameter or form
     event_id = request.args.get('event_id', type=int) or request.form.get('event_id', type=int)
@@ -716,7 +717,7 @@ def strategy():
         event = Event.query.get_or_404(event_id)
         
         # Get all matches for this event
-        matches = Match.query.filter_by(event_id=event.id).all()
+        matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
         # Custom match type order: practice, qualification, quarterfinals, semifinals, finals
         match_type_order = {
             'practice': 1,
@@ -736,8 +737,8 @@ def strategy():
             )
         matches = sorted(matches, key=match_sort_key)
     
-    # Get game configuration
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    # Get game configuration (alliance-aware)
+    game_config = get_effective_game_config()
     
     # Allow an optional preselected match id so other pages can link directly to an analysis
     preselected_match_id = request.args.get('match_id', type=int)
@@ -760,8 +761,8 @@ def strategy_live():
     and advances to the following match 2 minutes after the scheduled start time
     of the match it was showing.
     """
-    # All events for dropdown
-    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+    # All events for dropdown (combined/deduped like /events)
+    events = get_combined_dropdown_events()
 
     # Determine selected event from query params or config
     # Use the effective game config helper so defaults from config files are respected
@@ -789,8 +790,8 @@ def strategy_live():
 @analytics_required
 def strategy_all():
     """Show a compact strategy summary card for every match in an event."""
-    # Get all events for the dropdown
-    events = Event.query.order_by(Event.year.desc(), Event.name).all()
+    # Get all events for the dropdown (combined/deduped like /events)
+    events = get_combined_dropdown_events()
 
     # Get event from URL parameter or form
     event_id = request.args.get('event_id', type=int) or request.form.get('event_id', type=int)
@@ -800,7 +801,7 @@ def strategy_all():
 
     if event_id:
         event = Event.query.get_or_404(event_id)
-        matches = Match.query.filter_by(event_id=event.id).all()
+        matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
         # Keep same ordering as other strategy pages
         match_type_order = {
             'practice': 1,
@@ -820,8 +821,8 @@ def strategy_all():
             )
         matches = sorted(matches, key=match_sort_key)
 
-    # Get game configuration
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    # Get game configuration (alliance-aware)
+    game_config = get_effective_game_config()
 
     # Attempt to generate compact summaries for each match. If analysis fails for a match,
     # include minimal info and continue so the page always renders.
@@ -1183,8 +1184,8 @@ def public_strategy_view(token):
         return redirect(url_for('matches.strategy'))
 
     # Render the same template but include the token and shared match id so JS can call the public analyze endpoint
-    events = Event.query.order_by(Event.year.desc(), Event.name).all()
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    events = get_combined_dropdown_events()
+    game_config = get_effective_game_config()
     # Fetch the match for the share
     match = Match.query.get(share.get('match_id'))
     selected_event = match.event if match else None
@@ -1278,8 +1279,8 @@ def strategy_draw():
         flash('Insufficient permissions to access strategy drawing.', 'danger')
         return redirect(url_for('matches.index'))
 
-    events = Event.query.order_by(Event.year.desc(), Event.name).all()
-    game_config = current_app.config.get('GAME_CONFIG', {})
+    events = get_combined_dropdown_events()
+    game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     event_id = request.args.get('event_id', type=int) or request.form.get('event_id', type=int)
     event = None
@@ -1289,7 +1290,7 @@ def strategy_draw():
     elif current_event_code:
         event = get_event_by_code(current_event_code)
     if event:
-        matches = Match.query.filter_by(event_id=event.id).all()
+        matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
         match_type_order = {
             'practice': 1,
             'qualification': 2,

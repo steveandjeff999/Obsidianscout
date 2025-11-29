@@ -169,7 +169,7 @@
                                         </span>
                                     </td>
                                     <td>{{ match.match_number }}</td>
-                                    <td>{{ match.event.name }}</td>
+                                    <td>{{ match.event.name }}{% if match.event and match.event.is_alliance %} (Alliance){% endif %}</td>
                                     <td class="text-danger">{{ match.red_alliance }}</td>
                                     <td class="text-primary">{{ match.blue_alliance }}</td>
                                     <td>
@@ -229,9 +229,9 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for event in events %}
+                                {% for event in events|dedupe_events %}
                                 <tr>
-                                    <td>{{ event.name }}</td>
+                                    <td>{{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}</td>
                                     <td>{{ event.code }}</td>
                                     <td>{{ event.year }}</td>
                                     <td>{{ event.location }}</td>

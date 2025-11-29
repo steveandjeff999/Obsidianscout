@@ -2381,6 +2381,237 @@ def perform_periodic_alliance_sync():
         print(f"Error in perform_periodic_alliance_sync: {str(e)}")
 
 
+def perform_periodic_alliance_api_sync():
+    """Perform periodic API autosync for alliances that have a shared game config.
+
+    This mirrors `api_data_sync_worker` behavior which runs per scouting team.
+    We scope DB writes to the alliance's configured `game_config_team` or the
+    first active member if not set. Uses existing `sync_status` helpers to
+    determine desired interval and throttling.
+    """
+    try:
+        with current_app.app_context():
+            from app.utils.config_manager import load_game_config
+            from app.utils.api_utils import get_teams_dual_api, get_matches_dual_api, get_event_details_dual_api
+            from app.utils.sync_status import get_last_sync, update_last_sync, get_event_cache, set_event_cache
+            from app.models import ScoutingAlliance, Event, Team, Match, db
+            from sqlalchemy import func
+
+            # Intervals (seconds) copied from the per-team logic
+            RECENT_INTERVAL = 180
+            UNKNOWN_DATE_INTERVAL = 20 * 60
+            DAILY_INTERVAL = 24 * 60 * 60
+            CHECK_EVENT_INTERVAL = 5 * 60
+
+            alliances = ScoutingAlliance.query.filter_by(is_active=True).all()
+            for alliance in alliances:
+                try:
+                    if not alliance.is_config_complete():
+                        continue
+
+                    # Load alliance game config (shared config takes precedence)
+                    if alliance.shared_game_config:
+                        try:
+                            game_config = json.loads(alliance.shared_game_config)
+                        except Exception:
+                            game_config = load_game_config(team_number=alliance.game_config_team)
+                    elif alliance.game_config_team:
+                        game_config = load_game_config(team_number=alliance.game_config_team)
+                    else:
+                        continue
+
+                    # Place the alliance config into current_app for downstream helpers
+                    try:
+                        current_app.config['GAME_CONFIG'] = game_config
+                    except Exception:
+                        pass
+
+                    # Check api_settings.auto_sync_enabled (default True)
+                    api_settings = game_config.get('api_settings') or {}
+                    auto_sync_enabled = api_settings.get('auto_sync_enabled', True)
+                    if not auto_sync_enabled:
+                        continue
+
+                    # Determine event_code
+                    event_code = (game_config.get('current_event_code') or '').strip()
+                    if not event_code:
+                        # Nothing to sync
+                        continue
+
+                    # Use per-alliance cache key to avoid colliding with team caches
+                    cache_key = f"alliance_{alliance.id}"
+                    cached = get_event_cache(cache_key)
+                    now_utc = datetime.now(timezone.utc)
+                    use_cached_event = cached and (now_utc - cached.get('checked_at')).total_seconds() < CHECK_EVENT_INTERVAL and cached.get('event_code') == event_code
+
+                    if use_cached_event and cached:
+                        cached_start = cached.get('start_date')
+                        if cached_start:
+                            try:
+                                if hasattr(cached_start, 'year') and not getattr(cached_start, 'tzinfo', None):
+                                    cached_start_dt = datetime.combine(cached_start, datetime.min.time()).replace(tzinfo=timezone.utc)
+                                else:
+                                    cached_start_dt = cached_start if getattr(cached_start, 'tzinfo', None) else cached_start.replace(tzinfo=timezone.utc)
+
+                                delta_seconds_cached = (cached_start_dt - now_utc).total_seconds()
+                                threshold_seconds = 1.5 * 7 * 24 * 60 * 60
+                                if abs(delta_seconds_cached) <= threshold_seconds:
+                                    set_event_cache(cache_key, event_code, cached_start, RECENT_INTERVAL)
+                                else:
+                                    set_event_cache(cache_key, event_code, cached_start, DAILY_INTERVAL)
+                            except Exception:
+                                pass
+
+                    if not event_code:
+                        set_event_cache(cache_key, None, None, UNKNOWN_DATE_INTERVAL)
+                        continue
+
+                    # Determine the storage team number for this alliance
+                    storage_team = alliance.game_config_team or (alliance.get_active_members()[0].team_number if alliance.get_active_members() else None)
+                    if storage_team is None:
+                        continue
+
+                    # Ensure event exists under that storage team
+                    event = Event.query.filter(
+                        func.upper(Event.code) == event_code.upper(),
+                        Event.scouting_team_number == storage_team
+                    ).first()
+                    if not event:
+                        try:
+                            event_details = get_event_details_dual_api(event_code)
+                            if event_details:
+                                from app.routes.data import get_or_create_event
+                                event = get_or_create_event(
+                                    name=event_details.get('name', event_code),
+                                    code=event_code,
+                                    year=event_details.get('year', game_config.get('season', None) or game_config.get('year', 0)),
+                                    location=event_details.get('location'),
+                                    start_date=event_details.get('start_date'),
+                                    end_date=event_details.get('end_date'),
+                                    scouting_team_number=storage_team
+                                )
+                                if event_details.get('timezone') and not getattr(event, 'timezone', None):
+                                    event.timezone = event_details.get('timezone')
+                                    db.session.add(event)
+                                db.session.commit()
+                        except Exception as e:
+                            db.session.rollback()
+                            print(f"  Failed to create event {event_code} for alliance {alliance.id}: {e}")
+                            continue
+
+                    # Determine desired_interval via event date
+                    desired_interval = RECENT_INTERVAL
+                    try:
+                        if 'use_cached_event' in locals() and use_cached_event and cached:
+                            desired_interval = cached.get('desired_interval', RECENT_INTERVAL)
+                        else:
+                            if not getattr(event, 'start_date', None):
+                                desired_interval = UNKNOWN_DATE_INTERVAL
+                            else:
+                                event_start_dt = datetime.combine(event.start_date, datetime.min.time()).replace(tzinfo=timezone.utc) if not getattr(event.start_date, 'tzinfo', None) else event.start_date
+                                delta_seconds = (event_start_dt - now_utc).total_seconds()
+                                threshold_seconds = 1.5 * 7 * 24 * 60 * 60
+                                if abs(delta_seconds) <= threshold_seconds:
+                                    desired_interval = RECENT_INTERVAL
+                                else:
+                                    desired_interval = DAILY_INTERVAL
+                    except Exception:
+                        desired_interval = RECENT_INTERVAL
+
+                    set_event_cache(cache_key, event_code, getattr(event, 'start_date', None), desired_interval)
+
+                    last = get_last_sync(cache_key)
+                    if last:
+                        seconds_since = (datetime.now(timezone.utc) - last).total_seconds()
+                        if seconds_since < desired_interval:
+                            continue
+
+                    # --- Perform the actual sync for this alliance ---
+                    try:
+                        team_data_list = get_teams_dual_api(event_code)
+                        teams_added = 0
+                        teams_updated = 0
+
+                        for team_data in team_data_list:
+                            if not team_data or not team_data.get('team_number'):
+                                continue
+                            team_number = team_data.get('team_number')
+                            team = Team.query.filter_by(team_number=team_number, scouting_team_number=storage_team).first()
+                            if team:
+                                team.team_name = team_data.get('team_name', team.team_name)
+                                team.location = team_data.get('location', team.location)
+                                teams_updated += 1
+                            else:
+                                team = Team(team_number=team_number,
+                                            team_name=team_data.get('team_name'),
+                                            location=team_data.get('location'),
+                                            scouting_team_number=storage_team)
+                                db.session.add(team)
+                                teams_added += 1
+                            if event not in team.events:
+                                try:
+                                    team.events.append(event)
+                                except Exception:
+                                    pass
+                        print(f"  Alliance teams sync (alliance {alliance.id}): {teams_added} added, {teams_updated} updated")
+                    except Exception as e:
+                        print(f"  Error syncing alliance teams for {alliance.id}: {str(e)}")
+
+                    try:
+                        match_data_list = get_matches_dual_api(event_code)
+                        matches_added = 0
+                        matches_updated = 0
+                        for match_data in match_data_list:
+                            if not match_data:
+                                continue
+                            match_data['event_id'] = event.id
+                            match_number = match_data.get('match_number')
+                            match_type = match_data.get('match_type')
+                            if not match_number or not match_type:
+                                continue
+                            match = Match.query.filter_by(event_id=event.id, match_number=match_number, match_type=match_type, scouting_team_number=storage_team).first()
+                            if match:
+                                match.red_alliance = match_data.get('red_alliance', match.red_alliance)
+                                match.blue_alliance = match_data.get('blue_alliance', match.blue_alliance)
+                                match.winner = match_data.get('winner', match.winner)
+                                match.red_score = match_data.get('red_score', match.red_score)
+                                match.blue_score = match_data.get('blue_score', match.blue_score)
+                                matches_updated += 1
+                            else:
+                                match = Match(match_number=match_number,
+                                              match_type=match_type,
+                                              event_id=event.id,
+                                              red_alliance=match_data.get('red_alliance'),
+                                              blue_alliance=match_data.get('blue_alliance'),
+                                              red_score=match_data.get('red_score'),
+                                              blue_score=match_data.get('blue_score'),
+                                              winner=match_data.get('winner'),
+                                              scouting_team_number=storage_team)
+                                db.session.add(match)
+                                matches_added += 1
+                        print(f"  Alliance matches sync (alliance {alliance.id}): {matches_added} added, {matches_updated} updated")
+                    except Exception as e:
+                        print(f"  Error syncing alliance matches for {alliance.id}: {str(e)}")
+
+                    try:
+                        db.session.commit()
+                        try:
+                            from app.routes.data import merge_duplicate_events
+                            merge_duplicate_events(storage_team)
+                        except Exception:
+                            pass
+                        update_last_sync(cache_key)
+                    except Exception as e:
+                        db.session.rollback()
+                        print(f"  Failed to commit changes for alliance {alliance.id}: {e}")
+
+                except Exception as e:
+                    print(f"  Error processing alliance {alliance.id}: {e}")
+
+    except Exception as e:
+        print(f"Error in perform_periodic_alliance_api_sync: {str(e)}")
+
+
 @bp.route('/api/<int:alliance_id>/member/<int:member_id>/promote', methods=['POST'])
 @login_required
 def api_promote_member(alliance_id, member_id):

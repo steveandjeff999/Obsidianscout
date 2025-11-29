@@ -2,10 +2,10 @@ from flask import Blueprint, render_template, request, jsonify, current_app
 from flask_login import login_required, current_user
 from app.routes.auth import analytics_required
 from app.models import Team, Event
-from app.utils.team_isolation import filter_teams_by_scouting_team, filter_events_by_scouting_team
+from app.utils.team_isolation import filter_teams_by_scouting_team, filter_events_by_scouting_team, get_combined_dropdown_events
 import json
 from app.utils.analysis import calculate_team_metrics, _simulate_match_outcomes
-from app.utils.config_manager import get_current_game_config
+from app.utils.config_manager import get_effective_game_config
 from app.utils.theme_manager import ThemeManager
 
 
@@ -26,7 +26,7 @@ def index():
     # Reuse the team selection logic from graphs to provide a modern UI
     teams_query = filter_teams_by_scouting_team().order_by(Team.team_number).all()
     teams = teams_query
-    events = filter_events_by_scouting_team().order_by(Event.start_date).all()
+    events = get_combined_dropdown_events()
 
     # Calculate metrics and event mapping for client-side helpers
     team_metrics = {}
@@ -97,7 +97,7 @@ def run_simulation():
         blue_alliance.append({'team': t, 'metrics': metrics})
 
     # Determine which metric to use for totals (default 'tot')
-    game_config = get_current_game_config()
+    game_config = get_effective_game_config()
     total_metric_id = None
     if 'data_analysis' in game_config and 'key_metrics' in game_config['data_analysis']:
         for metric in game_config['data_analysis']['key_metrics']:

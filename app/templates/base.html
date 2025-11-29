@@ -429,6 +429,11 @@
         }
 
         /* Make suggestions dropdown dark as well in dark mode */
+        html.dark-mode .enhanced-search-suggestions,
+        html.dark-mode .enhanced-search-suggestions.show,
+        html.dark-mode .enhanced-search-suggestions-main,
+        html.dark-mode .enhanced-search-suggestions-main.show,
+        html.dark-mode #suggestions,
         body.dark-mode .enhanced-search-suggestions,
         body.dark-mode .enhanced-search-suggestions.show,
         body.dark-mode .enhanced-search-suggestions-main,
@@ -4591,8 +4596,8 @@
         function fetchSuggestions(query) {
             console.log('Fetching suggestions for:', query); // Debug log
 
-            // Request all suggestion types including matches and scouting to ensure broad coverage
-            const typesParam = 'team,user,match,scouting,page';
+            // Request all suggestion types including pages and help for broad coverage
+            const typesParam = 'team,user,match,scouting,page,help';
 
             fetch(`/search/api/suggestions?q=${encodeURIComponent(query)}&types=${encodeURIComponent(typesParam)}`)
                 .then(response => {
@@ -4638,12 +4643,14 @@
             let html = '';
             
             // Define category order and labels
-            const categoryOrder = ['team', 'user', 'match', 'scouting'];
+            const categoryOrder = ['team', 'user', 'match', 'scouting', 'page', 'help'];
             const categoryLabels = {
                 'team': 'Teams',
                 'user': 'Users',
                 'match': 'Matches',
                 'scouting': 'Scouting'
+                , 'page': 'Pages',
+                'help': 'Help & Docs'
             };
             
             // Build HTML with categories
@@ -4762,6 +4769,8 @@
                 'match': 'fas fa-gamepad',
                 'scouting': 'fas fa-clipboard-list',
                 'scouting_data': 'fas fa-clipboard-list'
+                , 'page': 'fas fa-file-alt',
+                'help': 'fas fa-book'
             };
             return icons[type] || 'fas fa-search';
         }

@@ -9,8 +9,8 @@
             <label for="event-select" class="me-2 fw-bold">Event:</label>
             <select id="event-select" class="form-select me-3 w-280" name="event_id">
                 <option value="">-- Select Event --</option>
-                {% for ev in events %}
-                    <option value="{{ ev.id }}" {% if selected_event and selected_event.id == ev.id %}selected{% endif %}>{{ ev.year }} - {{ ev.name }}</option>
+                {% for ev in events|dedupe_events %}
+                    <option value="{{ ev.id }}" data-event-code="{{ ev.code|upper if ev.code else '' }}" {% if selected_event and selected_event.id == ev.id %}selected{% endif %}>{{ ev.year }} - {{ ev.name }}{% if ev.is_alliance %} (Alliance){% endif %}</option>
                 {% endfor %}
             </select>
 

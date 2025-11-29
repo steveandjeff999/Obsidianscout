@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, current_app, redirect, url_for, request, flash, send_from_directory, get_flashed_messages, jsonify
+from flask import Blueprint, render_template, current_app, redirect, url_for, request, flash, send_from_directory, get_flashed_messages, jsonify, abort
 from flask_login import login_required, current_user
 import json
 import os
@@ -18,6 +18,7 @@ from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
     filter_events_by_scouting_team, get_event_by_code, validate_user_in_same_team
 )
+from app.utils.team_isolation import get_combined_dropdown_events
 
 connected_devices = {}
 
@@ -1522,79 +1523,14 @@ def get_chat_users():
 @bp.route('/admin/global-config', methods=['GET', 'POST'])
 @login_required
 def admin_global_config():
-    """Admin panel for global config management and broadcasting"""
-    # Require admin role
-    if not current_user.has_role('admin'):
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('main.index'))
-    
-    if request.method == 'POST':
-        action = request.form.get('action')
-        
-        if action == 'reload_all':
-            try:
-                # Trigger a global config reload for all users
-                from app.utils.config_manager import get_effective_game_config, get_effective_pit_config
-                from datetime import datetime
-                
-                # Get fresh config data
-                fresh_config = {
-                    'game_config': get_effective_game_config(),
-                    'pit_config': get_effective_pit_config(),
-                    'timestamp': datetime.now().isoformat()
-                }
-                
-                # Broadcast to ALL users
-                socketio.emit('global_config_changed', {
-                    'type': 'admin_reload',
-                    'effective_game_config': fresh_config['game_config'],
-                    'effective_pit_config': fresh_config['pit_config'],
-                    'timestamp': fresh_config['timestamp'],
-                    'message': 'Configuration reloaded by administrator',
-                    'force_reload': True
-                })
-                
-                flash('Global configuration reload broadcast to all users.', 'success')
-                
-            except Exception as e:
-                flash(f'Error broadcasting config reload: {str(e)}', 'error')
-        
-        elif action == 'broadcast_message':
-            try:
-                message = request.form.get('message', '').strip()
-                if message:
-                    # Broadcast custom message to all users
-                    socketio.emit('global_config_changed', {
-                        'type': 'admin_message',
-                        'message': message,
-                        'timestamp': datetime.now().isoformat(),
-                        'show_notification': True
-                    })
-                    
-                    flash(f'Message broadcast to all users: "{message}"', 'success')
-                else:
-                    flash('Message cannot be empty.', 'error')
-                    
-            except Exception as e:
-                flash(f'Error broadcasting message: {str(e)}', 'error')
-        
-        return redirect(url_for('main.admin_global_config'))
-    
-    # GET request - show admin panel
-    from app.utils.config_manager import get_effective_game_config, get_effective_pit_config, is_alliance_mode_active, get_active_alliance_info
-    
-    current_config = {
-        'game_config': get_effective_game_config(),
-        'pit_config': get_effective_pit_config(),
-        'alliance_status': {
-            'is_active': is_alliance_mode_active(),
-            'alliance_info': get_active_alliance_info()
-        }
-    }
-    
-    return render_template('admin/global_config.html', 
-                          current_config=current_config,
-                          **get_theme_context())
+    """Removed admin global-config page; redirect to main index.
+
+    Previously used to broadcast global config changes. This endpoint has
+    been removed for security and operational reasons. Admins should use the
+    dedicated admin settings pages instead.
+    """
+    # This endpoint was removed on purpose; return 404 to avoid exposing the page
+    abort(404)
 
 @bp.route('/sync-monitor')
 @login_required
@@ -1682,7 +1618,7 @@ def api_sync_status():
     # Get basic statistics
     total_teams = filter_teams_by_scouting_team().count()
     total_matches = filter_matches_by_scouting_team().count()
-    total_events = filter_events_by_scouting_team().count()
+    total_events = len(get_combined_dropdown_events())
     
     # Get current event info
     current_event = None
@@ -2079,7 +2015,7 @@ def analytics_config_averages():
         selected_event_id = request.args.get('event_id')
         events = []
         try:
-            events = filter_events_by_scouting_team().all()
+            events = get_combined_dropdown_events()
         except Exception:
             events = []
 

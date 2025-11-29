@@ -1,9 +1,11 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
-from app.models import Event, Match, ScoutingData, Team
+from app.models import Event, Match, ScoutingData, Team, ScoutingAllianceEvent
+from sqlalchemy import func
 from app import db
 from datetime import datetime, date
 from app.utils.config_manager import get_current_game_config, get_effective_game_config, save_game_config
-from app.utils.team_isolation import get_event_by_code, filter_events_by_scouting_team
+from app.utils.team_isolation import get_event_by_code, filter_events_by_scouting_team, get_current_scouting_team_number
+from app.models import TeamAllianceStatus
 from sqlalchemy.exc import IntegrityError
 
 bp = Blueprint('events', __name__, url_prefix='/events')
@@ -11,7 +13,112 @@ bp = Blueprint('events', __name__, url_prefix='/events')
 @bp.route('/')
 def index():
     """Display all events (filtered by current scouting team)"""
-    events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
+    current_team = get_current_scouting_team_number()
+    events = []
+
+    # If alliance is active for this team, show only alliance events (from alliance members and alliance event codes)
+    try:
+        alliance = TeamAllianceStatus.get_active_alliance_for_team(current_team) if current_team else None
+    except Exception:
+        alliance = None
+
+    if alliance:
+        # Collect alliance member team numbers and explicit alliance event codes
+        member_team_numbers = [m.team_number for m in alliance.get_active_members()]
+        alliance_event_codes = alliance.get_shared_events() or []
+
+        # Query events associated with members' teams
+        try:
+            member_events = Event.query.join(Event.teams).filter(Team.team_number.in_(member_team_numbers)).distinct().all()
+        except Exception:
+            member_events = []
+
+        # Query events explicitly added to alliance
+        try:
+            code_events = Event.query.filter(Event.code.in_(alliance_event_codes)).all() if alliance_event_codes else []
+        except Exception:
+            code_events = []
+
+        # Union the results
+        combined = list(member_events)
+        for e in code_events:
+            if e not in combined:
+                combined.append(e)
+
+        events = sorted(combined, key=lambda x: (x.year if getattr(x, 'year', None) is not None else 0, x.name), reverse=True)
+    else:
+        events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.name).all()
+
+    # Deduplicate events by normalized code and prefer the most complete event
+    def event_score(e):
+        score = 0
+        if e.name: score += 10
+        if e.location: score += 5
+        if getattr(e, 'start_date', None): score += 5
+        if getattr(e, 'end_date', None): score += 3
+        if getattr(e, 'timezone', None): score += 2
+        if e.year: score += 1
+        return score
+
+    events_by_code = {}
+    # Precompute alliance sets if alliance mode is active
+    alliance_event_codes_upper = set([c.strip().upper() for c in (alliance.get_shared_events() if alliance else [])]) if alliance else set()
+    member_team_numbers_set = set([m.team_number for m in alliance.get_active_members()]) if alliance else set()
+
+    for e in events:
+        key = (e.code or f'__id_{e.id}').strip().upper()
+        # Determine if this event is considered part of the active alliance
+        context_alliance = False
+        try:
+            if alliance:
+                if key in alliance_event_codes_upper:
+                    context_alliance = True
+                else:
+                    # check if any of event teams belong to alliance members
+                    for t in e.teams:
+                        if getattr(t, 'team_number', None) in member_team_numbers_set:
+                            context_alliance = True
+                            break
+        except Exception:
+            context_alliance = False
+
+        if key in events_by_code:
+            # If alliance active, prefer alliance-context events regardless of score
+            if alliance and context_alliance and not (getattr(events_by_code[key], 'code', '').strip().upper() in alliance_event_codes_upper):
+                events_by_code[key] = e
+            elif event_score(e) > event_score(events_by_code[key]):
+                events_by_code[key] = e
+        else:
+            events_by_code[key] = e
+
+    # Build final list and set an attribute on ORM object to indicate alliance sourced
+    deduped_events = []
+    for key, event in events_by_code.items():
+        is_alliance = False
+        try:
+            if alliance:
+                # Use precomputed sets to determine alliance membership
+                if key in alliance_event_codes_upper:
+                    is_alliance = True
+                else:
+                    for t in event.teams:
+                        if getattr(t, 'team_number', None) in member_team_numbers_set:
+                            is_alliance = True
+                            break
+            if not is_alliance and not key.startswith('__id_'):
+                sae = ScoutingAllianceEvent.query.filter(func.upper(ScoutingAllianceEvent.event_code) == key, ScoutingAllianceEvent.is_active == True).first()
+                is_alliance = sae is not None
+        except Exception:
+            is_alliance = False
+
+        # Attach a dynamic attribute for template use
+        try:
+            setattr(event, 'is_alliance', is_alliance)
+        except Exception:
+            pass
+        deduped_events.append(event)
+
+    events = deduped_events
     # Add current datetime to fix the 'now is undefined' error in the template
     now = datetime.now()
     return render_template('events/index.html', events=events, now=now)

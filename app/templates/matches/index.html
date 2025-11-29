@@ -73,8 +73,8 @@
                         <label class="form-label mb-1 mt-2">Event</label>
                         <select name="event_id" class="form-select">
                             <option value="">All Events</option>
-                            {% for event in events %}
-                            <option value="{{ event.id }}" {% if request.args.get('event_id') and request.args.get('event_id')|int == event.id %}selected{% endif %}>{{ event.name }}</option>
+                            {% for event in events|dedupe_events %}
+                            <option value="{{ event.id }}" data-event-code="{{ event.code|upper if event.code else '' }}" {% if request.args.get('event_id') and request.args.get('event_id')|int == event.id %}selected{% endif %}>{{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -126,7 +126,7 @@
                                     </span>
                                 </td>
                                 <td>
-                                    {{ match.event.name if match.event else 'N/A' }}
+                                    {{ match.event.name if match.event else 'N/A' }}{% if match.event and match.event.is_alliance %} (Alliance){% endif %}
                                     {% if match.event and match.event.timezone %}
                                     <br><small class="text-muted">{{ match.event.timezone.split('/')[-1].replace('_', ' ') }}</small>
                                     {% endif %}

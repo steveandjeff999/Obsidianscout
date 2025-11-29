@@ -13,7 +13,7 @@ from app.utils.team_isolation import (
     filter_avoid_entries_by_scouting_team, assign_scouting_team_to_model,
     get_current_scouting_team_number
 )
-from app.utils.team_isolation import filter_declined_entries_by_scouting_team
+from app.utils.team_isolation import filter_declined_entries_by_scouting_team, get_combined_dropdown_events
 
 bp = Blueprint('alliances', __name__, url_prefix='/alliances')
 
@@ -56,8 +56,8 @@ def emit_lists_update(event_id, list_data):
 @bp.route('/')
 def index():
     """Alliance selection main page"""
-    # Get all events ordered by date (filtered by scouting team)
-    events = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.start_date.desc()).all()
+    # Get all events for dropdown (combined + deduped as /events)
+    events = get_combined_dropdown_events()
     
     # Get current event from game config or fall back to most recent event (filtered by scouting team)
     game_config = get_effective_game_config()

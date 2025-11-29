@@ -612,6 +612,22 @@ if __name__ == '__main__':
     api_sync_thread = threading.Thread(target=api_data_sync_worker, daemon=True)
     api_sync_thread.start()
     print("Started periodic API data sync thread (3-minute intervals)")
+
+    # Start alliance API sync worker (syncs teams/matches for alliances)
+    def api_alliance_sync_worker():
+        while True:
+            try:
+                time.sleep(60)
+                with app.app_context():
+                    from app.routes.scouting_alliances import perform_periodic_alliance_api_sync
+                    perform_periodic_alliance_api_sync()
+            except Exception as e:
+                print(f"Error in alliance API data sync worker: {str(e)}")
+                time.sleep(60)
+
+    api_alliance_sync_thread = threading.Thread(target=api_alliance_sync_worker, daemon=True)
+    api_alliance_sync_thread.start()
+    print("Started alliance API auto-sync thread (1-minute evaluation)")
     
     security_maintenance_thread = threading.Thread(target=security_maintenance_worker, daemon=True)
     security_maintenance_thread.start()
