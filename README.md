@@ -2,7 +2,7 @@
 
 A comprehensive FRC (FIRST Robotics Competition) scouting platform with real-time data collection, analytics, and team collaboration features.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Running the Application
 
@@ -28,12 +28,12 @@ python run.py
 
 **Access the app at:** `http://localhost:8080`
 
-### ⚠️ Important: Don't Double-Click run.py!
+### Important: Don't Double-Click run.py!
 
 **DO NOT** double-click `run.py` or use "Open with Python" from File Explorer.
 This causes permission errors. Always use `START.bat` or the command line method above.
 
-## 📋 First Time Setup
+## First Time Setup
 
 1. **Install Python 3.12+** from [python.org](https://www.python.org/downloads/)
    - Make sure to check "Add Python to PATH" during installation
@@ -53,16 +53,16 @@ pip install -r requirements.txt
 python run.py
 
 
-## 🔑 Default Credentials
+## Default Credentials
 
 On first run, use these credentials:
 - **Username:** `superadmin`
 - **Password:** `password`
 - **Team:** `0`
 
-⚠️ **Change the password immediately after first login!**
+ **Change the password immediately after first login!**
 
-## 🛠️ Features
+## Features
 
 - **Match Scouting**: Real-time data collection during matches
 - **Pit Scouting**: Detailed team information and robot capabilities
@@ -78,7 +78,7 @@ On first run, use these credentials:
 - **Custom Reports**: Generate custom analytics reports
 - **Export Data**: Export to CSV, Excel, JSON formats
 
-## 📱 Mobile Access
+## Mobile Access
 
 To access from other devices on your network:
 
@@ -123,7 +123,7 @@ If you see "database is locked" errors:
 
 
 
-## 🗂️ Project Structure
+##  Project Structure
 
 ```
 Obsidian-Scout/
@@ -142,7 +142,7 @@ Obsidian-Scout/
 └── app_config.json       # Configuration file
 ```
 
-## 🔐 Security Notes
+## Security Notes
 
 - **Change default password** immediately after first login
 - **Use HTTPS** for production deployments
@@ -150,7 +150,7 @@ Obsidian-Scout/
 - **Firewall rules** if exposing to internet
 - **Strong passwords** for all user accounts
 
-## 🌐 API Access
+## API Access
 
 Obsidian Scout includes a REST API for external integrations:
 
@@ -160,7 +160,7 @@ Obsidian Scout includes a REST API for external integrations:
 
 See API documentation in `docs/` folder for details.
 
-## 🎯 Configuration
+## Configuration
 
 Main configuration file: `app_config.json`
 
@@ -171,7 +171,7 @@ Key settings:
 
 Edit these before deploying to production!
 
-## 🐛 Known Issues
+## Known Issues
 
 1. **OneDrive Sync**: May cause database locking issues
    - **Solution**: Move project to local folder or pause sync
@@ -182,15 +182,11 @@ Edit these before deploying to production!
 3. **File Explorer Launch**: Double-clicking run.py causes permission errors
    - **Solution**: Use START.bat instead
 
-## 🤝 Contributing
+## Contributing
 
 This is a private/team project. For issues or suggestions, contact the development team.
 
-## 📄 License
-
-Copyright © 2024-2026 Obsidian Scout Development Team
-
-## 🆘 Getting Help
+## Getting Help
 
 1. **Check documentation** in this folder
 2. **Run diagnostics**: `python test_directory_fix.py`
@@ -198,7 +194,8 @@ Copyright © 2024-2026 Obsidian Scout Development Team
 4. **Check the logs** in the terminal window
 5. **Contact team admin** for access issues
 
-## 🔄 Updates
+## 
+ Updates
 
 To update the application:
 
@@ -207,7 +204,7 @@ To update the application:
 3. **Replace files** (keep your `instance/` and `app_config.json`)
 4. **Run START.bat** to apply updates
 
-## ⚡ Performance Tips
+## Performance Tips
 
 - **Close unused tabs** in the web interface
 - **Regular database maintenance** (backup and optimize)
@@ -215,7 +212,7 @@ To update the application:
 - **Use local installation** (not on network drive)
 - **Disable antivirus scanning** for project folder (if safe)
 
-## 📊 Data Management
+## Data Management
 
 **Backup Your Data:**
 The `instance/` folder contains all your scouting data. Back it up regularly:
