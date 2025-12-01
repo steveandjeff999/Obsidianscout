@@ -289,7 +289,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const liveContainer = document.getElementById('liveMatchesContainer');
     async function loadLiveMatches(){
         try{
-            const res = await fetch('/api/brief-data', { credentials: 'same-origin' });
+            const res = await fetch('/api/live-matches', { credentials: 'same-origin' });
             if(!res.ok) throw new Error('Fetch failed');
             const payload = await res.json();
             if(!payload.success) throw new Error(payload.error || 'Failed to load');

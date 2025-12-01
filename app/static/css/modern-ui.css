@@ -1,5 +1,7 @@
 /* Modern UI overrides - mobile-first, responsive, dark-mode aware */
 :root {
+    --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', 'Roboto', Arial, sans-serif;
+    --font-heading: 'Poppins', 'Montserrat', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
     --ui-bg: var(--bs-body-bg, #ffffff);
     --ui-foreground: var(--bs-body-color, #222);
     --ui-card-bg: var(--card-bg, #ffffff);
@@ -9,6 +11,8 @@
     --ui-accent: var(--bs-primary, #1976d2);
     --ui-accent-rgb: 25,118,210;
     --ui-surface: var(--ui-card-bg);
+    --pill-radius: 9999px;
+    --card-radius: 12px;
 }
 
 /* Mobile first layout adjustments */
@@ -32,14 +36,15 @@ main.flex-shrink-0.py-4 {
 
 /* Typography */
 body {
-    font-family: 'Roboto', 'Montserrat', system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial;
+    font-family: var(--font-sans);
+    line-height: 1.45;
     color: var(--ui-foreground);
     background: var(--ui-bg);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
 
-h1, .page-title { font-family: 'Montserrat', sans-serif; font-weight: 600; letter-spacing: -0.4px; }
+h1, .page-title { font-family: var(--font-heading); font-weight: 700; letter-spacing: -0.4px; }
 h1 { font-size: 1.6rem; }
 h2 { font-size: 1.4rem; }
 h3 { font-size: 1.15rem; }
@@ -66,11 +71,18 @@ body.sidebar-collapsed .sidebar .nav-link span { display: none; }
 body.sidebar-collapsed main.container { margin-left: 92px; }
 
 /* Buttons and inputs */
-.btn { border-radius: 8px; }
+.btn { border-radius: 10px; padding: 0.6rem 0.9rem; transition: transform 160ms ease, box-shadow 160ms ease; }
+.btn-pill { border-radius: 9999px; padding-left: 1.05rem; padding-right: 1.05rem; }
+.btn-elevated { box-shadow: 0 8px 24px rgba(2,6,23,0.08); }
 .form-control, .form-select { border-radius: 8px; }
 
 /* Cards & modals */
-.card { border-radius: var(--card-radius, var(--border-radius)); box-shadow: 0 6px 22px rgba(16,24,40,0.04); }
+.card { border-radius: var(--card-radius, var(--border-radius)); box-shadow: 0 10px 30px rgba(2,6,23,0.06); }
+.card:hover { transform: translateY(-6px); box-shadow: 0 20px 48px rgba(2,6,23,0.08); }
+
+/* Small glass-style accent for hero/summary cards */
+.card-glass { background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.3)); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.5); }
+body.dark-mode .card-glass { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border: 1px solid rgba(255,255,255,0.03); }
 .modal-content { border-radius: var(--card-radius, 12px); }
 
 /* Card header styles */
@@ -293,7 +305,7 @@ body.dark-mode .sidebar .nav-link:hover { background: linear-gradient(90deg, rgb
 
 /* --- Navbar & User Dropdown Improvements --- */
 .topbar { padding: 0.45rem 1rem; align-items: center; }
-.topbar .btn { margin: 0 0.25rem; }
+.topbar .btn { margin: 0 0.25rem; border-radius: var(--pill-radius); padding-left: 0.8rem; padding-right: 0.8rem; }
 .topbar .brand { display: none; } /* brand is in sidebar */
 
 /* Make the user dropdown more modern */

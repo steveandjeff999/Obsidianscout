@@ -40,7 +40,7 @@
                 var useRounded = null;
                 if (storedRounded === 'true') useRounded = true;
                 else if (storedRounded === 'false') useRounded = false;
-                else useRounded = false; // default: rounded UI disabled
+                else useRounded = true; // default: rounded UI enabled for modern look
 
                 if (useRounded) {
                     document.documentElement.classList.add('rounded-ui');
@@ -198,6 +198,10 @@
     <link href="{{ url_for('static', filename='css/vendor/bootstrap.min.css') }}" rel="stylesheet">
     
     <link href="{{ url_for('static', filename='css/vendor/fontawesome-all.min.css') }}" rel="stylesheet">
+    <!-- Modern fonts: Inter for UI + Poppins for headings -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     
     {# Google Fonts are internet-hosted; fallback to system fonts for offline use #}
     <style>body{font-family: Roboto, Montserrat, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;}</style>
@@ -991,7 +995,7 @@
     coordinate mismatches. #}
 <body class="d-flex flex-column h-100 modern-layout {% if not no_chrome %}with-sidebar topbar-fixed{% endif %}">
     <!-- Global Top Bar (search + user) -->
-    <div class="topbar glass d-flex align-items-center gap-2 px-3 py-2 shadow-sm" role="banner">
+    <div class="topbar glass navbar-glass d-flex align-items-center gap-2 px-3 py-2 shadow-sm" role="banner">
         <div class="d-flex align-items-center gap-2 flex-shrink-0">
             <button id="sidebarToggle" class="btn btn-outline-primary btn-sm rounded-pill-soft" aria-label="Toggle navigation"><i class="fas fa-bars"></i></button>
         </div>
@@ -1112,6 +1116,7 @@
                 <div class="nav-group-items" id="group-superadmin-items">
                     <a class="nav-link {% if request.endpoint == 'auth.manage_users' %}active{% endif %}" href="{{ url_for('auth.manage_users') }}"><i class="fas fa-user-shield"></i><span>Manage Users</span></a>
                     <a class="nav-link {% if request.endpoint == 'auth.add_user' %}active{% endif %}" href="{{ url_for('auth.add_user') }}"><i class="fas fa-user-plus"></i><span>Add User</span></a>
+                    <a class="nav-link {% if request.endpoint == 'auth.manage_site_notifications' %}active{% endif %}" href="{{ url_for('auth.manage_site_notifications') }}"><i class="fas fa-bell"></i><span>Manage Notifications</span></a>
                 </div>
             </div>
             {% endif %}
@@ -3921,6 +3926,43 @@
                     positionFixedDropdown(toggle, menu);
                 }
             }
+        });
+
+        // Mobile fallback: ensure dropdowns stay within the viewport and don't drop off screen
+        document.addEventListener('shown.bs.dropdown', function(event) {
+            try {
+                const dropdown = event.target.closest('.navbar .dropdown, .topbar .dropdown');
+                if (!dropdown) return;
+                if (window.innerWidth >= 992) return; // desktop handled elsewhere
+                const menu = dropdown.querySelector('.dropdown-menu');
+                if (!menu) return;
+
+                // Allow time for Popper or bootstrap to set dimensions/transform, then clamp
+                setTimeout(() => {
+                    try {
+                        const rect = menu.getBoundingClientRect();
+                        const gap = 8; // px from screen edge
+                        // If menu extends beyond right edge, anchor it to the right with a small gap
+                        if (rect.right > (window.innerWidth - gap)) {
+                            menu.style.left = 'auto';
+                            menu.style.right = gap + 'px';
+                            menu.style.transform = 'none';
+                        }
+                        // If menu extends beyond left edge, anchor to left with small gap
+                        if (rect.left < gap) {
+                            menu.style.left = gap + 'px';
+                            menu.style.right = 'auto';
+                            menu.style.transform = 'none';
+                        }
+                        // Force a reasonable max width so it doesn't exceed viewport
+                        menu.style.maxWidth = 'calc(100vw - ' + (gap * 2) + 'px)';
+                        // Ensure it's visible and accessible
+                        menu.style.overflow = 'auto';
+                        menu.style.overflowY = 'auto';
+                        menu.style.position = 'absolute';
+                    } catch (e) { /* ignore */ }
+                }, 8);
+            } catch(e) { /* ignore */ }
         });
 
         // Portal navbar/topbar dropdowns to body so they stay fixed during page scroll (desktop only)

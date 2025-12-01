@@ -619,6 +619,18 @@ html.glass-off .nav-theme-green .topbar { background: var(--bs-body-bg) !importa
 .nav-theme-green .navbar .badge { background: rgba(255,255,255,0.1); color: #fff !important; border-color: rgba(255,255,255,0.12) !important; }
 .nav-theme-neutral .navbar .badge { background: rgba(0,0,0,0.06); color: #212529 !important; border-color: rgba(0,0,0,0.06) !important; }
 
+/* Ensure glass topbars still retain glass effect even when a nav theme is applied */
+.nav-theme-neutral .topbar.glass,
+.nav-theme-primary .topbar.glass,
+.nav-theme-indigo .topbar.glass,
+.nav-theme-green .topbar.glass {
+    background: var(--glass-bg) !important;
+    border-bottom: 1px solid var(--glass-border) !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.06) !important;
+    -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
+    backdrop-filter: blur(var(--glass-blur)) !important;
+}
+
 /* Search submit button gets a subtle glow for the theme */
 .nav-theme-primary .search-submit-btn { box-shadow: 0 2px 8px rgba(13,110,253,0.18); }
 .nav-theme-indigo .search-submit-btn { box-shadow: 0 2px 8px rgba(86,52,213,0.16); }

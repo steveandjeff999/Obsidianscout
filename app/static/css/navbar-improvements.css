@@ -168,9 +168,43 @@
     max-width: calc(100vw - 32px);
     width: auto !important;
     white-space: normal; /* allow wrapping for long labels */
-    z-index: 1055 !important; /* Ensure dropdowns appear above most UI */
-    position: fixed !important; /* fixed to escape containers and support JS positioning */
+     z-index: 1055 !important; /* Ensure dropdowns appear above most UI */
+     /* Position left to Bootstrap/JS control by default; only use fixed positioning on desktop.
+         See @media (min-width: 992px) below for desktop-specific positioning. */
     padding: 6px 0; /* Add some vertical padding for items */
+}
+
+/* Desktop-only: fix dropdown positioning so they escape navbar/container overflow
+   and support custom portal/positioning logic in scripts.js. On mobile we prefer
+   native Bootstrap behavior (absolute/relative) to keep dropdowns attached to
+   the toggle to avoid off-screen placement on small viewports. */
+@media (min-width: 992px) {
+    .dropdown-menu,
+    .dropdown-menu.navbar-glass,
+    .topbar .dropdown-menu {
+        position: fixed !important; /* fixed to escape containers and support JS positioning */
+    }
+}
+
+/* Mobile fallback: keep topbar dropdowns within viewport and avoid offscreen placement
+   — center by default, but if the dropdown has .dropdown-menu-end prefer a right-anchored layout. */
+@media (max-width: 991.98px) {
+    .navbar .dropdown-menu,
+    .topbar .dropdown-menu {
+        position: absolute !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        max-width: calc(100vw - 32px) !important;
+        min-width: 160px !important;
+    }
+
+    .navbar .dropdown-menu.dropdown-menu-end,
+    .topbar .dropdown-menu.dropdown-menu-end {
+        left: auto !important;
+        right: 8px !important;
+        transform: none !important;
+    }
 }
 
 /* Dark mode variant for dropdowns */

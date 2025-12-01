@@ -65,6 +65,17 @@
                         </div>
                         <div class="form-text">Inactive users cannot log in.</div>
                     </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="only_password_reset_emails" name="only_password_reset_emails" 
+                                {% if only_password_reset_emails %}checked{% endif %}>
+                            <label class="form-check-label" for="only_password_reset_emails">
+                                Only receive password reset emails
+                            </label>
+                        </div>
+                        <div class="form-text">When enabled, this user will not receive general emails from the site.
+                        </div>
+                    </div>
                     
                     <div class="mb-4">
                         <label class="form-label">Roles <span class="text-danger">*</span></label>

@@ -17,7 +17,10 @@ depends_on = None
 
 
 def upgrade():
-    op.create_table(
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    if 'custom_page' not in insp.get_table_names():
+        op.create_table(
         'custom_page',
         sa.Column('id', sa.Integer(), primary_key=True),
         sa.Column('title', sa.String(length=200), nullable=False),
@@ -31,4 +34,7 @@ def upgrade():
 
 
 def downgrade():
-    op.drop_table('custom_page')
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    if 'custom_page' in insp.get_table_names():
+        op.drop_table('custom_page')

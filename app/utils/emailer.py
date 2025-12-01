@@ -153,7 +153,7 @@ def _build_html_email(subject, body, from_addr=None, to_list=None):
         return html
 
 
-def send_email(to, subject, body, html=None, from_addr=None):
+def send_email(to, subject, body, html=None, from_addr=None, bypass_user_opt_out=False):
     """Send an email using Flask-Mail configured from instance/email_config.json.
 
     `to` may be a string or list of addresses.
@@ -196,6 +196,53 @@ def send_email(to, subject, body, html=None, from_addr=None):
         recipients = [to]
     else:
         recipients = list(to)
+
+    # Respect per-user opt-out: if a user has set `only_password_reset_emails`, they should
+    # not receive general emails; this applies unless caller explicitly sets `bypass_user_opt_out=True`.
+    try:
+        if not bypass_user_opt_out and recipients:
+            from app.models import User
+            from app.utils import user_prefs as user_prefs_util
+            # Query users who are in recipients and check their preferences
+            try:
+                from app import db
+                from sqlalchemy import inspect as sa_inspect
+                try:
+                    inspector = sa_inspect(db.get_engine(current_app))
+                    cols = [c['name'] for c in inspector.get_columns('user')] if 'user' in inspector.get_table_names() else []
+                except Exception:
+                    cols = []
+                if 'only_password_reset_emails' in cols:
+                    rows = User.query.filter(User.email.in_(recipients)).with_entities(User.username, User.email, User.only_password_reset_emails).all()
+                else:
+                    rows = User.query.filter(User.email.in_(recipients)).with_entities(User.username, User.email).all()
+                excluded = set()
+                for row in rows:
+                    try:
+                        if len(row) == 3:
+                            uname, email, only_pw = row
+                            if only_pw:
+                                excluded.add(email)
+                                continue
+                        else:
+                            uname, email = row
+                        if user_prefs_util.get_pref(uname, 'only_password_reset_emails', False):
+                            excluded.add(email)
+                    except Exception:
+                        pass
+            except Exception:
+                excluded = set()
+            if excluded:
+                recipients = [r for r in recipients if r not in excluded]
+                try:
+                    current_app.logger.info('Excluded %d recipient(s) due to only_password_reset_emails opt-out', len(excluded))
+                except Exception:
+                    pass
+            if not recipients:
+                return False, 'No recipients (all opted out)'
+    except Exception:
+        # If something goes wrong with phonebook/user query, fail open and continue with original recipients.
+        pass
 
     # If caller didn't provide html, create a simple styled html alternative
     if not html and body:

@@ -21,15 +21,19 @@ def upgrade():
     bind = op.get_bind()
     inspector = sa.inspect(bind)
     if 'role' in inspector.get_table_names():
-        op.bulk_insert(
-            sa.table('role',
-                sa.column('name', sa.String),
-                sa.column('description', sa.String)
-            ),
-            [
-                {'name': 'superadmin', 'description': 'User with access to all teams and administrative functions.'}
-            ]
-        )
+        # Only insert if not already present to avoid UNIQUE conflicts
+        bind = op.get_bind()
+        exists = bind.execute(sa.text("SELECT 1 FROM role WHERE name = :name"), {'name': 'superadmin'}).fetchone()
+        if not exists:
+            op.bulk_insert(
+                sa.table('role',
+                    sa.column('name', sa.String),
+                    sa.column('description', sa.String)
+                ),
+                [
+                    {'name': 'superadmin', 'description': 'User with access to all teams and administrative functions.'}
+                ]
+            )
 
 
 def downgrade():

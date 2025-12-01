@@ -458,6 +458,13 @@ Sent: {datetime.now(timezone.utc).strftime('%Y-%m-%d %I:%M %p UTC')}
                 'message': f'Test email sent to {current_user.email}'
             })
         else:
+            # If the reason is all recipients opted out, return a 200 with a skipped message
+            if error and ('No recipients' in str(error) or 'opted out' in str(error)):
+                return jsonify({
+                    'success': True,
+                    'skipped': True,
+                    'message': 'Not sent: recipient opted out'
+                })
             return jsonify({
                 'error': f'Failed to send email: {error}'
             }), 500
