@@ -114,9 +114,13 @@
 
   // On DOM ready attach to inputs with data-autocomplete attr
   document.addEventListener('DOMContentLoaded', function(){
-    var usersInput = document.querySelector('input[name="users"][data-autocomplete="users"]');
-    if(usersInput) attach(usersInput, 'users');
-    var teamsInput = document.querySelector('input[name="teams"][data-autocomplete="teams"]');
-    if(teamsInput) attach(teamsInput, 'teams');
+    var usersInputs = document.querySelectorAll('input[name="users"][data-autocomplete="users"]');
+    if(usersInputs && usersInputs.length){
+      usersInputs.forEach(function(ui){ attach(ui, 'users'); });
+    }
+    var teamsInputs = document.querySelectorAll('input[name="teams"][data-autocomplete="teams"]');
+    if(teamsInputs && teamsInputs.length){
+      teamsInputs.forEach(function(ti){ attach(ti, 'teams'); });
+    }
   });
 })();

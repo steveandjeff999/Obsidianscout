@@ -46,6 +46,11 @@ class User(UserMixin, ConcurrentModelMixin, db.Model):
     last_login = db.Column(db.DateTime)
     profile_picture = db.Column(db.String(256), nullable=True, default='img/avatars/default.png')
     must_change_password = db.Column(db.Boolean, default=False)
+    # Allow users to opt out of general emails and only receive password resets
+    only_password_reset_emails = db.Column(db.Boolean, default=False, nullable=False)
+    # If true, the user will only receive password reset emails; other emails (e.g. notifications)
+    # will be suppressed for this user when set. This preserves privacy for users who only want
+    # essential account emails.
     
     # Many-to-many relationship with roles
     # roles relationship will be defined after Role class to provide explicit
@@ -1696,6 +1701,21 @@ class SharedTeamRanks(db.Model):
             query = query.filter_by(created_by_user=username)
         return query.order_by(cls.created_at.desc()).all()
 
+class TextSnippet1(db.Model):
+    """Small text storage table used to test automatic migrations.
+
+    This table is intentionally trivial and does not come with a migration file;
+    the tools will autogenerate and apply a migration for it when you run the
+    auto-upgrade GUI or CLI.
+    """
+    __tablename__ = 'text_snippet'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def __repr__(self):
+        return f"<TextSnippet {self.id} {self.title}>"
 
 class CustomPage(db.Model):
     """Model to store user-created custom pages composed of widgets.

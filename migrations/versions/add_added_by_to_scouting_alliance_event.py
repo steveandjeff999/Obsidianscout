@@ -17,10 +17,20 @@ depends_on = None
 
 
 def upgrade():
-    with op.batch_alter_table('scouting_alliance_event', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('added_by', sa.Integer(), nullable=True))
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    table_exists = 'scouting_alliance_event' in insp.get_table_names()
+    cols = [c['name'] for c in insp.get_columns('scouting_alliance_event')] if table_exists else []
+    if table_exists and 'added_by' not in cols:
+        with op.batch_alter_table('scouting_alliance_event', schema=None) as batch_op:
+            batch_op.add_column(sa.Column('added_by', sa.Integer(), nullable=True))
 
 
 def downgrade():
-    with op.batch_alter_table('scouting_alliance_event', schema=None) as batch_op:
-        batch_op.drop_column('added_by')
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    table_exists = 'scouting_alliance_event' in insp.get_table_names()
+    cols = [c['name'] for c in insp.get_columns('scouting_alliance_event')] if table_exists else []
+    if table_exists and 'added_by' in cols:
+        with op.batch_alter_table('scouting_alliance_event', schema=None) as batch_op:
+            batch_op.drop_column('added_by')

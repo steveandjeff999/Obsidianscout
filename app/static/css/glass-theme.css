@@ -86,9 +86,28 @@ body.dark-mode .modern-layout .form-select {
     margin: 0 !important; /* removed gap between navbar and top of page */
     align-items: center;
 }
+
+/* Make the topbar translucent and glassy (same feel as dropdowns) */
+.modern-layout .topbar.glass,
+.modern-layout .topbar.navbar-glass,
+.modern-layout .topbar.navbar-glass .dropdown-menu {
+    background: linear-gradient(180deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.45) 100%);
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
+    backdrop-filter: blur(8px) saturate(120%);
+}
 .modern-layout .brand-logo { border-radius: 10px !important; background: linear-gradient(135deg, rgba(97, 85, 145, 0.95), rgba(99, 68, 160, 0.95)); color: #fff; }
 .modern-layout .brand-text { color: #111827 !important; }
 body.dark-mode .modern-layout .brand-text { color: #e6e6e6 !important; }
+
+/* Dark mode: topbar glass variant */
+body.dark-mode .modern-layout .topbar.glass,
+body.dark-mode .modern-layout .topbar.navbar-glass {
+    background: rgba(22,22,24,0.6) !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important;
+}
 
 /* Sidebar: translucent, slightly narrower, rounded edges */
 .modern-layout .sidebar {

@@ -1247,4 +1247,34 @@ def create_app(test_config=None):
     except Exception as e:
         app.logger.error(f" Failed to initialize API key system: {e}")
 
+    # Protect direct access to avatar files under the static path.
+    # Only the owner (signed in as that user) may fetch their avatar file.
+    # The shared default.png remains publicly accessible to avoid broken UI.
+    @app.before_request
+    def protect_avatar_static_files():
+        try:
+            from flask_login import current_user
+            import re
+            path = request.path or ''
+            if path.startswith('/static/img/avatars/'):
+                filename = os.path.basename(path)
+                if filename == 'default.png':
+                    return None
+                m = re.match(r'user_(\d+)\.[a-zA-Z0-9]+$', filename)
+                if not m:
+                    return jsonify({'success': False, 'error': 'Forbidden'}), 403
+                try:
+                    requested_id = int(m.group(1))
+                except Exception:
+                    return jsonify({'success': False, 'error': 'Forbidden'}), 403
+                if not getattr(current_user, 'is_authenticated', False):
+                    return jsonify({'success': False, 'error': 'Authentication required'}), 401
+                if getattr(current_user, 'id', None) != requested_id:
+                    return jsonify({'success': False, 'error': 'Forbidden'}), 403
+        except Exception:
+            try:
+                return jsonify({'success': False, 'error': 'Forbidden'}), 403
+            except Exception:
+                pass
+
     return app

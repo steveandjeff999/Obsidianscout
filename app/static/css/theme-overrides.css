@@ -35,7 +35,7 @@
 }
 
 /* Prefer explicit .glass application so callers can opt-in; provide sensible default fallbacks */
-.topbar.glass { background: var(--glass-bg) !important; border-bottom: 1px solid var(--glass-border) !important; box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
+.topbar.glass, .topbar.navbar-glass { background: var(--glass-bg) !important; border-bottom: 1px solid var(--glass-border) !important; box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
 .card.glass, .dashboard-card.glass, .stat-card.glass { background: var(--glass-bg) !important; border-color: var(--glass-border) !important; }
 .modal-content.glass { background: var(--glass-bg) !important; border-color: var(--glass-border) !important; }
 .dropdown-menu.glass { background: var(--glass-bg) !important; border-color: var(--glass-border) !important; }

@@ -16,6 +16,9 @@ from app.utils.theme_manager import ThemeManager
 from werkzeug.utils import secure_filename
 import os
 from app.utils import notifications as notif_util
+from app.utils import user_prefs as user_prefs_util
+from app.models_misc import NotificationLog
+from app.utils.emailer import send_email as send_email_util
 from app.utils import emailer as emailer_util
 from app.utils import token as token_util
 import json
@@ -146,7 +149,7 @@ def forgot_password():
         reset_url = url_for('auth.reset_password', token=token, _external=True)
         subject = 'ObsidianScout password reset'
         body = f"Hello {user.username},\n\nA password reset was requested for your account.\n\nUsername: {user.username}\n\nClick the link below to reset your password (valid for 1 hour):\n\n{reset_url}\n\nIf you did not request this, please ignore this email."
-        ok, msg = emailer_util.send_email(to=email, subject=subject, body=body)
+        ok, msg = emailer_util.send_email(to=email, subject=subject, body=body, bypass_user_opt_out=True)
         if ok:
             flash('If an account with that email exists, a reset link has been sent.', 'info')
             return redirect(url_for('auth.login'))
@@ -406,11 +409,31 @@ def profile():
             current_user.email = new_email
         elif new_email is None:
             current_user.email = None
+        # Only-password-reset toggle
+        only_pw_reset = request.form.get('only_password_reset_emails')
+        only_pw_val = True if only_pw_reset in ('on', 'true', '1') else False
+        try:
+            # Update DB column if present
+            current_user.only_password_reset_emails = only_pw_val
+        except Exception:
+            # Continue - DB column may not be present
+            pass
+        # Always persist to file-backed preferences as well (for migration/backward-compatibility)
+        try:
+            user_prefs_util.set_pref(current_user.username, 'only_password_reset_emails', only_pw_val)
+        except Exception:
+            # If file system is unavailable, ignore but log could be added
+            pass
 
         db.session.commit()
         flash('Profile updated successfully.', 'success')
         return redirect(request.url)
-    return render_template('auth/profile.html', user=current_user, **get_theme_context())
+    # Prefer DB column if present, otherwise fall back to file-backed user_prefs
+    try:
+        only_pw_reset_pref = bool(getattr(current_user, 'only_password_reset_emails', False))
+    except Exception:
+        only_pw_reset_pref = user_prefs_util.get_pref(current_user.username, 'only_password_reset_emails', False)
+    return render_template('auth/profile.html', user=current_user, only_password_reset_emails=only_pw_reset_pref, **get_theme_context())
 
 
 # Notifications management (simple file-backed storage to avoid DB migrations)
@@ -463,6 +486,8 @@ def notification_suggestions():
     return jsonify({'results': results})
 
 
+
+
 @bp.route('/notifications/dismiss', methods=['POST'])
 @login_required
 def dismiss_notification():
@@ -480,6 +505,213 @@ def dismiss_notification():
 def get_dismissed_notifications():
     dismissed = notif_util.get_dismissed_for_user(current_user.username)
     return jsonify({'dismissed': dismissed})
+
+
+@bp.route('/notifications/manage', methods=['GET'])
+@role_required('superadmin')
+def manage_site_notifications():
+    """Superadmin UI: view and manage site notifications."""
+    notifs = notif_util.load_notifications()
+    # Provide some lightweight user/team lists to help form selection
+    from app.models import User
+    users = User.query.with_entities(User.username, User.email).all()
+    # Distinct team numbers from users (strings)
+    team_nums = list({str(u[0]) for u in User.query.with_entities(User.scouting_team_number).distinct().all() if u[0]})
+    ctx = get_theme_context()
+    ctx['no_chrome'] = False
+    return render_template('auth/notifications.html', notifications=notifs, users=users, teams=sorted(team_nums), **ctx)
+
+
+@bp.route('/notifications', methods=['GET'])
+@role_required('superadmin')
+def auth_notifications_root():
+    return redirect(url_for('auth.manage_site_notifications'))
+
+
+@bp.route('/notifications/create', methods=['POST'])
+@role_required('superadmin')
+def create_notification():
+    data = request.form or request.get_json() or {}
+    message = data.get('message') or ''
+    level = data.get('level') or 'info'
+    audience = data.get('audience') or 'site'
+    teams_raw = data.get('teams') or ''
+    users_raw = data.get('users') or ''
+    # Parse comma-separated lists into arrays
+    teams = [t.strip() for t in teams_raw.split(',') if t.strip()] if teams_raw else []
+    users = [u.strip() for u in users_raw.split(',') if u.strip()] if users_raw else []
+    try:
+        notif = notif_util.add_notification(message=message, level=level, audience=audience, teams=teams, users=users)
+        flash('Notification created', 'success')
+    except Exception as e:
+        flash(f'Failed to create notification: {str(e)}', 'error')
+    return redirect(url_for('auth.manage_site_notifications'))
+
+
+@bp.route('/notifications/delete/<int:notif_id>', methods=['POST'])
+@role_required('superadmin')
+def delete_notification(notif_id):
+    try:
+        notif_util.remove_notification(notif_id)
+        flash('Notification removed', 'success')
+    except Exception as e:
+        flash(f'Failed to delete notification: {str(e)}', 'error')
+    return redirect(url_for('auth.manage_site_notifications'))
+
+
+@bp.route('/notifications/update/<int:notif_id>', methods=['POST'])
+@role_required('superadmin')
+def update_notification(notif_id):
+    """Update an existing notification (message, level, audience, teams, users)."""
+    try:
+        message = request.form.get('message') or ''
+        level = request.form.get('level') or 'info'
+        audience = request.form.get('audience') or 'site'
+        teams_raw = request.form.get('teams') or ''
+        users_raw = request.form.get('users') or ''
+        teams = [t.strip() for t in teams_raw.split(',') if t.strip()] if teams_raw else []
+        users = [u.strip() for u in users_raw.split(',') if u.strip()] if users_raw else []
+
+        notifs = notif_util.load_notifications()
+        updated = False
+        for n in notifs:
+            if int(n.get('id')) == int(notif_id):
+                n['message'] = message
+                n['level'] = level
+                n['audience'] = audience
+                n['teams'] = teams
+                n['users'] = users
+                updated = True
+                break
+        if updated:
+            notif_util.save_notifications(notifs)
+            flash('Notification updated', 'success')
+        else:
+            flash('Notification not found', 'error')
+    except Exception as e:
+        current_app.logger.exception('Failed to update notification: %s', e)
+        flash(f'Failed to update notification: {e}', 'error')
+    return redirect(url_for('auth.manage_site_notifications'))
+
+
+@bp.route('/notifications/send-email/<int:notif_id>', methods=['POST'])
+@role_required('superadmin')
+def send_notification_as_email(notif_id):
+    """Send the specified notification to applicable users by email.
+    Sends each email individually to avoid leaking recipient addresses to others.
+    """
+    try:
+        notifs = notif_util.load_notifications()
+        target = next((n for n in notifs if n.get('id') == int(notif_id)), None)
+        if not target:
+            flash('Notification not found', 'error')
+            return redirect(url_for('auth.manage_site_notifications'))
+
+        # Build recipients according to audience
+        recipients = set()
+        from app.models import User
+        if target.get('audience') == 'site':
+            users = User.query.with_entities(User.email).filter(User.email != None).all()
+            recipients.update([u[0] for u in users if u and u[0]])
+        elif target.get('audience') == 'teams':
+            teams = target.get('teams') or []
+            for t in teams:
+                try:
+                    tn = int(t)
+                except Exception:
+                    # skip invalid team number
+                    continue
+                users = User.query.filter_by(scouting_team_number=tn).with_entities(User.email).all()
+                recipients.update([u[0] for u in users if u and u[0]])
+        elif target.get('audience') == 'users':
+            user_names = target.get('users') or []
+            for uname in user_names:
+                u = User.query.filter_by(username=uname).first()
+                if u and u.email:
+                    recipients.add(u.email)
+
+        # Respect user preference to only receive password reset emails: if any users
+        # have `only_password_reset_emails` set, exclude them from this notification (this
+        # route is used for site notifications and is not a password reset email).
+        if recipients:
+            try:
+                # Query users in the recipients list and check their preferences
+                from app import db
+                from sqlalchemy import inspect as sa_inspect
+                eng = db.get_engine(current_app)
+                try:
+                    inspector = sa_inspect(eng)
+                    cols = [c['name'] for c in inspector.get_columns('user')] if 'user' in inspector.get_table_names() else []
+                except Exception:
+                    cols = []
+                if 'only_password_reset_emails' in cols:
+                    rows = User.query.filter(User.email.in_(list(recipients))).with_entities(
+                        User.username, User.email, User.only_password_reset_emails
+                    ).all()
+                else:
+                    rows = User.query.filter(User.email.in_(list(recipients))).with_entities(
+                        User.username, User.email
+                    ).all()
+                excluded_emails = set()
+                for row in rows:
+                    try:
+                        # Rows may be a tuple (username, email, only_pw_reset) if DB column exists
+                        if len(row) == 3:
+                            uname, email, only_pw = row
+                            if only_pw:
+                                excluded_emails.add(email)
+                                continue
+                        else:
+                            uname, email = row
+                        # Legacy fallback: check file-backed preferences
+                        if user_prefs_util.get_pref(uname, 'only_password_reset_emails', False):
+                            excluded_emails.add(email)
+                    except Exception:
+                        # ignore per-user read errors
+                        pass
+            except Exception as e:
+                current_app.logger.exception('Failed to check recipients opt-out settings: %s', e)
+                excluded_emails = set()
+            if excluded_emails:
+                recipients = recipients - excluded_emails
+                current_app.logger.info('Excluded %d recipient(s) from notification due to only_password_reset_emails setting', len(excluded_emails))
+                flash(f"Excluded {len(excluded_emails)} recipient(s) who opted out of general emails.", 'info')
+
+        subject = f"ObsidianScout Notification: {target.get('level', 'INFO').upper()}"
+        body = target.get('message', '')
+        success_count = 0
+        fail_count = 0
+        skipped_opt_out = 0
+        fail_reasons = []
+        for rcpt in recipients:
+            try:
+                ok, msg = emailer_util.send_email(to=rcpt, subject=subject, body=body)
+                if ok:
+                    success_count += 1
+                else:
+                    # If the mailer returned 'No recipients (all opted out)', treat as skipped opt-out
+                    if msg and ('No recipients' in msg or 'opted out' in msg):
+                        skipped_opt_out += 1
+                    else:
+                        fail_count += 1
+                        fail_reasons.append(f"{rcpt}: {msg}")
+            except Exception as e:
+                fail_count += 1
+                fail_reasons.append(f"{rcpt}: {str(e)}")
+
+        # Compose a friendly summary message including skipped/opt-out recipients
+        summary_parts = [f"Emails sent: {success_count}"]
+        if fail_count:
+            summary_parts.append(f"failed: {fail_count}")
+        if skipped_opt_out:
+            summary_parts.append(f"not sent (opted out): {skipped_opt_out}")
+        summary = '; '.join(summary_parts)
+        flash(summary, 'success' if fail_count == 0 else 'warning')
+        if fail_reasons:
+            current_app.logger.warning('Notification email errors: %s', '\n'.join(fail_reasons))
+    except Exception as e:
+        flash(f'Failed to send notification emails: {str(e)}', 'error')
+    return redirect(url_for('auth.manage_site_notifications'))
 
 
 @bp.route('/users')
@@ -561,6 +793,19 @@ def add_user():
             email = None
             
         user = User(username=username, email=email, scouting_team_number=target_team)
+        # Respect 'only_password_reset_emails' flag if provided
+        only_pw_reset = request.form.get('only_password_reset_emails')
+        only_pw_val = True if only_pw_reset in ('on', 'true', '1') else False
+        try:
+            user.only_password_reset_emails = only_pw_val
+        except Exception:
+            # DB column might not exist; we'll persist to JSON below
+            pass
+        # Persist preference to file-backed prefs too
+        try:
+            user_prefs_util.set_pref(user.username, 'only_password_reset_emails', only_pw_val)
+        except Exception:
+            pass
         user.set_password(password)
         
         # Add roles
@@ -745,6 +990,17 @@ def edit_user(user_id):
         user.email = None if email == '' else email
         
         user.is_active = bool(request.form.get('is_active'))
+        # Admin-editable: allow admins to set whether this user only receives password reset emails
+        only_pw_reset = request.form.get('only_password_reset_emails')
+        only_pw_val = True if only_pw_reset in ('on', 'true', '1') else False
+        try:
+            user.only_password_reset_emails = only_pw_val
+        except Exception:
+            pass
+        try:
+            user_prefs_util.set_pref(user.username, 'only_password_reset_emails', only_pw_val)
+        except Exception:
+            pass
         
         # Update password if provided
         new_password = request.form.get('password')
@@ -792,7 +1048,11 @@ def edit_user(user_id):
         return redirect(url_for('auth.manage_users'))
     
     roles = Role.query.all()
-    return render_template('auth/edit_user.html', user=user, roles=roles, **get_theme_context())
+    try:
+        prefs_only_pw = bool(getattr(user, 'only_password_reset_emails', False))
+    except Exception:
+        prefs_only_pw = user_prefs_util.get_pref(user.username, 'only_password_reset_emails', False)
+    return render_template('auth/edit_user.html', user=user, roles=roles, only_password_reset_emails=prefs_only_pw, **get_theme_context())
 
 @bp.route('/delete_user/<int:user_id>', methods=['POST'])
 @admin_required

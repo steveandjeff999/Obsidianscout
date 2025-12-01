@@ -35,6 +35,13 @@
                             <input class="form-control" type="email" id="email" name="email" value="{{ user.email or '' }}" placeholder="you@example.com">
                             <div class="form-text">Leave blank to remove email.</div>
                         </div>
+                        <div class="mb-3 form-check">
+                            <input class="form-check-input" type="checkbox" id="only_password_reset_emails" name="only_password_reset_emails" {% if only_password_reset_emails %}checked{% endif %} />
+                            <label class="form-check-label" for="only_password_reset_emails">
+                                Only receive password reset emails (opt-out of other email notifications)
+                            </label>
+                            <div class="form-text">When enabled, you will not receive admin notifications; password reset emails will still be delivered.</div>
+                        </div>
                         
                         <div class="mb-3">
                             {% if modern_ui %}

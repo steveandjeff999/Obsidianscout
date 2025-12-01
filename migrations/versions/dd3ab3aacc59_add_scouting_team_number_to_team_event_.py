@@ -24,9 +24,10 @@ def upgrade():
     # event table
     event_cols = [c['name'] for c in inspector.get_columns('event')] if 'event' in inspector.get_table_names() else []
     event_uqs = [u.get('name') for u in inspector.get_unique_constraints('event')] if 'event' in inspector.get_table_names() else []
-    with op.batch_alter_table('event', schema=None) as batch_op:
-        if 'scouting_team_number' not in event_cols:
-            batch_op.add_column(sa.Column('scouting_team_number', sa.Integer(), nullable=True))
+    if 'event' in inspector.get_table_names():
+        with op.batch_alter_table('event', schema=None) as batch_op:
+            if 'scouting_team_number' not in event_cols:
+                batch_op.add_column(sa.Column('scouting_team_number', sa.Integer(), nullable=True))
         # Remove the unique constraint on code since multiple teams can have same event code
         if 'uq_event_code' in (event_uqs or []):
             try:
@@ -37,16 +38,18 @@ def upgrade():
 
     # match table
     match_cols = [c['name'] for c in inspector.get_columns('match')] if 'match' in inspector.get_table_names() else []
-    with op.batch_alter_table('match', schema=None) as batch_op:
-        if 'scouting_team_number' not in match_cols:
-            batch_op.add_column(sa.Column('scouting_team_number', sa.Integer(), nullable=True))
+    if 'match' in inspector.get_table_names():
+        with op.batch_alter_table('match', schema=None) as batch_op:
+            if 'scouting_team_number' not in match_cols:
+                batch_op.add_column(sa.Column('scouting_team_number', sa.Integer(), nullable=True))
 
     # team table
     team_cols = [c['name'] for c in inspector.get_columns('team')] if 'team' in inspector.get_table_names() else []
     team_uqs = [u.get('name') for u in inspector.get_unique_constraints('team')] if 'team' in inspector.get_table_names() else []
-    with op.batch_alter_table('team', schema=None) as batch_op:
-        if 'scouting_team_number' not in team_cols:
-            batch_op.add_column(sa.Column('scouting_team_number', sa.Integer(), nullable=True))
+    if 'team' in inspector.get_table_names():
+        with op.batch_alter_table('team', schema=None) as batch_op:
+            if 'scouting_team_number' not in team_cols:
+                batch_op.add_column(sa.Column('scouting_team_number', sa.Integer(), nullable=True))
         # Remove the unique constraint on team_number since multiple scouting teams can have same team numbers
         if 'uq_team_team_number' in (team_uqs or []):
             try:

@@ -741,8 +741,14 @@ def send_notification_for_subscription(subscription, match):
                     log.email_sent = True
                     print(f" Email sent to {user.email} for match {match.id}")
                 else:
-                    log.email_error = error
-                    print(f" Email failed for {user.email}: {error}")
+                    if error and ('No recipients' in str(error) or 'opted out' in str(error)):
+                        # Recipient opted out - not a send failure
+                        log.email_sent = False
+                        log.email_error = 'Not sent: recipient opted out'
+                        print(f" Email skipped for {user.email}: recipient opted out")
+                    else:
+                        log.email_error = error
+                        print(f" Email failed for {user.email}: {error}")
             except Exception as e:
                 import traceback
                 log.email_error = str(e)

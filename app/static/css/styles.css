@@ -752,9 +752,9 @@ body {
     
     /* UI elements */
     --navbar-bg: #ffffff;
-    --card-shadow: 0 .125rem .25rem rgba(0, 0, 0, .075);
-    --card-shadow-hover: 0 .5rem 1rem rgba(0, 0, 0, .15);
-    --border-radius: .5rem;
+    --card-shadow: 0 6px 18px rgba(2,6,23,0.06);
+    --card-shadow-hover: 0 10px 36px rgba(2,6,23,0.1);
+    --border-radius: 0.75rem;
     --transition-speed: 0.2s;
     
     /* Typography */
@@ -1893,15 +1893,16 @@ body:not(.dark-mode) .toast .btn-close {
 /* Mobile dropdown positioning fixes */
 @media (max-width: 767.98px) {
     /* Force dropdowns to position left on mobile to prevent going off-screen */
+    .navbar-actions { position: relative !important; }
     .navbar-actions .dropdown-menu {
         left: auto !important;
-        right: 0 !important;
+        right: 8px !important;
         transform: none !important;
-        position: fixed !important;
-        top: 60px !important; /* Position below navbar */
-        width: 280px !important; /* Fixed width for mobile */
+        position: absolute !important;
+        top: calc(100% + 8px) !important; /* Position below the topbar actions */
+        width: auto !important; /* Let content determine width */
         max-width: calc(100vw - 20px) !important; /* Ensure it doesn't exceed screen width */
-        margin: 0 10px !important;
+        margin: 0 !important;
         z-index: 1050 !important;
     }
     

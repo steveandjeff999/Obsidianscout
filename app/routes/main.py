@@ -1444,7 +1444,10 @@ def increment_unread():
                     email_body = body_msg + "\n\nOpen the app to view your messages."
                     ok, err = send_email(user.email, email_subj, email_body)
                     try:
-                        current_app.logger.info(f"Email notify for {current_user.username}: ok={ok}, err={err}")
+                        if not ok and err and ('No recipients' in str(err) or 'opted out' in str(err)):
+                            current_app.logger.info(f"Email notify for {current_user.username}: skipped (opted out)")
+                        else:
+                            current_app.logger.info(f"Email notify for {current_user.username}: ok={ok}, err={err}")
                     except Exception:
                         pass
             except Exception as e:
@@ -1962,6 +1965,107 @@ def api_brief_data():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@bp.route('/api/live-matches', methods=['GET'])
+@login_required
+def api_live_matches():
+    """Return a lightweight upcoming matches payload for UI live widgets.
+
+    This endpoint intentionally does NOT compute per-team predictions or
+    run heavy ScoutingData aggregation. It returns minimal fields so the
+    front-end can render quickly and avoid blocking on heavy computations.
+    """
+    from app.models import Match, Event
+    from datetime import datetime
+    try:
+        scouting_team_number = current_user.scouting_team_number
+
+        game_config = get_effective_game_config()
+        current_event_code = game_config.get('current_event_code')
+        current_event = None
+        if current_event_code:
+            current_event = get_event_by_code(current_event_code)
+
+        upcoming_matches = []
+        if current_event:
+            last_completed_match_num = None
+            try:
+                from app.utils.api_utils import get_matches_dual_api
+                api_matches = get_matches_dual_api(current_event_code)
+                for api_match in api_matches:
+                    match_num = api_match.get('match_number')
+                    red_score = api_match.get('red_score')
+                    blue_score = api_match.get('blue_score')
+                    if match_num and red_score is not None and red_score >= 0 and blue_score is not None and blue_score >= 0:
+                        if last_completed_match_num is None or match_num > last_completed_match_num:
+                            last_completed_match_num = match_num
+            except Exception:
+                # Best-effort; continue with DB-only fallback
+                last_completed_match_num = None
+
+            if last_completed_match_num:
+                matches = filter_matches_by_scouting_team()\
+                    .filter(Match.event_id == current_event.id)\
+                    .filter(Match.match_number > last_completed_match_num)\
+                    .order_by(Match.match_type, Match.match_number)\
+                    .limit(5).all()
+            else:
+                last_local_match = filter_matches_by_scouting_team()\
+                    .filter(Match.event_id == current_event.id)\
+                    .filter(Match.red_score >= 0)\
+                    .filter(Match.blue_score >= 0)\
+                    .order_by(Match.match_number.desc())\
+                    .first()
+                if last_local_match:
+                    matches = filter_matches_by_scouting_team()\
+                        .filter(Match.event_id == current_event.id)\
+                        .filter(Match.match_number > last_local_match.match_number)\
+                        .order_by(Match.match_type, Match.match_number)\
+                        .limit(5).all()
+                else:
+                    matches = filter_matches_by_scouting_team()\
+                        .filter(Match.event_id == current_event.id)\
+                        .order_by(Match.match_type, Match.match_number)\
+                        .limit(5).all()
+
+            if not matches:
+                matches = filter_matches_by_scouting_team()\
+                    .filter(Match.event_id == current_event.id)\
+                    .order_by(Match.match_number.desc())\
+                    .limit(5).all()
+
+            for match in matches:
+                upcoming_matches.append({
+                    'id': match.id,
+                    'match_type': match.match_type.title(),
+                    'match_number': match.match_number,
+                    'scheduled_time': match.scheduled_time.isoformat() if hasattr(match, 'scheduled_time') and match.scheduled_time else None,
+                    'red_teams': match.red_teams,
+                    'blue_teams': match.blue_teams,
+                    'result': {
+                        'has_result': (match.red_score is not None and match.red_score >= 0 and match.blue_score is not None and match.blue_score >= 0),
+                        'red_score': match.red_score if getattr(match, 'red_score', None) is not None and match.red_score >= 0 else None,
+                        'blue_score': match.blue_score if getattr(match, 'blue_score', None) is not None and match.blue_score >= 0 else None,
+                        'winner': None
+                    }
+                })
+                if upcoming_matches and upcoming_matches[-1]['result']['has_result']:
+                    r = upcoming_matches[-1]['result']
+                    try:
+                        if r['red_score'] > r['blue_score']:
+                            r['winner'] = 'red'
+                        elif r['blue_score'] > r['red_score']:
+                            r['winner'] = 'blue'
+                        else:
+                            r['winner'] = 'tie'
+                    except Exception:
+                        r['winner'] = None
+
+        return jsonify({'success': True, 'upcoming_matches': upcoming_matches})
+    except Exception as e:
+        current_app.logger.exception('Error fetching live matches')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @bp.route('/api/event-remap/<event_key>', methods=['GET'])

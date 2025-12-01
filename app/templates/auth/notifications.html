@@ -5,30 +5,31 @@
     <div class="col-md-8">
       <h2>Site Notifications</h2>
       <form method="POST" action="{{ url_for('auth.create_notification') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <div class="mb-2">
-          <label class="form-label">Message</label>
-          <textarea name="message" class="form-control" required></textarea>
+          <label class="form-label" for="new-message">Message</label>
+          <textarea id="new-message" name="message" class="form-control" required></textarea>
         </div>
         <div class="mb-2 d-flex gap-2">
-          <select name="level" class="form-select w-auto">
+          <select name="level" id="new-level" class="form-select w-auto">
             <option value="info">Information (blue)</option>
             <option value="important">Important (yellow)</option>
             <option value="urgent">Urgent (red)</option>
           </select>
-          <select name="audience" class="form-select w-auto">
+          <select name="audience" id="new-audience" class="form-select w-auto">
             <option value="site">Site-wide</option>
             <option value="teams">Teams (comma-separated team numbers in teams field)</option>
             <option value="users">Specific users (comma-separated usernames in users field)</option>
           </select>
         </div>
         <div class="mb-2">
-          <label class="form-label">Teams (optional)</label>
-          <input name="teams" data-autocomplete="teams" class="form-control" placeholder="e.g. 1234, 5678">
+          <label class="form-label" for="new-teams">Teams (optional)</label>
+          <input id="new-teams" name="teams" data-autocomplete="teams" class="form-control" placeholder="e.g. 1234, 5678">
           <div class="form-text">Start typing a team number to see suggestions.</div>
         </div>
         <div class="mb-2">
-          <label class="form-label">Users (optional)</label>
-          <input name="users" data-autocomplete="users" class="form-control" placeholder="e.g. alice,bob">
+          <label class="form-label" for="new-users">Users (optional)</label>
+          <input id="new-users" name="users" data-autocomplete="users" class="form-control" placeholder="e.g. alice,bob">
           <div class="form-text">Start typing a username to see suggestions.</div>
         </div>
         <div>
@@ -41,19 +42,22 @@
       <h3>Existing Notifications</h3>
       <div class="list-group">
         {% for n in notifications %}
-          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <div class="list-group-item d-flex justify-content-between align-items-center">
             <div>
               <strong>[{{ n.level|upper }}]</strong> {{ n.message|safe }}
-              <div class="small text-muted">Audience: {{ n.audience }} Teams: {{ n.teams|join(', ') }} Users: {{ n.users|join(', ') }}</div>
+              <div class="small text-muted">Audience: {{ n.audience }} Teams: {{ (n.teams|default([]))|join(', ') }} Users: {{ (n.users|default([]))|join(', ') }}</div>
             </div>
-            <div>
-              <form method="POST" action="{{ url_for('auth.delete_notification', notif_id=n.id) }}" class="d-inline">
-                <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-              </form>
-              <form method="POST" action="{{ url_for('auth.send_notification_as_email', notif_id=n.id) }}" class="d-inline ms-2">
-                <button type="submit" class="btn btn-sm btn-primary">Send as Email</button>
-              </form>
-            </div>
+              <div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editNotificationModal-{{ n.id }}">Edit</button>
+                <form method="POST" action="{{ url_for('auth.delete_notification', notif_id=n.id) }}" class="d-inline ms-1">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                  <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                </form>
+                <form method="POST" action="{{ url_for('auth.send_notification_as_email', notif_id=n.id) }}" class="d-inline ms-2">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                  <button type="submit" class="btn btn-sm btn-primary">Send as Email</button>
+                </form>
+              </div>
           </div>
         {% else %}
           <div class="list-group-item">No notifications configured.</div>
@@ -62,6 +66,59 @@
     </div>
   </div>
 {% endblock %}
+
+{% for n in notifications %}
+<!-- Edit Notification Modal -->
+<div class="modal fade" id="editNotificationModal-{{ n.id }}" tabindex="-1" aria-labelledby="editNotificationModalLabel-{{ n.id }}" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editNotificationModalLabel-{{ n.id }}">Edit Notification</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="POST" action="{{ url_for('auth.update_notification', notif_id=n.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label" for="edit-message-{{ n.id }}">Message</label>
+          <textarea id="edit-message-{{ n.id }}" name="message" class="form-control" required>{{ n.message }}</textarea>
+        </div>
+        <div class="row mb-2">
+          <div class="col-md-4">
+            <label class="form-label" for="edit-level-{{ n.id }}">Severity</label>
+            <select id="edit-level-{{ n.id }}" name="level" class="form-select">
+              <option value="info" {% if n.level == 'info' %}selected{% endif %}>Information</option>
+              <option value="important" {% if n.level == 'important' %}selected{% endif %}>Important</option>
+              <option value="urgent" {% if n.level == 'urgent' %}selected{% endif %}>Urgent</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="edit-audience-{{ n.id }}">Audience</label>
+            <select id="edit-audience-{{ n.id }}" name="audience" class="form-select">
+              <option value="site" {% if n.audience == 'site' %}selected{% endif %}>Site-wide</option>
+              <option value="teams" {% if n.audience == 'teams' %}selected{% endif %}>Specific Teams</option>
+              <option value="users" {% if n.audience == 'users' %}selected{% endif %}>Specific Users</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="edit-teams-{{ n.id }}">Teams (comma-separated)</label>
+            <input id="edit-teams-{{ n.id }}" type="text" name="teams" data-autocomplete="teams" class="form-control" value="{{ (n.teams|default([]))|join(', ') }}" />
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label" for="edit-users-{{ n.id }}">Users (comma-separated)</label>
+          <input id="edit-users-{{ n.id }}" type="text" name="users" data-autocomplete="users" class="form-control" value="{{ (n.users|default([]))|join(', ') }}" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save changes</button>
+      </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
 
 {% block scripts %}
   {{ super() }}
