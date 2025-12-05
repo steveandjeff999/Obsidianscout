@@ -246,17 +246,118 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                Are you sure you want to delete this scouting data for Team {{ scouting_data.team.team_number }} in Match {{ scouting_data.match.match_number }}?
+                <p>Are you sure you want to delete this scouting data for Team {{ scouting_data.team.team_number }} in Match {{ scouting_data.match.match_number }}?</p>
+                
+                <!-- Alliance shared data section (shown dynamically if data is shared to alliances) -->
+                <div id="allianceDeleteSection" style="display: none;">
+                    <hr>
+                    <div class="alert alert-info">
+                        <i class="fas fa-users me-2"></i>
+                        <strong>Alliance Shared Data</strong>
+                        <p class="mb-2">This data has been shared to the following scouting alliance(s):</p>
+                        <ul id="sharedAlliancesList" class="mb-0"></ul>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="deleteFromAlliance" name="delete_from_alliance">
+                        <label class="form-check-label" for="deleteFromAlliance">
+                            <strong>Also delete from scouting alliance(s)</strong>
+                            <br><small class="text-muted">This will remove your data from alliance member access. Other members will no longer see this scouting data.</small>
+                        </label>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <form action="{{ url_for('scouting.delete_data', id=scouting_data.id) }}" method="post">
-                    <button type="submit" class="btn btn-danger">Delete</button>
-                </form>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn" onclick="deleteScoutingData()">Delete</button>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+// Check if data is shared to any alliances when modal opens
+document.getElementById('deleteModal').addEventListener('show.bs.modal', function () {
+    fetch('/alliances/scouting/api/check-alliance-shared-data', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({
+            data_type: 'scouting',
+            data_id: {{ scouting_data.id }}
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        const allianceSection = document.getElementById('allianceDeleteSection');
+        const alliancesList = document.getElementById('sharedAlliancesList');
+        
+        if (data.success && data.is_shared && data.shared_alliances.length > 0) {
+            alliancesList.innerHTML = '';
+            data.shared_alliances.forEach(alliance => {
+                const li = document.createElement('li');
+                li.textContent = alliance.alliance_name;
+                alliancesList.appendChild(li);
+            });
+            allianceSection.style.display = 'block';
+        } else {
+            allianceSection.style.display = 'none';
+        }
+    })
+    .catch(error => {
+        console.error('Error checking alliance data:', error);
+        document.getElementById('allianceDeleteSection').style.display = 'none';
+    });
+});
+
+function deleteScoutingData() {
+    const deleteFromAlliance = document.getElementById('deleteFromAlliance').checked;
+    
+    // If deleting from alliance, call the API first
+    if (deleteFromAlliance) {
+        fetch('/alliances/scouting/api/delete-from-alliance', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                data_type: 'scouting',
+                original_data_id: {{ scouting_data.id }}
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Now delete the local data
+            submitDeleteForm();
+        })
+        .catch(error => {
+            console.error('Error deleting from alliance:', error);
+            // Still try to delete local data
+            submitDeleteForm();
+        });
+    } else {
+        submitDeleteForm();
+    }
+}
+
+function submitDeleteForm() {
+    // Create and submit a form
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{{ url_for("scouting.delete_data", id=scouting_data.id) }}';
+    
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrf_token';
+    csrfInput.value = '{{ csrf_token() }}';
+    form.appendChild(csrfInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
 {% endblock %}
 
 {% block extra_css %}

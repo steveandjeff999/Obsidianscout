@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+{% block title %}Manage Alliance Events - {{ alliance.alliance_name }}{% endblock %}
+
+{% block head %}
+<meta name="csrf-token" content="{{ csrf_token() if csrf_token else '' }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-0">
+                        <i class="fas fa-calendar-alt"></i> Alliance Events
+                    </h2>
+                    <p class="text-muted mb-0">
+                        Manage events for <strong>{{ alliance.alliance_name }}</strong> - changes propagate to all alliance members
+                    </p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('scouting_alliances.view_alliance', alliance_id=alliance.id) }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i> Back to Alliance
+                    </a>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEventModal">
+                        <i class="fas fa-plus me-2"></i> Add Event
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-lg-4 col-md-6 mb-3">
+            <div class="card h-100 border-primary">
+                <div class="card-body">
+                    <h6 class="card-title text-primary">
+                        <i class="fas fa-calendar-check me-2"></i>Active Events
+                    </h6>
+                    <p class="display-6 mb-0">{{ alliance_events|selectattr('is_active', 'true')|list|length }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 col-md-6 mb-3">
+            <div class="card h-100 border-info">
+                <div class="card-body">
+                    <h6 class="card-title text-info">
+                        <i class="fas fa-database me-2"></i>Events with Data
+                    </h6>
+                    <p class="display-6 mb-0">{{ events|length }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 col-md-6 mb-3">
+            <div class="card h-100 border-success">
+                <div class="card-body">
+                    <h6 class="card-title text-success">
+                        <i class="fas fa-handshake me-2"></i>Alliance Members
+                    </h6>
+                    <p class="display-6 mb-0">{{ alliance.get_active_members()|length }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Current Event Info -->
+    {% if game_config and game_config.get('current_event_code') %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-info d-flex align-items-center">
+                <i class="fas fa-info-circle me-3 fa-2x"></i>
+                <div>
+                    <strong>Current Event Code:</strong> {{ game_config.get('current_event_code') }}
+                    <br>
+                    <small class="text-muted">This is the currently configured event for the alliance.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Events Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list me-2"></i>Alliance Events
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if alliance_events %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th style="width: 150px;">Event Code</th>
+                                    <th>Event Name</th>
+                                    <th>Added By</th>
+                                    <th>Date Added</th>
+                                    <th>Status</th>
+                                    <th style="width: 250px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ae in alliance_events %}
+                                {% set event_data = events|selectattr('code', 'equalto', ae.event_code)|first %}
+                                <tr>
+                                    <td class="fw-bold">{{ ae.event_code }}</td>
+                                    <td>{{ ae.event_name or event_data.name if event_data else 'Unknown' }}</td>
+                                    <td>Team {{ ae.added_by }}</td>
+                                    <td>{{ ae.created_at.strftime('%Y-%m-%d') if ae.created_at else 'N/A' }}</td>
+                                    <td>
+                                        {% if ae.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="{{ url_for('scouting_alliances.manage_alliance_teams', alliance_id=alliance.id) }}?event_code={{ ae.event_code }}" 
+                                               class="btn btn-sm btn-primary">
+                                                <i class="fas fa-users me-1"></i> Teams
+                                            </a>
+                                            <a href="{{ url_for('scouting_alliances.manage_alliance_matches', alliance_id=alliance.id) }}?event_code={{ ae.event_code }}" 
+                                               class="btn btn-sm btn-info">
+                                                <i class="fas fa-trophy me-1"></i> Matches
+                                            </a>
+                                            {% if ae.is_active %}
+                                            <button class="btn btn-sm btn-outline-danger" 
+                                                    onclick="removeEvent('{{ ae.event_code }}')"
+                                                    title="Remove from alliance">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        No events added to this alliance yet.
+                        <button class="btn btn-sm btn-primary ms-2" data-bs-toggle="modal" data-bs-target="#addEventModal">
+                            <i class="fas fa-plus me-1"></i> Add First Event
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-link me-2"></i>Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{{ url_for('scouting_alliances.manage_alliance_teams', alliance_id=alliance.id) }}" class="btn btn-outline-primary">
+                            <i class="fas fa-users me-2"></i>Manage All Teams
+                        </a>
+                        <a href="{{ url_for('scouting_alliances.manage_alliance_matches', alliance_id=alliance.id) }}" class="btn btn-outline-info">
+                            <i class="fas fa-trophy me-2"></i>Manage All Matches
+                        </a>
+                        <a href="{{ url_for('scouting_alliances.edit_game_config', alliance_id=alliance.id) }}" class="btn btn-outline-success">
+                            <i class="fas fa-gamepad me-2"></i>Edit Game Config
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Event Modal -->
+<div class="modal fade" id="addEventModal" tabindex="-1" aria-labelledby="addEventModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addEventModalLabel">
+                    <i class="fas fa-plus me-2"></i>Add Event to Alliance
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addEventForm">
+                    <div class="mb-3">
+                        <label for="eventCode" class="form-label">Event Code *</label>
+                        <input type="text" class="form-control" id="eventCode" required 
+                               placeholder="e.g., 2025txhou">
+                        <div class="form-text">
+                            Enter the FIRST event code. Event details will be fetched automatically.
+                        </div>
+                    </div>
+                </form>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-lightbulb me-2"></i>
+                    <strong>Tip:</strong> You can find event codes on the 
+                    <a href="https://www.thebluealliance.com/events" target="_blank">The Blue Alliance</a>
+                    or FIRST websites.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addEvent()">
+                    <i class="fas fa-plus me-1"></i> Add Event
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+    <div id="eventToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <strong class="me-auto" id="toastTitle">Notification</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body" id="toastMessage"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const ALLIANCE_ID = {{ alliance.id }};
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+function showToast(title, message, isError = false) {
+    const toast = document.getElementById('eventToast');
+    const toastTitle = document.getElementById('toastTitle');
+    const toastMessage = document.getElementById('toastMessage');
+    
+    toastTitle.textContent = title;
+    toastMessage.textContent = message;
+    
+    toast.classList.remove('bg-success', 'bg-danger', 'text-white');
+    if (isError) {
+        toast.classList.add('bg-danger', 'text-white');
+    } else {
+        toast.classList.add('bg-success', 'text-white');
+    }
+    
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+}
+
+async function addEvent() {
+    const eventCode = document.getElementById('eventCode').value.trim().toUpperCase();
+    
+    if (!eventCode) {
+        showToast('Error', 'Event code is required', true);
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/alliances/scouting/${ALLIANCE_ID}/manage/events/add`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF_TOKEN
+            },
+            body: JSON.stringify({ event_code: eventCode })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('Success', data.message || `Event ${eventCode} added successfully`);
+            // Close modal and reload
+            bootstrap.Modal.getInstance(document.getElementById('addEventModal')).hide();
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('Error', data.error || 'Failed to add event', true);
+        }
+    } catch (error) {
+        console.error('Error adding event:', error);
+        showToast('Error', 'Failed to add event: ' + error.message, true);
+    }
+}
+
+async function removeEvent(eventCode) {
+    if (!confirm(`Are you sure you want to remove event ${eventCode} from the alliance?\n\nThis will not delete any existing data.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/alliances/scouting/${ALLIANCE_ID}/manage/events/${eventCode}/remove`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF_TOKEN
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('Success', data.message || `Event ${eventCode} removed`);
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('Error', data.error || 'Failed to remove event', true);
+        }
+    } catch (error) {
+        console.error('Error removing event:', error);
+        showToast('Error', 'Failed to remove event: ' + error.message, true);
+    }
+}
+
+// Socket.IO listener for real-time updates
+if (typeof io !== 'undefined') {
+    const socket = io();
+    
+    socket.on('connect', function() {
+        socket.emit('join_alliance_room', { alliance_id: ALLIANCE_ID });
+    });
+    
+    socket.on('alliance_event_added', function(data) {
+        if (data.alliance_id === ALLIANCE_ID) {
+            showToast('Event Added', `${data.event_name} (${data.event_code}) added by Team ${data.added_by}`);
+            setTimeout(() => location.reload(), 2000);
+        }
+    });
+    
+    socket.on('alliance_event_removed', function(data) {
+        if (data.alliance_id === ALLIANCE_ID) {
+            showToast('Event Removed', `${data.event_code} removed by Team ${data.removed_by}`);
+            setTimeout(() => location.reload(), 2000);
+        }
+    });
+}
+</script>
+{% endblock %}

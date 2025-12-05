@@ -151,6 +151,13 @@ if __name__ == '__main__':
             
             print("Database table verification complete!")
             
+            # Run comprehensive database schema migrations
+            try:
+                from app.utils.database_migrations import run_all_migrations
+                run_all_migrations(db)
+            except Exception as migration_err:
+                print(f"Warning: Database migration check failed: {migration_err}")
+            
         except Exception as table_error:
             print(f"Warning: Error during table verification: {table_error}")
         

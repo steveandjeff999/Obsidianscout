@@ -356,9 +356,81 @@
     </div>
 </div>
 
+<!-- Deactivate Alliance Modal -->
+<div class="modal fade" id="deactivateAllianceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle text-warning me-2"></i>Deactivate Alliance Mode</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>You are about to deactivate alliance mode for <strong id="deactivateAllianceName"></strong>.</p>
+                <p>Your team's data will no longer be shared with alliance members while inactive.</p>
+                
+                <div class="alert alert-info" id="deactivateDataInfo">
+                    <i class="fas fa-spinner fa-spin me-2"></i>Checking your shared data...
+                </div>
+                
+                <h6 class="mt-3 mb-2"><i class="fas fa-download me-1"></i>Data Copy Options:</h6>
+                
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="radio" name="copyDataOption" id="copyNoneRadio" value="none" checked>
+                    <label class="form-check-label" for="copyNoneRadio">
+                        <strong>Don't copy any data</strong>
+                    </label>
+                    <div class="form-text">
+                        Just deactivate - no data will be copied.
+                    </div>
+                </div>
+                
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="radio" name="copyDataOption" id="copyMyDataRadio" value="my_data">
+                    <label class="form-check-label" for="copyMyDataRadio">
+                        <strong>Copy only MY team's data back</strong>
+                    </label>
+                    <div class="form-text text-primary">
+                        <i class="fas fa-user me-1"></i>This will copy only the scouting data YOUR team contributed to the alliance back to your private team storage. Useful if you want to keep your own work.
+                    </div>
+                </div>
+                
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="radio" name="copyDataOption" id="copyAllDataRadio" value="all_data">
+                    <label class="form-check-label" for="copyAllDataRadio">
+                        <strong>Copy ALL alliance data to my team</strong>
+                    </label>
+                    <div class="form-text text-success">
+                        <i class="fas fa-copy me-1"></i>This will copy ALL scouting data from the alliance (including data from other teams) to your team's local storage. Data from other teams will be prefixed with [Alliance-TEAM#].
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="removeSharedDataCheckbox">
+                    <label class="form-check-label" for="removeSharedDataCheckbox">
+                        <strong>Remove my team's scouting data from the alliance</strong>
+                    </label>
+                    <div class="form-text text-danger">
+                        <i class="fas fa-exclamation-triangle me-1"></i>This is irreversible! Other teams will lose access to your shared data.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="cancelDeactivation()">Cancel</button>
+                <button type="button" class="btn btn-warning" id="confirmDeactivateBtn" onclick="confirmDeactivateAlliance()">
+                    <i class="fas fa-power-off me-1"></i>Deactivate Alliance Mode
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 let currentChatAlliance = null;
 let socket = null;
+let pendingDeactivationAllianceId = null;
+let pendingDeactivationAllianceName = null;
 
 // Initialize Socket.IO
 document.addEventListener('DOMContentLoaded', function() {
@@ -446,14 +518,9 @@ function initializeAllianceModeToggles() {
                     this.checked = false;
                 }
             } else {
-                // Deactivating this alliance
-                const message = `This will deactivate "${allianceName}" and switch to individual team configuration. Continue?`;
-                if (confirm(message)) {
-                    toggleAllianceMode(allianceId, false, allianceName);
-                } else {
-                    // Revert the toggle if user cancels
-                    this.checked = true;
-                }
+                // Deactivating this alliance - show modal with options
+                this.checked = true; // Keep toggle on until confirmed
+                showDeactivateModal(allianceId, allianceName);
             }
         });
         
@@ -517,6 +584,184 @@ function toggleAllianceMode(allianceId, isActive, allianceName) {
         label.innerHTML = originalText;
         toggle.disabled = false;
     });
+}
+
+// Show deactivate modal with options
+function showDeactivateModal(allianceId, allianceName) {
+    pendingDeactivationAllianceId = allianceId;
+    pendingDeactivationAllianceName = allianceName;
+    
+    const modal = new bootstrap.Modal(document.getElementById('deactivateAllianceModal'));
+    const dataInfoEl = document.getElementById('deactivateDataInfo');
+    const nameEl = document.getElementById('deactivateAllianceName');
+    const removeCheckbox = document.getElementById('removeSharedDataCheckbox');
+    
+    // Reset radio buttons to default (none)
+    const copyNoneRadio = document.getElementById('copyNoneRadio');
+    if (copyNoneRadio) copyNoneRadio.checked = true;
+    
+    // Reset remove checkbox to unchecked
+    if (removeCheckbox) removeCheckbox.checked = false;
+    if (nameEl) nameEl.textContent = allianceName;
+    
+    // Check how much data is shared
+    fetch(`/alliances/scouting/api/${allianceId}/team-data-counts`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const totalCount = data.match_data_count + data.pit_data_count;
+            if (totalCount > 0) {
+                dataInfoEl.className = 'alert alert-warning';
+                dataInfoEl.innerHTML = `<i class="fas fa-database me-2"></i>Your team has shared <strong>${data.match_data_count}</strong> match scouting entries and <strong>${data.pit_data_count}</strong> pit scouting entries with this alliance.`;
+            } else {
+                dataInfoEl.className = 'alert alert-info';
+                dataInfoEl.innerHTML = `<i class="fas fa-info-circle me-2"></i>Your team has not shared any scouting data with this alliance yet.`;
+            }
+        } else {
+            dataInfoEl.className = 'alert alert-secondary';
+            dataInfoEl.innerHTML = `<i class="fas fa-info-circle me-2"></i>Could not retrieve data count.`;
+        }
+    })
+    .catch(error => {
+        console.error('Error fetching data counts:', error);
+        dataInfoEl.className = 'alert alert-secondary';
+        dataInfoEl.innerHTML = `<i class="fas fa-info-circle me-2"></i>Could not retrieve data count.`;
+    });
+    
+    modal.show();
+}
+
+// Cancel deactivation - revert toggle
+function cancelDeactivation() {
+    const toggle = document.getElementById(`allianceToggle${pendingDeactivationAllianceId}`);
+    if (toggle) {
+        toggle.checked = true;
+    }
+    pendingDeactivationAllianceId = null;
+    pendingDeactivationAllianceName = null;
+}
+
+// Confirm deactivation with options
+function confirmDeactivateAlliance() {
+    const removeData = document.getElementById('removeSharedDataCheckbox').checked;
+    // Get the selected copy option from radio buttons
+    const copyDataOption = document.querySelector('input[name="copyDataOption"]:checked')?.value || 'none';
+    const modal = bootstrap.Modal.getInstance(document.getElementById('deactivateAllianceModal'));
+    const btn = document.getElementById('confirmDeactivateBtn');
+    
+    // Disable button during operation
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processing...';
+    
+    // Function to continue with deactivation after optional copy
+    function proceedWithDeactivation() {
+        if (removeData) {
+            // Use the deactivate-with-data endpoint to remove data first
+            fetch('/alliances/scouting/api/deactivate-alliance-with-data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    alliance_id: pendingDeactivationAllianceId,
+                    remove_data: true
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    modal.hide();
+                    showToast(data.message || 'Alliance deactivated and your data has been removed.', 'success');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-power-off me-1"></i>Deactivate Alliance Mode';
+                    showToast('Failed to deactivate: ' + (data.error || 'Unknown error'), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-power-off me-1"></i>Deactivate Alliance Mode';
+                showToast('Error deactivating alliance', 'danger');
+            });
+        } else {
+            // Just deactivate without removing data
+            modal.hide();
+            toggleAllianceMode(pendingDeactivationAllianceId, false, pendingDeactivationAllianceName);
+        }
+    }
+    
+    // Handle copy data options
+    if (copyDataOption === 'all_data') {
+        // Copy ALL alliance data
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Copying All Alliance Data...';
+        
+        fetch(`/alliances/scouting/${pendingDeactivationAllianceId}/copy-all-data`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message || 'All alliance data copied to your team!', 'success');
+                // Now proceed with deactivation
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Deactivating...';
+                proceedWithDeactivation();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-power-off me-1"></i>Deactivate Alliance Mode';
+                showToast('Failed to copy data: ' + (data.error || 'Unknown error'), 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error copying data:', error);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-power-off me-1"></i>Deactivate Alliance Mode';
+            showToast('Error copying alliance data', 'danger');
+        });
+    } else if (copyDataOption === 'my_data') {
+        // Copy only MY team's data
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Copying Your Team\'s Data...';
+        
+        fetch(`/alliances/scouting/${pendingDeactivationAllianceId}/copy-my-data`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message || 'Your team\'s data copied back to your private storage!', 'success');
+                // Now proceed with deactivation
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Deactivating...';
+                proceedWithDeactivation();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-power-off me-1"></i>Deactivate Alliance Mode';
+                showToast('Failed to copy data: ' + (data.error || 'Unknown error'), 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error copying data:', error);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-power-off me-1"></i>Deactivate Alliance Mode';
+            showToast('Error copying your team\'s data', 'danger');
+        });
+    } else {
+        // No copy needed, proceed directly
+        proceedWithDeactivation();
+    }
 }
 
 // Respond to invitation

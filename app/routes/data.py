@@ -4,7 +4,8 @@ from app.routes.auth import analytics_required
 from app.models import (
     Team, Match, Event, ScoutingData, StrategyDrawing, PitScoutingData,
     AllianceSelection, DoNotPickEntry, AvoidEntry,
-    TeamListEntry, StrategyShare, SharedGraph, SharedTeamRanks, team_event
+    TeamListEntry, StrategyShare, SharedGraph, SharedTeamRanks, team_event,
+    AllianceSharedScoutingData, AllianceSharedPitData
 )
 from app import db
 import pandas as pd
@@ -23,11 +24,13 @@ from app.utils.config_manager import get_effective_game_config
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
     filter_events_by_scouting_team, filter_scouting_data_by_scouting_team, filter_pit_scouting_data_by_scouting_team,
-    get_event_by_code
+    get_event_by_code, get_all_teams_at_event
 )
 from app.utils.team_isolation import get_combined_dropdown_events
+from app.utils.alliance_data import get_active_alliance_id, get_all_teams_for_alliance, get_all_matches_for_alliance
 from flask import jsonify
 from app.utils.api_auth import team_data_access_required
+from app.utils.alliance_data import get_active_alliance_id, get_all_scouting_data, get_all_pit_data
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -1348,9 +1351,23 @@ def export_excel():
         except Exception:
             pd.DataFrame([]).to_excel(writer, index=False, sheet_name='Matches')
 
-        # 4) Scouting Data (all entries for this scouting team)
+        # 4) Scouting Data (all entries - use alliance data if in alliance mode)
         try:
-            scouting_data = ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).all()
+            alliance_id = get_active_alliance_id()
+            if alliance_id:
+                scouting_data = AllianceSharedScoutingData.query.filter_by(
+                    alliance_id=alliance_id,
+                    is_active=True
+                ).all()
+            else:
+                # Exclude alliance-copied data (scout_name starts with [Alliance-)
+                scouting_data = ScoutingData.query.filter(
+                    ScoutingData.scouting_team_number == current_user.scouting_team_number,
+                    db.or_(
+                        ScoutingData.scout_name == None,
+                        ~ScoutingData.scout_name.like('[Alliance-%')
+                    )
+                ).all()
             sd_rows = []
             for sd in scouting_data:
                 base = {
@@ -1385,9 +1402,18 @@ def export_excel():
         except Exception:
             pd.DataFrame([]).to_excel(writer, index=False, sheet_name='Scouting Data')
 
-        # 5) Pit Scouting
+        # 5) Pit Scouting (use alliance data if in alliance mode)
         try:
-            pit_rows = [p.to_dict() for p in PitScoutingData.query.order_by(PitScoutingData.timestamp.desc()).all()]
+            if alliance_id:
+                pit_data = AllianceSharedPitData.query.filter_by(
+                    alliance_id=alliance_id,
+                    is_active=True
+                ).order_by(AllianceSharedPitData.timestamp.desc()).all()
+                pit_rows = [p.to_dict() for p in pit_data]
+            else:
+                pit_rows = [p.to_dict() for p in PitScoutingData.query.filter_by(
+                    scouting_team_number=current_user.scouting_team_number
+                ).order_by(PitScoutingData.timestamp.desc()).all()]
             pd.DataFrame(pit_rows).to_excel(writer, index=False, sheet_name='Pit Scouting')
         except Exception:
             pd.DataFrame([]).to_excel(writer, index=False, sheet_name='Pit Scouting')
@@ -2070,17 +2096,39 @@ def manage_entries():
     if current_event_code:
         current_event = get_event_by_code(current_event_code)
     
-    # Fetch all scouting entries with eager loading of related models
-    scouting_entries = (ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number)
-                       .join(Match)
-                       .join(Event)
-                       .join(Team)
-                       .order_by(ScoutingData.timestamp.desc())
-                       .all())
+    # Check for alliance mode
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
     
-    # Get teams and matches filtered by the current event if available
+    # Fetch all scouting entries - use alliance data if in alliance mode
+    if is_alliance_mode:
+        scouting_entries = (AllianceSharedScoutingData.query.filter_by(
+            alliance_id=alliance_id,
+            is_active=True
+        )
+        .join(Match)
+        .join(Event)
+        .join(Team)
+        .order_by(AllianceSharedScoutingData.timestamp.desc())
+        .all())
+    else:
+        # Exclude alliance-copied data (scout_name starts with [Alliance-)
+        scouting_entries = (ScoutingData.query.filter(
+            ScoutingData.scouting_team_number == current_user.scouting_team_number,
+            db.or_(
+                ScoutingData.scout_name == None,
+                ~ScoutingData.scout_name.like('[Alliance-%')
+            )
+        )
+                           .join(Match)
+                           .join(Event)
+                           .join(Team)
+                           .order_by(ScoutingData.timestamp.desc())
+                           .all())
+    
+    # Get ALL teams at the current event (regardless of scouting_team_number) and matches
     if current_event:
-        teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+        teams = get_all_teams_at_event(event_id=current_event.id)
         matches = Match.query.filter_by(event_id=current_event.id).order_by(Match.match_type, Match.match_number).all()
     else:
         teams = []  # No teams if no current event is set
@@ -2096,6 +2144,8 @@ def manage_entries():
                          teams=teams,
                          matches=matches,
                          events=events,
+                         is_alliance_mode=is_alliance_mode,
+                         alliance_id=alliance_id,
                          **get_theme_context())
 
 @bp.route('/edit/<int:entry_id>', methods=['GET', 'POST'])
@@ -2518,11 +2568,29 @@ def validate_data():
 
     # Prepare comparison results
     results = []
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
+    
     for match in matches:
         key = (match.match_type.lower(), str(match.match_number))
         api_scores = api_score_lookup.get(key, {'red_score': None, 'blue_score': None})
-        # Aggregate scouting data for this match
-        scouting = ScoutingData.query.filter_by(match_id=match.id, scouting_team_number=current_user.scouting_team_number).all()
+        # Aggregate scouting data for this match - use alliance data if in alliance mode
+        if is_alliance_mode:
+            # In alliance mode, query by match_number and event_code since match IDs differ across teams
+            from sqlalchemy import func
+            scouting = AllianceSharedScoutingData.query.join(
+                Match, AllianceSharedScoutingData.match_id == Match.id
+            ).join(
+                Event, Match.event_id == Event.id
+            ).filter(
+                Match.match_number == match.match_number,
+                Match.match_type == match.match_type,
+                func.upper(Event.code) == func.upper(event.code) if event and event.code else Match.event_id == match.event_id,
+                AllianceSharedScoutingData.alliance_id == alliance_id,
+                AllianceSharedScoutingData.is_active == True
+            ).all()
+        else:
+            scouting = ScoutingData.query.filter_by(match_id=match.id, scouting_team_number=current_user.scouting_team_number).all()
         red_total = 0
         blue_total = 0
         for sd in scouting:
@@ -2637,9 +2705,19 @@ def data_stats():
         if current_event_code:
             current_event = get_event_by_code(current_event_code)
         
-        # Get database statistics filtered by current scouting team
-        teams_count = filter_teams_by_scouting_team().count()
-        matches_count = filter_matches_by_scouting_team().count()
+        # Check if we're in alliance mode
+        alliance_id = get_active_alliance_id()
+        
+        # Get database statistics - use alliance-aware functions in alliance mode
+        if alliance_id and current_event_code:
+            all_teams, _ = get_all_teams_for_alliance(event_code=current_event_code)
+            all_matches, _ = get_all_matches_for_alliance(event_code=current_event_code)
+            teams_count = len(all_teams)
+            matches_count = len(all_matches)
+        else:
+            teams_count = filter_teams_by_scouting_team().count()
+            matches_count = filter_matches_by_scouting_team().count()
+        
         scouting_count = filter_scouting_data_by_scouting_team().count()
         pit_scouting_count = filter_pit_scouting_data_by_scouting_team().count()
         events_count = len(get_combined_dropdown_events())
@@ -2647,8 +2725,13 @@ def data_stats():
         # Event-specific stats if current event is set
         event_stats = {}
         if current_event:
-            event_teams = filter_teams_by_scouting_team(Team.query.join(Team.events)).filter(Event.id == current_event.id).count()
-            event_matches = filter_matches_by_scouting_team(Match.query.filter_by(event_id=current_event.id)).count()
+            if alliance_id:
+                # Alliance mode - use already-fetched alliance data
+                event_teams = teams_count
+                event_matches = matches_count
+            else:
+                event_teams = filter_teams_by_scouting_team(Team.query.join(Team.events)).filter(Event.id == current_event.id).count()
+                event_matches = filter_matches_by_scouting_team(Match.query.filter_by(event_id=current_event.id)).count()
             # Use the student-friendly filter for event entries (includes unassigned entries when appropriate)
             event_scouting = filter_scouting_data_by_scouting_team(ScoutingData.query.join(Match).filter(Match.event_id == current_event.id)).count()
             

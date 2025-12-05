@@ -28909,3 +28909,91 @@ Parsed endgame scoring_elements:
   }
 ]
 
+--- Save attempt at 2025-12-04T19:53:58.031091+00:00 by 5568 ---
+Form keys:
+  simple_edit
+  simple_payload
+  game_name
+  season
+  version
+  alliance_size
+  scouting_stations
+  current_event_code
+  match_type_practice
+  match_type_qualification
+  match_type_playoff
+  auto_duration
+  teleop_duration
+  endgame_duration
+  preferred_api_source
+  tba_auth_key
+  tba_base_url
+  api_username
+  api_auth_token
+  api_base_url
+  auto_sync_enabled
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[]
+Merged parsed elements:
+[]
+---
+Previous teleop_period scoring_elements:
+[]
+Merged parsed elements:
+[]
+---
+Previous endgame_period scoring_elements:
+[]
+Merged parsed elements:
+[]
+---
+Parsed endgame scoring_elements:
+[]
+
+--- Save attempt at 2025-12-05T16:24:15.751332+00:00 by 5568 ---
+Form keys:
+  simple_edit
+  simple_payload
+  game_name
+  season
+  version
+  alliance_size
+  scouting_stations
+  current_event_code
+  match_type_practice
+  match_type_qualification
+  match_type_playoff
+  auto_duration
+  teleop_duration
+  endgame_duration
+  preferred_api_source
+  tba_auth_key
+  tba_base_url
+  api_username
+  api_auth_token
+  api_base_url
+  auto_sync_enabled
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[]
+Merged parsed elements:
+[]
+---
+Previous teleop_period scoring_elements:
+[]
+Merged parsed elements:
+[]
+---
+Previous endgame_period scoring_elements:
+[]
+Merged parsed elements:
+[]
+---
+Parsed endgame scoring_elements:
+[]
+

@@ -9,7 +9,12 @@
     <div class="col-md-12 mb-3">
         <div class="d-flex justify-content-between align-items-center">
             <div>
-                <h5 class="mb-0">All Pit Scouting Data</h5>
+                <h5 class="mb-0">
+                    All Pit Scouting Data
+                    <span id="allianceModeIndicator" class="badge bg-success ms-2" style="display: none;">
+                        <i class="fas fa-users me-1"></i>Alliance Mode
+                    </span>
+                </h5>
                 <small class="text-muted" id="eventInfo">
                     {% if current_event %}
                         {{ current_event.name }} ({{ current_event.code }})
@@ -158,6 +163,9 @@ class PitScoutingDataDisplay {
         this.autoRefreshEnabled = false;
         this.deleteModal = null;
         this.deleteId = null;
+        this.deleteIsAlliance = false;
+        this.isAllianceMode = false;
+        this.userIsAllianceAdmin = false;
         
         this.init();
     }
@@ -228,6 +236,8 @@ class PitScoutingDataDisplay {
             if (result.success) {
                 this.data = result.data;
                 this.config = result.config;
+                this.isAllianceMode = result.is_alliance_mode || false;
+                this.userIsAllianceAdmin = result.user_is_alliance_admin || false;
                 this.setupColumns();
                 this.filterData();
                 this.updateUI();
@@ -250,6 +260,11 @@ class PitScoutingDataDisplay {
         this.visibleColumns.add('timestamp');
         this.visibleColumns.add('is_uploaded');
         this.visibleColumns.add('actions');
+        
+        // Add source_team column when in alliance mode
+        if (this.isAllianceMode) {
+            this.visibleColumns.add('source_team');
+        }
         
         // Add first 3 elements from each section as default visible
         let columnCount = 0;
@@ -335,19 +350,26 @@ class PitScoutingDataDisplay {
     renderTable() {
         const tableHeader = document.getElementById('tableHeader');
         const tableBody = document.getElementById('tableBody');
+        const dataContainer = document.getElementById('dataContainer');
+        const noDataMessage = document.getElementById('noDataMessage');
         
         // Clear existing content
         tableHeader.innerHTML = '';
         tableBody.innerHTML = '';
         
         if (this.filteredData.length === 0) {
-            document.getElementById('dataContainer').style.display = 'none';
-            document.getElementById('noDataMessage').style.display = 'block';
+            dataContainer.classList.add('d-none');
+            dataContainer.style.display = 'none';
+            noDataMessage.classList.remove('d-none');
+            noDataMessage.style.display = 'block';
             return;
         }
         
-        document.getElementById('dataContainer').style.display = 'block';
-        document.getElementById('noDataMessage').style.display = 'none';
+        // Show data container, hide no data message
+        dataContainer.classList.remove('d-none');
+        dataContainer.style.display = 'block';
+        noDataMessage.classList.add('d-none');
+        noDataMessage.style.display = 'none';
         
         // Create header row
         const headerRow = document.createElement('tr');
@@ -358,6 +380,11 @@ class PitScoutingDataDisplay {
         }
         if (this.visibleColumns.has('scout_name')) {
             headerRow.appendChild(this.createHeaderCell('Scout'));
+        }
+        
+        // Source team column (alliance mode only)
+        if (this.visibleColumns.has('source_team')) {
+            headerRow.appendChild(this.createHeaderCell('Source Team'));
         }
         
         // Dynamic columns from config
@@ -395,6 +422,11 @@ class PitScoutingDataDisplay {
             }
             if (this.visibleColumns.has('scout_name')) {
                 dataRow.appendChild(this.createScoutCell(entry));
+            }
+            
+            // Source team column (alliance mode only)
+            if (this.visibleColumns.has('source_team')) {
+                dataRow.appendChild(this.createSourceTeamCell(entry));
             }
             
             // Dynamic columns from config
@@ -443,6 +475,13 @@ class PitScoutingDataDisplay {
     createScoutCell(entry) {
         const td = document.createElement('td');
         td.innerHTML = `<span class="badge bg-info">${entry.scout_name}</span>`;
+        return td;
+    }
+    
+    createSourceTeamCell(entry) {
+        const td = document.createElement('td');
+        const sourceTeam = entry.source_team || 'Unknown';
+        td.innerHTML = `<span class="badge bg-secondary">Team ${sourceTeam}</span>`;
         return td;
     }
     
@@ -499,35 +538,70 @@ class PitScoutingDataDisplay {
     
     createActionsCell(entry) {
         const td = document.createElement('td');
+        // For alliance mode, pass shared_id parameter
+        const viewUrl = entry.is_alliance_data 
+            ? `/pit-scouting/view/${entry.id}?shared_id=${entry.id}`
+            : `/pit-scouting/view/${entry.id}`;
+        const editUrl = entry.is_alliance_data
+            ? `/pit-scouting/edit/${entry.id}?shared_id=${entry.id}`
+            : `/pit-scouting/edit/${entry.id}`;
+        
+        // Show delete button only if user can delete
+        const deleteButton = entry.can_delete 
+            ? `<button class="btn btn-sm btn-outline-danger delete-btn" 
+                    data-id="${entry.id}" data-team="${entry.team_number}" 
+                    data-alliance="${entry.is_alliance_data}" title="Delete">
+                <i class="fas fa-trash"></i>
+               </button>`
+            : '';
+        
         td.innerHTML = `
             <div class="btn-group" role="group">
-                <a href="/pit-scouting/view/${entry.id}" class="btn btn-sm btn-outline-primary" title="View Details">
+                <a href="${viewUrl}" class="btn btn-sm btn-outline-primary" title="View Details">
                     <i class="fas fa-eye"></i>
                 </a>
-                <a href="/pit-scouting/edit/${entry.id}" class="btn btn-sm btn-outline-warning" title="Edit">
+                <a href="${editUrl}" class="btn btn-sm btn-outline-warning" title="Edit">
                     <i class="fas fa-edit"></i>
                 </a>
-                <button class="btn btn-sm btn-outline-danger delete-btn" 
-                        data-id="${entry.id}" data-team="${entry.team_number}" title="Delete">
-                    <i class="fas fa-trash"></i>
-                </button>
+                ${deleteButton}
             </div>
         `;
         
-        // Add delete event listener
+        // Add delete event listener if delete button exists
         const deleteBtn = td.querySelector('.delete-btn');
-        deleteBtn.addEventListener('click', () => {
-            this.deleteId = entry.id;
-            document.getElementById('deleteTeamNumber').textContent = 'Team ' + entry.team_number;
-            this.deleteModal.show();
-        });
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => {
+                this.deleteId = entry.id;
+                this.deleteIsAlliance = entry.is_alliance_data;
+                document.getElementById('deleteTeamNumber').textContent = 'Team ' + entry.team_number;
+                this.deleteModal.show();
+            });
+        }
         
         return td;
     }
     
     updateUI() {
-        document.getElementById('loadingSpinner').style.display = 'none';
+        // Hide loading spinner
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        loadingSpinner.classList.add('d-none');
+        loadingSpinner.style.display = 'none';
+        
         document.getElementById('dataCount').textContent = this.filteredData.length;
+        
+        // Show alliance mode indicator
+        const allianceIndicator = document.getElementById('allianceModeIndicator');
+        if (this.isAllianceMode && allianceIndicator) {
+            allianceIndicator.style.display = 'inline-block';
+        }
+        
+        const dataCountBadge = document.getElementById('dataCount');
+        if (this.isAllianceMode) {
+            dataCountBadge.classList.add('bg-success');
+            dataCountBadge.classList.remove('bg-light', 'text-dark');
+            dataCountBadge.title = 'Showing Alliance Shared Data';
+        }
+        
         this.renderTable();
     }
     
@@ -591,15 +665,28 @@ class PitScoutingDataDisplay {
         if (!this.deleteId) return;
         
         try {
+            // For alliance data, send shared_id in the request body
+            const requestBody = this.deleteIsAlliance 
+                ? JSON.stringify({ shared_id: this.deleteId })
+                : null;
+            
             const response = await fetch(`/pit-scouting/delete/${this.deleteId}`, {
-                method: 'POST'
+                method: 'POST',
+                headers: this.deleteIsAlliance ? {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                } : {},
+                body: requestBody
             });
+            
+            const result = await response.json().catch(() => null);
             
             if (response.ok) {
                 this.deleteModal.hide();
                 this.loadData(); // Refresh data
             } else {
-                alert('Error deleting entry');
+                const errorMsg = result?.error || 'Error deleting entry';
+                alert(errorMsg);
             }
         } catch (error) {
             console.error('Error deleting entry:', error);

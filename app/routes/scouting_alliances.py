@@ -10,7 +10,8 @@ from app.models import (
     Team, Event, Match, ScoutingData, PitScoutingData, User,
     ScoutingAlliance, ScoutingAllianceMember, ScoutingAllianceInvitation,
     ScoutingAllianceEvent, ScoutingAllianceSync, ScoutingAllianceChat,
-    TeamAllianceStatus
+    TeamAllianceStatus, AllianceSharedScoutingData, AllianceSharedPitData,
+    AllianceDeletedData
 )
 from app.routes.auth import admin_required
 from app.utils.theme_manager import ThemeManager
@@ -210,6 +211,7 @@ def toggle_alliance_mode(alliance_id):
     
     data = request.get_json()
     activate = data.get('activate', False)
+    remove_shared_data = data.get('remove_shared_data', False)  # Option to remove data when deactivating
     
     try:
         if activate:
@@ -231,6 +233,10 @@ def toggle_alliance_mode(alliance_id):
             # Activate alliance mode (this will automatically deactivate any other active alliance)
             TeamAllianceStatus.activate_alliance_for_team(current_team, alliance_id)
             
+            # Re-enable data sharing for this member
+            member.is_data_sharing_active = True
+            member.data_sharing_deactivated_at = None
+            
             # Update alliance shared configs from the configured teams
             if alliance.game_config_team:
                 game_config = load_game_config(team_number=alliance.game_config_team)
@@ -246,9 +252,12 @@ def toggle_alliance_mode(alliance_id):
             db.session.commit()
             
         else:
-            # Deactivate alliance mode
-            TeamAllianceStatus.deactivate_alliance_for_team(current_team)
-            message = 'Alliance mode deactivated - using individual team configuration'
+            # Deactivate alliance mode - pass remove_shared_data option
+            TeamAllianceStatus.deactivate_alliance_for_team(current_team, remove_shared_data=remove_shared_data)
+            if remove_shared_data:
+                message = 'Alliance mode deactivated - your shared data has been removed from the alliance'
+            else:
+                message = 'Alliance mode deactivated - your existing shared data remains (new syncs will not get your data)'
         
         # Get the effective configurations after toggle
         from app.utils.config_manager import get_effective_game_config, get_effective_pit_config, is_alliance_mode_active, get_active_alliance_info
@@ -690,27 +699,36 @@ def sync_scouting_data(alliance_id):
     alliance = ScoutingAlliance.query.get_or_404(alliance_id)
     alliance_events = alliance.get_shared_events()
     
-    # Get all active alliance members
+    # Get all active alliance members WHO HAVE DATA SHARING ENABLED
     all_members = alliance.get_active_members()
-    member_teams = [m.team_number for m in all_members]
+    # Filter to only include members with data sharing active
+    data_sharing_members = [m for m in all_members if getattr(m, 'is_data_sharing_active', True)]
+    member_teams = [m.team_number for m in data_sharing_members]
+    
+    # Build list of teams with data sharing disabled (for user feedback)
+    disabled_teams = [m.team_number for m in all_members if not getattr(m, 'is_data_sharing_active', True)]
     
     total_imported = 0
     total_shared = 0
+    total_shared_copies = 0
     
     if alliance_events:
         # Get events
         events = Event.query.filter(Event.code.in_(alliance_events)).all()
         event_ids = [e.id for e in events]
         
-        # STEP 1: Collect data from ALL alliance members (including current team)
+        # STEP 1: Collect data from ALL alliance members WHO HAVE DATA SHARING ENABLED and create shared copies
         all_scouting_data = {}
         all_pit_data = {}
         
         for team_num in member_teams:
             # Get scouting data for each team
+            # EXCLUDE entries that were received from alliance (have [Alliance- prefix)
+            # to prevent duplicate sharing
             scouting_entries = ScoutingData.query.join(Match).filter(
                 Match.event_id.in_(event_ids),
-                ScoutingData.scouting_team_number == team_num
+                ScoutingData.scouting_team_number == team_num,
+                ~ScoutingData.scout_name.like('[Alliance-%')
             ).all()
             
             for entry in scouting_entries:
@@ -730,82 +748,103 @@ def sync_scouting_data(alliance_id):
                         'timestamp': entry.timestamp.isoformat(),
                         'source_team': team_num,
                         'match_id': entry.match_id,
-                        'team_id': entry.team_id
+                        'team_id': entry.team_id,
+                        'original_id': entry.id,
+                        'entry': entry  # Keep reference to original entry
                     }
+                
+                # STEP 1B: Create shared copy in AllianceSharedScoutingData if not exists
+                # BUT SKIP if this data was previously deleted by alliance admin
+                if AllianceDeletedData.is_deleted(
+                    alliance_id=alliance_id,
+                    data_type='scouting',
+                    match_id=entry.match_id,
+                    team_id=entry.team_id,
+                    alliance_color=entry.alliance,
+                    source_team=team_num
+                ):
+                    continue  # Skip - this was deleted and shouldn't be re-synced
+                
+                existing_shared = AllianceSharedScoutingData.query.filter_by(
+                    alliance_id=alliance_id,
+                    original_scouting_data_id=entry.id
+                ).first()
+                
+                if not existing_shared:
+                    # Also check by match/team/alliance combo to avoid duplicates
+                    existing_shared = AllianceSharedScoutingData.query.filter_by(
+                        alliance_id=alliance_id,
+                        match_id=entry.match_id,
+                        team_id=entry.team_id,
+                        alliance=entry.alliance,
+                        source_scouting_team_number=team_num
+                    ).first()
+                
+                if not existing_shared:
+                    shared_copy = AllianceSharedScoutingData.create_from_scouting_data(
+                        entry, alliance_id, team_num
+                    )
+                    db.session.add(shared_copy)
+                    total_shared_copies += 1
             
             # Get pit data for each team
+            # EXCLUDE entries that were received from alliance (have [Alliance- prefix)
             pit_entries = PitScoutingData.query.filter(
-                PitScoutingData.scouting_team_number == team_num
+                PitScoutingData.scouting_team_number == team_num,
+                ~PitScoutingData.scout_name.like('[Alliance-%')
             ).all()
             
             for entry in pit_entries:
-                key = entry.team_number
+                key = entry.team.team_number
                 if key not in all_pit_data:
                     all_pit_data[key] = {
-                        'team_number': entry.team_number,
+                        'team_number': entry.team.team_number,
                         'scout_name': entry.scout_name,
                         'data': entry.data,
                         'timestamp': entry.timestamp.isoformat(),
-                        'source_team': team_num
+                        'source_team': team_num,
+                        'original_id': entry.id,
+                        'entry': entry  # Keep reference to original entry
                     }
-        
-        # STEP 2: Import missing data to current team
-        for key, entry_data in all_scouting_data.items():
-            if entry_data['source_team'] != current_team:
-                # Check if we already have this data
-                existing = ScoutingData.query.join(Match).join(Team).filter(
-                    Team.team_number == entry_data['team_number'],
-                    Match.match_number == entry_data['match_number'],
-                    Match.match_type == entry_data['match_type'],
-                    Match.event_id.in_(event_ids),
-                    ScoutingData.alliance == entry_data['alliance'],
-                    ScoutingData.scouting_team_number == current_team
+                
+                # STEP 1B: Create shared copy in AllianceSharedPitData if not exists
+                # BUT SKIP if this data was previously deleted by alliance admin
+                if AllianceDeletedData.is_deleted(
+                    alliance_id=alliance_id,
+                    data_type='pit',
+                    match_id=None,
+                    team_id=entry.team_id,
+                    alliance_color=None,
+                    source_team=team_num
+                ):
+                    continue  # Skip - this was deleted and shouldn't be re-synced
+                
+                existing_shared = AllianceSharedPitData.query.filter_by(
+                    alliance_id=alliance_id,
+                    original_pit_data_id=entry.id
                 ).first()
                 
-                if not existing:
-                    # Find the match and team
-                    match = Match.query.get(entry_data['match_id'])
-                    team = Team.query.get(entry_data['team_id'])
-                    
-                    if match and team:
-                        new_entry = ScoutingData(
-                            match_id=match.id,
-                            team_id=team.id,
-                            scouting_team_number=current_team,
-                            scout_name=f"[Alliance-{entry_data['source_team']}] {entry_data['scout_name']}",
-                            alliance=entry_data['alliance'],
-                            data=entry_data['data'],
-                            timestamp=datetime.fromisoformat(entry_data['timestamp'])
-                        )
-                        db.session.add(new_entry)
-                        total_imported += 1
-        
-        # Import missing pit data
-        for key, entry_data in all_pit_data.items():
-            if entry_data['source_team'] != current_team:
-                # Find the team first
-                team = Team.query.filter_by(team_number=entry_data['team_number']).first()
-                if not team:
-                    continue  # Skip if team doesn't exist
+                if not existing_shared:
+                    # Also check by team to avoid duplicates
+                    existing_shared = AllianceSharedPitData.query.filter_by(
+                        alliance_id=alliance_id,
+                        team_id=entry.team_id,
+                        source_scouting_team_number=team_num
+                    ).first()
                 
-                existing = PitScoutingData.query.filter_by(
-                    team_id=team.id,
-                    scouting_team_number=current_team
-                ).first()
-                
-                if not existing:
-                    new_entry = PitScoutingData(
-                        team_id=team.id,
-                        scouting_team_number=current_team,
-                        scout_name=f"[Alliance-{entry_data['source_team']}] {entry_data['scout_name']}",
-                        data_json=json.dumps(entry_data['data']),
-                        timestamp=datetime.fromisoformat(entry_data['timestamp']),
-                        local_id=str(uuid.uuid4())
+                if not existing_shared:
+                    shared_copy = AllianceSharedPitData.create_from_pit_data(
+                        entry, alliance_id, team_num
                     )
-                    db.session.add(new_entry)
-                    total_imported += 1
+                    db.session.add(shared_copy)
+                    total_shared_copies += 1
         
-        # STEP 3: Share current team's data with other members via SocketIO (if they're online)
+        # NOTE: We no longer create local copies in each team's ScoutingData/PitScoutingData.
+        # Alliance data lives ONLY in AllianceSharedScoutingData/AllianceSharedPitData tables.
+        # This prevents duplicates and makes delete work properly.
+        
+        # STEP 2: Share current team's data with other members via SocketIO (if they're online)
+        # This notifies them that new data is available in the shared tables
         current_team_scouting = [data for key, data in all_scouting_data.items() if data['source_team'] == current_team]
         current_team_pit = [data for key, data in all_pit_data.items() if data['source_team'] == current_team]
         total_shared = len(current_team_scouting) + len(current_team_pit)
@@ -828,8 +867,8 @@ def sync_scouting_data(alliance_id):
                 # Emit data via SocketIO (only if online)
                 socketio.emit('alliance_data_sync', {
                     'from_team': current_team,
-                    'scouting_data': current_team_scouting,
-                    'pit_data': current_team_pit,
+                    'scouting_data': [{k: v for k, v in d.items() if k != 'entry'} for d in current_team_scouting],
+                    'pit_data': [{k: v for k, v in d.items() if k != 'entry'} for d in current_team_pit],
                     'sync_id': sync_record.id
                 }, room=f'team_{member_obj.team_number}')
     
@@ -839,21 +878,160 @@ def sync_scouting_data(alliance_id):
         'success': True, 
         'imported_count': total_imported,
         'shared_count': total_shared,
-        'synced_to': len([m for m in all_members if m.team_number != current_team]),
-        'message': f'Imported {total_imported} new entries, shared {total_shared} entries with alliance members'
+        'shared_copies_created': total_shared_copies,
+        'synced_to': len([m for m in data_sharing_members if m.team_number != current_team]),
+        'data_sharing_disabled_teams': disabled_teams,
+        'message': f'Imported {total_imported} new entries, shared {total_shared} entries with alliance members, created {total_shared_copies} alliance copies' + 
+                   (f'. Note: {len(disabled_teams)} team(s) have data sharing disabled.' if disabled_teams else '')
     })
+
+
+@bp.route('/<int:alliance_id>/populate-shared-data', methods=['POST'])
+@login_required
+@admin_required
+def populate_alliance_shared_data(alliance_id):
+    """Populate AllianceSharedScoutingData and AllianceSharedPitData tables with existing data.
+    
+    This creates shared copies of all existing scouting data from alliance members
+    so that the data persists even if the original team deletes their copy.
+    Only includes data from teams with data sharing active.
+    """
+    current_team = get_current_scouting_team_number()
+    
+    # Check if user is a member
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        status='accepted'
+    ).first()
+    
+    if not member:
+        return jsonify({'success': False, 'error': 'Not authorized'})
+    
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    alliance_events = alliance.get_shared_events()
+    
+    # Get all active alliance members WHO HAVE DATA SHARING ENABLED
+    all_members = alliance.get_active_members()
+    data_sharing_members = [m for m in all_members if getattr(m, 'is_data_sharing_active', True)]
+    member_teams = [m.team_number for m in data_sharing_members]
+    
+    total_scouting_copies = 0
+    total_pit_copies = 0
+    
+    if alliance_events:
+        # Get events
+        events = Event.query.filter(Event.code.in_(alliance_events)).all()
+        event_ids = [e.id for e in events]
+        
+        for team_num in member_teams:
+            # Get ALL scouting data for each team (not just recent)
+            # EXCLUDE entries that were received from alliance (have [Alliance- prefix)
+            scouting_entries = ScoutingData.query.join(Match).filter(
+                Match.event_id.in_(event_ids),
+                ScoutingData.scouting_team_number == team_num,
+                ~ScoutingData.scout_name.like('[Alliance-%')
+            ).all()
+            
+            for entry in scouting_entries:
+                # Skip if this data was previously deleted by alliance admin
+                if AllianceDeletedData.is_deleted(
+                    alliance_id=alliance_id,
+                    data_type='scouting',
+                    match_id=entry.match_id,
+                    team_id=entry.team_id,
+                    alliance_color=entry.alliance,
+                    source_team=team_num
+                ):
+                    continue  # Skip - deleted data shouldn't be re-synced
+                
+                # Check if shared copy already exists by original ID
+                existing_shared = AllianceSharedScoutingData.query.filter_by(
+                    alliance_id=alliance_id,
+                    original_scouting_data_id=entry.id
+                ).first()
+                
+                if not existing_shared:
+                    # Also check by match/team/alliance combo to avoid duplicates
+                    existing_shared = AllianceSharedScoutingData.query.filter_by(
+                        alliance_id=alliance_id,
+                        match_id=entry.match_id,
+                        team_id=entry.team_id,
+                        alliance=entry.alliance,
+                        source_scouting_team_number=team_num
+                    ).first()
+                
+                if not existing_shared:
+                    shared_copy = AllianceSharedScoutingData.create_from_scouting_data(
+                        entry, alliance_id, team_num
+                    )
+                    db.session.add(shared_copy)
+                    total_scouting_copies += 1
+            
+            # Get ALL pit data for each team
+            # EXCLUDE entries that were received from alliance (have [Alliance- prefix)
+            pit_entries = PitScoutingData.query.filter(
+                PitScoutingData.scouting_team_number == team_num,
+                ~PitScoutingData.scout_name.like('[Alliance-%')
+            ).all()
+            
+            for entry in pit_entries:
+                # Skip if this data was previously deleted by alliance admin
+                if AllianceDeletedData.is_deleted(
+                    alliance_id=alliance_id,
+                    data_type='pit',
+                    match_id=None,
+                    team_id=entry.team_id,
+                    alliance_color=None,
+                    source_team=team_num
+                ):
+                    continue  # Skip - deleted data shouldn't be re-synced
+                
+                # Check if shared copy already exists by original ID
+                existing_shared = AllianceSharedPitData.query.filter_by(
+                    alliance_id=alliance_id,
+                    original_pit_data_id=entry.id
+                ).first()
+                
+                if not existing_shared:
+                    # Also check by team to avoid duplicates
+                    existing_shared = AllianceSharedPitData.query.filter_by(
+                        alliance_id=alliance_id,
+                        team_id=entry.team_id,
+                        source_scouting_team_number=team_num
+                    ).first()
+                
+                if not existing_shared:
+                    shared_copy = AllianceSharedPitData.create_from_pit_data(
+                        entry, alliance_id, team_num
+                    )
+                    db.session.add(shared_copy)
+                    total_pit_copies += 1
+    
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'scouting_copies_created': total_scouting_copies,
+        'pit_copies_created': total_pit_copies,
+        'message': f'Created {total_scouting_copies} scouting and {total_pit_copies} pit shared copies'
+    })
+
 
 @bp.route('/sync/receive', methods=['POST'])
 @login_required
 @admin_required
 def receive_sync_data():
-    """Receive synchronized data from alliance member"""
+    """Receive synchronized data notification from alliance member.
+    
+    NOTE: We no longer create local copies. Alliance data lives ONLY in the 
+    shared tables (AllianceSharedScoutingData/AllianceSharedPitData).
+    This endpoint now just acknowledges receipt and updates the sync record.
+    """
     data = request.get_json()
     current_team = get_current_scouting_team_number()
     
     from_team = data['from_team']
-    scouting_data = data['scouting_data']
-    pit_data = data['pit_data']
     sync_id = data['sync_id']
     
     # Verify we're in the same alliance
@@ -865,68 +1043,7 @@ def receive_sync_data():
     if not common_alliance:
         return jsonify({'success': False, 'error': 'Not in same alliance'})
     
-    # Process scouting data (create entries with alliance team prefix)
-    imported_count = 0
-    
-    for entry_data in scouting_data:
-        # Check if we already have this data
-        existing = ScoutingData.query.join(Match).join(Team).filter(
-            Team.team_number == entry_data['team_number'],
-            Match.match_number == entry_data['match_number'],
-            Match.match_type == entry_data['match_type'],
-            ScoutingData.scouting_team_number == current_team
-        ).first()
-        
-        if not existing:
-            # Find or create the match and team
-            event = Event.query.filter_by(code=entry_data['event_code']).first()
-            if event:
-                match = Match.query.filter_by(
-                    event_id=event.id,
-                    match_number=entry_data['match_number'],
-                    match_type=entry_data['match_type']
-                ).first()
-                
-                team = Team.query.filter_by(team_number=entry_data['team_number']).first()
-                
-                if match and team:
-                    new_entry = ScoutingData(
-                        match_id=match.id,
-                        team_id=team.id,
-                        scouting_team_number=current_team,
-                        scout_name=f"[Alliance-{from_team}] {entry_data['scout_name']}",
-                        alliance=entry_data['alliance'],
-                        data=entry_data['data'],
-                        timestamp=datetime.fromisoformat(entry_data['timestamp'])
-                    )
-                    db.session.add(new_entry)
-                    imported_count += 1
-    
-    # Process pit data
-    for entry_data in pit_data:
-        # Find the team first
-        team = Team.query.filter_by(team_number=entry_data['team_number']).first()
-        if not team:
-            continue  # Skip if team doesn't exist
-            
-        existing = PitScoutingData.query.filter_by(
-            team_id=team.id,
-            scouting_team_number=current_team
-        ).first()
-        
-        if not existing:
-            new_entry = PitScoutingData(
-                team_id=team.id,
-                scouting_team_number=current_team,
-                scout_name=f"[Alliance-{from_team}] {entry_data['scout_name']}",
-                data_json=json.dumps(entry_data['data']),
-                timestamp=datetime.fromisoformat(entry_data['timestamp']),
-                local_id=str(uuid.uuid4())
-            )
-            db.session.add(new_entry)
-            imported_count += 1
-    
-    # Update sync record
+    # Update sync record to mark as received
     sync_record = ScoutingAllianceSync.query.get(sync_id)
     if sync_record:
         sync_record.sync_status = 'synced'
@@ -934,7 +1051,8 @@ def receive_sync_data():
     
     db.session.commit()
     
-    return jsonify({'success': True, 'imported_count': imported_count})
+    # Data is already in the shared tables - no need to create local copies
+    return jsonify({'success': True, 'imported_count': 0, 'message': 'Sync acknowledged - data available in shared tables'})
 
 # ======== CHAT SYSTEM ========
 
@@ -1114,101 +1232,6 @@ def on_leave_alliance_room(data):
 
     # If payload didn't include either key, ignore gracefully.
     return
-    """Handle receipt of automatic sync data from alliance members"""
-    current_team = get_current_scouting_team_number()
-    from_team = data.get('from_team')
-    sync_id = data.get('sync_id')
-    
-    # Verify we're in the same alliance with the sending team
-    common_alliance = db.session.query(ScoutingAlliance).join(ScoutingAllianceMember).filter(
-        ScoutingAllianceMember.team_number.in_([current_team, from_team]),
-        ScoutingAllianceMember.status == 'accepted'
-    ).first()
-    
-    if not common_alliance:
-        return
-    
-    # Process the auto-sync data similar to manual sync
-    scouting_data = data.get('scouting_data', [])
-    pit_data = data.get('pit_data', [])
-    
-    imported_count = 0
-    
-    # Process scouting data
-    for entry_data in scouting_data:
-        # Check if we already have this data
-        existing = ScoutingData.query.join(Match).join(Team).filter(
-            Team.team_number == entry_data['team_number'],
-            Match.match_number == entry_data['match_number'],
-            Match.match_type == entry_data['match_type'],
-            ScoutingData.scouting_team_number == current_team
-        ).first()
-        
-        if not existing:
-            # Find or create the match and team
-            event = Event.query.filter_by(code=entry_data['event_code']).first()
-            if event:
-                match = Match.query.filter_by(
-                    event_id=event.id,
-                    match_number=entry_data['match_number'],
-                    match_type=entry_data['match_type']
-                ).first()
-                
-                team = Team.query.filter_by(team_number=entry_data['team_number']).first()
-                
-                if match and team:
-                    new_entry = ScoutingData(
-                        match_id=match.id,
-                        team_id=team.id,
-                        scouting_team_number=current_team,
-                        scout_name=f"[Alliance-{from_team}] {entry_data['scout_name']}",
-                        alliance=entry_data['alliance'],
-                        data=entry_data['data'],
-                        timestamp=datetime.fromisoformat(entry_data['timestamp'])
-                    )
-                    db.session.add(new_entry)
-                    imported_count += 1
-    
-    # Process pit data
-    for entry_data in pit_data:
-        existing = PitScoutingData.query.filter(
-            PitScoutingData.team_id.in_(
-                db.session.query(Team.id).filter(Team.team_number == entry_data['team_number'])
-            ),
-            PitScoutingData.scouting_team_number == current_team
-        ).first()
-        
-        if not existing:
-            team = Team.query.filter_by(team_number=entry_data['team_number']).first()
-            if team:
-                new_entry = PitScoutingData(
-                    team_id=team.id,
-                    scouting_team_number=current_team,
-                    scout_name=f"[Alliance-{from_team}] {entry_data['scout_name']}",
-                    data_json=json.dumps(entry_data['data']),
-                    timestamp=datetime.fromisoformat(entry_data['timestamp']),
-                    local_id=str(uuid.uuid4())
-                )
-                db.session.add(new_entry)
-                imported_count += 1
-    
-    # Update sync record
-    if sync_id:
-        sync_record = ScoutingAllianceSync.query.get(sync_id)
-        if sync_record:
-            sync_record.sync_status = 'synced'
-            sync_record.last_sync = datetime.now(timezone.utc)
-    
-    if imported_count > 0:
-        db.session.commit()
-        
-        # Notify the client about successful auto-sync
-        emit('alliance_auto_sync_complete', {
-            'from_team': from_team,
-            'imported_count': imported_count,
-            'alliance_name': data.get('alliance_name', 'Alliance'),
-            'type': data.get('type', 'auto_sync')
-        })
 
 
 # ======== API ENDPOINTS ========
@@ -1344,6 +1367,10 @@ def api_toggle_alliance_mode():
             else:
                 message = f'Alliance mode activated for {alliance.alliance_name}'
             
+            # Re-enable data sharing for this member when reactivating
+            member.is_data_sharing_active = True
+            member.data_sharing_deactivated_at = None
+            
             # Activate alliance mode (this will automatically deactivate any other active alliance)
             TeamAllianceStatus.activate_alliance_for_team(current_team, alliance_id)
             
@@ -1361,9 +1388,13 @@ def api_toggle_alliance_mode():
             
             db.session.commit()
         else:
-            # Deactivate alliance mode
+            # Deactivate alliance mode - set data sharing to inactive
+            # This prevents other teams from syncing NEW data from this team
+            member.is_data_sharing_active = False
+            member.data_sharing_deactivated_at = datetime.now(timezone.utc)
+            
             TeamAllianceStatus.deactivate_alliance_for_team(current_team)
-            message = 'Alliance mode deactivated - using individual team configuration'
+            message = 'Alliance mode deactivated - future syncs will not get new data from your team, but existing shared data remains'
             db.session.commit()
         
         return jsonify({
@@ -2302,20 +2333,93 @@ def perform_periodic_alliance_sync():
                     recent_time = datetime.now(timezone.utc) - timedelta(minutes=5)
                     
                     # Get recent scouting data for this team
+                    # EXCLUDE entries that were received from alliance (have [Alliance- prefix)
                     recent_scouting = ScoutingData.query.join(Match).filter(
                         Match.event_id.in_(event_ids),
                         ScoutingData.scouting_team_number == current_team,
-                        ScoutingData.timestamp >= recent_time
+                        ScoutingData.timestamp >= recent_time,
+                        ~ScoutingData.scout_name.like('[Alliance-%')
                     ).all()
                     
                     # Get recent pit data for this team
+                    # EXCLUDE entries that were received from alliance (have [Alliance- prefix)
                     recent_pit = PitScoutingData.query.filter(
                         PitScoutingData.scouting_team_number == current_team,
-                        PitScoutingData.timestamp >= recent_time
+                        PitScoutingData.timestamp >= recent_time,
+                        ~PitScoutingData.scout_name.like('[Alliance-%')
                     ).all()
                     
                     if not recent_scouting and not recent_pit:
                         continue  # No recent data to sync
+                    
+                    # Create shared copies in AllianceSharedScoutingData/AllianceSharedPitData
+                    shared_copies_created = 0
+                    
+                    for entry in recent_scouting:
+                        # Skip if this data was previously deleted by alliance admin
+                        if AllianceDeletedData.is_deleted(
+                            alliance_id=alliance.id,
+                            data_type='scouting',
+                            match_id=entry.match_id,
+                            team_id=entry.team_id,
+                            alliance_color=entry.alliance,
+                            source_team=current_team
+                        ):
+                            continue  # Skip - deleted data shouldn't be re-synced
+                        
+                        # Check if shared copy already exists
+                        existing_shared = AllianceSharedScoutingData.query.filter_by(
+                            alliance_id=alliance.id,
+                            original_scouting_data_id=entry.id
+                        ).first()
+                        
+                        if not existing_shared:
+                            existing_shared = AllianceSharedScoutingData.query.filter_by(
+                                alliance_id=alliance.id,
+                                match_id=entry.match_id,
+                                team_id=entry.team_id,
+                                alliance=entry.alliance,
+                                source_scouting_team_number=current_team
+                            ).first()
+                        
+                        if not existing_shared:
+                            shared_copy = AllianceSharedScoutingData.create_from_scouting_data(
+                                entry, alliance.id, current_team
+                            )
+                            db.session.add(shared_copy)
+                            shared_copies_created += 1
+                    
+                    for entry in recent_pit:
+                        # Skip if this data was previously deleted by alliance admin
+                        if AllianceDeletedData.is_deleted(
+                            alliance_id=alliance.id,
+                            data_type='pit',
+                            match_id=None,
+                            team_id=entry.team_id,
+                            alliance_color=None,
+                            source_team=current_team
+                        ):
+                            continue  # Skip - deleted data shouldn't be re-synced
+                        
+                        # Check if shared copy already exists
+                        existing_shared = AllianceSharedPitData.query.filter_by(
+                            alliance_id=alliance.id,
+                            original_pit_data_id=entry.id
+                        ).first()
+                        
+                        if not existing_shared:
+                            existing_shared = AllianceSharedPitData.query.filter_by(
+                                alliance_id=alliance.id,
+                                team_id=entry.team_id,
+                                source_scouting_team_number=current_team
+                            ).first()
+                        
+                        if not existing_shared:
+                            shared_copy = AllianceSharedPitData.create_from_pit_data(
+                                entry, alliance.id, current_team
+                            )
+                            db.session.add(shared_copy)
+                            shared_copies_created += 1
                     
                     # Prepare sync data
                     scouting_data = []
@@ -2369,9 +2473,9 @@ def perform_periodic_alliance_sync():
                                 'type': 'periodic_sync'
                             }, room=f'team_{member.team_number}')
                     
-                    if sync_count > 0:
+                    if sync_count > 0 or shared_copies_created > 0:
                         db.session.commit()
-                        print(f"Periodic sync: Team {current_team} synced {len(scouting_data)} scouting + {len(pit_data)} pit entries to {sync_count} alliance members")
+                        print(f"Periodic sync: Team {current_team} synced {len(scouting_data)} scouting + {len(pit_data)} pit entries to {sync_count} alliance members, created {shared_copies_created} shared copies")
                 
                 except Exception as e:
                     print(f"Error in periodic sync for team {status.team_number}: {str(e)}")
@@ -2379,6 +2483,188 @@ def perform_periodic_alliance_sync():
     
     except Exception as e:
         print(f"Error in perform_periodic_alliance_sync: {str(e)}")
+
+
+def perform_alliance_api_sync_for_alliance(alliance_id):
+    """Perform immediate API sync for a specific alliance (manual trigger).
+    
+    This function syncs teams and matches for a specific alliance immediately,
+    bypassing the interval throttling. It uses alliance member API keys as
+    fallback if the primary API fails.
+    
+    Args:
+        alliance_id: The ID of the alliance to sync
+        
+    Returns:
+        dict with success status and sync counts
+    """
+    result = {
+        'success': False,
+        'message': '',
+        'teams_added': 0,
+        'teams_updated': 0,
+        'matches_added': 0,
+        'matches_updated': 0
+    }
+    
+    try:
+        from app.utils.config_manager import load_game_config
+        from app.utils.api_utils import (
+            get_teams_with_alliance_fallback, get_matches_with_alliance_fallback, 
+            get_event_details_with_alliance_fallback
+        )
+        from app.models import ScoutingAlliance, Event, Team, Match, db
+        from sqlalchemy import func
+        
+        alliance = ScoutingAlliance.query.get(alliance_id)
+        if not alliance:
+            result['message'] = f'Alliance {alliance_id} not found'
+            return result
+        
+        if not alliance.is_config_complete():
+            result['message'] = 'Alliance configuration is incomplete'
+            return result
+        
+        # Load alliance game config
+        if alliance.shared_game_config:
+            try:
+                game_config = json.loads(alliance.shared_game_config)
+            except Exception:
+                game_config = load_game_config(team_number=alliance.game_config_team)
+        elif alliance.game_config_team:
+            game_config = load_game_config(team_number=alliance.game_config_team)
+        else:
+            result['message'] = 'No game config available for alliance'
+            return result
+        
+        # Get event code
+        event_code = (game_config.get('current_event_code') or '').strip()
+        if not event_code:
+            result['message'] = 'No event code configured for alliance'
+            return result
+        
+        # Determine storage team
+        storage_team = alliance.game_config_team or (alliance.get_active_members()[0].team_number if alliance.get_active_members() else None)
+        if storage_team is None:
+            result['message'] = 'No storage team determined for alliance'
+            return result
+        
+        # Ensure event exists
+        event = Event.query.filter(
+            func.upper(Event.code) == event_code.upper(),
+            Event.scouting_team_number == storage_team
+        ).first()
+        
+        if not event:
+            try:
+                event_details = get_event_details_with_alliance_fallback(event_code, alliance_id)
+                if event_details:
+                    from app.routes.data import get_or_create_event
+                    event = get_or_create_event(
+                        name=event_details.get('name', event_code),
+                        code=event_code,
+                        year=event_details.get('year', game_config.get('season', None) or game_config.get('year', 0)),
+                        location=event_details.get('location'),
+                        start_date=event_details.get('start_date'),
+                        end_date=event_details.get('end_date'),
+                        scouting_team_number=storage_team
+                    )
+                    if event_details.get('timezone') and not getattr(event, 'timezone', None):
+                        event.timezone = event_details.get('timezone')
+                        db.session.add(event)
+                    db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                result['message'] = f'Failed to create event: {str(e)}'
+                return result
+        
+        if not event:
+            result['message'] = f'Could not find or create event {event_code}'
+            return result
+        
+        # Sync teams
+        try:
+            team_data_list = get_teams_with_alliance_fallback(event_code, alliance_id)
+            
+            for team_data in team_data_list:
+                if not team_data or not team_data.get('team_number'):
+                    continue
+                team_number = team_data.get('team_number')
+                team = Team.query.filter_by(team_number=team_number, scouting_team_number=storage_team).first()
+                if team:
+                    team.team_name = team_data.get('team_name', team.team_name)
+                    team.location = team_data.get('location', team.location)
+                    result['teams_updated'] += 1
+                else:
+                    team = Team(team_number=team_number,
+                                team_name=team_data.get('team_name'),
+                                location=team_data.get('location'),
+                                scouting_team_number=storage_team)
+                    db.session.add(team)
+                    result['teams_added'] += 1
+                if event not in team.events:
+                    try:
+                        team.events.append(event)
+                    except Exception:
+                        pass
+            print(f"  Manual alliance sync (alliance {alliance_id}): {result['teams_added']} teams added, {result['teams_updated']} updated")
+        except Exception as e:
+            print(f"  Error syncing teams for alliance {alliance_id}: {str(e)}")
+        
+        # Sync matches
+        try:
+            match_data_list = get_matches_with_alliance_fallback(event_code, alliance_id)
+            
+            for match_data in match_data_list:
+                if not match_data:
+                    continue
+                match_number = match_data.get('match_number')
+                match_type = match_data.get('match_type')
+                if not match_number or not match_type:
+                    continue
+                match = Match.query.filter_by(event_id=event.id, match_number=match_number, match_type=match_type, scouting_team_number=storage_team).first()
+                if match:
+                    match.red_alliance = match_data.get('red_alliance', match.red_alliance)
+                    match.blue_alliance = match_data.get('blue_alliance', match.blue_alliance)
+                    match.winner = match_data.get('winner', match.winner)
+                    match.red_score = match_data.get('red_score', match.red_score)
+                    match.blue_score = match_data.get('blue_score', match.blue_score)
+                    result['matches_updated'] += 1
+                else:
+                    match = Match(match_number=match_number,
+                                  match_type=match_type,
+                                  event_id=event.id,
+                                  red_alliance=match_data.get('red_alliance'),
+                                  blue_alliance=match_data.get('blue_alliance'),
+                                  red_score=match_data.get('red_score'),
+                                  blue_score=match_data.get('blue_score'),
+                                  winner=match_data.get('winner'),
+                                  scouting_team_number=storage_team)
+                    db.session.add(match)
+                    result['matches_added'] += 1
+            print(f"  Manual alliance sync (alliance {alliance_id}): {result['matches_added']} matches added, {result['matches_updated']} updated")
+        except Exception as e:
+            print(f"  Error syncing matches for alliance {alliance_id}: {str(e)}")
+        
+        # Commit changes
+        try:
+            db.session.commit()
+            try:
+                from app.routes.data import merge_duplicate_events
+                merge_duplicate_events(storage_team)
+            except Exception:
+                pass
+            result['success'] = True
+            result['message'] = f'Alliance sync complete: {result["teams_added"]} teams added, {result["teams_updated"]} updated, {result["matches_added"]} matches added, {result["matches_updated"]} updated'
+        except Exception as e:
+            db.session.rollback()
+            result['message'] = f'Failed to commit changes: {str(e)}'
+        
+    except Exception as e:
+        result['message'] = f'Error during alliance sync: {str(e)}'
+        print(f"Error in perform_alliance_api_sync_for_alliance: {str(e)}")
+    
+    return result
 
 
 def perform_periodic_alliance_api_sync():
@@ -2392,7 +2678,10 @@ def perform_periodic_alliance_api_sync():
     try:
         with current_app.app_context():
             from app.utils.config_manager import load_game_config
-            from app.utils.api_utils import get_teams_dual_api, get_matches_dual_api, get_event_details_dual_api
+            from app.utils.api_utils import (
+                get_teams_with_alliance_fallback, get_matches_with_alliance_fallback, 
+                get_event_details_with_alliance_fallback
+            )
             from app.utils.sync_status import get_last_sync, update_last_sync, get_event_cache, set_event_cache
             from app.models import ScoutingAlliance, Event, Team, Match, db
             from sqlalchemy import func
@@ -2478,7 +2767,8 @@ def perform_periodic_alliance_api_sync():
                     ).first()
                     if not event:
                         try:
-                            event_details = get_event_details_dual_api(event_code)
+                            # Use alliance fallback to get event details using any member's API if needed
+                            event_details = get_event_details_with_alliance_fallback(event_code, alliance.id)
                             if event_details:
                                 from app.routes.data import get_or_create_event
                                 event = get_or_create_event(
@@ -2527,8 +2817,9 @@ def perform_periodic_alliance_api_sync():
                             continue
 
                     # --- Perform the actual sync for this alliance ---
+                    # Use alliance fallback API functions that try member APIs if primary fails
                     try:
-                        team_data_list = get_teams_dual_api(event_code)
+                        team_data_list = get_teams_with_alliance_fallback(event_code, alliance.id)
                         teams_added = 0
                         teams_updated = 0
 
@@ -2558,7 +2849,7 @@ def perform_periodic_alliance_api_sync():
                         print(f"  Error syncing alliance teams for {alliance.id}: {str(e)}")
 
                     try:
-                        match_data_list = get_matches_dual_api(event_code)
+                        match_data_list = get_matches_with_alliance_fallback(event_code, alliance.id)
                         matches_added = 0
                         matches_updated = 0
                         for match_data in match_data_list:
@@ -2741,3 +3032,2286 @@ def api_remove_member(alliance_id, member_id):
         'success': True,
         'message': f'Team {team_number} removed from alliance'
     })
+
+# ======== ALLIANCE DATA COPY/DELETE MANAGEMENT ========
+
+@bp.route('/api/share-data-to-alliance', methods=['POST'])
+@login_required
+def api_share_data_to_alliance():
+    """Share scouting or pit data to alliance (creates a copy in shared tables)"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        alliance_id = data.get('alliance_id')
+        data_type = data.get('data_type')  # 'scouting' or 'pit'
+        data_id = data.get('data_id')
+        
+        if not all([alliance_id, data_type, data_id]):
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+        
+        current_team = get_current_scouting_team_number()
+        
+        # Verify user is member of the alliance
+        member = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance_id,
+            team_number=current_team,
+            status='accepted'
+        ).first()
+        
+        if not member:
+            return jsonify({'success': False, 'error': 'Not a member of this alliance'}), 403
+        
+        if data_type == 'scouting':
+            # Get original scouting data
+            original = ScoutingData.query.filter_by(
+                id=data_id, 
+                scouting_team_number=current_team
+            ).first()
+            
+            if not original:
+                return jsonify({'success': False, 'error': 'Scouting data not found'}), 404
+            
+            # Check if already shared
+            existing = AllianceSharedScoutingData.query.filter_by(
+                alliance_id=alliance_id,
+                original_scouting_data_id=data_id
+            ).first()
+            
+            if existing:
+                return jsonify({'success': False, 'error': 'Data already shared to this alliance'}), 400
+            
+            # Create shared copy
+            shared = AllianceSharedScoutingData.create_from_scouting_data(
+                original, alliance_id, current_team
+            )
+            db.session.add(shared)
+            db.session.commit()
+            
+            return jsonify({
+                'success': True, 
+                'message': 'Scouting data shared to alliance',
+                'shared_id': shared.id
+            })
+        
+        elif data_type == 'pit':
+            # Get original pit data
+            original = PitScoutingData.query.filter_by(
+                id=data_id, 
+                scouting_team_number=current_team
+            ).first()
+            
+            if not original:
+                return jsonify({'success': False, 'error': 'Pit data not found'}), 404
+            
+            # Check if already shared
+            existing = AllianceSharedPitData.query.filter_by(
+                alliance_id=alliance_id,
+                original_pit_data_id=data_id
+            ).first()
+            
+            if existing:
+                return jsonify({'success': False, 'error': 'Data already shared to this alliance'}), 400
+            
+            # Create shared copy
+            shared = AllianceSharedPitData.create_from_pit_data(
+                original, alliance_id, current_team
+            )
+            db.session.add(shared)
+            db.session.commit()
+            
+            return jsonify({
+                'success': True, 
+                'message': 'Pit data shared to alliance',
+                'shared_id': shared.id
+            })
+        
+        return jsonify({'success': False, 'error': 'Invalid data type'}), 400
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error sharing data to alliance: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/delete-from-alliance', methods=['POST'])
+@login_required
+def api_delete_from_alliance():
+    """Delete shared data from alliance PERMANENTLY.
+    
+    Two modes:
+    1. Original owner deletes their data - uses original_data_id
+    2. Alliance admin deletes any data - uses shared_id
+    
+    When deleted:
+    - Removes from AllianceSharedScoutingData/AllianceSharedPitData (the ONLY place alliance data lives)
+    - Cleans up any legacy synced copies from members' ScoutingData/PitScoutingData (if they exist)
+    - Marks the data as deleted to PREVENT RE-SYNC
+    - Preserves the original team's private copy
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        data_type = data.get('data_type')  # 'scouting' or 'pit'
+        original_data_id = data.get('original_data_id')
+        shared_id = data.get('shared_id')  # Direct shared entry ID (for admin delete)
+        alliance_id = data.get('alliance_id')
+        
+        if not data_type:
+            return jsonify({'success': False, 'error': 'Missing data_type'}), 400
+        
+        if not shared_id and not original_data_id:
+            return jsonify({'success': False, 'error': 'Missing shared_id or original_data_id'}), 400
+        
+        current_team = get_current_scouting_team_number()
+        deleted_count = 0
+        synced_copies_deleted = 0
+        
+        # Check if user is alliance admin (can delete any data)
+        is_admin = False
+        if alliance_id:
+            member = ScoutingAllianceMember.query.filter_by(
+                alliance_id=alliance_id,
+                team_number=current_team,
+                role='admin',
+                status='accepted'
+            ).first()
+            is_admin = member is not None
+        
+        if data_type == 'scouting':
+            shared_entry = None
+            
+            # If shared_id provided, use it directly (admin delete mode)
+            if shared_id:
+                shared_entry = AllianceSharedScoutingData.query.get(shared_id)
+                if not shared_entry:
+                    return jsonify({'success': False, 'error': 'Shared entry not found'}), 404
+                
+                # Only owner or admin can delete
+                if shared_entry.source_scouting_team_number != current_team and not is_admin:
+                    return jsonify({'success': False, 'error': 'Only the source team or alliance admin can delete this'}), 403
+                
+                # Get info for removing synced copies from other teams
+                source_team = shared_entry.source_scouting_team_number
+                match_id = shared_entry.match_id
+                team_id = shared_entry.team_id
+                alliance_color = shared_entry.alliance
+                the_alliance_id = shared_entry.alliance_id
+                
+                # MARK AS DELETED to prevent re-sync
+                AllianceDeletedData.mark_deleted(
+                    alliance_id=the_alliance_id,
+                    data_type='scouting',
+                    match_id=match_id,
+                    team_id=team_id,
+                    alliance_color=alliance_color,
+                    source_team=source_team,
+                    deleted_by=current_team
+                )
+                
+                # Get all alliance members to remove synced copies
+                alliance = ScoutingAlliance.query.get(the_alliance_id)
+                if alliance:
+                    member_teams = [m.team_number for m in alliance.get_active_members()]
+                    
+                    # Remove synced copies from other teams' ScoutingData
+                    # These are entries with scout_name starting with [Alliance-
+                    for member_team in member_teams:
+                        if member_team != source_team:
+                            # Find and delete synced copies in this team's data
+                            synced_copies = ScoutingData.query.filter(
+                                ScoutingData.match_id == match_id,
+                                ScoutingData.team_id == team_id,
+                                ScoutingData.alliance == alliance_color,
+                                ScoutingData.scouting_team_number == member_team,
+                                ScoutingData.scout_name.like(f'[Alliance-{source_team}]%')
+                            ).all()
+                            
+                            for copy in synced_copies:
+                                db.session.delete(copy)
+                                synced_copies_deleted += 1
+                
+                # Delete the shared entry
+                db.session.delete(shared_entry)
+                deleted_count += 1
+            
+            else:
+                # Original mode: delete by original_data_id (owner only)
+                query = AllianceSharedScoutingData.query.filter_by(
+                    original_scouting_data_id=original_data_id,
+                    source_scouting_team_number=current_team
+                )
+                
+                if alliance_id:
+                    query = query.filter_by(alliance_id=alliance_id)
+                
+                shared_entries = query.all()
+                
+                for entry in shared_entries:
+                    # Mark as deleted to prevent re-sync
+                    AllianceDeletedData.mark_deleted(
+                        alliance_id=entry.alliance_id,
+                        data_type='scouting',
+                        match_id=entry.match_id,
+                        team_id=entry.team_id,
+                        alliance_color=entry.alliance,
+                        source_team=entry.source_scouting_team_number,
+                        deleted_by=current_team
+                    )
+                    
+                    # Also remove synced copies from all alliance members (except source)
+                    alliance = ScoutingAlliance.query.get(entry.alliance_id)
+                    if alliance:
+                        member_teams = [m.team_number for m in alliance.get_active_members()]
+                        for member_team in member_teams:
+                            if member_team != entry.source_scouting_team_number:
+                                # Find and delete synced copies in this team's data
+                                synced_copies = ScoutingData.query.filter(
+                                    ScoutingData.match_id == entry.match_id,
+                                    ScoutingData.team_id == entry.team_id,
+                                    ScoutingData.alliance == entry.alliance,
+                                    ScoutingData.scouting_team_number == member_team,
+                                    ScoutingData.scout_name.like(f'[Alliance-{entry.source_scouting_team_number}]%')
+                                ).all()
+                                for copy in synced_copies:
+                                    db.session.delete(copy)
+                                    synced_copies_deleted += 1
+                    
+                    db.session.delete(entry)
+                    deleted_count += 1
+        
+        elif data_type == 'pit':
+            shared_entry = None
+            
+            # If shared_id provided, use it directly (admin delete mode)
+            if shared_id:
+                shared_entry = AllianceSharedPitData.query.get(shared_id)
+                if not shared_entry:
+                    return jsonify({'success': False, 'error': 'Shared entry not found'}), 404
+                
+                # Only owner or admin can delete
+                if shared_entry.source_scouting_team_number != current_team and not is_admin:
+                    return jsonify({'success': False, 'error': 'Only the source team or alliance admin can delete this'}), 403
+                
+                # Get info for removing synced copies from other teams
+                source_team = shared_entry.source_scouting_team_number
+                team_id = shared_entry.team_id
+                the_alliance_id = shared_entry.alliance_id
+                
+                # MARK AS DELETED to prevent re-sync
+                AllianceDeletedData.mark_deleted(
+                    alliance_id=the_alliance_id,
+                    data_type='pit',
+                    match_id=None,
+                    team_id=team_id,
+                    alliance_color=None,
+                    source_team=source_team,
+                    deleted_by=current_team
+                )
+                
+                # Get all alliance members to remove synced copies
+                alliance = ScoutingAlliance.query.get(the_alliance_id)
+                if alliance:
+                    member_teams = [m.team_number for m in alliance.get_active_members()]
+                    
+                    # Remove synced copies from other teams' PitScoutingData
+                    for member_team in member_teams:
+                        if member_team != source_team:
+                            # Find and delete synced copies in this team's data
+                            synced_copies = PitScoutingData.query.filter(
+                                PitScoutingData.team_id == team_id,
+                                PitScoutingData.scouting_team_number == member_team,
+                                PitScoutingData.scout_name.like(f'[Alliance-{source_team}]%')
+                            ).all()
+                            
+                            for copy in synced_copies:
+                                db.session.delete(copy)
+                                synced_copies_deleted += 1
+                
+                # Delete the shared entry
+                db.session.delete(shared_entry)
+                deleted_count += 1
+            
+            else:
+                # Original mode: delete by original_pit_data_id (owner only)
+                query = AllianceSharedPitData.query.filter_by(
+                    original_pit_data_id=original_data_id,
+                    source_scouting_team_number=current_team
+                )
+                
+                if alliance_id:
+                    query = query.filter_by(alliance_id=alliance_id)
+                
+                shared_entries = query.all()
+                
+                for entry in shared_entries:
+                    # Mark as deleted to prevent re-sync
+                    AllianceDeletedData.mark_deleted(
+                        alliance_id=entry.alliance_id,
+                        data_type='pit',
+                        match_id=None,
+                        team_id=entry.team_id,
+                        alliance_color=None,
+                        source_team=entry.source_scouting_team_number,
+                        deleted_by=current_team
+                    )
+                    
+                    # Also remove synced copies from all alliance members (except source)
+                    alliance = ScoutingAlliance.query.get(entry.alliance_id)
+                    if alliance:
+                        member_teams = [m.team_number for m in alliance.get_active_members()]
+                        for member_team in member_teams:
+                            if member_team != entry.source_scouting_team_number:
+                                # Find and delete synced copies in this team's data
+                                synced_copies = PitScoutingData.query.filter(
+                                    PitScoutingData.team_id == entry.team_id,
+                                    PitScoutingData.scouting_team_number == member_team,
+                                    PitScoutingData.scout_name.like(f'[Alliance-{entry.source_scouting_team_number}]%')
+                                ).all()
+                                for copy in synced_copies:
+                                    db.session.delete(copy)
+                                    synced_copies_deleted += 1
+                    
+                    db.session.delete(entry)
+                    deleted_count += 1
+        else:
+            return jsonify({'success': False, 'error': 'Invalid data type'}), 400
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Permanently deleted {deleted_count} shared entries and {synced_copies_deleted} synced copies',
+            'deleted_count': deleted_count,
+            'synced_copies_deleted': synced_copies_deleted
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting from alliance: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/check-alliance-shared-data', methods=['POST'])
+@login_required
+def api_check_alliance_shared_data():
+    """Check if scouting/pit data is shared to any alliances (for showing delete from alliance option)"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        data_type = data.get('data_type')  # 'scouting' or 'pit'
+        data_id = data.get('data_id')
+        
+        if not all([data_type, data_id]):
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+        
+        current_team = get_current_scouting_team_number()
+        shared_alliances = []
+        
+        if data_type == 'scouting':
+            # Find all alliances this data is shared to
+            shared_entries = AllianceSharedScoutingData.query.filter_by(
+                original_scouting_data_id=data_id,
+                source_scouting_team_number=current_team,
+                is_active=True
+            ).all()
+            
+            for entry in shared_entries:
+                alliance = ScoutingAlliance.query.get(entry.alliance_id)
+                if alliance:
+                    shared_alliances.append({
+                        'alliance_id': alliance.id,
+                        'alliance_name': alliance.alliance_name,
+                        'shared_at': entry.shared_at.isoformat() if entry.shared_at else None
+                    })
+        
+        elif data_type == 'pit':
+            # Find all alliances this data is shared to
+            shared_entries = AllianceSharedPitData.query.filter_by(
+                original_pit_data_id=data_id,
+                source_scouting_team_number=current_team,
+                is_active=True
+            ).all()
+            
+            for entry in shared_entries:
+                alliance = ScoutingAlliance.query.get(entry.alliance_id)
+                if alliance:
+                    shared_alliances.append({
+                        'alliance_id': alliance.id,
+                        'alliance_name': alliance.alliance_name,
+                        'shared_at': entry.shared_at.isoformat() if entry.shared_at else None
+                    })
+        else:
+            return jsonify({'success': False, 'error': 'Invalid data type'}), 400
+        
+        # Also check if current team is in any active alliance
+        team_alliances = db.session.query(ScoutingAlliance).join(ScoutingAllianceMember).filter(
+            ScoutingAllianceMember.team_number == current_team,
+            ScoutingAllianceMember.status == 'accepted',
+            ScoutingAlliance.is_active == True
+        ).all()
+        
+        return jsonify({
+            'success': True,
+            'is_shared': len(shared_alliances) > 0,
+            'shared_alliances': shared_alliances,
+            'team_alliances': [{'id': a.id, 'name': a.alliance_name} for a in team_alliances],
+            'is_own_data': True  # Always true since we filter by current team
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error checking alliance shared data: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/deactivate-alliance-with-data', methods=['POST'])
+@login_required
+def api_deactivate_alliance_with_data():
+    """Deactivate alliance mode and optionally remove team's data from alliance.
+    
+    Default behavior is to KEEP data in alliance for other teams to access.
+    User can explicitly choose to remove their data from the alliance.
+    When removing, shared copies are deleted but the team's private data is preserved.
+    Any alliance data not already in the team's private storage will be copied back.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        alliance_id = data.get('alliance_id')
+        remove_data = data.get('remove_data', False)  # Default to False (keep data)
+        
+        if not alliance_id:
+            return jsonify({'success': False, 'error': 'Alliance ID required'}), 400
+        
+        current_team = get_current_scouting_team_number()
+        
+        # Verify user is member of the alliance
+        member = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance_id,
+            team_number=current_team,
+            status='accepted'
+        ).first()
+        
+        if not member:
+            return jsonify({'success': False, 'error': 'Not a member of this alliance'}), 403
+        
+        # Set data sharing to inactive for this team (prevents future syncs from getting this team's data)
+        member.is_data_sharing_active = False
+        member.data_sharing_deactivated_at = datetime.now(timezone.utc)
+        
+        # Deactivate alliance mode
+        TeamAllianceStatus.deactivate_alliance_for_team(current_team)
+        
+        shared_scouting_deleted = 0
+        shared_pit_deleted = 0
+        data_moved_to_private = 0
+        
+        if remove_data:
+            # STEP 1: Move alliance shared data to private team data before deleting shared copies
+            # This preserves the team's data privately while removing it from the alliance
+            
+            # Get all shared scouting data from this team
+            shared_scouting_entries = AllianceSharedScoutingData.query.filter_by(
+                alliance_id=alliance_id,
+                source_scouting_team_number=current_team
+            ).all()
+            
+            for entry in shared_scouting_entries:
+                # Check if this data already exists in the team's private ScoutingData
+                existing_private = ScoutingData.query.filter_by(
+                    match_id=entry.match_id,
+                    team_id=entry.team_id,
+                    alliance=entry.alliance,
+                    scouting_team_number=current_team
+                ).first()
+                
+                if not existing_private:
+                    # Create a private copy of the data
+                    private_copy = ScoutingData(
+                        match_id=entry.match_id,
+                        team_id=entry.team_id,
+                        scouting_team_number=current_team,
+                        scout_name=entry.scout_name,
+                        scout_id=entry.scout_id,
+                        scouting_station=entry.scouting_station,
+                        alliance=entry.alliance,
+                        data_json=entry.data_json,
+                        timestamp=entry.timestamp
+                    )
+                    db.session.add(private_copy)
+                    data_moved_to_private += 1
+                
+                # Delete the shared copy
+                db.session.delete(entry)
+                shared_scouting_deleted += 1
+            
+            # Get all shared pit data from this team
+            shared_pit_entries = AllianceSharedPitData.query.filter_by(
+                alliance_id=alliance_id,
+                source_scouting_team_number=current_team
+            ).all()
+            
+            for entry in shared_pit_entries:
+                # Check if this data already exists in the team's private PitScoutingData
+                existing_private = PitScoutingData.query.filter_by(
+                    team_id=entry.team_id,
+                    scouting_team_number=current_team
+                ).first()
+                
+                if not existing_private:
+                    # Create a private copy of the data
+                    private_copy = PitScoutingData(
+                        team_id=entry.team_id,
+                        event_id=entry.event_id,
+                        scouting_team_number=current_team,
+                        scout_name=entry.scout_name,
+                        scout_id=entry.scout_id,
+                        data_json=entry.data_json,
+                        timestamp=entry.timestamp,
+                        local_id=str(uuid.uuid4())
+                    )
+                    db.session.add(private_copy)
+                    data_moved_to_private += 1
+                
+                # Delete the shared copy
+                db.session.delete(entry)
+                shared_pit_deleted += 1
+            
+            db.session.commit()
+            
+            message = f'Alliance mode deactivated. Removed {shared_scouting_deleted + shared_pit_deleted} entries from alliance. {data_moved_to_private} entries preserved as private team data.'
+        else:
+            db.session.commit()
+            message = 'Alliance mode deactivated. Your existing shared data remains in the alliance, but future syncs will not get new data from your team.'
+        
+        return jsonify({
+            'success': True,
+            'message': message,
+            'shared_data_removed': shared_scouting_deleted + shared_pit_deleted,
+            'data_moved_to_private': data_moved_to_private,
+            'data_kept_in_alliance': not remove_data
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deactivating alliance: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/copy-alliance-data-to-team', methods=['POST'])
+@login_required
+def api_copy_alliance_data_to_team():
+    """Copy all alliance data (from all member teams) to the current team's local storage.
+    
+    This allows a team to request a copy of all alliance data before disabling alliance mode.
+    The data is copied to the team's private ScoutingData and PitScoutingData tables.
+    Data from other teams is prefixed with [Alliance-TEAM#] in the scout_name field.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        alliance_id = data.get('alliance_id')
+        
+        if not alliance_id:
+            return jsonify({'success': False, 'error': 'Alliance ID required'}), 400
+        
+        current_team = get_current_scouting_team_number()
+        
+        # Verify user is member of the alliance
+        member = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance_id,
+            team_number=current_team,
+            status='accepted'
+        ).first()
+        
+        if not member:
+            return jsonify({'success': False, 'error': 'Not a member of this alliance'}), 403
+        
+        # Use the utility function to copy all alliance data
+        from app.utils.alliance_data import copy_alliance_data_to_team
+        stats = copy_alliance_data_to_team(alliance_id, current_team)
+        
+        total_copied = stats['scouting_copied'] + stats['pit_copied']
+        total_skipped = stats['scouting_skipped'] + stats['pit_skipped']
+        
+        message = f'Copied {total_copied} entries to your team data. {total_skipped} entries already existed.'
+        if stats['errors']:
+            message += f' {len(stats["errors"])} errors occurred.'
+        
+        return jsonify({
+            'success': True,
+            'message': message,
+            'scouting_copied': stats['scouting_copied'],
+            'scouting_skipped': stats['scouting_skipped'],
+            'pit_copied': stats['pit_copied'],
+            'pit_skipped': stats['pit_skipped'],
+            'errors': stats['errors'][:10] if stats['errors'] else []  # Limit errors in response
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error copying alliance data: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/<int:alliance_id>/copy-all-data', methods=['POST'])
+@login_required
+def api_copy_all_alliance_data(alliance_id):
+    """Copy all alliance data (from all member teams) to the current team's local storage.
+    
+    This is an alternative to /api/copy-alliance-data-to-team that accepts alliance_id in the URL.
+    """
+    try:
+        current_team = get_current_scouting_team_number()
+        
+        # Verify user is member of the alliance
+        member = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance_id,
+            team_number=current_team,
+            status='accepted'
+        ).first()
+        
+        if not member:
+            return jsonify({'success': False, 'error': 'Not a member of this alliance'}), 403
+        
+        # Use the utility function to copy all alliance data
+        from app.utils.alliance_data import copy_alliance_data_to_team
+        stats = copy_alliance_data_to_team(alliance_id, current_team)
+        
+        total_copied = stats['scouting_copied'] + stats['pit_copied']
+        total_skipped = stats['scouting_skipped'] + stats['pit_skipped']
+        
+        message = f'Copied {total_copied} entries to your team data. {total_skipped} entries already existed.'
+        if stats['errors']:
+            message += f' {len(stats["errors"])} errors occurred.'
+        
+        return jsonify({
+            'success': True,
+            'message': message,
+            'scouting_copied': stats['scouting_copied'],
+            'scouting_skipped': stats['scouting_skipped'],
+            'pit_copied': stats['pit_copied'],
+            'pit_skipped': stats['pit_skipped'],
+            'errors': stats['errors'][:10] if stats['errors'] else []  # Limit errors in response
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error copying all alliance data: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/<int:alliance_id>/copy-my-data', methods=['POST'])
+@login_required
+def api_copy_my_alliance_data(alliance_id):
+    """Copy only the current team's data from the alliance shared tables back to local storage.
+    
+    This allows a team to retrieve only data they contributed when disabling alliance mode,
+    without keeping data from other alliance members.
+    """
+    try:
+        current_team = get_current_scouting_team_number()
+        
+        # Verify user is member of the alliance
+        member = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance_id,
+            team_number=current_team,
+            status='accepted'
+        ).first()
+        
+        if not member:
+            return jsonify({'success': False, 'error': 'Not a member of this alliance'}), 403
+        
+        # Use the utility function to copy only this team's data from the alliance
+        from app.utils.alliance_data import copy_my_team_alliance_data
+        stats = copy_my_team_alliance_data(alliance_id, current_team)
+        
+        total_copied = stats['scouting_copied'] + stats['pit_copied']
+        total_skipped = stats['scouting_skipped'] + stats['pit_skipped']
+        
+        message = f'Copied {total_copied} of your team\'s entries back to local storage. {total_skipped} entries already existed.'
+        if stats['errors']:
+            message += f' {len(stats["errors"])} errors occurred.'
+        
+        return jsonify({
+            'success': True,
+            'message': message,
+            'scouting_copied': stats['scouting_copied'],
+            'scouting_skipped': stats['scouting_skipped'],
+            'pit_copied': stats['pit_copied'],
+            'pit_skipped': stats['pit_skipped'],
+            'errors': stats['errors'][:10] if stats['errors'] else []  # Limit errors in response
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error copying team's alliance data: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/<int:alliance_id>/team-data-counts', methods=['GET'])
+@login_required
+def api_get_team_data_counts(alliance_id):
+    """Get counts of scouting/pit data for current team in a specific alliance"""
+    try:
+        current_team = get_current_scouting_team_number()
+        
+        # Verify user is member of the alliance
+        member = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance_id,
+            team_number=current_team,
+            status='accepted'
+        ).first()
+        
+        if not member:
+            return jsonify({'success': False, 'error': 'Not a member of this alliance'}), 403
+        
+        # Get the alliance to find the game_config_team (the team whose data is stored)
+        alliance = ScoutingAlliance.query.get(alliance_id)
+        if not alliance:
+            return jsonify({'success': False, 'error': 'Alliance not found'}), 404
+        
+        # Count scouting data shared TO the alliance (AllianceSharedScoutingData)
+        shared_scouting_count = AllianceSharedScoutingData.query.filter_by(
+            alliance_id=alliance_id,
+            source_scouting_team_number=current_team,
+            is_active=True
+        ).count()
+        
+        # Count pit data shared TO the alliance (AllianceSharedPitData)
+        shared_pit_count = AllianceSharedPitData.query.filter_by(
+            alliance_id=alliance_id,
+            source_scouting_team_number=current_team,
+            is_active=True
+        ).count()
+        
+        # Also count the team's actual scouting data (ScoutingData and PitScoutingData)
+        # This is the data that would be deleted when deactivating
+        actual_scouting_count = ScoutingData.query.filter_by(
+            scouting_team_number=current_team
+        ).count()
+        
+        actual_pit_count = PitScoutingData.query.filter_by(
+            scouting_team_number=current_team
+        ).count()
+        
+        return jsonify({
+            'success': True,
+            'match_data_count': shared_scouting_count,  # Shared to alliance
+            'pit_data_count': shared_pit_count,          # Shared to alliance
+            'actual_match_data_count': actual_scouting_count,  # Team's own data
+            'actual_pit_data_count': actual_pit_count,         # Team's own data
+            'total_shared': shared_scouting_count + shared_pit_count,
+            'total_actual': actual_scouting_count + actual_pit_count
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting team data counts: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/<int:alliance_id>/shared-data', methods=['GET'])
+@login_required
+def api_get_alliance_shared_data(alliance_id):
+    """Get all shared data for an alliance that the current team can access"""
+    try:
+        current_team = get_current_scouting_team_number()
+        
+        # Verify user is member of the alliance
+        member = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance_id,
+            team_number=current_team,
+            status='accepted'
+        ).first()
+        
+        if not member:
+            return jsonify({'success': False, 'error': 'Not a member of this alliance'}), 403
+        
+        # Get all active shared scouting data
+        scouting_data = AllianceSharedScoutingData.query.filter_by(
+            alliance_id=alliance_id,
+            is_active=True
+        ).all()
+        
+        # Get all active shared pit data
+        pit_data = AllianceSharedPitData.query.filter_by(
+            alliance_id=alliance_id,
+            is_active=True
+        ).all()
+        
+        return jsonify({
+            'success': True,
+            'scouting_data': [d.to_dict() for d in scouting_data],
+            'pit_data': [d.to_dict() for d in pit_data],
+            'is_admin': member.role == 'admin'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting alliance shared data: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/<int:alliance_id>/edit-shared-data', methods=['POST'])
+@login_required
+def api_edit_alliance_shared_data(alliance_id):
+    """Edit shared data in alliance (alliance admins only).
+    
+    Edits propagate to all teams EXCEPT the original scout by default.
+    Optionally can include the original scout's copy.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        current_team = get_current_scouting_team_number()
+        
+        # Verify user is admin of the alliance
+        member = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance_id,
+            team_number=current_team,
+            role='admin',
+            status='accepted'
+        ).first()
+        
+        if not member:
+            return jsonify({'success': False, 'error': 'Only alliance admins can edit shared data'}), 403
+        
+        data_type = data.get('data_type')  # 'scouting' or 'pit'
+        shared_id = data.get('shared_id')
+        new_data = data.get('new_data')  # The updated data fields
+        include_original = data.get('include_original', False)  # Whether to update original team's copy too
+        
+        if not all([data_type, shared_id, new_data]):
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+        
+        if data_type == 'scouting':
+            shared = AllianceSharedScoutingData.query.filter_by(
+                id=shared_id,
+                alliance_id=alliance_id
+            ).first()
+            
+            if not shared:
+                return jsonify({'success': False, 'error': 'Shared data not found'}), 404
+            
+            # Update the shared data
+            shared.data = new_data
+            shared.last_edited_by_team = current_team
+            shared.last_edited_at = datetime.now(timezone.utc)
+            
+            # Optionally update the original if requested
+            if include_original and shared.original_scouting_data_id:
+                original = ScoutingData.query.get(shared.original_scouting_data_id)
+                if original:
+                    original.data = new_data
+        
+        elif data_type == 'pit':
+            shared = AllianceSharedPitData.query.filter_by(
+                id=shared_id,
+                alliance_id=alliance_id
+            ).first()
+            
+            if not shared:
+                return jsonify({'success': False, 'error': 'Shared data not found'}), 404
+            
+            # Update the shared data
+            shared.data = new_data
+            shared.last_edited_by_team = current_team
+            shared.last_edited_at = datetime.now(timezone.utc)
+            
+            # Optionally update the original if requested
+            if include_original and shared.original_pit_data_id:
+                original = PitScoutingData.query.get(shared.original_pit_data_id)
+                if original:
+                    original.data = new_data
+        else:
+            return jsonify({'success': False, 'error': 'Invalid data type'}), 400
+        
+        db.session.commit()
+        
+        # Notify alliance members of the edit
+        socketio.emit('alliance_data_edited', {
+            'alliance_id': alliance_id,
+            'data_type': data_type,
+            'shared_id': shared_id,
+            'edited_by_team': current_team,
+            'include_original': include_original
+        }, room=f'alliance_{alliance_id}')
+        
+        return jsonify({
+            'success': True,
+            'message': 'Shared data updated successfully',
+            'include_original': include_original
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error editing alliance shared data: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/get-team-alliance-data-counts', methods=['GET'])
+@login_required
+def api_get_team_alliance_data_counts():
+    """Get counts of data this team has shared to various alliances"""
+    try:
+        current_team = get_current_scouting_team_number()
+        
+        # Get all alliances this team is in
+        team_alliances = db.session.query(ScoutingAlliance).join(ScoutingAllianceMember).filter(
+            ScoutingAllianceMember.team_number == current_team,
+            ScoutingAllianceMember.status == 'accepted'
+        ).all()
+        
+        result = []
+        for alliance in team_alliances:
+            scouting_count = AllianceSharedScoutingData.query.filter_by(
+                alliance_id=alliance.id,
+                source_scouting_team_number=current_team,
+                is_active=True
+            ).count()
+            
+            pit_count = AllianceSharedPitData.query.filter_by(
+                alliance_id=alliance.id,
+                source_scouting_team_number=current_team,
+                is_active=True
+            ).count()
+            
+            result.append({
+                'alliance_id': alliance.id,
+                'alliance_name': alliance.alliance_name,
+                'scouting_data_count': scouting_count,
+                'pit_data_count': pit_count,
+                'total_count': scouting_count + pit_count
+            })
+        
+        return jsonify({
+            'success': True,
+            'alliance_data': result,
+            'total_alliances': len(result)
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting team alliance data counts: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ======== ALLIANCE TEAMS & EVENTS MANAGEMENT ========
+
+@bp.route('/<int:alliance_id>/manage/teams')
+@login_required
+@admin_required
+def manage_alliance_teams(alliance_id):
+    """Manage teams for alliance - centralized team data that propagates to all members"""
+    current_team = get_current_scouting_team_number()
+    
+    # Check if user is admin of this alliance
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        role='admin',
+        status='accepted'
+    ).first()
+    
+    if not member:
+        flash('You must be an alliance admin to manage alliance teams.', 'error')
+        return redirect(url_for('scouting_alliances.view_alliance', alliance_id=alliance_id))
+    
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    
+    # Get the alliance's storage team number (game_config_team)
+    storage_team = alliance.game_config_team
+    if not storage_team:
+        flash('Alliance must have a game configuration set before managing teams.', 'warning')
+        return redirect(url_for('scouting_alliances.view_alliance', alliance_id=alliance_id))
+    
+    # Get alliance events to filter teams
+    alliance_events = alliance.get_shared_events()
+    
+    # Get events for the alliance
+    events = []
+    selected_event = None
+    event_id = request.args.get('event_id', type=int)
+    
+    if alliance_events:
+        # Filter to alliance events only - mark them as alliance events
+        events = Event.query.filter(
+            Event.code.in_(alliance_events),
+            Event.scouting_team_number == storage_team
+        ).all()
+        
+        if event_id:
+            selected_event = Event.query.filter_by(id=event_id, scouting_team_number=storage_team).first()
+        elif events:
+            # Use first alliance event as default
+            selected_event = events[0]
+    
+    # Get teams for the selected event, filtered by alliance storage team
+    teams = []
+    if selected_event:
+        teams = Team.query.join(Team.events).filter(
+            Event.id == selected_event.id,
+            Team.scouting_team_number == storage_team
+        ).order_by(Team.team_number).all()
+    
+    # Get effective game config for event code
+    from app.utils.config_manager import get_effective_game_config
+    game_config = get_effective_game_config()
+    
+    return render_template('scouting_alliances/manage_teams.html',
+                           alliance=alliance,
+                           member=member,
+                           teams=teams,
+                           events=events,
+                           selected_event=selected_event,
+                           game_config=game_config,
+                           current_team=current_team,
+                           **get_theme_context())
+
+
+@bp.route('/<int:alliance_id>/manage/teams/sync', methods=['POST'])
+@login_required
+@admin_required
+def sync_alliance_teams(alliance_id):
+    """Sync teams from FIRST API for alliance - stores under alliance's storage team"""
+    from app.utils.api_utils import get_teams_dual_api, api_to_db_team_conversion, get_event_details_dual_api
+    from app.routes.data import get_or_create_event
+    
+    current_team = get_current_scouting_team_number()
+    
+    # Check if user is admin of this alliance
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        role='admin',
+        status='accepted'
+    ).first()
+    
+    if not member:
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    storage_team = alliance.game_config_team
+    
+    if not storage_team:
+        return jsonify({'success': False, 'error': 'Alliance must have a game configuration set'}), 400
+    
+    data = request.get_json()
+    event_code = data.get('event_code')
+    
+    if not event_code:
+        return jsonify({'success': False, 'error': 'Event code is required'}), 400
+    
+    try:
+        # Get or create event under alliance's storage team
+        event = Event.query.filter_by(
+            code=event_code.upper(),
+            scouting_team_number=storage_team
+        ).first()
+        
+        if not event:
+            try:
+                event_details = get_event_details_dual_api(event_code)
+                from datetime import datetime
+                
+                start_date = None
+                end_date = None
+                if event_details.get('dateStart'):
+                    try:
+                        start_date = datetime.fromisoformat(event_details['dateStart'].replace('Z', '+00:00')).date()
+                    except:
+                        pass
+                if event_details.get('dateEnd'):
+                    try:
+                        end_date = datetime.fromisoformat(event_details['dateEnd'].replace('Z', '+00:00')).date()
+                    except:
+                        pass
+                
+                event = Event(
+                    name=event_details.get('name', f'Event {event_code}'),
+                    code=event_code.upper(),
+                    year=event_details.get('year', datetime.now().year),
+                    location=event_details.get('venue', ''),
+                    start_date=start_date,
+                    end_date=end_date,
+                    scouting_team_number=storage_team,
+                    is_alliance=True  # Mark as alliance event
+                )
+                db.session.add(event)
+                db.session.flush()
+            except Exception as e:
+                # Create minimal event
+                event = Event(
+                    name=f'Event {event_code}',
+                    code=event_code.upper(),
+                    year=datetime.now().year,
+                    scouting_team_number=storage_team,
+                    is_alliance=True
+                )
+                db.session.add(event)
+                db.session.flush()
+        
+        # Fetch teams from API
+        api_teams = get_teams_dual_api(event_code)
+        
+        teams_added = 0
+        teams_updated = 0
+        
+        for api_team in api_teams:
+            team_number = api_team.get('teamNumber')
+            if not team_number:
+                continue
+            
+            # Check if team exists for this scouting team
+            team = Team.query.filter_by(
+                team_number=team_number,
+                scouting_team_number=storage_team
+            ).first()
+            
+            if not team:
+                # Create new team
+                team = Team(
+                    team_number=team_number,
+                    team_name=api_team.get('nameShort') or api_team.get('nameFull') or f'Team {team_number}',
+                    location=f"{api_team.get('city', '')}, {api_team.get('stateProv', '')}, {api_team.get('country', '')}".strip(', '),
+                    scouting_team_number=storage_team
+                )
+                db.session.add(team)
+                teams_added += 1
+            else:
+                # Update existing team
+                team.team_name = api_team.get('nameShort') or api_team.get('nameFull') or team.team_name
+                teams_updated += 1
+            
+            # Associate team with event
+            if event not in team.events:
+                team.events.append(event)
+        
+        # Add event to alliance events if not already there
+        alliance_event = ScoutingAllianceEvent.query.filter_by(
+            alliance_id=alliance_id,
+            event_code=event_code.upper()
+        ).first()
+        
+        if not alliance_event:
+            alliance_event = ScoutingAllianceEvent(
+                alliance_id=alliance_id,
+                event_code=event_code.upper(),
+                event_name=event.name,
+                added_by=current_team,
+                is_active=True
+            )
+            db.session.add(alliance_event)
+        
+        db.session.commit()
+        
+        # Notify alliance members
+        socketio.emit('alliance_teams_synced', {
+            'alliance_id': alliance_id,
+            'event_code': event_code,
+            'teams_added': teams_added,
+            'teams_updated': teams_updated,
+            'synced_by': current_team
+        }, room=f'alliance_{alliance_id}')
+        
+        return jsonify({
+            'success': True,
+            'teams_added': teams_added,
+            'teams_updated': teams_updated,
+            'total_teams': len(api_teams),
+            'message': f'Synced {len(api_teams)} teams ({teams_added} new, {teams_updated} updated)'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error syncing alliance teams: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/<int:alliance_id>/manage/teams/add', methods=['POST'])
+@login_required
+@admin_required
+def add_alliance_team(alliance_id):
+    """Add a team manually to alliance"""
+    current_team = get_current_scouting_team_number()
+    
+    # Check if user is admin of this alliance
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        role='admin',
+        status='accepted'
+    ).first()
+    
+    if not member:
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    storage_team = alliance.game_config_team
+    
+    if not storage_team:
+        return jsonify({'success': False, 'error': 'Alliance must have a game configuration set'}), 400
+    
+    data = request.get_json()
+    team_number = data.get('team_number')
+    team_name = data.get('team_name', f'Team {team_number}')
+    event_id = data.get('event_id')
+    
+    if not team_number:
+        return jsonify({'success': False, 'error': 'Team number is required'}), 400
+    
+    try:
+        # Check if team already exists
+        team = Team.query.filter_by(
+            team_number=team_number,
+            scouting_team_number=storage_team
+        ).first()
+        
+        if not team:
+            team = Team(
+                team_number=team_number,
+                team_name=team_name,
+                scouting_team_number=storage_team
+            )
+            db.session.add(team)
+        
+        # Associate with event if provided
+        if event_id:
+            event = Event.query.filter_by(id=event_id, scouting_team_number=storage_team).first()
+            if event and event not in team.events:
+                team.events.append(event)
+        
+        db.session.commit()
+        
+        # Notify alliance members
+        socketio.emit('alliance_team_added', {
+            'alliance_id': alliance_id,
+            'team_number': team_number,
+            'team_name': team_name,
+            'added_by': current_team
+        }, room=f'alliance_{alliance_id}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'Team {team_number} added successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error adding alliance team: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/<int:alliance_id>/manage/events')
+@login_required
+@admin_required
+def manage_alliance_events(alliance_id):
+    """Manage events for alliance - centralized event data that propagates to all members"""
+    current_team = get_current_scouting_team_number()
+    
+    # Check if user is admin of this alliance
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        role='admin',
+        status='accepted'
+    ).first()
+    
+    if not member:
+        flash('You must be an alliance admin to manage alliance events.', 'error')
+        return redirect(url_for('scouting_alliances.view_alliance', alliance_id=alliance_id))
+    
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    
+    # Get the alliance's storage team number (game_config_team)
+    storage_team = alliance.game_config_team
+    
+    # Get alliance event codes
+    alliance_event_codes = alliance.get_shared_events()
+    
+    # Get Event objects for alliance
+    events = []
+    if storage_team and alliance_event_codes:
+        events = Event.query.filter(
+            Event.code.in_(alliance_event_codes),
+            Event.scouting_team_number == storage_team
+        ).order_by(Event.start_date.desc()).all()
+    
+    # Get ScoutingAllianceEvent records
+    alliance_events = ScoutingAllianceEvent.query.filter_by(
+        alliance_id=alliance_id,
+        is_active=True
+    ).all()
+    
+    # Get effective game config for event code
+    from app.utils.config_manager import get_effective_game_config
+    game_config = get_effective_game_config()
+    
+    return render_template('scouting_alliances/manage_events.html',
+                           alliance=alliance,
+                           member=member,
+                           events=events,
+                           alliance_events=alliance_events,
+                           game_config=game_config,
+                           current_team=current_team,
+                           **get_theme_context())
+
+
+@bp.route('/<int:alliance_id>/manage/events/add', methods=['POST'])
+@login_required
+@admin_required
+def add_alliance_event(alliance_id):
+    """Add an event to alliance"""
+    from app.utils.api_utils import get_event_details_dual_api
+    
+    current_team = get_current_scouting_team_number()
+    
+    # Check if user is admin of this alliance
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        role='admin',
+        status='accepted'
+    ).first()
+    
+    if not member:
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    storage_team = alliance.game_config_team
+    
+    if not storage_team:
+        return jsonify({'success': False, 'error': 'Alliance must have a game configuration set first'}), 400
+    
+    data = request.get_json()
+    event_code = data.get('event_code')
+    
+    if not event_code:
+        return jsonify({'success': False, 'error': 'Event code is required'}), 400
+    
+    event_code = event_code.upper()
+    
+    try:
+        # Check if alliance event already exists
+        existing = ScoutingAllianceEvent.query.filter_by(
+            alliance_id=alliance_id,
+            event_code=event_code
+        ).first()
+        
+        if existing:
+            if existing.is_active:
+                return jsonify({'success': False, 'error': 'Event already added to alliance'}), 400
+            else:
+                # Reactivate
+                existing.is_active = True
+                db.session.commit()
+                return jsonify({'success': True, 'message': 'Event reactivated'})
+        
+        # Try to get event details from API
+        event_name = f'Event {event_code}'
+        try:
+            event_details = get_event_details_dual_api(event_code)
+            event_name = event_details.get('name', event_name)
+            
+            # Create or get the event in the database under alliance's storage team
+            event = Event.query.filter_by(
+                code=event_code,
+                scouting_team_number=storage_team
+            ).first()
+            
+            if not event:
+                from datetime import datetime
+                start_date = None
+                end_date = None
+                if event_details.get('dateStart'):
+                    try:
+                        start_date = datetime.fromisoformat(event_details['dateStart'].replace('Z', '+00:00')).date()
+                    except:
+                        pass
+                if event_details.get('dateEnd'):
+                    try:
+                        end_date = datetime.fromisoformat(event_details['dateEnd'].replace('Z', '+00:00')).date()
+                    except:
+                        pass
+                
+                event = Event(
+                    name=event_name,
+                    code=event_code,
+                    year=event_details.get('year', datetime.now().year),
+                    location=event_details.get('venue', ''),
+                    start_date=start_date,
+                    end_date=end_date,
+                    scouting_team_number=storage_team,
+                    is_alliance=True
+                )
+                db.session.add(event)
+        except:
+            pass  # API failed, just create alliance event with code
+        
+        # Create alliance event record
+        alliance_event = ScoutingAllianceEvent(
+            alliance_id=alliance_id,
+            event_code=event_code,
+            event_name=event_name,
+            added_by=current_team,
+            is_active=True
+        )
+        db.session.add(alliance_event)
+        db.session.commit()
+        
+        # Notify alliance members
+        socketio.emit('alliance_event_added', {
+            'alliance_id': alliance_id,
+            'event_code': event_code,
+            'event_name': event_name,
+            'added_by': current_team
+        }, room=f'alliance_{alliance_id}')
+        
+        return jsonify({
+            'success': True,
+            'event_code': event_code,
+            'event_name': event_name,
+            'message': f'Event {event_code} added to alliance'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error adding alliance event: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/<int:alliance_id>/manage/events/<event_code>/remove', methods=['POST'])
+@login_required
+@admin_required
+def remove_alliance_event(alliance_id, event_code):
+    """Remove an event from alliance"""
+    current_team = get_current_scouting_team_number()
+    
+    # Check if user is admin of this alliance
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        role='admin',
+        status='accepted'
+    ).first()
+    
+    if not member:
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
+    try:
+        alliance_event = ScoutingAllianceEvent.query.filter_by(
+            alliance_id=alliance_id,
+            event_code=event_code.upper()
+        ).first()
+        
+        if not alliance_event:
+            return jsonify({'success': False, 'error': 'Event not found in alliance'}), 404
+        
+        # Mark as inactive instead of deleting (to preserve history)
+        alliance_event.is_active = False
+        db.session.commit()
+        
+        # Notify alliance members
+        socketio.emit('alliance_event_removed', {
+            'alliance_id': alliance_id,
+            'event_code': event_code,
+            'removed_by': current_team
+        }, room=f'alliance_{alliance_id}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'Event {event_code} removed from alliance'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error removing alliance event: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/<int:alliance_id>/manage/matches')
+@login_required
+@admin_required
+def manage_alliance_matches(alliance_id):
+    """Manage matches for alliance - centralized match data that propagates to all members"""
+    current_team = get_current_scouting_team_number()
+    
+    # Check if user is admin of this alliance
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        role='admin',
+        status='accepted'
+    ).first()
+    
+    if not member:
+        flash('You must be an alliance admin to manage alliance matches.', 'error')
+        return redirect(url_for('scouting_alliances.view_alliance', alliance_id=alliance_id))
+    
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    
+    # Get the alliance's storage team number (game_config_team)
+    storage_team = alliance.game_config_team
+    if not storage_team:
+        flash('Alliance must have a game configuration set before managing matches.', 'warning')
+        return redirect(url_for('scouting_alliances.view_alliance', alliance_id=alliance_id))
+    
+    # Get alliance events to filter matches
+    alliance_events = alliance.get_shared_events()
+    
+    # Get events for the alliance
+    events = []
+    selected_event = None
+    event_id = request.args.get('event_id', type=int)
+    
+    if alliance_events:
+        events = Event.query.filter(
+            Event.code.in_(alliance_events),
+            Event.scouting_team_number == storage_team
+        ).all()
+        
+        if event_id:
+            selected_event = Event.query.filter_by(id=event_id, scouting_team_number=storage_team).first()
+        elif events:
+            selected_event = events[0]
+    
+    # Get matches for the selected event
+    matches = []
+    if selected_event:
+        matches = Match.query.filter_by(
+            event_id=selected_event.id
+        ).order_by(Match.match_type, Match.match_number).all()
+    
+    # Get effective game config for event code
+    from app.utils.config_manager import get_effective_game_config
+    game_config = get_effective_game_config()
+    
+    return render_template('scouting_alliances/manage_matches.html',
+                           alliance=alliance,
+                           member=member,
+                           matches=matches,
+                           events=events,
+                           selected_event=selected_event,
+                           game_config=game_config,
+                           current_team=current_team,
+                           **get_theme_context())
+
+
+@bp.route('/<int:alliance_id>/manage/matches/sync', methods=['POST'])
+@login_required
+@admin_required
+def sync_alliance_matches(alliance_id):
+    """Sync matches from FIRST API for alliance - stores under alliance's storage team"""
+    from app.utils.api_utils import get_event_matches_dual_api
+    
+    current_team = get_current_scouting_team_number()
+    
+    # Check if user is admin of this alliance
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        role='admin',
+        status='accepted'
+    ).first()
+    
+    if not member:
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    storage_team = alliance.game_config_team
+    
+    if not storage_team:
+        return jsonify({'success': False, 'error': 'Alliance must have a game configuration set'}), 400
+    
+    data = request.get_json()
+    event_code = data.get('event_code')
+    
+    if not event_code:
+        return jsonify({'success': False, 'error': 'Event code is required'}), 400
+    
+    try:
+        # Get the event
+        event = Event.query.filter_by(
+            code=event_code.upper(),
+            scouting_team_number=storage_team
+        ).first()
+        
+        if not event:
+            return jsonify({'success': False, 'error': 'Event not found. Please add the event first.'}), 404
+        
+        # Fetch matches from API
+        api_matches = get_event_matches_dual_api(event_code)
+        
+        matches_added = 0
+        matches_updated = 0
+        
+        for api_match in api_matches:
+            match_number = api_match.get('matchNumber')
+            match_type = api_match.get('description', 'Qualification')
+            
+            # Normalize match type
+            if 'qualification' in match_type.lower() or 'qual' in match_type.lower():
+                match_type = 'Qualification'
+            elif 'playoff' in match_type.lower() or 'elim' in match_type.lower():
+                match_type = 'Playoff'
+            elif 'practice' in match_type.lower():
+                match_type = 'Practice'
+            
+            # Check if match already exists
+            match = Match.query.filter_by(
+                event_id=event.id,
+                match_number=match_number,
+                match_type=match_type
+            ).first()
+            
+            # Get teams
+            red_teams = []
+            blue_teams = []
+            
+            for team in api_match.get('teams', []):
+                team_number = team.get('teamNumber')
+                station = team.get('station', '')
+                
+                if 'Red' in station:
+                    red_teams.append(str(team_number))
+                elif 'Blue' in station:
+                    blue_teams.append(str(team_number))
+            
+            red_alliance = ','.join(red_teams)
+            blue_alliance = ','.join(blue_teams)
+            
+            # Parse scheduled time
+            scheduled_time = None
+            if api_match.get('startTime'):
+                try:
+                    from datetime import datetime
+                    scheduled_time = datetime.fromisoformat(api_match['startTime'].replace('Z', '+00:00'))
+                except:
+                    pass
+            
+            if not match:
+                match = Match(
+                    event_id=event.id,
+                    match_number=match_number,
+                    match_type=match_type,
+                    red_alliance=red_alliance,
+                    blue_alliance=blue_alliance,
+                    scheduled_time=scheduled_time
+                )
+                db.session.add(match)
+                matches_added += 1
+            else:
+                # Update existing match
+                match.red_alliance = red_alliance
+                match.blue_alliance = blue_alliance
+                if scheduled_time:
+                    match.scheduled_time = scheduled_time
+                matches_updated += 1
+        
+        db.session.commit()
+        
+        # Notify alliance members
+        socketio.emit('alliance_matches_synced', {
+            'alliance_id': alliance_id,
+            'event_code': event_code,
+            'matches_added': matches_added,
+            'matches_updated': matches_updated,
+            'synced_by': current_team
+        }, room=f'alliance_{alliance_id}')
+        
+        return jsonify({
+            'success': True,
+            'matches_added': matches_added,
+            'matches_updated': matches_updated,
+            'total_matches': len(api_matches),
+            'message': f'Synced {len(api_matches)} matches ({matches_added} new, {matches_updated} updated)'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error syncing alliance matches: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/<int:alliance_id>/manage/teams/<int:team_number>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_alliance_team(alliance_id, team_number):
+    """Remove a team from the alliance's event"""
+    current_team = get_current_scouting_team_number()
+    
+    # Check if user is admin of this alliance
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        role='admin',
+        status='accepted'
+    ).first()
+    
+    if not member:
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    storage_team = alliance.game_config_team
+    
+    if not storage_team:
+        return jsonify({'success': False, 'error': 'Alliance must have a game configuration set'}), 400
+    
+    data = request.get_json() or {}
+    event_id = data.get('event_id')
+    
+    try:
+        # Find the team
+        team = Team.query.filter_by(
+            team_number=team_number,
+            scouting_team_number=storage_team
+        ).first()
+        
+        if not team:
+            return jsonify({'success': False, 'error': 'Team not found'}), 404
+        
+        if event_id:
+            # Remove team from specific event
+            event = Event.query.filter_by(id=event_id, scouting_team_number=storage_team).first()
+            if event and event in team.events:
+                team.events.remove(event)
+                db.session.commit()
+                
+                # Notify alliance members
+                socketio.emit('alliance_team_removed', {
+                    'alliance_id': alliance_id,
+                    'team_number': team_number,
+                    'event_id': event_id,
+                    'removed_by': current_team
+                }, room=f'alliance_{alliance_id}')
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Team {team_number} removed from event'
+                })
+        else:
+            # Remove team from all events (but don't delete the team itself)
+            team.events = []
+            db.session.commit()
+            
+            # Notify alliance members
+            socketio.emit('alliance_team_removed', {
+                'alliance_id': alliance_id,
+                'team_number': team_number,
+                'removed_by': current_team
+            }, room=f'alliance_{alliance_id}')
+            
+            return jsonify({
+                'success': True,
+                'message': f'Team {team_number} removed from all events'
+            })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error removing alliance team: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/<int:alliance_id>/manage/matches/<int:match_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_alliance_match(alliance_id, match_id):
+    """Delete a match from the alliance"""
+    current_team = get_current_scouting_team_number()
+    
+    # Check if user is admin of this alliance
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        role='admin',
+        status='accepted'
+    ).first()
+    
+    if not member:
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    storage_team = alliance.game_config_team
+    
+    if not storage_team:
+        return jsonify({'success': False, 'error': 'Alliance must have a game configuration set'}), 400
+    
+    try:
+        # Find the match - ensure it belongs to an alliance event
+        match = Match.query.get(match_id)
+        
+        if not match:
+            return jsonify({'success': False, 'error': 'Match not found'}), 404
+        
+        # Verify the match's event belongs to the alliance's storage team
+        if match.event and match.event.scouting_team_number != storage_team:
+            return jsonify({'success': False, 'error': 'Match does not belong to this alliance'}), 403
+        
+        match_number = match.match_number
+        
+        # Delete the match
+        db.session.delete(match)
+        db.session.commit()
+        
+        # Notify alliance members
+        socketio.emit('alliance_match_deleted', {
+            'alliance_id': alliance_id,
+            'match_id': match_id,
+            'match_number': match_number,
+            'deleted_by': current_team
+        }, room=f'alliance_{alliance_id}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'Match {match_number} deleted'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting alliance match: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ======== IMPORT DATA FROM SCOUTING TEAMS ========
+
+@bp.route('/<int:alliance_id>/manage/import-data')
+@login_required
+@admin_required
+def import_data_page(alliance_id):
+    """Page to import YOUR OWN scouting data into the alliance"""
+    current_team = get_current_scouting_team_number()
+    
+    # Check if user is a member of this alliance
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        status='accepted'
+    ).first()
+    
+    if not member:
+        flash('You must be an alliance member to import data.', 'error')
+        return redirect(url_for('scouting_alliances.view_alliance', alliance_id=alliance_id))
+    
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    
+    # Get effective game config
+    from app.utils.config_manager import get_effective_game_config
+    game_config = get_effective_game_config()
+    
+    return render_template('scouting_alliances/import_data.html',
+                           alliance=alliance,
+                           member=member,
+                           game_config=game_config,
+                           current_team=current_team,
+                           **get_theme_context())
+
+
+@bp.route('/<int:alliance_id>/manage/import-data/scan', methods=['POST'])
+@login_required
+def scan_my_team_data(alliance_id):
+    """Scan current team's data to find entries that can be shared with alliance"""
+    current_team = get_current_scouting_team_number()
+    
+    # Check if user is a member of this alliance
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        status='accepted'
+    ).first()
+    
+    if not member:
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    
+    data = request.get_json() or {}
+    data_type = data.get('data_type', 'all')  # 'scouting', 'pit', or 'all'
+    
+    try:
+        # Get alliance event codes (optional - if none, show all team data)
+        alliance_events = alliance.get_shared_events()
+        
+        current_app.logger.info(f"[ImportScan] Team {current_team} scanning for alliance {alliance_id}")
+        current_app.logger.info(f"[ImportScan] Alliance events: {alliance_events}")
+        
+        # Get events for these codes
+        events = []
+        event_ids = []
+        if alliance_events:
+            events = Event.query.filter(Event.code.in_(alliance_events)).all()
+            event_ids = [e.id for e in events]
+            current_app.logger.info(f"[ImportScan] Found event IDs: {event_ids}")
+        
+        # Get ALL existing shared data in alliance to check for duplicates
+        # A duplicate is defined by match_id + team_id + alliance (for scouting)
+        # or just team_id (for pit)
+        existing_scouting_keys = set()
+        existing_pit_team_ids = set()
+        
+        # Get existing shared scouting data from ANY source
+        existing_shared_scouting = AllianceSharedScoutingData.query.filter_by(
+            alliance_id=alliance_id,
+            is_active=True
+        ).all()
+        
+        for shared in existing_shared_scouting:
+            # Create a unique key for comparison (match + team + alliance color)
+            key = (shared.match_id, shared.team_id, shared.alliance)
+            existing_scouting_keys.add(key)
+        
+        current_app.logger.info(f"[ImportScan] Existing scouting keys: {len(existing_scouting_keys)}")
+        
+        # Get existing shared pit data from ANY source
+        existing_shared_pit = AllianceSharedPitData.query.filter_by(
+            alliance_id=alliance_id,
+            is_active=True
+        ).all()
+        
+        for shared in existing_shared_pit:
+            existing_pit_team_ids.add(shared.team_id)
+        
+        current_app.logger.info(f"[ImportScan] Existing pit team IDs: {len(existing_pit_team_ids)}")
+        
+        results = {
+            'scouting_data': [],
+            'pit_data': [],
+            'source_team': current_team,
+            'alliance_events': alliance_events
+        }
+        
+        # Scan scouting data from CURRENT TEAM ONLY
+        if data_type in ['all', 'scouting']:
+            # Get all scouting data from current team
+            # EXCLUDE entries that were received from alliance (have [Alliance- prefix)
+            scouting_query = ScoutingData.query.filter(
+                ScoutingData.scouting_team_number == current_team
+            )
+            
+            # Exclude alliance-received data
+            scouting_query = scouting_query.filter(
+                db.or_(
+                    ScoutingData.scout_name == None,
+                    ~ScoutingData.scout_name.like('[Alliance-%')
+                )
+            )
+            
+            # If we have alliance events, filter by them
+            if event_ids:
+                scouting_query = scouting_query.join(Match).filter(
+                    Match.event_id.in_(event_ids)
+                )
+            
+            scouting_entries = scouting_query.all()
+            current_app.logger.info(f"[ImportScan] Found {len(scouting_entries)} scouting entries for team {current_team}")
+            
+            for entry in scouting_entries:
+                # Check if already exists in alliance (from ANY source)
+                key = (entry.match_id, entry.team_id, entry.alliance)
+                if key in existing_scouting_keys:
+                    current_app.logger.debug(f"[ImportScan] Skipping duplicate scouting entry: {key}")
+                    continue
+                
+                # Check if this was previously ignored/deleted
+                if AllianceDeletedData.is_deleted(
+                    alliance_id=alliance_id,
+                    data_type='scouting',
+                    match_id=entry.match_id,
+                    team_id=entry.team_id,
+                    alliance_color=entry.alliance,
+                    source_team=current_team
+                ):
+                    current_app.logger.debug(f"[ImportScan] Skipping deleted entry: {key}")
+                    continue
+                
+                # Add to results
+                results['scouting_data'].append({
+                    'id': entry.id,
+                    'team_number': entry.team.team_number if entry.team else 'Unknown',
+                    'team_name': entry.team.team_name if entry.team else 'Unknown',
+                    'match_number': entry.match.match_number if entry.match else 'Unknown',
+                    'match_type': entry.match.match_type if entry.match else 'Unknown',
+                    'event_code': entry.match.event.code if entry.match and entry.match.event else 'Unknown',
+                    'event_name': entry.match.event.name if entry.match and entry.match.event else 'Unknown',
+                    'alliance': entry.alliance,
+                    'scout_name': entry.scout_name,
+                    'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
+                    'data_preview': _get_data_preview(entry.data)
+                })
+        
+        # Scan pit data from CURRENT TEAM ONLY
+        if data_type in ['all', 'pit']:
+            # Get all pit data from current team
+            # EXCLUDE entries that were received from alliance (have [Alliance- prefix)
+            # Include NULL scouting_team_number for backwards compatibility
+            pit_query = PitScoutingData.query.filter(
+                db.or_(
+                    PitScoutingData.scouting_team_number == current_team,
+                    PitScoutingData.scouting_team_number == None
+                )
+            )
+            
+            # Exclude alliance-received data
+            pit_query = pit_query.filter(
+                db.or_(
+                    PitScoutingData.scout_name == None,
+                    ~PitScoutingData.scout_name.like('[Alliance-%')
+                )
+            )
+            
+            pit_entries = pit_query.all()
+            current_app.logger.info(f"[ImportScan] Found {len(pit_entries)} pit entries for team {current_team}")
+            
+            for entry in pit_entries:
+                # Check if already exists in alliance (from ANY source)
+                if entry.team_id in existing_pit_team_ids:
+                    current_app.logger.debug(f"[ImportScan] Skipping duplicate pit entry for team_id: {entry.team_id}")
+                    continue
+                
+                # Check if this was previously ignored/deleted
+                if AllianceDeletedData.is_deleted(
+                    alliance_id=alliance_id,
+                    data_type='pit',
+                    match_id=None,
+                    team_id=entry.team_id,
+                    alliance_color=None,
+                    source_team=current_team
+                ):
+                    continue
+                
+                # Add to results
+                results['pit_data'].append({
+                    'id': entry.id,
+                    'team_number': entry.team.team_number if entry.team else 'Unknown',
+                    'team_name': entry.team.team_name if entry.team else 'Unknown',
+                    'scout_name': entry.scout_name,
+                    'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
+                    'data_preview': _get_data_preview(entry.data)
+                })
+        
+        current_app.logger.info(f"[ImportScan] Results: {len(results['scouting_data'])} scouting, {len(results['pit_data'])} pit")
+        
+        return jsonify({
+            'success': True,
+            'results': results,
+            'total_scouting': len(results['scouting_data']),
+            'total_pit': len(results['pit_data'])
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error scanning team data: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _get_data_preview(data):
+    """Get a short preview of data for display"""
+    if not data:
+        return 'No data'
+    
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except:
+            return data[:100] + '...' if len(data) > 100 else data
+    
+    if isinstance(data, dict):
+        # Get first few key-value pairs
+        items = list(data.items())[:3]
+        preview_parts = []
+        for key, value in items:
+            if isinstance(value, (dict, list)):
+                preview_parts.append(f"{key}: [...]")
+            else:
+                str_val = str(value)
+                if len(str_val) > 20:
+                    str_val = str_val[:20] + '...'
+                preview_parts.append(f"{key}: {str_val}")
+        return ', '.join(preview_parts)
+    
+    return str(data)[:100]
+
+
+@bp.route('/<int:alliance_id>/manage/import-data/import', methods=['POST'])
+@login_required
+def import_selected_data(alliance_id):
+    """Import selected scouting data from current team into the alliance"""
+    current_team = get_current_scouting_team_number()
+    
+    # Check if user is a member of this alliance
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=current_team,
+        status='accepted'
+    ).first()
+    
+    if not member:
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+    
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    
+    data = request.get_json()
+    scouting_ids = data.get('scouting_ids', [])  # List of ScoutingData IDs to import
+    pit_ids = data.get('pit_ids', [])  # List of PitScoutingData IDs to import
+    ignore_ids = data.get('ignore_ids', [])  # IDs to mark as ignored (won't show again)
+    
+    try:
+        imported_scouting = 0
+        imported_pit = 0
+        ignored_count = 0
+        skipped_wrong_team = 0
+        skipped_duplicate = 0
+        
+        # Import scouting data
+        for scouting_id in scouting_ids:
+            entry = ScoutingData.query.get(scouting_id)
+            if not entry:
+                continue
+                
+            # Only allow importing data owned by current team
+            if entry.scouting_team_number != current_team:
+                skipped_wrong_team += 1
+                continue
+            
+            # Check if already exists from this source
+            existing = AllianceSharedScoutingData.query.filter_by(
+                alliance_id=alliance_id,
+                original_scouting_data_id=entry.id
+            ).first()
+            
+            if existing:
+                skipped_duplicate += 1
+                continue
+            
+            # Also check by match/team/alliance combo from ANY source
+            existing = AllianceSharedScoutingData.query.filter_by(
+                alliance_id=alliance_id,
+                match_id=entry.match_id,
+                team_id=entry.team_id,
+                alliance=entry.alliance,
+                is_active=True
+            ).first()
+            
+            if existing:
+                skipped_duplicate += 1
+                continue
+            
+            # Create shared copy
+            shared_copy = AllianceSharedScoutingData.create_from_scouting_data(
+                entry, alliance_id, current_team
+            )
+            db.session.add(shared_copy)
+            imported_scouting += 1
+        
+        # Import pit data
+        for pit_id in pit_ids:
+            entry = PitScoutingData.query.get(pit_id)
+            if not entry:
+                continue
+                
+            # Only allow importing data owned by current team
+            if entry.scouting_team_number != current_team:
+                skipped_wrong_team += 1
+                continue
+            
+            # Check if already exists from this source
+            existing = AllianceSharedPitData.query.filter_by(
+                alliance_id=alliance_id,
+                original_pit_data_id=entry.id
+            ).first()
+            
+            if existing:
+                skipped_duplicate += 1
+                continue
+            
+            # Also check by team from ANY source
+            existing = AllianceSharedPitData.query.filter_by(
+                alliance_id=alliance_id,
+                team_id=entry.team_id,
+                is_active=True
+            ).first()
+            
+            if existing:
+                skipped_duplicate += 1
+                continue
+            
+            # Create shared copy
+            shared_copy = AllianceSharedPitData.create_from_pit_data(
+                entry, alliance_id, current_team
+            )
+            db.session.add(shared_copy)
+            imported_pit += 1
+        
+        # Mark ignored entries as "deleted" so they won't show up again
+        for ignore_entry in ignore_ids:
+            ignore_type = ignore_entry.get('type')  # 'scouting' or 'pit'
+            ignore_id = ignore_entry.get('id')
+            
+            if ignore_type == 'scouting':
+                entry = ScoutingData.query.get(ignore_id)
+                if entry and entry.scouting_team_number == current_team:
+                    # Mark as deleted (ignored)
+                    deleted_record = AllianceDeletedData(
+                        alliance_id=alliance_id,
+                        data_type='scouting',
+                        match_id=entry.match_id,
+                        team_id=entry.team_id,
+                        alliance_color=entry.alliance,
+                        source_scouting_team_number=current_team,
+                        deleted_by_team=current_team
+                    )
+                    db.session.add(deleted_record)
+                    ignored_count += 1
+            
+            elif ignore_type == 'pit':
+                entry = PitScoutingData.query.get(ignore_id)
+                if entry and entry.scouting_team_number == current_team:
+                    # Mark as deleted (ignored)
+                    deleted_record = AllianceDeletedData(
+                        alliance_id=alliance_id,
+                        data_type='pit',
+                        match_id=None,
+                        team_id=entry.team_id,
+                        alliance_color=None,
+                        source_scouting_team_number=current_team,
+                        deleted_by_team=current_team
+                    )
+                    db.session.add(deleted_record)
+                    ignored_count += 1
+        
+        db.session.commit()
+        
+        # Notify alliance members
+        socketio.emit('alliance_data_imported', {
+            'alliance_id': alliance_id,
+            'source_team': current_team,
+            'imported_scouting': imported_scouting,
+            'imported_pit': imported_pit,
+            'imported_by': current_team
+        }, room=f'alliance_{alliance_id}')
+        
+        current_app.logger.info(f"[Import] Team {current_team} imported {imported_scouting} scouting, {imported_pit} pit. Skipped: {skipped_duplicate} duplicates, {skipped_wrong_team} wrong team")
+        
+        return jsonify({
+            'success': True,
+            'imported_scouting': imported_scouting,
+            'imported_pit': imported_pit,
+            'ignored_count': ignored_count,
+            'message': f'Imported {imported_scouting} scouting entries and {imported_pit} pit entries. {ignored_count} entries marked as ignored.'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error importing data: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500

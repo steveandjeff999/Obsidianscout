@@ -7,12 +7,36 @@
 {% block content %}
 <div class="card">
     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">All Scouting Data</h5>
-        <a href="{{ url_for('scouting.index') }}" class="btn btn-light btn-sm">
-            <i class="fas fa-arrow-left me-1"></i> Back to Scouting Dashboard
-        </a>
+        <h5 class="mb-0">
+            {% if is_alliance_mode %}
+            <i class="fas fa-users me-2"></i>Alliance Scouting Data
+            {% else %}
+            All Scouting Data
+            {% endif %}
+        </h5>
+        <div class="d-flex gap-2">
+            {% if is_alliance_mode %}
+            <span class="badge bg-warning text-dark">
+                <i class="fas fa-handshake me-1"></i>Alliance Mode Active
+            </span>
+            {% endif %}
+            <a href="{{ url_for('scouting.index') }}" class="btn btn-light btn-sm">
+                <i class="fas fa-arrow-left me-1"></i> Back to Scouting Dashboard
+            </a>
+        </div>
     </div>
     <div class="card-body">
+        {% if is_alliance_mode %}
+        <div class="alert alert-info mb-3">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Alliance Mode:</strong> Showing shared scouting data from all alliance members.
+            {% if user_is_alliance_admin %}
+            <span class="badge bg-success ms-2">You are an Alliance Admin</span>
+            {% else %}
+            <span class="text-muted ms-2">(You can only delete data you personally scouted)</span>
+            {% endif %}
+        </div>
+        {% endif %}
         {% if scouting_data %}        <div class="d-flex gap-3 mb-3">
             <div>
                 <label class="form-label">Filter by event:</label>
@@ -42,6 +66,7 @@
                         <th>Match</th>
                         <th>Alliance</th>
                         <th>Scout</th>
+                        {% if is_alliance_mode %}<th>Source Team</th>{% endif %}
                         <th>Station</th>
                         <th>Timestamp</th>
                         <th>Actions</th>
@@ -67,24 +92,45 @@
                             </span>
                         </td>
                         <td>{{ data.scout_name }}</td>
-                        <td>{{ data.scouting_station }}</td>
+                        {% if is_alliance_mode %}
+                        <td>
+                            <span class="badge bg-info">Team {{ data.source_scouting_team_number }}</span>
+                        </td>
+                        {% endif %}
+                        <td>{{ data.scouting_station if data.scouting_station else '-' }}</td>
                         <td>{{ data.timestamp.strftime('%m/%d/%Y %H:%M') }}</td>
                         <td>
                             <div class="btn-group" role="group">
+                                {% if is_alliance_mode %}
+                                <a href="{{ url_for('scouting.view_data', id=data.id, shared_id=data.id) }}" class="btn btn-sm btn-primary" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                {% else %}
                                 <a href="{{ url_for('scouting.view_data', id=data.id) }}" class="btn btn-sm btn-primary" title="View">
                                     <i class="fas fa-eye"></i>
                                 </a>
                                 <a href="{{ url_for('scouting.scouting_form', team_id=data.team_id, match_id=data.match_id) }}" class="btn btn-sm btn-warning" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </a>
-                                <button type="button" class="btn btn-sm btn-danger double-confirm-delete" title="Delete" data-entry-id="{{ data.id }}">
+                                {% endif %}
+                                {% set can_delete = user_is_alliance_admin or (current_user.username and current_user.username|lower in (data.scout_name|lower if data.scout_name else '')) or (not is_alliance_mode) %}
+                                {% if can_delete %}
+                                <button type="button" class="btn btn-sm btn-danger double-confirm-delete" title="Delete" data-entry-id="{{ data.id }}" {% if is_alliance_mode %}data-shared-id="{{ data.id }}"{% endif %}>
                                     <i class="fas fa-trash"></i>
                                 </button>
+                                {% else %}
+                                <button type="button" class="btn btn-sm btn-secondary" title="Only alliance admins or the original scout can delete" disabled>
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                {% endif %}
                             </div>
                             
                             <!-- Hidden form for double-confirm delete behavior (scripts.js will submit on second click) -->
                             <form id="delete-form-{{ data.id }}" action="{{ url_for('scouting.delete_data', id=data.id) }}" method="post" class="d-none">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                {% if is_alliance_mode %}
+                                <input type="hidden" name="shared_id" value="{{ data.id }}">
+                                {% endif %}
                             </form>
                         </td>
                     </tr>

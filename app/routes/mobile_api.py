@@ -17,10 +17,11 @@ import statistics
 
 from app.models import (
     User, Team, Event, Match, ScoutingData, PitScoutingData, 
-    DoNotPickEntry, AvoidEntry, ScoutingAllianceChat, TeamAllianceStatus, ScoutingDirectMessage, db
+    DoNotPickEntry, AvoidEntry, ScoutingAllianceChat, TeamAllianceStatus, ScoutingDirectMessage, db, Role,
+    AllianceSharedScoutingData, AllianceSharedPitData
 )
 from app import load_user_chat_history, load_group_chat_history, load_assistant_chat_history, save_user_chat_history, save_group_chat_history, get_user_chat_file_path, load_group_members, save_group_members, get_group_members_file_path
-from app.models_misc import NotificationQueue, NotificationSubscription, NotificationLog
+from app.models_misc import NotificationQueue, NotificationSubscription, NotificationLog, DeviceToken
 from app.utils.team_isolation import (
     get_current_scouting_team_number,
     filter_matches_by_scouting_team,
@@ -28,12 +29,20 @@ from app.utils.team_isolation import (
 )
 from app.utils.analysis import calculate_team_metrics
 from app.utils.api_utils import safe_int_team_number
+from app.utils.alliance_data import (
+    get_active_alliance_id_for_team,
+    get_scouting_data_query_for_team,
+    get_pit_data_query_for_team,
+    get_all_teams_for_alliance,
+    get_all_matches_for_alliance
+)
 from werkzeug.security import check_password_hash
 from app.assistant.visualizer import Visualizer
 
 # Create blueprint
 mobile_api = Blueprint('mobile_api', __name__, url_prefix='/api/mobile')
 
+from werkzeug.utils import secure_filename
 # Blueprint error handlers: return JSON for common HTTP errors so mobile clients
 # don't receive HTML error pages. These apply to errors raised while handling
 # requests under this blueprint.
@@ -330,6 +339,72 @@ def token_required(f):
         return f(*args, **kwargs)
     
     return decorated_function
+
+
+def sync_scouting_to_alliance(scouting_data_entry, team_number):
+    """Sync scouting data to alliance shared tables if alliance mode is active for the team"""
+    try:
+        alliance_id = get_active_alliance_id_for_team(team_number)
+        if not alliance_id:
+            return  # No active alliance
+        
+        # Check if shared entry already exists
+        existing_shared = AllianceSharedScoutingData.query.filter_by(
+            alliance_id=alliance_id,
+            original_scouting_data_id=scouting_data_entry.id,
+            is_active=True
+        ).first()
+        
+        if existing_shared:
+            # Update existing shared data
+            existing_shared.data = scouting_data_entry.data
+            existing_shared.scout_name = scouting_data_entry.scout_name
+            existing_shared.scout_id = scouting_data_entry.scout_id
+            existing_shared.scouting_station = getattr(scouting_data_entry, 'scouting_station', None)
+            existing_shared.alliance = getattr(scouting_data_entry, 'alliance', None)
+            existing_shared.timestamp = scouting_data_entry.timestamp
+            existing_shared.last_edited_by_team = team_number
+            existing_shared.last_edited_at = datetime.now(timezone.utc)
+        else:
+            # Create new shared data entry
+            shared_data = AllianceSharedScoutingData.create_from_scouting_data(
+                scouting_data_entry, alliance_id, team_number
+            )
+            db.session.add(shared_data)
+    except Exception as e:
+        current_app.logger.error(f"Error syncing scouting to alliance: {str(e)}")
+
+
+def sync_pit_to_alliance(pit_data_entry, team_number):
+    """Sync pit scouting data to alliance shared tables if alliance mode is active for the team"""
+    try:
+        alliance_id = get_active_alliance_id_for_team(team_number)
+        if not alliance_id:
+            return  # No active alliance
+        
+        # Check if shared entry already exists
+        existing_shared = AllianceSharedPitData.query.filter_by(
+            alliance_id=alliance_id,
+            original_pit_data_id=pit_data_entry.id,
+            is_active=True
+        ).first()
+        
+        if existing_shared:
+            # Update existing shared data
+            existing_shared.data = pit_data_entry.data
+            existing_shared.scout_name = pit_data_entry.scout_name
+            existing_shared.scout_id = pit_data_entry.scout_id
+            existing_shared.timestamp = pit_data_entry.timestamp
+            existing_shared.last_edited_by_team = team_number
+            existing_shared.last_edited_at = datetime.now(timezone.utc)
+        else:
+            # Create new shared data entry
+            shared_data = AllianceSharedPitData.create_from_pit_data(
+                pit_data_entry, alliance_id, team_number
+            )
+            db.session.add(shared_data)
+    except Exception as e:
+        current_app.logger.error(f"Error syncing pit data to alliance: {str(e)}")
 
 
 # ============================================================================
@@ -722,6 +797,380 @@ def mobile_register():
 # TEAM DATA ENDPOINTS
 # ============================================================================
 
+
+@mobile_api.route('/admin/users/<int:user_id>', methods=['PUT', 'PATCH'])
+@token_required
+def mobile_update_user(user_id):
+    """Update a user's profile/roles/active state using mobile API.
+
+    Mirrors the /auth/users web update behavior for admins and superadmins.
+    """
+    try:
+        actor = getattr(request, 'mobile_user', None)
+        if not actor:
+            return jsonify({'success': False, 'error': 'Authentication required', 'error_code': 'AUTH_REQUIRED'}), 401
+        target = User.query.get(user_id)
+        if not target:
+            return jsonify({'success': False, 'error': 'User not found', 'error_code': 'USER_NOT_FOUND'}), 404
+
+        # Determine privilege
+        is_super = actor.has_role('superadmin')
+        is_team_admin = actor.has_role('admin') and (getattr(actor, 'scouting_team_number', None) is not None and getattr(actor, 'scouting_team_number') == getattr(target, 'scouting_team_number', None))
+
+        if not (is_super or is_team_admin):
+            return jsonify({'success': False, 'error': 'Permission denied', 'error_code': 'PERMISSION_DENIED'}), 403
+
+        # Prevent team-admins from modifying superadmins
+        if target.has_role('superadmin') and not is_super:
+            return jsonify({'success': False, 'error': 'Cannot modify superadmin user', 'error_code': 'PERMISSION_DENIED'}), 403
+
+        data = request.get_json() or {}
+
+        # If superadmin: allow username and scouting_team_number change
+        if is_super:
+            if 'username' in data:
+                new_username = data.get('username')
+                try:
+                    new_team_raw = data.get('scouting_team_number')
+                    new_team = safe_int_team_number(new_team_raw) if new_team_raw not in (None, '') else None
+                except Exception:
+                    new_team = data.get('scouting_team_number')
+                if new_username:
+                    conflict = User.query.filter(User.username == new_username, User.scouting_team_number == new_team, User.id != target.id).first()
+                    if conflict:
+                        return jsonify({'success': False, 'error': 'Username conflict for target team', 'error_code': 'USERNAME_CONFLICT'}), 409
+                    target.username = new_username
+                if 'scouting_team_number' in data:
+                    target.scouting_team_number = new_team
+
+        # Password
+        if 'password' in data and data.get('password'):
+            target.set_password(data.get('password'))
+
+        # Active status
+        if 'is_active' in data:
+            target.is_active = bool(data.get('is_active'))
+
+        # Email update - check uniqueness
+        if 'email' in data:
+            email_val = data.get('email') or None
+            if email_val and User.query.filter(User.email == email_val, User.id != target.id).first():
+                return jsonify({'success': False, 'error': 'Email already in use', 'error_code': 'EMAIL_EXISTS'}), 409
+            target.email = email_val
+
+        # Roles: list of role names (string) allowed; team-admins may not assign superadmin
+        if 'roles' in data:
+            roles_list = data.get('roles') or []
+            if not isinstance(roles_list, list):
+                return jsonify({'success': False, 'error': 'roles must be a list', 'error_code': 'INVALID_ROLES'}), 400
+            # Team-admins cannot change their own roles unless superadmin
+            if actor.id == target.id and not is_super:
+                return jsonify({'success': False, 'error': 'Cannot modify your own roles', 'error_code': 'PERMISSION_DENIED'}), 403
+            target.roles.clear()
+            for rname in roles_list:
+                try:
+                    role_obj = Role.query.filter_by(name=str(rname)).first()
+                except Exception:
+                    role_obj = None
+                # If not found by name, try numeric id lookup for backwards compatibility
+                if not role_obj:
+                    try:
+                        rid = int(rname)
+                        role_obj = Role.query.get(rid)
+                    except Exception:
+                        role_obj = None
+                if role_obj:
+                    if role_obj.name == 'superadmin' and not is_super:
+                        return jsonify({'success': False, 'error': 'Only superadmins can assign superadmin role', 'error_code': 'PERMISSION_DENIED'}), 403
+                    target.roles.append(role_obj)
+
+        db.session.commit()
+        return jsonify({'success': True, 'user': {
+            'id': target.id,
+            'username': target.username,
+            'email': target.email,
+            'team_number': target.scouting_team_number,
+            'roles': target.get_role_names(),
+            'is_active': target.is_active
+        }}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception(f"mobile_update_user error: {e}")
+        return jsonify({'success': False, 'error': 'Failed to update user', 'error_code': 'UPDATE_ERROR'}), 500
+
+            # Scope to actor's team
+
+        users = query.all()
+        users_data = [{
+            'id': u.id,
+            'username': u.username,
+            'email': u.email,
+            'team_number': u.scouting_team_number,
+            'roles': u.get_role_names(),
+            'is_active': u.is_active
+        } for u in users]
+        return jsonify({'success': True, 'users': users_data, 'count': len(users_data)}), 200
+    except Exception as e:
+        current_app.logger.exception(f"mobile_list_users error: {e}")
+        return jsonify({'success': False, 'error': 'Failed to list users', 'error_code': 'USERS_ERROR'}), 500
+
+
+    
+
+
+    
+
+
+    
+
+
+
+@mobile_api.route('/admin/roles', methods=['GET'])
+@token_required
+def mobile_list_roles():
+    """List available roles for assignment. Admin-only (any admin/superadmin)."""
+    try:
+        actor = getattr(request, 'mobile_user', None)
+        if not actor or not (actor.has_role('admin') or actor.has_role('superadmin')):
+            return jsonify({'success': False, 'error': 'Permission denied', 'error_code': 'PERMISSION_DENIED'}), 403
+        roles = Role.query.all()
+        roles_data = [{'id': r.id, 'name': r.name, 'description': r.description} for r in roles]
+        return jsonify({'success': True, 'roles': roles_data}), 200
+    except Exception as e:
+        current_app.logger.exception(f"mobile_list_roles error: {e}")
+        return jsonify({'success': False, 'error': 'Failed to list roles', 'error_code': 'ROLES_ERROR'}), 500
+
+
+@mobile_api.route('/admin/users', methods=['GET'])
+@token_required
+def mobile_list_users():
+    """List users. Scopes to admin's team unless superadmin."""
+    try:
+        actor = getattr(request, 'mobile_user', None)
+        if not actor or not (actor.has_role('admin') or actor.has_role('superadmin')):
+            return jsonify({'success': False, 'error': 'Permission denied', 'error_code': 'PERMISSION_DENIED'}), 403
+
+        query = User.query
+        search = request.args.get('search')
+        if search:
+            from sqlalchemy import or_, func
+            if search.isdigit():
+                query = query.filter(or_(User.username.contains(search), User.scouting_team_number == int(search)))
+            else:
+                query = query.filter(or_(User.username.contains(search), func.cast(User.scouting_team_number, db.String).contains(search)))
+
+        if not actor.has_role('superadmin'):
+            query = query.filter_by(scouting_team_number=actor.scouting_team_number)
+
+        # By default, exclude inactive users (soft-deleted). Allow admin clients
+        # to include them explicitly via the 'include_inactive' query parameter.
+        include_inactive = request.args.get('include_inactive', '0')
+        if str(include_inactive).lower() not in ('1', 'true', 'yes', 'on'):
+            query = query.filter_by(is_active=True)
+
+        users = query.all()
+        users_data = []
+        for u in users:
+            users_data.append({
+                'id': u.id,
+                'username': u.username,
+                'email': u.email,
+                'team_number': u.scouting_team_number,
+                'roles': u.get_role_names(),
+                'is_active': u.is_active
+            })
+        return jsonify({'success': True, 'users': users_data, 'count': len(users_data)}), 200
+    except Exception as e:
+        current_app.logger.exception(f"mobile_list_users error: {e}")
+        return jsonify({'success': False, 'error': 'Failed to list users', 'error_code': 'USERS_LIST_ERROR'}), 500
+
+
+@mobile_api.route('/admin/users', methods=['POST'])
+@token_required
+def mobile_create_user():
+    """Create a new user. Admins can create within their team; superadmins can set team."""
+    try:
+        actor = getattr(request, 'mobile_user', None)
+        if not actor or not (actor.has_role('admin') or actor.has_role('superadmin')):
+            return jsonify({'success': False, 'error': 'Permission denied', 'error_code': 'PERMISSION_DENIED'}), 403
+
+        data = request.get_json() or {}
+        username = data.get('username')
+        password = data.get('password')
+        email = data.get('email')
+        team_raw = data.get('scouting_team_number')
+        if not username or not password:
+            return jsonify({'success': False, 'error': 'username and password required', 'error_code': 'MISSING_FIELDS'}), 400
+
+        if not actor.has_role('superadmin'):
+            team_number = actor.scouting_team_number
+        else:
+            team_number = safe_int_team_number(team_raw) if team_raw not in (None, '') else None
+
+        # Username uniqueness per-team
+        if User.query.filter_by(username=username, scouting_team_number=team_number).first():
+            return jsonify({'success': False, 'error': 'Username already exists for that team', 'error_code': 'USERNAME_EXISTS'}), 409
+
+        if email == '':
+            email = None
+        if email and User.query.filter_by(email=email).first():
+            return jsonify({'success': False, 'error': 'Email already exists', 'error_code': 'EMAIL_EXISTS'}), 409
+
+        user = User(username=username, email=email, scouting_team_number=team_number)
+        user.set_password(password)
+
+        # Assign roles
+        roles_list = data.get('roles') or []
+        for r in roles_list:
+            role_obj = None
+            try:
+                role_obj = Role.query.filter_by(name=str(r)).first()
+            except Exception:
+                pass
+            if not role_obj:
+                try:
+                    role_obj = Role.query.get(int(r))
+                except Exception:
+                    role_obj = None
+            if role_obj:
+                if role_obj.name == 'superadmin' and not actor.has_role('superadmin'):
+                    return jsonify({'success': False, 'error': 'Only superadmins can assign superadmin role', 'error_code': 'PERMISSION_DENIED'}), 403
+                user.roles.append(role_obj)
+
+        db.session.add(user)
+        db.session.flush()
+
+        # If first user for team, grant admin role
+        try:
+            count = User.query.filter_by(scouting_team_number=team_number).count()
+            if count == 1:
+                admin_role = Role.query.filter_by(name='admin').first()
+                if admin_role:
+                    user.roles.append(admin_role)
+        except Exception:
+            pass
+
+        db.session.commit()
+
+        return jsonify({'success': True, 'user': {'id': user.id, 'username': user.username, 'email': user.email, 'team_number': user.scouting_team_number, 'roles': user.get_role_names()}}), 201
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception(f"mobile_create_user error: {e}")
+        return jsonify({'success': False, 'error': 'Failed to create user', 'error_code': 'CREATE_USER_ERROR'}), 500
+
+
+@mobile_api.route('/admin/users/<int:user_id>', methods=['GET'])
+@token_required
+def mobile_get_user(user_id):
+    """Return user details. Scoped to admin's team unless superadmin."""
+    try:
+        actor = getattr(request, 'mobile_user', None)
+        if not actor or not (actor.has_role('admin') or actor.has_role('superadmin')):
+            return jsonify({'success': False, 'error': 'Permission denied', 'error_code': 'PERMISSION_DENIED'}), 403
+
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'success': False, 'error': 'User not found', 'error_code': 'USER_NOT_FOUND'}), 404
+
+        if not actor.has_role('superadmin') and user.scouting_team_number != actor.scouting_team_number:
+            return jsonify({'success': False, 'error': 'Permission denied', 'error_code': 'PERMISSION_DENIED'}), 403
+
+        # Hide inactive users by default to mimic list behavior; allow retrieval when
+        # explicitly requested via 'include_inactive' query parameter.
+        include_inactive = request.args.get('include_inactive', '0')
+        if not user.is_active and str(include_inactive).lower() not in ('1', 'true', 'yes', 'on'):
+            return jsonify({'success': False, 'error': 'User not found', 'error_code': 'USER_NOT_FOUND'}), 404
+
+        return jsonify({'success': True, 'user': {'id': user.id, 'username': user.username, 'email': user.email, 'team_number': user.scouting_team_number, 'roles': user.get_role_names(), 'is_active': user.is_active}}), 200
+    except Exception as e:
+        current_app.logger.exception(f"mobile_get_user error: {e}")
+        return jsonify({'success': False, 'error': 'Failed to retrieve user', 'error_code': 'USER_GET_ERROR'}), 500
+
+
+    except Exception as e:
+        current_app.logger.exception(f"mobile_get_user error: {e}")
+        return jsonify({'success': False, 'error': 'Failed to retrieve user', 'error_code': 'USER_GET_ERROR'}), 500
+
+
+@mobile_api.route('/admin/users/<int:user_id>', methods=['DELETE'])
+@token_required
+def mobile_delete_user(user_id):
+    """Soft-delete (deactivate) a user. Team-admin cannot deactivate superadmin; cannot delete themselves."""
+    try:
+        actor = getattr(request, 'mobile_user', None)
+        if not actor or not (actor.has_role('admin') or actor.has_role('superadmin')):
+            return jsonify({'success': False, 'error': 'Permission denied', 'error_code': 'PERMISSION_DENIED'}), 403
+
+        user = User.query.get_or_404(user_id)
+
+        # Prevent deleting self
+        if user.id == actor.id:
+            return jsonify({'success': False, 'error': 'You cannot delete your own account', 'error_code': 'PERMISSION_DENIED'}), 403
+
+        # Allow deletion by superadmins, or team-admins for users in their same team
+        is_super = actor.has_role('superadmin')
+        is_team_admin = actor.has_role('admin') and (getattr(actor, 'scouting_team_number', None) == getattr(user, 'scouting_team_number', None))
+        if not (is_super or is_team_admin):
+            return jsonify({'success': False, 'error': 'Permission denied', 'error_code': 'PERMISSION_DENIED'}), 403
+
+        # Prevent deleting other superadmins
+        if user.has_role('superadmin') and not is_super:
+            return jsonify({'success': False, 'error': 'Cannot permanently delete superadmin user', 'error_code': 'PERMISSION_DENIED'}), 403
+
+        # Begin cleanup across binds: clear roles and remove device/subscription rows
+        try:
+            # Remove role associations (users bind)
+            user.roles.clear()
+
+            # Anonymize ScoutingData and PitScoutingData entries that reference this user as scout
+            try:
+                ScoutingData.query.filter(ScoutingData.scout_id == user.id).update({ 'scout_id': None, 'scout_name': None }, synchronize_session=False)
+            except Exception:
+                pass
+            try:
+                PitScoutingData.query.filter(PitScoutingData.scout_id == user.id).update({ 'scout_id': None, 'scout_name': None }, synchronize_session=False)
+            except Exception:
+                pass
+
+            # Sanitize direct messages referencing this user
+            try:
+                ScoutingDirectMessage.query.filter(ScoutingDirectMessage.sender_id == user.id).update({ 'sender_id': None }, synchronize_session=False)
+                ScoutingDirectMessage.query.filter(ScoutingDirectMessage.recipient_id == user.id).update({ 'recipient_id': None }, synchronize_session=False)
+            except Exception:
+                pass
+
+            # Remove device tokens and notification subscriptions (misc bind)
+            try:
+                DeviceToken.query.filter_by(user_id=user.id).delete()
+            except Exception:
+                pass
+            try:
+                NotificationSubscription.query.filter_by(user_id=user.id).delete()
+            except Exception:
+                pass
+        except Exception as cleanup_err:
+            current_app.logger.exception(f"mobile_delete_user cleanup error: {cleanup_err}")
+
+        # Perform the hard delete (permanent)
+        try:
+            db.session.delete(user)
+            db.session.commit()
+            try:
+                current_app.logger.info(f"mobile_delete_user: actor={actor.id} target={user.id} permanently deleted")
+            except Exception:
+                pass
+            return jsonify({'success': True, 'message': 'User permanently deleted'}), 200
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.exception(f"mobile_delete_user error: {e}")
+            return jsonify({'success': False, 'error': 'Failed to permanently delete user', 'error_code': 'DELETE_USER_ERROR'}), 500
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception(f"mobile_delete_user error: {e}")
+        return jsonify({'success': False, 'error': 'Failed to deactivate user', 'error_code': 'DELETE_USER_ERROR'}), 500
+
+
 @mobile_api.route('/teams', methods=['GET'])
 @token_required
 def get_teams():
@@ -731,8 +1180,9 @@ def get_teams():
     Query params:
     - event_id: Filter by event (optional)
     - limit: Max results (default 100)
+            actor = getattr(request, 'mobile_user', None)
     - offset: Pagination offset (default 0)
-    
+            
     Response:
     {
         "success": true,
@@ -750,7 +1200,8 @@ def get_teams():
         try:
             alliance = TeamAllianceStatus.get_active_alliance_for_team(team_number)
             if alliance:
-                alliance_member_numbers = alliance.get_member_team_numbers()
+                # Use get_all_team_numbers to include game_config_team for data filtering
+                alliance_member_numbers = alliance.get_all_team_numbers()
         except Exception:
             alliance = None
 
@@ -951,7 +1402,8 @@ def get_team_details(team_id):
         try:
             alliance = TeamAllianceStatus.get_active_alliance_for_team(team_number)
             if alliance:
-                alliance_member_numbers = alliance.get_member_team_numbers()
+                # Use get_all_team_numbers to include game_config_team for data filtering
+                alliance_member_numbers = alliance.get_all_team_numbers()
         except Exception:
             alliance = None
 
@@ -1058,7 +1510,8 @@ def get_events():
         try:
             alliance = TeamAllianceStatus.get_active_alliance_for_team(team_number)
             if alliance:
-                alliance_member_numbers = alliance.get_member_team_numbers()
+                # Use get_all_team_numbers to include game_config_team for data filtering
+                alliance_member_numbers = alliance.get_all_team_numbers()
         except Exception:
             alliance = None
 
@@ -1155,6 +1608,7 @@ def get_matches():
     
     Query params:
     - event_id: Filter by event (required)
+            alliance = TeamAllianceStatus.get_active_alliance_for_team(team_number)
     - match_type: Filter by match type (optional)
     - team_number: Filter by team (optional)
     
@@ -1190,7 +1644,8 @@ def get_matches():
         try:
             alliance = TeamAllianceStatus.get_active_alliance_for_team(team_number)
             if alliance:
-                alliance_member_numbers = alliance.get_member_team_numbers()
+                # Use get_all_team_numbers to include game_config_team for data filtering
+                alliance_member_numbers = alliance.get_all_team_numbers()
         except Exception:
             alliance = None
         
@@ -1380,6 +1835,10 @@ def submit_scouting_data():
         db.session.add(scouting_data)
         db.session.commit()
         
+        # Sync to alliance if active
+        sync_scouting_to_alliance(scouting_data, team_number)
+        db.session.commit()
+        
         return jsonify({
             'success': True,
             'scouting_id': scouting_data.id,
@@ -1488,6 +1947,9 @@ def bulk_submit_scouting_data():
                 db.session.add(scouting_data)
                 db.session.flush()  # Get ID without committing
                 
+                # Sync to alliance if active
+                sync_scouting_to_alliance(scouting_data, team_number)
+                
                 results.append({
                     'offline_id': entry.get('offline_id'),
                     'success': True,
@@ -1581,6 +2043,7 @@ def get_scouting_history():
 def get_all_scouting_data():
     """
     Return scouting data rows for the scouting team with optional filters.
+    Uses alliance shared data if alliance mode is active for the team.
 
     Query params:
     - team_number (int) or team_id (int): filter by team
@@ -1594,7 +2057,8 @@ def get_all_scouting_data():
       "success": true,
       "count": 10,
       "total": 123,
-      "entries": [{...}]
+      "entries": [{...}],
+      "is_alliance_mode": false
     }
     """
     try:
@@ -1623,82 +2087,143 @@ def get_all_scouting_data():
                 except Exception:
                     current_app.logger.debug(f"Error resolving event code '{event_param}' in scouting/all\n{traceback.format_exc()}")
 
-        # Scoping: by default mobile API is scoped to the token's scouting_team_number.
-        # For testing, clients may pass scoped=0 to retrieve rows regardless of scouting_team_number.
-        scoped_param = request.args.get('scoped', '1')
-        scoped = False if str(scoped_param).lower() in ('0', 'false', 'no', 'off') else True
-
         limit = min(request.args.get('limit', 200, type=int), 2000)
         offset = request.args.get('offset', 0, type=int)
 
-        # Build query mirroring the web /scouting/list logic:
-        # Start with ScoutingData filtered by the token's scouting_team_number,
-        # then optionally filter by which team was scouted, event, or match.
-        base_q = ScoutingData.query.filter_by(scouting_team_number=team_number)
+        # Check if alliance mode is active for this team
+        alliance_id = get_active_alliance_id_for_team(team_number)
+        is_alliance_mode = alliance_id is not None
 
-        # Optional filter: which team was scouted (team_id or team_number)
-        # This is about the *scouted* team (Team.id or Team.team_number), not the scouting team.
-        # IMPORTANT: If user passes team_number that matches their own scouting_team_number,
-        # ignore it (common mistake — they want all data for their scouting team, not filtered).
-        if q_team_id:
-            base_q = base_q.filter(ScoutingData.team_id == q_team_id)
-        elif q_team_number and q_team_number != team_number:
-            # Only filter if q_team_number is different from the token's scouting team.
-            # Resolve Team.id for the *scouted* team_number.
-            # Look for a Team record with that team_number. Prefer one scoped to the
-            # token's scouting_team_number if it exists, otherwise any team with that number.
+        # Resolve team_id if team_number filter is provided
+        resolved_team_id = q_team_id
+        if not resolved_team_id and q_team_number and q_team_number != team_number:
             t_scouted = Team.query.filter_by(team_number=q_team_number, scouting_team_number=team_number).first()
             if not t_scouted:
                 t_scouted = Team.query.filter_by(team_number=q_team_number).first()
             if t_scouted:
-                base_q = base_q.filter(ScoutingData.team_id == t_scouted.id)
+                resolved_team_id = t_scouted.id
             else:
-                # No such team exists; return empty
-                return jsonify({'success': True, 'count': 0, 'total': 0, 'entries': []}), 200
+                return jsonify({'success': True, 'count': 0, 'total': 0, 'entries': [], 'is_alliance_mode': is_alliance_mode}), 200
 
-        # Optional filter: by match_id
-        if match_id:
-            base_q = base_q.filter(ScoutingData.match_id == match_id)
+        if is_alliance_mode:
+            # Alliance mode - query from shared tables
+            # Note: Must query by team_number, not team_id, because different alliance members
+            # have different team_id values for the same team_number
+            base_q = AllianceSharedScoutingData.query.filter_by(
+                alliance_id=alliance_id,
+                is_active=True
+            )
+            
+            # Apply team filter by team_number if provided
+            team_number_filter = q_team_number
+            if not team_number_filter and resolved_team_id:
+                t_for_filter = Team.query.get(resolved_team_id)
+                if t_for_filter:
+                    team_number_filter = t_for_filter.team_number
+            
+            if team_number_filter:
+                # Join with Team and filter by team_number
+                base_q = base_q.join(
+                    Team, AllianceSharedScoutingData.team_id == Team.id
+                ).filter(Team.team_number == team_number_filter)
+            
+            if match_id:
+                # Note: match_id filtering in alliance mode may need similar treatment
+                # for now, filter by match_id directly since it references the source team's match
+                base_q = base_q.filter(AllianceSharedScoutingData.match_id == match_id)
+            
+            # Join for related data (only if not already joined)
+            if team_number_filter:
+                # Team already joined, just add Match and Event
+                joined_q = base_q.join(Match, AllianceSharedScoutingData.match_id == Match.id).join(Event, Match.event_id == Event.id)
+            else:
+                joined_q = base_q.join(Match, AllianceSharedScoutingData.match_id == Match.id).join(Team, AllianceSharedScoutingData.team_id == Team.id).join(Event, Match.event_id == Event.id)
+            
+            if event_id:
+                # Filter by event code, not event_id, since event_ids differ across alliance members
+                event_for_filter = Event.query.get(event_id)
+                if event_for_filter and event_for_filter.code:
+                    from sqlalchemy import func
+                    joined_q = joined_q.filter(func.upper(Event.code) == func.upper(event_for_filter.code))
+                else:
+                    joined_q = joined_q.filter(Match.event_id == event_id)
+            
+            total = joined_q.count()
+            rows = joined_q.order_by(AllianceSharedScoutingData.timestamp.desc()).offset(offset).limit(limit).all()
+            
+            entries = []
+            for r in rows:
+                team_obj = getattr(r, 'team', None)
+                match_obj = getattr(r, 'match', None)
+                event_obj = getattr(match_obj, 'event', None) if match_obj else None
 
-        # Join Match, Team, and Event to populate related fields in the response.
-        # Mirror /scouting/list which does:
-        #   ScoutingData.query.filter_by(scouting_team_number=...).join(Match).join(Event).join(Team)
-        joined_q = base_q.join(Match, ScoutingData.match_id == Match.id).join(Team, ScoutingData.team_id == Team.id).join(Event, Match.event_id == Event.id)
+                entries.append({
+                    'id': r.id,
+                    'shared_id': r.id,
+                    'original_id': r.original_scouting_data_id,
+                    'team_id': r.team_id,
+                    'team_number': team_obj.team_number if team_obj else None,
+                    'team_name': team_obj.team_name if team_obj else None,
+                    'match_id': r.match_id,
+                    'match_number': match_obj.match_number if match_obj else None,
+                    'match_type': match_obj.match_type if match_obj else None,
+                    'event_id': event_obj.id if event_obj else None,
+                    'event_code': event_obj.code if event_obj else None,
+                    'alliance': r.alliance,
+                    'scout_name': r.scout_name,
+                    'scout_id': r.scout_id,
+                    'scouting_station': r.scouting_station,
+                    'timestamp': r.timestamp.isoformat() if r.timestamp else None,
+                    'scouting_team_number': r.source_scouting_team_number,
+                    'source_team': r.source_scouting_team_number,
+                    'data': r.data,
+                    'is_alliance_data': True
+                })
+        else:
+            # Normal mode - query from team's data
+            base_q = ScoutingData.query.filter_by(scouting_team_number=team_number)
 
-        # Optional filter: by event_id (after joining)
-        if event_id:
-            joined_q = joined_q.filter(Match.event_id == event_id)
+            if resolved_team_id:
+                base_q = base_q.filter(ScoutingData.team_id == resolved_team_id)
 
-        total = joined_q.count()
-        rows = joined_q.order_by(ScoutingData.timestamp.desc()).offset(offset).limit(limit).all()
+            if match_id:
+                base_q = base_q.filter(ScoutingData.match_id == match_id)
 
-        entries = []
-        for r in rows:
-            # Access related objects safely (they may be None)
-            team_obj = getattr(r, 'team', None)
-            match_obj = getattr(r, 'match', None)
-            event_obj = getattr(match_obj, 'event', None) if match_obj else None
+            joined_q = base_q.join(Match, ScoutingData.match_id == Match.id).join(Team, ScoutingData.team_id == Team.id).join(Event, Match.event_id == Event.id)
 
-            entries.append({
-                'id': r.id,
-                'team_id': r.team_id,
-                'team_number': team_obj.team_number if team_obj else None,
-                'team_name': team_obj.team_name if team_obj else None,
-                'match_id': r.match_id,
-                'match_number': match_obj.match_number if match_obj else None,
-                'match_type': match_obj.match_type if match_obj else None,
-                'event_id': event_obj.id if event_obj else None,
-                'event_code': event_obj.code if event_obj else None,
-                'alliance': r.alliance,
-                'scout_name': r.scout_name,
-                'scout_id': r.scout_id,
-                'scouting_station': r.scouting_station,
-                'timestamp': r.timestamp.isoformat() if r.timestamp else None,
-                'scouting_team_number': r.scouting_team_number,
-                'data': r.data
-            })
+            if event_id:
+                joined_q = joined_q.filter(Match.event_id == event_id)
 
-        return jsonify({'success': True, 'count': len(entries), 'total': total, 'entries': entries}), 200
+            total = joined_q.count()
+            rows = joined_q.order_by(ScoutingData.timestamp.desc()).offset(offset).limit(limit).all()
+
+            entries = []
+            for r in rows:
+                team_obj = getattr(r, 'team', None)
+                match_obj = getattr(r, 'match', None)
+                event_obj = getattr(match_obj, 'event', None) if match_obj else None
+
+                entries.append({
+                    'id': r.id,
+                    'team_id': r.team_id,
+                    'team_number': team_obj.team_number if team_obj else None,
+                    'team_name': team_obj.team_name if team_obj else None,
+                    'match_id': r.match_id,
+                    'match_number': match_obj.match_number if match_obj else None,
+                    'match_type': match_obj.match_type if match_obj else None,
+                    'event_id': event_obj.id if event_obj else None,
+                    'event_code': event_obj.code if event_obj else None,
+                    'alliance': r.alliance,
+                    'scout_name': r.scout_name,
+                    'scout_id': r.scout_id,
+                    'scouting_station': r.scouting_station,
+                    'timestamp': r.timestamp.isoformat() if r.timestamp else None,
+                    'scouting_team_number': r.scouting_team_number,
+                    'data': r.data,
+                    'is_alliance_data': False
+                })
+
+        return jsonify({'success': True, 'count': len(entries), 'total': total, 'entries': entries, 'is_alliance_mode': is_alliance_mode}), 200
 
     except Exception as e:
         current_app.logger.error(f"Get all scouting data error: {str(e)}\n{traceback.format_exc()}")
@@ -1805,6 +2330,10 @@ def submit_pit_scouting_data():
             pass
         
         db.session.add(pit_data)
+        db.session.commit()
+        
+        # Sync to alliance if active
+        sync_pit_to_alliance(pit_data, team_number)
         db.session.commit()
         
         return jsonify({
@@ -2295,16 +2824,29 @@ def mobile_graphs_compare():
         from app.utils.config_manager import load_game_config
         team_config = load_game_config(team_number=token_team_number) if token_team_number else None
 
+        # Check for alliance mode
+        alliance_id = get_active_alliance_id_for_team(token_team_number)
+        
+        # In alliance mode, get all available teams from alliance data
+        alliance_teams_map = {}
+        if alliance_id:
+            alliance_teams, _ = get_all_teams_for_alliance(event_id=resolved_event_id)
+            alliance_teams_map = {t.team_number: t for t in alliance_teams}
+
         for idx, tn in enumerate(team_numbers):
             try:
                 tn_int = int(tn)
             except Exception:
                 continue
 
-            team = Team.query.filter_by(team_number=tn_int, scouting_team_number=token_team_number).first()
-            if not team:
-                # fallback to any team record with that number
-                team = Team.query.filter_by(team_number=tn_int).first()
+            # In alliance mode, prefer teams from alliance data
+            if alliance_id and tn_int in alliance_teams_map:
+                team = alliance_teams_map[tn_int]
+            else:
+                team = Team.query.filter_by(team_number=tn_int, scouting_team_number=token_team_number).first()
+                if not team:
+                    # fallback to any team record with that number
+                    team = Team.query.filter_by(team_number=tn_int).first()
             if not team:
                 # skip unknown teams
                 continue
@@ -2334,12 +2876,36 @@ def mobile_graphs_compare():
             teams_response.append(team_entry)
 
             # Build per-match series for downstream chart handling
-            q = ScoutingData.query.join(Match, ScoutingData.match_id == Match.id).filter(
-                ScoutingData.team_id == team.id,
-                ScoutingData.scouting_team_number == token_team_number
-            )
-            if resolved_event_id is not None:
-                q = q.filter(Match.event_id == resolved_event_id)
+            # Check for alliance mode
+            alliance_id = get_active_alliance_id_for_team(token_team_number)
+            
+            if alliance_id:
+                # Alliance mode - query from shared tables by team_number (not team_id)
+                # since different alliance members have different team_id for the same team_number
+                q = AllianceSharedScoutingData.query.join(
+                    Match, AllianceSharedScoutingData.match_id == Match.id
+                ).join(
+                    Team, AllianceSharedScoutingData.team_id == Team.id
+                ).join(
+                    Event, Match.event_id == Event.id
+                ).filter(
+                    Team.team_number == team.team_number,
+                    AllianceSharedScoutingData.alliance_id == alliance_id,
+                    AllianceSharedScoutingData.is_active == True
+                )
+                if resolved_event_id is not None:
+                    # Filter by event code, not event_id in alliance mode
+                    from sqlalchemy import func as sqla_func
+                    resolved_event = Event.query.get(resolved_event_id)
+                    if resolved_event and resolved_event.code:
+                        q = q.filter(sqla_func.upper(Event.code) == sqla_func.upper(resolved_event.code))
+            else:
+                q = ScoutingData.query.join(Match, ScoutingData.match_id == Match.id).filter(
+                    ScoutingData.team_id == team.id,
+                    ScoutingData.scouting_team_number == token_team_number
+                )
+                if resolved_event_id is not None:
+                    q = q.filter(Match.event_id == resolved_event_id)
             scouting_rows = q.order_by(Match.match_number).all()
 
             per_match_records = []
@@ -2616,26 +3182,63 @@ def mobile_graphs_image():
         from app.utils.config_manager import load_game_config
         team_config = load_game_config(team_number=token_team_number) if token_team_number else None
 
-        # Resolve teams (respect team isolation like compare endpoint)
+        # Check for alliance mode
+        alliance_id = get_active_alliance_id_for_team(token_team_number)
+
+        # Resolve teams (in alliance mode, use alliance teams; otherwise respect team isolation)
         teams = []
-        for tn in team_numbers:
-            t = Team.query.filter_by(team_number=tn, scouting_team_number=token_team_number).first()
-            if not t:
-                t = Team.query.filter_by(team_number=tn).first()
-            if t:
-                teams.append(t)
+        if alliance_id:
+            # Get all teams from alliance data
+            alliance_teams, _ = get_all_teams_for_alliance(event_id=resolved_event_id)
+            alliance_teams_map = {t.team_number: t for t in alliance_teams}
+            for tn in team_numbers:
+                if tn in alliance_teams_map:
+                    teams.append(alliance_teams_map[tn])
+                else:
+                    # Fallback if team not in alliance data
+                    t = Team.query.filter_by(team_number=tn).first()
+                    if t:
+                        teams.append(t)
+        else:
+            for tn in team_numbers:
+                t = Team.query.filter_by(team_number=tn, scouting_team_number=token_team_number).first()
+                if not t:
+                    t = Team.query.filter_by(team_number=tn).first()
+                if t:
+                    teams.append(t)
 
         if not teams:
             return jsonify({'success': False, 'error': 'No teams found', 'error_code': 'NO_TEAMS'}), 404
 
         # Build minimal team_data dict compatible with graphs.py helpers
-        team_ids = [t.id for t in teams]
-        scouting_query = ScoutingData.query.join(Match, ScoutingData.match_id == Match.id).filter(
-            ScoutingData.team_id.in_(team_ids),
-            ScoutingData.scouting_team_number == token_team_number
-        )
-        if resolved_event_id is not None:
-            scouting_query = scouting_query.filter(Match.event_id == resolved_event_id)
+        team_numbers_list = [t.team_number for t in teams]
+        if alliance_id:
+            # Alliance mode - query from shared tables by team_number (not team_id)
+            scouting_query = AllianceSharedScoutingData.query.join(
+                Match, AllianceSharedScoutingData.match_id == Match.id
+            ).join(
+                Team, AllianceSharedScoutingData.team_id == Team.id
+            ).join(
+                Event, Match.event_id == Event.id
+            ).filter(
+                Team.team_number.in_(team_numbers_list),
+                AllianceSharedScoutingData.alliance_id == alliance_id,
+                AllianceSharedScoutingData.is_active == True
+            )
+            if resolved_event_id is not None:
+                # Filter by event code in alliance mode
+                from sqlalchemy import func as sqla_func
+                resolved_event = Event.query.get(resolved_event_id)
+                if resolved_event and resolved_event.code:
+                    scouting_query = scouting_query.filter(sqla_func.upper(Event.code) == sqla_func.upper(resolved_event.code))
+        else:
+            team_ids = [t.id for t in teams]
+            scouting_query = ScoutingData.query.join(Match, ScoutingData.match_id == Match.id).filter(
+                ScoutingData.team_id.in_(team_ids),
+                ScoutingData.scouting_team_number == token_team_number
+            )
+            if resolved_event_id is not None:
+                scouting_query = scouting_query.filter(Match.event_id == resolved_event_id)
         scouting_rows = scouting_query.order_by(Match.match_number).all()
 
         # Map common metric names to metric IDs used by calculate_metric()
@@ -2892,15 +3495,29 @@ def mobile_graphs_visualize():
             if not data and not team_numbers:
                 return jsonify({'success': False, 'error': 'No team_number(s) or visualization_data provided', 'error_code': 'MISSING_TEAMS_OR_DATA'}), 400
 
+            # Check for alliance mode
+            alliance_id = get_active_alliance_id_for_team(token_team_number)
+            
+            # In alliance mode, get teams from alliance data
+            alliance_teams_map = {}
+            if alliance_id:
+                alliance_teams, _ = get_all_teams_for_alliance(event_id=event_id)
+                alliance_teams_map = {t.team_number: t for t in alliance_teams}
+
             teams = []
             for tn in team_numbers:
                 try:
                     tn_int = int(tn)
                 except Exception:
                     continue
-                t = Team.query.filter_by(team_number=tn_int, scouting_team_number=token_team_number).first()
-                if not t:
-                    t = Team.query.filter_by(team_number=tn_int).first()
+                
+                # In alliance mode, prefer teams from alliance data
+                if alliance_id and tn_int in alliance_teams_map:
+                    t = alliance_teams_map[tn_int]
+                else:
+                    t = Team.query.filter_by(team_number=tn_int, scouting_team_number=token_team_number).first()
+                    if not t:
+                        t = Team.query.filter_by(team_number=tn_int).first()
                 if not t:
                     continue
 
@@ -2914,11 +3531,31 @@ def mobile_graphs_visualize():
                 # Get actual match data for visualizations that need it
                 matches_data = []
                 if event_id:
-                    scouting_rows = ScoutingData.query.join(Match, ScoutingData.match_id == Match.id).filter(
-                        ScoutingData.team_id == t.id,
-                        ScoutingData.scouting_team_number == token_team_number,
-                        Match.event_id == event_id
-                    ).order_by(Match.match_number).all()
+                    # Check for alliance mode
+                    alliance_id = get_active_alliance_id_for_team(token_team_number)
+                    
+                    if alliance_id:
+                        # Alliance mode - query from shared tables by team_number (not team_id)
+                        from sqlalchemy import func as sqla_func
+                        resolved_event = Event.query.get(event_id)
+                        scouting_rows = AllianceSharedScoutingData.query.join(
+                            Match, AllianceSharedScoutingData.match_id == Match.id
+                        ).join(
+                            Team, AllianceSharedScoutingData.team_id == Team.id
+                        ).join(
+                            Event, Match.event_id == Event.id
+                        ).filter(
+                            Team.team_number == t.team_number,
+                            AllianceSharedScoutingData.alliance_id == alliance_id,
+                            AllianceSharedScoutingData.is_active == True,
+                            sqla_func.upper(Event.code) == sqla_func.upper(resolved_event.code) if resolved_event and resolved_event.code else Match.event_id == event_id
+                        ).order_by(Match.match_number).all()
+                    else:
+                        scouting_rows = ScoutingData.query.join(Match, ScoutingData.match_id == Match.id).filter(
+                            ScoutingData.team_id == t.id,
+                            ScoutingData.scouting_team_number == token_team_number,
+                            Match.event_id == event_id
+                        ).order_by(Match.match_number).all()
                     current_app.logger.debug(f"Found {len(scouting_rows)} scouting rows for team {t.team_number}")
                     
                     for row in scouting_rows:

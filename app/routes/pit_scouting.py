@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
 from flask_login import login_required, current_user
 from flask_socketio import emit, join_room, leave_room
-from app.models import Team, Event, PitScoutingData
+from app.models import Team, Event, PitScoutingData, AllianceSharedPitData
 from app import db, socketio
 import json
 import uuid
@@ -13,7 +13,11 @@ from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_current_pit_config, save_pit_config, get_effective_pit_config, is_alliance_mode_active
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
-    filter_events_by_scouting_team, get_event_by_code
+    filter_events_by_scouting_team, get_event_by_code, get_all_teams_at_event
+)
+from app.utils.alliance_data import (
+    get_all_pit_data, can_delete_pit_entry, is_alliance_admin, get_active_alliance_id,
+    get_all_teams_for_alliance
 )
 
 def get_theme_context():
@@ -45,6 +49,39 @@ def auto_sync_alliance_pit_data(pit_data_entry):
             return
             
         alliance = alliance_status.active_alliance
+        
+        # Check if current team has data sharing enabled
+        current_member = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance.id,
+            team_number=current_team,
+            status='accepted'
+        ).first()
+        
+        # If data sharing is disabled for this team, don't sync their data to others
+        if current_member and not getattr(current_member, 'is_data_sharing_active', True):
+            return
+        
+        # Also save to AllianceSharedPitData for centralized alliance storage
+        existing_shared = AllianceSharedPitData.query.filter_by(
+            alliance_id=alliance.id,
+            original_pit_data_id=pit_data_entry.id,
+            is_active=True
+        ).first()
+        
+        if existing_shared:
+            # Update existing shared data
+            existing_shared.data = pit_data_entry.data
+            existing_shared.scout_name = pit_data_entry.scout_name
+            existing_shared.scout_id = pit_data_entry.scout_id
+            existing_shared.timestamp = pit_data_entry.timestamp
+            existing_shared.last_edited_by_team = current_team
+            existing_shared.last_edited_at = datetime.now(timezone.utc)
+        else:
+            # Create new shared data entry
+            shared_data = AllianceSharedPitData.create_from_pit_data(
+                pit_data_entry, alliance.id, current_team
+            )
+            db.session.add(shared_data)
         
         # Prepare the pit data for sync
         sync_data = {
@@ -104,21 +141,41 @@ def index():
     if current_event_code:
         current_event = get_event_by_code(current_event_code)
     
-    # Get teams filtered by the current event if available
-    if current_event:
-        teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
-    else:
-        teams = filter_teams_by_scouting_team().all()
+    # Get pit data using centralized function (handles alliance mode automatically)
+    all_pit_data_list, is_alliance_mode, alliance_id = get_all_pit_data()
     
-    # Get recent pit scouting data
-    recent_pit_data = PitScoutingData.query.order_by(PitScoutingData.timestamp.desc()).limit(10).all()
-    # Also gather all pit entries for the teams shown so the Teams grid can accurately
-    # reflect whether a team has been scouted (not limited to the recent list)
+    # Check if user is alliance admin
+    user_is_alliance_admin = is_alliance_admin(alliance_id) if is_alliance_mode else False
+    
+    # Get teams - use alliance teams if in alliance mode
+    if is_alliance_mode:
+        if current_event:
+            teams, _ = get_all_teams_for_alliance(event_id=current_event.id)
+        else:
+            teams, _ = get_all_teams_for_alliance()
+    else:
+        # Get ALL teams at the current event (regardless of scouting_team_number)
+        if current_event:
+            teams = get_all_teams_at_event(event_id=current_event.id)
+        else:
+            teams = filter_teams_by_scouting_team().all()
+    
+    # Get recent entries (limit to 10 for display)
+    recent_pit_data = all_pit_data_list[:10] if all_pit_data_list else []
+    
+    # Get all pit entries for teams shown
     team_ids = [t.id for t in teams]
     if team_ids:
-        all_pit_entries = PitScoutingData.query.filter(PitScoutingData.team_id.in_(team_ids)).all()
+        all_pit_entries = [e for e in all_pit_data_list if e.team_id in team_ids]
     else:
-        all_pit_entries = []
+        all_pit_entries = all_pit_data_list
+    
+    # Get statistics
+    total_teams_scouted = len(all_pit_data_list)
+    if is_alliance_mode:
+        unuploaded_count = 0  # Alliance shared data is always "uploaded"
+    else:
+        unuploaded_count = sum(1 for e in all_pit_data_list if not getattr(e, 'is_uploaded', True))
 
     # Build quick lookup sets for template membership tests
     scouted_team_ids = set()
@@ -133,10 +190,6 @@ def index():
             # be resilient to partially populated records
             continue
     
-    # Get statistics
-    total_teams_scouted = PitScoutingData.query.count()
-    unuploaded_count = PitScoutingData.query.filter_by(is_uploaded=False).count()
-    
     return render_template('scouting/pit_index.html', 
                           teams=teams, 
                           pit_data=recent_pit_data,
@@ -147,6 +200,8 @@ def index():
                           current_event=current_event,
                           total_teams_scouted=total_teams_scouted,
                           unuploaded_count=unuploaded_count,
+                          is_alliance_mode=is_alliance_mode,
+                          user_is_alliance_admin=user_is_alliance_admin,
                           **get_theme_context())
 
 @bp.route('/form', methods=['GET', 'POST'])
@@ -173,9 +228,9 @@ def form():
     if current_event_code:
         current_event = get_event_by_code(current_event_code)
     
-    # Get teams filtered by the current event if available
+    # Get ALL teams at the current event (regardless of scouting_team_number)
     if current_event:
-        teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+        teams = get_all_teams_at_event(event_id=current_event.id)
     else:
         teams = filter_teams_by_scouting_team().all()
 
@@ -305,6 +360,7 @@ def form():
                 local_id=str(uuid.uuid4()),
                 team_id=team.id,
                 event_id=current_event.id if current_event else None,
+                scouting_team_number=getattr(current_user, 'scouting_team_number', None),
                 scout_name=current_user.username,
                 scout_id=current_user.id,
                 data_json=json.dumps(form_data),
@@ -382,7 +438,7 @@ def list_dynamic():
 @bp.route('/api/list')
 @login_required
 def api_list():
-    """API endpoint to get pit scouting data as JSON"""
+    """API endpoint to get pit scouting data as JSON - uses alliance data if active"""
     pit_config = get_effective_pit_config()
     
     # Get current event based on team-scoped/alliance-aware game configuration
@@ -392,40 +448,30 @@ def api_list():
     if current_event_code:
         current_event = get_event_by_code(current_event_code)
     
-    # Filter by event if available. Show both records for the current event
-    # and records with no event_id (locally collected entries). Also scope
-    # results to the current user's scouting team so users only see their
-    # team's pit data.
-    from flask_login import current_user
-    team_scope = None
-    try:
-        if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and hasattr(current_user, 'scouting_team_number'):
-            team_scope = current_user.scouting_team_number
-    except Exception:
-        team_scope = None
-
-    query = PitScoutingData.query
-    if team_scope is not None:
-        query = query.filter(PitScoutingData.scouting_team_number == team_scope)
-
-    if current_event:
-        pit_data = query.filter(
-            (PitScoutingData.event_id == current_event.id) | (PitScoutingData.event_id.is_(None))
-        ).order_by(PitScoutingData.timestamp.desc()).all()
-    else:
-        pit_data = query.order_by(PitScoutingData.timestamp.desc()).all()
+    # Use the centralized get_all_pit_data function (handles alliance mode automatically)
+    pit_data, is_alliance_mode, alliance_id = get_all_pit_data()
+    
+    # Check if user is alliance admin (for delete permissions)
+    user_is_alliance_admin = is_alliance_admin(alliance_id) if is_alliance_mode else False
     
     # Convert to JSON format
     data_list = []
     for entry in pit_data:
+        # Check delete permission for each entry
+        can_delete = can_delete_pit_entry(entry, is_alliance_mode, alliance_id)
+        
         entry_data = {
             'id': entry.id,
+            'shared_id': entry.id if is_alliance_mode else None,
             'team_number': entry.team.team_number,
             'team_name': entry.team.team_name or f'Team {entry.team.team_number}',
             'scout_name': entry.scout_name,
             'timestamp': entry.timestamp.isoformat(),
-            'is_uploaded': entry.is_uploaded,
-            'data': entry.data  # This contains the actual form data
+            'is_uploaded': getattr(entry, 'is_uploaded', True),
+            'data': entry.data,
+            'source_team': getattr(entry, 'source_scouting_team_number', getattr(entry, 'scouting_team_number', None)),
+            'can_delete': can_delete,
+            'is_alliance_data': is_alliance_mode
         }
         data_list.append(entry_data)
     
@@ -433,6 +479,8 @@ def api_list():
         'success': True,
         'data': data_list,
         'config': pit_config['pit_scouting'],
+        'is_alliance_mode': is_alliance_mode,
+        'user_is_alliance_admin': user_is_alliance_admin,
         'current_event': {
             'name': current_event.name,
             'code': current_event.code
@@ -443,13 +491,49 @@ def api_list():
 @bp.route('/view/<int:id>')
 @login_required
 def view(id):
-    """View specific pit scouting data"""
+    """View specific pit scouting data - supports both regular and alliance shared data"""
     pit_config = get_effective_pit_config()
-    pit_data = PitScoutingData.query.get_or_404(id)
+    
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
+    
+    # Check for shared_id parameter (alliance mode)
+    shared_id = request.args.get('shared_id', type=int)
+    
+    if shared_id:
+        # Viewing alliance shared data by shared_id
+        pit_data = AllianceSharedPitData.query.filter_by(
+            id=shared_id,
+            alliance_id=alliance_id,
+            is_active=True
+        ).first_or_404()
+    else:
+        # Try to get regular pit data first (this is what the form redirects to)
+        pit_data = PitScoutingData.query.get(id)
+        if not pit_data:
+            # If not found as regular data, try alliance shared data
+            if is_alliance_mode:
+                pit_data = AllianceSharedPitData.query.filter_by(
+                    id=id,
+                    alliance_id=alliance_id,
+                    is_active=True
+                ).first_or_404()
+            else:
+                # Not found and not in alliance mode
+                from flask import abort
+                abort(404)
+    
+    # Check delete permission
+    can_delete = can_delete_pit_entry(pit_data, is_alliance_mode, alliance_id)
+    user_is_alliance_admin = is_alliance_admin(alliance_id) if is_alliance_mode else False
     
     return render_template('scouting/pit_view.html', 
                           pit_data=pit_data,
                           pit_config=pit_config,
+                          is_alliance_mode=is_alliance_mode,
+                          alliance_id=alliance_id,
+                          can_delete=can_delete,
+                          user_is_alliance_admin=user_is_alliance_admin,
                           **get_theme_context())
 
 @bp.route('/edit/<int:id>', methods=['GET', 'POST'])
@@ -542,8 +626,9 @@ def edit(id):
     if current_event_code:
         current_event = get_event_by_code(current_event_code)
 
+    # Get ALL teams at the current event (regardless of scouting_team_number)
     if current_event:
-        teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+        teams = get_all_teams_at_event(event_id=current_event.id)
     else:
         teams = filter_teams_by_scouting_team().all()
 
@@ -604,8 +689,14 @@ def edit(id):
 @login_required
 def sync_status():
     """Get sync status for local storage and WebSocket connectivity"""
-    unuploaded_count = PitScoutingData.query.filter_by(is_uploaded=False).count()
-    total_count = PitScoutingData.query.count()
+    # Use centralized function to get pit data with proper filtering
+    all_pit_data, is_alliance_mode, alliance_id = get_all_pit_data()
+    
+    total_count = len(all_pit_data)
+    if is_alliance_mode:
+        unuploaded_count = 0  # Alliance data is always "uploaded"
+    else:
+        unuploaded_count = sum(1 for e in all_pit_data if not getattr(e, 'is_uploaded', True))
     
     # Get current event (team-scoped/alliance-aware)
     game_config = get_effective_game_config()
@@ -640,8 +731,11 @@ def upload():
         if current_event_code:
             current_event = get_event_by_code(current_event_code)
         
-        # Get unuploaded data
-        unuploaded_data = PitScoutingData.query.filter_by(is_uploaded=False).all()
+        # Get all pit data using centralized function
+        all_pit_data, is_alliance_mode, alliance_id = get_all_pit_data()
+        
+        # Filter to unuploaded data only
+        unuploaded_data = [e for e in all_pit_data if not getattr(e, 'is_uploaded', True)]
         
         if not unuploaded_data:
             return jsonify({
@@ -651,9 +745,13 @@ def upload():
             })
         
         # Mark data as uploaded (since WebSocket sync handles real-time updates)
+        # Also sync to alliance if in alliance mode
         for pit_data in unuploaded_data:
             pit_data.is_uploaded = True
             pit_data.upload_timestamp = datetime.now(timezone.utc)
+            
+            # Auto-sync to alliance if active
+            auto_sync_alliance_pit_data(pit_data)
         
         db.session.commit()
         
@@ -661,7 +759,7 @@ def upload():
         if current_event:
             emit_pit_sync_status(current_event.id, {
                 'unuploaded_count': 0,
-                'total_count': PitScoutingData.query.count(),
+                'total_count': len(all_pit_data),
                 'message': f'Marked {len(unuploaded_data)} entries as uploaded'
             })
         
@@ -684,48 +782,127 @@ def upload():
 @login_required
 def export():
     """Export all pit scouting data as JSON"""
-    pit_data = PitScoutingData.query.order_by(PitScoutingData.timestamp.desc()).all()
+    # Use centralized function for proper filtering
+    pit_data, is_alliance_mode, alliance_id = get_all_pit_data()
     
     export_data = []
     for entry in pit_data:
-        export_data.append(entry.to_dict())
+        if hasattr(entry, 'to_dict'):
+            export_data.append(entry.to_dict())
+        else:
+            # Handle alliance shared data
+            export_data.append({
+                'id': entry.id,
+                'team_id': entry.team_id,
+                'team_number': entry.team.team_number if entry.team else None,
+                'scout_name': entry.scout_name,
+                'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
+                'data': entry.data,
+                'source_team': getattr(entry, 'source_scouting_team_number', None)
+            })
     
     return jsonify({
         'pit_scouting_data': export_data,
         'export_timestamp': datetime.now(timezone.utc).isoformat(),
-        'total_entries': len(export_data)
+        'total_entries': len(export_data),
+        'is_alliance_mode': is_alliance_mode
     })
 
 @bp.route('/delete/<int:id>', methods=['POST'])
 @login_required
 def delete(id):
-    """Delete pit scouting data"""
-    pit_data = PitScoutingData.query.get_or_404(id)
+    """Delete pit scouting data - enforces alliance delete permissions"""
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
     
-    # Check if user can delete this data
-    if not current_user.has_role('admin') and pit_data.scout_id != current_user.id:
-        flash('You can only delete your own pit scouting data', 'error')
-        return redirect(url_for('pit_scouting.view', id=id))
+    # Check for shared_id in request (alliance mode delete)
+    data = request.get_json() if request.is_json else {}
+    shared_id = data.get('shared_id') or request.form.get('shared_id')
     
-    try:
-        team_number = pit_data.team.team_number
-        event_id = pit_data.event_id
-        pit_data_dict = pit_data.to_dict()  # Get data before deletion
+    if is_alliance_mode and shared_id:
+        # Deleting alliance shared pit data
+        pit_data = AllianceSharedPitData.query.filter_by(
+            id=shared_id,
+            alliance_id=alliance_id
+        ).first_or_404()
         
-        db.session.delete(pit_data)
-        db.session.commit()
+        # Check permissions
+        if not can_delete_pit_entry(pit_data, is_alliance_mode, alliance_id):
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'Only alliance admins or the original scout can delete this data'}), 403
+            flash('Only alliance admins or the original scout can delete this data.', 'error')
+            return redirect(url_for('pit_scouting.list'))
         
-        # Emit real-time update
-        if event_id:
-            emit_pit_data_update(event_id, 'deleted', pit_data_dict)
+        try:
+            team_number = pit_data.team.team_number if pit_data.team else 'Unknown'
+            
+            # Mark as deleted to prevent re-sync
+            from app.models import AllianceDeletedData
+            AllianceDeletedData.mark_deleted(
+                alliance_id=alliance_id,
+                data_type='pit',
+                match_id=None,
+                team_id=pit_data.team_id,
+                alliance_color=None,
+                source_team=pit_data.source_scouting_team_number,
+                deleted_by=current_user.scouting_team_number
+            )
+            
+            db.session.delete(pit_data)
+            db.session.commit()
+            
+            if request.is_json:
+                return jsonify({'success': True, 'message': f'Pit scouting data for Team {team_number} deleted!'})
+            flash(f'Pit scouting data for Team {team_number} deleted successfully!', 'success')
+            return redirect(url_for('pit_scouting.list'))
+            
+        except Exception as e:
+            db.session.rollback()
+            if request.is_json:
+                return jsonify({'success': False, 'error': str(e)}), 500
+            flash(f'Error deleting pit scouting data: {str(e)}', 'error')
+            return redirect(url_for('pit_scouting.list'))
+    else:
+        # Regular delete
+        pit_data = PitScoutingData.query.get_or_404(id)
         
-        flash(f'Pit scouting data for Team {team_number} deleted successfully!', 'success')
-        return redirect(url_for('pit_scouting.list'))
+        # Check if user can delete this data
+        if is_alliance_mode:
+            # In alliance mode, use alliance delete permissions
+            if not can_delete_pit_entry(pit_data, is_alliance_mode, alliance_id):
+                if request.is_json:
+                    return jsonify({'success': False, 'error': 'Only alliance admins or the original scout can delete this data'}), 403
+                flash('Only alliance admins or the original scout can delete this data.', 'error')
+                return redirect(url_for('pit_scouting.view', id=id))
+        else:
+            # Regular mode - admin or owner can delete
+            if not current_user.has_role('admin') and pit_data.scout_id != current_user.id:
+                flash('You can only delete your own pit scouting data', 'error')
+                return redirect(url_for('pit_scouting.view', id=id))
         
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error deleting pit scouting data: {str(e)}', 'error')
-        return redirect(url_for('pit_scouting.view', id=id))
+        try:
+            team_number = pit_data.team.team_number
+            event_id = pit_data.event_id
+            pit_data_dict = pit_data.to_dict()  # Get data before deletion
+            
+            db.session.delete(pit_data)
+            db.session.commit()
+            
+            # Emit real-time update
+            if event_id:
+                emit_pit_data_update(event_id, 'deleted', pit_data_dict)
+            
+            if request.is_json:
+                return jsonify({'success': True, 'message': f'Pit scouting data for Team {team_number} deleted!'})
+            flash(f'Pit scouting data for Team {team_number} deleted successfully!', 'success')
+            return redirect(url_for('pit_scouting.list'))
+            
+        except Exception as e:
+            db.session.rollback()
+            if request.is_json:
+                return jsonify({'success': False, 'error': str(e)}), 500
+            flash(f'Error deleting pit scouting data: {str(e)}', 'error')
+            return redirect(url_for('pit_scouting.view', id=id))
 
 @bp.route('/config')
 @login_required
@@ -1151,6 +1328,7 @@ def sync_download():
                         local_id=item_data.get('local_id'),
                         team_id=team.id,
                         event_id=item_data.get('event_id'),
+                        scouting_team_number=item_data.get('scouting_team_number') or getattr(current_user, 'scouting_team_number', None),
                         scout_name=item_data.get('scout_name'),
                         scout_id=item_data.get('scout_id'),
                         data_json=json.dumps(item_data.get('data', {})),
@@ -1274,6 +1452,7 @@ def sync_full():
                         local_id=item_data.get('local_id'),
                         team_id=team.id,
                         event_id=item_data.get('event_id'),
+                        scouting_team_number=item_data.get('scouting_team_number') or getattr(current_user, 'scouting_team_number', None),
                         scout_name=item_data.get('scout_name'),
                         scout_id=item_data.get('scout_id'),
                         data_json=json.dumps(item_data.get('data', {})),
@@ -1432,9 +1611,9 @@ def pit_data():
         if current_event_code:
             current_event = get_event_by_code(current_event_code)
         
-        # Get teams filtered by the current event if available
+        # Get ALL teams at the current event (regardless of scouting_team_number)
         if current_event:
-            teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+            teams = get_all_teams_at_event(event_id=current_event.id)
         else:
             teams = filter_teams_by_scouting_team().all()
         

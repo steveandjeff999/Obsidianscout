@@ -97,7 +97,7 @@
                 <div class="card-body">
                     <ul class="list-group mb-3">
                         {% for team_number in match.red_alliance.split(',') if team_number %}
-                        {% set evcode = (match.event.event_code if match.event and match.event.event_code else (match.event.code if match.event and match.event.code else (game_config.get('current_event_code') if game_config else '')) ) %}
+                        {% set evcode = (match.event.code if match.event and match.event.code else (game_config.get('current_event_code') if game_config else '')) %}
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             Team <span class="team-number" data-team-num="{{ team_number }}" data-event-key="{{ evcode }}">{{ team_number }}</span>
                             <div>
@@ -129,7 +129,7 @@
                 <div class="card-body">
                     <ul class="list-group mb-3">
                         {% for team_number in match.blue_alliance.split(',') if team_number %}
-                        {% set evcode = (match.event.event_code if match.event and match.event.event_code else (match.event.code if match.event and match.event.code else (game_config.get('current_event_code') if game_config else '')) ) %}
+                        {% set evcode = (match.event.code if match.event and match.event.code else (game_config.get('current_event_code') if game_config else '')) %}
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             Team <span class="team-number" data-team-num="{{ team_number }}" data-event-key="{{ evcode }}">{{ team_number }}</span>
                             <div>
@@ -174,7 +174,7 @@
                     <tbody>
                         {% for entry in scouting_data %}
                         <tr>
-                            {% set evcode = (entry.match.event.event_code if entry.match and entry.match.event and entry.match.event.event_code else (entry.match.event.code if entry.match and entry.match.event and entry.match.event.code else (game_config.get('current_event_code') if game_config else '')) ) %}
+                            {% set evcode = (entry.match.event.code if entry.match and entry.match.event and entry.match.event.code else (game_config.get('current_event_code') if game_config else '')) %}
                             <td><span class="team-number" data-team-num="{{ entry.team.team_number }}" data-event-key="{{ evcode }}">{{ entry.team.team_number }}</span> - {{ entry.team.team_name }}</td>
                             <td>
                                 <span class="badge {% if entry.alliance == 'red' %}bg-danger{% elif entry.alliance == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">

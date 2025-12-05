@@ -9,7 +9,7 @@ from sqlalchemy import or_, func
 
 
 def get_alliance_team_numbers():
-    """Get list of all team numbers in the active alliance (including current team).
+    """Get list of all team numbers in the active alliance (including current team and game_config_team).
     Returns empty list if alliance mode is not active.
     """
     try:
@@ -24,7 +24,13 @@ def get_alliance_team_numbers():
         
         if active_alliance and active_alliance.is_config_complete():
             # Return all member team numbers
-            return active_alliance.get_member_team_numbers()
+            team_numbers = set(active_alliance.get_member_team_numbers())
+            
+            # Also include the game_config_team if set (data may be synced under this team)
+            if active_alliance.game_config_team:
+                team_numbers.add(active_alliance.game_config_team)
+            
+            return list(team_numbers)
         
         return []
     except Exception:
@@ -117,9 +123,88 @@ def filter_teams_by_scouting_team(query=None):
     return query.filter(Team.scouting_team_number.is_(None))  # Show unassigned teams if no team set
 
 
+def get_all_teams_at_event(event_id=None, event_code=None):
+    """Get ALL teams at an event, regardless of scouting_team_number.
+    This is used when we want to show all teams at an event for analysis/graphs,
+    not just teams that the current scouting team imported.
+    
+    Args:
+        event_id: The event database ID
+        event_code: The event code (alternative to event_id)
+    
+    Returns:
+        List of Team objects at the event, deduplicated by team_number
+    """
+    if not event_id and not event_code:
+        return []
+    
+    # Find the event
+    if event_id:
+        event = Event.query.get(event_id)
+    else:
+        # Find any event with this code (case-insensitive)
+        event = Event.query.filter(func.upper(Event.code) == event_code.upper()).first()
+    
+    if not event:
+        return []
+    
+    # Get all teams associated with this event through the team_event relationship
+    # This includes teams from all scouting teams
+    all_teams = Team.query.join(Team.events).filter(Event.id == event.id).all()
+    
+    # Also get teams from matches at events with the same code
+    # This catches teams that might not be in the team_event table but have matches
+    event_codes_to_check = [event.code.upper()]
+    events_with_same_code = Event.query.filter(func.upper(Event.code) == event.code.upper()).all()
+    event_ids_to_check = [e.id for e in events_with_same_code]
+    
+    # Get teams from matches at these events
+    matches = Match.query.filter(Match.event_id.in_(event_ids_to_check)).all()
+    team_numbers_from_matches = set()
+    for match in matches:
+        try:
+            if match.red_alliance:
+                for tn in match.red_alliance.split(','):
+                    tn = tn.strip()
+                    if tn.isdigit():
+                        team_numbers_from_matches.add(int(tn))
+            if match.blue_alliance:
+                for tn in match.blue_alliance.split(','):
+                    tn = tn.strip()
+                    if tn.isdigit():
+                        team_numbers_from_matches.add(int(tn))
+        except Exception:
+            continue
+    
+    # Add teams from matches that aren't already in the list
+    existing_team_numbers = {t.team_number for t in all_teams}
+    for tn in team_numbers_from_matches:
+        if tn not in existing_team_numbers:
+            team = Team.query.filter_by(team_number=tn).first()
+            if team:
+                all_teams.append(team)
+                existing_team_numbers.add(tn)
+    
+    # Deduplicate by team_number, preferring teams with meaningful names
+    teams_by_number = {}
+    for team in all_teams:
+        tn = team.team_number
+        if tn not in teams_by_number:
+            teams_by_number[tn] = team
+        else:
+            # Prefer team with meaningful name
+            existing = teams_by_number[tn]
+            existing_name = (existing.team_name or '').strip()
+            team_name = (team.team_name or '').strip()
+            if team_name and (not existing_name or existing_name.isdigit()):
+                teams_by_number[tn] = team
+    
+    return sorted(teams_by_number.values(), key=lambda t: t.team_number)
+
+
 def filter_events_by_scouting_team(query=None):
     """Filter events by current user's scouting team number.
-    If alliance mode is active, filters by alliance shared event codes.
+    If alliance mode is active, filters by alliance shared event codes AND alliance team numbers.
     Deduplicates by uppercase event code at SQL level.
     """
     from sqlalchemy import distinct
@@ -133,10 +218,15 @@ def filter_events_by_scouting_team(query=None):
         shared_event_codes = get_alliance_shared_event_codes()
         if shared_event_codes:
             # Show only events that are in the alliance's shared event list
+            # AND belong to alliance members (including game_config_team)
             # Use uppercase comparison to handle case-insensitive event codes
             # Use DISTINCT on uppercase code to prevent duplicate events
             upper_codes = [code.upper() for code in shared_event_codes]
-            return query.filter(func.upper(Event.code).in_(upper_codes)).distinct(func.upper(Event.code))
+            alliance_team_numbers = get_alliance_team_numbers()
+            return query.filter(
+                func.upper(Event.code).in_(upper_codes),
+                Event.scouting_team_number.in_(alliance_team_numbers)
+            ).distinct(func.upper(Event.code))
         else:
             # Show only current team's events
             return query.filter(Event.scouting_team_number == scouting_team_number)
@@ -376,13 +466,31 @@ def get_event_by_code(event_code):
     
     Uses case-insensitive comparison to handle event codes consistently
     regardless of how they were originally stored.
+    
+    In alliance mode, also searches alliance member events if not found
+    in the current user's events.
     """
     if not event_code:
         return None
     
     # Normalize to uppercase for comparison
     event_code_upper = event_code.upper()
-    return filter_events_by_scouting_team().filter(func.upper(Event.code) == event_code_upper).first()
+    
+    # First try to find in current user's events
+    event = filter_events_by_scouting_team().filter(func.upper(Event.code) == event_code_upper).first()
+    
+    if event:
+        return event
+    
+    # If not found and in alliance mode, search alliance member events
+    alliance_team_numbers = get_alliance_team_numbers()
+    if alliance_team_numbers:
+        event = Event.query.filter(
+            func.upper(Event.code) == event_code_upper,
+            Event.scouting_team_number.in_(alliance_team_numbers)
+        ).first()
+    
+    return event
 
 
 def get_combined_dropdown_events():

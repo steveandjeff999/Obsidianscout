@@ -14,6 +14,7 @@ from app.utils.team_isolation import (
     assign_scouting_team_to_model, get_event_by_code, filter_scouting_data_by_scouting_team
 )
 from app.utils.team_isolation import get_combined_dropdown_events
+from app.utils.alliance_data import get_active_alliance_id, get_all_teams_for_alliance
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -55,11 +56,18 @@ def index():
             flash(f"Event with code '{current_event_code}' not found. Please sync teams to create this event.", "warning")
     
     # Filter teams by the selected event and scouting team
+    # In alliance mode, show teams from alliance scouting data
+    alliance_id = get_active_alliance_id()
+    
     if event:
-        # Get teams associated with this event, filtered by scouting team
-        teams = filter_teams_by_scouting_team().join(
-            Team.events
-        ).filter(Event.id == event.id).order_by(Team.team_number).all()
+        if alliance_id:
+            # Alliance mode - get teams from alliance scouting data for this event
+            teams, _ = get_all_teams_for_alliance(event_id=event.id)
+        else:
+            # Normal mode - get teams associated with this event, filtered by scouting team
+            teams = filter_teams_by_scouting_team().join(
+                Team.events
+            ).filter(Event.id == event.id).order_by(Team.team_number).all()
     else:
         # If no event selected, don't show any teams
         teams = []
@@ -69,7 +77,7 @@ def index():
         else:
             flash("Please select an event to view teams.", "info")
     
-    return render_template('teams/index.html', teams=teams, events=events, selected_event=event, **get_theme_context())
+    return render_template('teams/index.html', teams=teams, events=events, selected_event=event, is_alliance_mode=alliance_id is not None, **get_theme_context())
 
 @bp.route('/sync_from_config')
 def sync_from_config():
@@ -437,6 +445,11 @@ def delete(team_number):
 def view(team_number):
     """View team details"""
     from app.utils.team_isolation import get_current_scouting_team_number
+    from app.utils.alliance_data import get_scouting_data_for_team, get_active_alliance_id
+    
+    # Check if we're in alliance mode
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
     
     # Find the team entry that belongs to the current scouting team or has scouting data
     current_scouting_team = get_current_scouting_team_number()
@@ -454,9 +467,8 @@ def view(team_number):
     if team is None:
         team = Team.query.filter_by(team_number=team_number).first_or_404()
     
-    # Get scouting data for this specific team
-    from app.utils.team_isolation import filter_scouting_data_by_scouting_team
-    scouting_data = filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team.id).order_by(ScoutingData.match_id).all()
+    # Get scouting data for this specific team - use alliance data if in alliance mode
+    scouting_data, is_from_alliance = get_scouting_data_for_team(team.id)
     
     # Get game configuration for metrics calculation
     game_config = get_effective_game_config()
@@ -594,6 +606,8 @@ def view(team_number):
 @analytics_required
 def ranks():
     """Display team rankings for the selected event based on average total points"""
+    from app.utils.alliance_data import get_scouting_data_for_team, get_active_alliance_id
+    
     game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     event_id = request.args.get('event_id', type=int)
@@ -604,6 +618,11 @@ def ranks():
     elif current_event_code:
         event = get_event_by_code(current_event_code)
     teams = event.teams if event else []
+    
+    # Check if alliance mode is active
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
+    
     # Determine the total metric id from config
     total_metric_id = None
     if 'data_analysis' in game_config and 'key_metrics' in game_config['data_analysis']:
@@ -616,8 +635,8 @@ def ranks():
     # Calculate average total points for each team
     team_rankings = []
     for team in teams:
-        # Use isolation helper so users see their team's and unassigned entries
-        scouting_data = filter_scouting_data_by_scouting_team().filter(ScoutingData.team_id == team.id).all()
+        # Use alliance data if in alliance mode, otherwise use team isolation helper
+        scouting_data, _ = get_scouting_data_for_team(team.id, event_id=event_id if event_id else None)
         if scouting_data:
             # Calculate metric for each scouting entry then filter out matches with 0 points
             total_points_raw = [data.calculate_metric(total_metric_id) for data in scouting_data]
@@ -648,6 +667,8 @@ def ranks():
         events=events,
         selected_event=event,
         total_metric_id=total_metric_id,
+        is_alliance_mode=is_alliance_mode,
+        alliance_id=alliance_id,
         **get_theme_context()
     )
 
@@ -728,7 +749,14 @@ def view_shared_ranks(share_id):
     team_rankings = []
     for team in teams:
         # Get all scouting data for this team (without team isolation for shared view)
-        scouting_data = ScoutingData.query.filter_by(team_id=team.id).all()
+        # Exclude alliance-copied data - shared ranks should only use original data
+        from sqlalchemy import or_
+        scouting_data = ScoutingData.query.filter_by(team_id=team.id).filter(
+            or_(
+                ScoutingData.scout_name == None,
+                ~ScoutingData.scout_name.like('[Alliance-%')
+            )
+        ).all()
         if scouting_data:
             total_points_raw = [data.calculate_metric(total_metric_id) for data in scouting_data]
             scored_points = [p for p in total_points_raw if p is not None and p != 0]
