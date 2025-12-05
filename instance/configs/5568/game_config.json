@@ -1,22 +1,45 @@
 {
-  "season": 2025,
   "game_name": "FRC 2025 Game",
+  "season": 2025,
+  "version": "1.0.0",
   "alliance_size": 3,
+  "scouting_stations": 6,
+  "current_event_code": "AROZ",
   "match_types": [
     "Practice",
     "Qualification",
     "Playoff"
   ],
-  "scouting_stations": 6,
   "preferred_api_source": "first",
+  "auto_period": {
+    "duration_seconds": 15,
+    "scoring_elements": []
+  },
+  "teleop_period": {
+    "duration_seconds": 135,
+    "scoring_elements": []
+  },
+  "endgame_period": {
+    "duration_seconds": 30,
+    "scoring_elements": []
+  },
+  "game_pieces": [],
+  "post_match": {
+    "rating_elements": [],
+    "text_elements": []
+  },
   "api_settings": {
     "username": "",
     "auth_token": "[REDACTED_auth_token]",
-    "base_url": "https://frc-api.firstinspires.org"
+    "base_url": "https://frc-api.firstinspires.org",
+    "auto_sync_enabled": true
   },
   "tba_api_settings": {
     "auth_key": "",
     "base_url": "https://www.thebluealliance.com/api/v3"
+  },
+  "data_analysis": {
+    "key_metrics": []
   },
   "scoring_elements": [
     {

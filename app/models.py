@@ -1053,6 +1053,7 @@ class PitScoutingData(db.Model):
             'team_id': self.team_id,
             'team_number': self.team.team_number if self.team else None,
             'event_id': self.event_id,
+            'scouting_team_number': self.scouting_team_number,
             'scout_name': self.scout_name,
             'scout_id': self.scout_id,
             'timestamp': self.timestamp.isoformat() if self.timestamp else None,
@@ -1069,6 +1070,7 @@ class PitScoutingData(db.Model):
             local_id=data_dict.get('local_id'),
             team_id=data_dict.get('team_id'),
             event_id=data_dict.get('event_id'),
+            scouting_team_number=data_dict.get('scouting_team_number'),
             scout_name=data_dict.get('scout_name'),
             scout_id=data_dict.get('scout_id'),
             data_json=json.dumps(data_dict.get('data', {})),
@@ -1154,6 +1156,15 @@ class ScoutingAlliance(db.Model):
         """Get list of team numbers in this alliance"""
         return [member.team_number for member in self.get_active_members()]
     
+    def get_all_team_numbers(self):
+        """Get list of all team numbers including members and game_config_team.
+        This is useful for data filtering where data may be stored under game_config_team.
+        """
+        team_numbers = set(self.get_member_team_numbers())
+        if self.game_config_team:
+            team_numbers.add(self.game_config_team)
+        return list(team_numbers)
+    
     def is_member(self, team_number):
         """Check if a team is a member of this alliance"""
         return team_number in self.get_member_team_numbers()
@@ -1173,6 +1184,17 @@ class ScoutingAlliance(db.Model):
                 if event_code:
                     event_codes.add(event_code)
             except (json.JSONDecodeError, AttributeError):
+                pass
+        
+        # Check the game_config_team's config (this is the authoritative source)
+        if self.game_config_team:
+            try:
+                game_config_team_config = load_game_config(self.game_config_team)
+                if isinstance(game_config_team_config, dict):
+                    event_code = game_config_team_config.get('current_event_code', '').strip().upper()
+                    if event_code:
+                        event_codes.add(event_code)
+            except Exception:
                 pass
         
         # Then collect event codes from all active alliance members' configs
@@ -1236,6 +1258,9 @@ class ScoutingAllianceMember(db.Model):
     status = db.Column(db.String(50), default='pending')  # 'pending', 'accepted', 'declined'
     joined_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     invited_by = db.Column(db.Integer, nullable=True)  # Team number that sent the invite
+    # Data sharing status - when False, other teams cannot sync NEW data from this team
+    is_data_sharing_active = db.Column(db.Boolean, default=True)
+    data_sharing_deactivated_at = db.Column(db.DateTime, nullable=True)
     
     def __repr__(self):
         return f'<AllianceMember {self.team_number} in Alliance {self.alliance_id}>'
@@ -1335,6 +1360,323 @@ class ScoutingAllianceChat(db.Model):
         }
 
 
+class AllianceSharedScoutingData(db.Model):
+    """Model to store copies of scouting data shared with alliances.
+    
+    When data is synced to an alliance, a copy is made here so that deleting
+    the original doesn't affect other alliance members' access to the data.
+    """
+    __tablename__ = 'alliance_shared_scouting_data'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    alliance_id = db.Column(db.Integer, db.ForeignKey('scouting_alliance.id'), nullable=False)
+    
+    # Reference to original data (may be null if original was deleted)
+    original_scouting_data_id = db.Column(db.Integer, nullable=True)
+    
+    # Team that originally scouted this data (the "owner")
+    source_scouting_team_number = db.Column(db.Integer, nullable=False)
+    
+    # Copy of the scouting data fields
+    match_id = db.Column(db.Integer, db.ForeignKey('match.id'), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=False)
+    scout_name = db.Column(db.String(50))
+    scout_id = db.Column(db.Integer, nullable=True)
+    scouting_station = db.Column(db.Integer)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    alliance = db.Column(db.String(10))  # 'red' or 'blue'
+    data_json = db.Column(db.Text, nullable=False)  # JSON data based on game config
+    
+    # Metadata for alliance sharing
+    shared_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    shared_by_team = db.Column(db.Integer, nullable=False)  # Team that shared this
+    last_edited_by_team = db.Column(db.Integer, nullable=True)  # Last team to edit (for admin edits)
+    last_edited_at = db.Column(db.DateTime, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)  # Can be set to False if source team removes from alliance
+    
+    # Relationships
+    alliance_rel = db.relationship('ScoutingAlliance', backref='shared_scouting_data')
+    match = db.relationship('Match')
+    team = db.relationship('Team')
+    
+    def __repr__(self):
+        return f'<AllianceSharedScoutingData Alliance {self.alliance_id} Team {self.team.team_number if self.team else "?"} Match {self.match.match_number if self.match else "?"}>'
+    
+    @property
+    def data(self):
+        """Get data as a Python dictionary"""
+        return json.loads(self.data_json)
+    
+    @data.setter
+    def data(self, value):
+        """Store data as JSON string"""
+        self.data_json = json.dumps(value)
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'alliance_id': self.alliance_id,
+            'original_id': self.original_scouting_data_id,
+            'source_team': self.source_scouting_team_number,
+            'match_id': self.match_id,
+            'team_id': self.team_id,
+            'team_number': self.team.team_number if self.team else None,
+            'match_number': self.match.match_number if self.match else None,
+            'match_type': self.match.match_type if self.match else None,
+            'event_code': self.match.event.code if self.match and self.match.event else None,
+            'scout_name': self.scout_name,
+            'alliance': self.alliance,
+            'data': self.data,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'shared_at': self.shared_at.isoformat() if self.shared_at else None,
+            'shared_by_team': self.shared_by_team,
+            'last_edited_by_team': self.last_edited_by_team,
+            'last_edited_at': self.last_edited_at.isoformat() if self.last_edited_at else None,
+            'is_active': self.is_active
+        }
+    
+    @classmethod
+    def create_from_scouting_data(cls, scouting_data, alliance_id, shared_by_team):
+        """Create a shared copy from original ScoutingData"""
+        return cls(
+            alliance_id=alliance_id,
+            original_scouting_data_id=scouting_data.id,
+            source_scouting_team_number=scouting_data.scouting_team_number,
+            match_id=scouting_data.match_id,
+            team_id=scouting_data.team_id,
+            scout_name=scouting_data.scout_name,
+            scout_id=scouting_data.scout_id,
+            scouting_station=scouting_data.scouting_station,
+            timestamp=scouting_data.timestamp,
+            alliance=scouting_data.alliance,
+            data_json=scouting_data.data_json,
+            shared_by_team=shared_by_team
+        )
+    
+    @property
+    def scouting_team_number(self):
+        """Alias for source_scouting_team_number to match ScoutingData interface."""
+        return self.source_scouting_team_number
+    
+    def calculate_metric(self, formula_or_id):
+        """Calculate metrics based on formulas or metric IDs defined in game config.
+        
+        This is a proxy method that uses ScoutingData's implementation by creating
+        a temporary ScoutingData-like object with our data.
+        """
+        # Create a temporary ScoutingData object to leverage its calculate_metric logic
+        temp_data = ScoutingData(
+            match_id=self.match_id,
+            team_id=self.team_id,
+            scouting_team_number=self.source_scouting_team_number,
+            data_json=self.data_json
+        )
+        return temp_data.calculate_metric(formula_or_id)
+    
+    def _calculate_auto_points_dynamic(self, local_dict, game_config=None):
+        """Proxy method that delegates to ScoutingData's implementation."""
+        temp_data = ScoutingData(
+            match_id=self.match_id,
+            team_id=self.team_id,
+            scouting_team_number=self.source_scouting_team_number,
+            data_json=self.data_json
+        )
+        return temp_data._calculate_auto_points_dynamic(local_dict, game_config)
+    
+    def _calculate_teleop_points_dynamic(self, local_dict, game_config=None):
+        """Proxy method that delegates to ScoutingData's implementation."""
+        temp_data = ScoutingData(
+            match_id=self.match_id,
+            team_id=self.team_id,
+            scouting_team_number=self.source_scouting_team_number,
+            data_json=self.data_json
+        )
+        return temp_data._calculate_teleop_points_dynamic(local_dict, game_config)
+    
+    def _calculate_endgame_points_dynamic(self, local_dict, game_config=None):
+        """Proxy method that delegates to ScoutingData's implementation."""
+        temp_data = ScoutingData(
+            match_id=self.match_id,
+            team_id=self.team_id,
+            scouting_team_number=self.source_scouting_team_number,
+            data_json=self.data_json
+        )
+        return temp_data._calculate_endgame_points_dynamic(local_dict, game_config)
+    
+    def _evaluate_formula(self, formula, local_dict):
+        """Proxy method that delegates to ScoutingData's implementation."""
+        temp_data = ScoutingData(
+            match_id=self.match_id,
+            team_id=self.team_id,
+            scouting_team_number=self.source_scouting_team_number,
+            data_json=self.data_json
+        )
+        return temp_data._evaluate_formula(formula, local_dict)
+
+
+class AllianceSharedPitData(db.Model):
+    """Model to store copies of pit scouting data shared with alliances.
+    
+    When pit data is synced to an alliance, a copy is made here so that deleting
+    the original doesn't affect other alliance members' access to the data.
+    """
+    __tablename__ = 'alliance_shared_pit_data'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    alliance_id = db.Column(db.Integer, db.ForeignKey('scouting_alliance.id'), nullable=False)
+    
+    # Reference to original data (may be null if original was deleted)
+    original_pit_data_id = db.Column(db.Integer, nullable=True)
+    
+    # Team that originally scouted this data (the "owner")
+    source_scouting_team_number = db.Column(db.Integer, nullable=False)
+    
+    # Copy of the pit scouting data fields
+    team_id = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=False)
+    event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=True)
+    scout_name = db.Column(db.String(50), nullable=False)
+    scout_id = db.Column(db.Integer, nullable=True)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    data_json = db.Column(db.Text, nullable=False)  # JSON data
+    local_id = db.Column(db.String(36), nullable=True)  # UUID for tracking
+    
+    # Metadata for alliance sharing
+    shared_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    shared_by_team = db.Column(db.Integer, nullable=False)  # Team that shared this
+    last_edited_by_team = db.Column(db.Integer, nullable=True)  # Last team to edit (for admin edits)
+    last_edited_at = db.Column(db.DateTime, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)  # Can be set to False if source team removes from alliance
+    
+    # Relationships
+    alliance_rel = db.relationship('ScoutingAlliance', backref='shared_pit_data')
+    team = db.relationship('Team')
+    event = db.relationship('Event')
+    
+    def __repr__(self):
+        return f'<AllianceSharedPitData Alliance {self.alliance_id} Team {self.team.team_number if self.team else "?"}>'
+    
+    @property
+    def data(self):
+        """Get data as a Python dictionary"""
+        try:
+            return json.loads(self.data_json)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    
+    @data.setter
+    def data(self, value):
+        """Set data from a Python dictionary"""
+        self.data_json = json.dumps(value)
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'alliance_id': self.alliance_id,
+            'original_id': self.original_pit_data_id,
+            'source_team': self.source_scouting_team_number,
+            'team_id': self.team_id,
+            'team_number': self.team.team_number if self.team else None,
+            'event_id': self.event_id,
+            'scout_name': self.scout_name,
+            'data': self.data,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'shared_at': self.shared_at.isoformat() if self.shared_at else None,
+            'shared_by_team': self.shared_by_team,
+            'last_edited_by_team': self.last_edited_by_team,
+            'last_edited_at': self.last_edited_at.isoformat() if self.last_edited_at else None,
+            'is_active': self.is_active
+        }
+    
+    @classmethod
+    def create_from_pit_data(cls, pit_data, alliance_id, shared_by_team):
+        """Create a shared copy from original PitScoutingData"""
+        import uuid
+        return cls(
+            alliance_id=alliance_id,
+            original_pit_data_id=pit_data.id,
+            source_scouting_team_number=pit_data.scouting_team_number,
+            team_id=pit_data.team_id,
+            event_id=pit_data.event_id,
+            scout_name=pit_data.scout_name,
+            scout_id=pit_data.scout_id,
+            timestamp=pit_data.timestamp,
+            data_json=pit_data.data_json,
+            local_id=str(uuid.uuid4()),
+            shared_by_team=shared_by_team
+        )
+
+
+class AllianceDeletedData(db.Model):
+    """Track data that was deleted from an alliance by admin to prevent re-sync.
+    
+    When alliance admin deletes shared data, we record it here so that
+    future syncs don't re-add the same data.
+    """
+    __tablename__ = 'alliance_deleted_data'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    alliance_id = db.Column(db.Integer, db.ForeignKey('scouting_alliance.id'), nullable=False)
+    data_type = db.Column(db.String(20), nullable=False)  # 'scouting' or 'pit'
+    
+    # Identify the data that was deleted (match these fields to prevent re-sync)
+    match_id = db.Column(db.Integer, nullable=True)  # For scouting data
+    team_id = db.Column(db.Integer, nullable=False)
+    alliance_color = db.Column(db.String(10), nullable=True)  # 'red' or 'blue' for scouting
+    source_scouting_team_number = db.Column(db.Integer, nullable=False)
+    
+    # Metadata
+    deleted_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    deleted_by_team = db.Column(db.Integer, nullable=False)
+    
+    # Relationship
+    alliance_rel = db.relationship('ScoutingAlliance', backref='deleted_data_records')
+    
+    def __repr__(self):
+        return f'<AllianceDeletedData Alliance {self.alliance_id} Type {self.data_type}>'
+    
+    @classmethod
+    def is_deleted(cls, alliance_id, data_type, match_id, team_id, alliance_color, source_team):
+        """Check if this data was previously deleted from the alliance"""
+        query = cls.query.filter_by(
+            alliance_id=alliance_id,
+            data_type=data_type,
+            team_id=team_id,
+            source_scouting_team_number=source_team
+        )
+        if data_type == 'scouting':
+            query = query.filter_by(match_id=match_id, alliance_color=alliance_color)
+        return query.first() is not None
+    
+    @classmethod
+    def mark_deleted(cls, alliance_id, data_type, match_id, team_id, alliance_color, source_team, deleted_by):
+        """Mark data as deleted to prevent re-sync"""
+        # Check if already marked
+        existing = cls.query.filter_by(
+            alliance_id=alliance_id,
+            data_type=data_type,
+            team_id=team_id,
+            source_scouting_team_number=source_team
+        )
+        if data_type == 'scouting':
+            existing = existing.filter_by(match_id=match_id, alliance_color=alliance_color)
+        
+        if existing.first():
+            return  # Already marked
+        
+        record = cls(
+            alliance_id=alliance_id,
+            data_type=data_type,
+            match_id=match_id,
+            team_id=team_id,
+            alliance_color=alliance_color,
+            source_scouting_team_number=source_team,
+            deleted_by_team=deleted_by
+        )
+        db.session.add(record)
+
+
 class ScoutingDirectMessage(db.Model):
     """Model for direct (user-to-user) messages between users within the same
     scouting team or allied teams.
@@ -1420,10 +1762,44 @@ class TeamAllianceStatus(db.Model):
         return status
     
     @classmethod
-    def deactivate_alliance_for_team(cls, team_number):
-        """Deactivate alliance mode for a team"""
+    def deactivate_alliance_for_team(cls, team_number, remove_shared_data=False):
+        """Deactivate alliance mode for a team.
+        
+        Args:
+            team_number: The team number to deactivate
+            remove_shared_data: If True, removes all shared data from this team from the alliance
+        """
+        from app import db
+        
         status = cls.query.filter_by(team_number=team_number).first()
         if status:
+            alliance_id = status.active_alliance_id
+            
+            # Set is_data_sharing_active to False for this team's membership
+            # This prevents other teams from syncing NEW data from this team
+            if alliance_id:
+                member = ScoutingAllianceMember.query.filter_by(
+                    alliance_id=alliance_id,
+                    team_number=team_number
+                ).first()
+                if member:
+                    member.is_data_sharing_active = False
+                    member.data_sharing_deactivated_at = datetime.now(timezone.utc)
+                
+                # Optionally remove all shared data from this team
+                if remove_shared_data:
+                    # Remove scouting data shared by this team
+                    AllianceSharedScoutingData.query.filter_by(
+                        alliance_id=alliance_id,
+                        source_scouting_team_number=team_number
+                    ).delete()
+                    
+                    # Remove pit data shared by this team
+                    AllianceSharedPitData.query.filter_by(
+                        alliance_id=alliance_id,
+                        source_scouting_team_number=team_number
+                    ).delete()
+            
             status.is_alliance_mode_active = False
             status.deactivated_at = datetime.now(timezone.utc)
             db.session.commit()
@@ -1514,7 +1890,14 @@ class SharedGraph(db.Model):
         """Check if this shared graph has expired"""
         if not self.expires_at:
             return False
-        return datetime.now(timezone.utc) > self.expires_at
+        now = datetime.now(timezone.utc)
+        exp = self.expires_at
+        # If expires_at is naive, assume UTC. If it's aware, convert to UTC for safe comparison.
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        else:
+            exp = exp.astimezone(timezone.utc)
+        return now > exp
     
     def get_teams(self):
         """Get Team objects for the teams in this shared graph"""
@@ -1632,7 +2015,14 @@ class SharedTeamRanks(db.Model):
         """Check if this shared ranking has expired"""
         if not self.expires_at:
             return False
-        return datetime.now(timezone.utc) > self.expires_at
+        now = datetime.now(timezone.utc)
+        exp = self.expires_at
+        # If expires_at is naive, assume UTC. If it's aware, convert to UTC for safe comparison.
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        else:
+            exp = exp.astimezone(timezone.utc)
+        return now > exp
     
     def increment_view_count(self):
         """Increment the view count for this shared ranking"""

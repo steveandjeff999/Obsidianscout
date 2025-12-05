@@ -19,6 +19,7 @@ from app.utils.team_isolation import (
     filter_events_by_scouting_team, get_event_by_code, validate_user_in_same_team
 )
 from app.utils.team_isolation import get_combined_dropdown_events
+from app.utils.alliance_data import get_active_alliance_id, get_all_scouting_data, get_all_teams_for_alliance, get_all_matches_for_alliance
 
 connected_devices = {}
 
@@ -80,31 +81,58 @@ def index():
     if current_event_code:
         current_event = get_event_by_code(current_event_code)  # Use filtered function
     
-    # Get teams filtered by the current event and scouting team
+    # Check for alliance mode
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
+    
+    # Get teams filtered by the current event
+    # In alliance mode, get teams from alliance scouting data
     if current_event:
-        teams = filter_teams_by_scouting_team().join(
-            Team.events
-        ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+        if alliance_id:
+            teams, _ = get_all_teams_for_alliance(event_id=current_event.id)
+        else:
+            teams = filter_teams_by_scouting_team().join(
+                Team.events
+            ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
     else:
         teams = []  # No teams if no current event is set
     
-    # Get matches filtered by the current event and scouting team
+    # Get matches filtered by the current event
+    # In alliance mode, get matches from alliance scouting data
     if current_event:
-        matches_query = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id)
-        # filter_matches_by_scouting_team() already handles alliance mode and team isolation
-        matches = matches_query.order_by(Match.match_type, Match.match_number).all()
+        if alliance_id:
+            matches, _ = get_all_matches_for_alliance(event_id=current_event.id)
+        else:
+            matches_query = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id)
+            # filter_matches_by_scouting_team() already handles alliance mode and team isolation
+            matches = matches_query.order_by(Match.match_type, Match.match_number).all()
     else:
         matches = []  # No matches if no current event is set
     
     # Only show scouting entries associated with the current event
     if current_event:
-        # Start with entries for matches in the current event using alliance-aware filtering
-        from app.utils.team_isolation import filter_scouting_data_by_scouting_team
-        base_q = filter_scouting_data_by_scouting_team().join(Match).filter(Match.event_id == current_event.id)
-        scout_entries = base_q.order_by(ScoutingData.timestamp.desc()).limit(5).all()
-
-        # Get total count of scouting entries for the current event
-        total_scout_entries = base_q.count()
+        # Check for alliance mode
+        alliance_id = get_active_alliance_id()
+        
+        if alliance_id:
+            # Alliance mode - use shared scouting data
+            # Filter by event_code (not event_id) since different alliance members have different event IDs
+            from app.models import AllianceSharedScoutingData
+            from sqlalchemy import func
+            base_q = AllianceSharedScoutingData.query.filter_by(
+                alliance_id=alliance_id,
+                is_active=True
+            ).join(Match).join(Event, Match.event_id == Event.id).filter(
+                func.upper(Event.code) == func.upper(current_event.code) if current_event.code else Match.event_id == current_event.id
+            )
+            scout_entries = base_q.order_by(AllianceSharedScoutingData.timestamp.desc()).limit(5).all()
+            total_scout_entries = base_q.count()
+        else:
+            # Normal mode - use team filtering
+            from app.utils.team_isolation import filter_scouting_data_by_scouting_team
+            base_q = filter_scouting_data_by_scouting_team().join(Match).filter(Match.event_id == current_event.id)
+            scout_entries = base_q.order_by(ScoutingData.timestamp.desc()).limit(5).all()
+            total_scout_entries = base_q.count()
     else:
         # No configured event -> show no entries
         scout_entries = []
@@ -1618,9 +1646,20 @@ def api_sync_status():
     game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
     
-    # Get basic statistics
-    total_teams = filter_teams_by_scouting_team().count()
-    total_matches = filter_matches_by_scouting_team().count()
+    # Get basic statistics - use alliance-aware functions
+    alliance_id = get_active_alliance_id()
+    
+    if alliance_id:
+        # Alliance mode - use alliance-aware functions
+        all_teams, _ = get_all_teams_for_alliance(event_code=current_event_code)
+        all_matches, _ = get_all_matches_for_alliance(event_code=current_event_code)
+        total_teams = len(all_teams)
+        total_matches = len(all_matches)
+    else:
+        # Standard mode
+        total_teams = filter_teams_by_scouting_team().count()
+        total_matches = filter_matches_by_scouting_team().count()
+    
     total_events = len(get_combined_dropdown_events())
     
     # Get current event info
@@ -1628,8 +1667,13 @@ def api_sync_status():
     if current_event_code:
         current_event = get_event_by_code(current_event_code)
         if current_event:
-            event_teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).count()
-            event_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).count()
+            if alliance_id:
+                # Alliance mode - count from alliance functions which already filter by event
+                event_teams = len(all_teams) if current_event_code else 0
+                event_matches = len(all_matches) if current_event_code else 0
+            else:
+                event_teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).count()
+                event_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).count()
         else:
             event_teams = 0
             event_matches = 0
@@ -2118,6 +2162,7 @@ def analytics_config_averages():
         match_ids = None
         selected_event_id = request.args.get('event_id')
         events = []
+        selected_event_code = None  # Track event_code for alliance mode filtering
         try:
             events = get_combined_dropdown_events()
         except Exception:
@@ -2126,6 +2171,9 @@ def analytics_config_averages():
         if selected_event_id:
             try:
                 selected_event_id = int(selected_event_id)
+                selected_event_obj = Event.query.get(selected_event_id)
+                if selected_event_obj:
+                    selected_event_code = selected_event_obj.code
                 match_ids = [m.id for m in filter_matches_by_scouting_team().filter(Match.event_id == selected_event_id).all()]
             except Exception:
                 selected_event_id = None
@@ -2138,14 +2186,29 @@ def analytics_config_averages():
                     if event:
                         match_ids = [m.id for m in filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()]
                         selected_event_id = event.id
+                        selected_event_code = event.code
                 except Exception:
                     match_ids = None
 
-        # Query scouting data scoped to current user's scouting team
-        scouting_team_number = getattr(current_user, 'scouting_team_number', None)
-        q = ScoutingData.query.filter(ScoutingData.scouting_team_number == scouting_team_number)
-        if match_ids:
-            q = q.filter(ScoutingData.match_id.in_(match_ids))
+        # Query scouting data - use alliance data if in alliance mode
+        alliance_id = get_active_alliance_id()
+        if alliance_id:
+            from app.models import AllianceSharedScoutingData
+            from sqlalchemy import func
+            q = AllianceSharedScoutingData.query.filter_by(
+                alliance_id=alliance_id,
+                is_active=True
+            )
+            # In alliance mode, filter by event_code (not match_ids) since match IDs differ across teams
+            if selected_event_code:
+                q = q.join(Match, AllianceSharedScoutingData.match_id == Match.id).join(
+                    Event, Match.event_id == Event.id
+                ).filter(func.upper(Event.code) == func.upper(selected_event_code))
+        else:
+            scouting_team_number = getattr(current_user, 'scouting_team_number', None)
+            q = ScoutingData.query.filter(ScoutingData.scouting_team_number == scouting_team_number)
+            if match_ids:
+                q = q.filter(ScoutingData.match_id.in_(match_ids))
         entries = q.all()
 
         # Helper to extract data dict from ScoutingData entry
@@ -2400,6 +2463,9 @@ def api_sync_event():
     This endpoint calls the existing blueprint handlers for team and match
     syncs. It returns JSON with per-step results. Only authenticated users
     with admin or analytics roles should trigger this.
+    
+    When alliance mode is active, this also triggers the alliance API sync
+    to ensure all alliance members get updated teams and matches.
     """
     # Require admin or analytics role to prevent misuse
     if not (current_user.has_role('admin') or current_user.has_role('analytics')):
@@ -2407,10 +2473,34 @@ def api_sync_event():
 
     results = {
         'teams_sync': {'success': False, 'message': '', 'flashes': []},
-        'matches_sync': {'success': False, 'message': '', 'flashes': []}
+        'matches_sync': {'success': False, 'message': '', 'flashes': []},
+        'alliance_sync': {'success': False, 'message': '', 'triggered': False}
     }
 
     try:
+        # Check if alliance mode is active - if so, also trigger alliance API sync
+        from app.utils.alliance_data import get_active_alliance_id
+        alliance_id = get_active_alliance_id()
+        
+        if alliance_id:
+            # Alliance mode is active - trigger alliance API sync first
+            try:
+                from app.routes.scouting_alliances import perform_alliance_api_sync_for_alliance
+                print(f"Manual sync triggered: Running alliance API sync for alliance {alliance_id}")
+                sync_result = perform_alliance_api_sync_for_alliance(alliance_id)
+                results['alliance_sync']['triggered'] = True
+                results['alliance_sync']['success'] = sync_result.get('success', False)
+                results['alliance_sync']['message'] = sync_result.get('message', 'Alliance sync attempted')
+                results['alliance_sync']['teams_added'] = sync_result.get('teams_added', 0)
+                results['alliance_sync']['teams_updated'] = sync_result.get('teams_updated', 0)
+                results['alliance_sync']['matches_added'] = sync_result.get('matches_added', 0)
+                results['alliance_sync']['matches_updated'] = sync_result.get('matches_updated', 0)
+            except Exception as e:
+                current_app.logger.exception('Alliance sync failed')
+                results['alliance_sync']['triggered'] = True
+                results['alliance_sync']['success'] = False
+                results['alliance_sync']['message'] = str(e)
+        
         # Import inside function to avoid circular imports at module level
         from app.routes import teams as teams_bp
         # Call the teams sync view function directly. It will perform DB work
@@ -2471,7 +2561,7 @@ def api_sync_event():
             results['matches_sync']['flashes'] = [{'category': c, 'message': m} for c, m in flashes]
 
         # Determine overall success
-        overall_success = results['teams_sync']['success'] or results['matches_sync']['success']
+        overall_success = results['teams_sync']['success'] or results['matches_sync']['success'] or results['alliance_sync'].get('success', False)
 
         return jsonify({'success': overall_success, 'results': results})
 

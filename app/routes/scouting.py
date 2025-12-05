@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
 from flask_login import login_required, current_user
-from app.models import Match, Team, ScoutingData, Event
+from app.models import Match, Team, ScoutingData, Event, AllianceSharedScoutingData
 from app import db, socketio
 import json
 from datetime import datetime, timezone
@@ -11,7 +11,12 @@ from app.utils.config_manager import get_id_to_perm_id_mapping, get_current_game
 from app.utils.theme_manager import ThemeManager
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
-    filter_events_by_scouting_team, get_event_by_code
+    filter_events_by_scouting_team, get_event_by_code, get_all_teams_at_event
+)
+from app.utils.alliance_data import (
+    get_all_scouting_data, get_events_with_scouting_data, 
+    can_delete_scouting_entry, is_alliance_admin, get_active_alliance_id,
+    normalize_scouting_entry, get_all_teams_for_alliance, get_all_matches_for_alliance
 )
 
 bp = Blueprint('scouting', __name__, url_prefix='/scouting')
@@ -45,6 +50,41 @@ def auto_sync_alliance_data(scouting_data_entry):
             return
             
         alliance = alliance_status.active_alliance
+        
+        # Check if current team has data sharing enabled
+        current_member = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance.id,
+            team_number=current_team,
+            status='accepted'
+        ).first()
+        
+        # If data sharing is disabled for this team, don't sync their data to others
+        if current_member and not getattr(current_member, 'is_data_sharing_active', True):
+            return
+        
+        # Also save to AllianceSharedScoutingData for centralized alliance storage
+        existing_shared = AllianceSharedScoutingData.query.filter_by(
+            alliance_id=alliance.id,
+            original_scouting_data_id=scouting_data_entry.id,
+            is_active=True
+        ).first()
+        
+        if existing_shared:
+            # Update existing shared data
+            existing_shared.data = scouting_data_entry.data
+            existing_shared.scout_name = scouting_data_entry.scout_name
+            existing_shared.scout_id = scouting_data_entry.scout_id
+            existing_shared.scouting_station = scouting_data_entry.scouting_station
+            existing_shared.alliance = scouting_data_entry.alliance
+            existing_shared.timestamp = scouting_data_entry.timestamp
+            existing_shared.last_edited_by_team = current_team
+            existing_shared.last_edited_at = datetime.now(timezone.utc)
+        else:
+            # Create new shared data entry
+            shared_data = AllianceSharedScoutingData.create_from_scouting_data(
+                scouting_data_entry, alliance.id, current_team
+            )
+            db.session.add(shared_data)
         
         # Get alliance shared events to verify we should sync this data
         alliance_events = alliance.get_shared_events()
@@ -114,13 +154,24 @@ def index():
     if current_event_code:
         current_event = get_event_by_code(current_event_code)  # Use filtered function
     
-    # Get teams filtered by the current event and scouting team
-    if current_event:
-        teams = filter_teams_by_scouting_team().join(
-            Team.events
-        ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+    # Check if alliance mode is active
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
+    
+    # Get teams - use alliance teams if in alliance mode
+    if is_alliance_mode:
+        if current_event:
+            teams, _ = get_all_teams_for_alliance(event_id=current_event.id)
+        else:
+            teams, _ = get_all_teams_for_alliance()
     else:
-        teams = []  # No teams if no current event is set
+        # Get teams filtered by the current event and scouting team
+        if current_event:
+            teams = filter_teams_by_scouting_team().join(
+                Team.events
+            ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+        else:
+            teams = []  # No teams if no current event is set
     
     # Define custom ordering for match types
     match_type_order = {
@@ -131,25 +182,46 @@ def index():
         'elimination': 3,  # Alternative name for playoff matches
     }
     
-    # Get matches filtered by the current event if available
-    if current_event:
-        all_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).all()
+    # Get matches - use alliance matches if in alliance mode
+    if is_alliance_mode:
+        if current_event:
+            all_matches, _ = get_all_matches_for_alliance(event_id=current_event.id)
+        else:
+            all_matches, _ = get_all_matches_for_alliance()
     else:
-        all_matches = filter_matches_by_scouting_team().all()
+        # Get matches filtered by the current event if available
+        if current_event:
+            all_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).all()
+        else:
+            all_matches = filter_matches_by_scouting_team().all()
     
     matches = sorted(all_matches, key=lambda m: (
         match_type_order.get(m.match_type.lower(), 99),  # Unknown types go to the end
         m.match_number
     ))
     
-    # Get recent scouting data
-    recent_scouting_data = ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number).order_by(ScoutingData.timestamp.desc()).limit(5).all()
+    # Get recent scouting data - use alliance data if alliance mode is active
+    if is_alliance_mode:
+        recent_scouting_data = AllianceSharedScoutingData.query.filter_by(
+            alliance_id=alliance_id,
+            is_active=True
+        ).order_by(AllianceSharedScoutingData.timestamp.desc()).limit(5).all()
+    else:
+        # Exclude alliance-copied data (scout_name starts with [Alliance-)
+        recent_scouting_data = ScoutingData.query.filter(
+            ScoutingData.scouting_team_number == current_user.scouting_team_number,
+            db.or_(
+                ScoutingData.scout_name == None,
+                ~ScoutingData.scout_name.like('[Alliance-%')
+            )
+        ).order_by(ScoutingData.timestamp.desc()).limit(5).all()
     
     return render_template('scouting/index.html', 
                           teams=teams, 
                           matches=matches,
                           scouting_data=recent_scouting_data,  
                           game_config=game_config,
+                          is_alliance_mode=is_alliance_mode,
                           **get_theme_context())
 
 @bp.route('/form', methods=['GET', 'POST'])
@@ -164,13 +236,24 @@ def scouting_form():
     if current_event_code:
         current_event = get_event_by_code(current_event_code)  # Use filtered function
     
-    # Get teams filtered by the current event and scouting team
-    if current_event:
-        teams = filter_teams_by_scouting_team().join(
-            Team.events
-        ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+    # Check if alliance mode is active
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
+    
+    # Get teams - use alliance teams if in alliance mode
+    if is_alliance_mode:
+        if current_event:
+            teams, _ = get_all_teams_for_alliance(event_id=current_event.id)
+        else:
+            teams, _ = get_all_teams_for_alliance()
     else:
-        teams = []  # No teams if no current event is set
+        # Get teams filtered by the current event and scouting team
+        if current_event:
+            teams = filter_teams_by_scouting_team().join(
+                Team.events
+            ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+        else:
+            teams = []  # No teams if no current event is set
 
     # Sort teams by team_number (already sorted in query but keeping for consistency)
     teams = sorted(teams, key=lambda t: t.team_number)
@@ -184,11 +267,18 @@ def scouting_form():
         'elimination': 3,  # Alternative name for playoff matches
     }
     
-    # Get matches filtered by the current event if available
-    if current_event:
-        all_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).all()
+    # Get matches - use alliance matches if in alliance mode
+    if is_alliance_mode:
+        if current_event:
+            all_matches, _ = get_all_matches_for_alliance(event_id=current_event.id)
+        else:
+            all_matches, _ = get_all_matches_for_alliance()
     else:
-        all_matches = filter_matches_by_scouting_team().all()
+        # Get matches filtered by the current event if available
+        if current_event:
+            all_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).all()
+        else:
+            all_matches = filter_matches_by_scouting_team().all()
     
     matches = sorted(all_matches, key=lambda m: (
         match_type_order.get(m.match_type.lower(), 99),  # Unknown types go to the end
@@ -366,6 +456,10 @@ def scouting_form():
             scouting_team_number=current_user.scouting_team_number
         ).first()
         
+        # Check if alliance mode is active
+        alliance_id = get_active_alliance_id()
+        is_alliance_mode = alliance_id is not None
+        
         # Create or update scouting data
         if existing_data:
             existing_data.data = data
@@ -374,6 +468,32 @@ def scouting_form():
             existing_data.scouting_station = scouting_station
             existing_data.alliance = alliance
             existing_data.timestamp = datetime.now(timezone.utc)
+            
+            # If alliance mode is active, also update or create alliance shared data
+            if is_alliance_mode:
+                existing_shared = AllianceSharedScoutingData.query.filter_by(
+                    alliance_id=alliance_id,
+                    original_scouting_data_id=existing_data.id,
+                    is_active=True
+                ).first()
+                
+                if existing_shared:
+                    # Update existing shared data
+                    existing_shared.data = data
+                    existing_shared.scout_name = scout_name
+                    existing_shared.scout_id = scout_id
+                    existing_shared.scouting_station = scouting_station
+                    existing_shared.alliance = alliance
+                    existing_shared.timestamp = datetime.now(timezone.utc)
+                    existing_shared.last_edited_by_team = current_user.scouting_team_number
+                    existing_shared.last_edited_at = datetime.now(timezone.utc)
+                else:
+                    # Create new shared data entry
+                    shared_data = AllianceSharedScoutingData.create_from_scouting_data(
+                        existing_data, alliance_id, current_user.scouting_team_number
+                    )
+                    db.session.add(shared_data)
+            
             flash('Scouting data updated successfully!', 'success')
         else:
             new_data = ScoutingData(
@@ -387,6 +507,15 @@ def scouting_form():
                 scouting_team_number=current_user.scouting_team_number
             )
             db.session.add(new_data)
+            db.session.flush()  # Get the ID for the new record
+            
+            # If alliance mode is active, also create alliance shared data
+            if is_alliance_mode:
+                shared_data = AllianceSharedScoutingData.create_from_scouting_data(
+                    new_data, alliance_id, current_user.scouting_team_number
+                )
+                db.session.add(shared_data)
+            
             flash('Scouting data saved successfully!', 'success')
         
         db.session.commit()
@@ -630,66 +759,141 @@ def qr_code(team_id, match_id):
 @bp.route('/list')
 @login_required
 def list_data():
-    """List all scouting data"""
+    """List all scouting data - uses alliance shared data when alliance mode is active"""
     # If the user is ONLY a scout (no analytics or admin role), redirect to the scouting dashboard with a message
     if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin'):
         flash('Access to the full scouting data list is restricted. Please contact an administrator for assistance.', 'warning')
         return redirect(url_for('scouting.index'))
     
-    scouting_data = (ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number)
-                     .join(Match)
-                     .join(Event)
-                     .join(Team)
-                     .order_by(ScoutingData.timestamp.desc())
-                     .all())
+    # Get scouting data - automatically uses alliance shared data if alliance mode is active
+    scouting_data, is_alliance_mode, alliance_id = get_all_scouting_data()
     
-    # Get all events that have scouting data
-    events = (Event.query
-             .join(Match)
-             .join(ScoutingData).filter(ScoutingData.scouting_team_number==current_user.scouting_team_number)
-             .distinct()
-             .order_by(Event.name)
-             .all())
+    # Get events with scouting data
+    events, _, _ = get_events_with_scouting_data()
+    
+    # Check if user is alliance admin (for delete permissions)
+    user_is_alliance_admin = is_alliance_admin(alliance_id) if is_alliance_mode else False
     
     return render_template('scouting/list.html', 
                          scouting_data=scouting_data,
                          events=events,
+                         is_alliance_mode=is_alliance_mode,
+                         alliance_id=alliance_id,
+                         user_is_alliance_admin=user_is_alliance_admin,
                          **get_theme_context())
 
 @bp.route('/view/<int:id>')
 @login_required
 def view_data(id):
-    """View a specific scouting data entry"""
+    """View a specific scouting data entry - supports both regular and alliance shared data"""
     # If the user is ONLY a scout (no analytics or admin role), redirect to the scouting dashboard with a message
     if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin'):
         flash('Access to view detailed scouting data is restricted. Please contact an administrator for assistance.', 'warning')
         return redirect(url_for('scouting.index'))
-        
-    scouting_data = ScoutingData.query.filter_by(id=id, scouting_team_number=current_user.scouting_team_number).first_or_404()
+    
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
+    
+    # Check for shared_id parameter (alliance mode)
+    shared_id = request.args.get('shared_id', type=int)
+    
+    if is_alliance_mode and shared_id:
+        # Viewing alliance shared data
+        scouting_data = AllianceSharedScoutingData.query.filter_by(
+            id=shared_id,
+            alliance_id=alliance_id,
+            is_active=True
+        ).first_or_404()
+    elif is_alliance_mode:
+        # Try to find in alliance data first
+        scouting_data = AllianceSharedScoutingData.query.filter_by(
+            id=id,
+            alliance_id=alliance_id,
+            is_active=True
+        ).first()
+        if not scouting_data:
+            # Fall back to regular data
+            scouting_data = ScoutingData.query.filter_by(id=id, scouting_team_number=current_user.scouting_team_number).first_or_404()
+    else:
+        scouting_data = ScoutingData.query.filter_by(id=id, scouting_team_number=current_user.scouting_team_number).first_or_404()
     
     # Get game configuration
     game_config = get_effective_game_config()
     
+    # Check delete permissions
+    can_delete = can_delete_scouting_entry(scouting_data, is_alliance_mode, alliance_id)
+    user_is_alliance_admin = is_alliance_admin(alliance_id) if is_alliance_mode else False
+    
     return render_template('scouting/view.html', scouting_data=scouting_data, 
                           game_config=game_config,
+                          is_alliance_mode=is_alliance_mode,
+                          alliance_id=alliance_id,
+                          can_delete=can_delete,
+                          user_is_alliance_admin=user_is_alliance_admin,
                           **get_theme_context())
 
 @bp.route('/delete/<int:id>', methods=['POST'])
 @login_required
 def delete_data(id):
-    """Delete a scouting data entry"""
+    """Delete a scouting data entry - enforces alliance delete permissions"""
     # If the user is ONLY a scout (no analytics or admin role), redirect to the scouting dashboard with a message
     if current_user.has_role('scout') and not current_user.has_role('analytics') and not current_user.has_role('admin'):
         flash('You do not have permission to delete scouting data. Please contact an administrator for assistance.', 'danger')
         return redirect(url_for('scouting.index'))
+    
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
+    
+    # Check for shared_id in request (alliance mode delete)
+    data = request.get_json() if request.is_json else {}
+    shared_id = data.get('shared_id') or request.form.get('shared_id')
+    
+    if is_alliance_mode and shared_id:
+        # Deleting alliance shared data
+        scouting_data = AllianceSharedScoutingData.query.filter_by(
+            id=shared_id,
+            alliance_id=alliance_id
+        ).first_or_404()
         
-    scouting_data = ScoutingData.query.filter_by(id=id, scouting_team_number=current_user.scouting_team_number).first_or_404()
+        # Check permissions
+        if not can_delete_scouting_entry(scouting_data, is_alliance_mode, alliance_id):
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+                return jsonify({'success': False, 'error': 'Only alliance admins or the original scout can delete this data'}), 403
+            flash('Only alliance admins or the original scout can delete this data.', 'danger')
+            return redirect(url_for('scouting.list_data'))
+        
+        team_number = scouting_data.team.team_number if scouting_data.team else 'Unknown'
+        match_number = scouting_data.match.match_number if scouting_data.match else 'Unknown'
+        
+        # Use the alliance delete endpoint logic
+        from app.models import AllianceDeletedData
+        AllianceDeletedData.mark_deleted(
+            alliance_id=alliance_id,
+            data_type='scouting',
+            match_id=scouting_data.match_id,
+            team_id=scouting_data.team_id,
+            alliance_color=scouting_data.alliance,
+            source_team=scouting_data.source_scouting_team_number,
+            deleted_by=current_user.scouting_team_number
+        )
+        db.session.delete(scouting_data)
+        db.session.commit()
+    else:
+        # Regular delete
+        scouting_data = ScoutingData.query.filter_by(id=id, scouting_team_number=current_user.scouting_team_number).first_or_404()
+        
+        # In alliance mode, check if user can delete their own team's data
+        if is_alliance_mode and not can_delete_scouting_entry(scouting_data, is_alliance_mode, alliance_id):
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+                return jsonify({'success': False, 'error': 'Only alliance admins or the original scout can delete this data'}), 403
+            flash('Only alliance admins or the original scout can delete this data.', 'danger')
+            return redirect(url_for('scouting.list_data'))
+        
+        team_number = scouting_data.team.team_number
+        match_number = scouting_data.match.match_number
 
-    team_number = scouting_data.team.team_number
-    match_number = scouting_data.match.match_number
-
-    db.session.delete(scouting_data)
-    db.session.commit()
+        db.session.delete(scouting_data)
+        db.session.commit()
 
     # If request is AJAX or expects JSON, return JSON response
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
@@ -710,9 +914,9 @@ def offline_data():
     if current_event_code:
         current_event = get_event_by_code(current_event_code)
     
-    # Get teams filtered by the current event if available
+    # Get ALL teams at the current event (regardless of scouting_team_number)
     if current_event:
-        teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+        teams = get_all_teams_at_event(event_id=current_event.id)
     else:
         teams = []  # No teams if no current event is set
     
@@ -793,6 +997,8 @@ def submit_offline_data():
             existing_data.alliance = alliance
             existing_data.timestamp = datetime.now(timezone.utc)
             db.session.commit()
+            # Sync to alliance if active
+            auto_sync_alliance_data(existing_data)
             return jsonify({'success': True, 'message': 'Offline data updated successfully'})
         else:
             new_data = ScoutingData(
@@ -806,6 +1012,8 @@ def submit_offline_data():
             )
             db.session.add(new_data)
             db.session.commit()
+            # Sync to alliance if active
+            auto_sync_alliance_data(new_data)
             return jsonify({'success': True, 'message': 'Offline data saved successfully'})
             
     except Exception as e:
@@ -1043,16 +1251,41 @@ def view_text_elements():
         flash('No text elements are configured in the game configuration.', 'info')
         return redirect(url_for('scouting.index'))
     
-    # Get scouting data with text elements
-    query = (ScoutingData.query.filter_by(scouting_team_number=current_user.scouting_team_number)
-             .join(Match)
-             .join(Event)
-             .join(Team)
-             .order_by(ScoutingData.timestamp.desc()))
+    # Check for alliance mode
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
     
-    # Filter by current event if available
-    if current_event:
-        query = query.filter(Event.id == current_event.id)
+    # Get scouting data with text elements - use alliance data if in alliance mode
+    if is_alliance_mode:
+        from sqlalchemy import func
+        query = (AllianceSharedScoutingData.query.filter_by(
+            alliance_id=alliance_id,
+            is_active=True
+        )
+        .join(Match)
+        .join(Event)
+        .join(Team)
+        .order_by(AllianceSharedScoutingData.timestamp.desc()))
+        
+        # Filter by current event code if available (not event_id in alliance mode)
+        if current_event and current_event.code:
+            query = query.filter(func.upper(Event.code) == func.upper(current_event.code))
+    else:
+        query = (ScoutingData.query.filter(
+            ScoutingData.scouting_team_number == current_user.scouting_team_number,
+            db.or_(
+                ScoutingData.scout_name == None,
+                ~ScoutingData.scout_name.like('[Alliance-%')
+            )
+        )
+                 .join(Match)
+                 .join(Event)
+                 .join(Team)
+                 .order_by(ScoutingData.timestamp.desc()))
+        
+        # Filter by current event if available (only in non-alliance mode)
+        if current_event:
+            query = query.filter(Event.id == current_event.id)
     
     all_scouting_data = query.all()
     

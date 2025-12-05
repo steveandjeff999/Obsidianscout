@@ -1051,3 +1051,256 @@ def get_event_details_dual_api(event_code):
             print(f"Fallback API ({fallback_source}) also failed: {str(fallback_error)}")
             diag = inspect_api_key_locations()
             raise ApiError(f"Both APIs failed. Primary ({preferred_source}): {str(e)}, Fallback ({fallback_source}): {str(fallback_error)}\n\n{diag}")
+
+
+def get_teams_with_alliance_fallback(event_code, alliance_id=None):
+    """Get teams using alliance member API keys as fallback if primary fails.
+    
+    This function first tries to get teams using the standard dual API.
+    If that fails and alliance_id is provided, it will try each alliance
+    member's API keys until one succeeds.
+    
+    Args:
+        event_code: The event code to fetch teams for
+        alliance_id: Optional alliance ID for fallback API keys
+        
+    Returns:
+        List of team data dictionaries
+    """
+    # First try the standard dual API approach
+    try:
+        return get_teams_dual_api(event_code)
+    except ApiError as primary_error:
+        print(f"Primary API failed for teams: {primary_error}")
+        
+        if not alliance_id:
+            raise primary_error
+        
+        # Try alliance member API keys as fallback
+        print(f"Attempting alliance member API fallback for alliance {alliance_id}")
+        
+        try:
+            from app.models import ScoutingAlliance, ScoutingAllianceMember
+            from app.utils.config_manager import load_game_config
+            
+            alliance = ScoutingAlliance.query.get(alliance_id)
+            if not alliance:
+                raise primary_error
+            
+            active_members = alliance.get_active_members()
+            if not active_members:
+                raise primary_error
+            
+            # Try each member's API configuration
+            for member in active_members:
+                try:
+                    member_config = load_game_config(team_number=member.team_number)
+                    if not member_config:
+                        continue
+                    
+                    api_settings = member_config.get('api_settings', {})
+                    
+                    # Check for FIRST API key
+                    first_api_key = api_settings.get('first_api_key')
+                    if first_api_key:
+                        print(f"  Trying team {member.team_number}'s FIRST API key...")
+                        # Temporarily set the config for this request
+                        original_config = current_app.config.get('GAME_CONFIG')
+                        try:
+                            current_app.config['GAME_CONFIG'] = member_config
+                            teams = get_teams_dual_api(event_code)
+                            print(f"  Success! Got {len(teams)} teams using team {member.team_number}'s API")
+                            return teams
+                        except Exception as e:
+                            print(f"  Team {member.team_number}'s API failed: {e}")
+                        finally:
+                            if original_config:
+                                current_app.config['GAME_CONFIG'] = original_config
+                    
+                    # Check for TBA API key
+                    tba_key = api_settings.get('tba_api_key')
+                    if tba_key:
+                        print(f"  Trying team {member.team_number}'s TBA API key...")
+                        original_config = current_app.config.get('GAME_CONFIG')
+                        try:
+                            current_app.config['GAME_CONFIG'] = member_config
+                            teams = get_teams_dual_api(event_code)
+                            print(f"  Success! Got {len(teams)} teams using team {member.team_number}'s TBA API")
+                            return teams
+                        except Exception as e:
+                            print(f"  Team {member.team_number}'s TBA API failed: {e}")
+                        finally:
+                            if original_config:
+                                current_app.config['GAME_CONFIG'] = original_config
+                                
+                except Exception as member_error:
+                    print(f"  Error trying team {member.team_number}: {member_error}")
+                    continue
+            
+            # All member APIs failed
+            raise ApiError(f"All alliance member APIs failed. Primary error: {primary_error}")
+            
+        except Exception as fallback_error:
+            print(f"Alliance fallback failed: {fallback_error}")
+            raise primary_error
+
+
+def get_matches_with_alliance_fallback(event_code, alliance_id=None):
+    """Get matches using alliance member API keys as fallback if primary fails.
+    
+    This function first tries to get matches using the standard dual API.
+    If that fails and alliance_id is provided, it will try each alliance
+    member's API keys until one succeeds.
+    
+    Args:
+        event_code: The event code to fetch matches for
+        alliance_id: Optional alliance ID for fallback API keys
+        
+    Returns:
+        List of match data dictionaries
+    """
+    # First try the standard dual API approach
+    try:
+        return get_matches_dual_api(event_code)
+    except ApiError as primary_error:
+        print(f"Primary API failed for matches: {primary_error}")
+        
+        if not alliance_id:
+            raise primary_error
+        
+        # Try alliance member API keys as fallback
+        print(f"Attempting alliance member API fallback for alliance {alliance_id}")
+        
+        try:
+            from app.models import ScoutingAlliance, ScoutingAllianceMember
+            from app.utils.config_manager import load_game_config
+            
+            alliance = ScoutingAlliance.query.get(alliance_id)
+            if not alliance:
+                raise primary_error
+            
+            active_members = alliance.get_active_members()
+            if not active_members:
+                raise primary_error
+            
+            # Try each member's API configuration
+            for member in active_members:
+                try:
+                    member_config = load_game_config(team_number=member.team_number)
+                    if not member_config:
+                        continue
+                    
+                    api_settings = member_config.get('api_settings', {})
+                    
+                    # Check for FIRST API key
+                    first_api_key = api_settings.get('first_api_key')
+                    if first_api_key:
+                        print(f"  Trying team {member.team_number}'s FIRST API key...")
+                        original_config = current_app.config.get('GAME_CONFIG')
+                        try:
+                            current_app.config['GAME_CONFIG'] = member_config
+                            matches = get_matches_dual_api(event_code)
+                            print(f"  Success! Got {len(matches)} matches using team {member.team_number}'s API")
+                            return matches
+                        except Exception as e:
+                            print(f"  Team {member.team_number}'s API failed: {e}")
+                        finally:
+                            if original_config:
+                                current_app.config['GAME_CONFIG'] = original_config
+                    
+                    # Check for TBA API key
+                    tba_key = api_settings.get('tba_api_key')
+                    if tba_key:
+                        print(f"  Trying team {member.team_number}'s TBA API key...")
+                        original_config = current_app.config.get('GAME_CONFIG')
+                        try:
+                            current_app.config['GAME_CONFIG'] = member_config
+                            matches = get_matches_dual_api(event_code)
+                            print(f"  Success! Got {len(matches)} matches using team {member.team_number}'s TBA API")
+                            return matches
+                        except Exception as e:
+                            print(f"  Team {member.team_number}'s TBA API failed: {e}")
+                        finally:
+                            if original_config:
+                                current_app.config['GAME_CONFIG'] = original_config
+                                
+                except Exception as member_error:
+                    print(f"  Error trying team {member.team_number}: {member_error}")
+                    continue
+            
+            # All member APIs failed
+            raise ApiError(f"All alliance member APIs failed. Primary error: {primary_error}")
+            
+        except Exception as fallback_error:
+            print(f"Alliance fallback failed: {fallback_error}")
+            raise primary_error
+
+
+def get_event_details_with_alliance_fallback(event_code, alliance_id=None):
+    """Get event details using alliance member API keys as fallback if primary fails.
+    
+    Args:
+        event_code: The event code to fetch details for
+        alliance_id: Optional alliance ID for fallback API keys
+        
+    Returns:
+        Event details dictionary
+    """
+    # First try the standard dual API approach
+    try:
+        return get_event_details_dual_api(event_code)
+    except ApiError as primary_error:
+        print(f"Primary API failed for event details: {primary_error}")
+        
+        if not alliance_id:
+            raise primary_error
+        
+        # Try alliance member API keys as fallback
+        print(f"Attempting alliance member API fallback for alliance {alliance_id}")
+        
+        try:
+            from app.models import ScoutingAlliance
+            from app.utils.config_manager import load_game_config
+            
+            alliance = ScoutingAlliance.query.get(alliance_id)
+            if not alliance:
+                raise primary_error
+            
+            active_members = alliance.get_active_members()
+            if not active_members:
+                raise primary_error
+            
+            # Try each member's API configuration
+            for member in active_members:
+                try:
+                    member_config = load_game_config(team_number=member.team_number)
+                    if not member_config:
+                        continue
+                    
+                    api_settings = member_config.get('api_settings', {})
+                    
+                    # Check for FIRST API key or TBA API key
+                    if api_settings.get('first_api_key') or api_settings.get('tba_api_key'):
+                        print(f"  Trying team {member.team_number}'s API key...")
+                        original_config = current_app.config.get('GAME_CONFIG')
+                        try:
+                            current_app.config['GAME_CONFIG'] = member_config
+                            details = get_event_details_dual_api(event_code)
+                            print(f"  Success! Got event details using team {member.team_number}'s API")
+                            return details
+                        except Exception as e:
+                            print(f"  Team {member.team_number}'s API failed: {e}")
+                        finally:
+                            if original_config:
+                                current_app.config['GAME_CONFIG'] = original_config
+                                
+                except Exception as member_error:
+                    print(f"  Error trying team {member.team_number}: {member_error}")
+                    continue
+            
+            # All member APIs failed
+            raise ApiError(f"All alliance member APIs failed. Primary error: {primary_error}")
+            
+        except Exception as fallback_error:
+            print(f"Alliance fallback failed: {fallback_error}")
+            raise primary_error

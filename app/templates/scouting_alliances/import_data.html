@@ -1,0 +1,627 @@
+{% extends "base.html" %}
+{% block title %}Share My Data - {{ alliance.alliance_name }}{% endblock %}
+
+{% block head %}
+<meta name="csrf-token" content="{{ csrf_token() if csrf_token else '' }}">
+<style>
+    .data-row {
+        transition: background-color 0.2s;
+        cursor: pointer;
+    }
+    .data-row:hover {
+        background-color: rgba(var(--bs-primary-rgb), 0.1);
+    }
+    .data-row.selected {
+        background-color: rgba(var(--bs-success-rgb), 0.15);
+    }
+    .data-row.ignored {
+        background-color: rgba(var(--bs-danger-rgb), 0.1);
+        text-decoration: line-through;
+        opacity: 0.6;
+    }
+    .data-preview {
+        font-size: 0.8rem;
+        color: #666;
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .scan-loading {
+        display: none;
+    }
+    .scan-loading.active {
+        display: block;
+    }
+    #resultsSection {
+        display: none;
+    }
+    #resultsSection.active {
+        display: block;
+    }
+    .badge-count {
+        font-size: 1rem;
+        padding: 0.5rem 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-0">
+                        <i class="fas fa-file-import"></i> Share My Team's Data
+                    </h2>
+                    <p class="text-muted mb-0">
+                        Share scouting data from <strong>Team {{ current_team }}</strong> with <strong>{{ alliance.alliance_name }}</strong>
+                    </p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('scouting_alliances.view_alliance', alliance_id=alliance.id) }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i> Back to Alliance
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card h-100 border-primary">
+                <div class="card-body">
+                    <h6 class="card-title text-primary">
+                        <i class="fas fa-users me-2"></i>Your Team
+                    </h6>
+                    <p class="display-6 mb-0">{{ current_team }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card h-100 border-info">
+                <div class="card-body">
+                    <h6 class="card-title text-info">
+                        <i class="fas fa-calendar-alt me-2"></i>Alliance Events
+                    </h6>
+                    <p class="display-6 mb-0">{{ alliance.get_shared_events()|length }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card h-100 border-success" id="foundDataCard">
+                <div class="card-body">
+                    <h6 class="card-title text-success">
+                        <i class="fas fa-clipboard-list me-2"></i>Match Data Available
+                    </h6>
+                    <p class="display-6 mb-0" id="totalScoutingFound">-</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card h-100 border-warning" id="foundPitCard">
+                <div class="card-body">
+                    <h6 class="card-title text-warning">
+                        <i class="fas fa-tools me-2"></i>Pit Data Available
+                    </h6>
+                    <p class="display-6 mb-0" id="totalPitFound">-</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scan Options -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-search me-2"></i>Scan Your Data</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">
+                Scan your team's scouting data to find entries that can be shared with the alliance.
+                Only data not already in the alliance will be shown.
+            </p>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label"><strong>Data Type</strong></label>
+                    <select id="dataType" class="form-select" title="Select Data Type">
+                        <option value="all">All Data (Match + Pit)</option>
+                        <option value="scouting">Match Scouting Only</option>
+                        <option value="pit">Pit Scouting Only</option>
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3 d-flex align-items-end">
+                    <button class="btn btn-primary btn-lg w-100" onclick="scanForData()">
+                        <i class="fas fa-search me-2"></i>Scan My Data
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Loading Indicator -->
+            <div class="scan-loading text-center py-4" id="scanLoading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Scanning...</span>
+                </div>
+                <p class="mt-2 mb-0">Scanning your data...</p>
+            </div>
+            
+            <!-- No Data Message -->
+            <div class="alert alert-info d-none" id="noDataMessage">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>No data found to share.</strong> Either your team has no scouting data for alliance events, 
+                or all your data has already been shared with the alliance.
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Section -->
+    <div id="resultsSection">
+        <!-- Selection Controls -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-list-check me-2"></i>Your Data Available for Sharing</h5>
+                <div class="d-flex gap-2">
+                    <span class="badge bg-success badge-count" id="selectedCount">0 selected</span>
+                    <span class="badge bg-danger badge-count" id="ignoredCount">0 ignored</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between flex-wrap gap-2 mb-3">
+                    <div class="btn-group">
+                        <button class="btn btn-outline-success" onclick="selectAll()">
+                            <i class="fas fa-check-double me-1"></i> Select All
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="deselectAll()">
+                            <i class="fas fa-times me-1"></i> Deselect All
+                        </button>
+                        <button class="btn btn-outline-warning" onclick="toggleIgnoreMode()" id="ignoreModeBtn">
+                            <i class="fas fa-eye-slash me-1"></i> <span id="ignoreModeText">Ignore Mode</span>
+                        </button>
+                    </div>
+                    <button class="btn btn-success btn-lg" onclick="importSelected()" id="importBtn" disabled>
+                        <i class="fas fa-upload me-2"></i>Share with Alliance
+                    </button>
+                </div>
+
+                <div class="alert alert-info mb-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Tips:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>Click rows to select/deselect for sharing</li>
+                        <li>Use "Ignore Mode" to mark entries you don't want to share (they won't appear again)</li>
+                        <li>Only data from alliance events that isn't already shared is shown</li>
+                    </ul>
+                </div>
+
+                <!-- Tab Navigation -->
+                <ul class="nav nav-tabs" id="dataTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="scouting-tab" data-bs-toggle="tab" 
+                                data-bs-target="#scoutingPane" type="button" role="tab">
+                            <i class="fas fa-clipboard-list me-1"></i> Match Scouting 
+                            <span class="badge bg-secondary" id="scoutingTabCount">0</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="pit-tab" data-bs-toggle="tab" 
+                                data-bs-target="#pitPane" type="button" role="tab">
+                            <i class="fas fa-tools me-1"></i> Pit Scouting
+                            <span class="badge bg-secondary" id="pitTabCount">0</span>
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content mt-3">
+                    <!-- Match Scouting Tab -->
+                    <div class="tab-pane fade show active" id="scoutingPane" role="tabpanel">
+                        <div id="scoutingResults">
+                            <p class="text-muted text-center py-4">Click "Scan My Data" to find available entries.</p>
+                        </div>
+                    </div>
+
+                    <!-- Pit Scouting Tab -->
+                    <div class="tab-pane fade" id="pitPane" role="tabpanel">
+                        <div id="pitResults">
+                            <p class="text-muted text-center py-4">Click "Scan My Data" to find available entries.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Import Progress Modal -->
+<div class="modal fade" id="importProgressModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-cog fa-spin me-2"></i>Sharing Data...
+                </h5>
+            </div>
+            <div class="modal-body text-center py-4">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Sharing...</span>
+                </div>
+                <p class="mb-0">Please wait while your data is being shared with the alliance...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+<script>
+const allianceId = {{ alliance.id }};
+const currentTeam = {{ current_team }};
+let ignoreModeActive = false;
+let scannedData = {
+    scouting: [],
+    pit: []
+};
+let selectedScouting = new Set();
+let selectedPit = new Set();
+let ignoredScouting = new Set();
+let ignoredPit = new Set();
+
+// CSRF Token helper
+function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+}
+
+// Scan for available data
+async function scanForData() {
+    const dataType = document.getElementById('dataType').value;
+    
+    // Show loading
+    document.getElementById('scanLoading').classList.add('active');
+    document.getElementById('resultsSection').classList.remove('active');
+    document.getElementById('noDataMessage').classList.add('d-none');
+    
+    try {
+        const response = await fetch(`/alliances/scouting/${allianceId}/manage/import-data/scan`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                data_type: dataType
+            })
+        });
+        
+        const result = await response.json();
+        console.log('Scan result:', result);
+        
+        if (result.success) {
+            // Reset selections
+            selectedScouting.clear();
+            selectedPit.clear();
+            ignoredScouting.clear();
+            ignoredPit.clear();
+            
+            scannedData.scouting = result.results.scouting_data || [];
+            scannedData.pit = result.results.pit_data || [];
+            
+            // Update counts
+            document.getElementById('totalScoutingFound').textContent = scannedData.scouting.length;
+            document.getElementById('totalPitFound').textContent = scannedData.pit.length;
+            document.getElementById('scoutingTabCount').textContent = scannedData.scouting.length;
+            document.getElementById('pitTabCount').textContent = scannedData.pit.length;
+            
+            if (scannedData.scouting.length === 0 && scannedData.pit.length === 0) {
+                // No data found
+                document.getElementById('noDataMessage').classList.remove('d-none');
+            } else {
+                // Render results
+                renderScoutingResults();
+                renderPitResults();
+                updateCounts();
+                
+                // Show results
+                document.getElementById('resultsSection').classList.add('active');
+            }
+        } else {
+            alert('Error scanning for data: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error scanning:', error);
+        alert('Error scanning for data: ' + error.message);
+    } finally {
+        document.getElementById('scanLoading').classList.remove('active');
+    }
+}
+
+// Render scouting results
+function renderScoutingResults() {
+    const container = document.getElementById('scoutingResults');
+    
+    if (scannedData.scouting.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center py-4">No match scouting data available to share.</p>';
+        return;
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 40px;"></th>
+                        <th>Scouted Team</th>
+                        <th>Match</th>
+                        <th>Event</th>
+                        <th>Alliance</th>
+                        <th>Scout</th>
+                        <th>Preview</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    for (const entry of scannedData.scouting) {
+        const isSelected = selectedScouting.has(entry.id);
+        const isIgnored = ignoredScouting.has(entry.id);
+        html += `
+            <tr class="data-row ${isSelected ? 'selected' : ''} ${isIgnored ? 'ignored' : ''}" 
+                data-id="${entry.id}" data-type="scouting"
+                onclick="toggleSelection(${entry.id}, 'scouting')">
+                <td class="text-center">
+                    <i class="fas ${isSelected ? 'fa-check-circle text-success' : (isIgnored ? 'fa-ban text-danger' : 'fa-circle text-muted')}"></i>
+                </td>
+                <td><strong>${entry.team_number}</strong></td>
+                <td>${entry.match_type || ''} ${entry.match_number}</td>
+                <td>${entry.event_code}</td>
+                <td>
+                    <span class="badge ${entry.alliance === 'red' ? 'bg-danger' : 'bg-primary'}">
+                        ${entry.alliance}
+                    </span>
+                </td>
+                <td>${entry.scout_name || 'N/A'}</td>
+                <td class="data-preview" title="${entry.data_preview || ''}">${entry.data_preview || ''}</td>
+            </tr>
+        `;
+    }
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// Render pit results
+function renderPitResults() {
+    const container = document.getElementById('pitResults');
+    
+    if (scannedData.pit.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center py-4">No pit scouting data available to share.</p>';
+        return;
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 40px;"></th>
+                        <th>Team</th>
+                        <th>Scout</th>
+                        <th>Preview</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    for (const entry of scannedData.pit) {
+        const isSelected = selectedPit.has(entry.id);
+        const isIgnored = ignoredPit.has(entry.id);
+        html += `
+            <tr class="data-row ${isSelected ? 'selected' : ''} ${isIgnored ? 'ignored' : ''}" 
+                data-id="${entry.id}" data-type="pit"
+                onclick="toggleSelection(${entry.id}, 'pit')">
+                <td class="text-center">
+                    <i class="fas ${isSelected ? 'fa-check-circle text-success' : (isIgnored ? 'fa-ban text-danger' : 'fa-circle text-muted')}"></i>
+                </td>
+                <td><strong>${entry.team_number}</strong> ${entry.team_name ? '- ' + entry.team_name : ''}</td>
+                <td>${entry.scout_name || 'N/A'}</td>
+                <td class="data-preview" title="${entry.data_preview || ''}">${entry.data_preview || ''}</td>
+            </tr>
+        `;
+    }
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// Toggle selection for an entry
+function toggleSelection(id, type) {
+    if (ignoreModeActive) {
+        // Toggle ignore instead
+        if (type === 'scouting') {
+            if (ignoredScouting.has(id)) {
+                ignoredScouting.delete(id);
+            } else {
+                ignoredScouting.add(id);
+                selectedScouting.delete(id);
+            }
+        } else {
+            if (ignoredPit.has(id)) {
+                ignoredPit.delete(id);
+            } else {
+                ignoredPit.add(id);
+                selectedPit.delete(id);
+            }
+        }
+    } else {
+        // Toggle selection
+        if (type === 'scouting') {
+            if (ignoredScouting.has(id)) return;
+            if (selectedScouting.has(id)) {
+                selectedScouting.delete(id);
+            } else {
+                selectedScouting.add(id);
+            }
+        } else {
+            if (ignoredPit.has(id)) return;
+            if (selectedPit.has(id)) {
+                selectedPit.delete(id);
+            } else {
+                selectedPit.add(id);
+            }
+        }
+    }
+    
+    renderScoutingResults();
+    renderPitResults();
+    updateCounts();
+}
+
+// Select all non-ignored items
+function selectAll() {
+    for (const entry of scannedData.scouting) {
+        if (!ignoredScouting.has(entry.id)) {
+            selectedScouting.add(entry.id);
+        }
+    }
+    for (const entry of scannedData.pit) {
+        if (!ignoredPit.has(entry.id)) {
+            selectedPit.add(entry.id);
+        }
+    }
+    renderScoutingResults();
+    renderPitResults();
+    updateCounts();
+}
+
+// Deselect all
+function deselectAll() {
+    selectedScouting.clear();
+    selectedPit.clear();
+    renderScoutingResults();
+    renderPitResults();
+    updateCounts();
+}
+
+// Toggle ignore mode
+function toggleIgnoreMode() {
+    ignoreModeActive = !ignoreModeActive;
+    const btn = document.getElementById('ignoreModeBtn');
+    const text = document.getElementById('ignoreModeText');
+    if (ignoreModeActive) {
+        text.textContent = 'Exit Ignore Mode';
+        btn.classList.remove('btn-outline-warning');
+        btn.classList.add('btn-warning');
+    } else {
+        text.textContent = 'Ignore Mode';
+        btn.classList.remove('btn-warning');
+        btn.classList.add('btn-outline-warning');
+    }
+}
+
+// Update selection counts
+function updateCounts() {
+    const totalSelected = selectedScouting.size + selectedPit.size;
+    const totalIgnored = ignoredScouting.size + ignoredPit.size;
+    
+    document.getElementById('selectedCount').textContent = `${totalSelected} selected`;
+    document.getElementById('ignoredCount').textContent = `${totalIgnored} ignored`;
+    
+    const importBtn = document.getElementById('importBtn');
+    importBtn.disabled = totalSelected === 0;
+}
+
+// Import selected data
+async function importSelected() {
+    const scoutingIds = Array.from(selectedScouting);
+    const pitIds = Array.from(selectedPit);
+    
+    if (scoutingIds.length === 0 && pitIds.length === 0) {
+        alert('Please select at least one entry to share.');
+        return;
+    }
+    
+    // Build ignore list
+    const ignoreList = [];
+    for (const id of ignoredScouting) {
+        ignoreList.push({ type: 'scouting', id: id });
+    }
+    for (const id of ignoredPit) {
+        ignoreList.push({ type: 'pit', id: id });
+    }
+    
+    // Show progress modal
+    const modal = new bootstrap.Modal(document.getElementById('importProgressModal'));
+    modal.show();
+    
+    try {
+        const response = await fetch(`/alliances/scouting/${allianceId}/manage/import-data/import`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                scouting_ids: scoutingIds,
+                pit_ids: pitIds,
+                ignore_ids: ignoreList
+            })
+        });
+        
+        const result = await response.json();
+        
+        modal.hide();
+        
+        if (result.success) {
+            alert(`Successfully shared:\n- ${result.imported_scouting} match scouting entries\n- ${result.imported_pit} pit scouting entries\n- ${result.ignored_count} entries marked as ignored`);
+            
+            // Clear selections and re-scan
+            selectedScouting.clear();
+            selectedPit.clear();
+            ignoredScouting.clear();
+            ignoredPit.clear();
+            
+            // Re-scan to refresh
+            scanForData();
+        } else {
+            alert('Error sharing data: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        modal.hide();
+        console.error('Error importing:', error);
+        alert('Error sharing data: ' + error.message);
+    }
+}
+
+// Initialize socket connection
+const socket = io();
+
+socket.on('connect', function() {
+    console.log('Connected to socket');
+    socket.emit('join_alliance', { alliance_id: allianceId });
+});
+
+socket.on('alliance_data_imported', function(data) {
+    if (data.imported_by !== currentTeam) {
+        console.log('Data shared by another member, refreshing...');
+        scanForData();
+    }
+});
+
+// Auto-scan on page load
+document.addEventListener('DOMContentLoaded', function() {
+    scanForData();
+});
+</script>
+{% endblock %}

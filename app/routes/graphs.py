@@ -20,6 +20,12 @@ from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
     filter_events_by_scouting_team, get_event_by_code, get_combined_dropdown_events
 )
+from app.utils.alliance_data import (
+    get_active_alliance_id, get_scouting_data_for_teams,
+    get_scouting_data_for_team, get_teams_with_scouting_data,
+    get_events_with_scouting_data, get_all_teams_for_alliance,
+    get_all_matches_for_alliance, get_active_alliance_id_for_team
+)
 import os
 import secrets
 import copy
@@ -115,15 +121,48 @@ def _build_page_context(page, scouting_team_number):
             data_view = widget.get('data_view', 'averages')
 
             team_ids = []
+            team_numbers = []
             if selected_teams and not (len(selected_teams) == 1 and str(selected_teams[0]) == 'all'):
                 for s in selected_teams:
                     if s == 'all':
                         team_ids = []
+                        team_numbers = []
                         break
                     try:
-                        team_ids.append(int(s))
+                        val = int(s)
+                        team_ids.append(val)
+                        team_numbers.append(val)  # selected_teams can be team_numbers or ids
                     except Exception:
                         pass
+            
+            # Check for alliance mode
+            alliance_id = get_active_alliance_id_for_team(scouting_team_number)
+            
+            if alliance_id:
+                # Alliance mode - get teams from alliance data
+                alliance_teams, _ = get_all_teams_for_alliance()
+                alliance_teams_map = {t.team_number: t for t in alliance_teams}
+                alliance_teams_by_id = {t.id: t for t in alliance_teams}
+                
+                if team_ids or team_numbers:
+                    teams = []
+                    for tid in team_ids:
+                        # Check both by id and by number (selected_teams might be either)
+                        if tid in alliance_teams_by_id:
+                            teams.append(alliance_teams_by_id[tid])
+                        elif tid in alliance_teams_map:
+                            teams.append(alliance_teams_map[tid])
+                    # Deduplicate
+                    seen = set()
+                    deduped = []
+                    for t in teams:
+                        if t.team_number not in seen:
+                            seen.add(t.team_number)
+                            deduped.append(t)
+                    teams = deduped
+                else:
+                    teams = alliance_teams
+            else:
                 if team_ids:
                     teams = Team.query.filter(Team.id.in_(team_ids)).all()
                     found_ids = {t.id for t in teams}
@@ -134,8 +173,6 @@ def _build_page_context(page, scouting_team_number):
                             teams.extend(more_by_number)
                 else:
                     teams = Team.query.order_by(Team.team_number).all()
-            else:
-                teams = Team.query.order_by(Team.team_number).all()
 
             # Deduplicate teams
             unique_map = {}
@@ -147,7 +184,8 @@ def _build_page_context(page, scouting_team_number):
             team_data = {}
             if teams:
                 team_ids = [t.id for t in teams]
-                scouting_data = ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids), ScoutingData.scouting_team_number==scouting_team_number).all()
+                # Use alliance-aware data retrieval
+                scouting_data, _ = get_scouting_data_for_teams(team_ids)
                 for data in scouting_data:
                     team = data.team
                     match = data.match
@@ -239,7 +277,12 @@ def _build_page_context(page, scouting_team_number):
         for el in game_config.get(period, {}).get('scoring_elements', []):
             scoring_elements.append({'period': period, 'id': el.get('perm_id', el.get('id')), 'name': el.get('name', el.get('id'))})
 
-    teams_q = Team.query.order_by(Team.team_number).all()
+    # Check for alliance mode - use alliance teams if active
+    alliance_id = get_active_alliance_id_for_team(scouting_team_number)
+    if alliance_id:
+        teams_q, _ = get_all_teams_for_alliance()
+    else:
+        teams_q = Team.query.order_by(Team.team_number).all()
     teams = [{'id': t.team_number, 'name': t.team_name or f'Team {t.team_number}'} for t in teams_q]
 
     # Use the combined dropdown events method which returns both local and
@@ -252,7 +295,11 @@ def _build_page_context(page, scouting_team_number):
     # Normalized to a list of simple dicts for templates
     events = [{'id': getattr(e, 'id', None), 'name': getattr(e, 'name', getattr(e, 'code', None)), 'code': getattr(e, 'code', None)} for e in events_q]
 
-    matches_q = Match.query.order_by(Match.event_id, Match.match_number).limit(1000).all()
+    # In alliance mode, get matches from alliance data
+    if alliance_id:
+        matches_q, _ = get_all_matches_for_alliance()
+    else:
+        matches_q = Match.query.order_by(Match.event_id, Match.match_number).limit(1000).all()
     matches = [{'id': m.id, 'event_id': m.event_id, 'match_type': m.match_type, 'match_number': m.match_number} for m in matches_q]
 
     return plots, metrics, scoring_elements, teams, events, matches
@@ -278,14 +325,31 @@ def index():
     
     current_scouting_team = get_current_scouting_team_number()
     
-    if current_event:
-        # Only include teams/events visible to the current scouting team
-        current_event_teams = list(filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all())
-        other_teams = filter_teams_by_scouting_team().filter(~Team.id.in_([t.id for t in current_event_teams])).order_by(Team.team_number).all()
-        all_teams_raw = current_event_teams + other_teams
+    # Check if alliance mode is active
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
+    
+    # Import the helper to get ALL teams at an event
+    from app.utils.team_isolation import get_all_teams_at_event
+    
+    if is_alliance_mode:
+        # Alliance mode - get teams from alliance scouting data
+        if current_event:
+            current_event_teams, _ = get_all_teams_for_alliance(event_code=current_event.code)
+            all_teams_raw = current_event_teams
+        else:
+            all_teams_raw, _ = get_all_teams_for_alliance()
     else:
-        # No current event: only show teams visible to the current scouting team
-        all_teams_raw = filter_teams_by_scouting_team().order_by(Team.team_number).all()
+        # Normal mode - get ALL teams at the current event (regardless of scouting_team_number)
+        if current_event:
+            # Get ALL teams at this event for analysis purposes
+            current_event_teams = get_all_teams_at_event(event_id=current_event.id)
+            # Also include teams from other events that belong to the current scouting team
+            other_teams = filter_teams_by_scouting_team().filter(~Team.id.in_([t.id for t in current_event_teams])).order_by(Team.team_number).all()
+            all_teams_raw = current_event_teams + other_teams
+        else:
+            # No current event: only show teams visible to the current scouting team
+            all_teams_raw = filter_teams_by_scouting_team().order_by(Team.team_number).all()
     
     # Deduplicate teams by team_number.
     # Preference order when duplicate team_number found:
@@ -319,13 +383,25 @@ def index():
                 continue
 
             # Otherwise, fall back to preferring records with scouting data for current_scouting_team
+            # Exclude alliance-copied data
+            from sqlalchemy import or_
             has_data = ScoutingData.query.filter_by(
                 team_id=team.id,
                 scouting_team_number=current_scouting_team
+            ).filter(
+                or_(
+                    ScoutingData.scout_name == None,
+                    ~ScoutingData.scout_name.like('[Alliance-%')
+                )
             ).first() is not None
             existing_has_data = ScoutingData.query.filter_by(
                 team_id=existing_team.id,
                 scouting_team_number=current_scouting_team
+            ).filter(
+                or_(
+                    ScoutingData.scout_name == None,
+                    ~ScoutingData.scout_name.like('[Alliance-%')
+                )
             ).first() is not None
 
             if has_data and not existing_has_data:
@@ -399,28 +475,23 @@ def index():
     
     # Only create graphs if teams are selected
     if selected_team_numbers:
-        # Get scouting data for selected teams (respect team isolation)
-        teams = filter_teams_by_scouting_team().filter(Team.team_number.in_(selected_team_numbers)).all()
+        # Get teams for selected team_numbers - use alliance data if in alliance mode
+        if is_alliance_mode:
+            # In alliance mode, get teams from alliance data
+            all_alliance_teams, _ = get_all_teams_for_alliance(event_id=selected_event_id)
+            teams = [t for t in all_alliance_teams if t.team_number in selected_team_numbers]
+        else:
+            teams = filter_teams_by_scouting_team().filter(Team.team_number.in_(selected_team_numbers)).all()
         print(f"Found {len(teams)} teams")
         
-        if selected_event_id:
-            # Get matches from selected event
-            matches = Match.query.filter_by(event_id=selected_event_id).all()
-            match_ids = [match.id for match in matches]
+        if teams:
+            team_ids = [team.id for team in teams]
             
-            # Filter scouting data for these matches and teams
-            team_ids = [team.id for team in teams]
-            scouting_data = ScoutingData.query.filter(
-                ScoutingData.team_id.in_(team_ids),
-                ScoutingData.match_id.in_(match_ids),
-                ScoutingData.scouting_team_number==current_user.scouting_team_number
-            ).all()
-            print(f"Found {len(scouting_data)} scouting records for selected teams at event {selected_event_id}")
+            # Use alliance-aware data retrieval
+            scouting_data, _ = get_scouting_data_for_teams(team_ids, event_id=selected_event_id if selected_event_id else None)
+            print(f"Found {len(scouting_data)} scouting records for selected teams {'at event ' + str(selected_event_id) if selected_event_id else 'across all events'}")
         else:
-            # Get all scouting data for selected teams
-            team_ids = [team.id for team in teams]
-            scouting_data = ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids), ScoutingData.scouting_team_number==current_user.scouting_team_number).all()
-            print(f"Found {len(scouting_data)} scouting records for selected teams across all events")
+            scouting_data = []
         
         # Generate graphs if we have teams selected
         if teams:
@@ -530,6 +601,15 @@ def scout_leaderboard():
     q = ScoutingData.query
     if scouting_team_number is not None:
         q = q.filter_by(scouting_team_number=scouting_team_number)
+    
+    # Exclude alliance-copied data when not in alliance mode
+    from sqlalchemy import or_
+    q = q.filter(
+        or_(
+            ScoutingData.scout_name == None,
+            ~ScoutingData.scout_name.like('[Alliance-%')
+        )
+    )
 
     entries = q.all()
 
@@ -679,8 +759,9 @@ def graphs_data():
     if current_event_code:
         current_event = get_event_by_code(current_event_code)
     
+    # Get ALL teams at the current event (regardless of scouting_team_number)
     if current_event:
-        current_event_teams = list(filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all())
+        current_event_teams = get_all_teams_at_event(event_id=current_event.id)
         other_teams = filter_teams_by_scouting_team().filter(~Team.id.in_([t.id for t in current_event_teams])).order_by(Team.team_number).all()
         all_teams_raw = current_event_teams + other_teams
     else:
@@ -701,15 +782,27 @@ def graphs_data():
             existing_team = teams_by_number[team_number]
             
             # Check if current team has scouting data for our scouting team
+            # Exclude alliance-copied data
+            from sqlalchemy import or_
             has_data = ScoutingData.query.filter_by(
                 team_id=team.id, 
                 scouting_team_number=current_scouting_team
+            ).filter(
+                or_(
+                    ScoutingData.scout_name == None,
+                    ~ScoutingData.scout_name.like('[Alliance-%')
+                )
             ).first() is not None
             
             # Check if existing team has scouting data for our scouting team  
             existing_has_data = ScoutingData.query.filter_by(
                 team_id=existing_team.id,
                 scouting_team_number=current_scouting_team  
+            ).filter(
+                or_(
+                    ScoutingData.scout_name == None,
+                    ~ScoutingData.scout_name.like('[Alliance-%')
+                )
             ).first() is not None
             
             # Prefer team with scouting data, or keep existing if both/neither have data
@@ -768,9 +861,9 @@ def side_by_side():
         if current_event_code:
             current_event = get_event_by_code(current_event_code)
         
-        # Get teams filtered by the current event if available, otherwise show all teams
+        # Get ALL teams at the current event (regardless of scouting_team_number)
         if current_event:
-            teams_raw = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+            teams_raw = get_all_teams_at_event(event_id=current_event.id)
         else:
             # Only include teams visible to the current scouting team
             teams_raw = filter_teams_by_scouting_team().order_by(Team.team_number).all()
@@ -790,15 +883,27 @@ def side_by_side():
                 existing_team = teams_by_number[team_number]
                 
                 # Check if current team has scouting data for our scouting team
+                # Exclude alliance-copied data
+                from sqlalchemy import or_
                 has_data = ScoutingData.query.filter_by(
                     team_id=team.id, 
                     scouting_team_number=current_scouting_team
+                ).filter(
+                    or_(
+                        ScoutingData.scout_name == None,
+                        ~ScoutingData.scout_name.like('[Alliance-%')
+                    )
                 ).first() is not None
                 
                 # Check if existing team has scouting data for our scouting team  
                 existing_has_data = ScoutingData.query.filter_by(
                     team_id=existing_team.id,
                     scouting_team_number=current_scouting_team  
+                ).filter(
+                    or_(
+                        ScoutingData.scout_name == None,
+                        ~ScoutingData.scout_name.like('[Alliance-%')
+                    )
                 ).first() is not None
                 
                 # Prefer team with scouting data, or keep existing if both/neither have data
@@ -843,7 +948,7 @@ def side_by_side():
         teams_by_number.setdefault(t.team_number, []).append(t)
 
     # Prepare helper imports once
-    from app.utils.team_isolation import filter_scouting_data_by_scouting_team, get_current_scouting_team_number
+    from app.utils.team_isolation import get_current_scouting_team_number
     from app.utils.config_manager import get_effective_game_config
 
     scouting_team_number = get_current_scouting_team_number()
@@ -854,12 +959,8 @@ def side_by_side():
         rep_team = team_group[0]
         team_ids = [t.id for t in team_group]
 
-        # Fetch scouting data across all team ids, honoring team isolation if enabled
-        if scouting_team_number is not None:
-            scouting_q = filter_scouting_data_by_scouting_team()
-            scouting_data = scouting_q.filter(ScoutingData.team_id.in_(team_ids)).all()
-        else:
-            scouting_data = ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids), ScoutingData.scouting_team_number == None).all()
+        # Fetch scouting data across all team ids - use alliance-aware data retrieval
+        scouting_data, _ = get_scouting_data_for_teams(team_ids)
 
         # Build team_info container
         team_info = {
@@ -1067,6 +1168,8 @@ def view_shared(share_id):
     plots = {}
     
     # Get scouting data for selected teams (without team isolation)
+    # Exclude alliance-copied data - shared graphs should use original data only
+    from sqlalchemy import or_
     if shared_graph.event_id:
         # Get matches from selected event
         matches = Match.query.filter_by(event_id=shared_graph.event_id).all()
@@ -1077,11 +1180,21 @@ def view_shared(share_id):
         scouting_data = ScoutingData.query.filter(
             ScoutingData.team_id.in_(team_ids),
             ScoutingData.match_id.in_(match_ids)
+        ).filter(
+            or_(
+                ScoutingData.scout_name == None,
+                ~ScoutingData.scout_name.like('[Alliance-%')
+            )
         ).all()
     else:
         # Get all scouting data for selected teams
         team_ids = [team.id for team in teams]
-        scouting_data = ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids)).all()
+        scouting_data = ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids)).filter(
+            or_(
+                ScoutingData.scout_name == None,
+                ~ScoutingData.scout_name.like('[Alliance-%')
+            )
+        ).all()
     
     # Process the data and create graphs
     if teams and scouting_data:
@@ -1476,7 +1589,8 @@ def public_page_widget_render(token, widget_index):
                                 if t.team_number not in team_data:
                                         team_data[t.team_number] = {'team_name': t.team_name, 'matches': []}
 
-                        scouting_data = ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids), ScoutingData.scouting_team_number==scouting_team_number).all()
+                        # Use alliance-aware data retrieval
+                        scouting_data, _ = get_scouting_data_for_teams(team_ids)
                         for data in scouting_data:
                                 team = data.team
                                 match = data.match
@@ -2085,7 +2199,8 @@ def pages_widget_render(page_id, widget_index):
                 if t.team_number not in team_data:
                     team_data[t.team_number] = {'team_name': t.team_name, 'matches': []}
 
-            scouting_data = ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids), ScoutingData.scouting_team_number==current_user.scouting_team_number).all()
+            # Use alliance-aware data retrieval
+            scouting_data, _ = get_scouting_data_for_teams(team_ids)
             for data in scouting_data:
                 team = data.team
                 match = data.match
@@ -2553,7 +2668,8 @@ def pages_view(page_id):
             # Gather scouting data for these teams
             if teams:
                 team_ids = [t.id for t in teams]
-                scouting_data = ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids), ScoutingData.scouting_team_number==current_user.scouting_team_number).all()
+                # Use alliance-aware data retrieval
+                scouting_data, _ = get_scouting_data_for_teams(team_ids)
                 for data in scouting_data:
                     team = data.team
                     match = data.match

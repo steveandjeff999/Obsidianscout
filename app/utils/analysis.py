@@ -373,7 +373,7 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
     team_number = team.team_number if team else team_id
     
     # Get all scouting data for this team.
-    # If the team is currently in alliance-mode, use scouting data shared by alliance members.
+    # If the team is currently in alliance-mode, use scouting data from shared alliance tables.
     # Otherwise, respect the normal scouting team isolation rules.
     def _get_scouting_data_for_team(team_obj, event_filter=None):
         """Return a list of ScoutingData objects to use for analytics for the given Team object or id."""
@@ -383,12 +383,24 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
         if not team_obj:
             return []
 
-        # Check if alliance mode is active for this team_number
+        # Use the alliance_data utilities for consistent behavior across the app
+        try:
+            from app.utils.alliance_data import get_scouting_data_for_team as alliance_get_scouting_data
+            scouting_data, is_alliance_mode = alliance_get_scouting_data(team_obj.id, event_id=event_filter)
+            if scouting_data:
+                return scouting_data
+        except Exception as e:
+            print(f"    DEBUG: alliance_data utility error: {e}")
+            # Fall back to legacy approach if utility fails
+            pass
+
+        # Fallback: Check if alliance mode is active using legacy method
         try:
             if TeamAllianceStatus.is_alliance_mode_active_for_team(team_obj.team_number):
                 alliance = TeamAllianceStatus.get_active_alliance_for_team(team_obj.team_number)
                 if alliance:
-                    member_numbers = alliance.get_member_team_numbers()
+                    # Use get_all_team_numbers to include game_config_team for data filtering
+                    member_numbers = alliance.get_all_team_numbers()
                     # Use scouting entries contributed by alliance members for this team
                     query = ScoutingData.query.filter(ScoutingData.team_id == team_obj.id,
                                                      ScoutingData.scouting_team_number.in_(member_numbers))
@@ -407,6 +419,14 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
         if scouting_team_number is not None:
             # Use exact match filter (same as /data/manage) - no NULL entries
             query = ScoutingData.query.filter_by(team_id=team_obj.id, scouting_team_number=scouting_team_number)
+            # Exclude alliance-copied data when not in alliance mode
+            from sqlalchemy import or_
+            query = query.filter(
+                or_(
+                    ScoutingData.scout_name == None,
+                    ~ScoutingData.scout_name.like('[Alliance-%')
+                )
+            )
             # Apply event filter if provided
             if event_filter:
                 query = query.join(Match).filter(Match.event_id == event_filter)
@@ -415,6 +435,14 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
             return results
         
         query = ScoutingData.query.filter_by(team_id=team_obj.id, scouting_team_number=None)
+        # Exclude alliance-copied data
+        from sqlalchemy import or_
+        query = query.filter(
+            or_(
+                ScoutingData.scout_name == None,
+                ~ScoutingData.scout_name.like('[Alliance-%')
+            )
+        )
         # Apply event filter if provided - get match IDs first to avoid JOIN issues
         if event_filter:
             match_ids = [m.id for m in Match.query.filter_by(event_id=event_filter).all()]
@@ -1136,7 +1164,8 @@ def generate_match_strategy_analysis(match_id):
             if TeamAllianceStatus.is_alliance_mode_active_for_team(team.team_number):
                 alliance = TeamAllianceStatus.get_active_alliance_for_team(team.team_number)
                 if alliance:
-                    member_numbers = alliance.get_member_team_numbers()
+                    # Use get_all_team_numbers to include game_config_team for data filtering
+                    member_numbers = alliance.get_all_team_numbers()
                     match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
                     scouting_records = ScoutingData.query.filter(ScoutingData.team_id == team.id,
                                                                  ScoutingData.scouting_team_number.in_(member_numbers),
@@ -1149,11 +1178,26 @@ def generate_match_strategy_analysis(match_id):
                 if scouting_team_number is not None:
                     # Use exact match filter (same as /data/manage) with match_ids instead of JOIN
                     match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
-                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=scouting_team_number).filter(ScoutingData.match_id.in_(match_ids)).all() if match_ids else []
+                    # Exclude alliance-copied data when not in alliance mode
+                    from sqlalchemy import or_
+                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=scouting_team_number).filter(
+                        ScoutingData.match_id.in_(match_ids),
+                        or_(
+                            ScoutingData.scout_name == None,
+                            ~ScoutingData.scout_name.like('[Alliance-%')
+                        )
+                    ).all() if match_ids else []
                     print(f"    DEBUG RED: Team {team.team_number} - Found {len(scouting_records)} records with scouting_team={scouting_team_number}, event={match.event_id}")
                 else:
                     match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
-                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=None).filter(ScoutingData.match_id.in_(match_ids)).all() if match_ids else []
+                    from sqlalchemy import or_
+                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=None).filter(
+                        ScoutingData.match_id.in_(match_ids),
+                        or_(
+                            ScoutingData.scout_name == None,
+                            ~ScoutingData.scout_name.like('[Alliance-%')
+                        )
+                    ).all() if match_ids else []
         except Exception as e:
             print(f"    DEBUG RED ERROR: Team {team.team_number} - Exception: {e}")
             match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
@@ -1175,7 +1219,8 @@ def generate_match_strategy_analysis(match_id):
             if TeamAllianceStatus.is_alliance_mode_active_for_team(team.team_number):
                 alliance = TeamAllianceStatus.get_active_alliance_for_team(team.team_number)
                 if alliance:
-                    member_numbers = alliance.get_member_team_numbers()
+                    # Use get_all_team_numbers to include game_config_team for data filtering
+                    member_numbers = alliance.get_all_team_numbers()
                     match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
                     scouting_records = ScoutingData.query.filter(ScoutingData.team_id == team.id,
                                                                  ScoutingData.scouting_team_number.in_(member_numbers),
@@ -1188,11 +1233,26 @@ def generate_match_strategy_analysis(match_id):
                 if scouting_team_number is not None:
                     # Use exact match filter (same as /data/manage) with match_ids instead of JOIN
                     match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
-                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=scouting_team_number).filter(ScoutingData.match_id.in_(match_ids)).all() if match_ids else []
+                    # Exclude alliance-copied data when not in alliance mode
+                    from sqlalchemy import or_
+                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=scouting_team_number).filter(
+                        ScoutingData.match_id.in_(match_ids),
+                        or_(
+                            ScoutingData.scout_name == None,
+                            ~ScoutingData.scout_name.like('[Alliance-%')
+                        )
+                    ).all() if match_ids else []
                     print(f"    DEBUG BLUE: Team {team.team_number} - Found {len(scouting_records)} records with scouting_team={scouting_team_number}, event={match.event_id}")
                 else:
                     match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]
-                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=None).filter(ScoutingData.match_id.in_(match_ids)).all() if match_ids else []
+                    from sqlalchemy import or_
+                    scouting_records = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=None).filter(
+                        ScoutingData.match_id.in_(match_ids),
+                        or_(
+                            ScoutingData.scout_name == None,
+                            ~ScoutingData.scout_name.like('[Alliance-%')
+                        )
+                    ).all() if match_ids else []
         except Exception as e:
             print(f"    DEBUG BLUE ERROR: Team {team.team_number} - Exception: {e}")
             match_ids = [m.id for m in Match.query.filter_by(event_id=match.event_id).all()]

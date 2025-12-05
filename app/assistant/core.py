@@ -1031,10 +1031,19 @@ class Assistant:
                 return {"text": f"Team {team_number} not found in the database."}
             
             # Get all scouting entries ordered by match
+            # Exclude alliance-copied data when not in alliance mode
             scouting_team_num = self._get_scouting_team_number()
             query = ScoutingData.query.filter_by(team_id=team.id)
             if scouting_team_num:
                 query = query.filter_by(scouting_team_number=scouting_team_num)
+            # Exclude alliance-copied data
+            from sqlalchemy import or_
+            query = query.filter(
+                or_(
+                    ScoutingData.scout_name == None,
+                    ~ScoutingData.scout_name.like('[Alliance-%')
+                )
+            )
             entries = query.join(Match).order_by(Match.match_number).all()
             
             if len(entries) < 3:
@@ -1287,6 +1296,14 @@ class Assistant:
             query = ScoutingData.query.filter_by(team_id=team.id)
             if scouting_team_num:
                 query = query.filter_by(scouting_team_number=scouting_team_num)
+            # Exclude alliance-copied data
+            from sqlalchemy import or_
+            query = query.filter(
+                or_(
+                    ScoutingData.scout_name == None,
+                    ~ScoutingData.scout_name.like('[Alliance-%')
+                )
+            )
             entries = query.all()
             
             if len(entries) < 3:
@@ -1338,9 +1355,16 @@ class Assistant:
             if not team:
                 return {"text": f"Team {team_number} not found."}
             
+            # Exclude alliance-copied data
+            from sqlalchemy import or_
             entries = ScoutingData.query.filter_by(
                 team_id=team.id,
                 scouting_team_number=current_user.scouting_team_number
+            ).filter(
+                or_(
+                    ScoutingData.scout_name == None,
+                    ~ScoutingData.scout_name.like('[Alliance-%')
+                )
             ).join(Match).order_by(Match.match_number).all()
             
             if not entries:
@@ -1583,7 +1607,14 @@ class Assistant:
             if not team:
                 return {"text": f"Team {team_number} not found in the database."}
             # Calculate team statistics from scouting data
-            entries = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=current_user.scouting_team_number).all()
+            # Exclude alliance-copied data
+            from sqlalchemy import or_
+            entries = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=current_user.scouting_team_number).filter(
+                or_(
+                    ScoutingData.scout_name == None,
+                    ~ScoutingData.scout_name.like('[Alliance-%')
+                )
+            ).all()
             if not entries:
                 return {"text": f"No scouting data available for Team {team_number}."}
             analytics_result = calculate_team_metrics(team.id)

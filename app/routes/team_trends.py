@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, current_app, jsonify
 from app.models import Team, ScoutingData, Event
 from app.utils.config_manager import get_effective_game_config
 from app.utils.team_isolation import filter_teams_by_scouting_team, get_event_by_code
+from app.utils.alliance_data import get_scouting_data_for_team, get_active_alliance_id
 from statistics import mean
 import math
 
@@ -109,12 +110,14 @@ def _analyze_team(team_number):
     except Exception:
         team = None
 
-    # Find all ScoutingData entries for this team (by team_id or team_number match)
+    # Find all ScoutingData entries for this team - use alliance data if in alliance mode
     try:
         entries = []
-        # If we have team object, prefer team.id
         if team:
-            entries = ScoutingData.query.filter_by(team_id=team.id).order_by(ScoutingData.timestamp).all()
+            # Use alliance-aware data retrieval
+            entries, is_alliance = get_scouting_data_for_team(team.id)
+            # Sort by timestamp
+            entries = sorted(entries, key=lambda x: x.timestamp if x.timestamp else x.id)
         else:
             # Fallback: query by team number in Team table
             entries = ScoutingData.query.join(Team).filter(Team.team_number == team_number).order_by(ScoutingData.timestamp).all()
@@ -380,7 +383,9 @@ def _analyze_multiple_teams(team_numbers):
 
         try:
             if team:
-                entries = ScoutingData.query.filter_by(team_id=team.id).order_by(ScoutingData.timestamp).all()
+                # Use alliance-aware data retrieval
+                entries, _ = get_scouting_data_for_team(team.id)
+                entries = sorted(entries, key=lambda x: x.timestamp if x.timestamp else x.id)
             else:
                 entries = ScoutingData.query.join(Team).filter(Team.team_number == tn).order_by(ScoutingData.timestamp).all()
         except Exception:
@@ -389,7 +394,7 @@ def _analyze_multiple_teams(team_numbers):
         timeline = []
         x_vals = []
         y_vals = []
-        for idx, entry in enumerate(entries):
+        for i, entry in enumerate(entries):
             try:
                 data = entry.data
                 total_points = None
@@ -400,7 +405,7 @@ def _analyze_multiple_teams(team_numbers):
                     total_points = sum(numeric_values) if numeric_values else 0
                 tp = float(total_points)
                 timeline.append({'timestamp': entry.timestamp.isoformat(), 'total_points': tp})
-                x_vals.append(idx)
+                x_vals.append(i)
                 y_vals.append(tp)
             except Exception:
                 continue

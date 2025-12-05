@@ -343,6 +343,87 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Alliance Data Management -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-database"></i> Alliance Data Management
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        Manage teams, events, and matches that will be shared with all alliance members.
+                    </p>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="card border-primary h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-users fa-3x text-primary mb-3"></i>
+                                    <h6>Teams</h6>
+                                    <p class="text-muted small">
+                                        Sync and manage teams from FIRST API. Teams will be available to all alliance members.
+                                    </p>
+                                    <a href="{{ url_for('scouting_alliances.manage_alliance_teams', alliance_id=alliance.id) }}" 
+                                       class="btn btn-primary btn-sm">
+                                        <i class="fas fa-users-cog"></i> Manage Teams
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card border-info h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-calendar-alt fa-3x text-info mb-3"></i>
+                                    <h6>Events</h6>
+                                    <p class="text-muted small">
+                                        Add and manage events for the alliance. Events determine which data is shared.
+                                    </p>
+                                    <a href="{{ url_for('scouting_alliances.manage_alliance_events', alliance_id=alliance.id) }}" 
+                                       class="btn btn-info btn-sm">
+                                        <i class="fas fa-calendar-plus"></i> Manage Events
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card border-success h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-trophy fa-3x text-success mb-3"></i>
+                                    <h6>Matches</h6>
+                                    <p class="text-muted small">
+                                        Sync and view match schedules for alliance events.
+                                    </p>
+                                    <a href="{{ url_for('scouting_alliances.manage_alliance_matches', alliance_id=alliance.id) }}" 
+                                       class="btn btn-success btn-sm">
+                                        <i class="fas fa-list-ol"></i> Manage Matches
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card border-warning h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-file-import fa-3x text-warning mb-3"></i>
+                                    <h6>Import Data</h6>
+                                    <p class="text-muted small">
+                                        Import scouting data from alliance member teams into the shared storage.
+                                    </p>
+                                    <a href="{{ url_for('scouting_alliances.import_data_page', alliance_id=alliance.id) }}" 
+                                       class="btn btn-warning btn-sm">
+                                        <i class="fas fa-download"></i> Import Data
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="alert alert-warning mt-3">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Important:</strong> Data synced here is stored centrally for the alliance. 
+                        All alliance members will automatically have access to this data when alliance mode is active.
+                    </div>
+                </div>
+            </div>
             {% endif %}
 
             <!-- Events Section -->
@@ -426,6 +507,122 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Alliance Data Management (Admins Only) -->
+            {% if member.role == 'admin' %}
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-database"></i> Alliance Shared Data
+                    </h5>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-success" onclick="syncAndPopulateData()" id="syncPopulateBtn">
+                            <i class="fas fa-sync"></i> Sync & Populate
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="loadAllianceSharedData()">
+                            <i class="fas fa-refresh"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        As an alliance administrator, you can view and edit all scouting data shared within the alliance.
+                        Use "Sync & Populate" to import data from all member teams into the shared storage.
+                    </p>
+                    
+                    <!-- Data Stats -->
+                    <div class="row mb-3" id="allianceDataStats">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h4 class="text-primary" id="sharedScoutingCount">-</h4>
+                                    <p class="mb-0">Match Scouting Entries</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h4 class="text-info" id="sharedPitCount">-</h4>
+                                    <p class="mb-0">Pit Scouting Entries</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Data Tables -->
+                    <ul class="nav nav-tabs" id="dataTabsNav" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="scouting-tab" data-bs-toggle="tab" data-bs-target="#scoutingData" type="button" role="tab">
+                                <i class="fas fa-clipboard-list me-1"></i> Match Scouting
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="pit-tab" data-bs-toggle="tab" data-bs-target="#pitData" type="button" role="tab">
+                                <i class="fas fa-tools me-1"></i> Pit Scouting
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content mt-3" id="dataTabsContent">
+                        <!-- Match Scouting Data Tab -->
+                        <div class="tab-pane fade show active" id="scoutingData" role="tabpanel">
+                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                <table class="table table-sm table-hover">
+                                    <thead class="sticky-top bg-white">
+                                        <tr>
+                                            <th>Team</th>
+                                            <th>Match</th>
+                                            <th>Event</th>
+                                            <th>Scout</th>
+                                            <th>Source Team</th>
+                                            <th>Shared</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="scoutingDataTable">
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted">
+                                                <i class="fas fa-spinner fa-spin me-2"></i>Loading...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Pit Scouting Data Tab -->
+                        <div class="tab-pane fade" id="pitData" role="tabpanel">
+                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                <table class="table table-sm table-hover">
+                                    <thead class="sticky-top bg-white">
+                                        <tr>
+                                            <th>Team</th>
+                                            <th>Scout</th>
+                                            <th>Source Team</th>
+                                            <th>Shared</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="pitDataTable">
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted">
+                                                <i class="fas fa-spinner fa-spin me-2"></i>Loading...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning mt-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Note:</strong> Editing shared data will update the alliance copy. Use "Include Original" to also update the source team's copy.
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- Chat Sidebar -->
@@ -511,6 +708,76 @@
                     <button type="submit" class="btn btn-primary">Add Event</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Deactivate Alliance Modal -->
+<div class="modal fade" id="deactivateAllianceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle text-warning me-2"></i>Deactivate Alliance Mode</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>You are about to deactivate alliance mode for <strong>{{ alliance.alliance_name }}</strong>.</p>
+                <p>Your team's data will no longer be shared with alliance members while inactive.</p>
+                
+                <div class="alert alert-info" id="deactivateDataInfo">
+                    <i class="fas fa-spinner fa-spin me-2"></i>Checking your shared data...
+                </div>
+                
+                <h6 class="mt-3 mb-2"><i class="fas fa-download me-1"></i>Data Copy Options:</h6>
+                
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="radio" name="copyDataOption" id="copyNoneRadio" value="none" checked>
+                    <label class="form-check-label" for="copyNoneRadio">
+                        <strong>Don't copy any data</strong>
+                    </label>
+                    <div class="form-text">
+                        Just deactivate - no data will be copied.
+                    </div>
+                </div>
+                
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="radio" name="copyDataOption" id="copyMyDataRadio" value="my_data">
+                    <label class="form-check-label" for="copyMyDataRadio">
+                        <strong>Copy only MY team's data back</strong>
+                    </label>
+                    <div class="form-text text-primary">
+                        <i class="fas fa-user me-1"></i>This will copy only the scouting data YOUR team contributed to the alliance back to your private team storage. Useful if you want to keep your own work.
+                    </div>
+                </div>
+                
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="radio" name="copyDataOption" id="copyAllDataRadio" value="all_data">
+                    <label class="form-check-label" for="copyAllDataRadio">
+                        <strong>Copy ALL alliance data to my team</strong>
+                    </label>
+                    <div class="form-text text-success">
+                        <i class="fas fa-copy me-1"></i>This will copy ALL scouting data from the alliance (including data from other teams) to your team's local storage. Data from other teams will be prefixed with [Alliance-TEAM#].
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="removeSharedDataCheckbox">
+                    <label class="form-check-label" for="removeSharedDataCheckbox">
+                        <strong>Remove my team's scouting data from the alliance</strong>
+                    </label>
+                    <div class="form-text text-danger">
+                        <i class="fas fa-exclamation-triangle me-1"></i>This is irreversible! Other teams will lose access to your shared data.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="cancelDeactivation()">Cancel</button>
+                <button type="button" class="btn btn-warning" id="confirmDeactivateBtn" onclick="confirmDeactivateAlliance()">
+                    <i class="fas fa-power-off me-1"></i>Deactivate Alliance Mode
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -622,6 +889,195 @@ function checkAllianceModeStatus() {
 }
 
 function toggleAllianceMode(isActive) {
+    // If deactivating, show confirmation modal
+    if (!isActive) {
+        showDeactivateModal();
+        return;
+    }
+    
+    // If activating, proceed directly
+    performAllianceModeToggle(true);
+}
+
+function showDeactivateModal() {
+    const modal = new bootstrap.Modal(document.getElementById('deactivateAllianceModal'));
+    const dataInfoEl = document.getElementById('deactivateDataInfo');
+    const removeCheckbox = document.getElementById('removeSharedDataCheckbox');
+    
+    // Reset radio buttons to default (none)
+    const copyNoneRadio = document.getElementById('copyNoneRadio');
+    if (copyNoneRadio) copyNoneRadio.checked = true;
+    
+    // Reset remove checkbox to unchecked
+    if (removeCheckbox) removeCheckbox.checked = false;
+    
+    // Check how much data is shared
+    let headers = {
+        'Content-Type': 'application/json',
+    };
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta) {
+        headers['X-CSRFToken'] = csrfMeta.getAttribute('content');
+    }
+    
+    fetch(`/alliances/scouting/api/{{ alliance.id }}/team-data-counts`, {
+        method: 'GET',
+        headers: headers
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const totalCount = data.match_data_count + data.pit_data_count;
+            if (totalCount > 0) {
+                dataInfoEl.className = 'alert alert-warning';
+                dataInfoEl.innerHTML = `<i class="fas fa-database me-2"></i>Your team has shared <strong>${data.match_data_count}</strong> match scouting entries and <strong>${data.pit_data_count}</strong> pit scouting entries with this alliance.`;
+            } else {
+                dataInfoEl.className = 'alert alert-info';
+                dataInfoEl.innerHTML = `<i class="fas fa-info-circle me-2"></i>Your team has not shared any scouting data with this alliance yet.`;
+            }
+        } else {
+            dataInfoEl.className = 'alert alert-secondary';
+            dataInfoEl.innerHTML = `<i class="fas fa-info-circle me-2"></i>Could not retrieve data count.`;
+        }
+    })
+    .catch(error => {
+        console.error('Error fetching data counts:', error);
+        dataInfoEl.className = 'alert alert-secondary';
+        dataInfoEl.innerHTML = `<i class="fas fa-info-circle me-2"></i>Could not retrieve data count.`;
+    });
+    
+    modal.show();
+}
+
+function cancelDeactivation() {
+    // Revert toggle switch to active state
+    const toggle = document.getElementById('allianceModeToggle');
+    if (toggle) {
+        toggle.checked = true;
+    }
+}
+
+function confirmDeactivateAlliance() {
+    const removeData = document.getElementById('removeSharedDataCheckbox').checked;
+    // Get the selected copy option from radio buttons
+    const copyDataOption = document.querySelector('input[name="copyDataOption"]:checked')?.value || 'none';
+    const modal = bootstrap.Modal.getInstance(document.getElementById('deactivateAllianceModal'));
+    const btn = document.getElementById('confirmDeactivateBtn');
+    
+    // Get CSRF token
+    let headers = {
+        'Content-Type': 'application/json',
+    };
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta) {
+        headers['X-CSRFToken'] = csrfMeta.getAttribute('content');
+    }
+    
+    // Disable button during operation
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processing...';
+    
+    // Function to continue with deactivation after optional copy
+    function proceedWithDeactivation() {
+        if (removeData) {
+            // Use the deactivate-with-data endpoint to remove data first
+            fetch('/alliances/scouting/api/deactivate-alliance-with-data', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({
+                    alliance_id: {{ alliance.id }},
+                    remove_data: true
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    modal.hide();
+                    showNotification(data.message || 'Alliance deactivated and your data has been removed.', 'success');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-power-off me-1"></i>Deactivate Alliance Mode';
+                    showNotification('Failed to deactivate: ' + (data.error || 'Unknown error'), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-power-off me-1"></i>Deactivate Alliance Mode';
+                showNotification('Error deactivating alliance', 'danger');
+            });
+        } else {
+            // Just deactivate without removing data
+            modal.hide();
+            performAllianceModeToggle(false);
+        }
+    }
+    
+    // Handle copy data options
+    if (copyDataOption === 'all_data') {
+        // Copy ALL alliance data
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Copying All Alliance Data...';
+        
+        fetch(`/alliances/scouting/{{ alliance.id }}/copy-all-data`, {
+            method: 'POST',
+            headers: headers
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification(data.message || 'All alliance data copied to your team!', 'success');
+                // Now proceed with deactivation
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Deactivating...';
+                proceedWithDeactivation();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-power-off me-1"></i>Deactivate Alliance Mode';
+                showNotification('Failed to copy data: ' + (data.error || 'Unknown error'), 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error copying data:', error);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-power-off me-1"></i>Deactivate Alliance Mode';
+            showNotification('Error copying alliance data', 'danger');
+        });
+    } else if (copyDataOption === 'my_data') {
+        // Copy only MY team's data
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Copying Your Team\'s Data...';
+        
+        fetch(`/alliances/scouting/{{ alliance.id }}/copy-my-data`, {
+            method: 'POST',
+            headers: headers
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification(data.message || 'Your team\'s data copied back to your private storage!', 'success');
+                // Now proceed with deactivation
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Deactivating...';
+                proceedWithDeactivation();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-power-off me-1"></i>Deactivate Alliance Mode';
+                showNotification('Failed to copy data: ' + (data.error || 'Unknown error'), 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error copying data:', error);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-power-off me-1"></i>Deactivate Alliance Mode';
+            showNotification('Error copying your team\'s data', 'danger');
+        });
+    } else {
+        // No copy needed, proceed directly
+        proceedWithDeactivation();
+    }
+}
+
+function performAllianceModeToggle(isActive) {
     const statusElement = document.getElementById('allianceModeStatus');
     if (statusElement) {
         statusElement.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Updating...';
@@ -940,6 +1396,379 @@ function removeMember(allianceId, memberId, teamNumber) {
         console.error('Error removing member:', error);
         showNotification('Network error occurred', 'danger');
     });
+}
+
+// ======== ALLIANCE DATA MANAGEMENT FUNCTIONS ========
+
+// Store alliance shared data globally
+let allianceScoutingData = [];
+let alliancePitData = [];
+
+// Load alliance shared data on page load (for admins)
+document.addEventListener('DOMContentLoaded', function() {
+    {% if member.role == 'admin' %}
+    setTimeout(loadAllianceSharedData, 1000);
+    {% endif %}
+});
+
+async function syncAndPopulateData() {
+    const btn = document.getElementById('syncPopulateBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+    btn.disabled = true;
+    
+    let headers = { 'Content-Type': 'application/json' };
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta) {
+        headers['X-CSRFToken'] = csrfMeta.getAttribute('content');
+    }
+    
+    try {
+        // Step 1: Sync data between teams
+        const syncResponse = await fetch('/alliances/scouting/{{ alliance.id }}/sync/data', {
+            method: 'POST',
+            headers: headers
+        });
+        const syncData = await syncResponse.json();
+        
+        // Step 2: Populate shared data tables
+        const populateResponse = await fetch('/alliances/scouting/{{ alliance.id }}/populate-shared-data', {
+            method: 'POST',
+            headers: headers
+        });
+        const populateData = await populateResponse.json();
+        
+        // Build result message
+        let message = '';
+        if (syncData.success) {
+            message += `Sync: Imported ${syncData.imported_count} entries, created ${syncData.shared_copies_created || 0} shared copies. `;
+        }
+        if (populateData.success) {
+            message += `Populate: Created ${populateData.scouting_copies_created} scouting + ${populateData.pit_copies_created} pit shared copies.`;
+        }
+        
+        showNotification(message || 'Data synchronized successfully!', 'success');
+        
+        // Refresh the data display
+        loadAllianceSharedData();
+        
+    } catch (error) {
+        console.error('Error syncing data:', error);
+        showNotification('Error syncing data: ' + error.message, 'danger');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+function loadAllianceSharedData() {
+    let headers = {};
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta) {
+        headers['X-CSRFToken'] = csrfMeta.getAttribute('content');
+    }
+    
+    fetch('/alliances/scouting/api/{{ alliance.id }}/shared-data', {
+        headers: headers
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            allianceScoutingData = data.scouting_data || [];
+            alliancePitData = data.pit_data || [];
+            
+            // Update stats
+            document.getElementById('sharedScoutingCount').textContent = allianceScoutingData.length;
+            document.getElementById('sharedPitCount').textContent = alliancePitData.length;
+            
+            // Render tables
+            renderScoutingDataTable();
+            renderPitDataTable();
+        } else {
+            console.error('Failed to load alliance data:', data.error);
+            showNotification('Failed to load alliance data: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error loading alliance data:', error);
+    });
+}
+
+function renderScoutingDataTable() {
+    const tbody = document.getElementById('scoutingDataTable');
+    if (!tbody) return;
+    
+    if (allianceScoutingData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No match scouting data shared in this alliance yet.</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = allianceScoutingData.map(item => `
+        <tr>
+            <td><strong>${item.team_number || 'N/A'}</strong></td>
+            <td>${item.match_type || ''} ${item.match_number || ''}</td>
+            <td>${item.event_code || 'N/A'}</td>
+            <td>${item.scout_name || 'Unknown'}</td>
+            <td>Team ${item.source_team}</td>
+            <td><small>${item.shared_at ? new Date(item.shared_at).toLocaleDateString() : 'N/A'}</small></td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="viewSharedData('scouting', ${item.id})" title="View">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-warning" onclick="editSharedData('scouting', ${item.id})" title="Edit">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteSharedData('scouting', ${item.id})" title="Remove from Alliance">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function renderPitDataTable() {
+    const tbody = document.getElementById('pitDataTable');
+    if (!tbody) return;
+    
+    if (alliancePitData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No pit scouting data shared in this alliance yet.</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = alliancePitData.map(item => `
+        <tr>
+            <td><strong>${item.team_number || 'N/A'}</strong></td>
+            <td>${item.scout_name || 'Unknown'}</td>
+            <td>Team ${item.source_team}</td>
+            <td><small>${item.shared_at ? new Date(item.shared_at).toLocaleDateString() : 'N/A'}</small></td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="viewSharedData('pit', ${item.id})" title="View">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-warning" onclick="editSharedData('pit', ${item.id})" title="Edit">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteSharedData('pit', ${item.id})" title="Remove from Alliance">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function viewSharedData(dataType, sharedId) {
+    const dataArray = dataType === 'scouting' ? allianceScoutingData : alliancePitData;
+    const item = dataArray.find(d => d.id === sharedId);
+    
+    if (!item) {
+        showNotification('Data not found', 'danger');
+        return;
+    }
+    
+    // Create a formatted view of the data
+    let content = `<div class="mb-3">
+        <h6>Data Details</h6>
+        <p><strong>Team:</strong> ${item.team_number || 'N/A'}</p>
+        <p><strong>Source Team:</strong> ${item.source_team}</p>
+        <p><strong>Scout:</strong> ${item.scout_name || 'Unknown'}</p>
+        ${dataType === 'scouting' ? `<p><strong>Match:</strong> ${item.match_type || ''} ${item.match_number || ''}</p>` : ''}
+        <p><strong>Shared:</strong> ${item.shared_at ? new Date(item.shared_at).toLocaleString() : 'N/A'}</p>
+        ${item.last_edited_by_team ? `<p><strong>Last edited by:</strong> Team ${item.last_edited_by_team} on ${new Date(item.last_edited_at).toLocaleString()}</p>` : ''}
+    </div>
+    <div class="mb-3">
+        <h6>Scouting Data</h6>
+        <pre class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto;">${JSON.stringify(item.data, null, 2)}</pre>
+    </div>`;
+    
+    // Show in modal
+    showDataModal('View Shared Data', content, false);
+}
+
+function editSharedData(dataType, sharedId) {
+    const dataArray = dataType === 'scouting' ? allianceScoutingData : alliancePitData;
+    const item = dataArray.find(d => d.id === sharedId);
+    
+    if (!item) {
+        showNotification('Data not found', 'danger');
+        return;
+    }
+    
+    // Create an editable form
+    let content = `<div class="mb-3">
+        <h6>Editing ${dataType === 'scouting' ? 'Match' : 'Pit'} Scouting Data</h6>
+        <p class="text-muted small">Team ${item.team_number || 'N/A'} ${dataType === 'scouting' ? `- ${item.match_type || ''} ${item.match_number || ''}` : ''}</p>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Scouting Data (JSON)</label>
+        <textarea id="editDataJson" class="form-control font-monospace" rows="12" style="font-size: 0.85rem;">${JSON.stringify(item.data, null, 2)}</textarea>
+        <div class="form-text">Edit the JSON data directly. Be careful to maintain valid JSON format.</div>
+    </div>
+    <div class="mb-3">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="includeOriginalCheck">
+            <label class="form-check-label" for="includeOriginalCheck">
+                <strong>Also update source team's original data</strong>
+                <br><small class="text-muted">Check this to propagate changes back to Team ${item.source_team}'s original entry</small>
+            </label>
+        </div>
+    </div>`;
+    
+    showDataModal('Edit Shared Data', content, true, () => {
+        saveSharedData(dataType, sharedId);
+    });
+}
+
+function saveSharedData(dataType, sharedId) {
+    const jsonText = document.getElementById('editDataJson').value;
+    const includeOriginal = document.getElementById('includeOriginalCheck').checked;
+    
+    let newData;
+    try {
+        newData = JSON.parse(jsonText);
+    } catch (e) {
+        showNotification('Invalid JSON format: ' + e.message, 'danger');
+        return;
+    }
+    
+    let headers = {
+        'Content-Type': 'application/json',
+    };
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta) {
+        headers['X-CSRFToken'] = csrfMeta.getAttribute('content');
+    }
+    
+    fetch('/alliances/scouting/api/{{ alliance.id }}/edit-shared-data', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+            data_type: dataType,
+            shared_id: sharedId,
+            new_data: newData,
+            include_original: includeOriginal
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Data updated successfully!' + (data.include_original ? ' (including original)' : ''), 'success');
+            hideDataModal();
+            loadAllianceSharedData(); // Refresh
+        } else {
+            showNotification('Failed to save: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving data:', error);
+        showNotification('Network error occurred', 'danger');
+    });
+}
+
+function deleteSharedData(dataType, sharedId) {
+    const dataArray = dataType === 'scouting' ? allianceScoutingData : alliancePitData;
+    const item = dataArray.find(d => d.id === sharedId);
+    
+    if (!item) {
+        showNotification('Data not found', 'danger');
+        return;
+    }
+    
+    const confirmMsg = `Remove this ${dataType === 'scouting' ? 'match' : 'pit'} scouting entry from the alliance?\n\n` +
+                       `Team: ${item.team_number || 'N/A'}\n` +
+                       (dataType === 'scouting' ? `Match: ${item.match_type || ''} ${item.match_number || ''}\n` : '') +
+                       `Source: Team ${item.source_team}\n\n` +
+                       `This will:\n` +
+                       `- Remove from alliance shared data\n` +
+                       `- Remove synced copies from other alliance members\n` +
+                       `- Keep the original team's (${item.source_team}) private copy`;
+    
+    if (!confirm(confirmMsg)) return;
+    
+    let headers = {
+        'Content-Type': 'application/json',
+    };
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta) {
+        headers['X-CSRFToken'] = csrfMeta.getAttribute('content');
+    }
+    
+    // Use the shared_id directly for admin delete
+    fetch('/alliances/scouting/api/delete-from-alliance', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+            data_type: dataType,
+            shared_id: sharedId,
+            alliance_id: {{ alliance.id }}
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const msg = `Removed from alliance: ${data.deleted_count} shared entries, ${data.synced_copies_deleted || 0} synced copies from members`;
+            showNotification(msg, 'success');
+            loadAllianceSharedData(); // Refresh
+        } else {
+            showNotification('Failed to delete: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error deleting data:', error);
+        showNotification('Network error occurred', 'danger');
+    });
+}
+
+// Helper functions for modals
+let currentDataModal = null;
+
+function showDataModal(title, content, showSave = false, onSave = null) {
+    // Remove existing modal if any
+    hideDataModal();
+    
+    const modalHtml = `
+    <div class="modal fade" id="dataViewModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">${title}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    ${content}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    ${showSave ? '<button type="button" class="btn btn-primary" id="modalSaveBtn">Save Changes</button>' : ''}
+                </div>
+            </div>
+        </div>
+    </div>`;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    const modalEl = document.getElementById('dataViewModal');
+    currentDataModal = new bootstrap.Modal(modalEl);
+    
+    if (showSave && onSave) {
+        document.getElementById('modalSaveBtn').addEventListener('click', onSave);
+    }
+    
+    modalEl.addEventListener('hidden.bs.modal', function() {
+        modalEl.remove();
+        currentDataModal = null;
+    });
+    
+    currentDataModal.show();
+}
+
+function hideDataModal() {
+    if (currentDataModal) {
+        currentDataModal.hide();
+    }
+    const existing = document.getElementById('dataViewModal');
+    if (existing) {
+        existing.remove();
+    }
 }
 </script>
 {% endblock %}

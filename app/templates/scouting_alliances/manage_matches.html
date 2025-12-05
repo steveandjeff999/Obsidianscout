@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+{% block title %}Manage Alliance Matches - {{ alliance.alliance_name }}{% endblock %}
+
+{% block head %}
+<meta name="csrf-token" content="{{ csrf_token() if csrf_token else '' }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-0">
+                        <i class="fas fa-trophy"></i> Alliance Matches
+                    </h2>
+                    <p class="text-muted mb-0">
+                        Manage matches for <strong>{{ alliance.alliance_name }}</strong> - changes propagate to all alliance members
+                    </p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('scouting_alliances.view_alliance', alliance_id=alliance.id) }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i> Back to Alliance
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-lg-4 col-md-6 mb-3">
+            <div class="card h-100 border-primary">
+                <div class="card-body">
+                    <h6 class="card-title text-primary">
+                        <i class="fas fa-trophy me-2"></i>Total Matches
+                    </h6>
+                    <p class="display-6 mb-0">{{ matches|length }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 col-md-6 mb-3">
+            <div class="card h-100 border-info">
+                <div class="card-body">
+                    <h6 class="card-title text-info">
+                        <i class="fas fa-calendar-alt me-2"></i>Events
+                    </h6>
+                    <p class="display-6 mb-0">{{ events|length }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 col-md-6 mb-3">
+            <div class="card h-100 border-success">
+                <div class="card-body">
+                    <h6 class="card-title text-success">
+                        <i class="fas fa-handshake me-2"></i>Alliance Members
+                    </h6>
+                    <p class="display-6 mb-0">{{ alliance.get_active_members()|length }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters and Sync -->
+    <div class="row mb-4">
+        <div class="col-lg-4 col-md-12 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" action="{{ url_for('scouting_alliances.manage_alliance_matches', alliance_id=alliance.id) }}" class="row gx-2 gy-2">
+                        <div class="col-12">
+                            <label class="form-label mb-1"><strong>Filter by Event</strong></label>
+                            <select name="event_id" class="form-select" onchange="this.form.submit()">
+                                <option value="">-- Select Event --</option>
+                                {% for event in events %}
+                                <option value="{{ event.id }}" {% if selected_event and selected_event.id == event.id %}selected{% endif %}>
+                                    {{ event.name }} ({{ event.year }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-8 col-md-12 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">
+                        <i class="fas fa-sync me-2"></i>Sync Matches from API
+                    </h5>
+                    <div class="input-group">
+                        <input type="text" id="syncEventCode" class="form-control" 
+                               placeholder="Enter event code (e.g., 2025txhou)"
+                               value="{{ selected_event.code if selected_event else '' }}">
+                        <button class="btn btn-success" type="button" onclick="syncMatches()">
+                            <i class="fas fa-sync me-1"></i> Sync Matches
+                        </button>
+                    </div>
+                    <small class="text-muted">
+                        Sync will fetch all matches from the FIRST API and add them to the alliance
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Matches Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list me-2"></i>
+                        {% if selected_event %}
+                            Matches for {{ selected_event.name }}
+                        {% else %}
+                            Alliance Matches
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if matches %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th style="width: 100px;">Match #</th>
+                                    <th style="width: 120px;">Type</th>
+                                    <th>Red Alliance</th>
+                                    <th>Blue Alliance</th>
+                                    <th>Scheduled</th>
+                                    <th style="width: 200px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for match in matches %}
+                                <tr>
+                                    <td class="fw-bold">{{ match.match_number }}</td>
+                                    <td>
+                                        <span class="badge {% if match.match_type == 'Qualification' %}bg-primary{% elif match.match_type == 'Playoff' %}bg-danger{% elif match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %}">
+                                            {{ match.match_type }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% for team in match.red_alliance.split(',') if team %}
+                                        <span class="badge bg-danger me-1">{{ team }}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        {% for team in match.blue_alliance.split(',') if team %}
+                                        <span class="badge bg-primary me-1">{{ team }}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        {% if match.scheduled_time %}
+                                            {{ match.scheduled_time.strftime('%m/%d %I:%M %p') }}
+                                        {% else %}
+                                            <span class="text-muted">TBD</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="{{ url_for('matches.view', match_id=match.id) }}" 
+                                               class="btn btn-sm btn-primary" target="_blank">
+                                                <i class="fas fa-eye me-1"></i> View
+                                            </a>
+                                            <a href="{{ url_for('matches.analyze_strategy', match_id=match.id) }}" 
+                                               class="btn btn-sm btn-info" target="_blank">
+                                                <i class="fas fa-chart-bar me-1"></i> Strategy
+                                            </a>
+                                            <button class="btn btn-sm btn-outline-danger" 
+                                                    onclick="deleteMatch({{ match.id }}, {{ match.match_number }})"
+                                                    title="Delete match">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        {% if selected_event %}
+                            No matches found for this event.
+                            <button class="btn btn-sm btn-success ms-2" onclick="syncMatches()">
+                                <i class="fas fa-sync me-1"></i> Sync Matches
+                            </button>
+                        {% elif events %}
+                            Please select an event to view matches.
+                        {% else %}
+                            No events added to this alliance yet. 
+                            <a href="{{ url_for('scouting_alliances.manage_alliance_events', alliance_id=alliance.id) }}" class="alert-link">
+                                Add events first
+                            </a>.
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-link me-2"></i>Related Pages
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{{ url_for('scouting_alliances.manage_alliance_teams', alliance_id=alliance.id) }}" class="btn btn-outline-primary">
+                            <i class="fas fa-users me-2"></i>Manage Teams
+                        </a>
+                        <a href="{{ url_for('scouting_alliances.manage_alliance_events', alliance_id=alliance.id) }}" class="btn btn-outline-info">
+                            <i class="fas fa-calendar-alt me-2"></i>Manage Events
+                        </a>
+                        {% if selected_event %}
+                        <a href="{{ url_for('matches.strategy_all') }}?event_id={{ selected_event.id }}" 
+                           class="btn btn-outline-success" target="_blank">
+                            <i class="fas fa-chart-line me-2"></i>Strategy All Matches
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+    <div id="syncToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <strong class="me-auto" id="toastTitle">Notification</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body" id="toastMessage"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const ALLIANCE_ID = {{ alliance.id }};
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+function showToast(title, message, isError = false) {
+    const toast = document.getElementById('syncToast');
+    const toastTitle = document.getElementById('toastTitle');
+    const toastMessage = document.getElementById('toastMessage');
+    
+    toastTitle.textContent = title;
+    toastMessage.textContent = message;
+    
+    toast.classList.remove('bg-success', 'bg-danger', 'text-white');
+    if (isError) {
+        toast.classList.add('bg-danger', 'text-white');
+    } else {
+        toast.classList.add('bg-success', 'text-white');
+    }
+    
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+}
+
+async function syncMatches() {
+    const eventCode = document.getElementById('syncEventCode').value.trim();
+    
+    if (!eventCode) {
+        showToast('Error', 'Please enter an event code', true);
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/alliances/scouting/${ALLIANCE_ID}/manage/matches/sync`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF_TOKEN
+            },
+            body: JSON.stringify({ event_code: eventCode })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('Success', data.message);
+            // Reload page after short delay
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('Error', data.error || 'Failed to sync matches', true);
+        }
+    } catch (error) {
+        console.error('Error syncing matches:', error);
+        showToast('Error', 'Failed to sync matches: ' + error.message, true);
+    }
+}
+
+async function deleteMatch(matchId, matchNumber) {
+    if (!confirm(`Are you sure you want to delete Match ${matchNumber}?\n\nThis will remove the match from the alliance.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/alliances/scouting/${ALLIANCE_ID}/manage/matches/${matchId}/delete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF_TOKEN
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('Success', data.message || `Match ${matchNumber} deleted`);
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('Error', data.error || 'Failed to delete match', true);
+        }
+    } catch (error) {
+        console.error('Error deleting match:', error);
+        showToast('Error', 'Failed to delete match: ' + error.message, true);
+    }
+}
+
+// Socket.IO listener for real-time updates
+if (typeof io !== 'undefined') {
+    const socket = io();
+    
+    socket.on('connect', function() {
+        socket.emit('join_alliance_room', { alliance_id: ALLIANCE_ID });
+    });
+    
+    socket.on('alliance_matches_synced', function(data) {
+        if (data.alliance_id === ALLIANCE_ID) {
+            showToast('Matches Synced', `${data.matches_added} matches added, ${data.matches_updated} updated by Team ${data.synced_by}`);
+            setTimeout(() => location.reload(), 2000);
+        }
+    });
+}
+</script>
+{% endblock %}
