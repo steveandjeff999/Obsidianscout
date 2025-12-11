@@ -150,6 +150,28 @@ if __name__ == '__main__':
                 print(f"Warning: Could not create APIs database tables: {apis_error}")
             
             print("Database table verification complete!")
+
+            # Fix matches with missing event_id (may exist from older imports/bugs).
+            try:
+                from app.models import Match
+                from app.routes.data import get_or_create_event
+
+                null_matches = Match.query.filter(Match.event_id == None).count()
+                if null_matches and null_matches > 0:
+                    placeholder = get_or_create_event(
+                        name='Imported (Missing Event) - Startup Fix',
+                        code=f'IMPORT-NULL-{datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")}',
+                        year=datetime.utcnow().year
+                    )
+                    Match.query.filter(Match.event_id == None).update({Match.event_id: placeholder.id})
+                    db.session.commit()
+                    print(f"Startup fix: Assigned {null_matches} matches to placeholder event id {placeholder.id}")
+            except Exception as e:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                print(f"Warning: Failed to fix matches with missing event_id on startup: {e}")
             
             # Run comprehensive database schema migrations
             try:
