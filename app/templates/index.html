@@ -306,12 +306,57 @@ document.addEventListener('DOMContentLoaded', function() {
             liveContainer.innerHTML = '<div class="text-center p-3 text-muted small">No upcoming matches at the moment</div>';
             return;
         }
-        liveContainer.innerHTML = matches.map(m => {
-            const red = (m.red_teams || []).map(t => `<div class="badge bg-light text-dark me-1">${escapeHtml(String(t))}</div>`).join('');
-            const blue = (m.blue_teams || []).map(t => `<div class="badge bg-light text-dark me-1">${escapeHtml(String(t))}</div>`).join('');
-            const time = m.scheduled_time ? `<div class="time-pill">${formatMatchTime(m.scheduled_time)}</div>` : '';
-            const pred = (m.prediction && m.prediction.winner) ? `<div class="small predicted-winner mt-1">Predicted: ${escapeHtml(m.prediction.winner)} (${escapeHtml(String(m.prediction.red_score))}-${escapeHtml(String(m.prediction.blue_score))})</div>` : '';
-            return `<div class="list-group-item d-flex justify-content-between align-items-start"><div><div class="fw-medium">${escapeHtml(m.match_type || '')} ${escapeHtml(String(m.match_number || ''))}</div><div class="small text-muted mt-1">${red}${blue}</div>${pred}</div><div class="text-end">${time}</div></div>`;
+        // Render using a stacked team-card layout similar to Now Brief panel for visual clarity
+        liveContainer.innerHTML = matches.map(function(m){
+            var redStack = [];
+            var blueStack = [];
+            try{
+                (m.red_teams || []).forEach(function(t){
+                    var tn = String(t);
+                    var isWinner = m.result && m.result.has_result && m.result.winner === 'red';
+                    redStack.push('<a class="team-card small' + (isWinner ? ' winner' : '') + '" href="/teams/' + escapeHtml(tn) + '/view" title="View Team ' + escapeHtml(tn) + '"><span class="team-number">' + escapeHtml(tn) + '</span></a>');
+                });
+                (m.blue_teams || []).forEach(function(t){
+                    var tn = String(t);
+                    var isWinner = m.result && m.result.has_result && m.result.winner === 'blue';
+                    blueStack.push('<a class="team-card small' + (isWinner ? ' winner' : '') + '" href="/teams/' + escapeHtml(tn) + '/view" title="View Team ' + escapeHtml(tn) + '"><span class="team-number">' + escapeHtml(tn) + '</span></a>');
+                });
+            }catch(e){/* ignore */}
+
+            var redBadges = (m.red_teams||[]).map(function(t){ return '<span class="team-badge">' + escapeHtml(String(t)) + '</span>'; }).join('');
+            var blueBadges = (m.blue_teams||[]).map(function(t){ return '<span class="team-badge">' + escapeHtml(String(t)) + '</span>'; }).join('');
+
+            var resultHtml = '';
+            try{
+                if(m.result && m.result.has_result){
+                    var r = m.result;
+                    var winnerStr = r.winner === 'red' ? 'Red' : (r.winner === 'blue' ? 'Blue' : (r.winner === 'tie' ? 'Tie' : null));
+                    if(winnerStr){
+                        resultHtml = '<div class="mt-1 predicted-winner small">Winner: ' + escapeHtml(winnerStr) + (r.red_score!=null && r.blue_score!=null ? ' (' + escapeHtml(String(r.red_score)) + '-' + escapeHtml(String(r.blue_score)) + ')' : '') + '</div>';
+                    } else {
+                        resultHtml = '<div class="mt-1 small">Score: ' + (r.red_score!=null?escapeHtml(String(r.red_score)):'-') + ' - ' + (r.blue_score!=null?escapeHtml(String(r.blue_score)):'-') + '</div>';
+                    }
+                } else if(m.prediction && m.prediction.winner){
+                    resultHtml = '<div class="mt-1 predicted-winner small">Predicted: ' + escapeHtml(m.prediction.winner) + ' (' + escapeHtml(String(m.prediction.red_score)) + '-' + escapeHtml(String(m.prediction.blue_score)) + ')</div>';
+                }
+            }catch(e){ resultHtml = ''; }
+
+            var timeHtml = m.scheduled_time ? ('<div class="time-pill">' + formatMatchTime(m.scheduled_time) + '</div>') : '';
+
+            var html = '';
+            html += '<div class="match-row" onclick="window.location.href=\'/matches/' + escapeHtml(String(m.id)) + '\'">';
+            html += '<div class="match-main">';
+            html += '<div class="flex-grow-1">';
+            html += '<div class="fw-semibold">' + escapeHtml(m.match_type || '') + ' ' + (m.match_number || '') + '</div>';
+            html += '<div class="d-flex align-items-start gap-2 mt-1">';
+            html += '<div class="match-stack alliance-red">' + redStack.join('') + '</div>';
+            html += '<div class="match-stack alliance-blue">' + blueStack.join('') + '</div>';
+            html += '</div>';
+            html += '<div class="small text-muted mt-1"><span class="me-2 alliance-red">' + redBadges + '</span><span class="alliance-blue">' + blueBadges + '</span></div>';
+            html += '</div>';
+            html += '<div class="text-end small">' + timeHtml + resultHtml + '</div>';
+            html += '</div></div>';
+            return html;
         }).join('');
     }
 

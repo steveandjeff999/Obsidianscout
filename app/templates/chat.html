@@ -305,8 +305,23 @@
     // Add a small stylesheet for fixed-height chat containers
     const fixedStyle = document.createElement('style');
     fixedStyle.textContent = `
-        .chat-messages-fixed-height { height: 420px; max-height: 420px; }
-        @media (max-width: 900px) { .chat-messages-fixed-height { height: 320px; max-height: 320px; } }
+        /* Use viewport-aware flexible sizing so messages don't get cut off. */
+        .chat-messages-fixed-height {
+            height: auto;                /* Let flexbox determine height where possible */
+            min-height: 320px;          /* Reasonable minimum */
+            max-height: calc(100vh - 260px); /* Fit within the viewport while leaving room for headers and inputs */
+            box-sizing: border-box;     /* Include padding/border in height calculations */
+            /* Keep space before the input; this should match input height */
+            padding-bottom: 84px;
+            /* Ensure scroll-to-bottom doesn't hide messages under inputs */
+            scroll-padding-bottom: 84px;
+        }
+        @media (min-width: 900px) {
+            .chat-messages-fixed-height { min-height: 420px; }
+        }
+        @media (max-width: 900px) {
+            .chat-messages-fixed-height { min-height: 260px; max-height: calc(100vh - 210px); }
+        }
     `;
     document.head.appendChild(fixedStyle);
 
@@ -1466,9 +1481,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (messageId) {
             const el = container.querySelector(`[data-message-id="${messageId}"]`);
             if (el) {
-                // Scroll so the target is visible with a small offset
+                // Scroll so the target is visible and fully above any input/toolbars
                 const offset = 8;
-                const top = el.offsetTop - offset;
+                // Prefer the element to sit at the bottom of the container so it's in view
+                // Compute the scrollTop so that the element's bottom is visible with a bit of offset
+                const top = Math.max(0, el.offsetTop - (container.clientHeight - el.offsetHeight) - offset);
                 try {
                     container.scrollTo({ top: top, behavior: 'auto' });
                 } catch (e) {

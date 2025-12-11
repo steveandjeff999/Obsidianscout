@@ -29,6 +29,10 @@
                 <p>Edit the JSON configuration below. The system will validate your changes before saving.</p>
                 
                 <form id="configForm" action="{{ url_for('main.save_config') }}" method="POST">
+                    <input type="hidden" name="skip_migration" id="skip_migration" value="">
+                    <input type="hidden" name="mapping_confirmed" id="mapping_confirmed" value="">
+                    <input type="hidden" name="mapping_suggestions" id="mapping_suggestions" value="">
+                    <input type="hidden" name="skip_migration" id="skip_migration" value="">
                     <div class="mb-3">
                         <label for="configJsonEditor" class="form-label">Game Configuration JSON</label>
                         <div id="configJsonEditor" class="json-editor"></div>
@@ -186,31 +190,106 @@ body.dark-mode #configJsonEditor {
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize the JSON editor
         const editor = ace.edit("configJsonEditor");
-        editor.setTheme("ace/theme/chrome");
+        editor.setTheme("ace/theme/monokai");
         editor.session.setMode("ace/mode/json");
         // Parse the config safely (already JSON from Jinja tojson)
         const configData = {{ game_config | tojson | safe }};
-        editor.setValue(JSON.stringify(configData, null, 2));
+        editor.setValue(JSON.stringify(configData || window.GAME_CONFIG || {}, null, 2));
+        editor.clearSelection();
+        try { editor.gotoLine(1); } catch(e) { /* ignore */ }
         editor.setOptions({
             fontSize: "14px",
             showPrintMargin: false,
             showGutter: true
         });
         
-        // Update the hidden form field when the form is submitted
-        document.getElementById('configForm').addEventListener('submit', function() {
-            try {
-                // Parse the JSON to validate it
-                JSON.parse(editor.getValue());
-                
-                // Update the hidden form field
-                document.getElementById('config_json').value = editor.getValue();
+        // Intercept form submit to check mapping first (ask user if they want to migrate old data)
+        document.getElementById('configForm').addEventListener('submit', function(e) {
+            // If mapping has been confirmed on client, bypass check
+            if (document.getElementById('mapping_confirmed').value === 'true') {
+                // Remove confirmation so future submits re-check
+                document.getElementById('mapping_confirmed').value = '';
                 return true;
-            } catch (e) {
-                alert('Invalid JSON: ' + e.message);
+            }
+            e.preventDefault();
+            // Validate JSON
+            let configJson;
+            try {
+                configJson = JSON.parse(editor.getValue());
+            } catch (err) {
+                alert('Invalid JSON: ' + err.message);
                 return false;
             }
+
+            // Build payload for check-mapping endpoint
+            const payload = { new_config: configJson, original_config: {{ game_config | tojson | safe }} };
+
+            fetch('{{ url_for("main.check_mapping") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(r => r.json()).then(data => {
+                if (data.mapping_needed) {
+                    // Show a confirmation modal
+                    if (!document.getElementById('migrationConfirmModal')) {
+                        const modalHtml = `
+                            <div class="modal fade" id="migrationConfirmModal" tabindex="-1" aria-labelledby="migrationConfirmLabel" aria-hidden="true">
+                              <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content">
+                                  <div class="modal-header">
+                                    <h5 class="modal-title" id="migrationConfirmLabel">Remap Scoring Elements?</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                  </div>
+                                  <div class="modal-body">We detected changes to scoring elements. Would you like to remap existing scouting data to the new configuration?</div>
+                                  <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" id="migrationSkipBtn">No, Skip Migration</button>
+                                    <button type="button" class="btn btn-primary" id="migrationProceedBtn">Yes, Show Migration Options</button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>`;
+                        document.body.insertAdjacentHTML('beforeend', modalHtml);
+                    }
+                    const migrationModal = new bootstrap.Modal(document.getElementById('migrationConfirmModal'));
+                    migrationModal.show();
+                    // Persist mapping suggestions on the form so the server can reuse them
+                    document.getElementById('mapping_suggestions').value = JSON.stringify(data.mapping_suggestions || {});
+                    document.getElementById('migrationSkipBtn').onclick = function() {
+                        document.getElementById('skip_migration').value = 'true';
+                        document.getElementById('config_json').value = JSON.stringify(configJson);
+                        migrationModal.hide();
+                        document.getElementById('configForm').submit();
+                    };
+                    document.getElementById('migrationProceedBtn').onclick = function() {
+                        document.getElementById('mapping_confirmed').value = 'true';
+                        document.getElementById('mapping_suggestions').value = JSON.stringify(data.mapping_suggestions || {});
+                        // Post to the standard save path to render migration UI (no skip flag)
+                        document.getElementById('config_json').value = JSON.stringify(configJson);
+                        migrationModal.hide();
+                        document.getElementById('configForm').submit();
+                    };
+                } else {
+                    // no migration needed, just save
+                    document.getElementById('config_json').value = JSON.stringify(configJson);
+                    document.getElementById('configForm').submit();
+                }
+            }).catch(err => {
+                console.error('check mapping failed', err);
+                // fallback: submit normally
+                document.getElementById('config_json').value = JSON.stringify(configJson);
+                document.getElementById('configForm').submit();
+            });
+            return false;
         });
+
+        // Validate and update the hidden form field on load
+        try {
+            JSON.parse(editor.getValue());
+            document.getElementById('config_json').value = editor.getValue();
+        } catch (e) {
+            // If invalid on initial load, log the error and leave textarea empty so user can correct
+            console.warn('Config editor initial JSON invalid:', e);
+        }
     });
 </script>
 {% endblock %}

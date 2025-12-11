@@ -993,7 +993,7 @@
     When true we omit the sidebar/topbar helper classes so related JS/CSS
     won't add overlays or offsets on mobile which can cause tap/click
     coordinate mismatches. #}
-<body class="d-flex flex-column h-100 modern-layout {% if not no_chrome %}with-sidebar topbar-fixed{% endif %}">
+<body class="d-flex flex-column h-100 modern-layout {% if not no_chrome %}with-sidebar topbar-fixed{% endif %} {% if liquid_glass_buttons_enabled %}liquid-glass-buttons{% endif %}">
     <!-- Global Top Bar (search + user) -->
     <div class="topbar glass navbar-glass d-flex align-items-center gap-2 px-3 py-2 shadow-sm" role="banner">
         <div class="d-flex align-items-center gap-2 flex-shrink-0">
@@ -1212,6 +1212,7 @@
                 {% endif %}
                 <!-- Per-user settings (stored locally in the browser) -->
                 <a class="btn btn-outline-primary btn-sm w-100 text-start {% if request.endpoint == 'main.settings' %}active{% endif %}" href="{{ url_for('main.settings') }}"><i class="fas fa-cog me-2"></i>Settings</a>
+                <!-- Theme Settings removed: theme management is handled client-side -->
                 <button id="darkModeButton" class="btn btn-outline-secondary btn-sm rounded-pill-soft w-100 text-start" type="button">
                     <i class="fas fa-moon me-2" id="darkModeIcon"></i><span id="darkModeLabel">Dark Mode</span>
                 </button>

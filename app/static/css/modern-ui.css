@@ -146,6 +146,47 @@ body.dark-mode .table thead th { background: rgba(255,255,255,0.03); }
     border-color: rgba(var(--ui-accent-rgb), 0.8) !important;
 }
 
+/* Liquid Glass Buttons: modern frosted tint applied to buttons
+   - Controlled by class on <body>: `liquid-glass-buttons`.
+   - Uses backdrop-filter for blur and a very transparent tint to match Lite iOS look.
+   - Accessible focus and contrast kept for keyboard users. */
+body.liquid-glass-buttons {
+    --liquid-glass-tint: rgba(var(--ui-accent-rgb), 0.08);
+    --liquid-glass-border: rgba(255,255,255,0.06);
+}
+
+body.liquid-glass-buttons .btn {
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--liquid-glass-border) !important;
+    color: var(--ui-foreground);
+    box-shadow: none !important;
+}
+
+body.liquid-glass-buttons .btn.btn-primary {
+    background: linear-gradient(180deg, rgba(var(--ui-accent-rgb),0.12), rgba(var(--ui-accent-rgb),0.06));
+    color: white !important;
+    border: 1px solid rgba(var(--ui-accent-rgb),0.12) !important;
+    box-shadow: 0 6px 18px rgba(var(--ui-accent-rgb), 0.06);
+}
+
+/* A slightly more transparent variant for small buttons */
+body.liquid-glass-buttons .btn.btn-sm {
+    background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+}
+
+/* Dark mode adjustments */
+body.dark-mode.liquid-glass-buttons .btn {
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border: 1px solid rgba(255,255,255,0.04) !important;
+    color: var(--ui-foreground);
+}
+
+body.dark-mode.liquid-glass-buttons .btn.btn-primary {
+    background: linear-gradient(180deg, rgba(var(--ui-accent-rgb),0.14), rgba(var(--ui-accent-rgb),0.08));
+}
+
 /* Toasts & Alerts */
 .toast { border-radius: var(--card-radius, 12px); box-shadow: 0 10px 30px rgba(2,6,23,0.08); }
 .alert { border-radius: var(--card-radius, 12px); }

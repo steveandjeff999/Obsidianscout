@@ -6,16 +6,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="row">
-        <div class="col-md-12">
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{{ url_for('auth.admin_settings') }}">Admin Settings</a></li>
-                    <li class="breadcrumb-item"><a href="{{ url_for('themes.index') }}">Theme Management</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Edit Theme</li>
-                </ol>
-            </nav>
+    <!-- Theme template removed. Server-side theme management disabled. -->
             
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
@@ -28,9 +19,7 @@
                     <a href="{{ url_for('themes.preview_theme', theme_id=theme.id) }}" class="btn btn-outline-primary">
                         <i class="fas fa-eye"></i> Preview
                     </a>
-                    <a href="{{ url_for('themes.index') }}" class="btn btn-secondary">
-                        <i class="fas fa-arrow-left"></i> Back to Themes
-                    </a>
+                    <!-- Theme UI removed -->
                 </div>
             </div>
         </div>

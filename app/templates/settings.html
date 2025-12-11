@@ -64,6 +64,11 @@
                     <label class="form-check-label" for="compactDensityToggle">Use compact layout density</label>
                 </div>
 
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="liquidGlassToggle">
+                    <label class="form-check-label" for="liquidGlassToggle">Enable Liquid Glass Buttons (requires server)</label>
+                </div>
+
                 <!-- Rounded UI toggle removed from settings (sitewide control preserved) -->
 
                 <div class="mb-3">
@@ -221,6 +226,43 @@
         try{ if(reducedToggle) reducedToggle.checked = readBool('reduced_motion', false); }catch(e){}
         var navbarThemeSelect = document.getElementById('navbarThemeSelect');
         try{ if(navbarThemeSelect) navbarThemeSelect.value = localStorage.getItem('navbar_theme') || 'neutral'; }catch(e){}
+
+        // Liquid glass button control (per-user preference, honored only if server enabled)
+        var liquidToggle = document.getElementById('liquidGlassToggle');
+        async function refreshLiquidGlassStatus() {
+            try {
+                const resp = await fetch("{{ url_for('auth.liquid_glass_status') }}", {headers: {'X-Requested-With':'XMLHttpRequest'}});
+                const data = await resp.json();
+                const serverEnabled = !!data.enabled;
+                if(!liquidToggle) return;
+                if(!serverEnabled) {
+                    liquidToggle.checked = false;
+                    liquidToggle.disabled = true;
+                    // Clear any locally-stored preference and remove class
+                    try { localStorage.removeItem('liquid_glass_buttons'); } catch(e) {}
+                    document.body.classList.remove('liquid-glass-buttons');
+                    // Add a title to explain why it's disabled
+                    liquidToggle.parentNode.querySelector('label').title = 'This appearance feature is disabled by your team admin.';
+                } else {
+                    // Server allows liquid glass — use local preference to determine state
+                    var pref = localStorage.getItem('liquid_glass_buttons');
+                    if(pref === null) pref = 'true'; // default on when allowed
+                    liquidToggle.checked = pref === 'true';
+                    liquidToggle.disabled = false;
+                    if(liquidToggle.checked) document.body.classList.add('liquid-glass-buttons'); else document.body.classList.remove('liquid-glass-buttons');
+                }
+            } catch(e) {
+                console.warn('Failed to fetch liquid glass status', e);
+                if(liquidToggle) liquidToggle.disabled = true;
+            }
+        }
+        if(liquidToggle){
+            liquidToggle.addEventListener('change', function(evt){
+                try{ localStorage.setItem('liquid_glass_buttons', evt.target.checked ? 'true' : 'false') }catch(e){}
+                if(evt.target.checked) document.body.classList.add('liquid-glass-buttons'); else document.body.classList.remove('liquid-glass-buttons');
+            });
+            refreshLiquidGlassStatus();
+        }
 
         // Accent color control
         // Accent color controls removed from UI
