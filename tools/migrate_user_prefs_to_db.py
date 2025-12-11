@@ -47,6 +47,27 @@ def migrate(remove_after=False):
                             changes.append((uname, 'apply_failed'))
                 else:
                     changes.append((uname, 'no_change'))
+            # Also migrate preferred_theme if present
+            if 'preferred_theme' in up:
+                from app.models import User
+                u = User.query.filter_by(username=uname).first()
+                if not u:
+                    changes.append((uname + ' (theme)', 'user not found'))
+                else:
+                    val = up.get('preferred_theme')
+                    if getattr(u, 'preferred_theme', None) != val:
+                        changes.append((uname + ' (theme)', u.id, getattr(u, 'preferred_theme', None), val))
+                        if remove_after:
+                            try:
+                                u.preferred_theme = val
+                                db.session.add(u)
+                                db.session.commit()
+                                del up['preferred_theme']
+                            except Exception:
+                                db.session.rollback()
+                                changes.append((uname + ' (theme)', 'apply_failed'))
+                    else:
+                        changes.append((uname + ' (theme)', 'no_change'))
 
         # If removal requested, write back the prefs file with removed entries
         if remove_after:

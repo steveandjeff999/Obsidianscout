@@ -145,6 +145,13 @@ MIGRATIONS = [
     ('team_alliance_status', 'deactivated_at', 'DATETIME', None),
     
     # -------------------------------------------------------------------------
+    # Team table per-team starting points
+    # -------------------------------------------------------------------------
+    ('team', 'starting_points', 'FLOAT DEFAULT 0', None),
+    ('team', 'starting_points_threshold', 'INTEGER DEFAULT 2', None),
+    ('team', 'starting_points_enabled', 'BOOLEAN DEFAULT 0', None),
+    # -------------------------------------------------------------------------
+
     # SharedGraph table migrations (default bind)
     # -------------------------------------------------------------------------
     ('shared_graph', 'allow_comments', 'BOOLEAN DEFAULT 0', None),
@@ -351,3 +358,72 @@ def check_missing_columns(db):
                 })
     
     return missing
+
+
+def column_exists_for_bind(db, bind_key, table_name, column_name):
+    """Return True if the given column is present in the specified table for a bind."""
+    engine = get_engine_for_bind(db, bind_key)
+    cols = get_table_columns(engine, table_name)
+    return bool(cols and column_name in cols)
+
+
+def migrate_user_notification_prefs(db, remove_after=True):
+    """Migrate legacy JSON user preference 'only_password_reset_emails' into DB users table.
+
+    Returns the count of successfully migrated users.
+    """
+    try:
+        from app.utils import user_prefs as user_prefs_util
+        from app.models import User
+    except Exception:
+        return 0
+
+    # Ensure the DB column exists before attempting migration
+    try:
+        if not column_exists_for_bind(db, 'users', 'user', 'only_password_reset_emails'):
+            return 0
+    except Exception:
+        return 0
+
+    prefs = user_prefs_util.load_prefs() or {}
+    changes = 0
+    for uname, up in list(prefs.items()):
+        if not isinstance(up, dict):
+            continue
+        if 'only_password_reset_emails' not in up:
+            continue
+        try:
+            u = User.query.filter_by(username=uname).first()
+        except Exception:
+            u = None
+        if not u:
+            continue
+        val = bool(up.get('only_password_reset_emails', False))
+        try:
+            if getattr(u, 'only_password_reset_emails', None) != val:
+                u.only_password_reset_emails = val
+                db.session.add(u)
+                db.session.commit()
+                changes += 1
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            continue
+        # Optionally remove migrated key from JSON to keep file clean
+        if remove_after:
+            try:
+                if 'only_password_reset_emails' in up:
+                    del up['only_password_reset_emails']
+                    prefs[uname] = up
+            except Exception:
+                pass
+
+    if remove_after and changes > 0:
+        try:
+            user_prefs_util.save_prefs(prefs)
+        except Exception:
+            pass
+
+    return changes

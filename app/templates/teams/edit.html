@@ -45,6 +45,29 @@
                             Hold down Ctrl (Windows) or Command (Mac) to select multiple events.
                         </div>
                     </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Starting Points (optional)</label>
+                        <div class="form-text mb-2">Provide a starting points value that will be used for this team across events until it has a few scouted matches (defaults to threshold 2).</div>
+                        <div class="row g-2 align-items-center mb-2">
+                            <div class="col-md-4">
+                                <input type="number" step="0.1" class="form-control" name="starting_points" placeholder="Start pts" value="{{ team.starting_points or '' }}">
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" name="starting_points_threshold">
+                                    <option value="1" {% if team.starting_points_threshold == 1 %}selected{% endif %}>1</option>
+                                    <option value="2" {% if team.starting_points_threshold == 2 %}selected{% endif %}>2</option>
+                                    <option value="3" {% if team.starting_points_threshold == 3 %}selected{% endif %}>3</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="1" id="sp_enabled" name="starting_points_enabled" {% if team.starting_points_enabled %}checked{% endif %}>
+                                    <label class="form-check-label" for="sp_enabled">Enable</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     
                     <div class="d-flex justify-content-between">
                         <a href="{{ url_for('teams.view', team_number=team.team_number) }}" class="btn btn-secondary">

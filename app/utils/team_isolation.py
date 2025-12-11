@@ -109,13 +109,12 @@ def filter_teams_by_scouting_team(query=None):
         query = Team.query
     
     if scouting_team_number is not None:
-        # Check if alliance mode is active
-        shared_event_codes = get_alliance_shared_event_codes()
-        if shared_event_codes:
+        # Check if alliance mode is active by presence of alliance team numbers
+        alliance_team_numbers = get_alliance_team_numbers()
+        if alliance_team_numbers:
             # Show all teams from any alliance member (don't filter by scouting_team_number)
             # Teams are shared across the alliance when alliance mode is active
             # Use DISTINCT on team_number to prevent duplicates
-            alliance_team_numbers = get_alliance_team_numbers()
             return query.filter(Team.scouting_team_number.in_(alliance_team_numbers)).distinct(Team.team_number)
         else:
             # Show only current team's teams
@@ -247,31 +246,37 @@ def filter_matches_by_scouting_team(query=None):
     
     if scouting_team_number is not None:
         # Check if alliance mode is active
-        shared_event_codes = get_alliance_shared_event_codes()
-        if shared_event_codes:
-            # Show matches from all alliance members for shared events
-            # Get event IDs for shared event codes from ANY alliance member
-            upper_codes = [code.upper() for code in shared_event_codes]
-            alliance_team_numbers = get_alliance_team_numbers()
-            
-            # Create subquery that deduplicates at SQL level
-            # Select MIN(match.id) grouped by (UPPER(event.code), match_type, match_number)
+        alliance_team_numbers = get_alliance_team_numbers()
+        if alliance_team_numbers:
+            # Show matches from all alliance members. We include matches
+            # where the event is associated with an alliance team OR where
+            # either red_alliance or blue_alliance contains a member team's number.
+            alliance_team_numbers = list(alliance_team_numbers)
+
             from sqlalchemy import func as sql_func
-            
+            from sqlalchemy import or_
+
+            # Build match filters for red/blue alliance membership
+            red_filters = [Match.red_alliance.contains(str(n)) for n in alliance_team_numbers]
+            blue_filters = [Match.blue_alliance.contains(str(n)) for n in alliance_team_numbers]
+
+            # Build subquery that deduplicates matches by event code / match type / number
             subq = db.session.query(
                 sql_func.min(Match.id).label('match_id')
             ).join(
                 Event, Match.event_id == Event.id
             ).filter(
-                sql_func.upper(Event.code).in_(upper_codes),
-                Event.scouting_team_number.in_(alliance_team_numbers)
+                or_(
+                    Event.scouting_team_number.in_(alliance_team_numbers),
+                    *red_filters,
+                    *blue_filters
+                )
             ).group_by(
                 sql_func.upper(Event.code),
                 Match.match_type,
                 Match.match_number
             ).subquery()
-            
-            # Return matches whose IDs are in the deduplicated subquery
+
             return query.filter(Match.id.in_(select(subq.c.match_id)))
         else:
             # Show only current team's matches

@@ -12,11 +12,12 @@ from app.utils.api_utils import safe_int_team_number
 from sqlalchemy import or_, func
 from datetime import datetime, timezone
 from app.utils.system_check import SystemCheck
-from app.utils.theme_manager import ThemeManager
+# ThemeManager removed from auth routes; provide a lightweight context function below.
 from werkzeug.utils import secure_filename
 import os
 from app.utils import notifications as notif_util
 from app.utils import user_prefs as user_prefs_util
+from app.utils.database_migrations import column_exists_for_bind
 from app.models_misc import NotificationLog
 from app.utils.emailer import send_email as send_email_util
 from app.utils import emailer as emailer_util
@@ -25,17 +26,26 @@ import json
  
 
 def get_theme_context():
-    theme_manager = ThemeManager()
-    return {
-        'themes': theme_manager.get_available_themes(),
-        'current_theme_id': theme_manager.current_theme
-        ,
-        # Signal to base template that auth pages should render without the
-        # global chrome (sidebar/topbar). This prevents global JS/CSS that
-        # manipulates the sidebar or adds overlays from running on auth pages
-        # and causing touch/click offsets on mobile devices.
+    # Provide minimal placeholders so templates can render without theme endpoints
+    ctx = {
+        'themes': {},
+        'current_theme_id': 'light',
+        # Mark auth pages to render without global chrome for layout consistency
         'no_chrome': True
     }
+    # Add a convenient flag that templates can use to enable the 'liquid glass'
+    # button style as a per-team toggle. We keep this lightweight so templates
+    # can opt-in to the visual change without additional logic.
+    try:
+        if current_user and current_user.is_authenticated:
+            from app.models import ScoutingTeamSettings
+            team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+            ctx['liquid_glass_buttons_enabled'] = bool(team_settings and getattr(team_settings, 'liquid_glass_buttons', False))
+        else:
+            ctx['liquid_glass_buttons_enabled'] = False
+    except Exception:
+        ctx['liquid_glass_buttons_enabled'] = False
+    return ctx
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -412,25 +422,29 @@ def profile():
         # Only-password-reset toggle
         only_pw_reset = request.form.get('only_password_reset_emails')
         only_pw_val = True if only_pw_reset in ('on', 'true', '1') else False
+        # Prefer to persist to DB column when available; otherwise fallback to JSON file prefs
         try:
-            # Update DB column if present
-            current_user.only_password_reset_emails = only_pw_val
+            if column_exists_for_bind(db, 'users', 'user', 'only_password_reset_emails'):
+                current_user.only_password_reset_emails = only_pw_val
+            else:
+                user_prefs_util.set_pref(current_user.username, 'only_password_reset_emails', only_pw_val)
         except Exception:
-            # Continue - DB column may not be present
-            pass
-        # Always persist to file-backed preferences as well (for migration/backward-compatibility)
-        try:
-            user_prefs_util.set_pref(current_user.username, 'only_password_reset_emails', only_pw_val)
-        except Exception:
-            # If file system is unavailable, ignore but log could be added
-            pass
+            # In case of any unexpected error, try fallback persistence to JSON
+            try:
+                user_prefs_util.set_pref(current_user.username, 'only_password_reset_emails', only_pw_val)
+            except Exception:
+                pass
 
         db.session.commit()
         flash('Profile updated successfully.', 'success')
         return redirect(request.url)
     # Prefer DB column if present, otherwise fall back to file-backed user_prefs
+    # Prefer DB column if present, otherwise fall back to file-backed user_prefs
     try:
-        only_pw_reset_pref = bool(getattr(current_user, 'only_password_reset_emails', False))
+        if column_exists_for_bind(db, 'users', 'user', 'only_password_reset_emails'):
+            only_pw_reset_pref = bool(getattr(current_user, 'only_password_reset_emails', False))
+        else:
+            only_pw_reset_pref = user_prefs_util.get_pref(current_user.username, 'only_password_reset_emails', False)
     except Exception:
         only_pw_reset_pref = user_prefs_util.get_pref(current_user.username, 'only_password_reset_emails', False)
     return render_template('auth/profile.html', user=current_user, only_password_reset_emails=only_pw_reset_pref, **get_theme_context())
@@ -796,16 +810,17 @@ def add_user():
         # Respect 'only_password_reset_emails' flag if provided
         only_pw_reset = request.form.get('only_password_reset_emails')
         only_pw_val = True if only_pw_reset in ('on', 'true', '1') else False
+        # Prefer to persist to DB column when available; otherwise fallback to JSON file prefs
         try:
-            user.only_password_reset_emails = only_pw_val
+            if column_exists_for_bind(db, 'users', 'user', 'only_password_reset_emails'):
+                user.only_password_reset_emails = only_pw_val
+            else:
+                user_prefs_util.set_pref(user.username, 'only_password_reset_emails', only_pw_val)
         except Exception:
-            # DB column might not exist; we'll persist to JSON below
-            pass
-        # Persist preference to file-backed prefs too
-        try:
-            user_prefs_util.set_pref(user.username, 'only_password_reset_emails', only_pw_val)
-        except Exception:
-            pass
+            try:
+                user_prefs_util.set_pref(user.username, 'only_password_reset_emails', only_pw_val)
+            except Exception:
+                pass
         user.set_password(password)
         
         # Add roles
@@ -993,14 +1008,17 @@ def edit_user(user_id):
         # Admin-editable: allow admins to set whether this user only receives password reset emails
         only_pw_reset = request.form.get('only_password_reset_emails')
         only_pw_val = True if only_pw_reset in ('on', 'true', '1') else False
+        # Prefer to persist to DB column when available; otherwise fallback to JSON file prefs
         try:
-            user.only_password_reset_emails = only_pw_val
+            if column_exists_for_bind(db, 'users', 'user', 'only_password_reset_emails'):
+                user.only_password_reset_emails = only_pw_val
+            else:
+                user_prefs_util.set_pref(user.username, 'only_password_reset_emails', only_pw_val)
         except Exception:
-            pass
-        try:
-            user_prefs_util.set_pref(user.username, 'only_password_reset_emails', only_pw_val)
-        except Exception:
-            pass
+            try:
+                user_prefs_util.set_pref(user.username, 'only_password_reset_emails', only_pw_val)
+            except Exception:
+                pass
         
         # Update password if provided
         new_password = request.form.get('password')
@@ -1049,7 +1067,10 @@ def edit_user(user_id):
     
     roles = Role.query.all()
     try:
-        prefs_only_pw = bool(getattr(user, 'only_password_reset_emails', False))
+        if column_exists_for_bind(db, 'users', 'user', 'only_password_reset_emails'):
+            prefs_only_pw = bool(getattr(user, 'only_password_reset_emails', False))
+        else:
+            prefs_only_pw = user_prefs_util.get_pref(user.username, 'only_password_reset_emails', False)
     except Exception:
         prefs_only_pw = user_prefs_util.get_pref(user.username, 'only_password_reset_emails', False)
     return render_template('auth/edit_user.html', user=user, roles=roles, only_password_reset_emails=prefs_only_pw, **get_theme_context())
@@ -1377,6 +1398,36 @@ def toggle_account_lock():
         flash('Account creation has been locked for your team.', 'warning')
     
     db.session.commit()
+    return redirect(url_for('auth.admin_settings'))
+
+
+@bp.route('/admin/liquid-glass-status', methods=['GET'])
+@admin_required
+def liquid_glass_status():
+    """Return JSON with current liquid glass button status for the admin's team"""
+    from app.models import ScoutingTeamSettings
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    enabled = bool(team_settings and getattr(team_settings, 'liquid_glass_buttons', False))
+    return jsonify({'enabled': enabled})
+
+
+@bp.route('/admin/toggle-liquid-glass-buttons', methods=['POST'])
+@admin_required
+def toggle_liquid_glass_buttons():
+    """Toggle the per-team liquid glass button appearance setting"""
+    from app.models import ScoutingTeamSettings
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    if not team_settings:
+        team_settings = ScoutingTeamSettings(scouting_team_number=current_user.scouting_team_number)
+        db.session.add(team_settings)
+
+    # Toggle the flag and persist
+    team_settings.liquid_glass_buttons = not bool(getattr(team_settings, 'liquid_glass_buttons', False))
+    db.session.commit()
+    if team_settings.liquid_glass_buttons:
+        flash('Liquid glass buttons have been enabled for your team.', 'success')
+    else:
+        flash('Liquid glass buttons have been disabled for your team.', 'info')
     return redirect(url_for('auth.admin_settings'))
 
 # Context processor to make current_user and role functions available in templates

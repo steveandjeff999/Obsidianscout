@@ -10,6 +10,7 @@ import markdown2
 from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import (get_current_game_config, get_effective_game_config, save_game_config, 
                                      get_available_default_configs, reset_config_to_default)
+from app.utils.config_migration import compute_mapping_suggestions, apply_mapping
 from flask import request, jsonify
 from app import load_chat_history
 from app.models import User
@@ -190,6 +191,114 @@ def simple_edit_config():
     default_configs = get_available_default_configs()
     return render_template('config_simple_edit_simplified.html', game_config=game_config, default_configs=default_configs, **get_theme_context())
 
+
+@bp.route('/config/migrate/apply', methods=['POST'])
+@login_required
+def apply_config_migration():
+    """Endpoint to apply the user's mapping choices and migrate existing scouting data.
+    Accepts form fields 'migration_mapping' (JSON) and optional 'team_number'.
+    """
+    try:
+        mapping_raw = request.form.get('migration_mapping')
+        if not mapping_raw:
+            flash('No mapping submitted, nothing to do.', 'warning')
+            return redirect(url_for('main.config'))
+        # Accept either a JSON string or a parsed object from application/json
+        if isinstance(mapping_raw, str):
+            mapping = json.loads(mapping_raw)
+        else:
+            mapping = mapping_raw or {}
+
+        team_number = request.form.get('team_number')
+        if team_number:
+            try:
+                team_number = int(team_number)
+            except Exception:
+                team_number = None
+
+        alliance_id = request.form.get('alliance_id')
+        if alliance_id:
+            try:
+                alliance_id = int(alliance_id)
+            except Exception:
+                alliance_id = None
+
+        updated_config_raw = request.form.get('updated_config_json')
+        updated_config = None
+        if updated_config_raw:
+            try:
+                if isinstance(updated_config_raw, str):
+                    updated_config = json.loads(updated_config_raw)
+                else:
+                    updated_config = updated_config_raw
+            except Exception:
+                updated_config = None
+
+        result = apply_mapping(mapping, team_number=team_number, alliance_id=alliance_id, new_config=updated_config, dry_run=False)
+        try:
+            current_app.logger.debug(f"apply_config_migration mapping: {mapping} team: {team_number} alliance: {alliance_id} result: {result}")
+        except Exception:
+            pass
+        if result.get('success'):
+            flash(f"Updated {result.get('updated', 0)} scouting data entries.", 'success')
+        else:
+            flash(f"Migration failed: {result.get('message')}", 'danger')
+    except Exception as e:
+        flash(f"Migration failed: {str(e)}", 'danger')
+    if alliance_id:
+        # Redirect back to alliance view if the migration scoped to alliance
+        try:
+            from flask import current_app
+            return redirect(url_for('scouting_alliances.view_alliance', alliance_id=alliance_id))
+        except Exception:
+            pass
+    return redirect(url_for('main.config'))
+
+
+@bp.route('/config/migrate/preview', methods=['POST'])
+@login_required
+def preview_config_migration():
+    try:
+        # Accept either form-encoded or JSON body; use silent JSON parse to avoid 415 errors
+        body_json = request.get_json(silent=True) or {}
+        mapping_raw = request.form.get('migration_mapping') or (body_json or {}).get('migration_mapping')
+        if not mapping_raw:
+            return jsonify({'success': False, 'message': 'No mapping provided'}), 400
+        if isinstance(mapping_raw, str):
+            mapping = json.loads(mapping_raw)
+        else:
+            mapping = mapping_raw or {}
+
+        team_number = request.form.get('team_number') or (body_json or {}).get('team_number')
+        if team_number:
+            try:
+                team_number = int(team_number)
+            except Exception:
+                team_number = None
+        alliance_id = request.form.get('alliance_id') or (body_json or {}).get('alliance_id')
+        if alliance_id:
+            try:
+                alliance_id = int(alliance_id)
+            except Exception:
+                alliance_id = None
+
+        updated_config_raw = request.form.get('updated_config_json') or (body_json or {}).get('updated_config_json')
+        updated_config = None
+        if updated_config_raw:
+            try:
+                if isinstance(updated_config_raw, str):
+                    updated_config = json.loads(updated_config_raw)
+                else:
+                    updated_config = updated_config_raw
+            except Exception:
+                updated_config = None
+
+        result = apply_mapping(mapping, team_number=team_number, alliance_id=alliance_id, new_config=updated_config, dry_run=True)
+        return jsonify({ 'success': True, 'to_update': result.get('updated', 0), 'sample': result.get('sample', []) })
+    except Exception as e:
+        current_app.logger.exception('preview_config_migration error')
+        return jsonify({ 'success': False, 'error': str(e) }), 500
+
 def ensure_complete_config_structure(config):
     """Ensures the configuration has all required sections with proper defaults"""
     
@@ -352,10 +461,44 @@ def save_config():
                 flash(f"Missing required configuration key: {key}", "danger")
                 return redirect(url_for('main.edit_config'))
         
+        # Capture the original config for potential migration mapping
+        original_config = get_current_game_config()
+
+        skip_migration = request.form.get('skip_migration') == 'true'
         # Save the updated configuration
         if save_game_config(updated_config):
             # Update the configuration in the app
             current_app.config['GAME_CONFIG'] = updated_config
+
+            # Compute mapping suggestions to show to the user
+            try:
+                mapping_suggestions_raw = request.form.get('mapping_suggestions') or request.form.get('mapping_suggestions_json')
+                if mapping_suggestions_raw:
+                    mapping_suggestions = json.loads(mapping_suggestions_raw)
+                else:
+                    mapping_suggestions = compute_mapping_suggestions(original_config, updated_config)
+            except Exception:
+                mapping_suggestions = compute_mapping_suggestions(original_config, updated_config)
+            # Decide whether a migration is likely useful: if any old element has different suggested id
+            mapping_needed = False
+            for period, mappings in mapping_suggestions.items():
+                for m in mappings:
+                    if not m['suggested_new_id'] or m['suggested_new_id'] != m['old']['id']:
+                        mapping_needed = True
+                        break
+                if mapping_needed:
+                    break
+
+            if mapping_needed and not skip_migration:
+                # Render migration UI directly so user can confirm remapping
+                from flask_login import current_user
+                team_number = getattr(current_user, 'scouting_team_number', None)
+                try:
+                    current_app.logger.debug(f"Mapping needed: {mapping_needed} for team {team_number}. Suggestions: {mapping_suggestions}")
+                except Exception:
+                    current_app.logger.debug(f"Mapping needed: {mapping_needed} for team {team_number}. Suggestions count: {len(mapping_suggestions) if mapping_suggestions else 0}")
+                return render_template('config_migrate.html', original_config=original_config, updated_config=updated_config, mapping_suggestions=mapping_suggestions, team_number=team_number, **get_theme_context())
+
             flash('Configuration updated successfully!', 'success')
         else:
             flash('Error saving configuration.', 'danger')
@@ -366,6 +509,48 @@ def save_config():
     except Exception as e:
         flash(f'Error updating configuration: {str(e)}', 'danger')
         return redirect(url_for('main.edit_config'))
+
+
+@bp.route('/config/check-mapping', methods=['POST'])
+@login_required
+def check_mapping():
+    """Check whether a migration is needed for the provided new config.
+
+    Accepts JSON body or form data with 'new_config' (or 'new_config_json') and optional 'original_config'.
+    Returns JSON: { mapping_needed: bool, mapping_suggestions: {} }
+    """
+    try:
+        body = request.get_json(silent=True) or request.form or {}
+        new_cfg = body.get('new_config') or body.get('new_config_json') or body
+        if isinstance(new_cfg, str):
+            try:
+                new_cfg = json.loads(new_cfg)
+            except Exception:
+                new_cfg = {}
+
+        original_cfg = body.get('original_config')
+        if isinstance(original_cfg, str):
+            try:
+                original_cfg = json.loads(original_cfg)
+            except Exception:
+                original_cfg = None
+        if not original_cfg:
+            original_cfg = get_current_game_config()
+
+        mapping_suggestions = compute_mapping_suggestions(original_cfg, new_cfg)
+        mapping_needed = False
+        for period, mappings in mapping_suggestions.items():
+            for m in mappings:
+                if not m['suggested_new_id'] or m['suggested_new_id'] != m['old']['id']:
+                    mapping_needed = True
+                    break
+            if mapping_needed:
+                break
+
+        return jsonify({ 'mapping_needed': mapping_needed, 'mapping_suggestions': mapping_suggestions })
+    except Exception as e:
+        current_app.logger.exception('check_mapping error')
+        return jsonify({ 'error': str(e) }), 500
 
 
 @bp.route('/notifications/recent')
@@ -851,10 +1036,36 @@ def save_simple_config():
             updated_config.setdefault('api_settings', {})
             updated_config['api_settings']['auto_sync_enabled'] = True
         
+        skip_migration = request.form.get('skip_migration') == 'true'
         # Save the configuration
         if save_game_config(updated_config):
             # Update app config
             current_app.config['GAME_CONFIG'] = updated_config
+
+            # Compute mapping suggestions and prompt for migration if needed
+            try:
+                mapping_suggestions_raw = request.form.get('mapping_suggestions') or request.form.get('mapping_suggestions_json')
+                if mapping_suggestions_raw:
+                    mapping_suggestions = json.loads(mapping_suggestions_raw)
+                else:
+                    mapping_suggestions = compute_mapping_suggestions(original_config, updated_config)
+            except Exception:
+                mapping_suggestions = compute_mapping_suggestions(original_config, updated_config)
+            mapping_needed = False
+            for period, mappings in mapping_suggestions.items():
+                for m in mappings:
+                    if not m['suggested_new_id'] or m['suggested_new_id'] != m['old']['id']:
+                        mapping_needed = True
+                        break
+                if mapping_needed:
+                    break
+
+            if mapping_needed and not skip_migration:
+                # Render migration UI directly so user can confirm remapping
+                from flask_login import current_user
+                team_number = getattr(current_user, 'scouting_team_number', None)
+                return render_template('config_migrate.html', original_config=original_config, updated_config=updated_config, mapping_suggestions=mapping_suggestions, team_number=team_number, **get_theme_context())
+
             flash('Configuration updated successfully!', 'success')
         else:
             flash('Error saving configuration.', 'danger')
@@ -876,6 +1087,34 @@ def help_page():
         md_content = f.read()
     html_content = markdown2.markdown(md_content)
     return render_template('help.html', files=files, content=html_content, selected=selected, **get_theme_context())
+
+
+@bp.route('/privacy')
+def privacy_page():
+    """Privacy policy page (public). Renders help/PRIVACY.md as a help topic."""
+    files = get_help_files()
+    priv_file = 'PRIVACY.md'
+    # Ensure the private policy file is visible in the help topics if present
+    if priv_file not in files:
+        # If not found, still render content from the markdown in the help folder if possible
+        files = files + [priv_file]
+    try:
+        path = os.path.join(HELP_FOLDER, priv_file)
+        if os.path.exists(path):
+            with open(path, encoding='utf-8') as f:
+                md_content = f.read()
+        else:
+            # Fallback: combine a short privacy summary from existing docs
+            md_content = """
+            # Privacy Policy
+
+            Obsidian-Scout protects user and team data. We isolate team data, use token-based authentication, and encrypt sync traffic. For details, see the admin help files.
+            """
+    except Exception:
+        md_content = "Privacy policy is currently unavailable."
+
+    html_content = markdown2.markdown(md_content)
+    return render_template('help.html', files=files, content=html_content, selected=priv_file, **get_theme_context())
 
 @bp.route('/chat')
 @login_required

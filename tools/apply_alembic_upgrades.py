@@ -250,6 +250,11 @@ def apply_upgrades_for_binds(app, selected_binds, no_backup=False, dry_run=False
                             log('Verified: user.only_password_reset_emails exists', log_widget)
                         else:
                             log('Warning: user.only_password_reset_emails is missing after upgrade', log_widget)
+                        # Also verify preferred_theme exists for user
+                        if db_column_exists(engine, 'user', 'preferred_theme'):
+                            log('Verified: user.preferred_theme exists', log_widget)
+                        else:
+                            log('Warning: user.preferred_theme is missing after upgrade', log_widget)
                 except Exception as e:
                     log(f'Error during post-upgrade verification: {e}', log_widget)
 

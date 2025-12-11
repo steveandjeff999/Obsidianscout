@@ -1236,9 +1236,28 @@ def get_teams():
             # Build teams list from matches for the event to avoid relying on
             # Team.events association which may be incomplete.
             if alliance and alliance_member_numbers:
-                red_filters = [Match.red_alliance.contains(str(n)) for n in alliance_member_numbers]
-                blue_filters = [Match.blue_alliance.contains(str(n)) for n in alliance_member_numbers]
-                matches = Match.query.filter(Match.event_id == event_id).filter(db.or_(*red_filters, *blue_filters)).all()
+                # Alliance mode - use alliance-aware function to get all teams for the event
+                teams_list, _ = get_all_teams_for_alliance(event_id=event_id)
+                # Return directly with pagination
+                limit = min(request.args.get('limit', 100, type=int), 500)
+                offset = request.args.get('offset', 0, type=int)
+                
+                total_count = len(teams_list)
+                teams = teams_list[offset:offset+limit]
+                
+                teams_data = [{
+                    'id': team.id,
+                    'team_number': team.team_number,
+                    'team_name': team.team_name,
+                    'location': team.location
+                } for team in teams]
+                
+                return jsonify({
+                    'success': True,
+                    'teams': teams_data,
+                    'count': len(teams_data),
+                    'total': total_count
+                }), 200
             else:
                 matches = Match.query.filter_by(event_id=event_id, scouting_team_number=team_number).all()
             team_nums = set()
@@ -1256,10 +1275,7 @@ def get_teams():
             if not team_nums:
                 return jsonify({'success': True, 'teams': [], 'count': 0, 'total': 0}), 200
 
-            if alliance and alliance_member_numbers:
-                teams_query = Team.query.filter(Team.team_number.in_(list(team_nums))).distinct()
-            else:
-                teams_query = Team.query.filter(Team.scouting_team_number == team_number, Team.team_number.in_(list(team_nums)))
+            teams_query = Team.query.filter(Team.scouting_team_number == team_number, Team.team_number.in_(list(team_nums)))
         else:
             # No event_id provided: restrict to the scouting team's "current event"
             # as defined in its effective game configuration (considers alliance mode).
@@ -1312,6 +1328,30 @@ def get_teams():
                 # avoid returning teams from unrelated events.
                 return jsonify({'success': True, 'teams': [], 'count': 0, 'total': 0}), 200
 
+            # Alliance mode - use alliance-aware function to get all teams for the event
+            if alliance and alliance_member_numbers:
+                teams_list, _ = get_all_teams_for_alliance(event_id=event.id)
+                # Return directly with pagination
+                limit = min(request.args.get('limit', 100, type=int), 500)
+                offset = request.args.get('offset', 0, type=int)
+                
+                total_count = len(teams_list)
+                teams = teams_list[offset:offset+limit]
+                
+                teams_data = [{
+                    'id': team.id,
+                    'team_number': team.team_number,
+                    'team_name': team.team_name,
+                    'location': team.location
+                } for team in teams]
+                
+                return jsonify({
+                    'success': True,
+                    'teams': teams_data,
+                    'count': len(teams_data),
+                    'total': total_count
+                }), 200
+
             # Collect team numbers from matches for this event. Prefer matches
             # that are scoped to the scouting_team_number, but fall back to any
             # matches for the event if none are scoped.
@@ -1339,10 +1379,7 @@ def get_teams():
             if not team_nums:
                 return jsonify({'success': True, 'teams': [], 'count': 0, 'total': 0}), 200
 
-            if alliance and alliance_member_numbers:
-                teams_query = Team.query.filter(Team.team_number.in_(list(team_nums))).distinct()
-            else:
-                teams_query = Team.query.filter(Team.scouting_team_number == team_number, Team.team_number.in_(list(team_nums)))
+            teams_query = Team.query.filter(Team.scouting_team_number == team_number, Team.team_number.in_(list(team_nums)))
         
         # Pagination
         limit = min(request.args.get('limit', 100, type=int), 500)
@@ -1697,7 +1734,12 @@ def get_matches():
         
         # Build the base query: allow event_id resolution and use the helper that respects alliance config
         if event_id:
-            matches_query = filter_matches_by_scouting_team().filter(Match.event_id == event_id)
+            if alliance and alliance_member_numbers:
+                # Alliance mode - use alliance-aware function to get all matches for the event
+                matches, _ = get_all_matches_for_alliance(event_id=event_id)
+            else:
+                matches_query = filter_matches_by_scouting_team().filter(Match.event_id == event_id)
+                matches = matches_query.order_by(Match.match_number).all()
         else:
             return jsonify({
                 'success': False,
@@ -1705,22 +1747,15 @@ def get_matches():
                 'error_code': 'MISSING_EVENT_ID'
             }), 400
         
-        # Optional filters
+        # Optional filters (apply after getting matches)
         match_type = request.args.get('match_type')
         if match_type:
-            matches_query = matches_query.filter_by(match_type=match_type)
+            matches = [m for m in matches if m.match_type == match_type]
         
         team_filter = request.args.get('team_number', type=int)
         if team_filter:
             team_str = str(team_filter)
-            matches_query = matches_query.filter(
-                db.or_(
-                    Match.red_alliance.contains(team_str),
-                    Match.blue_alliance.contains(team_str)
-                )
-            )
-        
-        matches = matches_query.order_by(Match.match_number).all()
+            matches = [m for m in matches if (m.red_alliance and team_str in m.red_alliance) or (m.blue_alliance and team_str in m.blue_alliance)]
         
         matches_data = [{
             'id': match.id,
@@ -2406,8 +2441,17 @@ def get_game_config():
             requested_team = None
 
         if requested_team is not None:
-            current_app.logger.info(f"mobile_api.get_game_config: request includes override requested_team={requested_team}; using it instead of resolved {team_number}")
-            team_number = requested_team
+            # Only permit overriding to a different team when the caller is a
+            # superadmin. Otherwise, reject to avoid exposing other teams' configs.
+            if mobile_user and getattr(mobile_user, 'has_role', None) and mobile_user.has_role('superadmin'):
+                current_app.logger.info(f"mobile_api.get_game_config: superadmin override requested_team={requested_team}; using it instead of resolved {team_number}")
+                team_number = requested_team
+            else:
+                try:
+                    if int(requested_team) != int(team_number if team_number is not None else -999999):
+                        return jsonify({'success': False, 'error': 'Forbidden to access another team', 'error_code': 'FORBIDDEN'}), 403
+                except Exception:
+                    return jsonify({'success': False, 'error': 'Forbidden to access another team', 'error_code': 'FORBIDDEN'}), 403
 
         # Determine if the team is currently in an active alliance; if so,
         # prefer the alliance's shared config or its configured team's config.
@@ -2560,6 +2604,68 @@ def get_game_config():
         }), 500
 
 
+@mobile_api.route('/config/game/active', methods=['GET'])
+@token_required
+def get_game_config_active():
+    """
+    Alias for the active config (preference for alliance shared config when active).
+    """
+    return get_game_config()
+
+
+@mobile_api.route('/config/game/team', methods=['GET'])
+@token_required
+def get_game_config_team():
+    """
+    Return the explicit per-team game config file (team config only, no alliance merge).
+    """
+    try:
+        token_team = getattr(request, 'mobile_team_number', None)
+        requested_team = None
+        try:
+            hdr = request.headers.get('X-Mobile-Requested-Team')
+            if hdr:
+                requested_team = int(hdr)
+            else:
+                qp = request.args.get('team_number')
+                if qp is not None:
+                    try:
+                        requested_team = int(qp)
+                    except Exception:
+                        requested_team = None
+        except Exception:
+            requested_team = None
+
+        team_number = requested_team if requested_team is not None else token_team
+        # Only allow explicit request for different team if caller is superadmin
+        if requested_team is not None and requested_team != token_team:
+            user = getattr(request, 'mobile_user', None)
+            if not (user and getattr(user, 'has_role', None) and user.has_role('superadmin')):
+                return jsonify({'success': False, 'error': 'Forbidden to access another team', 'error_code': 'FORBIDDEN'}), 403
+        from app.utils.config_manager import load_game_config
+        game_config = None
+        try:
+            if team_number is not None:
+                base_dir = os.getcwd()
+                team_config_path = os.path.join(base_dir, 'instance', 'configs', str(team_number), 'game_config.json')
+                if os.path.exists(team_config_path):
+                    with open(team_config_path, 'r', encoding='utf-8') as f:
+                        try:
+                            game_config = json.load(f)
+                        except Exception:
+                            current_app.logger.warning(f"Invalid JSON in team game_config for team {team_number}")
+        except Exception:
+            game_config = None
+
+        if game_config is None:
+            game_config = load_game_config(team_number=team_number)
+
+        return jsonify({'success': True, 'config': game_config}), 200
+    except Exception as e:
+        current_app.logger.error(f"Get team game config error: {str(e)}")
+        return jsonify({'success': False, 'error': 'Failed to retrieve team game configuration', 'error_code': 'CONFIG_ERROR'}), 500
+
+
 @mobile_api.route('/config/game', methods=['POST', 'PUT'])
 @token_required
 def set_game_config():
@@ -2582,8 +2688,38 @@ def set_game_config():
         if not user:
             return jsonify({'success': False, 'error': 'Authentication required', 'error_code': 'AUTH_REQUIRED'}), 401
 
-        # Require admin or superadmin role to modify config
-        if not (user.has_role('admin') or user.has_role('superadmin')):
+        # Require admin or superadmin role to modify config OR allow alliance admins
+        allowed = user.has_role('admin') or user.has_role('superadmin')
+        if not allowed:
+            # Allow alliance admins (who may not be team admins) to edit the
+            # active (alliance) configuration. We only check for alliance
+            # admin on the resolved team number from the token or request.
+            from app.utils.alliance_data import get_active_alliance_id_for_team, is_alliance_admin
+            token_team = getattr(request, 'mobile_team_number', None)
+            requested_team = None
+            try:
+                hdr = request.headers.get('X-Mobile-Requested-Team')
+                if hdr:
+                    requested_team = int(hdr)
+                else:
+                    qp = request.args.get('team_number')
+                    if qp is not None:
+                        try:
+                            requested_team = int(qp)
+                        except Exception:
+                            requested_team = None
+            except Exception:
+                requested_team = None
+
+            team_number_to_check = requested_team if requested_team is not None else token_team
+            try:
+                alliance_id_check = get_active_alliance_id_for_team(team_number_to_check)
+            except Exception:
+                alliance_id_check = None
+            if alliance_id_check and is_alliance_admin(alliance_id_check):
+                allowed = True
+
+        if not allowed:
             return jsonify({'success': False, 'error': 'Forbidden', 'error_code': 'FORBIDDEN'}), 403
 
         # Ensure flask-login current_user is set so save_game_config can infer team
@@ -2598,10 +2734,64 @@ def set_game_config():
             return jsonify({'success': False, 'error': 'Missing or invalid JSON body', 'error_code': 'MISSING_BODY'}), 400
 
         # Basic structural validation could be added here. For now, delegate
-        # to existing save_game_config which writes per-team or global files.
+        # to either saving the per-team config or the alliance-shared config
+        # depending on the active config context. If an active alliance exists
+        # and the user has alliance-admin rights, update the alliance config.
         from app.utils.config_manager import save_game_config
+        from app.utils.alliance_data import get_active_alliance_id_for_team, is_alliance_admin
 
-        saved = save_game_config(data)
+        # Respect potential per-request override to act on a different team
+        token_team = getattr(request, 'mobile_team_number', None)
+        requested_team = None
+        try:
+            hdr = request.headers.get('X-Mobile-Requested-Team')
+            if hdr:
+                requested_team = int(hdr)
+            else:
+                qp = request.args.get('team_number')
+                if qp is not None:
+                    try:
+                        requested_team = int(qp)
+                    except Exception:
+                        requested_team = None
+        except Exception:
+            requested_team = None
+
+        team_number = requested_team if requested_team is not None else token_team
+
+        # If there's an active alliance for this team, attempt to update alliance cfg
+        alliance_id = None
+        try:
+            alliance_id = get_active_alliance_id_for_team(team_number)
+        except Exception:
+            alliance_id = None
+
+        saved = False
+        if alliance_id:
+            # When in alliance mode, only alliance admins may edit the alliance config
+            try:
+                if not is_alliance_admin(alliance_id):
+                    return jsonify({'success': False, 'error': 'Forbidden: alliance admin required to edit alliance config', 'error_code': 'FORBIDDEN'}), 403
+                from app.models import ScoutingAlliance
+                alliance = ScoutingAlliance.query.get(alliance_id)
+                if alliance is None:
+                    return jsonify({'success': False, 'error': 'Alliance not found', 'error_code': 'NOT_FOUND'}), 404
+                alliance.shared_game_config = json.dumps(data)
+                db.session.add(alliance)
+                db.session.commit()
+                saved = True
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.exception(f"Failed to update alliance shared_game_config: {e}")
+                saved = False
+        else:
+            # No active alliance -> fall back to per-team save behavior
+            try:
+                saved = save_game_config(data)
+            except Exception as e:
+                current_app.logger.exception(f"Failed to save team game config: {e}")
+                saved = False
+
         if saved:
             # Update running config in the Flask app (best-effort)
             try:
@@ -2614,6 +2804,49 @@ def set_game_config():
 
     except Exception as e:
         current_app.logger.error(f"Set game config error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Internal server error', 'error_code': 'INTERNAL_ERROR'}), 500
+
+
+@mobile_api.route('/config/game/active', methods=['POST', 'PUT'])
+@token_required
+def set_game_config_active():
+    """
+    Alias that updates the "active" config. Calls the existing set_game_config (which implements active-mode behavior).
+    """
+    return set_game_config()
+
+
+@mobile_api.route('/config/game/team', methods=['POST', 'PUT'])
+@token_required
+def set_game_config_team():
+    """
+    Save the per-team game configuration explicitly (team-only file). Requires admin role.
+    """
+    try:
+        user = getattr(request, 'mobile_user', None)
+        if not user:
+            return jsonify({'success': False, 'error': 'Authentication required', 'error_code': 'AUTH_REQUIRED'}), 401
+        if not (user.has_role('admin') or user.has_role('superadmin')):
+            return jsonify({'success': False, 'error': 'Forbidden', 'error_code': 'FORBIDDEN'}), 403
+        try:
+            login_user(user, remember=False, force=True)
+        except Exception:
+            pass
+        data = request.get_json()
+        if not data or not isinstance(data, dict):
+            return jsonify({'success': False, 'error': 'Missing or invalid JSON body', 'error_code': 'MISSING_BODY'}), 400
+        from app.utils.config_manager import save_game_config
+        saved = save_game_config(data)
+        if saved:
+            try:
+                current_app.config['GAME_CONFIG'] = data
+            except Exception:
+                pass
+            return jsonify({'success': True}), 200
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save configuration', 'error_code': 'SAVE_FAILED'}), 500
+    except Exception as e:
+        current_app.logger.error(f"Set team game config error: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'success': False, 'error': 'Internal server error', 'error_code': 'INTERNAL_ERROR'}), 500
 
 
@@ -2639,6 +2872,16 @@ def get_pit_config():
             except Exception:
                 # ignore malformed team param
                 pass
+        # Only superadmins may request a different team number explicitly
+        if requested_team is not None and team_number is not None and int(requested_team) != int(request.mobile_team_number if request.mobile_team_number is not None else -999999):
+            user = getattr(request, 'mobile_user', None)
+            if not (user and getattr(user, 'has_role', None) and user.has_role('superadmin')):
+                return jsonify({'success': False, 'error': 'Forbidden to access another team', 'error_code': 'FORBIDDEN'}), 403
+        # Restrict explicit team queries to superadmins only for security
+        if requested_team is not None and team_number is not None and int(requested_team) != int(request.mobile_team_number if request.mobile_team_number is not None else -999999):
+            user = getattr(request, 'mobile_user', None)
+            if not (user and getattr(user, 'has_role', None) and user.has_role('superadmin')):
+                return jsonify({'success': False, 'error': 'Forbidden to access another team', 'error_code': 'FORBIDDEN'}), 403
 
         # Determine if alliance is active and prefer alliance pit config when present
         alliance_pit_cfg = None
@@ -2720,8 +2963,36 @@ def set_pit_config():
         if not user:
             return jsonify({'success': False, 'error': 'Authentication required', 'error_code': 'AUTH_REQUIRED'}), 401
 
-        # Require admin or superadmin role to modify config
-        if not (user.has_role('admin') or user.has_role('superadmin')):
+        # Require admin or superadmin role to modify config OR allow alliance admins
+        allowed = user.has_role('admin') or user.has_role('superadmin')
+        if not allowed:
+            # Determine token/request team to check if this user is an alliance admin
+            from app.utils.alliance_data import get_active_alliance_id_for_team, is_alliance_admin
+            token_team = getattr(request, 'mobile_team_number', None)
+            requested_team = None
+            try:
+                hdr = request.headers.get('X-Mobile-Requested-Team')
+                if hdr:
+                    requested_team = int(hdr)
+                else:
+                    qp = request.args.get('team')
+                    if qp is not None:
+                        try:
+                            requested_team = int(qp)
+                        except Exception:
+                            requested_team = None
+            except Exception:
+                requested_team = None
+
+            team_number_to_check = requested_team if requested_team is not None else token_team
+            try:
+                alliance_id_check = get_active_alliance_id_for_team(team_number_to_check)
+            except Exception:
+                alliance_id_check = None
+            if alliance_id_check and is_alliance_admin(alliance_id_check):
+                allowed = True
+
+        if not allowed:
             return jsonify({'success': False, 'error': 'Forbidden', 'error_code': 'FORBIDDEN'}), 403
 
         # Ensure flask-login current_user is set so save_pit_config can infer team
@@ -2735,8 +3006,56 @@ def set_pit_config():
             return jsonify({'success': False, 'error': 'Missing or invalid JSON body', 'error_code': 'MISSING_BODY'}), 400
 
         from app.utils.config_manager import save_pit_config
+        from app.utils.alliance_data import get_active_alliance_id_for_team, is_alliance_admin
 
-        saved = save_pit_config(data)
+        # Determine team_number respect token override
+        token_team = getattr(request, 'mobile_team_number', None)
+        requested_team = None
+        try:
+            hdr = request.headers.get('X-Mobile-Requested-Team')
+            if hdr:
+                requested_team = int(hdr)
+            else:
+                qp = request.args.get('team')
+                if qp is not None:
+                    try:
+                        requested_team = int(qp)
+                    except Exception:
+                        requested_team = None
+        except Exception:
+            requested_team = None
+
+        team_number = requested_team if requested_team is not None else token_team
+
+        saved = False
+        alliance_id = None
+        try:
+            alliance_id = get_active_alliance_id_for_team(team_number)
+        except Exception:
+            alliance_id = None
+
+        if alliance_id:
+            # Must be alliance admin to update alliance shared pit config
+            try:
+                if not is_alliance_admin(alliance_id):
+                    return jsonify({'success': False, 'error': 'Forbidden: alliance admin required to edit alliance pit config', 'error_code': 'FORBIDDEN'}), 403
+                from app.models import ScoutingAlliance
+                alliance = ScoutingAlliance.query.get(alliance_id)
+                if alliance is None:
+                    return jsonify({'success': False, 'error': 'Alliance not found', 'error_code': 'NOT_FOUND'}), 404
+                alliance.shared_pit_config = json.dumps(data)
+                db.session.add(alliance)
+                db.session.commit()
+                saved = True
+            except Exception:
+                db.session.rollback()
+                saved = False
+        else:
+            try:
+                saved = save_pit_config(data)
+            except Exception as e:
+                current_app.logger.exception(f"Failed to save team pit config: {e}")
+                saved = False
         if saved:
             return jsonify({'success': True}), 200
         else:
@@ -2744,6 +3063,90 @@ def set_pit_config():
 
     except Exception as e:
         current_app.logger.error(f"Set pit config error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'success': False, 'error': 'Internal server error', 'error_code': 'INTERNAL_ERROR'}), 500
+
+
+@mobile_api.route('/config/pit/active', methods=['GET'])
+@token_required
+def get_pit_config_active():
+    """
+    Return active pit config (alliance if active, else team)
+    """
+    return get_pit_config()
+
+
+@mobile_api.route('/config/pit/team', methods=['GET'])
+@token_required
+def get_pit_config_team():
+    """
+    Return explicit per-team pit config file (team-only no alliance merge)
+    """
+    try:
+        requested_team = request.args.get('team') if request.args.get('team') not in (None, '') else None
+        team_number = request.mobile_team_number if request.mobile_team_number else None
+        if requested_team is not None:
+            try:
+                team_number = int(requested_team)
+            except Exception:
+                # ignore malformed team param
+                pass
+        from app.utils.config_manager import load_pit_config
+        pit_config = None
+        try:
+            if team_number is not None:
+                base_dir = os.getcwd()
+                team_config_path = os.path.join(base_dir, 'instance', 'configs', str(team_number), 'pit_config.json')
+                if os.path.exists(team_config_path):
+                    with open(team_config_path, 'r', encoding='utf-8') as f:
+                        try:
+                            pit_config = json.load(f)
+                        except Exception:
+                            current_app.logger.warning(f"Invalid JSON in team pit_config for team {team_number}")
+        except Exception:
+            pit_config = None
+
+        if pit_config is None:
+            pit_config = load_pit_config(team_number=team_number)
+
+        return jsonify({'success': True, 'config': pit_config}), 200
+    except Exception as e:
+        current_app.logger.error(f"Get team pit config error: {str(e)}")
+        return jsonify({'success': False, 'error': 'Failed to retrieve team pit configuration', 'error_code': 'CONFIG_ERROR'}), 500
+
+
+@mobile_api.route('/config/pit/active', methods=['POST', 'PUT'])
+@token_required
+def set_pit_config_active():
+    return set_pit_config()
+
+
+@mobile_api.route('/config/pit/team', methods=['POST', 'PUT'])
+@token_required
+def set_pit_config_team():
+    """
+    Save explicit per-team pit config file; requires admin/superadmin.
+    """
+    try:
+        user = getattr(request, 'mobile_user', None)
+        if not user:
+            return jsonify({'success': False, 'error': 'Authentication required', 'error_code': 'AUTH_REQUIRED'}), 401
+        if not (user.has_role('admin') or user.has_role('superadmin')):
+            return jsonify({'success': False, 'error': 'Forbidden', 'error_code': 'FORBIDDEN'}), 403
+        try:
+            login_user(user, remember=False, force=True)
+        except Exception:
+            pass
+        data = request.get_json()
+        if not data or not isinstance(data, dict):
+            return jsonify({'success': False, 'error': 'Missing or invalid JSON body', 'error_code': 'MISSING_BODY'}), 400
+        from app.utils.config_manager import save_pit_config
+        saved = save_pit_config(data)
+        if saved:
+            return jsonify({'success': True}), 200
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save configuration', 'error_code': 'SAVE_FAILED'}), 500
+    except Exception as e:
+        current_app.logger.error(f"Set team pit config error: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'success': False, 'error': 'Internal server error', 'error_code': 'INTERNAL_ERROR'}), 500
 
 

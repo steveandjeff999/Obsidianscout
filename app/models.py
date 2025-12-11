@@ -29,6 +29,7 @@ team_event = db.Table('team_event',
 )
 
 
+
 class User(UserMixin, ConcurrentModelMixin, db.Model):
     __bind_key__ = 'users'
     __table_args__ = (
@@ -141,6 +142,8 @@ class ScoutingTeamSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     scouting_team_number = db.Column(db.Integer, unique=True, nullable=False)
     account_creation_locked = db.Column(db.Boolean, default=False, nullable=False)
+    # If true, apply a modern 'liquid glass' frosted/tinted look to buttons
+    liquid_glass_buttons = db.Column(db.Boolean, default=False, nullable=False)
     locked_by_user_id = db.Column(db.Integer, nullable=True)
     locked_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
@@ -197,6 +200,10 @@ class Team(ConcurrentModelMixin, db.Model):
     team_name = db.Column(db.String(100))
     location = db.Column(db.String(100))
     scouting_team_number = db.Column(db.Integer, nullable=True)
+    # Per-team starting points used across all events when the team has too few scouted matches
+    starting_points = db.Column(db.Float, nullable=True, default=0)
+    starting_points_threshold = db.Column(db.Integer, nullable=True, default=2)
+    starting_points_enabled = db.Column(db.Boolean, nullable=False, default=False)
     # Define relationship with ScoutingData
     scouting_data = db.relationship('ScoutingData', backref='team', lazy=True)
     # Track which events this team has participated in

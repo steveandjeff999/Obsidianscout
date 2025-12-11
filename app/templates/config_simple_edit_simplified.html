@@ -78,6 +78,10 @@
                 {% endif %}
                 
                 <form method="POST" action="{{ url_for('main.save_config') }}" id="config-form">
+                    <input type="hidden" name="skip_migration" id="skip_migration" value="">
+                    <input type="hidden" name="mapping_confirmed" id="mapping_confirmed" value="">
+                    <input type="hidden" name="mapping_suggestions" id="mapping_suggestions" value="">
+                    <input type="hidden" name="skip_migration" id="skip_migration" value="">
                     <input type="hidden" name="simple_edit" value="true">
                     <input type="hidden" name="simple_payload" id="simple_payload" value="">
                     
@@ -1066,15 +1070,63 @@ document.addEventListener('DOMContentLoaded', function() {
         return payload;
     }
     
-    // Form submission
+    // Form submission — intercept and ask whether to migrate for scoring element changes
     document.getElementById('config-form').addEventListener('submit', function(e) {
+        e.preventDefault();
         try {
             const payload = buildSimplePayload();
             document.getElementById('simple_payload').value = JSON.stringify(payload);
+            // Call check-mapping before saving
+            fetch('{{ url_for("main.check_mapping") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ new_config: payload, original_config: {{ game_config | tojson | safe }} })
+            }).then(r => r.json()).then(data => {
+                if (data.mapping_needed) {
+                    // Build and show a modal asking user whether to migrate
+                    if (!document.getElementById('migrationConfirmModalSimple')) {
+                        const modalHtml = `
+                            <div class="modal fade" id="migrationConfirmModalSimple" tabindex="-1" aria-labelledby="migrationConfirmLabelSimple" aria-hidden="true">
+                              <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content">
+                                  <div class="modal-header">
+                                    <h5 class="modal-title" id="migrationConfirmLabelSimple">Remap Scoring Elements?</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                  </div>
+                                  <div class="modal-body">We detected changes in scoring elements. Would you like to remap existing scouting data to the new configuration?</div>
+                                  <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" id="migrationSkipBtnSimple">No, Skip Migration</button>
+                                    <button type="button" class="btn btn-primary" id="migrationProceedBtnSimple">Yes, Show Migration Options</button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>`;
+                        document.body.insertAdjacentHTML('beforeend', modalHtml);
+                    }
+                    const modalEl = document.getElementById('migrationConfirmModalSimple');
+                    const migrationModal = new bootstrap.Modal(modalEl);
+                    migrationModal.show();
+                    // Save suggestions for server to reuse
+                    document.getElementById('mapping_suggestions').value = JSON.stringify(data.mapping_suggestions || {});
+                    document.getElementById('migrationSkipBtnSimple').onclick = function() {
+                        document.getElementById('skip_migration').value = 'true';
+                        migrationModal.hide();
+                        document.getElementById('config-form').submit();
+                    };
+                    document.getElementById('migrationProceedBtnSimple').onclick = function() {
+                        // Mark that user confirmed migration so the client-side check is not re-run
+                        document.getElementById('mapping_confirmed').value = 'true';
+                        document.getElementById('mapping_suggestions').value = JSON.stringify(data.mapping_suggestions || {});
+                        migrationModal.hide();
+                        document.getElementById('config-form').submit();
+                    };
+                } else {
+                    document.getElementById('config-form').submit();
+                }
+            }).catch(err => { console.error('check mapping failed', err); document.getElementById('config-form').submit(); });
         } catch (err) {
             console.error('Failed to build payload:', err);
             alert('Error preparing configuration data. Please check your inputs.');
-            e.preventDefault();
         }
     });
 });

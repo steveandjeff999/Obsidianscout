@@ -224,7 +224,18 @@ body.dark-mode .modern-layout .modal-content { background: rgba(22,22,24,0.7); b
 /* Utility classes */
 .initially-hidden { display: none !important; }
 .assistant-fab { position: fixed; bottom: 32px; right: 32px; z-index: 1050; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; }
-.chat-container { max-height: 300px; overflow-y: auto; border: 1px solid rgba(0,0,0,0.06); border-radius: 8px; padding: 10px; margin-bottom: 10px; background: rgba(255,255,255,0.02); }
+.chat-container {
+    /* Flexible chat container: fit to viewport while leaving room for headers and inputs */
+    max-height: calc(100vh - 260px);
+    min-height: 200px;
+    overflow-y: auto;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 8px;
+    padding: 10px 10px 84px; /* leave space for the input so last messages are visible */
+    margin-bottom: 10px;
+    background: rgba(255,255,255,0.02);
+    scroll-padding-bottom: 84px;
+}
 body.dark-mode .chat-container { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.03); }
 .time-text { font-size: 0.8em; color: var(--bs-secondary); }
 .w-200 { width: 200px !important; }

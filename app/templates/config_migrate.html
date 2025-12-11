@@ -1,0 +1,174 @@
+{% extends 'base.html' %}
+
+{% block title %}Migrate Scoring Elements{% endblock %}
+
+{% block heading %}Migrate Scoring Elements{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">Map old scoring elements to the new configuration</h5>
+            </div>
+            <div class="card-body">
+                <p>We detected changes in the scoring elements between your previously-saved configuration and the newly-saved one. Choose whether to remap existing scouting data so it continues to be usable with the new configuration.</p>
+
+                <form id="migrateForm" method="POST" action="{{ url_for('main.apply_config_migration') }}">
+                    <input type="hidden" name="team_number" value="{{ team_number or '' }}" />
+                    {% if alliance_id is defined and alliance_id %}
+                        <input type="hidden" name="alliance_id" value="{{ alliance_id }}" />
+                    {% endif %}
+                    <input type="hidden" name="updated_config_json" value='{{ updated_config | tojson | safe }}' />
+                    <div class="mb-3">
+                        {% for period, items in mapping_suggestions.items() %}
+                            <h6>{{ period.replace('_period', '').title() }}</h6>
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Old ID</th>
+                                        <th>Old Name</th>
+                                        <th>New Element</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for m in items %}
+                                    <tr>
+                                        <td>{{ m.old.id }}</td>
+                                        <td>{{ m.old.name }}</td>
+                                        <td>
+                                            <select title="Select new element" data-oldid="{{ m.old.id }}" data-oldperm="{{ m.old.perm_id or '' }}" data-period="{{ period }}" name="mapping_select" class="form-select">
+                                                <option value="">-- Do not migrate --</option>
+                                                {% if m.suggestions and m.suggestions|length > 0 %}
+                                                    {% for s in m.suggestions %}
+                                                        <option value="{{ s.id }}" {% if s.id == m.suggested_new_id or s.id == m.old.id or (s.perm_id is defined and s.perm_id == m.old.perm_id) %}selected{% endif %}>{{ s.id }} - {{ s.name or s.id }}</option>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    {# Fallback: show new elements present in updated_config across periods and top-level #}
+                                                    {% for e in (updated_config.auto_period.scoring_elements if updated_config.auto_period is defined else []) %}
+                                                        <option value="{{ e.id }}" {% if e.id == m.suggested_new_id or e.id == m.old.id or (e.perm_id is defined and e.perm_id == m.old.perm_id) %}selected{% endif %}>{{ e.id }} - {{ e.name or e.id }}</option>
+                                                    {% endfor %}
+                                                    {% for e in (updated_config.teleop_period.scoring_elements if updated_config.teleop_period is defined else []) %}
+                                                        <option value="{{ e.id }}" {% if e.id == m.suggested_new_id or e.id == m.old.id %}selected{% endif %}>{{ e.id }} - {{ e.name or e.id }}</option>
+                                                    {% endfor %}
+                                                    {% for e in (updated_config.endgame_period.scoring_elements if updated_config.endgame_period is defined else []) %}
+                                                        <option value="{{ e.id }}" {% if e.id == m.suggested_new_id or e.id == m.old.id %}selected{% endif %}>{{ e.id }} - {{ e.name or e.id }}</option>
+                                                    {% endfor %}
+                                                    {% for e in (updated_config.scoring_elements if updated_config is defined and updated_config.scoring_elements is defined else []) %}
+                                                        <option value="{{ e.id }}" {% if e.id == m.suggested_new_id or e.id == m.old.id %}selected{% endif %}>{{ e.id }} - {{ e.name or e.id }}</option>
+                                                    {% endfor %}
+                                                {% endif %}
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        {% endfor %}
+                    </div>
+                    <div class="d-flex justify-content-end">
+                        <a href="{{ url_for('main.config') }}" class="btn btn-secondary me-2">Skip Migration</a>
+                        <button type="button" id="preview-btn" class="btn btn-outline-info me-2">Preview Migration</button>
+                        <button type="submit" class="btn btn-primary">Apply Mapping and Migrate Data</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('migrateForm').addEventListener('submit', function(evt){
+    // Build mapping JSON in hidden field
+    const selects = Array.from(this.querySelectorAll('select[name="mapping_select"]'));
+    const mapping = {};
+    selects.forEach(function(el){
+        const oldid = el.getAttribute('data-oldid');
+        const oldperm = el.getAttribute('data-oldperm');
+        const newid = el.value;
+        if (newid && oldid) mapping[oldid] = { 'new_id': newid, 'old_perm_id': oldperm };
+    });
+    // Create a hidden field to post mapping
+    let hf = document.getElementById('migration_mapping_json');
+    if (!hf){
+        hf = document.createElement('input');
+        hf.type = 'hidden'; hf.id = 'migration_mapping_json'; hf.name = 'migration_mapping';
+        this.appendChild(hf);
+    }
+    hf.value = JSON.stringify(mapping);
+});
+
+// Preview mapping changes without applying
+document.getElementById('preview-btn').addEventListener('click', function(evt){
+    const form = document.getElementById('migrateForm');
+    const selects = Array.from(form.querySelectorAll('select[name="mapping_select"]'));
+    const mapping = {};
+    selects.forEach(function(el){
+        const oldid = el.getAttribute('data-oldid');
+        const oldperm = el.getAttribute('data-oldperm');
+        const newid = el.value;
+        if (newid && oldid) mapping[oldid] = { 'new_id': newid, 'old_perm_id': oldperm };
+    });
+    if (!Object.keys(mapping).length){
+        alert('No mapping selections made. Nothing to preview.');
+        return;
+    }
+    // Create a temporary form data to post
+    const formData = new FormData();
+    formData.append('migration_mapping', JSON.stringify(mapping));
+    const team = form.querySelector('input[name="team_number"]') ? form.querySelector('input[name="team_number"]').value : '';
+    if (team) formData.append('team_number', team);
+    const alliance = form.querySelector('input[name="alliance_id"]') ? form.querySelector('input[name="alliance_id"]').value : '';
+    if (alliance) formData.append('alliance_id', alliance);
+    const updatedCfg = form.querySelector('input[name="updated_config_json"]') ? form.querySelector('input[name="updated_config_json"]').value : '';
+    if (updatedCfg) formData.append('updated_config_json', updatedCfg);
+
+    const btn = this; btn.disabled = true;
+    fetch('{{ url_for("main.preview_config_migration") }}', { method: 'POST', body: formData, credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(async r => {
+            // If response was a redirect or not OK, try to parse JSON error or show a friendly message
+            if (!r.ok) {
+                try { const err = await r.json(); throw new Error(err && (err.error || err.message) ? (err.error || err.message) : 'Server error'); } catch(e){ throw e; }
+            }
+            return r.json();
+        }).then(data => {
+            if (data && data.success) {
+                // Show result in modal for a cleaner UX
+                                const sampleRows = (data.sample || []).map(s => `<div class="tiny">#${s.id} (team: ${s.team || 'N/A'})</div>`).join('\n');
+                                const modalHtml = `
+                    <div class="modal fade" id="previewResultModal" tabindex="-1" aria-hidden="true">
+                      <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                          <div class="modal-header">
+                            <h5 class="modal-title">Migration Preview</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                          </div>
+                                                    <div class="modal-body"><p>${(data.to_update||0)} scouting data entries would be updated by this mapping.</p>${sampleRows ? `<hr/><p><strong>Sample affected entries:</strong></p>${sampleRows}` : ''}</div>
+                          <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>`;
+                // Remove existing modal if present
+                const existing = document.getElementById('previewResultModal'); if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+                const previewModal = new bootstrap.Modal(document.getElementById('previewResultModal'));
+                previewModal.show();
+                btn.disabled = false;
+            } else {
+                const msg = data && (data.message || data.error) ? (data.message || data.error) : 'unknown';
+                const errHtml = `Preview failed: ${msg}`;
+                alert(errHtml);
+                btn.disabled = false;
+            }
+        }).catch(err => {
+            console.error('Preview failed', err);
+            alert('Preview request failed. Check logs for details.');
+            this.disabled = false;
+        });
+});
+</script>
+{% endblock %}

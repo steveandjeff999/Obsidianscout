@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort
 from flask_login import login_required, current_user
 from app.routes.auth import analytics_required
-from app.models import Team, Event, ScoutingData, team_event
+from app.models import Team, Event, ScoutingData
 from app import db
 from app.utils.api_utils import get_teams, ApiError, api_to_db_team_conversion, get_event_details, get_teams_dual_api, get_event_details_dual_api
 from app.utils.tba_api_utils import get_tba_team_events, TBAApiError
@@ -347,6 +347,19 @@ def add():
                         if event not in team.events:
                             team.events.append(event)
                 
+                # Read team-level starting points settings from the form and set on the Team model
+                try:
+                    sp_val = request.form.get('starting_points', type=float)
+                    sp_thresh = request.form.get('starting_points_threshold', type=int)
+                    sp_enabled = request.form.get('starting_points_enabled') is not None
+                    if sp_val is not None:
+                        team.starting_points = sp_val
+                    if sp_thresh is not None:
+                        team.starting_points_threshold = sp_thresh
+                    team.starting_points_enabled = bool(sp_enabled)
+                except Exception:
+                    pass
+
                 # Use the last selected event as the return URL
                 return_event_id = event_ids[-1]
                 
@@ -371,6 +384,7 @@ def edit(team_number):
     
     # Get all events for the form (combined/deduped like /events)
     events = get_combined_dropdown_events()
+    # Starting points are stored on the Team model; values are updated on POST
     
     if request.method == 'POST':
         # new_team_number = request.form.get('team_number', type=int)
@@ -410,6 +424,19 @@ def edit(team_number):
                         continue
 
                     team.events.append(event)
+
+            # Read team-level starting points settings from the form and set on the Team model
+            try:
+                sp_val = request.form.get('starting_points', type=float)
+                sp_thresh = request.form.get('starting_points_threshold', type=int)
+                sp_enabled = request.form.get('starting_points_enabled') is not None
+                if sp_val is not None:
+                    team.starting_points = sp_val
+                if sp_thresh is not None:
+                    team.starting_points_threshold = sp_thresh
+                team.starting_points_enabled = bool(sp_enabled)
+            except Exception:
+                pass
 
             db.session.commit()
             flash(f'Team {team.team_number} updated successfully', 'success')

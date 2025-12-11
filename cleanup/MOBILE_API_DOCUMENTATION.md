@@ -1012,17 +1012,21 @@ Notes:
 
 ### Get Game Configuration
 
-Retrieve current game configuration for mobile app. This endpoint now returns the full gameconfig JSON used by the web UI for the scouting team (not a trimmed subset). Mobile clients should expect the complete configuration including sections, rules, validation, and any custom fields.
+Retrieve game configuration for mobile app. The mobile API now exposes two read endpoints to make the distinction explicit:
 
-This endpoint preferentially returns the saved per-team `game_config.json` file located at `instance/configs/<scouting_team_number>/game_config.json` if it exists. If that file isn't present or is invalid, the server falls back to the standard loader which may return default or merged configs (including alliance-shared configs when applicable).
+- **Active config (team or alliance):** `GET /api/mobile/config/game` and `GET /api/mobile/config/game/active` — returns the ``active`` configuration for the requester. If the requesting team's alliance mode is active and the alliance has a shared config, the active config will be the alliance-shared configuration; otherwise it is the team's explicit saved config.
+- **Per-team explicit config file:** `GET /api/mobile/config/game/team` — returns the explicit saved per-team `game_config.json` (instance file) if present. This never merges alliance config and is useful for showing or downloading the raw team-level file.
 
-**Endpoint:** `GET /api/mobile/config/game`
+All GET endpoints return the full gameconfig JSON used by the web UI (not a trimmed subset). Mobile clients should expect the complete configuration including sections, rules, validation, and any custom fields.
+
+By default the server will attempt to return the team-level file from `instance/configs/<scouting_team_number>/game_config.json` when requested via `team`, otherwise the loader may return defaults or the alliance-shared JSON (when requesting `active`).
 
 ### Set / Update Game Configuration
 
-Admins can update the game configuration (team-scoped or global) via the Mobile API. Only users with the `admin` or `superadmin` role may perform this action.
+There are now two write endpoints to clearly separate editing of the active configuration vs. the explicit team file:
 
-**Endpoint:** `POST /api/mobile/config/game` or `PUT /api/mobile/config/game`
+- **Active config (team or alliance):** `POST/PUT /api/mobile/config/game` and `POST/PUT /api/mobile/config/game/active` — Updates the active configuration for the requesting team. If the requesting team is in alliance mode and the alliance has a shared config, this endpoint will save to the alliance's `ScoutingAlliance.shared_game_config` and **requires the caller to be an alliance admin**. Otherwise it behaves as a team-save (admins may still use it to update their own team's config).
+- **Per-team config file:** `POST/PUT /api/mobile/config/game/team` — Updates the explicit per-team `game_config.json` file (team-only). This requires the caller to be a team `admin` or `superadmin`.
 
 **Headers:**
 ```
@@ -1045,23 +1049,45 @@ Content-Type: application/json
 - 400 / MISSING_BODY: Missing or invalid JSON payload
 - 500 / SAVE_FAILED: Server failed to persist the configuration
 
-Notes:
+- Notes:
 - The server will persist per-team configuration when the authenticated admin belongs to a scouting team. If the caller is a global admin without a scouting team, the configuration is saved to the global `config/game_config.json` file.
+- When saving to the "active" config while the team is in an active alliance and the alliance has a shared config, the endpoint will update the alliance shared config and **only alliance admins** may perform that operation. Attempting to edit the alliance shared config without alliance-admin privileges returns `403 FORBIDDEN`.
+- If you want to update only your team file regardless of alliance mode, use `POST /api/mobile/config/game/team` instead.
+ - If you want to update only your team file regardless of alliance mode, use `POST /api/mobile/config/game/team` instead.
+ - Clients may pass `X-Mobile-Requested-Team: <team_number>` header or `?team_number=<team_number>` query parameter to operate on a specific team for this request; server permissions (admin, superadmin, or alliance-admin) will be checked for the requested team.
 - The server performs minimal validation; consider validating keys client-side before sending. The web UI includes additional form-level validation.
+
+Examples:
+
+- Update active config (the server will save to alliance shared config if alliance active and you are an alliance admin; otherwise it saves to the team config):
+```bash
+curl -X PUT "https://your-server.com/api/mobile/config/game" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @new_game_config.json
+```
+
+- Update explicit per-team file (always updates team file regardless of alliance mode):
+```bash
+curl -X PUT "https://your-server.com/api/mobile/config/game/team" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @team_game_config.json
+```
 
 ### Get Pit Configuration
 
-Retrieve current pit configuration for mobile app. This endpoint returns the full `pit_config.json` used by the web UI for the scouting team (includes sections, elements, and any options lists).
+Retrieve pit configuration for mobile app. The mobile API now exposes two read endpoints:
 
-This endpoint preferentially returns the saved per-team `pit_config.json` file located at `instance/configs/<scouting_team_number>/pit_config.json` if it exists. If that file isn't present or is invalid, the server falls back to the standard loader which may return defaults or merged configs.
-
-**Endpoint:** `GET /api/mobile/config/pit`
+- **Active config (team or alliance):** `GET /api/mobile/config/pit` and `GET /api/mobile/config/pit/active` — returns the active pit configuration (alliance's shared pit config if the token team is in alliance mode and alliance config present; otherwise the team's explicit config).
+- **Per-team explicit config file:** `GET /api/mobile/config/pit/team` — returns the explicit per-team pit config file located at `instance/configs/<scouting_team_number>/pit_config.json` if present (no alliance merge).
 
 ### Set / Update Pit Configuration
 
-Admins can update the pit configuration for their team via the Mobile API. Only users with the `admin` or `superadmin` role may perform this action. Note: pit config saves are team-scoped; global saves are not supported by the server at this time.
+Write endpoints for pit config mirror the game config endpoints:
 
-**Endpoint:** `POST /api/mobile/config/pit` or `PUT /api/mobile/config/pit`
+- **Active config (team or alliance):** `POST/PUT /api/mobile/config/pit` and `POST/PUT /api/mobile/config/pit/active` — Updates the active pit configuration. If in alliance mode and the alliance defines a shared pit config, this requires the caller to be an alliance admin and will persist to `ScoutingAlliance.shared_pit_config`.
+- **Per-team config file:** `POST/PUT /api/mobile/config/pit/team` — Updates the per-team `pit_config.json` file. This requires the caller to be a team `admin` or `superadmin`.
 
 **Headers:**
 ```
@@ -1080,9 +1106,29 @@ Content-Type: application/json
 
 **Errors:**
 - 401 / AUTH_REQUIRED: Missing or invalid token
-- 403 / FORBIDDEN: Caller lacks admin permissions
+- 403 / FORBIDDEN: Caller lacks admin or alliance-admin permissions (see notes above)
 - 400 / MISSING_BODY: Missing or invalid JSON payload
 - 500 / SAVE_FAILED: Server failed to persist the configuration
+ - 500 / SAVE_FAILED: Server failed to persist the configuration
+ - Clients may pass `X-Mobile-Requested-Team: <team_number>` header or `?team=<team_number>` query parameter to operate on a specific team for this request; server permissions (admin, superadmin, or alliance-admin) will be checked for the requested team.
+
+Examples:
+
+- Update active pit config (alliance shared if active — requires alliance admin):
+```bash
+curl -X PUT "https://your-server.com/api/mobile/config/pit" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @new_pit_config.json
+```
+
+- Update team pit config explicitly:
+```bash
+curl -X PUT "https://your-server.com/api/mobile/config/pit/team" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @team_pit_config.json
+```
 
 **Headers:**
 ```
@@ -1122,7 +1168,7 @@ Authorization: Bearer <token>
 How mobile apps should use the game configuration
 -----------------------------------------------
 
-The `/config/game` endpoint returns the full gameconfig JSON used by the web UI for your scouting team. The key field mobile clients will commonly use is `config.scouting_form` — it contains the sections and elements that define the fields shown on the web scouting form. By reading this structure, mobile apps can dynamically render the same form the web UI shows and keep behavior consistent across platforms.
+The `/config/game` endpoint returns the effective ("active") gameconfig JSON used by the web UI for your scouting team. Use `/config/game/active` (alias) to explicitly request the active config. The key field mobile clients will commonly use is `config.scouting_form` — it contains the sections and elements that define the fields shown on the web scouting form. For the raw saved per-team file, request `GET /api/mobile/config/game/team` (which returns the instance file if present). By reading `config.scouting_form` mobile apps can dynamically render the same form the web UI shows and keep behavior consistent across platforms.
 Size and backward-compatibility note
 ----------------------------------
 Because this endpoint returns the full gameconfig, payloads may be larger than the previous compact response. Mobile apps should cache the config and only re-fetch when `/sync/status` indicates updates or the server timestamp changes. If your client expects an older compact shape, read `config.scouting_form` and ignore extra fields — the server will continue to accept submissions that use the defined `id`s.

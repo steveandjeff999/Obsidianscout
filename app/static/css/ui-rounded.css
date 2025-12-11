@@ -370,15 +370,19 @@ html.glass-off .nav-theme-green .topbar { background: var(--bs-body-bg) !importa
     --nav-accent: #0d6efd;
     --nav-accent-2: #3d8bfd;
     --nav-accent-contrast: #ffffff;
+    --nav-accent-rgb: 13,110,253;
+    --nav-accent-2-rgb: 61,139,253;
 }
 
 .nav-theme-indigo {
     --nav-accent: #5b3be9;
     --nav-accent-2: #764bff;
     --nav-accent-contrast: #ffffff;
+    --nav-accent-rgb: 91,59,233;
+    --nav-accent-2-rgb: 118,75,255;
 }
 
-.nav-theme-indigo .btn-primary { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; border-color: var(--nav-accent) !important; box-shadow: 0 6px 18px rgba(91,59,233,0.12); }
+.nav-theme-indigo .btn-primary { background-image: linear-gradient(90deg, rgba(var(--nav-accent-rgb), var(--btn-primary-alpha)), rgba(var(--nav-accent-2-rgb), var(--btn-primary-alpha))) !important; color: var(--nav-accent-contrast) !important; border-color: rgba(var(--nav-accent-rgb),0.12) !important; box-shadow: 0 6px 18px rgba(91,59,233,0.12) !important; }
 .nav-theme-indigo .btn-outline-primary { color: var(--nav-accent) !important; border-color: rgba(91,59,233,0.18) !important; }
 .nav-theme-indigo .badge.bg-primary, .nav-theme-indigo .badge-primary { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; }
 .nav-theme-indigo .toast .toast-header { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; }
@@ -388,9 +392,11 @@ html.glass-off .nav-theme-green .topbar { background: var(--bs-body-bg) !importa
     --nav-accent: #198754;
     --nav-accent-2: #20c997;
     --nav-accent-contrast: #ffffff;
+    --nav-accent-rgb: 25,135,84;
+    --nav-accent-2-rgb: 32,201,151;
 }
 
-.nav-theme-green .btn-primary { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; border-color: var(--nav-accent) !important; box-shadow: 0 6px 18px rgba(25,135,84,0.12); }
+.nav-theme-green .btn-primary { background-image: linear-gradient(90deg, rgba(var(--nav-accent-rgb), var(--btn-primary-alpha)), rgba(var(--nav-accent-2-rgb), var(--btn-primary-alpha))) !important; color: var(--nav-accent-contrast) !important; border-color: rgba(var(--nav-accent-rgb),0.12) !important; box-shadow: 0 6px 18px rgba(25,135,84,0.12) !important; }
 .nav-theme-green .btn-outline-primary { color: var(--nav-accent) !important; border-color: rgba(25,135,84,0.18) !important; }
 .nav-theme-green .badge.bg-primary, .nav-theme-green .badge-primary { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; }
 .nav-theme-green .toast .toast-header { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; }
@@ -470,10 +476,10 @@ html.glass-off .nav-theme-green .topbar { background: var(--bs-body-bg) !importa
 
 /* Buttons */
 .nav-theme-primary .btn-primary {
-    background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important;
+    background-image: linear-gradient(90deg, rgba(var(--nav-accent-rgb), var(--btn-primary-alpha)), rgba(var(--nav-accent-2-rgb), var(--btn-primary-alpha))) !important;
     color: var(--nav-accent-contrast) !important;
-    border-color: var(--nav-accent) !important;
-    box-shadow: 0 6px 18px rgba(var(--bs-primary-rgb,13,110,253),0.12);
+    border-color: rgba(var(--nav-accent-rgb), 0.12) !important;
+    box-shadow: 0 6px 18px rgba(var(--bs-primary-rgb,13,110,253),0.12) !important;
 }
 
 /* ============================ */

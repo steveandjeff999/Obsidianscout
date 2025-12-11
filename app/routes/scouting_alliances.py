@@ -1671,6 +1671,12 @@ def edit_game_config(alliance_id):
     # If still no config found, use the default
     if not config_data:
         config_data = load_game_config()
+
+    # Keep a copy of the original config before edits for potential migration comparisons
+    try:
+        original_config = json.loads(alliance.shared_game_config) if alliance.shared_game_config else {}
+    except Exception:
+        original_config = config_data
     
     return render_template('scouting_alliances/edit_game_config_new.html', 
                          alliance=alliance, 
@@ -1884,6 +1890,12 @@ def save_game_config(alliance_id):
                 config_data['post_match']['rating_elements'] = rating_elements
                 config_data['post_match']['text_elements'] = text_elements
         
+        # Capture original config for migration comparison
+        try:
+            original_config_before = json.loads(alliance.shared_game_config) if alliance.shared_game_config else {}
+        except Exception:
+            original_config_before = {}
+
         # Validate and save the configuration
         alliance.shared_game_config = json.dumps(config_data, indent=2)
         alliance.game_config_team = current_team  # Mark that config is set
@@ -1902,6 +1914,44 @@ def save_game_config(alliance_id):
         }, room=f'alliance_{alliance_id}')
         
         flash('Alliance game configuration saved successfully!', 'success')
+
+        # Detect and prompt for migration if any scoring element ids changed
+        try:
+            original_config = original_config_before
+        except Exception:
+            original_config = {}
+        skip_migration = request.form.get('skip_migration') == 'true'
+        # Compute mapping suggestions
+        try:
+            from app.utils.config_migration import compute_mapping_suggestions
+            # Use client-provided mapping_suggestions if present
+            mapping_suggestions_raw = request.form.get('mapping_suggestions') or request.form.get('mapping_suggestions_json')
+            if mapping_suggestions_raw:
+                try:
+                    mapping_suggestions = json.loads(mapping_suggestions_raw)
+                except Exception:
+                    mapping_suggestions = compute_mapping_suggestions(original_config, config_data)
+            else:
+                mapping_suggestions = compute_mapping_suggestions(original_config, config_data)
+            mapping_needed = False
+            for period, mappings in mapping_suggestions.items():
+                for m in mappings:
+                    if not m['suggested_new_id'] or m['suggested_new_id'] != m['old']['id']:
+                        mapping_needed = True
+                        break
+                if mapping_needed:
+                    break
+            if mapping_needed and not skip_migration:
+                try:
+                    current_app.logger.debug(f"Alliance mapping needed for alliance {alliance_id}. Suggestions: {mapping_suggestions}")
+                except Exception:
+                    pass
+                # Render migration UI so the alliance admin can migrate shared data
+                return render_template('config_migrate.html', original_config=original_config, updated_config=config_data, mapping_suggestions=mapping_suggestions, alliance_id=alliance_id, team_number=None, **get_theme_context())
+        except Exception:
+            current_app.logger.debug('Failed to compute mapping suggestions')
+        except Exception:
+            pass
         
         # Handle JSON requests (API) vs form submissions
         if request.is_json or request.headers.get('Accept') == 'application/json':

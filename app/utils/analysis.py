@@ -454,7 +454,39 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
     
     scouting_data = _get_scouting_data_for_team(team, event_id)
 
-    if not scouting_data:
+    # Determine if there are configured starting points for this team/event.
+    # We'll create a separate calculation list so we do not alter the canonical scouting_data
+    calc_data = list(scouting_data)
+    try:
+        # Use team-level starting points (applies across all events for the team)
+        if team is not None and getattr(team, 'starting_points_enabled', False) and getattr(team, 'starting_points', None) is not None:
+            sp_val = float(getattr(team, 'starting_points', 0) or 0)
+            sp_thresh = int(getattr(team, 'starting_points_threshold', 2) or 2)
+            sc_count = len(scouting_data)
+            add_count = max(0, sp_thresh - sc_count)
+            if add_count > 0 and sp_val != 0:
+                class _FakeSD:
+                    def __init__(self, val):
+                        self.data = {}
+                        self.match = None
+                        self.scout_name = 'StartingPoints'
+                        self._sp = val
+                    def _calculate_auto_points_dynamic(self, data, game_config):
+                        return 0
+                    def _calculate_teleop_points_dynamic(self, data, game_config):
+                        return 0
+                    def _calculate_endgame_points_dynamic(self, data, game_config):
+                        return 0
+                    def calculate_metric(self, formula_or_id):
+                        if isinstance(formula_or_id, str) and ('tot' in formula_or_id.lower() or formula_or_id == 'tot'):
+                            return self._sp
+                        return 0
+                for _ in range(add_count):
+                    calc_data.append(_FakeSD(sp_val))
+    except Exception:
+        pass
+
+    if not scouting_data and not calc_data:
         print(f"    No scouting data found for team {team_number} (ID: {team_id})")
         return {
             'team_number': team_number,
@@ -471,8 +503,46 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
     if game_config is None:
         game_config = get_current_game_config()
     
-    # Calculate exponential weights based on match recency
-    time_weights = _calculate_exponential_weights(scouting_data, decay_factor=0.15)
+    # Determine if there are configured starting points for this team/event.
+    # We'll create a separate calculation list so we do not alter the canonical scouting_data
+    calc_data = list(scouting_data)
+    try:
+        from app.models import team_event
+        from app import db
+        if event_id is not None and team is not None:
+            row = db.session.execute(team_event.select().where(
+                team_event.c.team_id == team.id,
+                team_event.c.event_id == event_id
+            )).first()
+            if row and getattr(row, 'starting_points_enabled', False) and getattr(row, 'starting_points', None) is not None:
+                sp_val = float(getattr(row, 'starting_points', 0) or 0)
+                sp_thresh = int(getattr(row, 'starting_points_threshold', 2) or 2)
+                sc_count = len(scouting_data)
+                add_count = max(0, sp_thresh - sc_count)
+                if add_count > 0 and sp_val != 0:
+                    class _FakeSD:
+                        def __init__(self, val):
+                            self.data = {}
+                            self.match = None
+                            self.scout_name = 'StartingPoints'
+                            self._sp = val
+                        def _calculate_auto_points_dynamic(self, data, game_config):
+                            return 0
+                        def _calculate_teleop_points_dynamic(self, data, game_config):
+                            return 0
+                        def _calculate_endgame_points_dynamic(self, data, game_config):
+                            return 0
+                        def calculate_metric(self, formula_or_id):
+                            if isinstance(formula_or_id, str) and ('tot' in formula_or_id.lower() or formula_or_id == 'tot'):
+                                return self._sp
+                            return 0
+                    for _ in range(add_count):
+                        calc_data.append(_FakeSD(sp_val))
+    except Exception:
+        pass
+
+    # Calculate exponential weights based on match recency - use calc_data which may include synthetic entries
+    time_weights = _calculate_exponential_weights(calc_data, decay_factor=0.15)
     
     # Calculate dynamic period-based metrics (first pass to get values)
     auto_values = []
@@ -481,7 +551,7 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
     total_values = []
     
     print(f"    Calculating dynamic metrics across {len(scouting_data)} matches with time-weighted analysis:")
-    for idx, data in enumerate(scouting_data):
+    for idx, data in enumerate(calc_data):
         match_info = f"Match {data.match.match_number}" if data.match else f"Record #{idx+1}"
         
         # Calculate points for each period using dynamic methods
@@ -531,13 +601,16 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
         if mild > 0:
             print(f"      Mild outliers: {mild} (edge of normal range)")
         
-        for idx, (data, is_outlier, weight, severity) in enumerate(zip(scouting_data, outliers_detected, weights, outlier_scores)):
+        # Limit logging to real scouting records (do not report synthetic starting point entries)
+        real_count = len(scouting_data)
+        for idx, (data, is_outlier, weight, severity) in enumerate(zip(scouting_data, outliers_detected[:real_count], weights[:real_count], outlier_scores[:real_count])):
             if is_outlier:
                 match_info = f"Match {data.match.match_number}" if data.match else f"Record #{idx+1}"
                 severity_label = "SEVERE" if severity > 0.7 else "MODERATE" if severity > 0.3 else "MILD"
                 print(f"      {match_info}: total={total_values[idx]:.1f} ({severity_label} OUTLIER - severity={severity:.2f}, weight={weight:.3f})")
     
     # Print match details with final weights
+    # Print match details only for actual matches (not synthetic entries)
     for idx, data in enumerate(scouting_data):
         match_info = f"Match {data.match.match_number}" if data.match else f"Record #{idx+1}"
         weight = weights[idx] if idx < len(weights) else 1.0
@@ -669,7 +742,7 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
                 break
     
     if endgame_field_id:
-        for data in scouting_data:
+        for data in calc_data:
             if endgame_field_id in data.data:
                 endgame_positions.append(data.data[endgame_field_id])
     
@@ -719,7 +792,7 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
             
             # Calculate legacy metric
             values = []
-            for idx, data in enumerate(scouting_data):
+            for idx, data in enumerate(calc_data):
                 value = data.calculate_metric(metric_formula)
                 values.append(value)
             

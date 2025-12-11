@@ -155,6 +155,14 @@ if __name__ == '__main__':
             try:
                 from app.utils.database_migrations import run_all_migrations
                 run_all_migrations(db)
+                # Migrate the legacy JSON-only "only_password_reset_emails" into the users DB column
+                try:
+                    from app.utils.database_migrations import migrate_user_notification_prefs
+                    migrated = migrate_user_notification_prefs(db, remove_after=True)
+                    if migrated and migrated > 0:
+                        print(f"Migrated {migrated} user notification preference(s) to DB")
+                except Exception as mig_err:
+                    print(f"Warning: Failed to auto-migrate user notification preferences: {mig_err}")
             except Exception as migration_err:
                 print(f"Warning: Database migration check failed: {migration_err}")
             
