@@ -1150,6 +1150,13 @@ def create_app(test_config=None):
                 print(f"Warning: Database tables may already exist or per-table create failed: {e}")
         except Exception as e:
             print(f"Warning: Database initialization encountered an error: {e}")
+        # Ensure automatic migrations are attempted at app creation time so runtime code
+        # that references newer columns won't fail when the app is started by a WSGI server.
+        try:
+            from app.utils.database_migrations import run_all_migrations
+            run_all_migrations(db)
+        except Exception as e:
+            app.logger.warning(f"Failed to run automatic migrations during app init: {e}")
     
     # Error handlers
     @app.errorhandler(404)
