@@ -364,9 +364,111 @@ def _process_portable_data(export_data):
                     pass
         db.session.commit()
 
+        # Ensure we have a placeholder Event for any MATCH entries that reference a missing event
+        # so inserting matches doesn't violate the NOT NULL constraint on Match.event_id.
+        if export_data.get('matches'):
+            need_placeholder = False
+            for m in export_data.get('matches', []):
+                # If the exported match references an event id that isn't in our mapping,
+                # we need a placeholder event to assign it to.
+                if m.get('event_id') is None or m.get('event_id') not in mapping['events']:
+                    need_placeholder = True
+                    break
+            if need_placeholder:
+                try:
+                    placeholder = get_or_create_event(
+                        name='Imported (Missing Event) - Portable Import',
+                        code=f'IMPORT-NULL-{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}',
+                        year=datetime.now(timezone.utc).year
+                    )
+                    mapping['events'][None] = placeholder.id
+                    db.session.commit()
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    # Fallback: attempt to create a minimal Event directly
+                    try:
+                        ev = Event(name='Imported (Missing Event) - Portable Import', code=None, year=datetime.now(timezone.utc).year)
+                        db.session.add(ev)
+                        db.session.flush()
+                        mapping['events'][None] = ev.id
+                        db.session.commit()
+                    except Exception:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+
+        # Ensure we have a placeholder Event for any MATCH entries that reference a missing event
+        if export_data.get('matches'):
+            need_placeholder = False
+            for m in export_data.get('matches', []):
+                if m.get('event_id') is None or m.get('event_id') not in mapping['events']:
+                    need_placeholder = True
+                    break
+            if need_placeholder:
+                try:
+                    placeholder = get_or_create_event(
+                        name='Imported (Missing Event) - Portable Import',
+                        code=f'IMPORT-NULL-{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}',
+                        year=datetime.now(timezone.utc).year
+                    )
+                    mapping['events'][None] = placeholder.id
+                    db.session.commit()
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    # Fallback: attempt to create Event directly
+                    try:
+                        ev = Event(name='Imported (Missing Event) - Portable Import', code=None, year=datetime.now(timezone.utc).year)
+                        db.session.add(ev)
+                        db.session.flush()
+                        mapping['events'][None] = ev.id
+                        db.session.commit()
+                    except Exception:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+
         # MATCHES
         for m in export_data.get('matches', []):
+            # Look up mapped event id. If mapping doesn't contain a key for the
+            # exported event_id, fall back to the placeholder (mapping['events'][None])
             new_event = mapping['events'].get(m.get('event_id'))
+            if new_event is None:
+                # If a placeholder wasn't pre-created earlier, create one now
+                if mapping['events'].get(None) is None:
+                    try:
+                        placeholder = get_or_create_event(
+                            name='Imported (Missing Event) - Portable Import',
+                            code=f'IMPORT-NULL-{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}',
+                            year=datetime.now(timezone.utc).year
+                        )
+                        mapping['events'][None] = placeholder.id
+                        db.session.commit()
+                    except Exception:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                        # Fallback to creating a minimal Event directly
+                        try:
+                            ev = Event(name='Imported (Missing Event) - Portable Import', code=None, year=datetime.now(timezone.utc).year)
+                            db.session.add(ev)
+                            db.session.flush()
+                            mapping['events'][None] = ev.id
+                            db.session.commit()
+                        except Exception:
+                            try:
+                                db.session.rollback()
+                            except Exception:
+                                pass
+                new_event = mapping['events'].get(None)
             existing = None
             if new_event:
                 existing = Match.query.filter_by(event_id=new_event, match_type=m.get('match_type'), match_number=m.get('match_number')).first()
@@ -381,10 +483,14 @@ def _process_portable_data(export_data):
                 mapping['matches'][m['id']] = existing.id
                 report['updated']['matches'] = report['updated'].get('matches', 0) + 1 if report['updated'].get('matches') else 1
             else:
+                # If we still don't have an event id, skip this match and report error
+                if not new_event:
+                    report['errors'].append(f"Skipping match import (no event): {m.get('match_number')} {m.get('match_type')}")
+                    continue
                 new_m = Match(
                     match_number=m.get('match_number'),
                     match_type=m.get('match_type'),
-                    event_id=new_event if new_event else None,
+                    event_id=new_event if new_event else mapping['events'].get(None),
                     red_alliance=m.get('red_alliance') or '',
                     blue_alliance=m.get('blue_alliance') or '',
                     red_score=m.get('red_score'),
@@ -394,6 +500,17 @@ def _process_portable_data(export_data):
                 )
                 db.session.add(new_m)
                 db.session.flush()
+                # If for some reason event_id persisted as None (race or mapping issue), assign placeholder if available
+                try:
+                    if (not new_m.event_id) and mapping['events'].get(None):
+                        new_m.event_id = mapping['events'].get(None)
+                        db.session.add(new_m)
+                        db.session.flush()
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
                 mapping['matches'][m['id']] = new_m.id
                 report['created']['matches'] = report['created'].get('matches', 0) + 1 if report['created'].get('matches') else 1
 
@@ -1840,10 +1957,42 @@ def import_portable():
                 mapping['matches'][m['id']] = existing.id
                 report['updated']['matches'] = report['updated'].get('matches', 0) + 1 if report['updated'].get('matches') else 1
             else:
+                # Resolve placeholder if needed
+                if not new_event and mapping['events'].get(None) is None:
+                    try:
+                        placeholder = get_or_create_event(
+                            name='Imported (Missing Event) - Portable Import',
+                            code=f'IMPORT-NULL-{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}',
+                            year=datetime.now(timezone.utc).year
+                        )
+                        mapping['events'][None] = placeholder.id
+                        db.session.commit()
+                    except Exception:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                        try:
+                            ev = Event(name='Imported (Missing Event) - Portable Import', code=None, year=datetime.now(timezone.utc).year)
+                            db.session.add(ev)
+                            db.session.flush()
+                            mapping['events'][None] = ev.id
+                            db.session.commit()
+                        except Exception:
+                            try:
+                                db.session.rollback()
+                            except Exception:
+                                pass
+                if not new_event and mapping['events'].get(None):
+                    new_event = mapping['events'].get(None)
+                # If we still don't have an event id, skip and log
+                if not new_event:
+                    report['errors'].append(f"Skipping match import (no event): {m.get('match_number')} {m.get('match_type')}")
+                    continue
                 new_m = Match(
                     match_number=m.get('match_number'),
                     match_type=m.get('match_type'),
-                    event_id=new_event if new_event else None,
+                    event_id=new_event if new_event else mapping['events'].get(None),
                     red_alliance=m.get('red_alliance') or '',
                     blue_alliance=m.get('blue_alliance') or '',
                     red_score=m.get('red_score'),
@@ -1853,6 +2002,16 @@ def import_portable():
                 )
                 db.session.add(new_m)
                 db.session.flush()
+                try:
+                    if (not new_m.event_id) and mapping['events'].get(None):
+                        new_m.event_id = mapping['events'].get(None)
+                        db.session.add(new_m)
+                        db.session.flush()
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
                 mapping['matches'][m['id']] = new_m.id
                 report['created']['matches'] = report['created'].get('matches', 0) + 1 if report['created'].get('matches') else 1
 
