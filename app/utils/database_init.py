@@ -12,6 +12,13 @@ from app.models import User, Role, Team, Event, Match
 def initialize_database():
     """Initialize database with all required tables and default data"""
     print("Initializing database...")
+    # Run schema migrations early so ORM queries don't fail on missing columns
+    try:
+        from app.utils.database_migrations import run_all_migrations
+        print("Running automatic schema migrations before initialization...")
+        run_all_migrations(db)
+    except Exception as e:
+        print(f"Warning: automatic migrations failed to run early: {e}")
     # Create users bind tables first (if configured), then create other tables
     from flask import current_app
     try:
@@ -38,6 +45,11 @@ def initialize_database():
                 table.create(default_engine, checkfirst=True)
             except Exception as e:
                 print(f"Warning: could not create table {table.name}: {e}")
+        # Ensure any missing tables (or binds) get created as a safety net
+        try:
+            db.create_all()
+        except Exception as e:
+            print(f"Warning: db.create_all fallback failed: {e}")
     except Exception as e:
         # Fallback to a single create_all if something unexpected occurs
         try:
@@ -47,6 +59,20 @@ def initialize_database():
     
     # Initialize authentication system
     init_auth_system()
+    # After auth is initialized, ensure any legacy preferences are migrated if the users-only column exists
+    try:
+        from app.utils.database_migrations import column_exists_for_bind
+        from app.utils.database_migrations import migrate_user_notification_prefs
+        if column_exists_for_bind(db, 'users', 'user', 'only_password_reset_emails'):
+            try:
+                migrated = migrate_user_notification_prefs(db, remove_after=True)
+                if migrated and migrated > 0:
+                    print(f"Migrated {migrated} user notification preference(s) to DB during initialization")
+            except Exception as mp_e:
+                print(f"Warning: migrate_user_notification_prefs failed during init: {mp_e}")
+    except Exception:
+        # Not critical - continuing
+        pass
     
     # Initialize default configuration files
     init_default_configs()
@@ -54,6 +80,20 @@ def initialize_database():
     # Optionally seed with sample data
     if should_seed_sample_data():
         seed_sample_data()
+
+    # Safety net: ensure any runtime-critical UI columns exist before returning
+    # Some routes query ScoutingTeamSettings.liquid_glass_buttons directly at runtime.
+    try:
+        from app.utils.database_migrations import column_exists_for_bind, run_all_migrations
+        if not column_exists_for_bind(db, None, 'scouting_team_settings', 'liquid_glass_buttons'):
+            print("Detected missing scouting_team_settings.liquid_glass_buttons column - applying migrations...")
+            try:
+                run_all_migrations(db)
+            except Exception as mm_e:
+                print(f"Warning: run_all_migrations failed while adding liquid_glass_buttons: {mm_e}")
+    except Exception:
+        # Not critical - continue
+        pass
     
     print("Database initialization complete!")
 
@@ -100,7 +140,22 @@ def init_auth_system():
     admin_username = 'admin'
     admin_password = 'password'
     
-    admin_user = User.query.filter_by(username=admin_username).first()
+    # Query for admin user, but if ORM access fails due to missing columns, try running migrations then re-query
+    try:
+        admin_user = User.query.filter_by(username=admin_username).first()
+    except Exception as e:
+        print(f"Auth init query failed (likely missing column): {e}")
+        try:
+            from app.utils.database_migrations import run_all_migrations
+            print("Attempting to run migrations to repair auth schema...")
+            run_all_migrations(db)
+        except Exception as me:
+            print(f"Failed to run migrations: {me}")
+        try:
+            admin_user = User.query.filter_by(username=admin_username).first()
+        except Exception as e2:
+            print(f"Auth init query still failing after migrations: {e2}")
+            admin_user = None
     if not admin_user:
         admin_user = User(username=admin_username)
         admin_user.set_password(admin_password)
@@ -346,6 +401,25 @@ def check_database_health():
         
     except Exception as e:
         print(f"Database health check failed: {e}")
+        # Attempt to automatically repair schema issues by running migrations
+        try:
+            from app.utils.database_migrations import run_all_migrations
+            print("Attempting to run automatic migrations to repair DB...")
+            added = run_all_migrations(db)
+            if added > 0:
+                print("Schema repaired by migrations; re-checking database health...")
+                # Try a quick re-check (best-effort)
+                try:
+                    user_count = User.query.count()
+                    role_count = Role.query.count()
+                    if user_count == 0 or role_count == 0:
+                        return False
+                    return True
+                except Exception as e2:
+                    print(f"Re-check after migration failed: {e2}")
+                    return False
+        except Exception as me:
+            print(f"Automatic migration attempt failed: {me}")
         return False
 
 if __name__ == '__main__':
