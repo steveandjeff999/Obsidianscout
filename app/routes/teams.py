@@ -68,6 +68,18 @@ def index():
             teams = filter_teams_by_scouting_team().join(
                 Team.events
             ).filter(Event.id == event.id).order_by(Team.team_number).all()
+
+        # Deduplicate teams by team_number using a shared helper that applies
+        # the preference rules (prefer alliance teams when alliance active,
+        # else prefer local teams).
+        try:
+            from app.utils.team_isolation import dedupe_team_list, get_alliance_team_numbers, get_current_scouting_team_number
+            alliance_team_nums = get_alliance_team_numbers() or []
+            current_scouting_team = get_current_scouting_team_number()
+            teams = dedupe_team_list(teams, prefer_alliance=bool(alliance_id), alliance_team_numbers=alliance_team_nums, current_scouting_team=current_scouting_team)
+        except Exception:
+            # If anything goes wrong, fall back to the original teams list (don't crash the page)
+            pass
     else:
         # If no event selected, don't show any teams
         teams = []
@@ -644,7 +656,19 @@ def ranks():
         event = Event.query.get_or_404(event_id)
     elif current_event_code:
         event = get_event_by_code(current_event_code)
-    teams = event.teams if event else []
+    # Build teams list from event but deduplicate by team_number to avoid duplicate logical teams
+    if event:
+        teams = list(event.teams)
+        try:
+            from app.utils.team_isolation import dedupe_team_list, get_alliance_team_numbers, get_current_scouting_team_number
+            alliance_team_nums = get_alliance_team_numbers() or []
+            current_scouting_team = get_current_scouting_team_number()
+            teams = dedupe_team_list(teams, prefer_alliance=bool(alliance_id), alliance_team_numbers=alliance_team_nums, current_scouting_team=current_scouting_team)
+        except Exception:
+            # If deduplication fails, fall back to raw event teams
+            teams = list(event.teams)
+    else:
+        teams = []
     
     # Check if alliance mode is active
     alliance_id = get_active_alliance_id()
@@ -764,7 +788,20 @@ def view_shared_ranks(share_id):
     
     # Get event and teams for the shared configuration
     event = shared_ranks.event
-    teams = event.teams if event else []
+    # Build teams list from event but deduplicate by team_number to avoid duplicate logical teams
+    if event:
+        teams = list(event.teams)
+        try:
+            from app.utils.team_isolation import dedupe_team_list, get_alliance_team_numbers, get_current_scouting_team_number
+            from app.utils.alliance_data import get_active_alliance_id
+            alliance_team_nums = get_alliance_team_numbers() or []
+            current_scouting_team = get_current_scouting_team_number()
+            # For shared view, prefer alliance when active
+            teams = dedupe_team_list(teams, prefer_alliance=bool(get_active_alliance_id()), alliance_team_numbers=alliance_team_nums, current_scouting_team=current_scouting_team)
+        except Exception:
+            teams = list(event.teams)
+    else:
+        teams = []
     
     if not teams:
         teams = Team.query.all()  # Fallback to all teams if no event specified

@@ -461,6 +461,47 @@ def assign_scouting_team_to_model(model_instance):
     return model_instance
 
 
+def dedupe_team_list(teams, prefer_alliance=False, alliance_team_numbers=None, current_scouting_team=None):
+    """Deduplicate a list of Team-like objects by team_number.
+
+    Preference rules:
+      - If prefer_alliance is True, prefer a Team whose scouting_team_number
+        is in the provided alliance_team_numbers list.
+      - If prefer_alliance is False, prefer a Team whose scouting_team_number
+        equals the provided current_scouting_team.
+
+    Returns a sorted list of unique teams (by team_number).
+    """
+    if not teams:
+        return []
+
+    alliance_team_numbers = set(alliance_team_numbers or [])
+    deduped = {}
+
+    for t in teams:
+        tn = getattr(t, 'team_number', None)
+        if tn is None:
+            # Skip malformed entries
+            continue
+        if tn not in deduped:
+            deduped[tn] = t
+            continue
+
+        existing = deduped[tn]
+
+        try:
+            if prefer_alliance:
+                if getattr(t, 'scouting_team_number', None) in alliance_team_numbers and getattr(existing, 'scouting_team_number', None) not in alliance_team_numbers:
+                    deduped[tn] = t
+            else:
+                if getattr(t, 'scouting_team_number', None) == current_scouting_team and getattr(existing, 'scouting_team_number', None) != current_scouting_team:
+                    deduped[tn] = t
+        except Exception:
+            # If comparison fails, keep existing
+            pass
+
+    return sorted(deduped.values(), key=lambda x: (getattr(x, 'team_number', 0) or 0))
+
 def get_team_by_number(team_number):
     """Get a team by number, filtered by current scouting team."""
     return filter_teams_by_scouting_team().filter(Team.team_number == team_number).first()

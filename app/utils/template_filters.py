@@ -172,3 +172,24 @@ def init_app(app):
         except Exception:
             # On any failure, return events as-is to avoid breaking templates
             return events or []
+
+    @app.template_filter('dedupe_teams')
+    def dedupe_teams(teams):
+        """
+        Deduplicate a list of Team-like objects for template rendering.
+
+        Preference rules mirror `dedupe_team_list`:
+        - If alliance mode is active, prefer a Team whose `scouting_team_number`
+          is in the alliance team numbers.
+        - Otherwise prefer a Team whose `scouting_team_number` equals the
+          current scouting team.
+        """
+        try:
+            from app.utils.team_isolation import dedupe_team_list, get_alliance_team_numbers, get_current_scouting_team_number
+            from app.utils.alliance_data import get_active_alliance_id
+            prefer_alliance = bool(get_active_alliance_id())
+            alliance_team_nums = get_alliance_team_numbers() or []
+            current_scouting_team = get_current_scouting_team_number()
+            return dedupe_team_list(list(teams or []), prefer_alliance=prefer_alliance, alliance_team_numbers=alliance_team_nums, current_scouting_team=current_scouting_team)
+        except Exception:
+            return teams or []
