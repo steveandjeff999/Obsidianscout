@@ -255,6 +255,15 @@ def scouting_form():
         else:
             teams = []  # No teams if no current event is set
 
+    # Deduplicate team listings by team_number to avoid duplicate logical teams
+    try:
+        from app.utils.team_isolation import dedupe_team_list, get_alliance_team_numbers, get_current_scouting_team_number
+        alliance_team_nums = get_alliance_team_numbers() or []
+        current_scouting_team = get_current_scouting_team_number()
+        teams = dedupe_team_list(list(teams or []), prefer_alliance=bool(alliance_id), alliance_team_numbers=alliance_team_nums, current_scouting_team=current_scouting_team)
+    except Exception:
+        teams = list(teams or [])
+
     # Sort teams by team_number (already sorted in query but keeping for consistency)
     teams = sorted(teams, key=lambda t: t.team_number)
     
