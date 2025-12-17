@@ -132,9 +132,7 @@
                         <div class="col-md-4">
                             <canvas id="performanceRadarChart" class="chart-h-200"></canvas>
                         </div>
-                        <div class="col-md-4">
-                            <canvas id="teamComparisonChart" class="chart-h-200"></canvas>
-                        </div>
+                        <!-- Team-by-Team chart removed per user request -->
                     </div>
 
                     <div id="keyBattles" class="mt-3"></div>
@@ -166,6 +164,67 @@ let reconnectAttempts = 0;
 let reconnectTimer = null;
 const RECONNECT_BASE_MS = 2000; // initial backoff
 const RECONNECT_MAX_MS = 60000; // max backoff
+
+// Global match type ordering: Practice → Qualification → Quarterfinals → Semifinals → Finals
+const MATCH_TYPE_ORDER = {
+    'practice': 1,
+    'qualification': 2,
+    'qualifier': 2,
+    'quarterfinal': 3,
+    'quarterfinals': 3,
+    'qf': 3,
+    'semifinal': 4,
+    'semifinals': 4,
+    'sf': 4,
+    'playoff': 5,
+    'elimination': 5,
+    'final': 6,
+    'finals': 6,
+    'f': 6
+};
+
+// Parse match number which may be int, string like '5', or playoff format like '1-2'.
+// Returns [series_number, game_number] for sorting.
+function parseMatchNumber(matchNumber) {
+    if (matchNumber === null || matchNumber === undefined) return [0, 0];
+    
+    const s = String(matchNumber).trim();
+    
+    // Check for 'X-Y' format (e.g., '1-2', '10-1')
+    if (s.includes('-')) {
+        const parts = s.split('-');
+        if (parts.length === 2) {
+            const series = parseInt(parts[0], 10);
+            const game = parseInt(parts[1], 10);
+            if (!isNaN(series) && !isNaN(game)) {
+                return [series, game];
+            }
+        }
+    }
+    
+    // Try parsing as simple integer
+    const num = parseInt(s, 10);
+    return isNaN(num) ? [0, 0] : [num, 0];
+}
+
+// Global sort key for matches: orders by match type then by match number.
+// Handles playoff 'X-Y' format match numbers correctly.
+function matchSortKey(m) {
+    const matchType = ((m.comp_level || m.match_type) || '').toLowerCase();
+    const typeOrder = MATCH_TYPE_ORDER[matchType] || 99;
+    const [series, game] = parseMatchNumber(m.match_number);
+    return [typeOrder, series, game];
+}
+
+// Compare two matches for sorting
+function compareMatches(a, b) {
+    const keyA = matchSortKey(a);
+    const keyB = matchSortKey(b);
+    for (let i = 0; i < 3; i++) {
+        if (keyA[i] !== keyB[i]) return keyA[i] - keyB[i];
+    }
+    return 0;
+}
 
 function setStatus(msg) {
     document.getElementById('status_box').textContent = msg;
@@ -283,9 +342,9 @@ function pickNextMatchForTeam(teamNumber) {
         return withTs[0];
     }
 
-    // If there are upcoming candidates without timestamps, prefer the lowest match_number among them
+    // If there are upcoming candidates without timestamps, use proper match ordering
     if (upcoming.length) {
-        upcoming.sort((a,b) => (a.match_number||0) - (b.match_number||0));
+        upcoming.sort(compareMatches);
         return upcoming[0];
     }
 
@@ -295,8 +354,8 @@ function pickNextMatchForTeam(teamNumber) {
         return past[0];
     }
 
-    // Final fallback: sort by match_number and return first
-    candidates.sort((a,b) => (a.match_number||0) - (b.match_number||0));
+    // Final fallback: sort using proper match ordering and return first
+    candidates.sort(compareMatches);
     return candidates[0] || null;
 }
 
@@ -332,11 +391,43 @@ function scheduleAutoAdvanceForMatch(match) {
         document.getElementById('auto_advance_info').textContent = 'No match selected — auto-advance disabled.';
         return;
     }
-    const mt = getMatchTime(match);
+    let mt = getMatchTime(match);
     if (!mt) {
-        document.getElementById('auto_advance_info').textContent = 'No scheduled time available — auto-advance disabled for this match.';
-        return;
+        // Try to find an alternate time from other matches for this team (nearest upcoming or most recent past with a time)
+        const now = Date.now();
+        const teamMatches = matchesCache.filter(m => teamInMatch(selectedTeam, m));
+        let alt = null;
+        teamMatches.forEach(m => {
+            const t = getMatchTime(m);
+            if (t) {
+                const ts = Date.parse(t);
+                if (!isNaN(ts)) {
+                    if (ts >= now) {
+                        // upcoming match: prefer earliest upcoming
+                        if (!alt || ts < alt.ts) alt = { m, ts };
+                    } else {
+                        // past match: prefer most recent past
+                        if (!alt || (alt.ts < now && ts > alt.ts)) alt = { m, ts };
+                    }
+                }
+            }
+        });
+
+        if (alt) {
+            mt = new Date(alt.ts).toISOString();
+            document.getElementById('auto_advance_info').textContent = 'No scheduled time for this match — using nearest match time for auto-advance.';
+        } else {
+            // No times anywhere in the schedule; provide clearer messaging based on whether any match has a time
+            const anyWithTime = matchesCache.some(m => !!getMatchTime(m));
+            if (anyWithTime) {
+                document.getElementById('auto_advance_info').textContent = 'No scheduled time for this match — auto-advance disabled for this match.';
+            } else {
+                document.getElementById('auto_advance_info').textContent = 'No scheduled times available in schedule — auto-advance disabled.';
+            }
+            return;
+        }
     }
+
     const predTs = Date.parse(mt);
     if (isNaN(predTs)) {
         document.getElementById('auto_advance_info').textContent = 'Invalid scheduled time — auto-advance disabled.';
@@ -371,13 +462,15 @@ function advanceToNextMatch() {
     // Find current index in team matches and move to the next unplayed match after it
     const teamMatches = matchesCache.filter(m => teamInMatch(selectedTeam, m));
     if (!teamMatches || teamMatches.length === 0) return;
-    // sort the same way
+    // sort using proper match ordering (handles X-Y playoff format), but prefer timestamps when available
     teamMatches.forEach(m => { const t = getMatchTime(m); m._pred_ts = t ? Date.parse(t) : null; });
     teamMatches.sort((a,b) => {
+        // If both have timestamps, sort by timestamp first
         if (a._pred_ts && b._pred_ts) return a._pred_ts - b._pred_ts;
         if (a._pred_ts && !b._pred_ts) return -1;
         if (!a._pred_ts && b._pred_ts) return 1;
-        return (a.match_number || 0) - (b.match_number || 0);
+        // Fallback to proper match ordering (handles X-Y playoff format)
+        return compareMatches(a, b);
     });
 
     // Find index of currentMatch in this sorted array
@@ -406,10 +499,10 @@ function advanceToNextMatch() {
 
 async function loadMatch(match) {
     currentMatch = match;
-    document.getElementById('current_match_card').style.display = 'block';
+    document.getElementById('current_match_card').classList.remove('d-none');
     document.getElementById('display_team').textContent = selectedTeam || '';
     document.getElementById('match_info').innerHTML = renderMatchInfo(match);
-    document.getElementById('strategy_json').style.display = 'none';
+    document.getElementById('strategy_json').classList.add('d-none');
     // Schedule auto-advance
     scheduleAutoAdvanceForMatch(match);
     setStatus('Showing match ' + (match.match_number || '') + ' — scheduled: ' + (match.predicted_time || 'unknown'));
@@ -435,9 +528,13 @@ async function loadStrategyForCurrentMatch() {
         attempt += 1;
         try {
             setStatus('Fetching strategy analysis... (attempt ' + attempt + ')');
-            const resp = await fetch(analyzeUrl);
+            const resp = await fetch(analyzeUrl, { credentials: 'same-origin' });
             if (!resp.ok) {
                 const txt = await resp.text();
+                // Provide clearer messages for auth failures
+                if (resp.status === 401 || resp.status === 403) {
+                    throw new Error('Analyze request not authorized: ' + resp.status + ' ' + txt);
+                }
                 throw new Error('Analyze failed: ' + resp.status + ' ' + txt);
             }
             const data = await resp.json();
@@ -445,14 +542,14 @@ async function loadStrategyForCurrentMatch() {
             try {
                 strategyData = data;
                 displayStrategyResults(data);
-                document.getElementById('strategyResults').style.display = 'block';
-                document.getElementById('strategy_json').style.display = 'none';
+                document.getElementById('strategyResults').classList.remove('d-none');
+                document.getElementById('strategy_json').classList.add('d-none');
                 setStatus('Strategy loaded for match ' + (currentMatch.match_number || ''));
             } catch (e) {
                 // Fallback: show raw JSON
                 console.warn('Failed to render full strategy UI, showing raw JSON', e);
                 document.getElementById('strategy_pre').textContent = JSON.stringify(data, null, 2);
-                document.getElementById('strategy_json').style.display = 'block';
+                document.getElementById('strategy_json').classList.remove('d-none');
             }
             return;
         } catch (e) {
@@ -467,8 +564,8 @@ async function loadStrategyForCurrentMatch() {
             // Show non-blocking error info in the raw JSON panel instead of an alert
             try {
                 document.getElementById('strategy_pre').textContent = 'Error fetching strategy analysis:\n' + (e.message || String(e));
-                document.getElementById('strategy_json').style.display = 'block';
-                document.getElementById('strategyResults').style.display = 'none';
+                document.getElementById('strategy_json').classList.remove('d-none');
+                document.getElementById('strategyResults').classList.add('d-none');
             } catch (ie) { /* ignore */ }
         }
         // If analysis repeatedly fails, start reconnect loop for schedule updates in case of network/server issues
@@ -480,7 +577,6 @@ async function loadStrategyForCurrentMatch() {
 // --- Strategy display functions (adapted from strategy.html) ---
 let allianceChart = null;
 let radarChart = null;
-let teamChart = null;
 
 // Helpers to normalize and deduplicate team entries so teams don't appear multiple times
 function normalizeTeamEntry(t) {
@@ -531,7 +627,7 @@ function displayStrategyResults(data) {
     displayMatchupAnalysis(data.matchup_analysis || {});
     // Create visualizations
     createVisualizationCharts(data.graph_data || {});
-    document.getElementById('strategyResults').style.display = 'block';
+    document.getElementById('strategyResults').classList.remove('d-none');
 }
 
 function displayMatchOverview(matchData) {
@@ -585,6 +681,7 @@ function displayMatchOverview(matchData) {
 
 function displayPredictedOutcome(prediction) {
     const container = document.getElementById('predictedOutcome');
+    const fmt = v => (v !== null && v !== undefined && !isNaN(Number(v))) ? Math.round(Number(v)) : '--';
     const winnerClass = prediction.predicted_winner === 'red' ? 'text-danger' : 'text-primary';
     const winnerText = prediction.predicted_winner === 'red' ? 'Red Alliance' : 'Blue Alliance';
     container.innerHTML = `
@@ -597,7 +694,7 @@ function displayPredictedOutcome(prediction) {
             </div>
             <div class="col-md-4">
                 <div class="text-center">
-                    <h2>${(prediction.red_score != null ? prediction.red_score : '--')} - ${(prediction.blue_score != null ? prediction.blue_score : '--')}</h2>
+                    <h2>${fmt(prediction.red_score)} - ${fmt(prediction.blue_score)}</h2>
                     <p class="lead">Expected Score</p>
                 </div>
             </div>
@@ -622,14 +719,24 @@ function displayAllianceStrategy(allianceData, color) {
     try {
         if (color === 'red') {
             const redBadge = document.getElementById('redAllianceScore');
-            let score = (strategyData && strategyData.predicted_outcome && strategyData.predicted_outcome.red_score) || allianceData.predicted_score || '--';
+            let score = null;
+            if (strategyData && strategyData.predicted_outcome && typeof strategyData.predicted_outcome.red_score !== 'undefined') {
+                score = strategyData.predicted_outcome.red_score;
+            } else if (allianceData && allianceData.predicted_score !== undefined && allianceData.predicted_score !== null) {
+                score = allianceData.predicted_score;
+            }
             redBadge.textContent = (score !== null && score !== undefined && !isNaN(Number(score))) ? `${Math.round(Number(score))} pts` : '--';
         } else if (color === 'blue') {
             const blueBadge = document.getElementById('blueAllianceScore');
-            let score = (strategyData && strategyData.predicted_outcome && strategyData.predicted_outcome.blue_score) || allianceData.predicted_score || '--';
+            let score = null;
+            if (strategyData && strategyData.predicted_outcome && typeof strategyData.predicted_outcome.blue_score !== 'undefined') {
+                score = strategyData.predicted_outcome.blue_score;
+            } else if (allianceData && allianceData.predicted_score !== undefined && allianceData.predicted_score !== null) {
+                score = allianceData.predicted_score;
+            }
             blueBadge.textContent = (score !== null && score !== undefined && !isNaN(Number(score))) ? `${Math.round(Number(score))} pts` : '--';
         }
-    } catch (e) { console.warn('Failed to update alliance score', e); }
+    } catch (e) { console.warn(e); }
 
     // Deduplicate team entries
     const teams = uniqTeamEntries(allianceData.teams || []);
@@ -678,7 +785,88 @@ function displayMatchupAnalysis(matchupData) {
     if (!matchupData || !matchupData.overall_comparison) { container.innerHTML = '<p class="text-muted">No matchup analysis available.</p>'; return; }
     const overall = matchupData.overall_comparison;
     const period = matchupData.period_analysis || {};
-    container.innerHTML = `...`;
+
+    // Use predicted_outcome if available for consistent displayed totals
+    const pred = (strategyData && strategyData.predicted_outcome) ? strategyData.predicted_outcome : null;
+    const red_val = (pred && typeof pred.red_score !== 'undefined' && pred.red_score !== null) ? Number(pred.red_score) : Number(overall.red_alliance_total || 0);
+    const blue_val = (pred && typeof pred.blue_score !== 'undefined' && pred.blue_score !== null) ? Number(pred.blue_score) : Number(overall.blue_alliance_total || 0);
+    const margin_val = (pred && typeof pred.margin !== 'undefined' && pred.margin !== null) ? Number(pred.margin) : Math.abs(red_val - blue_val);
+    const advantage = (pred && pred.predicted_winner) ? pred.predicted_winner : (overall.advantage || (red_val > blue_val ? 'red' : 'blue'));
+
+    container.innerHTML = `
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <h6>Overall Comparison</h6>
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="text-center">
+                                    <h4 class="text-danger">${red_val.toFixed(1)}</h4>
+                                    <p class="mb-0">Red Alliance</p>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-center">
+                                    <h4 class="text-primary">${blue_val.toFixed(1)}</h4>
+                                    <p class="mb-0">Blue Alliance</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-center mt-3">
+                            <p class="mb-0">
+                                <span class="badge ${advantage === 'red' ? 'bg-danger' : 'bg-primary'}">
+                                    ${advantage === 'red' ? 'Red' : 'Blue'} Alliance Advantage
+                                </span>
+                            </p>
+                            <small class="text-muted">Margin: ${margin_val.toFixed(1)} points</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <h6>Period Analysis</h6>
+                <div class="card">
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between">
+                                <span>Autonomous:</span>
+                                <span class="badge ${period.autonomous && period.autonomous.advantage === 'red' ? 'bg-danger' : 'bg-primary'}">
+                                    ${period.autonomous && period.autonomous.advantage === 'red' ? 'Red' : 'Blue'}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between">
+                                <span>Teleop:</span>
+                                <span class="badge ${period.teleop && period.teleop.advantage === 'red' ? 'bg-danger' : 'bg-primary'}">
+                                    ${period.teleop && period.teleop.advantage === 'red' ? 'Red' : 'Blue'}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="mb-0">
+                            <div class="d-flex justify-content-between">
+                                <span>Endgame:</span>
+                                <span class="badge ${period.endgame && period.endgame.advantage === 'red' ? 'bg-danger' : 'bg-primary'}">
+                                    ${period.endgame && period.endgame.advantage === 'red' ? 'Red' : 'Blue'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-12">
+                <h6>Key Insights</h6>
+                <ul class="mb-0">
+                    ${(() => { const arr = ((matchupData && matchupData.key_insights) ? matchupData.key_insights : []); const seen = new Set(); return arr.filter(s=>{ const k=((s||'')+'').trim().toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; }).map(insight=>`<li>${insight}</li>`).join(''); })()}
+                </ul>
+            </div>
+        </div>
+    `;
 }
 
 function createVisualizationCharts(graphData) {
@@ -687,7 +875,7 @@ function createVisualizationCharts(graphData) {
         if (!graphData) return;
         if (graphData.alliance_comparison) createAllianceComparisonChart(graphData.alliance_comparison);
         if (graphData.radar_chart_data) createPerformanceRadarChart(graphData.radar_chart_data);
-        if (graphData.team_comparison) createTeamComparisonChart(graphData.team_comparison);
+        // Team-by-team visualization removed in live strategy view
     } catch (e) { console.warn('Chart creation failed', e); }
 }
 
@@ -707,50 +895,44 @@ function createPerformanceRadarChart(data) {
     } catch (e) { console.warn(e); }
 }
 
-function createTeamComparisonChart(data) {
-    try {
-        const ctx = document.getElementById('teamComparisonChart').getContext('2d');
-        if (teamChart) teamChart.destroy();
-        // Build a simple stacked bar with available data, prefer explicit team_number when present
-        const labels = [];
-        const auto = []; const teleop = []; const endgame = [];
-        const red = data.red_data || [];
-        const blue = data.blue_data || [];
-        // Helper to extract team number from various shapes
-        const extractTeamNumber = (entry, fallbackIdx, alliance) => {
-            if (!entry) return (fallbackIdx+1).toString();
-            if (entry.team_number) return String(entry.team_number);
-            if (entry.team && entry.team.team_number) return String(entry.team.team_number);
-            // try to pull from strategyData alliances if available
-            try {
-                if (strategyData && alliance && strategyData[alliance] && Array.isArray(strategyData[alliance].teams)) {
-                    const t = uniqTeamEntries(strategyData[alliance].teams)[fallbackIdx];
-                    if (t && t.team && t.team.team_number) return String(t.team.team_number);
-                }
-            } catch (e) { /* ignore */ }
-            return String(fallbackIdx+1);
-        };
-
-        red.forEach((t,i)=>{
-            const tn = extractTeamNumber(t,i,'red_alliance');
-            labels.push(`Team ${tn}`);
-            auto.push(t.auto||0);
-            teleop.push(t.teleop||0);
-            endgame.push(t.endgame||0);
-        });
-        blue.forEach((t,i)=>{
-            const tn = extractTeamNumber(t,i,'blue_alliance');
-            labels.push(`Team ${tn}`);
-            auto.push(t.auto||0);
-            teleop.push(t.teleop||0);
-            endgame.push(t.endgame||0);
-        });
-
-        teamChart = new Chart(ctx, { type:'bar', data:{ labels, datasets:[{ label:'Auto', data:auto, backgroundColor:'rgba(255,193,7,0.7)' },{ label:'Teleop', data:teleop, backgroundColor:'rgba(40,167,69,0.7)' },{ label:'Endgame', data:endgame, backgroundColor:'rgba(108,117,125,0.7)' }] }, options:{ responsive:true, maintainAspectRatio:false, scales:{ x:{ stacked:true }, y:{ stacked:true } } } });
-    } catch (e) { console.warn(e); }
-}
+// Team-by-team chart removed for live strategy view
 
 // --- End strategy display functions ---
+
+// Populate manual match select when schedule fetched periodically
+function populateManualMatchSelect(teamNumber) {
+    const sel = document.getElementById('manual_match_select');
+    if (!sel) return;
+    // Clear existing
+    sel.innerHTML = '<option value="">-- Select match manually --</option>';
+    // Determine which matches to show: either filtered by team or all cached matches for the event
+    let list = [];
+    if (teamNumber) {
+        list = matchesCache.filter(m => teamInMatch(teamNumber, m));
+    } else {
+        // Show matches for the currently-selected event only
+        if (selectedEventId) {
+            list = matchesCache.filter(m => String(m.event_id || m.event || '') === String(selectedEventId));
+        } else {
+            list = matchesCache.slice();
+        }
+    }
+    // Sort by predicted time -> match_number
+    list.forEach(m => { const t = getMatchTime(m); m._pred_ts = t ? Date.parse(t) : null; });
+    list.sort((a,b) => {
+        if (a._pred_ts && b._pred_ts) return a._pred_ts - b._pred_ts;
+        if (a._pred_ts && !b._pred_ts) return -1;
+        if (!a._pred_ts && b._pred_ts) return 1;
+        return (a.match_number || 0) - (b.match_number || 0);
+    });
+    list.forEach(m => {
+        const label = `${m.match_number || '--'} ${m.comp_level || ''} — Red: ${(m.alliances && m.alliances.red && m.alliances.red.teams) ? m.alliances.red.teams.join(',') : ''} vs Blue: ${(m.alliances && m.alliances.blue && m.alliances.blue.teams) ? m.alliances.blue.teams.join(',') : ''}`;
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = label;
+        sel.appendChild(opt);
+    });
+}
 
 async function refreshAndUpdate() {
     const j = await fetchSchedule();
@@ -804,20 +986,26 @@ document.addEventListener('DOMContentLoaded', function() {
     const loadStrBtn = document.getElementById('load_strategy_btn');
     const forceNextBtn = document.getElementById('force_next_btn');
 
-    teamSel.addEventListener('change', () => {
-        if (teamSel.value) startBtn.disabled = false; else startBtn.disabled = true;
-    });
-
-    // Persist selected team to localStorage when changed and auto-start live strategy
-    teamSel.addEventListener('change', () => {
-        try { localStorage.setItem('strategy_live_selected_team', teamSel.value || ''); } catch (e) { /* ignore */ }
-        try {
-            if (teamSel.value) {
-                // Ensure Start is enabled and programmatically start live mode
-                startBtn.disabled = false;
-                setTimeout(() => { try { startBtn.click(); } catch (e) { /* ignore */ } }, 150);
-            }
-        } catch (e) { /* ignore */ }
+    // Single robust handler for team selection: enable Start, persist, fetch schedule, and populate manual matches
+    teamSel.addEventListener('change', async () => {
+        const val = teamSel.value;
+        console.log('teamSel change', val, 'matchesCache len:', (matchesCache || []).length);
+        try { localStorage.setItem('strategy_live_selected_team', val || ''); } catch (e) { /* ignore */ }
+        if (val) {
+            startBtn.disabled = false;
+            selectedTeam = val;
+            try {
+                // Make sure we have an up-to-date schedule before populating manual selector
+                await fetchSchedule();
+                populateManualMatchSelect(val);
+            } catch (e) { console.warn('Failed to fetch schedule on team change', e); }
+            // Give UI a moment then auto-start live mode (as before)
+            try { setTimeout(() => { try { startBtn.click(); } catch (e) { /* ignore */ } }, 150); } catch (e) { /* ignore */ }
+        } else {
+            startBtn.disabled = true;
+            selectedTeam = null;
+            try { populateManualMatchSelect(null); } catch (e) { /* ignore */ }
+        }
     });
 
     eventSel.addEventListener('change', () => {
@@ -909,41 +1097,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Refresh schedule and update to automatic selection
                 refreshAndUpdate();
             }, 5 * 60 * 1000);
-        });
-    }
-
-    // Populate manual match select when schedule fetched periodically
-    function populateManualMatchSelect(teamNumber) {
-        const sel = document.getElementById('manual_match_select');
-        if (!sel) return;
-        // Clear existing
-        sel.innerHTML = '<option value="">-- Select match manually --</option>';
-        // Determine which matches to show: either filtered by team or all cached matches for the event
-        let list = [];
-        if (teamNumber) {
-            list = matchesCache.filter(m => teamInMatch(teamNumber, m));
-        } else {
-            // Show matches for the currently-selected event only
-            if (selectedEventId) {
-                list = matchesCache.filter(m => String(m.event_id || m.event || '') === String(selectedEventId));
-            } else {
-                list = matchesCache.slice();
-            }
-        }
-    // Sort by predicted time -> match_number
-    list.forEach(m => { const t = getMatchTime(m); m._pred_ts = t ? Date.parse(t) : null; });
-        list.sort((a,b) => {
-            if (a._pred_ts && b._pred_ts) return a._pred_ts - b._pred_ts;
-            if (a._pred_ts && !b._pred_ts) return -1;
-            if (!a._pred_ts && b._pred_ts) return 1;
-            return (a.match_number || 0) - (b.match_number || 0);
-        });
-        list.forEach(m => {
-            const label = `${m.match_number || '--'} ${m.comp_level || ''} — Red: ${(m.alliances && m.alliances.red && m.alliances.red.teams) ? m.alliances.red.teams.join(',') : ''} vs Blue: ${(m.alliances && m.alliances.blue && m.alliances.blue.teams) ? m.alliances.blue.teams.join(',') : ''}`;
-            const opt = document.createElement('option');
-            opt.value = m.id;
-            opt.textContent = label;
-            sel.appendChild(opt);
         });
     }
 

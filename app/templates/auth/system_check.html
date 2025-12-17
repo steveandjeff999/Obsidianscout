@@ -13,6 +13,7 @@
             <h5 class="card-title">Run System Check</h5>
             <p class="card-text">Click the button below to run a comprehensive system check. This will verify the database integrity, configuration files, routes, and models.</p>
             <form action="{{ url_for('auth.system_check') }}" method="post" id="system-check-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-primary" id="run-check-btn">
                     <i class="fas fa-cogs"></i> Run System Check
                 </button>
@@ -31,6 +32,7 @@
             <p>{{ results.overall.summary }}</p>
             <div class="d-flex justify-content-between">
                 <form action="{{ url_for('auth.system_check') }}" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-sync-alt"></i> Run Again
                     </button>

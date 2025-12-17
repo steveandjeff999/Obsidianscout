@@ -1,0 +1,5 @@
+{
+  "error": "Failed to generate visualization: No match score data provided",
+  "error_code": "VIS_ERROR",
+  "success": false
+}

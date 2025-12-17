@@ -1,4 +1,4 @@
-from flask import Flask, render_template, flash, send_from_directory, jsonify, request
+from flask import Flask, render_template, flash, send_from_directory, jsonify, request, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_socketio import SocketIO, join_room
@@ -738,25 +738,51 @@ def create_app(test_config=None):
         if top_cfg.get('JWT_SECRET_KEY'):
             app.config['JWT_SECRET_KEY'] = top_cfg.get('JWT_SECRET_KEY')
 
+        # If the SECRET_KEY is present in top-level config, import it into app.config
+        if top_cfg.get('SECRET_KEY'):
+            app.config['SECRET_KEY'] = top_cfg.get('SECRET_KEY')
+
         # Support auto-generation flag: if true, generate a secure random secret,
         # write it into app_config.json and flip the flag to false so it only runs once.
         gen_flag = top_cfg.get('JWT_GENERATE_NEW')
+        gen_secret_flag = top_cfg.get('SECRET_KEY_GENERATE_NEW')
+        
+        config_changed = False
+        import secrets as _secrets
+
         if gen_flag:
-            import secrets as _secrets
             new_secret = _secrets.token_urlsafe(48)
             top_cfg['JWT_SECRET_KEY'] = new_secret
             top_cfg['JWT_GENERATE_NEW'] = False
+            app.config['JWT_SECRET_KEY'] = new_secret
+            config_changed = True
+            try:
+                app.logger.info('Generated new JWT secret')
+            except Exception:
+                pass
+
+        if gen_secret_flag:
+            new_app_secret = _secrets.token_urlsafe(48)
+            top_cfg['SECRET_KEY'] = new_app_secret
+            top_cfg['SECRET_KEY_GENERATE_NEW'] = False
+            app.config['SECRET_KEY'] = new_app_secret
+            config_changed = True
+            try:
+                app.logger.info('Generated new App SECRET_KEY')
+            except Exception:
+                pass
+
+        if config_changed:
             try:
                 with open(cfg_path, 'w', encoding='utf-8') as wf:
                     json.dump(top_cfg, wf, ensure_ascii=False, indent=2)
-                app.config['JWT_SECRET_KEY'] = new_secret
                 try:
-                    app.logger.info('Generated new JWT secret and updated app_config.json')
+                    app.logger.info('Updated app_config.json with new secrets')
                 except Exception:
                     pass
             except Exception as e:
                 try:
-                    app.logger.error(f'Failed to persist generated JWT secret to {cfg_path}: {e}')
+                    app.logger.error(f'Failed to persist generated secrets to {cfg_path}: {e}')
                 except Exception:
                     pass
 
@@ -975,6 +1001,20 @@ def create_app(test_config=None):
     except Exception:
         pass
 
+    # Inject per-team "liquid glass" buttons allowance so all templates can
+    # decide whether to honor per-user preference stored in localStorage.
+    @app.context_processor
+    def inject_liquid_glass_setting():
+        try:
+            from flask_login import current_user
+            if current_user and current_user.is_authenticated:
+                from app.models import ScoutingTeamSettings
+                team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+                return {'liquid_glass_buttons_enabled': bool(team_settings and getattr(team_settings, 'liquid_glass_buttons', False))}
+        except Exception:
+            pass
+        return {'liquid_glass_buttons_enabled': False}
+
     # Register chat history routes
     register_chat_history_routes(app)
 
@@ -1080,9 +1120,9 @@ def create_app(test_config=None):
         """Make csrf_token function available to all templates"""
         import secrets
         def csrf_token():
-            # Simple token generation for basic CSRF protection
-            # In production, you might want to use Flask-WTF for proper CSRF protection
-            return secrets.token_urlsafe(32)
+            if 'csrf_token' not in session:
+                session['csrf_token'] = secrets.token_urlsafe(32)
+            return session['csrf_token']
         
         return {
             'csrf_token': csrf_token

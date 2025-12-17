@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify, session
 from flask_login import login_user, logout_user, login_required, current_user
 try:
     from werkzeug.urls import url_parse
@@ -24,28 +24,29 @@ from app.utils import emailer as emailer_util
 from app.utils import token as token_util
 import json
  
+def validate_csrf_token():
+    token = request.form.get('csrf_token')
+    if not token and request.is_json:
+        data = request.get_json()
+        if data:
+            token = data.get('csrf_token')
+    if not token:
+        token = request.headers.get('X-CSRFToken')
+
+    if not token or token != session.get('csrf_token'):
+        if not request.is_json and request.headers.get('X-Requested-With') != 'XMLHttpRequest':
+            flash('CSRF validation failed. Please try again.', 'error')
+        return False
+    return True
 
 def get_theme_context():
     # Provide minimal placeholders so templates can render without theme endpoints
-    ctx = {
+    return {
         'themes': {},
         'current_theme_id': 'light',
         # Mark auth pages to render without global chrome for layout consistency
         'no_chrome': True
     }
-    # Add a convenient flag that templates can use to enable the 'liquid glass'
-    # button style as a per-team toggle. We keep this lightweight so templates
-    # can opt-in to the visual change without additional logic.
-    try:
-        if current_user and current_user.is_authenticated:
-            from app.models import ScoutingTeamSettings
-            team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
-            ctx['liquid_glass_buttons_enabled'] = bool(team_settings and getattr(team_settings, 'liquid_glass_buttons', False))
-        else:
-            ctx['liquid_glass_buttons_enabled'] = False
-    except Exception:
-        ctx['liquid_glass_buttons_enabled'] = False
-    return ctx
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -86,6 +87,9 @@ def login():
         return redirect(url_for('main.index'))
     
     if request.method == 'POST':
+        if not validate_csrf_token():
+            return redirect(url_for('auth.login'))
+
         username = request.form['username']
         password = request.form['password']
         team_number = request.form.get('team_number')
@@ -145,6 +149,8 @@ def login():
 @bp.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'POST':
+        if not validate_csrf_token():
+            return redirect(url_for('auth.forgot_password'))
         email = request.form.get('email')
         if not email:
             flash('Email is required', 'error')
@@ -208,6 +214,8 @@ def reset_password(token):
         flash('Invalid reset link.', 'error')
         return redirect(url_for('auth.login'))
     if request.method == 'POST':
+        if not validate_csrf_token():
+            return redirect(url_for('auth.reset_password', token=token))
         password = request.form.get('password')
         confirm = request.form.get('confirm')
         if not password or password != confirm:
@@ -232,6 +240,8 @@ def change_password():
     """
     # No early redirect: allow any authenticated user to use this page.
     if request.method == 'POST':
+        if not validate_csrf_token():
+            return redirect(url_for('auth.change_password'))
         current_password = request.form['current_password']
         new_password = request.form['new_password']
         confirm_password = request.form['confirm_password']
@@ -282,6 +292,8 @@ def register():
         return redirect(url_for('main.index'))
 
     if request.method == 'POST':
+        if not validate_csrf_token():
+            return redirect(url_for('auth.register'))
         username = request.form['username']
         password = request.form['password']
         confirm_password = request.form['confirm_password']
@@ -345,6 +357,8 @@ def select_role():
         return redirect(url_for('main.index'))
 
     if request.method == 'POST':
+        if not validate_csrf_token():
+            return redirect(url_for('auth.select_role'))
         role_id = request.form.get('role')
         if not role_id:
             flash('You must select a role.', 'error')
@@ -374,6 +388,8 @@ def logout():
 @login_required
 def profile():
     if request.method == 'POST':
+        if not validate_csrf_token():
+            return redirect(request.url)
         # If a profile picture was uploaded, handle it first
         if 'profile_picture' in request.files and request.files['profile_picture'].filename:
             file = request.files['profile_picture']
@@ -506,6 +522,8 @@ def notification_suggestions():
 @login_required
 def dismiss_notification():
     """Record a server-side dismissal for the current user (optional)"""
+    if not validate_csrf_token():
+        return jsonify({'success': False, 'message': 'CSRF validation failed'}), 400
     data = request.get_json() or {}
     notif_id = data.get('notif_id')
     if not notif_id:
@@ -545,6 +563,8 @@ def auth_notifications_root():
 @bp.route('/notifications/create', methods=['POST'])
 @role_required('superadmin')
 def create_notification():
+    if not validate_csrf_token():
+        return redirect(url_for('auth.manage_site_notifications'))
     data = request.form or request.get_json() or {}
     message = data.get('message') or ''
     level = data.get('level') or 'info'
@@ -565,6 +585,8 @@ def create_notification():
 @bp.route('/notifications/delete/<int:notif_id>', methods=['POST'])
 @role_required('superadmin')
 def delete_notification(notif_id):
+    if not validate_csrf_token():
+        return redirect(url_for('auth.manage_site_notifications'))
     try:
         notif_util.remove_notification(notif_id)
         flash('Notification removed', 'success')
@@ -577,6 +599,8 @@ def delete_notification(notif_id):
 @role_required('superadmin')
 def update_notification(notif_id):
     """Update an existing notification (message, level, audience, teams, users)."""
+    if not validate_csrf_token():
+        return redirect(url_for('auth.manage_site_notifications'))
     try:
         message = request.form.get('message') or ''
         level = request.form.get('level') or 'info'
@@ -614,6 +638,8 @@ def send_notification_as_email(notif_id):
     """Send the specified notification to applicable users by email.
     Sends each email individually to avoid leaking recipient addresses to others.
     """
+    if not validate_csrf_token():
+        return redirect(url_for('auth.manage_site_notifications'))
     try:
         notifs = notif_util.load_notifications()
         target = next((n for n in notifs if n.get('id') == int(notif_id)), None)
@@ -778,6 +804,8 @@ def manage_users():
 @admin_required
 def add_user():
     if request.method == 'POST':
+        if not validate_csrf_token():
+            return redirect(url_for('auth.add_user'))
         username = request.form['username']
         email = request.form.get('email')
         password = request.form['password']
@@ -866,6 +894,8 @@ def add_user():
 @bp.route('/users/update/<int:user_id>', methods=['POST'])
 @admin_required
 def update_user(user_id):
+    if not validate_csrf_token():
+        return redirect(url_for('auth.manage_users'))
     from flask import current_app
     current_app.logger.info(f"Update user request for user_id: {user_id}")
     current_app.logger.info(f"Current user: {current_user.username}, roles: {[role.name for role in current_user.roles]}")
@@ -986,6 +1016,8 @@ def edit_user(user_id):
         return redirect(url_for('auth.manage_users'))
     
     if request.method == 'POST':
+        if not validate_csrf_token():
+            return redirect(url_for('auth.edit_user', user_id=user.id))
         # Validate username uniqueness within the (possibly new) team before applying
         new_username = request.form['username']
         new_team_raw = request.form.get('scouting_team_number')
@@ -1078,6 +1110,8 @@ def edit_user(user_id):
 @bp.route('/delete_user/<int:user_id>', methods=['POST'])
 @admin_required
 def delete_user(user_id):
+    if not validate_csrf_token():
+        return redirect(url_for('auth.manage_users'))
     from flask import current_app
     current_app.logger.info(f"Soft delete attempt for user_id: {user_id}")
     current_app.logger.info(f"Current user: {current_user.username}, roles: {[role.name for role in current_user.roles]}")
@@ -1134,6 +1168,8 @@ def delete_user(user_id):
 @admin_required
 def hard_delete_user(user_id):
     """Permanently delete a user from the database (hard delete)"""
+    if not validate_csrf_token():
+        return redirect(url_for('auth.manage_users'))
     from flask import current_app
     current_app.logger.info(f"Hard delete attempt for user_id: {user_id}")
     current_app.logger.info(f"Current user: {current_user.username}, roles: {[role.name for role in current_user.roles]}")
@@ -1193,6 +1229,8 @@ def hard_delete_user(user_id):
 @admin_required
 def restore_user(user_id):
     """Restore a soft-deleted (deactivated) user"""
+    if not validate_csrf_token():
+        return redirect(url_for('auth.manage_users'))
     from flask import current_app
     current_app.logger.info(f"Restore attempt for user_id: {user_id}")
     current_app.logger.info(f"Current user: {current_user.username}, roles: {[role.name for role in current_user.roles]}")
@@ -1235,6 +1273,8 @@ def restore_user(user_id):
 @admin_required
 def delete_user_permanently(user_id):
     """Permanently delete a user from the database with change tracking for sync"""
+    if not validate_csrf_token():
+        return redirect(url_for('auth.manage_users'))
     from flask import current_app
     
     # First, let's print to console to see if function is being called
@@ -1294,6 +1334,8 @@ def delete_user_permanently(user_id):
 def system_check():
     """Run system checks to validate integrity of the application"""
     if request.method == 'POST':
+        if not validate_csrf_token():
+            return redirect(url_for('auth.system_check'))
         # Create system check instance
         checker = SystemCheck()
         
@@ -1377,10 +1419,48 @@ def set_display_preference():
     flash('Display preference is now controlled per-user in your browser (Settings page).', 'info')
     return redirect(url_for('auth.admin_settings'))
 
+@bp.route('/admin/toggle-liquid-glass-buttons', methods=['POST'])
+@admin_required
+def toggle_liquid_glass_buttons():
+    """Toggle liquid glass buttons setting for the admin's team"""
+    if not validate_csrf_token():
+        return redirect(url_for('auth.admin_settings'))
+    from app.models import ScoutingTeamSettings
+    
+    # Get or create team settings
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    if not team_settings:
+        team_settings = ScoutingTeamSettings(scouting_team_number=current_user.scouting_team_number)
+        db.session.add(team_settings)
+    
+    # Toggle the setting
+    team_settings.liquid_glass_buttons = not team_settings.liquid_glass_buttons
+    team_settings.updated_at = datetime.now(timezone.utc)
+    
+    db.session.commit()
+    
+    status = "enabled" if team_settings.liquid_glass_buttons else "disabled"
+    flash(f'Liquid Glass Buttons have been {status} for your team.', 'success')
+    
+    return redirect(url_for('auth.admin_settings'))
+
+@bp.route('/admin/liquid-glass-status', methods=['GET'])
+def liquid_glass_status():
+    """Return JSON with current liquid glass buttons status for the user's team"""
+    if not current_user.is_authenticated:
+        return jsonify({'enabled': False})
+        
+    from app.models import ScoutingTeamSettings
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    enabled = team_settings.liquid_glass_buttons if team_settings else False
+    return jsonify({'enabled': bool(enabled)})
+
 @bp.route('/admin/toggle-account-lock', methods=['POST'])
 @admin_required
 def toggle_account_lock():
     """Toggle account creation lock for the admin's team"""
+    if not validate_csrf_token():
+        return redirect(url_for('auth.admin_settings'))
     from app.models import ScoutingTeamSettings
     
     # Get or create team settings
@@ -1398,36 +1478,6 @@ def toggle_account_lock():
         flash('Account creation has been locked for your team.', 'warning')
     
     db.session.commit()
-    return redirect(url_for('auth.admin_settings'))
-
-
-@bp.route('/admin/liquid-glass-status', methods=['GET'])
-@admin_required
-def liquid_glass_status():
-    """Return JSON with current liquid glass button status for the admin's team"""
-    from app.models import ScoutingTeamSettings
-    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
-    enabled = bool(team_settings and getattr(team_settings, 'liquid_glass_buttons', False))
-    return jsonify({'enabled': enabled})
-
-
-@bp.route('/admin/toggle-liquid-glass-buttons', methods=['POST'])
-@admin_required
-def toggle_liquid_glass_buttons():
-    """Toggle the per-team liquid glass button appearance setting"""
-    from app.models import ScoutingTeamSettings
-    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
-    if not team_settings:
-        team_settings = ScoutingTeamSettings(scouting_team_number=current_user.scouting_team_number)
-        db.session.add(team_settings)
-
-    # Toggle the flag and persist
-    team_settings.liquid_glass_buttons = not bool(getattr(team_settings, 'liquid_glass_buttons', False))
-    db.session.commit()
-    if team_settings.liquid_glass_buttons:
-        flash('Liquid glass buttons have been enabled for your team.', 'success')
-    else:
-        flash('Liquid glass buttons have been disabled for your team.', 'info')
     return redirect(url_for('auth.admin_settings'))
 
 # Context processor to make current_user and role functions available in templates

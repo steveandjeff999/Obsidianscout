@@ -661,6 +661,29 @@ def get_all_matches_for_alliance(event_id=None, event_code=None):
                     seen[key] = m
             
             matches = sorted(seen.values(), key=lambda m: (m.match_type or '', m.match_number or 0))
+            
+            # Populate missing times for deduped matches using other alliance match records
+            try:
+                alliance_events = Event.query.filter(Event.scouting_team_number.in_(alliance_team_nums)).all()
+                alliance_event_ids = [e.id for e in alliance_events]
+                for m in matches:
+                    if (getattr(m, 'scheduled_time', None) is None or getattr(m, 'predicted_time', None) is None or getattr(m, 'actual_time', None) is None) and alliance_event_ids:
+                        other = Match.query.filter(
+                            Match.match_number == m.match_number,
+                            Match.match_type == m.match_type,
+                            Match.event_id.in_(alliance_event_ids),
+                            Match.scouting_team_number.in_(alliance_team_nums)
+                        ).order_by(Match.scouting_team_number == getattr(current_user, 'scouting_team_number', None)).first()
+                        if other:
+                            if getattr(m, 'scheduled_time', None) is None and getattr(other, 'scheduled_time', None) is not None:
+                                m.scheduled_time = other.scheduled_time
+                            if getattr(m, 'predicted_time', None) is None and getattr(other, 'predicted_time', None) is not None:
+                                m.predicted_time = other.predicted_time
+                            if getattr(m, 'actual_time', None) is None and getattr(other, 'actual_time', None) is not None:
+                                m.actual_time = other.actual_time
+            except Exception:
+                pass
+
             return matches, True
     
     # Fallback: Get all matches from any alliance member
@@ -679,6 +702,33 @@ def get_all_matches_for_alliance(event_id=None, event_code=None):
     
     matches = sorted(seen.values(), key=lambda m: (m.match_type or '', m.match_number or 0))
     
+    # Ensure match times are populated where possible. If the deduped match has no
+    # scheduled/predicted/actual times, look for any other match in the alliance
+    # with the same match_type/number and take its timestamps to display in the UI.
+    try:
+        # Collect event ids for alliance teams to constrain lookup
+        alliance_events = Event.query.filter(Event.scouting_team_number.in_(alliance_team_nums)).all()
+        alliance_event_ids = [e.id for e in alliance_events]
+        for m in matches:
+            if (getattr(m, 'scheduled_time', None) is None or getattr(m, 'predicted_time', None) is None or getattr(m, 'actual_time', None) is None) and alliance_event_ids:
+                other = Match.query.filter(
+                    Match.match_number == m.match_number,
+                    Match.match_type == m.match_type,
+                    Match.event_id.in_(alliance_event_ids),
+                    Match.scouting_team_number.in_(alliance_team_nums)
+                ).order_by(Match.scouting_team_number == getattr(current_user, 'scouting_team_number', None)).first()
+                if other:
+                    # Only copy values that are missing on the deduped match
+                    if getattr(m, 'scheduled_time', None) is None and getattr(other, 'scheduled_time', None) is not None:
+                        m.scheduled_time = other.scheduled_time
+                    if getattr(m, 'predicted_time', None) is None and getattr(other, 'predicted_time', None) is not None:
+                        m.predicted_time = other.predicted_time
+                    if getattr(m, 'actual_time', None) is None and getattr(other, 'actual_time', None) is not None:
+                        m.actual_time = other.actual_time
+    except Exception:
+        # If anything goes wrong, just return matches as-is; we don't want a UI error
+        pass
+
     return matches, True
 
 

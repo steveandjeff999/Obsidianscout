@@ -4,7 +4,7 @@ from app.routes.auth import analytics_required
 from app.models import Match, Event, Team, ScoutingData, AllianceSharedScoutingData
 from app import db
 from app.utils.api_utils import get_matches, ApiError, api_to_db_match_conversion, get_matches_dual_api
-from app.utils.score_utils import norm_db_score
+from app.utils.score_utils import norm_db_score, match_sort_key, parse_match_number, MATCH_TYPE_ORDER
 from datetime import datetime, timezone
 from app.utils.timezone_utils import convert_local_to_utc
 from app.utils.prediction_offsets import compute_event_dynamic_offset_minutes
@@ -35,7 +35,7 @@ def get_theme_context():
     }
 
 
-# (score normalization is provided by app.utils.score_utils.norm_db_score)
+# (score normalization and match sorting is provided by app.utils.score_utils)
 
 bp = Blueprint('matches', __name__, url_prefix='/matches')
 
@@ -62,27 +62,17 @@ def index():
         event = get_event_by_code(current_event_code)
     
     # Get all events for the dropdown (combined/deduped like /events)
-        events = get_combined_dropdown_events()
+    events = get_combined_dropdown_events()
     
     # Filter matches by the selected event and scouting team
     if event:
-        # Define custom ordering for match types
-        match_type_order = {
-            'practice': 1,
-            'qualification': 2,
-            'qualifier': 2,  # Alternative name for qualification matches
-            'playoff': 3,
-            'elimination': 3,  # Alternative name for playoff matches
-        }
-        
         # Check for alliance mode
         alliance_id = get_active_alliance_id()
         
         if alliance_id:
             # Alliance mode - get matches from alliance scouting data for this event
             matches, _ = get_all_matches_for_alliance(event_id=event.id)
-            # Convert to query-like behavior for filtering below
-            query = Match.query.filter(Match.id.in_([m.id for m in matches]))
+            # Keep the list of matches provided by the helper (it may have times populated in-memory)
         else:
             # Build base query for this event (filtered by scouting team)
             query = filter_matches_by_scouting_team().filter(Match.event_id == event.id)
@@ -99,33 +89,43 @@ def index():
         q = (request.args.get('q') or '').strip()
         match_type = (request.args.get('match_type') or '').strip()
 
-        if match_type:
-            # Case-insensitive match type filtering
-            try:
-                query = query.filter(Match.match_type.ilike(match_type))
-            except Exception:
-                # Fallback to exact compare if ilike not available
-                query = query.filter(Match.match_type == match_type)
-
-        if q:
-            # If numeric, allow matching by match number OR team numbers in alliances
-            if q.isdigit():
-                try:
+        if alliance_id:
+            # We're operating on a Python list of Match objects (already loaded)
+            if match_type:
+                matches = [m for m in matches if (m.match_type or '').lower() == match_type.lower()]
+            if q:
+                if q.isdigit():
                     qnum = int(q)
-                    query = query.filter(or_(Match.match_number == qnum,
-                                              Match.red_alliance.like(f"%{q}%"),
-                                              Match.blue_alliance.like(f"%{q}%")))
+                    matches = [m for m in matches if (m.match_number == qnum or (m.red_alliance and q in m.red_alliance) or (m.blue_alliance and q in m.blue_alliance))]
+                else:
+                    matches = [m for m in matches if ((m.red_alliance and q.lower() in m.red_alliance.lower()) or (m.blue_alliance and q.lower() in m.blue_alliance.lower()))]
+        else:
+            if match_type:
+                # Case-insensitive match type filtering
+                try:
+                    query = query.filter(Match.match_type.ilike(match_type))
                 except Exception:
-                    query = query.filter(or_(Match.red_alliance.ilike(f"%{q}%"), Match.blue_alliance.ilike(f"%{q}%")))
-            else:
-                query = query.filter(or_(Match.red_alliance.ilike(f"%{q}%"), Match.blue_alliance.ilike(f"%{q}%")))
+                    # Fallback to exact compare if ilike not available
+                    query = query.filter(Match.match_type == match_type)
 
-        # Execute query and sort in Python using our custom ordering
-        matches = query.all()
-        matches = sorted(matches, key=lambda m: (
-            match_type_order.get((m.match_type or '').lower(), 99),
-            m.match_number
-        ))
+            if q:
+                # If numeric, allow matching by match number OR team numbers in alliances
+                if q.isdigit():
+                    try:
+                        qnum = int(q)
+                        query = query.filter(or_(Match.match_number == qnum,
+                                                  Match.red_alliance.like(f"%{q}%"),
+                                                  Match.blue_alliance.like(f"%{q}%")))
+                    except Exception:
+                        query = query.filter(or_(Match.red_alliance.ilike(f"%{q}%"), Match.blue_alliance.ilike(f"%{q}%")))
+                else:
+                    query = query.filter(or_(Match.red_alliance.ilike(f"%{q}%"), Match.blue_alliance.ilike(f"%{q}%")))
+
+            # Execute query and sort in Python using our custom ordering
+            matches = query.all()
+
+        # Use global match_sort_key for proper ordering (handles X-Y playoff format)
+        matches = sorted(matches, key=match_sort_key)
     else:
         # If no event selected, don't show any matches
         matches = []
@@ -767,23 +767,7 @@ def strategy():
         
         # Get all matches for this event
         matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
-        # Custom match type order: practice, qualification, quarterfinals, semifinals, finals
-        match_type_order = {
-            'practice': 1,
-            'qualification': 2,
-            'qualifier': 2,  # Alternative name for qualification matches
-            'quarterfinal': 3,
-            'quarterfinals': 3,
-            'semifinal': 4,
-            'semifinals': 4,
-            'final': 5,
-            'finals': 5
-        }
-        def match_sort_key(m):
-            return (
-                match_type_order.get(m.match_type.lower(), 99),
-                m.match_number
-            )
+        # Use global match_sort_key for proper ordering (handles X-Y playoff format)
         matches = sorted(matches, key=match_sort_key)
     
     # Get game configuration (alliance-aware)
@@ -851,23 +835,7 @@ def strategy_all():
     if event_id:
         event = Event.query.get_or_404(event_id)
         matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
-        # Keep same ordering as other strategy pages
-        match_type_order = {
-            'practice': 1,
-            'qualification': 2,
-            'qualifier': 2,
-            'quarterfinal': 3,
-            'quarterfinals': 3,
-            'semifinal': 4,
-            'semifinals': 4,
-            'final': 5,
-            'finals': 5
-        }
-        def match_sort_key(m):
-            return (
-                match_type_order.get(m.match_type.lower(), 99),
-                m.match_number
-            )
+        # Use global match_sort_key for proper ordering (handles X-Y playoff format)
         matches = sorted(matches, key=match_sort_key)
 
     # Get game configuration (alliance-aware)
@@ -1368,22 +1336,7 @@ def strategy_draw():
         event = get_event_by_code(current_event_code)
     if event:
         matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
-        match_type_order = {
-            'practice': 1,
-            'qualification': 2,
-            'qualifier': 2,
-            'quarterfinal': 3,
-            'quarterfinals': 3,
-            'semifinal': 4,
-            'semifinals': 4,
-            'final': 5,
-            'finals': 5
-        }
-        def match_sort_key(m):
-            return (
-                match_type_order.get(m.match_type.lower(), 99),
-                m.match_number
-            )
+        # Use global match_sort_key for proper ordering (handles X-Y playoff format)
         matches = sorted(matches, key=match_sort_key)
     return render_template(
         'matches/strategy_draw.html',
@@ -1579,7 +1532,9 @@ def matches_data():
             matches_query = matches_query.filter(Match.scouting_team_number == current_scouting_team)
         else:
             matches_query = matches_query.filter(Match.scouting_team_number.is_(None))
-        matches = matches_query.order_by(Match.match_number).all()
+        matches = matches_query.all()
+        # Use global match_sort_key for proper ordering (handles X-Y playoff format)
+        matches = sorted(matches, key=match_sort_key)
         
         # Get team data for context
         teams = db.session.query(Team).join(Team.events).filter(Event.id == current_event.id).all()

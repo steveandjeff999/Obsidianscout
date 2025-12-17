@@ -83,6 +83,20 @@ window.addEventListener('storage', function(){ try{ applyUserPreferences(); }cat
 // Expose globally
 window.applyUserPreferences = applyUserPreferences;
 
+// Global share button helpers - make them available on any page
+window.showShareReadyButtons = function(scope) {
+    try {
+        const selector = scope ? `.share-when-ready[data-share-scope="${scope}"]` : '.share-when-ready';
+        document.querySelectorAll(selector).forEach(btn => btn.classList.remove('d-none'));
+    } catch (e) { console.warn('showShareReadyButtons error', e); }
+};
+window.hideShareReadyButtons = function(scope) {
+    try {
+        const selector = scope ? `.share-when-ready[data-share-scope="${scope}"]` : '.share-when-ready';
+        document.querySelectorAll(selector).forEach(btn => btn.classList.add('d-none'));
+    } catch (e) { console.warn('hideShareReadyButtons error', e); }
+};
+
 document.addEventListener('DOMContentLoaded', function() {
     // Register service worker for offline support
     if ('serviceWorker' in navigator) {
@@ -349,6 +363,30 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize offline data manager
     setupOfflineDataManager();
+
+    // Observe strategy results visibility to toggle strategy share button
+    try {
+        const strategyResultsEl = document.getElementById('strategyResults');
+        if (strategyResultsEl) {
+            const mo = new MutationObserver((mutationsList) => {
+                mutationsList.forEach(m => {
+                    // When style or class changes, check visibility
+                    const isVisible = !strategyResultsEl.classList.contains('d-none') && strategyResultsEl.style.display !== 'none';
+                    if (isVisible) {
+                        if (typeof window.showShareReadyButtons === 'function') window.showShareReadyButtons('strategy');
+                    } else {
+                        if (typeof window.hideShareReadyButtons === 'function') window.hideShareReadyButtons('strategy');
+                    }
+                });
+            });
+            mo.observe(strategyResultsEl, { attributes: true, attributeFilter: ['class', 'style'] });
+            // Initial state
+            const isVisibleNow = !strategyResultsEl.classList.contains('d-none') && strategyResultsEl.style.display !== 'none';
+            if (isVisibleNow) {
+                if (typeof window.showShareReadyButtons === 'function') window.showShareReadyButtons('strategy');
+            }
+        }
+    } catch (e) { /* silently ignore observer failures */ }
     
     // Initialize scouting form with save functionality
     initScoutingForm();
@@ -388,6 +426,19 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+});
+
+// Global error handlers to catch uncaught exceptions and promise rejections
+window.addEventListener('error', function(e) {
+    try {
+        console.error('Global JS error:', e.message || e.error || e);
+    } catch (err) { console.warn('Error in global error handler', err); }
+});
+
+window.addEventListener('unhandledrejection', function(ev) {
+    try {
+        console.warn('Unhandled promise rejection:', ev.reason);
+    } catch (err) { console.warn('Error in unhandledrejection handler', err); }
 });
 
 /**
@@ -2246,6 +2297,7 @@ function renderPlotlyGraphs() {
     
     console.log(`Found ${graphElements.length} graph elements to render`);
     
+    const renderPromises = [];
     graphElements.forEach(element => {
         // Get graph data from data attribute
         try {
@@ -2465,23 +2517,23 @@ function renderPlotlyGraphs() {
             if (parsedData.data && parsedData.layout) {
                 // Our custom format with data and layout properties
                 console.log('Using custom format with data and layout properties');
-                applyClientThemeAndPlot(parsedData.data, parsedData.layout);
+                renderPromises.push(applyClientThemeAndPlot(parsedData.data, parsedData.layout));
             } else {
                 // Using plotly.io.to_json format
                 console.log('Using plotly.io.to_json format');
                 // parsedData in this case is an array or figure object — pass as data
                 if (parsedData.data && parsedData.layout) {
-                    applyClientThemeAndPlot(parsedData.data, parsedData.layout);
+                    renderPromises.push(applyClientThemeAndPlot(parsedData.data, parsedData.layout));
                 } else if (parsedData.data) {
-                    applyClientThemeAndPlot(parsedData.data, parsedData.layout || {});
+                    renderPromises.push(applyClientThemeAndPlot(parsedData.data, parsedData.layout || {}));
                 } else {
                     // It's likely a figure encoded by plotly; try to plot directly and apply layout after
                     const maybeFig = parsedData;
                     if (maybeFig.data && maybeFig.layout) {
-                        applyClientThemeAndPlot(maybeFig.data, maybeFig.layout);
+                        renderPromises.push(applyClientThemeAndPlot(maybeFig.data, maybeFig.layout));
                     } else {
                         // Fallback: try plotting the parsedData directly
-                        applyClientThemeAndPlot(parsedData, {});
+                        renderPromises.push(applyClientThemeAndPlot(parsedData, {}));
                     }
                 }
             }
@@ -2508,6 +2560,15 @@ function renderPlotlyGraphs() {
             element.querySelector('.alert').appendChild(debugBtn);
         }
     });
+
+    // When all graph rendering promises are complete, show share buttons for graphs
+    Promise.all(renderPromises).then(() => {
+        try {
+            if (graphElements && graphElements.length > 0) {
+                if (typeof window.showShareReadyButtons === 'function') window.showShareReadyButtons('graphs');
+            }
+        } catch (e) { console.warn('Error while showing share buttons after graphs render', e); }
+    }).catch(err => { console.warn('Some graphs failed to render', err); });
 }
 
 /**

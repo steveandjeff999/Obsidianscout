@@ -1,0 +1,5 @@
+{
+  "error": "Failed to generate visualization: Need at least two teams to compare",
+  "error_code": "VIS_ERROR",
+  "success": false
+}

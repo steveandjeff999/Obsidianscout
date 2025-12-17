@@ -22,7 +22,7 @@ from datetime import datetime
 BASE_URL = os.environ.get('OBSIDIAN_BASE_URL', 'https://localhost:8080')
 API_BASE = f"{BASE_URL}/api/mobile"
 # Use admin user which has scouting_team_number = 5454 and has actual data
-USERNAME = os.environ.get('OBSIDIAN_TEST_USERNAME', 'admin')
+USERNAME = os.environ.get('OBSIDIAN_TEST_USERNAME', 'Seth Herod')
 PASSWORD = os.environ.get('OBSIDIAN_TEST_PASSWORD', '5454')
 TEAM = int(os.environ.get('OBSIDIAN_TEST_TEAM', '5454'))
 
@@ -60,7 +60,7 @@ def build_combinations():
     metrics = ['total_points', 'auto_points', 'teleop_points', 'endgame_points']
     modes = ['match_by_match', 'averages']
     # Use team 5431 which actually has scouting data (scouted BY team 5454)
-    team_sets = [[2583], [5431, 6369, 2583]]
+    team_sets = [[254], [1671]]
 
     combos = []
 

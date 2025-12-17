@@ -28,6 +28,7 @@ from app.utils.team_isolation import (
 )
 from app.utils.team_isolation import get_combined_dropdown_events
 from app.utils.alliance_data import get_active_alliance_id, get_all_teams_for_alliance, get_all_matches_for_alliance
+from app.utils.score_utils import match_sort_key
 from flask import jsonify
 from app.utils.api_auth import team_data_access_required
 from app.utils.alliance_data import get_active_alliance_id, get_all_scouting_data, get_all_pit_data
@@ -2288,7 +2289,9 @@ def manage_entries():
     # Get ALL teams at the current event (regardless of scouting_team_number) and matches
     if current_event:
         teams = get_all_teams_at_event(event_id=current_event.id)
-        matches = Match.query.filter_by(event_id=current_event.id).order_by(Match.match_type, Match.match_number).all()
+        matches = Match.query.filter_by(event_id=current_event.id).all()
+        # Use proper match sorting (handles X-Y playoff format)
+        matches = sorted(matches, key=match_sort_key)
     else:
         teams = []  # No teams if no current event is set
         matches = []  # No matches if no current event is set
@@ -2411,6 +2414,8 @@ def wipe_database():
             StrategyShare.query.filter(StrategyShare.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
             ScoutingData.query.filter(ScoutingData.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
             StrategyDrawing.query.filter(StrategyDrawing.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
+            # AllianceSharedScoutingData references matches and must be deleted first to avoid FK errors
+            AllianceSharedScoutingData.query.filter(AllianceSharedScoutingData.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
 
             # 3) Delete matches belonging to these events
             Match.query.filter(Match.event_id.in_(event_ids)).delete(synchronize_session=False)
@@ -2434,9 +2439,37 @@ def wipe_database():
         AllianceSelection.query.filter_by(scouting_team_number=scouting_team_number).delete()
         DoNotPickEntry.query.filter_by(scouting_team_number=scouting_team_number).delete()
         AvoidEntry.query.filter_by(scouting_team_number=scouting_team_number).delete()
+        # Remove alliance-shared scouting entries originally created by this team
+        AllianceSharedScoutingData.query.filter_by(source_scouting_team_number=scouting_team_number).delete()
 
         # Delete teams owned by this scouting team
-        Team.query.filter_by(scouting_team_number=scouting_team_number).delete()
+        teams_to_delete = Team.query.filter_by(scouting_team_number=scouting_team_number).all()
+        team_ids = [t.id for t in teams_to_delete]
+
+        if team_ids:
+            # Remove association rows in team_event linking these teams to events
+            try:
+                db.session.execute(team_event.delete().where(team_event.c.team_id.in_(team_ids)))
+            except Exception:
+                pass
+
+            # Delete or nullify all records referencing these team ids to avoid FK constraint errors
+            ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids)).delete(synchronize_session=False)
+            PitScoutingData.query.filter(PitScoutingData.team_id.in_(team_ids)).delete(synchronize_session=False)
+            AllianceSharedScoutingData.query.filter(AllianceSharedScoutingData.team_id.in_(team_ids)).delete(synchronize_session=False)
+            AllianceSharedPitData.query.filter(AllianceSharedPitData.team_id.in_(team_ids)).delete(synchronize_session=False)
+            TeamListEntry.query.filter(TeamListEntry.team_id.in_(team_ids)).delete(synchronize_session=False)
+
+            # Nullify references to these teams in AllianceSelection (do not delete alliances)
+            AllianceSelection.query.filter(AllianceSelection.captain.in_(team_ids)).update({AllianceSelection.captain: None}, synchronize_session=False)
+            AllianceSelection.query.filter(AllianceSelection.first_pick.in_(team_ids)).update({AllianceSelection.first_pick: None}, synchronize_session=False)
+            AllianceSelection.query.filter(AllianceSelection.second_pick.in_(team_ids)).update({AllianceSelection.second_pick: None}, synchronize_session=False)
+            AllianceSelection.query.filter(AllianceSelection.third_pick.in_(team_ids)).update({AllianceSelection.third_pick: None}, synchronize_session=False)
+
+            # Finally delete the teams themselves
+            Team.query.filter(Team.id.in_(team_ids)).delete(synchronize_session=False)
+        else:
+            Team.query.filter_by(scouting_team_number=scouting_team_number).delete()
 
         db.session.commit()
         

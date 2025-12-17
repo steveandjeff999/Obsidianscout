@@ -71,7 +71,7 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <button type="button" class="btn btn-primary w-100" onclick="analyzeSelectedMatch()" disabled id="analyzeBtn">
+                    <button type="button" class="btn btn-primary w-100" disabled id="analyzeBtn">
                         <i class="fas fa-chart-line me-2"></i>Analyze Match Strategy
                     </button>
                 </div>
@@ -215,21 +215,7 @@
             </div>
         </div>
         
-        <!-- Team-by-Team Analysis -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">
-                            <i class="fas fa-users me-2"></i>Team-by-Team Analysis
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <canvas id="teamComparisonChart" width="800" height="400"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Team-by-Team Analysis removed per user request -->
         
         <!-- Matchup Analysis -->
         <div class="row mb-4">
@@ -266,7 +252,7 @@
                             <button type="button" class="btn btn-outline-success" onclick="exportToPDF()">
                                 <i class="fas fa-file-pdf me-2"></i>Export to PDF
                             </button>
-                            <button type="button" class="btn btn-outline-info" onclick="shareStrategy()" id="shareBtn">
+                            <button type="button" class="btn btn-outline-info d-none share-when-ready" onclick="shareStrategy()" id="shareBtn" data-share-scope="strategy">
                                 <i class="fas fa-share me-2"></i>Share Strategy
                             </button>
                         </div>
@@ -282,13 +268,14 @@ let currentMatchId = null;
 let strategyData = null;
 let allianceChart = null;
 let radarChart = null;
-let teamChart = null;
 
 function loadMatchStrategy(matchId) {
     const analyzeBtn = document.getElementById('analyzeBtn');
+    console.log('loadMatchStrategy called with matchId:', matchId);
     if (matchId) {
         currentMatchId = matchId;
         analyzeBtn.disabled = false;
+        console.log('analyzeBtn enabled for matchId', matchId);
         analyzeBtn.textContent = 'Analyze Match Strategy';
         analyzeBtn.innerHTML = '<i class="fas fa-chart-line me-2"></i>Analyze Match Strategy';
     } else {
@@ -299,6 +286,13 @@ function loadMatchStrategy(matchId) {
 }
 
 function analyzeSelectedMatch() {
+    console.log('analyzeSelectedMatch called; currentMatchId=', currentMatchId);
+    // Prevent concurrent or duplicate analyzes
+    if (window.analyzeInProgress) {
+        console.warn('analyzeSelectedMatch ignored - already in progress');
+        return;
+    }
+    window.analyzeInProgress = true;
     if (!currentMatchId) {
         alert('Please select a match first');
         return;
@@ -306,25 +300,57 @@ function analyzeSelectedMatch() {
     
     showLoadingSpinner();
     hideStrategyResults();
+    // Disable analyze button to prevent duplicate requests
+    try { document.getElementById('analyzeBtn').disabled = true; } catch (e) {}
     
     // If page was opened via a public share token, call the public analyze endpoint
     const publicToken = window.PUBLIC_SHARE_TOKEN || null;
     const analyzeUrl = publicToken ? `/matches/strategy/public/analyze/${publicToken}/${currentMatchId}` : `/matches/strategy/analyze/${currentMatchId}`;
-    fetch(analyzeUrl)
-        .then(response => response.json())
+    console.log('Fetching analyzeUrl:', analyzeUrl);
+    fetch(analyzeUrl, { credentials: 'same-origin' })
+        .then(response => {
+            console.log('analyze response status:', response.status, response.statusText);
+            if (!response.ok) {
+                // Provide better error for auth failures
+                if (response.status === 401 || response.status === 403) {
+                    throw new Error(`Analyze request unauthorized: ${response.status}`);
+                }
+                throw new Error(`Analyze request failed with status ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
+            console.log('analyze returned data:', data);
             if (data.error) {
                 throw new Error(data.error);
             }
             strategyData = data;
-            displayStrategyResults(data);
+            try {
+                displayStrategyResults(data);
+            } catch (dsErr) {
+                console.error('displayStrategyResults threw an error:', dsErr);
+                // Show visible error
+                try { document.getElementById('strategyResults').innerHTML = `<div class="alert alert-danger">Error displaying strategy results: ${dsErr.message}</div>`; } catch (ee) {}
+            }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Error analyzing match strategy: ' + error.message);
+            try { alert('Error analyzing match strategy: ' + error.message); } catch (e) {}
+            // Show inline message in the results container
+            try {
+                const results = document.getElementById('strategyResults');
+                if (results) {
+                    results.classList.remove('d-none');
+                    results.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i>Error analyzing match strategy: ${error.message}</div>`;
+                }
+            } catch (ee) { /* ignore */ }
         })
         .finally(() => {
             hideLoadingSpinner();
+            window.analyzeInProgress = false;
+            // Re-enable analyze button
+            try { document.getElementById('analyzeBtn').disabled = false; } catch (e) {}
+            console.log('analyzeSelectedMatch finished (finally)');
         });
 }
 
@@ -337,31 +363,64 @@ function hideLoadingSpinner() {
 }
 
 function hideStrategyResults() {
-    document.getElementById('strategyResults').style.display = 'none';
+    const el = document.getElementById('strategyResults');
+    if (el) {
+        el.classList.add('d-none');
+        el.style.display = 'none';
+    }
 }
 
 function displayStrategyResults(data) {
+    console.log('displayStrategyResults called with data keys:', Object.keys(data || {}));
+    // Deduplicate red/blue alliance teams at the top-level strategy data to avoid duplicates in charts
+    try {
+        if (strategyData && strategyData.red_alliance && Array.isArray(strategyData.red_alliance.teams)) {
+            const seenR = new Set();
+            strategyData.red_alliance.teams = strategyData.red_alliance.teams.filter(td => {
+                const num = (td && td.team && td.team.team_number) || td.team_number || td.number;
+                if (!num) return true;
+                if (seenR.has(String(num))) return false;
+                seenR.add(String(num));
+                return true;
+            });
+        }
+        if (strategyData && strategyData.blue_alliance && Array.isArray(strategyData.blue_alliance.teams)) {
+            const seenB = new Set();
+            strategyData.blue_alliance.teams = strategyData.blue_alliance.teams.filter(td => {
+                const num = (td && td.team && td.team.team_number) || td.team_number || td.number;
+                if (!num) return true;
+                if (seenB.has(String(num))) return false;
+                seenB.add(String(num));
+                return true;
+            });
+        }
+    } catch (e) { console.warn('Failed to dedupe top-level strategy teams', e); }
+
     // Display match overview
-    displayMatchOverview(data.match);
+    try { displayMatchOverview(data.match); } catch (e) { console.error('displayMatchOverview error', e); }
     
     // Display predicted outcome
-    displayPredictedOutcome(data.predicted_outcome);
+    try { displayPredictedOutcome(data.predicted_outcome); } catch (e) { console.error('displayPredictedOutcome error', e); }
     
     // Display alliance strategies
-    displayAllianceStrategy(data.red_alliance, 'red');
-    displayAllianceStrategy(data.blue_alliance, 'blue');
+    try { displayAllianceStrategy(data.red_alliance, 'red'); } catch (e) { console.error('displayAllianceStrategy (red) error', e); }
+    try { displayAllianceStrategy(data.blue_alliance, 'blue'); } catch (e) { console.error('displayAllianceStrategy (blue) error', e); }
     
     // Display key battles
-    displayKeyBattles(data.key_battles);
+    try { displayKeyBattles(data.key_battles); } catch (e) { console.error('displayKeyBattles error', e); }
     
     // Display matchup analysis
-    displayMatchupAnalysis(data.matchup_analysis);
+    try { displayMatchupAnalysis(data.matchup_analysis); } catch (e) { console.error('displayMatchupAnalysis error', e); }
     
     // Create visualizations
-    createVisualizationCharts(data.graph_data);
+    try { createVisualizationCharts(data.graph_data); } catch (e) { console.error('createVisualizationCharts error', e); }
     
-    // Show results
-    document.getElementById('strategyResults').style.display = 'block';
+    // Show results (remove Bootstrap d-none which uses !important)
+    const sr = document.getElementById('strategyResults');
+    if (sr) {
+        sr.classList.remove('d-none');
+        sr.style.display = 'block';
+    }
 }
 
 function displayMatchOverview(matchData) {
@@ -390,7 +449,7 @@ function displayMatchOverview(matchData) {
 
 function displayPredictedOutcome(prediction) {
     const container = document.getElementById('predictedOutcome');
-    
+    const fmt = (v) => (v !== null && v !== undefined && !isNaN(Number(v))) ? Math.round(Number(v)) : '--';
     const winnerClass = prediction.predicted_winner === 'red' ? 'text-danger' : 'text-primary';
     const winnerText = prediction.predicted_winner === 'red' ? 'Red Alliance' : 'Blue Alliance';
     
@@ -404,7 +463,7 @@ function displayPredictedOutcome(prediction) {
             </div>
             <div class="col-md-4">
                 <div class="text-center">
-                    <h2>${prediction.red_score} - ${prediction.blue_score}</h2>
+                    <h2>${fmt(prediction.red_score)} - ${fmt(prediction.blue_score)}</h2>
                     <p class="lead">Expected Score</p>
                 </div>
             </div>
@@ -418,7 +477,7 @@ function displayPredictedOutcome(prediction) {
         <div class="mt-3">
             <h6>Analysis Reasoning:</h6>
             <ul class="mb-0">
-                ${prediction.reasoning.map(reason => `<li>${reason}</li>`).join('')}
+                ${((prediction && prediction.reasoning) ? prediction.reasoning : []).map(reason => `<li>${reason}</li>`).join('')}
             </ul>
         </div>
     `;
@@ -431,8 +490,11 @@ function displayAllianceStrategy(allianceData, color) {
         if (color === 'red') {
             const redBadge = document.getElementById('redAllianceScore');
             let score = null;
-            if (strategyData && strategyData.predicted_outcome) score = strategyData.predicted_outcome.red_score || null;
-            if (!score && allianceData.predicted_score) score = allianceData.predicted_score;
+            if (strategyData && strategyData.predicted_outcome && typeof strategyData.predicted_outcome.red_score !== 'undefined') {
+                score = strategyData.predicted_outcome.red_score;
+            } else if (allianceData && allianceData.predicted_score !== undefined && allianceData.predicted_score !== null) {
+                score = allianceData.predicted_score;
+            }
             if (score !== null && score !== undefined && !isNaN(Number(score))) {
                 redBadge.textContent = `${Math.round(Number(score))} pts`;
             } else {
@@ -441,8 +503,11 @@ function displayAllianceStrategy(allianceData, color) {
         } else if (color === 'blue') {
             const blueBadge = document.getElementById('blueAllianceScore');
             let score = null;
-            if (strategyData && strategyData.predicted_outcome) score = strategyData.predicted_outcome.blue_score || null;
-            if (!score && allianceData.predicted_score) score = allianceData.predicted_score;
+            if (strategyData && strategyData.predicted_outcome && typeof strategyData.predicted_outcome.blue_score !== 'undefined') {
+                score = strategyData.predicted_outcome.blue_score;
+            } else if (allianceData && allianceData.predicted_score !== undefined && allianceData.predicted_score !== null) {
+                score = allianceData.predicted_score;
+            }
             if (score !== null && score !== undefined && !isNaN(Number(score))) {
                 blueBadge.textContent = `${Math.round(Number(score))} pts`;
             } else {
@@ -453,11 +518,25 @@ function displayAllianceStrategy(allianceData, color) {
         console.warn('Failed to update alliance score badge', e);
     }
 
+    // Dedupe teams by team number to avoid duplicate display
+    let teamsList = (allianceData && allianceData.teams) ? allianceData.teams.slice() : [];
+    try {
+        const s = new Set();
+        teamsList = teamsList.filter(td => {
+            const num = (td && td.team && td.team.team_number) || td.team_number || td.team?.team_number || td.number;
+            if (!num) return true; // include if no numeric id found
+            if (!s.has(String(num))) { s.add(String(num)); return true; }
+            return false;
+        });
+    } catch (e) { console.warn('Failed to dedupe teamsList', e); }
+
+    console.log(`displayAllianceStrategy(${color}) teams count before: ${(allianceData && allianceData.teams) ? allianceData.teams.length : 0}, after dedupe: ${teamsList.length}`);
+
     container.innerHTML = `
         <div class="mb-4">
             <h6>Team Composition:</h6>
             <div class="row">
-                ${allianceData.teams.map(teamData => `
+                ${(teamsList || []).map(teamData => `
                     <div class="col-md-4 mb-3">
                         <div class="card">
                             <div class="card-body p-2">
@@ -476,28 +555,28 @@ function displayAllianceStrategy(allianceData, color) {
         <div class="mb-4">
             <h6>Key Strategies:</h6>
             <ul class="mb-0">
-                ${allianceData.strategy.key_strategies.map(strategy => `<li>${strategy}</li>`).join('')}
+                    ${(() => { const arr = (((allianceData && allianceData.strategy) && allianceData.strategy.key_strategies) ? allianceData.strategy.key_strategies : []); const seen = new Set(); return arr.filter(s=>{ const k=( (s||'') + '').trim().toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }).map(s=>`<li>${s}</li>`).join(''); })()}
             </ul>
         </div>
         
         <div class="mb-4">
             <h6>Strengths:</h6>
             <ul class="mb-0">
-                ${allianceData.strengths.map(strength => `<li class="text-success">${strength}</li>`).join('')}
+                ${((allianceData && allianceData.strengths) ? allianceData.strengths : []).map(strength => `<li class="text-success">${strength}</li>`).join('')}
             </ul>
         </div>
         
         <div class="mb-4">
             <h6>Weaknesses:</h6>
             <ul class="mb-0">
-                ${allianceData.weaknesses.map(weakness => `<li class="text-warning">${weakness}</li>`).join('')}
+                ${((allianceData && allianceData.weaknesses) ? allianceData.weaknesses : []).map(weakness => `<li class="text-warning">${weakness}</li>`).join('')}
             </ul>
         </div>
         
         <div class="mb-0">
             <h6>Recommendations:</h6>
             <ul class="mb-0">
-                ${allianceData.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                ${(() => { const arr = ((allianceData && allianceData.recommendations) ? allianceData.recommendations : []); const seen = new Set(); return arr.filter(r=>{ const k=((r||'')+'').trim().toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; }).map(r=>`<li>${r}</li>`).join(''); })()}
             </ul>
         </div>
         
@@ -520,11 +599,11 @@ function displayAllianceStrategy(allianceData, color) {
                         </div>
                     </div>
                     
-                    ${allianceData.endgame_analysis.strategy_conflicts.length > 0 ? `
-                        <div class="mb-3">
+                    ${((allianceData && allianceData.endgame_analysis) && (allianceData.endgame_analysis.strategy_conflicts && allianceData.endgame_analysis.strategy_conflicts.length > 0)) ? 
+                        `<div class="mb-3">
                             <strong>Conflicts:</strong>
                             <ul class="mb-0 small">
-                                ${allianceData.endgame_analysis.strategy_conflicts.map(conflict => `<li class="text-warning">${conflict}</li>`).join('')}
+                                ${(() => { const arr = ((allianceData.endgame_analysis && allianceData.endgame_analysis.strategy_conflicts) ? allianceData.endgame_analysis.strategy_conflicts : []); const seen = new Set(); return arr.filter(r=>{ const k=((r||'')+'').trim().toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; }).map(conflict => `<li class="text-warning">${conflict}</li>`).join(''); })()}
                             </ul>
                         </div>
                     ` : ''}
@@ -532,33 +611,43 @@ function displayAllianceStrategy(allianceData, color) {
                     <div class="mb-3">
                         <strong>Team Endgame Capabilities:</strong>
                         <div class="row mt-2">
-                            ${allianceData.endgame_analysis.team_capabilities.map(teamCap => `
-                                <div class="col-md-4 mb-2">
-                                    <div class="card border-light">
-                                        <div class="card-body p-2">
-                                            <h6 class="card-title mb-1">Team ${teamCap.team_number}</h6>
-                                            <div class="small">
-                                                <div><strong>Position:</strong> ${teamCap.capabilities.primary_strategy}</div>
-                                                <div><strong>Consistency:</strong> 
-                                                    <span class="badge ${teamCap.capabilities.consistency === 'Very Consistent' ? 'bg-success' : 
-                                                                        teamCap.capabilities.consistency === 'Consistent' ? 'bg-info' :
-                                                                        teamCap.capabilities.consistency === 'Somewhat Consistent' ? 'bg-warning' : 'bg-secondary'} badge-sm">
-                                                        ${teamCap.capabilities.consistency}
-                                                    </span>
+                            ${(() => {
+                                const arr = ((allianceData && allianceData.endgame_analysis && allianceData.endgame_analysis.team_capabilities) ? allianceData.endgame_analysis.team_capabilities : []);
+                                const seen = new Set();
+                                const unique = arr.filter(tc => {
+                                    const num = (tc && (tc.team_number || (tc.team && tc.team.team_number))) || null;
+                                    const id = num ? String(num) : JSON.stringify(tc);
+                                    if (seen.has(id)) return false; seen.add(id); return true;
+                                });
+                                console.log('displayAllianceStrategy endgame team_capabilities dedupe before:', arr.length, 'after:', unique.length);
+                                return unique.map(teamCap => `
+                                    <div class="col-md-4 mb-2">
+                                        <div class="card border-light">
+                                            <div class="card-body p-2">
+                                                <h6 class="card-title mb-1">Team ${teamCap.team_number || (teamCap.team && teamCap.team.team_number) || ''}</h6>
+                                                <div class="small">
+                                                    <div><strong>Position:</strong> ${teamCap.capabilities && teamCap.capabilities.primary_strategy ? teamCap.capabilities.primary_strategy : 'No Data'}</div>
+                                                    <div><strong>Consistency:</strong> 
+                                                        <span class="badge ${teamCap.capabilities && teamCap.capabilities.consistency === 'Very Consistent' ? 'bg-success' : 
+                                                                            teamCap.capabilities && teamCap.capabilities.consistency === 'Consistent' ? 'bg-info' :
+                                                                            teamCap.capabilities && teamCap.capabilities.consistency === 'Somewhat Consistent' ? 'bg-warning' : 'bg-secondary'} badge-sm">
+                                                            ${teamCap.capabilities && teamCap.capabilities.consistency ? teamCap.capabilities.consistency : 'No Data'}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            `).join('')}
+                                `).join('');
+                            })()}
                         </div>
                     </div>
                     
-                    ${allianceData.endgame_analysis.recommendations.length > 0 ? `
+                    ${((allianceData && allianceData.endgame_analysis) && (allianceData.endgame_analysis.recommendations && allianceData.endgame_analysis.recommendations.length > 0)) ? `
                         <div class="mb-0">
                             <strong>Endgame Recommendations:</strong>
                             <ul class="mb-0 small">
-                                ${allianceData.endgame_analysis.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                                ${(() => { const arr = ((allianceData.endgame_analysis && allianceData.endgame_analysis.recommendations) ? allianceData.endgame_analysis.recommendations : []); const seen = new Set(); return arr.filter(r=>{ const k=((r||'')+'').trim().toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; }).map(rec => `<li>${rec}</li>`).join(''); })()}
                             </ul>
                         </div>
                     ` : ''}
@@ -569,14 +658,25 @@ function displayAllianceStrategy(allianceData, color) {
 }
 
 function displayKeyBattles(battles) {
+    console.log('displayKeyBattles called', battles);
     const container = document.getElementById('keyBattles');
+    // Dedupe battles by title to avoid duplicate entries
+    let uniqueBattles = (battles || []).slice();
+    try {
+        const seen = new Set();
+        uniqueBattles = uniqueBattles.filter(b => {
+            const title = ((b && b.title) ? b.title : JSON.stringify(b) || '').trim().toLowerCase();
+            if (!seen.has(title)) { seen.add(title); return true; }
+            return false;
+        });
+    } catch (e) { console.warn('Failed to dedupe keyBattles', e); }
     
-    if (!battles || battles.length === 0) {
+    if (!uniqueBattles || uniqueBattles.length === 0) {
         container.innerHTML = '<p class="text-muted">No key battles identified.</p>';
         return;
     }
     
-    container.innerHTML = battles.map(battle => `
+    container.innerHTML = uniqueBattles.map(battle => `
         <div class="card mb-3">
             <div class="card-body">
                 <h6 class="card-title">${battle.title}</h6>
@@ -596,6 +696,7 @@ function displayKeyBattles(battles) {
 }
 
 function displayMatchupAnalysis(matchupData) {
+    console.log('displayMatchupAnalysis called', matchupData);
     const container = document.getElementById('matchupAnalysis');
     
     if (!matchupData || !matchupData.overall_comparison) {
@@ -605,7 +706,14 @@ function displayMatchupAnalysis(matchupData) {
     
     const overall = matchupData.overall_comparison;
     const period = matchupData.period_analysis;
-    
+
+    // Prefer predicted_outcome from the full strategy if available for consistency
+    const pred = (strategyData && strategyData.predicted_outcome) ? strategyData.predicted_outcome : null;
+    const red_val = (pred && typeof pred.red_score !== 'undefined' && pred.red_score !== null) ? Number(pred.red_score) : Number(overall.red_alliance_total || 0);
+    const blue_val = (pred && typeof pred.blue_score !== 'undefined' && pred.blue_score !== null) ? Number(pred.blue_score) : Number(overall.blue_alliance_total || 0);
+    const margin_val = (pred && typeof pred.margin !== 'undefined' && pred.margin !== null) ? Number(pred.margin) : Math.abs(red_val - blue_val);
+    const advantage = (pred && pred.predicted_winner) ? pred.predicted_winner : (overall.advantage || (red_val > blue_val ? 'red' : 'blue'));
+
     container.innerHTML = `
         <div class="row mb-4">
             <div class="col-md-6">
@@ -615,24 +723,24 @@ function displayMatchupAnalysis(matchupData) {
                         <div class="row">
                             <div class="col-6">
                                 <div class="text-center">
-                                    <h4 class="text-danger">${overall.red_alliance_total.toFixed(1)}</h4>
+                                    <h4 class="text-danger">${red_val.toFixed(1)}</h4>
                                     <p class="mb-0">Red Alliance</p>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="text-center">
-                                    <h4 class="text-primary">${overall.blue_alliance_total.toFixed(1)}</h4>
+                                    <h4 class="text-primary">${blue_val.toFixed(1)}</h4>
                                     <p class="mb-0">Blue Alliance</p>
                                 </div>
                             </div>
                         </div>
                         <div class="text-center mt-3">
                             <p class="mb-0">
-                                <span class="badge ${overall.advantage === 'red' ? 'bg-danger' : 'bg-primary'}">
-                                    ${overall.advantage === 'red' ? 'Red' : 'Blue'} Alliance Advantage
+                                <span class="badge ${advantage === 'red' ? 'bg-danger' : 'bg-primary'}">
+                                    ${advantage === 'red' ? 'Red' : 'Blue'} Alliance Advantage
                                 </span>
                             </p>
-                            <small class="text-muted">Margin: ${overall.margin.toFixed(1)} points</small>
+                            <small class="text-muted">Margin: ${margin_val.toFixed(1)} points</small>
                         </div>
                     </div>
                 </div>
@@ -675,7 +783,7 @@ function displayMatchupAnalysis(matchupData) {
             <div class="col-12">
                 <h6>Key Insights</h6>
                 <ul class="mb-0">
-                    ${matchupData.key_insights.map(insight => `<li>${insight}</li>`).join('')}
+                    ${(() => { const arr = ((matchupData && matchupData.key_insights) ? matchupData.key_insights : []); const seen = new Set(); return arr.filter(s=>{ const k=((s||'')+'').trim().toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; }).map(insight=>`<li>${insight}</li>`).join(''); })()}
                 </ul>
             </div>
         </div>
@@ -695,10 +803,7 @@ function createVisualizationCharts(graphData) {
         createPerformanceRadarChart(graphData.radar_chart_data);
     }
     
-    // Create Team Comparison Chart
-    if (graphData.team_comparison) {
-        createTeamComparisonChart(graphData.team_comparison);
-    }
+    // Team comparison chart removed; not rendering team-by-team analysis
 }
 
 function createAllianceComparisonChart(data) {
@@ -797,92 +902,7 @@ function createPerformanceRadarChart(data) {
     });
 }
 
-function createTeamComparisonChart(data) {
-    const ctx = document.getElementById('teamComparisonChart').getContext('2d');
-    
-    if (teamChart) {
-        teamChart.destroy();
-    }
-    
-    // Prepare data for stacked bar chart
-    const allTeams = [...data.red_data, ...data.blue_data];
-    const teamNumbers = [];
-    const autoData = [];
-    const teleopData = [];
-    const endgameData = [];
-    const colors = [];
-    
-    // Add red teams
-    data.red_data.forEach((team, index) => {
-        teamNumbers.push(`Team ${strategyData.red_alliance.teams[index].team.team_number}`);
-        autoData.push(team.auto);
-        teleopData.push(team.teleop);
-        endgameData.push(team.endgame);
-        colors.push('rgba(220, 53, 69, 0.7)');
-    });
-    
-    // Add blue teams
-    data.blue_data.forEach((team, index) => {
-        teamNumbers.push(`Team ${strategyData.blue_alliance.teams[index].team.team_number}`);
-        autoData.push(team.auto);
-        teleopData.push(team.teleop);
-        endgameData.push(team.endgame);
-        colors.push('rgba(13, 110, 253, 0.7)');
-    });
-    
-    teamChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: teamNumbers,
-            datasets: [{
-                label: 'Auto Points',
-                data: autoData,
-                backgroundColor: 'rgba(255, 193, 7, 0.7)',
-                borderColor: 'rgba(255, 193, 7, 1)',
-                borderWidth: 1
-            }, {
-                label: 'Teleop Points',
-                data: teleopData,
-                backgroundColor: 'rgba(40, 167, 69, 0.7)',
-                borderColor: 'rgba(40, 167, 69, 1)',
-                borderWidth: 1
-            }, {
-                label: 'Endgame Points',
-                data: endgameData,
-                backgroundColor: 'rgba(108, 117, 125, 0.7)',
-                borderColor: 'rgba(108, 117, 125, 1)',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    stacked: true,
-                    title: {
-                        display: true,
-                        text: 'Teams'
-                    }
-                },
-                y: {
-                    stacked: true,
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Points'
-                    }
-                }
-            },
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Team Performance Breakdown'
-                }
-            }
-        }
-    });
-}
+// Team-by-Team chart removed per user request
 
 function printStrategyReport() {
     window.print();
@@ -1006,7 +1026,36 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     {% endif %}
 
+    // Defensive: Attach a click handler for analyze button in case inline attribute isn't executed
+    try {
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        if (analyzeBtn) {
+            analyzeBtn.addEventListener('click', function(e) {
+                try {
+                    // Avoid double-invocation when disabled
+                    if (analyzeBtn.disabled) return;
+                    analyzeSelectedMatch();
+                } catch (err) { console.warn('analyzeBtn event handler error', err); }
+            });
+        }
+
+        // Ensure match selection enables/disables the analyze button and attach resilient listeners
+        const matchSelect = document.getElementById('match_id');
+        if (matchSelect) {
+            // On load, reflect current selection into the analyze button state
+            try {
+                if (analyzeBtn) analyzeBtn.disabled = !matchSelect.value;
+                if (matchSelect.value) loadMatchStrategy(matchSelect.value);
+            } catch (e) { /* ignore */ }
+
+            // Prefer programmatic listeners instead of relying solely on inline attributes
+            matchSelect.addEventListener('change', function(e) { loadMatchStrategy(e.target.value); });
+            matchSelect.addEventListener('input', function(e) { loadMatchStrategy(e.target.value); });
+        }
+    } catch (e) { console.warn('Failed to initialize analyze button or match select listeners', e); }
+
     // Any additional initialization code here
+    console.log('Matches strategy page script initialized');
 });
 </script>
 

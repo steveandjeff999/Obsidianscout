@@ -15,6 +15,7 @@
                             <label class="form-label">Profile Picture</label><br>
                             <img src="{{ url_for('static', filename=user.profile_picture or 'img/avatars/default.png') }}" class="rounded-circle mb-2 img-fit-cover" alt="Profile Picture" width="96" height="96">
                             <form method="POST" enctype="multipart/form-data" class="mt-2">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input class="form-control" type="file" name="profile_picture" accept="image/*">
                                 {% if modern_ui %}
                                     {{ ui_button.button('Upload New Picture', variant='primary', size='sm') }}
@@ -25,6 +26,7 @@
                             </form>
                         </div>
                         <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="mb-3">
                             <label for="username" class="form-label fw-bold">Username:</label>
                             <input class="form-control" type="text" id="username" name="username" value="{{ user.username }}">

@@ -253,6 +253,10 @@
 </div>
 
 <script>
+function getCsrfToken() {
+    return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+}
+
 function showLoading() {
     $('#loadingModal').modal('show');
 }
@@ -310,6 +314,7 @@ function optimizeDatabase() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
         }
     })
     .then(response => response.json())
@@ -338,6 +343,7 @@ function enableWalMode() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
         }
     })
     .then(response => response.json())
@@ -364,6 +370,7 @@ function testConcurrentOps() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
         }
     })
     .then(response => response.json())
@@ -450,6 +457,7 @@ function clearDatabase() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
         }
     })
     .then(response => response.json())
@@ -490,6 +498,9 @@ document.getElementById('importForm').addEventListener('submit', function(e) {
     
     fetch('{{ url_for("db_admin.import_database") }}', {
         method: 'POST',
+        headers: {
+            'X-CSRFToken': getCsrfToken()
+        },
         body: formData
     })
     .then(response => response.json())

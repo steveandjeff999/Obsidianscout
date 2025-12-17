@@ -1614,6 +1614,32 @@ def _identify_key_battles(red_alliance_data, blue_alliance_data, game_config):
     
     if not red_alliance_data or not blue_alliance_data:
         return battles
+
+    # Deduplicate input alliance lists to avoid duplicates from upstream
+    try:
+        def _dedupe_team_list(list_in):
+            seen = set()
+            unique = []
+            for td in list_in:
+                try:
+                    tn = None
+                    if td.get('team') is not None:
+                        tn = getattr(td['team'], 'team_number', None) if not isinstance(td['team'], dict) else td['team'].get('team_number')
+                    if tn is None:
+                        tn = td.get('team_number') or td.get('number')
+                except Exception:
+                    tn = None
+                if tn is None:
+                    unique.append(td)
+                elif tn not in seen:
+                    seen.add(tn)
+                    unique.append(td)
+            return unique
+        red_alliance_data = _dedupe_team_list(red_alliance_data)
+        blue_alliance_data = _dedupe_team_list(blue_alliance_data)
+    except Exception:
+        # ignore and fall back to provided lists
+        pass
     
     # Find top scorers from each alliance
     red_top_scorer = max(red_alliance_data, 
@@ -1954,8 +1980,32 @@ def _analyze_alliance_endgame_coordination(alliance_data, game_config):
             'recommendations': []
         }
     
+    # Deduplicate alliance_data by team number to avoid duplicates from upstream sources
+    try:
+        seen = set()
+        unique_alliance_data = []
+        for team_data in alliance_data:
+            try:
+                tn = None
+                if team_data.get('team') is not None:
+                    tn = getattr(team_data['team'], 'team_number', None) if not isinstance(team_data['team'], dict) else team_data['team'].get('team_number')
+                if tn is None:
+                    tn = team_data.get('team_number') or team_data.get('number')
+            except Exception:
+                tn = None
+            if tn is None:
+                unique_alliance_data.append(team_data)
+            elif tn not in seen:
+                seen.add(tn)
+                unique_alliance_data.append(team_data)
+        # fall back if something went wrong
+        if not unique_alliance_data:
+            unique_alliance_data = alliance_data
+    except Exception:
+        unique_alliance_data = alliance_data
+
     endgame_capabilities = []
-    for team_data in alliance_data:
+    for team_data in unique_alliance_data:
         capabilities = _get_team_endgame_capabilities(team_data, game_config)
         endgame_capabilities.append({
             'team_number': team_data['team'].team_number,

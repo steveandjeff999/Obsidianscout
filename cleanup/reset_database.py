@@ -9,7 +9,7 @@ import os
 import sys
 from app import create_app, db
 from app.utils.database_init import initialize_database
-from app.models import User, Team, Event, Match, ScoutingData, AllianceSelection, DoNotPickEntry, AvoidEntry, PitScoutingData
+from app.models import User, Team, Event, Match, ScoutingData, AllianceSelection, DoNotPickEntry, AvoidEntry, PitScoutingData, StrategyDrawing, AllianceSharedScoutingData, StrategyShare
 from flask_login import current_user
 from app.utils.team_isolation import get_current_scouting_team_number
 
@@ -64,6 +64,8 @@ def reset_database_for_team():
         # Delete scouting data for this team
         scouting_data_count = ScoutingData.query.filter_by(scouting_team_number=scouting_team_number).count()
         ScoutingData.query.filter_by(scouting_team_number=scouting_team_number).delete()
+        # Delete alliance-shared copies created by this team
+        AllianceSharedScoutingData.query.filter_by(source_scouting_team_number=scouting_team_number).delete()
         print(f"Deleted {scouting_data_count} scouting data entries for team {scouting_team_number}")
         
         # Delete pit scouting data for this team
@@ -87,6 +89,10 @@ def reset_database_for_team():
         print(f"Deleted {avoid_count} avoid entries for team {scouting_team_number}")
         
         # Delete matches for this team
+        # Remove alliance-shared scouting entries referencing these matches first to avoid FK errors
+        AllianceSharedScoutingData.query.filter(AllianceSharedScoutingData.match.has(Match.scouting_team_number == scouting_team_number)).delete()
+        # Remove strategy shares referencing these matches
+        StrategyShare.query.filter(StrategyShare.match.has(Match.scouting_team_number == scouting_team_number)).delete()
         match_count = Match.query.filter_by(scouting_team_number=scouting_team_number).count()
         Match.query.filter_by(scouting_team_number=scouting_team_number).delete()
         print(f"Deleted {match_count} matches for team {scouting_team_number}")
@@ -96,9 +102,31 @@ def reset_database_for_team():
         Event.query.filter_by(scouting_team_number=scouting_team_number).delete()
         print(f"Deleted {event_count} events for team {scouting_team_number}")
         
-        # Delete teams for this scouting team
-        team_count = Team.query.filter_by(scouting_team_number=scouting_team_number).count()
-        Team.query.filter_by(scouting_team_number=scouting_team_number).delete()
+        # Delete teams for this scouting team (delete dependent rows first)
+        teams_to_delete = Team.query.filter_by(scouting_team_number=scouting_team_number).all()
+        team_ids = [t.id for t in teams_to_delete]
+        team_count = len(team_ids)
+        if team_ids:
+            # Remove association rows in team_event linking these teams to events
+            try:
+                db.session.execute(team_event.delete().where(team_event.c.team_id.in_(team_ids)))
+            except Exception:
+                pass
+            # Delete dependent rows referencing these teams
+            ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids)).delete()
+            PitScoutingData.query.filter(PitScoutingData.team_id.in_(team_ids)).delete()
+            AllianceSharedScoutingData.query.filter(AllianceSharedScoutingData.team_id.in_(team_ids)).delete()
+            AllianceSharedPitData.query.filter(AllianceSharedPitData.team_id.in_(team_ids)).delete()
+            TeamListEntry.query.filter(TeamListEntry.team_id.in_(team_ids)).delete()
+            # Nullify AllianceSelection fields that reference these teams
+            AllianceSelection.query.filter(AllianceSelection.captain.in_(team_ids)).update({AllianceSelection.captain: None})
+            AllianceSelection.query.filter(AllianceSelection.first_pick.in_(team_ids)).update({AllianceSelection.first_pick: None})
+            AllianceSelection.query.filter(AllianceSelection.second_pick.in_(team_ids)).update({AllianceSelection.second_pick: None})
+            AllianceSelection.query.filter(AllianceSelection.third_pick.in_(team_ids)).update({AllianceSelection.third_pick: None})
+            # Finally, delete teams
+            Team.query.filter(Team.id.in_(team_ids)).delete()
+        else:
+            team_count = 0
         print(f"Deleted {team_count} teams for scouting team {scouting_team_number}")
         
         # Commit all deletions

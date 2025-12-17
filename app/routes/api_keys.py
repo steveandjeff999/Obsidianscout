@@ -13,7 +13,7 @@ from app.api_models import (
 )
 from app.models import Team, Event, Match, ScoutingData
 from app import db
-from app.routes.auth import admin_required
+from app.routes.auth import admin_required, validate_csrf_token
 
 bp = Blueprint('api_keys', __name__, url_prefix='/api/keys')
 
@@ -63,6 +63,8 @@ def list_api_keys():
 @admin_required
 def create_new_api_key():
     """Create a new API key for the current user's team"""
+    if not validate_csrf_token():
+        return jsonify({'error': 'CSRF validation failed'}), 400
     try:
         data = request.get_json()
         
@@ -164,6 +166,8 @@ def get_api_key_details(api_key_id):
 @admin_required
 def update_api_key(api_key_id):
     """Update an existing API key"""
+    if not validate_csrf_token():
+        return jsonify({'error': 'CSRF validation failed'}), 400
     try:
         team_number = current_user.scouting_team_number
         if not team_number:
@@ -226,6 +230,8 @@ def update_api_key(api_key_id):
 @admin_required
 def delete_api_key(api_key_id):
     """Deactivate (soft delete) an API key"""
+    if not validate_csrf_token():
+        return jsonify({'error': 'CSRF validation failed'}), 400
     try:
         team_number = current_user.scouting_team_number
         if not team_number:
@@ -349,6 +355,8 @@ def test_api_key_system():
 @admin_required
 def reactivate_key(api_key_id):
     """Reactivate a previously deactivated API key"""
+    if not validate_csrf_token():
+        return jsonify({'error': 'CSRF validation failed'}), 400
     try:
         team_number = current_user.scouting_team_number
         if not team_number:

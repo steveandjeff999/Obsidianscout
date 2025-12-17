@@ -43,9 +43,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Also try to persist dismissal server-side for logged-in users (best-effort)
     try {
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
       fetch('/auth/notifications/dismiss', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+        headers: {
+            'Content-Type': 'application/json', 
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': csrfToken
+        },
         credentials: 'same-origin',
         body: JSON.stringify({notif_id: id})
       }).catch(()=>{});
