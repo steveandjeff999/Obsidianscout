@@ -656,6 +656,10 @@ def create_app(test_config=None):
             }
         },
         UPLOAD_FOLDER=os.path.join(app.instance_path, 'uploads'),
+        # Security: enforce secure session cookies
+        SESSION_COOKIE_SECURE=True,
+        SESSION_COOKIE_HTTPONLY=True,
+        REMEMBER_COOKIE_SECURE=True,
         # Browser AI settings (defaults to None to use fallback)
         BROWSER_AI_API_KEY=None,
         BROWSER_AI_ENDPOINT="https://api.browserai.co/v1/chat/completions"
