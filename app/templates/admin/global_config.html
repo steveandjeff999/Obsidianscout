@@ -96,6 +96,7 @@
                         have been manually edited or when troubleshooting sync issues.
                     </p>
                     <form method="POST" onsubmit="return confirm('This will reload configuration on ALL connected devices. Continue?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="reload_all">
                         <button type="submit" class="btn btn-warning">
                             <i class="fas fa-sync me-2"></i>Reload All Configurations
@@ -110,6 +111,7 @@
                         Send a custom notification message to all connected users. This will appear as a config update notification.
                     </p>
                     <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="broadcast_message">
                         <div class="mb-3">
                             <label for="message" class="form-label">Message</label>

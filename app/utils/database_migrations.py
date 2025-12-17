@@ -48,6 +48,7 @@ MIGRATIONS = [
     # -------------------------------------------------------------------------
     ('match', 'scheduled_time', 'DATETIME', None),
     ('match', 'predicted_time', 'DATETIME', None),
+    ('match', 'actual_time', 'DATETIME', None),
     ('match', 'winner', 'VARCHAR(10)', None),
     ('match', 'scouting_team_number', 'INTEGER', None),
     

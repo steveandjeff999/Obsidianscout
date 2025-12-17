@@ -237,7 +237,7 @@ class Event(db.Model):
     year = db.Column(db.Integer, nullable=False)
     scouting_team_number = db.Column(db.Integer, nullable=True)
     schedule_offset = db.Column(db.Integer, nullable=True)  # Current schedule offset in minutes (positive = behind, negative = ahead)
-    matches = db.relationship('Match', backref='event', lazy=True)
+    matches = db.relationship('Match', backref='event', lazy=True, cascade='all, delete-orphan')
     
     def __repr__(self):
         return f"Event: {self.name} ({self.year})"
@@ -264,8 +264,9 @@ class Match(ConcurrentModelMixin, db.Model):
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     scheduled_time = db.Column(db.DateTime, nullable=True, index=True)  # Scheduled match start time from API (stored in UTC)
     predicted_time = db.Column(db.DateTime, nullable=True)  # Predicted start time from TBA (stored in UTC)
+    actual_time = db.Column(db.DateTime, nullable=True)  # When the match actually started (UTC)
     scouting_team_number = db.Column(db.Integer, nullable=True)
-    scouting_data = db.relationship('ScoutingData', backref='match', lazy=True)
+    scouting_data = db.relationship('ScoutingData', backref='match', lazy=True, cascade='all, delete-orphan')
     
     def __repr__(self):
         return f"Match {self.match_type} {self.match_number}"
@@ -299,7 +300,7 @@ class StrategyShare(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     revoked = db.Column(db.Boolean, default=False)
     # Relationship to match for convenient access
-    match = db.relationship('Match', backref=db.backref('strategy_shares', lazy=True))
+    match = db.relationship('Match', backref=db.backref('strategy_shares', lazy=True, cascade='all, delete-orphan'))
 
     def __repr__(self):
         return f'<StrategyShare match={self.match_id} token={self.token[:8]}... revoked={self.revoked}>'
@@ -1111,7 +1112,7 @@ class StrategyDrawing(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     background_image = db.Column(db.String(256), nullable=True)  # Path or filename of custom background
 
-    match = db.relationship('Match', backref=db.backref('strategy_drawing', uselist=False))
+    match = db.relationship('Match', backref=db.backref('strategy_drawing', uselist=False, cascade='all, delete-orphan'))
 
     def __repr__(self):
         return f"<StrategyDrawing for Match {self.match_id}>"
@@ -1403,7 +1404,7 @@ class AllianceSharedScoutingData(db.Model):
     
     # Relationships
     alliance_rel = db.relationship('ScoutingAlliance', backref='shared_scouting_data')
-    match = db.relationship('Match')
+    match = db.relationship('Match', backref=db.backref('alliance_shared_scouting_data', lazy=True, cascade='all, delete-orphan'))
     team = db.relationship('Team')
     
     def __repr__(self):

@@ -3,6 +3,12 @@
 <head>
     <!-- Early theme detection: apply dark-mode class to <html> before CSS loads to prevent white flash -->
     <script>
+        // Server-side indication whether liquid glass buttons are allowed for this team.
+        // This is a small, early flag used by client scripts to decide whether to honor
+        // per-user 'liquid_glass_buttons' preference stored in localStorage.
+        window.__server_liquid_glass_allowed = {{ 'true' if liquid_glass_buttons_enabled|default(False) else 'false' }};
+    </script>
+    <script>
         (function(){
             try {
                 // Check explicit user preference stored in localStorage (string 'true' / 'false')
@@ -60,21 +66,13 @@
                     document.documentElement.classList.add('nav-theme-'+themeVal);
                     document.body.classList.add('nav-theme-'+themeVal);
                 } catch(e) { /* ignore */ }
-                // Apply UI shape early to avoid flash (values: square|rounded|pill|circle)
-                try {
-                    var storedShape = null;
-                    try { storedShape = localStorage.getItem('ui_shape'); } catch(e) { storedShape = null; }
-                    if (!storedShape) storedShape = 'rounded';
-                    document.documentElement.classList.add('ui-shape-'+storedShape);
-                    document.body.classList.add('ui-shape-'+storedShape);
-                } catch(e) { /* ignore */ }
+                // Button shape customization removed: no early UI-shape class is applied
                 // Accent color is removed from per-user settings; rely on theme defaults.
 
                     var br = null; try { br = localStorage.getItem('border_radius'); } catch(e) { br = null; }
                     if (br) { try { document.documentElement.style.setProperty('--border-radius', br+'px'); document.body.style.setProperty('--border-radius', br+'px'); try{ document.documentElement.style.setProperty('--card-radius', Math.max(parseInt(br,10),4) + 'px'); document.body.style.setProperty('--card-radius', Math.max(parseInt(br,10),4) + 'px'); document.documentElement.style.setProperty('--control-radius', Math.max(parseInt(br,10) - 4,4) + 'px'); document.body.style.setProperty('--control-radius', Math.max(parseInt(br,10) - 4,4) + 'px'); }catch(e){} } catch(e) {} }
 
-                    var btn = null; try { btn = localStorage.getItem('btn_size'); } catch(e) { btn = null; }
-                    if (btn) { try { document.documentElement.classList.add('btn-size-'+btn); document.body.classList.add('btn-size-'+btn); } catch(e) {} }
+                    /* Button size customization removed: no early btn-size class applied */
 
                     var elev = null; try { elev = localStorage.getItem('card_elevation'); } catch(e) { elev = null; }
                     if (elev) { try { document.documentElement.classList.add('card-elevation-'+elev); document.body.classList.add('card-elevation-'+elev); } catch(e) {} }
@@ -92,6 +90,32 @@
                             document.body.classList.add('glass-off');
                         }
                     } catch(e) {}
+                
+                    // Per-user per-team "liquid glass" buttons preference.
+                    // Server controls whether this appearance feature is allowed for the team.
+                    // - If the server has enabled the feature for the team, the server's
+                    //   default will be used unless the user has an explicit local preference.
+                    // - If the server has disabled the feature, user preferences are ignored.
+                    // Expose a small helper value (set via Jinja below) so this early script
+                    // can decide the initial state and avoid visual flashes.
+                    try {
+                        var serverAllowsLiquid = (typeof window.__server_liquid_glass_allowed !== 'undefined') ? (window.__server_liquid_glass_allowed === true || window.__server_liquid_glass_allowed === 'true') : false;
+                        var storedLiquid = null;
+                        try { storedLiquid = localStorage.getItem('liquid_glass_buttons'); } catch(e) { storedLiquid = null; }
+
+                        // Honor explicit per-user preference when present; otherwise fall back to server default.
+                        if (storedLiquid === 'true') {
+                            try { document.documentElement.classList.add('liquid-glass-buttons'); document.body.classList.add('liquid-glass-buttons'); } catch(e) {}
+                        } else if (storedLiquid === 'false') {
+                            try { document.documentElement.classList.remove('liquid-glass-buttons'); document.body.classList.remove('liquid-glass-buttons'); } catch(e) {}
+                        } else {
+                            // No per-user pref: fall back to server allowance/template default.
+                            if (!serverAllowsLiquid) {
+                                try { document.documentElement.classList.remove('liquid-glass-buttons'); document.body.classList.remove('liquid-glass-buttons'); } catch(e) {}
+                            }
+                            // else leave server default as rendered by template
+                        }
+                    } catch(e) { /* non-fatal */ }
                 } catch(e) {}
             } catch (e) { /* silently ignore */ }
         })();
@@ -183,6 +207,7 @@
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
+    <meta name="csrf-token" content="{{ csrf_token() if csrf_token else '' }}">
     <title>{% block title %}ObsidianScout{% endblock %}</title>
     
     {% if game_config %}
@@ -221,7 +246,7 @@
     <!-- Modern dark theme additions (more refined surfaces, softened shadows, updated accents) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-theme-modern.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/glass-theme.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/ui-rounded.css') }}">
+    <!-- Button shape customization removed: ui-rounded styles no longer included -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-fixes.css') }}">
     <!-- Use UMD build of Chart.js for compatibility with non-module script loading -->
     <script src="{{ url_for('static', filename='js/vendor/chart.umd.min.js') }}"></script>
@@ -1431,6 +1456,35 @@
             lastWasDesktop = nowDesktop;
         });
 
+        // Safety: Ensure the sidebar remains scrollable on desktop. In some
+        // edge cases (for example after an overlay was added on mobile or if
+        // an exception prevented cleanup) the global overflow style can be
+        // left set to 'hidden', which hides scrollbars and prevents reaching
+        // footer controls. Clear any stale overflow and remove leftover
+        // mobile overlay when on desktop viewports.
+        (function ensureSidebarScrollOnDesktop(){
+            function ensure(){
+                try {
+                    if (window.innerWidth >= 992) {
+                        // Remove any accidental global overflow that prevents page or
+                        // sidebar scrolling.
+                        if (document.documentElement.style.overflow === 'hidden' || document.body.style.overflow === 'hidden'){
+                            document.documentElement.style.overflow = '';
+                            document.body.style.overflow = '';
+                        }
+                        // Remove the mobile backdrop overlay if it was left behind
+                        var overlay = document.getElementById('sidebarBackdropOverlay');
+                        if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                        // Ensure sidebar has native scrolling enabled
+                        var sb = document.getElementById('appSidebar');
+                        if (sb) sb.style.overflowY = 'auto';
+                    }
+                } catch(e){ /* non-fatal */ }
+            }
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ensure); else ensure();
+            window.addEventListener('resize', function(){ try{ ensure(); } catch(e){} });
+        })();
+
         // Avoid repositioning fixed dropdowns while page scrolls; only reposition if user opens a dropdown or resizes
         let lastScrollY = window.scrollY;
         window.addEventListener('scroll', function() {
@@ -1911,6 +1965,29 @@
                 if (localStorage.getItem('darkMode') === null) {
                     applyState(e.matches);
                 }
+            });
+
+            // Keep liquid glass per-user preference in sync across tabs
+            window.addEventListener('storage', function(e){
+                try {
+                    if (e.key !== 'liquid_glass_buttons') return;
+                    if (e.newValue === 'true') {
+                        document.documentElement.classList.add('liquid-glass-buttons');
+                        document.body.classList.add('liquid-glass-buttons');
+                        return;
+                    }
+                    if (e.newValue === 'false') {
+                        document.documentElement.classList.remove('liquid-glass-buttons');
+                        document.body.classList.remove('liquid-glass-buttons');
+                        return;
+                    }
+                    // e.newValue === null (preference removed): fall back to server default
+                    var serverAllowsFallback = (window.__server_liquid_glass_allowed === true || window.__server_liquid_glass_allowed === 'true');
+                    if (!serverAllowsFallback) {
+                        document.documentElement.classList.remove('liquid-glass-buttons');
+                        document.body.classList.remove('liquid-glass-buttons');
+                    }
+                } catch (err) { /* ignore storage sync errors */ }
             });
             
             // Initialize toasts

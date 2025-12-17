@@ -13,7 +13,7 @@ import os
 BASE_URL = os.environ.get('OBSIDIAN_BASE_URL', 'https://localhost:8080')
 API_BASE = f"{BASE_URL}/api/mobile"
 # Use admin user which has scouting_team_number = 5454 and has actual data
-TEST_USERNAME = os.environ.get('OBSIDIAN_TEST_USERNAME', 'admin')
+TEST_USERNAME = os.environ.get('OBSIDIAN_TEST_USERNAME', 'Seth Herod')
 TEST_PASSWORD = os.environ.get('OBSIDIAN_TEST_PASSWORD', '5454')
 TEST_TEAM_NUMBER = int(os.environ.get('OBSIDIAN_TEST_TEAM', '5454'))
 

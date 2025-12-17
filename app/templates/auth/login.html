@@ -37,6 +37,7 @@
             {% endwith %}
 
             <form method="POST" novalidate class="needs-validation" id="loginForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-3">
                     <label for="username" class="form-label visually-hidden">Username</label>
                     <div class="input-group">

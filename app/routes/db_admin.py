@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 import json
 import os
 import logging
+from sqlalchemy import inspect
 import os
 import json
 from datetime import datetime
@@ -325,6 +326,14 @@ def import_database():
                         logger.warning(f"No engine found for bind {bind_key}, skipping")
                         continue
 
+                    # Validate table names
+                    try:
+                        inspector = inspect(engine)
+                        valid_tables = set(inspector.get_table_names())
+                    except Exception as e:
+                        logger.warning(f"Could not inspect tables for bind {bind_key}: {e}")
+                        continue
+
                     with engine.begin() as conn:
                         try:
                             conn.execute(db.text('PRAGMA foreign_keys = OFF'))
@@ -333,6 +342,9 @@ def import_database():
 
                         # Delete existing rows for the listed tables (order doesn't matter with FK off)
                         for table_name, rows in tables.items():
+                            if table_name not in valid_tables:
+                                logger.warning(f"Skipping invalid table {table_name} on bind {bind_key}")
+                                continue
                             try:
                                 conn.execute(db.text(f'DELETE FROM "{table_name}"'))
                             except Exception as e:
@@ -340,19 +352,33 @@ def import_database():
 
                         # Insert rows
                         for table_name, rows in tables.items():
+                            if table_name not in valid_tables:
+                                continue
                             if not rows:
                                 continue
                             try:
-                                # Determine columns from first row
+                                # Determine columns from first row and validate against schema
+                                try:
+                                    valid_columns = {c['name'] for c in inspector.get_columns(table_name)}
+                                except Exception:
+                                    logger.warning(f"Could not inspect columns for table {table_name}")
+                                    continue
+
                                 cols = list(rows[0].keys())
-                                cols_quoted = ','.join([f'"{c}"' for c in cols])
-                                placeholders = ','.join([f':{c}' for c in cols])
+                                safe_cols = [c for c in cols if c in valid_columns]
+                                
+                                if not safe_cols:
+                                    continue
+
+                                cols_quoted = ','.join([f'"{c}"' for c in safe_cols])
+                                placeholders = ','.join([f':{c}' for c in safe_cols])
                                 insert_sql = db.text(f'INSERT INTO "{table_name}" ({cols_quoted}) VALUES ({placeholders})')
                                 for r in rows:
                                     try:
                                         # Convert any non-serializable types minimally (e.g., bytes)
                                         params = {}
-                                        for k, v in r.items():
+                                        for k in safe_cols:
+                                            v = r.get(k)
                                             if isinstance(v, bytes):
                                                 params[k] = v.decode('utf-8', errors='ignore')
                                             else:

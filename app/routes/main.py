@@ -21,6 +21,7 @@ from app.utils.team_isolation import (
 )
 from app.utils.team_isolation import get_combined_dropdown_events
 from app.utils.alliance_data import get_active_alliance_id, get_all_scouting_data, get_all_teams_for_alliance, get_all_matches_for_alliance
+from app.utils.score_utils import match_sort_key
 
 connected_devices = {}
 
@@ -106,7 +107,9 @@ def index():
         else:
             matches_query = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id)
             # filter_matches_by_scouting_team() already handles alliance mode and team isolation
-            matches = matches_query.order_by(Match.match_type, Match.match_number).all()
+            matches = matches_query.all()
+        # Use proper match sorting (handles X-Y playoff format)
+        matches = sorted(matches, key=match_sort_key)
     else:
         matches = []  # No matches if no current event is set
     

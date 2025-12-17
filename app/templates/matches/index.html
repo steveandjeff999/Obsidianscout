@@ -72,9 +72,8 @@
                     <div class="col-12">
                         <label class="form-label mb-1 mt-2">Event</label>
                         <select name="event_id" class="form-select">
-                            <option value="">All Events</option>
                             {% for event in events|dedupe_events %}
-                            <option value="{{ event.id }}" data-event-code="{{ event.code|upper if event.code else '' }}" {% if request.args.get('event_id') and request.args.get('event_id')|int == event.id %}selected{% endif %}>{{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}</option>
+                            <option value="{{ event.id }}" data-event-code="{{ event.code|upper if event.code else '' }}" {% if (request.args.get('event_id') and request.args.get('event_id')|int == event.id) or (not request.args.get('event_id') and selected_event and selected_event.id == event.id) %}selected{% endif %}>{{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -135,24 +134,48 @@
                                     {# Consider a match 'played' ONLY if it has valid scores (not None and >= 0) #}
                                     {# Check if scores are available from display_scores dictionary #}
                                     {% set ds = display_scores.get(match.id) if display_scores is defined else None %}
-                                    {% set has_played = ds and ds.red_score is not none and ds.red_score >= 0 and ds.blue_score is not none and ds.blue_score >= 0 %}
+                                    {% set has_played = (ds and ds.red_score is not none and ds.red_score >= 0 and ds.blue_score is not none and ds.blue_score >= 0) or (match.actual_time is not none) %}
                                     {% if has_played %}
-                                        {# Pick a time to display: prefer scheduled_time, then predicted_time #}
-                                        {% set display_time = match.scheduled_time or match.predicted_time %}
-                                            {% if display_time %}
+                                        {# Display both scheduled and actual (played) times where available #}
+                                        {% set sched_dt = match.scheduled_time %}
+                                        {% set actual_dt = match.actual_time %}
+                                        {% if sched_dt %}
+                                            {% if match.event and match.event.timezone %}
+                                                <div class="text-nowrap"><small class="text-muted">Scheduled: {{ sched_dt | format_time_tz(match.event.timezone, '%I:%M %p') }}</small></div>
+                                            {% else %}
+                                                <div class="text-nowrap"><small class="text-muted">Scheduled: {{ sched_dt | format_time_tz(None, '%I:%M %p') }}</small></div>
+                                            {% endif %}
+                                        {% endif %}
+                                        {% if actual_dt %}
                                             {% if match.event and match.event.timezone %}
                                                 <div class="text-nowrap">
-                                                    <span class="text-success fw-bold">Played at {{ display_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
-                                                    <br><small class="text-muted">{{ display_time | format_time_tz(match.event.timezone, '%Y-%m-%d %I:%M %p %Z') }}</small>
+                                                    <span class="text-success fw-bold">Played at {{ actual_dt | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
+                                                    <br><small class="text-muted">{{ actual_dt | format_time_tz(match.event.timezone, '%Y-%m-%d %I:%M %p %Z') }}</small>
                                                 </div>
                                             {% else %}
                                                 <div class="text-nowrap">
-                                                    <span class="text-success fw-bold">Played at {{ display_time | format_time_tz(None, '%I:%M %p') }}</span>
-                                                    <br><small class="text-muted">{{ display_time | format_time_tz(None, '%Y-%m-%d %I:%M %p') }}</small>
+                                                    <span class="text-success fw-bold">Played at {{ actual_dt | format_time_tz(None, '%I:%M %p') }}</span>
+                                                    <br><small class="text-muted">{{ actual_dt | format_time_tz(None, '%Y-%m-%d %I:%M %p') }}</small>
                                                 </div>
                                             {% endif %}
                                         {% else %}
-                                            <span class="text-muted">Played</span>
+                                            {# No actual time recorded; fallback to display_time for compatibility #}
+                                            {% set display_time = match.scheduled_time or match.predicted_time %}
+                                            {% if display_time %}
+                                                {% if match.event and match.event.timezone %}
+                                                    <div class="text-nowrap">
+                                                        <span class="text-success fw-bold">Played at {{ display_time | format_time_tz(match.event.timezone, '%I:%M %p') }}</span>
+                                                        <br><small class="text-muted">{{ display_time | format_time_tz(match.event.timezone, '%Y-%m-%d %I:%M %p %Z') }}</small>
+                                                    </div>
+                                                {% else %}
+                                                    <div class="text-nowrap">
+                                                        <span class="text-success fw-bold">Played at {{ display_time | format_time_tz(None, '%I:%M %p') }}</span>
+                                                        <br><small class="text-muted">{{ display_time | format_time_tz(None, '%Y-%m-%d %I:%M %p') }}</small>
+                                                    </div>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="text-muted">Played</span>
+                                            {% endif %}
                                         {% endif %}
                                     {% elif match.scheduled_time and match.predicted_time %}
                                         {# Show both scheduled and adjusted time when schedule offset exists #}

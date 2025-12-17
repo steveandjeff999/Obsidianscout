@@ -60,6 +60,7 @@
 
                 <!-- Role Selection Form -->
                 <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-4">
                         <p>Welcome, {{ current_user.username }}! Please select a role to continue.</p>
                         {% for role in roles %}

@@ -340,7 +340,7 @@
                                         <span class="visually-hidden">Loading...</span>
                                     </div>
                                 </button>
-                                <button type="button" class="btn btn-success btn-lg px-4 {% if not plots %}d-none{% endif %}" data-bs-toggle="modal" data-bs-target="#shareModal" id="share-graphs-btn">
+                                <button type="button" class="btn btn-success btn-lg px-4 d-none share-when-ready" data-bs-toggle="modal" data-bs-target="#shareModal" id="share-graphs-btn" data-share-scope="graphs">
                                     <i class="fas fa-share-alt me-2"></i>
                                     <span class="d-none d-sm-inline">Share </span>Graphs
                                 </button>
@@ -720,6 +720,14 @@
         }
         
         waitForPlotly();
+
+        // Hide share buttons immediately when user attempts to regenerate graphs
+        document.getElementById('generate-graphs-btn')?.addEventListener('click', function() {
+            try { if (typeof window.hideShareReadyButtons === 'function') window.hideShareReadyButtons('graphs'); } catch (e) {}
+            // show inline spinner if present
+            const spinner = document.getElementById('loading-spinner');
+            if (spinner) spinner.classList.remove('d-none');
+        });
     });
     
     // ======== REAL-TIME CONFIG UPDATE LISTENERS ========

@@ -617,6 +617,10 @@ def upload_file():
         # Create full destination path
         dest_path = os.path.join(dest_dir, file_path)
         
+        # Security check - ensure path is within allowed directory
+        if not os.path.commonpath([os.path.abspath(dest_path), os.path.abspath(dest_dir)]) == os.path.abspath(dest_dir):
+            return jsonify({'error': 'Invalid file path'}), 400
+        
         # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         
@@ -689,7 +693,7 @@ def download_file():
             return jsonify({'error': 'File not found'}), 404
         
         # Security check - ensure path is within allowed directory
-        if not os.path.commonpath([source_path, source_dir]) == source_dir:
+        if not os.path.commonpath([os.path.abspath(source_path), os.path.abspath(source_dir)]) == os.path.abspath(source_dir):
             return jsonify({'error': 'Invalid file path'}), 400
         
         return send_file(source_path, as_attachment=True, 
@@ -740,7 +744,7 @@ def delete_file():
         target_path = os.path.join(target_dir, file_path)
         
         # Security check - ensure path is within allowed directory
-        if not os.path.commonpath([target_path, target_dir]) == target_dir:
+        if not os.path.commonpath([os.path.abspath(target_path), os.path.abspath(target_dir)]) == os.path.abspath(target_dir):
             return jsonify({'error': 'Invalid file path'}), 400
         
         if not os.path.exists(target_path):

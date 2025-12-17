@@ -50,6 +50,25 @@ app = create_app()
 # Setup auth redirect handler
 @app.before_request
 def check_first_run():
+    # Log basic request info so we can debug API vs app origins of failures
+    try:
+        remote = request.remote_addr or request.environ.get('REMOTE_ADDR')
+        auth = request.headers.get('Authorization')
+        content_type = request.headers.get('Content-Type')
+        q = request.query_string.decode('utf-8') if request.query_string else ''
+        print(f"Incoming request from {remote}: {request.method} {request.path}?{q} Authorization={'present' if auth else 'none'} Content-Type={content_type}")
+        # For methods that often carry payloads, show a small preview (avoid huge dumps)
+        if request.method in ('POST', 'PUT', 'PATCH'):
+            try:
+                body = request.get_data(as_text=True)
+                if body:
+                    preview = body[:1000]
+                    print(f"  Body preview: {preview}")
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"  Failed to log incoming request: {e}")
+
     # Check for restart trigger file (Flask reload mechanism)
     restart_trigger = os.path.join(os.path.dirname(__file__), '.flask_restart_trigger')
     if os.path.exists(restart_trigger):
@@ -88,6 +107,18 @@ def handle_integrity_error(error):
 def handle_operational_error(error):
     flash(f"Database error: {str(error)}", 'error')
     return redirect(url_for('main.index'))
+
+
+@app.after_request
+def log_response(response):
+    # Log response status to terminal for debugging origin of 401/other errors
+    try:
+        remote = request.remote_addr or request.environ.get('REMOTE_ADDR')
+        # Use response.status for human readable status
+        print(f"Outgoing response to {remote}: {request.method} {request.path} -> {response.status}")
+    except Exception:
+        pass
+    return response
 
 if __name__ == '__main__':
     # Determine if running in a production environment (like Render)

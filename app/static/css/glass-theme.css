@@ -1,15 +1,15 @@
 /* Glass Theme - modern glassmorphism and rounded UI overrides */
 :root {
-    --glass-border: rgba(255,255,255,0.08);
-    --glass-bg: rgba(255,255,255,0.78);
-    --glass-bg-dark: rgba(22,22,24,0.70);
+    --glass-border: rgba(255,255,255,0.06);
+    --glass-bg: rgba(255,255,255,0.55);
+    --glass-bg-dark: rgba(22,22,24,0.50);
     --accent-1: #4e73df; /* primary accent */
     --accent-2: #764ba2; /* secondary gradient */
     --muted-text: rgba(0,0,0,0.6);
     --card-radius: 14px;
     --control-radius: 10px;
     --control-padding: 10px 14px;
-    --soft-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    --soft-shadow: 0 6px 20px rgba(0,0,0,0.12);
     --soft-shadow-inner: inset 0 1px 0 rgba(255,255,255,0.02);
 }
 
@@ -25,11 +25,11 @@
 .modern-layout .sidebar,
 .modern-layout .topbar {
     border-radius: var(--card-radius) !important;
-    background: linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(255,255,255,0.6) 100%); /* light glass */
-    border: 1px solid rgba(255,255,255,0.6);
+    background: linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.4) 100%); /* lighter, more transparent glass */
+    border: 1px solid rgba(255,255,255,0.14);
     box-shadow: var(--soft-shadow), var(--soft-shadow-inner);
-    -webkit-backdrop-filter: blur(8px) saturate(120%);
-    backdrop-filter: blur(8px) saturate(120%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    backdrop-filter: blur(18px) saturate(140%);
 }
 
 /* Dark-mode variants */
@@ -91,11 +91,11 @@ body.dark-mode .modern-layout .form-select {
 .modern-layout .topbar.glass,
 .modern-layout .topbar.navbar-glass,
 .modern-layout .topbar.navbar-glass .dropdown-menu {
-    background: linear-gradient(180deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.45) 100%);
-    border: 1px solid rgba(255,255,255,0.14);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-    -webkit-backdrop-filter: blur(8px) saturate(120%);
-    backdrop-filter: blur(8px) saturate(120%);
+    background: linear-gradient(180deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.25) 100%);
+    border: 1px solid rgba(255,255,255,0.10);
+    box-shadow: 0 8px 28px rgba(0,0,0,0.10);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    backdrop-filter: blur(18px) saturate(140%);
 }
 .modern-layout .brand-logo { border-radius: 10px !important; background: linear-gradient(135deg, rgba(97, 85, 145, 0.95), rgba(99, 68, 160, 0.95)); color: #fff; }
 .modern-layout .brand-text { color: #111827 !important; }
@@ -104,9 +104,9 @@ body.dark-mode .modern-layout .brand-text { color: #e6e6e6 !important; }
 /* Dark mode: topbar glass variant */
 body.dark-mode .modern-layout .topbar.glass,
 body.dark-mode .modern-layout .topbar.navbar-glass {
-    background: rgba(22,22,24,0.6) !important;
-    border: 1px solid rgba(255,255,255,0.06) !important;
-    box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important;
+    background: rgba(22,22,24,0.45) !important;
+    border: 1px solid rgba(255,255,255,0.05) !important;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.45) !important;
 }
 
 /* Sidebar: translucent, slightly narrower, rounded edges */
@@ -138,7 +138,7 @@ body.dark-mode .modern-layout .topbar.navbar-glass {
 .modern-layout input.form-control:focus, .modern-layout .form-select:focus { box-shadow: 0 6px 18px rgba(78,115,223,0.06) !important; }
 
 /* Dropdowns and menus glass */
-.modern-layout .dropdown-menu, .modern-layout .notifications-dropdown, .modern-layout .navbar-glass { border-radius: 10px; border: 1px solid rgba(0,0,0,0.04); box-shadow: 0 6px 18px rgba(0,0,0,0.12); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.modern-layout .dropdown-menu, .modern-layout .notifications-dropdown, .modern-layout .navbar-glass { border-radius: 10px; border: 1px solid rgba(0,0,0,0.02); box-shadow: 0 6px 18px rgba(0,0,0,0.08); -webkit-backdrop-filter: blur(14px) saturate(130%); backdrop-filter: blur(14px) saturate(130%); }
 
 /* Toast modern look */
 .modern-layout .toast { border-radius: 12px; overflow: hidden; }
@@ -155,7 +155,7 @@ body.dark-mode .modern-layout .topbar.navbar-glass {
 .modern-layout .card .form-control { background: rgba(255,255,255,0.02) !important; }
 
 /* Make modals feel like floating glass panels */
-.modal-backdrop.show { opacity: 0.35 !important; }
+.modal-backdrop.show { opacity: 0.25 !important; }
 .modern-layout .modal-content { border-radius: var(--card-radius, var(--border-radius, 14px)) !important; padding: 8px; }
 
 /* UI micro-interactions */

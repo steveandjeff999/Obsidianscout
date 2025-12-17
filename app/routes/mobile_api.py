@@ -1766,6 +1766,10 @@ def get_matches():
             'red_score': match.red_score,
             'blue_score': match.blue_score,
             'winner': match.winner
+            ,
+            'scheduled_time': match.scheduled_time.isoformat() if hasattr(match, 'scheduled_time') and match.scheduled_time else None,
+            'predicted_time': match.predicted_time.isoformat() if hasattr(match, 'predicted_time') and match.predicted_time else None,
+            'actual_time': getattr(match, 'actual_time', None).isoformat() if getattr(match, 'actual_time', None) else None
         } for match in matches]
         
         return jsonify({
@@ -3389,11 +3393,28 @@ def mobile_graphs_compare():
 
         graphs = {}
         if 'line' in graph_types_set:
-            graphs['line'] = {
-                'type': 'line',
-                'labels': labels_sorted,
-                'datasets': line_datasets
-            }
+            if str(data_view).lower() in ('averages', 'average', 'avg', 'mean', 'means'):
+                # Represent averages across teams as a line (x: team_number)
+                avg_labels = [str(t['team_number']) for t in teams_response]
+                avg_values = [t['value'] for t in teams_response]
+                graphs['line'] = {
+                    'type': 'line',
+                    'labels': avg_labels,
+                    'datasets': [
+                        {
+                            'label': f'Average {metric_title}',
+                            'data': avg_values,
+                            'borderColor': '#36A2EB',
+                            'backgroundColor': '#36A2EB'
+                        }
+                    ]
+                }
+            else:
+                graphs['line'] = {
+                    'type': 'line',
+                    'labels': labels_sorted,
+                    'datasets': line_datasets
+                }
         if 'bar' in graph_types_set:
             graphs['bar'] = {
                 'type': 'bar',
@@ -3417,10 +3438,27 @@ def mobile_graphs_compare():
         if histogram_requested:
             histogram_datasets = []
             all_values = []
-            for series in team_series_entries:
-                if not series['values']:
-                    continue
-                values = series['values']
+            if str(data_view).lower() in ('averages', 'average', 'avg', 'mean', 'means'):
+                # Histogram over team averages
+                avg_vals = []
+                for s in team_series_entries:
+                    vals = s['values'] or []
+                    avg_vals.append(sum(vals) / len(vals) if vals else 0)
+                if avg_vals:
+                    histogram_datasets.append({
+                        'team_number': 'averages',
+                        'team_name': 'Averages',
+                        'color': '#FFCE56',
+                        'values': avg_vals,
+                        'count': len(avg_vals),
+                        'mean': sum(avg_vals) / len(avg_vals) if avg_vals else 0
+                    })
+                    all_values.extend(avg_vals)
+            else:
+                for series in team_series_entries:
+                    if not series['values']:
+                        continue
+                    values = series['values']
                 dataset_entry = {
                     'team_number': series['team_number'],
                     'team_name': series['team_name'],
@@ -3452,10 +3490,29 @@ def mobile_graphs_compare():
 
         if 'box' in graph_types_set:
             box_datasets = []
-            for series in team_series_entries:
-                values = series['values']
-                if not values:
-                    continue
+            if str(data_view).lower() in ('averages', 'average', 'avg', 'mean', 'means'):
+                avg_vals = []
+                for s in team_series_entries:
+                    vals = s['values'] or []
+                    avg_vals.append(sum(vals) / len(vals) if vals else 0)
+                if avg_vals:
+                    box_datasets.append({
+                        'team_number': 'averages',
+                        'team_name': 'Averages',
+                        'color': '#FFCE56',
+                        'values': avg_vals,
+                        'stats': {
+                            'count': len(avg_vals),
+                            'min': min(avg_vals),
+                            'max': max(avg_vals),
+                            'median': statistics.median(avg_vals)
+                        }
+                    })
+            else:
+                for series in team_series_entries:
+                    values = series['values']
+                    if not values:
+                        continue
 
                 stats_summary = {
                     'count': len(values),
@@ -3549,6 +3606,8 @@ def mobile_graphs_image():
         metric = payload.get('metric') or 'total_points'
         metric_title = metric.replace('_', ' ').title()
         mode = (payload.get('mode') or 'match_by_match')
+        # Normalized boolean for average-mode plotting
+        is_averages_mode = str(mode).lower() in ('averages', 'average', 'avg', 'mean', 'means')
 
         token_team_number = request.mobile_team_number
 
@@ -3724,16 +3783,29 @@ def mobile_graphs_image():
                 fig.update_layout(xaxis_title='Team', yaxis_title=metric_title)
             elif graph_type in ('line', 'scatter'):
                 # line per team across matches
-                for idx, t in enumerate(teams):
-                    matches = team_data.get(t.team_number, {}).get('matches', [])
-                    x = [f"Match {m['match_number']}" for m in matches if m['match_number'] is not None]
-                    y = [m['metric_value'] for m in matches if m['match_number'] is not None]
+                if is_averages_mode:
+                    # Averages mode: compare team averages across teams as a line
+                    labels = [str(t.team_number) for t in teams]
+                    values = []
+                    for t in teams:
+                        nums = [m['metric_value'] for m in team_data.get(t.team_number, {}).get('matches', [])]
+                        avg = sum(nums) / len(nums) if nums else 0
+                        values.append(avg)
                     if graph_type == 'line':
-                        fig = fig or go.Figure()
-                        fig.add_trace(go.Scatter(x=x, y=y, mode='lines+markers', name=str(t.team_number)))
+                        fig = go.Figure(data=[go.Scatter(x=labels, y=values, mode='lines+markers')])
                     else:
-                        fig = fig or go.Figure()
-                        fig.add_trace(go.Scatter(x=x, y=y, mode='markers', name=str(t.team_number)))
+                        fig = go.Figure(data=[go.Scatter(x=labels, y=values, mode='markers')])
+                else:
+                    for idx, t in enumerate(teams):
+                        matches = team_data.get(t.team_number, {}).get('matches', [])
+                        x = [f"Match {m['match_number']}" for m in matches if m['match_number'] is not None]
+                        y = [m['metric_value'] for m in matches if m['match_number'] is not None]
+                        if graph_type == 'line':
+                            fig = fig or go.Figure()
+                            fig.add_trace(go.Scatter(x=x, y=y, mode='lines+markers', name=str(t.team_number)))
+                        else:
+                            fig = fig or go.Figure()
+                            fig.add_trace(go.Scatter(x=x, y=y, mode='markers', name=str(t.team_number)))
                 fig = fig or go.Figure()
                 fig.update_layout(xaxis_title='Match', yaxis_title=metric_title)
             elif graph_type == 'radar':
@@ -3753,21 +3825,39 @@ def mobile_graphs_image():
                     fig.add_trace(go.Scatterpolar(r=radar_metrics, theta=labels, fill='toself', name=str(t.team_number)))
             elif graph_type == 'histogram':
                 fig = go.Figure()
-                for t in teams:
-                    matches = team_data.get(t.team_number, {}).get('matches', [])
-                    values = [m['metric_value'] for m in matches if m['metric_value'] is not None]
-                    if not values:
-                        continue
-                    fig.add_trace(go.Histogram(x=values, name=str(t.team_number), opacity=0.75))
+                if is_averages_mode:
+                    # Histogram of averages across teams
+                    avg_vals = []
+                    for t in teams:
+                        nums = [m['metric_value'] for m in team_data.get(t.team_number, {}).get('matches', [])]
+                        avg_vals.append(sum(nums) / len(nums) if nums else 0)
+                    if avg_vals:
+                        fig.add_trace(go.Histogram(x=avg_vals, name='Averages', opacity=0.75))
+                else:
+                    for t in teams:
+                        matches = team_data.get(t.team_number, {}).get('matches', [])
+                        values = [m['metric_value'] for m in matches if m['metric_value'] is not None]
+                        if not values:
+                            continue
+                        fig.add_trace(go.Histogram(x=values, name=str(t.team_number), opacity=0.75))
                 fig.update_layout(barmode='overlay', xaxis_title=metric_title, yaxis_title='Frequency')
             elif graph_type == 'box':
                 fig = go.Figure()
-                for t in teams:
-                    matches = team_data.get(t.team_number, {}).get('matches', [])
-                    values = [m['metric_value'] for m in matches if m['metric_value'] is not None]
-                    if not values:
-                        continue
-                    fig.add_trace(go.Box(y=values, name=str(t.team_number), boxmean=True))
+                if is_averages_mode:
+                    # Box plot of averages across teams
+                    avg_vals = []
+                    for t in teams:
+                        nums = [m['metric_value'] for m in team_data.get(t.team_number, {}).get('matches', [])]
+                        avg_vals.append(sum(nums) / len(nums) if nums else 0)
+                    if avg_vals:
+                        fig.add_trace(go.Box(y=avg_vals, name='Averages', boxmean=True))
+                else:
+                    for t in teams:
+                        matches = team_data.get(t.team_number, {}).get('matches', [])
+                        values = [m['metric_value'] for m in matches if m['metric_value'] is not None]
+                        if not values:
+                            continue
+                        fig.add_trace(go.Box(y=values, name=str(t.team_number), boxmean=True))
                 fig.update_layout(xaxis_title='Team', yaxis_title=metric_title)
             else:
                 fig = go.Figure()

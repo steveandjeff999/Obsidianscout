@@ -10,7 +10,7 @@
         <span class="badge bg-info">{{ match.event.name }}{% if match.event and match.event.is_alliance %} (Alliance){% endif %}</span>
     </h1>
     
-    {% if match.scheduled_time or match.predicted_time %}
+    {% if match.scheduled_time or match.predicted_time or match.actual_time %}
     <div class="alert {% if match.scheduled_time and match.predicted_time and match.event.schedule_offset %}alert-warning{% else %}alert-info{% endif %} mb-4">
         <h5 class="alert-heading mb-2">
             <i class="fas fa-clock me-2"></i>Match Schedule
@@ -67,6 +67,18 @@
             {% else %}
                 <p class="mb-0">
                     <strong>Scheduled:</strong> {{ match.scheduled_time.strftime('%A, %B %d at %I:%M %p') }} UTC
+                </p>
+            {% endif %}
+            {% if match.actual_time %}
+                <hr>
+                <p class="mb-1">
+                    <strong>Played at:</strong>
+                    {{ match.actual_time | format_time_tz(match.event.timezone if match.event else None, '%A, %B %d at %I:%M %p') }}
+                </p>
+                <p class="mb-0 small text-muted">
+                    {% if match.event and match.event.timezone %}
+                        Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})
+                    {% endif %}
                 </p>
             {% endif %}
         {% elif match.predicted_time %}

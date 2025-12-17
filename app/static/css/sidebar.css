@@ -351,6 +351,14 @@ body.with-sidebar.sidebar-collapsed .sidebar .sidebar-header {
 		 and add extra bottom padding so the footer isn't clipped on devices
 		 with navigation bars / safe areas. Also ensure inner regions don't
 		 accidentally limit the scroll height. */
+
+	/* Hide topbar when the sidebar is open on mobile to maximize usable vertical space */
+	body.with-sidebar.sidebar-open .topbar { display: none !important; }
+
+	/* Allow the sidebar to use full available height for native scrolling
+	   and add extra bottom padding so the footer isn't clipped on devices
+	   with navigation bars / safe areas. Also ensure inner regions don't
+	   accidentally limit the scroll height. */
 	 /* Use a larger bottom padding to ensure controls are reachable under
 		 browsers with on-screen navigation bars. This value aims to be generous
 		 enough that the footer buttons can scroll fully into view. */

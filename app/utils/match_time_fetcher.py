@@ -167,8 +167,10 @@ def fetch_match_times_from_tba(event_code, event_timezone=None):
                     except Exception as e:
                         print(f"Error parsing predicted_time {predicted_time}: {e}")
                 
-                if scheduled or predicted:
-                    match_times[(match_type, match_num)] = (scheduled, predicted)
+                if scheduled or predicted or actual_time:
+                    # Include actual_time if present (datetime or None)
+                    # We return (scheduled, predicted, actual) tuple so callers can persist actual_time
+                    match_times[(match_type, match_num)] = (scheduled, predicted, datetime.fromtimestamp(actual_time, tz=timezone.utc) if actual_time else None)
             
             print(f" Fetched {len(matches)} match times from TBA")
         else:
@@ -260,7 +262,7 @@ def update_match_times(event_code, scouting_team_number=None):
         
         # Update from TBA times (already in UTC)
         if match_key in tba_times:
-            scheduled, predicted = tba_times[match_key]
+            scheduled, predicted, actual = tba_times[match_key]
 
             # Normalize TBA times (they are timezone-aware UTC) to naive UTC for DB
             try:
@@ -288,6 +290,19 @@ def update_match_times(event_code, scouting_team_number=None):
                 print(f"⏬ Updating Match {match.match_type}#{match.match_number} predicted_time -> {predicted_naive} (naive UTC)")
                 match.predicted_time = predicted_naive
                 updated = True
+            # Persist actual_time, if provided by TBA
+            if actual:
+                try:
+                    if actual.tzinfo is not None:
+                        actual_naive = actual.astimezone(timezone.utc).replace(tzinfo=None)
+                    else:
+                        actual_naive = actual
+                except Exception:
+                    actual_naive = actual
+                if match.actual_time != actual_naive:
+                    print(f"⏬ Updating Match {match.match_type}#{match.match_number} actual_time -> {actual_naive} (naive UTC)")
+                    match.actual_time = actual_naive
+                    updated = True
         
         if updated:
             updated_count += 1
