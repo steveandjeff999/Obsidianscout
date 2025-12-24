@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import '_help_icon.html' as help %}
 {% block title %}Manage Alliance Events - {{ alliance.alliance_name }}{% endblock %}
 
 {% block head %}
@@ -12,7 +13,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h2 class="mb-0">
-                        <i class="fas fa-calendar-alt"></i> Alliance Events
+                        <i class="fas fa-calendar-alt"></i> Alliance Events {{ help.help_icon('Manage events for this alliance. Events determine which matches and data are shared across members.', 'Alliance events') }}
                     </h2>
                     <p class="text-muted mb-0">
                         Manage events for <strong>{{ alliance.alliance_name }}</strong> - changes propagate to all alliance members
@@ -86,7 +87,7 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
-                        <i class="fas fa-list me-2"></i>Alliance Events
+                        <i class="fas fa-list me-2"></i>Alliance Events {{ help.help_icon('List of events configured for the alliance; add events to enable sharing of match and scouting data.', 'Alliance events') }}
                     </h5>
                 </div>
                 <div class="card-body">
@@ -162,7 +163,7 @@
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="fas fa-link me-2"></i>Quick Actions
+                        <i class="fas fa-link me-2"></i>Quick Actions {{ help.help_icon('Quick links to manage teams, matches, and configurations related to this alliance.', 'Quick actions') }}
                     </h5>
                 </div>
                 <div class="card-body">

@@ -156,70 +156,7 @@
                             </div>
                         </div>
                         
-                        <!-- Filters Column -->
-                        <div class="col-12 col-lg-6">
-                            {% if events %}
-                            <!-- Event Filter -->
-                            <div class="mb-3">
-                                <label for="event_id" class="form-label fw-semibold">
-                                    <i class="fas fa-calendar-alt me-2 text-info"></i>Filter by Event (Optional)
-                                </label>
-                                <select name="event_id" id="event_id" class="form-select event-select">
-                                    <option value="">All Events</option>
-                                    {% for event in events|dedupe_events %}
-                                    <option value="{{ event.id }}" data-event-code="{{ event.code|upper if event.code else '' }}">
-                                        {{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                                <div class="form-text">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    Filter teams by event. Select "All Events" to see all teams.
-                                </div>
-                            </div>
-                            {% endif %}
-                            
-                            <!-- Comparison Focus -->
-                            <div class="mb-3">
-                                <label for="comparison_focus" class="form-label fw-semibold">
-                                    <i class="fas fa-chart-line me-2 text-success"></i>Comparison Focus
-                                </label>
-                                <select name="comparison_focus" id="comparison_focus" class="form-select">
-                                    <option value="overall"> Overall Performance</option>
-                                    <option value="autonomous"> Autonomous Period</option>
-                                    <option value="teleop"> Teleoperated Period</option>
-                                    <option value="endgame"> Endgame Performance</option>
-                                    <option value="consistency"> Consistency Analysis</option>
-                                    <option value="trends"> Performance Trends</option>
-                                </select>
-                                <div class="form-text">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    Choose what aspect of team performance to focus the comparison on.
-                                </div>
-                            </div>
-                            
-                            <!-- Data View Type Selection -->
-                            <div class="mb-3">
-                                <label for="data_view" class="form-label fw-semibold">
-                                    <i class="fas fa-eye me-2 text-info"></i>Data View Type
-                                </label>
-                                <select name="data_view" id="data_view" class="form-select">
-                                    <option value="averages">
-                                         Team Averages (Recommended)
-                                    </option>
-                                    <option value="matches">
-                                         Match-by-Match Data
-                                    </option>
-                                    <option value="both">
-                                         Both Views
-                                    </option>
-                                </select>
-                                <div class="form-text">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    Choose how to display the data for comparison analysis.
-                                </div>
-                            </div>
-                        </div>
+                        <!-- Filters column removed per request -->
                     </div>
                     
                     <!-- Submit Button - Full width on mobile, centered on desktop -->

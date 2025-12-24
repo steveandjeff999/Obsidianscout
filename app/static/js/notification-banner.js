@@ -15,6 +15,31 @@ document.addEventListener('DOMContentLoaded', function() {
   // Initial adjust
   adjustMainPadding();
 
+  // Show expand toggles for overflowed messages
+  try {
+    Array.from(wrapper.querySelectorAll('.site-notification')).forEach(sn => {
+      const msg = sn.querySelector('.notification-message');
+      if (!msg) return;
+      // If message is taller than the clamped height, add a toggle button
+      if (msg.scrollHeight > msg.clientHeight + 1) {
+        const btn = document.createElement('button');
+        btn.className = 'notification-expand';
+        btn.type = 'button';
+        btn.textContent = 'More';
+        btn.setAttribute('aria-expanded', 'false');
+        btn.addEventListener('click', function(e){
+          e.preventDefault();
+          const now = sn.classList.toggle('expanded');
+          btn.textContent = now ? 'Less' : 'More';
+          btn.setAttribute('aria-expanded', now ? 'true' : 'false');
+          adjustMainPadding();
+        });
+        // Insert after the message text
+        msg.parentNode.insertBefore(btn, msg.nextSibling);
+      }
+    });
+  } catch(e) {}
+
   wrapper.addEventListener('click', function(e) {
     const btn = e.target.closest('[data-notif-id]');
     if (!btn) return;

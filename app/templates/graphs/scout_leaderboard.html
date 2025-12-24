@@ -3,7 +3,8 @@
 
 {% block content %}
 <div class="container">
-  <h1>Scout Leaderboard</h1>
+  {% import '_help_icon.html' as help %}
+  <h1>Scout Leaderboard {{ help.help_icon('Rank and compare scouts by matches scouted or prediction accuracy. Use sorting controls to change the ranking.', 'Scout leaderboard') }}</h1>
   <p class="text-muted">Ranks scouts by prediction accuracy (when available) or by total matches scouted. Use the controls to change sorting.</p>
 
   <div class="mb-3">

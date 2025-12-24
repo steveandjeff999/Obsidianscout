@@ -554,6 +554,41 @@ html.glass-off .nav-theme-green .topbar { background: var(--bs-body-bg) !importa
 
 .nav-theme-primary .btn-check:checked + .btn-primary, .nav-theme-primary .form-check-input:checked { box-shadow: 0 0 0 0.15rem rgba(var(--bs-primary-rgb,13,110,253),0.16) !important; }
 
+/* Dark-mode visibility for outline buttons (radio / btn-check) */
+[data-bs-theme="dark"] .btn-check:checked + .btn-outline-danger,
+.dark-mode .btn-check:checked + .btn-outline-danger {
+    color: #fff !important;
+    background-color: rgba(var(--bs-danger-rgb,220,53,69), 0.14) !important;
+    border-color: rgba(var(--bs-danger-rgb,220,53,69), 0.28) !important;
+    box-shadow: 0 0 0 0.15rem rgba(var(--bs-danger-rgb,220,53,69), 0.12) !important;
+}
+
+[data-bs-theme="dark"] .btn-check:checked + .btn-outline-primary,
+.dark-mode .btn-check:checked + .btn-outline-primary {
+    color: #fff !important;
+    background-color: rgba(var(--bs-primary-rgb,13,110,253), 0.14) !important;
+    border-color: rgba(var(--bs-primary-rgb,13,110,253), 0.28) !important;
+    box-shadow: 0 0 0 0.15rem rgba(var(--bs-primary-rgb,13,110,253), 0.12) !important;
+}
+
+[data-bs-theme="dark"] .btn-check:checked + .btn-outline-secondary,
+.dark-mode .btn-check:checked + .btn-outline-secondary {
+    color: #fff !important;
+    background-color: rgba(255,255,255,0.04) !important;
+    border-color: rgba(255,255,255,0.08) !important;
+    box-shadow: 0 0 0 0.12rem rgba(255,255,255,0.06) !important;
+}
+
+/* Ensure any selected button is visible in dark mode (fallback/general rule) */
+[data-bs-theme="dark"] .btn-check:checked + .btn,
+.dark-mode .btn-check:checked + .btn {
+    color: #fff !important;
+    background-color: rgba(255,255,255,0.04) !important;
+    border-color: rgba(255,255,255,0.08) !important;
+    box-shadow: 0 0 0 0.12rem rgba(255,255,255,0.06) !important;
+}
+
+
 .nav-theme-primary .table .table-active, .nav-theme-primary .table tr.active td { background: linear-gradient(90deg, rgba(var(--bs-primary-rgb,13,110,253),0.06), rgba(var(--bs-primary-rgb,13,110,253),0.03)) !important; }
 
 .nav-theme-primary .accordion-button:not(.collapsed) { background: linear-gradient(90deg,var(--nav-accent),var(--nav-accent-2)) !important; color: var(--nav-accent-contrast) !important; }

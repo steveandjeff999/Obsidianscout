@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% import '_help_icon.html' as help %}
+
 {% block title %}Manage Alliance Matches - {{ alliance.alliance_name }}{% endblock %}
 
 {% block head %}
@@ -12,7 +14,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h2 class="mb-0">
-                        <i class="fas fa-trophy"></i> Alliance Matches
+                        <i class="fas fa-trophy"></i> Alliance Matches {{ help.help_icon('Manage match schedules and sync matches from APIs for your alliance. Coordinate with other admins before deleting matches.', 'Alliance matches') }}
                     </h2>
                     <p class="text-muted mb-0">
                         Manage matches for <strong>{{ alliance.alliance_name }}</strong> - changes propagate to all alliance members
@@ -86,14 +88,14 @@
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title mb-3">
-                        <i class="fas fa-sync me-2"></i>Sync Matches from API
+                        <i class="fas fa-sync me-2"></i>Sync Matches from API {{ help.help_icon('Fetch match schedules for an event from the configured API. Ensure the event code is correct to avoid duplicate matches.', 'Sync matches') }}
                     </h5>
                     <div class="input-group">
                         <input type="text" id="syncEventCode" class="form-control" 
                                placeholder="Enter event code (e.g., 2025txhou)"
                                value="{{ selected_event.code if selected_event else '' }}">
                         <button class="btn btn-success" type="button" onclick="syncMatches()">
-                            <i class="fas fa-sync me-1"></i> Sync Matches
+                            <i class="fas fa-sync me-1"></i> Sync Matches {{ help.help_icon('Pull matches from the API for the event code entered above. New matches will be added to the alliance schedule.', 'Sync matches') }}
                         </button>
                     </div>
                     <small class="text-muted">
@@ -171,7 +173,7 @@
                                             <button class="btn btn-sm btn-outline-danger" 
                                                     onclick="deleteMatch({{ match.id }}, {{ match.match_number }})"
                                                     title="Delete match">
-                                                <i class="fas fa-trash"></i>
+                                                <i class="fas fa-trash"></i> {{ help.help_icon('Delete this match from the alliance schedule. This will remove it for all alliance members.', 'Delete match') }}
                                             </button>
                                         </div>
                                     </td>

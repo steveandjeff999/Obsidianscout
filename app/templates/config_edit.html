@@ -1,8 +1,10 @@
 {% extends 'base.html' %}
 
+{% import '_help_icon.html' as help %}
+
 {% block title %}Edit Game Configuration{% endblock %}
 
-{% block heading %}Edit Game Configuration{% endblock %}
+{% block heading %}Edit Game Configuration {{ help.help_icon('Edit the game configuration JSON. The editor validates changes and may prompt to remap scoring elements when structure changes.', 'Edit configuration') }}{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -20,10 +22,13 @@
                 </div>
             </div>
             <div class="card-body">
+
+                {% include '_alliance_mode_banner.html' %}
+
                 <div class="alert alert-warning">
                     <i class="fas fa-exclamation-triangle me-2"></i>
                     <strong>Warning:</strong> Editing the game configuration will affect all aspects of the scouting system. 
-                    Make sure you understand the structure and impact of your changes.
+                    Make sure you understand the structure and impact of your changes. {{ help.help_icon('Editing JSON can change element ids and structures which may require remapping existing scouting data. Use the migration options if prompted.', 'Editing warning') }}
                 </div>
                 
                 <p>Edit the JSON configuration below. The system will validate your changes before saving.</p>
@@ -34,19 +39,20 @@
                     <input type="hidden" name="mapping_suggestions" id="mapping_suggestions" value="">
                     <input type="hidden" name="skip_migration" id="skip_migration" value="">
                     <div class="mb-3">
-                        <label for="configJsonEditor" class="form-label">Game Configuration JSON</label>
+                        <label for="configJsonEditor" class="form-label">Game Configuration JSON {{ help.help_icon('Raw JSON editor (ACE). Use this when you need full control; changes are validated on save and may prompt for data migration when schema changes.', 'JSON editor') }}</label>
                         <div id="configJsonEditor" class="json-editor"></div>
                         <textarea id="config_json" name="config_json" hidden>{{ game_config | tojson }}</textarea>
                     </div>
                     
                     <div class="d-flex justify-content-between">
                         <div>
-                            <button type="submit" class="btn btn-success me-2">
-                                <i class="fas fa-save me-1"></i> Save Configuration
+                            <button type="submit" class="btn btn-success me-2" id="saveConfigBtn">
+                                <i class="fas fa-save me-1"></i> Save Configuration {{ help.help_icon('Validate and persist changes. If scoring elements changed, you may be prompted to remap existing scouting data.', 'Save configuration') }}
                             </button>
                             <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#resetModal">
-                                <i class="fas fa-undo me-1"></i> Reset to Default
+                                <i class="fas fa-undo me-1"></i> Reset to Default {{ help.help_icon('Replace the active configuration with a selected default. This is destructive and cannot be undone.', 'Reset to default') }}
                             </button>
+                            <small id="jsonValidationFeedback" class="form-text text-danger ms-2" role="alert" aria-live="polite" style="display:none;"></small>
                         </div>
                         <a href="{{ url_for('main.config') }}" class="btn btn-secondary">
                             <i class="fas fa-times me-1"></i> Cancel
@@ -76,7 +82,7 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label for="default_config" class="form-label">Select Default Configuration:</label>
+                        <label for="default_config" class="form-label">Select Default Configuration: {{ help.help_icon('Choose a pre-made default configuration template. Useful to reset to known-good setups for different seasons.', 'Default configuration') }}</label>
                         <select name="default_config" id="default_config" class="form-select" required>
                             <option value="">-- Select a default configuration --</option>
                             {% if default_configs %}
@@ -192,9 +198,22 @@ body.dark-mode #configJsonEditor {
         const editor = ace.edit("configJsonEditor");
         editor.setTheme("ace/theme/monokai");
         editor.session.setMode("ace/mode/json");
-        // Parse the config safely (already JSON from Jinja tojson)
-        const configData = {{ game_config | tojson | safe }};
-        editor.setValue(JSON.stringify(configData || window.GAME_CONFIG || {}, null, 2));
+        // If a raw (invalid) config was captured on the server, prefer showing the raw text
+        const CONFIG_LOAD_RAW = {{ config_load_raw | tojson | safe }};
+        const configRawText = (CONFIG_LOAD_RAW && CONFIG_LOAD_RAW['game_config.json']) ? CONFIG_LOAD_RAW['game_config.json'] : null;
+        if (configRawText) {
+            try {
+                const parsed = JSON.parse(configRawText);
+                editor.setValue(JSON.stringify(parsed, null, 2));
+            } catch (e) {
+                // Show raw, possibly invalid JSON so admin can fix it
+                editor.setValue(configRawText);
+            }
+        } else {
+            // Parse the config safely (already JSON from Jinja tojson)
+            const configData = {{ game_config | tojson | safe }};
+            editor.setValue(JSON.stringify(configData || window.GAME_CONFIG || {}, null, 2));
+        }
         editor.clearSelection();
         try { editor.gotoLine(1); } catch(e) { /* ignore */ }
         editor.setOptions({
@@ -202,7 +221,72 @@ body.dark-mode #configJsonEditor {
             showPrintMargin: false,
             showGutter: true
         });
-        
+
+        // Helper: compute line/column from an index in the text
+        function indexToLineCol(text, index) {
+            const lines = text.slice(0, index).split(/\r\n|\r|\n/);
+            const line = lines.length;
+            const col = lines[lines.length-1].length + 1;
+            return {line, col};
+        }
+
+        const saveBtn = document.getElementById('saveConfigBtn');
+        const feedbackEl = document.getElementById('jsonValidationFeedback');
+
+        // Debounce helper
+        function debounce(fn, wait) {
+            let t;
+            return function(...args) {
+                clearTimeout(t);
+                t = setTimeout(() => fn.apply(this, args), wait);
+            };
+        }
+
+        function validateJsonAndUpdateUI() {
+            const text = editor.getValue();
+            try {
+                JSON.parse(text);
+                // valid
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.classList.remove('btn-secondary');
+                    saveBtn.classList.add('btn-success');
+                }
+                if (feedbackEl) {
+                    feedbackEl.style.display = 'none';
+                    feedbackEl.textContent = '';
+                }
+                // update hidden textarea with current JSON text
+                const hidden = document.getElementById('config_json');
+                if (hidden) hidden.value = text;
+                return true;
+            } catch (err) {
+                let msg = err.message || 'Invalid JSON';
+                const m = /at position (\d+)/.exec(msg);
+                if (m) {
+                    const pos = parseInt(m[1], 10);
+                    const lc = indexToLineCol(text, pos);
+                    msg += ` (line ${lc.line}, column ${lc.col})`;
+                }
+                if (saveBtn) {
+                    saveBtn.disabled = true;
+                    saveBtn.classList.remove('btn-success');
+                    saveBtn.classList.add('btn-secondary');
+                }
+                if (feedbackEl) {
+                    feedbackEl.style.display = 'block';
+                    feedbackEl.textContent = 'Invalid JSON: ' + msg;
+                }
+                return false;
+            }
+        }
+
+        const debouncedValidate = debounce(validateJsonAndUpdateUI, 250);
+        editor.session.on('change', debouncedValidate);
+
+        // initial validation & update
+        validateJsonAndUpdateUI();
+
         // Intercept form submit to check mapping first (ask user if they want to migrate old data)
         document.getElementById('configForm').addEventListener('submit', function(e) {
             // If mapping has been confirmed on client, bypass check

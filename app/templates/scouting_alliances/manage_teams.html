@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% import '_help_icon.html' as help %}
+
 {% block title %}Manage Alliance Teams - {{ alliance.alliance_name }}{% endblock %}
 
 {% block head %}
@@ -12,7 +14,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h2 class="mb-0">
-                        <i class="fas fa-users-cog"></i> Alliance Teams
+                        <i class="fas fa-users-cog"></i> Alliance Teams {{ help.help_icon('Manage teams associated with this alliance. Teams and event assignments propagate to all members and can be synced from APIs.', 'Alliance teams') }}
                     </h2>
                     <p class="text-muted mb-0">
                         Manage teams for <strong>{{ alliance.alliance_name }}</strong> - changes propagate to all alliance members
@@ -23,7 +25,7 @@
                         <i class="fas fa-arrow-left me-2"></i> Back to Alliance
                     </a>
                     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addTeamModal">
-                        <i class="fas fa-plus me-2"></i> Add Team
+                        <i class="fas fa-plus me-2"></i> Add Team {{ help.help_icon('Add a team to the alliance manually. You can associate it with an event or fetch details from the API later.', 'Add team') }}
                     </button>
                 </div>
             </div>
@@ -89,7 +91,7 @@
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title mb-3">
-                        <i class="fas fa-sync me-2"></i>Sync Teams from API
+                        <i class="fas fa-sync me-2"></i>Sync Teams from API {{ help.help_icon('Fetch teams for an event from the configured API (FIRST/TBA). This can add many teams at once; ensure event code is correct.', 'Sync teams') }}
                     </h5>
                     <div class="input-group">
                         <input type="text" id="syncEventCode" class="form-control" 
@@ -200,7 +202,7 @@
             <div class="modal-body">
                 <form id="addTeamForm">
                     <div class="mb-3">
-                        <label for="teamNumber" class="form-label">Team Number *</label>
+                        <label for="teamNumber" class="form-label">Team Number * {{ help.help_icon('Enter the numeric FRC team number (e.g., 254). This is required to add a team to the alliance.', 'Team number') }}</label>
                         <input type="number" class="form-control" id="teamNumber" required min="1">
                     </div>
                     <div class="mb-3">

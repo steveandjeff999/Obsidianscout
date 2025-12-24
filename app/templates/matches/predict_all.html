@@ -5,7 +5,8 @@
 {% block content %}
 <div class="container">
     <div class="d-flex align-items-center justify-content-between mb-3">
-        <h1 class="h4 mb-0">Predictions for {{ selected_event.name if selected_event else 'Event' }}</h1>
+        {% import '_help_icon.html' as help %}
+        <h1 class="h4 mb-0">Predictions for {{ selected_event.name if selected_event else 'Event' }} {{ help.help_icon('Predictions across an entire event. Use the event selector above to change which event is shown.', 'Event Predictions') }}</h1>
 
         <div class="d-flex gap-2 align-items-center">
             <div class="input-group">

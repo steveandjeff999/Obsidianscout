@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 
 {% block title %}Match Details{% endblock %}
 
@@ -8,94 +9,39 @@
         <span class="badge {% if match.match_type == 'Qualification' %}bg-primary{% elif match.match_type == 'Playoff' %}bg-danger{% elif match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %}">{{ match.match_type }}</span>
         Match {{ match.match_number }}
         <span class="badge bg-info">{{ match.event.name }}{% if match.event and match.event.is_alliance %} (Alliance){% endif %}</span>
+        {{ help.help_icon('Details and status for this match including teams, schedule, and scouting data. Use the sections below to view scouting entries and reports.', 'Match details') }}
     </h1>
     
     {% if match.scheduled_time or match.predicted_time or match.actual_time %}
-    <div class="alert {% if match.scheduled_time and match.predicted_time and match.event.schedule_offset %}alert-warning{% else %}alert-info{% endif %} mb-4">
+    <div class="alert {% if match.scheduled_time and match.predicted_time and match.event and match.event.schedule_offset %}alert-warning{% else %}alert-info{% endif %} mb-4">
         <h5 class="alert-heading mb-2">
-            <i class="fas fa-clock me-2"></i>Match Schedule
-            {% if match.event.schedule_offset and match.event.schedule_offset != 0 %}
-            <span class="badge bg-warning text-dark ms-2">
-                Event {{ match.event.schedule_offset|abs }}m {{ 'behind' if match.event.schedule_offset > 0 else 'ahead' }}
-            </span>
-            {% else %}
-                <p class="mb-1">
-                    <strong>Original Schedule:</strong> 
-                    <span style="text-decoration: line-through;" class="text-muted">
-                        {{ match.scheduled_time | format_time_tz(None, '%A, %B %d at %I:%M %p') }}
-                    </span>
-                </p>
-                <p class="mb-0">
-                    <strong class="text-warning">Adjusted Time:</strong> 
-                    <span class="text-warning fw-bold">
-                        ~{{ match.predicted_time | format_time_tz(None, '%A, %B %d at %I:%M %p') }}
-                    </span>
-                </p>
-                    <span class="text-warning fw-bold">
-                        ~{{ match.predicted_time | format_time_tz(match.event.timezone, '%A, %B %d at %I:%M %p') }}
-                    </span>
-                </p>
-                <p class="mb-0 small text-muted">
-                    <i class="fas fa-info-circle me-1"></i>
-                    Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})
-                    {% if match.event.schedule_offset %}
-                    <br>The event is running {{ match.event.schedule_offset|abs }} minutes {{ 'behind schedule ' if match.event.schedule_offset > 0 else 'ahead of schedule ' }}
-                    {% else %}
-                        <p class="mb-1">
-                            <strong>Scheduled:</strong> 
-                            {{ match.scheduled_time | format_time_tz(match.event.timezone if match.event else None, '%A, %B %d at %I:%M %p') }}
-                        </p>
-                        <p class="mb-0 small text-muted">
-                            {% if match.event and match.event.timezone %}
-                                Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})
-                            {% endif %}
-                        </p>
-                    {% endif %}
-                    </span>
-                </p>
-            {% endif %}
-        {% elif match.scheduled_time %}
-            {# Only scheduled time, no adjustment #}
+            <i class="fas fa-clock me-2"></i>Match Schedule {{ help.help_icon('Match scheduled/predicted/actual times and timezone information. Schedule offsets indicate event running ahead/behind.', 'Match schedule') }}
+        </h5>
+
+        {% if match.event and match.event.schedule_offset and match.predicted_time %}
+            <div class="mb-2">
+                <span class="badge bg-warning text-dark me-2">Event {{ match.event.schedule_offset|abs }}m {{ 'behind' if match.event.schedule_offset > 0 else 'ahead' }}</span>
+                <strong>Adjusted Time:</strong>
+                <span class="text-warning fw-bold">~{{ match.predicted_time | format_time_tz(match.event.timezone if match.event else None, '%A, %B %d at %I:%M %p') }}</span>
+            </div>
+            <p class="small text-muted">Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})</p>
+
+        {% elif match.predicted_time %}
+            <p class="mb-1"><strong>Adjusted Time:</strong> <span class="text-warning fw-bold">~{{ match.predicted_time | format_time_tz(match.event.timezone if match.event else None, '%A, %B %d at %I:%M %p') }}</span></p>
             {% if match.event and match.event.timezone %}
-                <p class="mb-1">
-                    <strong>Scheduled:</strong> 
-                    {{ match.scheduled_time | format_time_tz(match.event.timezone, '%A, %B %d at %I:%M %p') }}
-                </p>
-                <p class="mb-0 small text-muted">
-                    Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})
-                </p>
-            {% else %}
-                <p class="mb-0">
-                    <strong>Scheduled:</strong> {{ match.scheduled_time.strftime('%A, %B %d at %I:%M %p') }} UTC
-                </p>
+                <p class="mb-0 small text-muted">Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})</p>
             {% endif %}
+
+        {% elif match.scheduled_time %}
+            <p class="mb-1"><strong>Scheduled:</strong> {{ match.scheduled_time | format_time_tz(match.event.timezone if match.event else None, '%A, %B %d at %I:%M %p') }}</p>
             {% if match.actual_time %}
                 <hr>
-                <p class="mb-1">
-                    <strong>Played at:</strong>
-                    {{ match.actual_time | format_time_tz(match.event.timezone if match.event else None, '%A, %B %d at %I:%M %p') }}
-                </p>
-                <p class="mb-0 small text-muted">
-                    {% if match.event and match.event.timezone %}
-                        Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})
-                    {% endif %}
-                </p>
+                <p class="mb-1"><strong>Played at:</strong> {{ match.actual_time | format_time_tz(match.event.timezone if match.event else None, '%A, %B %d at %I:%M %p') }}</p>
             {% endif %}
-        {% elif match.predicted_time %}
-            {# Only predicted time #}
             {% if match.event and match.event.timezone %}
-                <p class="mb-1">
-                    <strong>Predicted:</strong> 
-                    ~{{ match.predicted_time | format_time_tz(match.event.timezone, '%A, %B %d at %I:%M %p') }}
-                </p>
-                <p class="mb-0 small text-muted">
-                    Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})
-                </p>
-            {% else %}
-                <p class="mb-0">
-                    <strong>Predicted:</strong> ~{{ match.predicted_time.strftime('%A, %B %d at %I:%M %p') }} UTC
-                </p>
+                <p class="mb-0 small text-muted">Event timezone: {{ match.event.timezone.split('/')[-1].replace('_', ' ') }} ({{ match.event.timezone }})</p>
             {% endif %}
+
         {% endif %}
     </div>
     {% endif %}
@@ -104,7 +50,7 @@
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0">Red Alliance</h5>
+                    <h5 class="mb-0">Red Alliance {{ help.help_icon('Teams assigned to the red alliance for this match. Use Team Info to view team details, and note that scoring may come from local or server sources.', 'Red alliance') }}</h5>
                 </div>
                 <div class="card-body">
                     <ul class="list-group mb-3">
@@ -136,7 +82,7 @@
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Blue Alliance</h5>
+                    <h5 class="mb-0">Blue Alliance {{ help.help_icon('Teams assigned to the blue alliance for this match; Team Info shows more about each team.', 'Blue alliance') }}</h5>
                 </div>
                 <div class="card-body">
                     <ul class="list-group mb-3">
@@ -168,7 +114,7 @@
     
     <div class="card mb-4">
         <div class="card-header bg-info text-white">
-            <h5 class="mb-0">Scouting Data</h5>
+            <h5 class="mb-0">Scouting Data {{ help.help_icon('Scouting entries recorded for this match. Use View/Edit actions to examine or correct entries; data may be local or synced to the server.', 'Scouting data') }}</h5>
         </div>
         <div class="card-body">
             {% if scouting_data %}

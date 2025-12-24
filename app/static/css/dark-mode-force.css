@@ -799,6 +799,81 @@ html body.dark-mode #teamSelectionModal .modal-footer {
     flex: 0 0 auto !important;
 }
 
+/* Popovers and tooltips should look dark and be legible in dark mode */
+html body.modern-layout.dark-mode .popover,
+html body.dark-mode .popover,
+html html.dark-mode .popover {
+    background-color: rgba(10,12,15,0.95) !important;
+    color: #e6e6e6 !important;
+    border-color: rgba(255,255,255,0.04) !important;
+}
+html body.modern-layout.dark-mode .popover .popover-header,
+html body.dark-mode .popover .popover-header,
+html html.dark-mode .popover .popover-header {
+    background-color: transparent !important;
+    border-bottom-color: rgba(255,255,255,0.06) !important;
+    color: #ffffff !important;
+}
+html body.modern-layout.dark-mode .popover .popover-body,
+html body.dark-mode .popover .popover-body,
+html html.dark-mode .popover .popover-body { color: #e6e6e6 !important; }
+
+/* Tooltips (tiny hover labels) */
+html body.modern-layout.dark-mode .tooltip-inner,
+html body.dark-mode .tooltip-inner,
+html html.dark-mode .tooltip-inner {
+    background-color: rgba(6,6,6,0.95) !important;
+    color: #e6e6e6 !important;
+    border-radius: 6px !important;
+}
+
+/* Toasts */
+html body.modern-layout.dark-mode .toast,
+html body.dark-mode .toast,
+html html.dark-mode .toast {
+    background-color: rgba(24,24,26,0.9) !important;
+    color: #e6e6e6 !important;
+    border-color: rgba(255,255,255,0.04) !important;
+}
+html body.modern-layout.dark-mode .toast .toast-header,
+html body.dark-mode .toast .toast-header { background: transparent !important; color: #e6e6e6 !important; }
+
+/* Tables should be readable in dark mode */
+html body.modern-layout.dark-mode table.table,
+html body.dark-mode table.table,
+html html.dark-mode table.table {
+    color: #e6e6e6 !important;
+}
+html body.modern-layout.dark-mode table.table thead th,
+html body.dark-mode table.table thead th { background-color: rgba(255,255,255,0.03) !important; color: #e6e6e6 !important; border-color: rgba(255,255,255,0.06) !important; }
+html body.modern-layout.dark-mode table.table.table-striped tbody tr:nth-of-type(odd),
+html body.dark-mode table.table.table-striped tbody tr:nth-of-type(odd) { background-color: rgba(255,255,255,0.02) !important; }
+
+/* Code and pre elements */
+html body.modern-layout.dark-mode pre,
+html body.dark-mode pre,
+html html.dark-mode pre,
+html body.modern-layout.dark-mode code,
+html body.dark-mode code,
+html html.dark-mode code {
+    background-color: rgba(0,0,0,0.6) !important;
+    color: #e6e6e6 !important;
+    border-radius: 6px !important;
+    padding: 0.25rem 0.4rem !important;
+}
+
+/* Datatable pagination and controls contrast fixes */
+html body.modern-layout.dark-mode .dataTables_wrapper .dataTables_paginate .paginate_button,
+html body.dark-mode .dataTables_wrapper .dataTables_paginate .paginate_button {
+    background-color: rgba(255,255,255,0.03) !important;
+    color: #e6e6e6 !important;
+    border: 1px solid rgba(255,255,255,0.04) !important;
+}
+
+/* Safety: ensure popovers are darker than surrounding card backgrounds */
+html body.modern-layout.dark-mode .popover { box-shadow: 0 8px 24px rgba(0,0,0,0.6) !important; }
+
+
 /* Small-screen tweak: increase top/bottom margin if needed */
 @media (max-height: 640px) {
     html body.modern-layout.dark-mode #teamSelectionModal .modal-dialog,

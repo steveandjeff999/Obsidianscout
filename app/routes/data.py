@@ -32,6 +32,11 @@ from app.utils.score_utils import match_sort_key
 from flask import jsonify
 from app.utils.api_auth import team_data_access_required
 from app.utils.alliance_data import get_active_alliance_id, get_all_scouting_data, get_all_pit_data
+from uuid import uuid4
+from app import socketio
+
+# Simple in-memory job tracking for background imports
+import_jobs = {}
 
 def get_theme_context():
     theme_manager = ThemeManager()
@@ -190,6 +195,19 @@ def get_or_create_event(name=None, code=None, year=None, location=None, start_da
                 pass
             return evt
 
+    # Ensure we have a valid year (Event.year is NOT NULL) - infer from start_date or fallback to current year
+    final_year = year
+    try:
+        if final_year is None:
+            if start_date and hasattr(start_date, 'year'):
+                final_year = start_date.year
+            else:
+                from datetime import datetime as _dt
+                final_year = _dt.now(timezone.utc).year
+    except Exception:
+        from datetime import datetime as _dt
+        final_year = _dt.now(timezone.utc).year
+
     # Create new event, with normalized code if available
     new_ev = Event(
         name=name,
@@ -197,7 +215,7 @@ def get_or_create_event(name=None, code=None, year=None, location=None, start_da
         location=location,
         start_date=start_date,
         end_date=end_date,
-        year=year,
+        year=final_year,
         scouting_team_number=scouting_team_number
     )
     try:
@@ -296,11 +314,16 @@ def _process_portable_data(export_data):
     report = {'created': {}, 'updated': {}, 'skipped': {}, 'errors': []}
 
     try:
+        # Build lookup of exported events (by exported id) for later code-based resolution
+        exported_events_by_id = {ev.get('id'): ev for ev in export_data.get('events', []) if ev.get('id') is not None}
+
         # EVENTS
         for ev in export_data.get('events', []):
             existing = None
-            if ev.get('code'):
-                existing = Event.query.filter_by(code=ev.get('code'), year=ev.get('year')).first()
+            # Normalize code for lookup
+            code = ev.get('code') if ev.get('code') else None
+            if code:
+                existing = Event.query.filter_by(code=code, year=ev.get('year')).first()
             if not existing:
                 existing = Event.query.filter_by(name=ev.get('name'), year=ev.get('year')).first()
 
@@ -310,6 +333,9 @@ def _process_portable_data(export_data):
                 existing.end_date = _sanitize_date(ev.get('end_date'))
                 db.session.add(existing)
                 mapping['events'][ev['id']] = existing.id
+                # Also map by code for resilience across servers
+                if code:
+                    mapping['events'][code.strip().upper()] = existing.id
                 report['updated'].setdefault('events', 0)
                 report['updated']['events'] = report['updated']['events'] + 1 if report['updated'].get('events') else 1
             else:
@@ -323,10 +349,122 @@ def _process_portable_data(export_data):
                     scouting_team_number=ev.get('scouting_team_number')
                 )
                 mapping['events'][ev['id']] = new_ev.id
+                if code:
+                    mapping['events'][code.strip().upper()] = new_ev.id
                 report['created'].setdefault('events', 0)
                 report['created']['events'] = report['created']['events'] + 1 if report['created'].get('events') else 1
 
         db.session.commit()
+
+        # Helper: resolve an exported event id (or create/fallback using event code from exported events)
+        def _resolve_event(export_event_id, fallback_scouting_team=None):
+            # Direct mapping present?
+            if export_event_id in mapping['events']:
+                return mapping['events'][export_event_id]
+
+            # If export_event_id is a code already, return mapping by code
+            if isinstance(export_event_id, str):
+                code_key = export_event_id.strip().upper()
+                if code_key in mapping['events']:
+                    return mapping['events'][code_key]
+
+            # Look up the original exported event record for extra metadata
+            ev = exported_events_by_id.get(export_event_id)
+            if ev:
+                code = ev.get('code')
+                year = ev.get('year')
+                stn = ev.get('scouting_team_number') if ev.get('scouting_team_number') else fallback_scouting_team
+
+                # Try to find an existing local event by code+year or code only
+                if code:
+                    try:
+                        code_norm = code.strip().upper()
+                    except Exception:
+                        code_norm = code
+
+                    existing = Event.query.filter_by(code=code_norm, year=year, scouting_team_number=stn).first()
+                    if not existing:
+                        existing = Event.query.filter_by(code=code_norm, year=year).first()
+                    if existing:
+                        mapping['events'][export_event_id] = existing.id
+                        mapping['events'][code_norm] = existing.id
+                        return existing.id
+
+                # If no existing event, create one using exported metadata
+                try:
+                    created = get_or_create_event(
+                        name=ev.get('name'),
+                        code=ev.get('code'),
+                        year=ev.get('year'),
+                        location=ev.get('location'),
+                        start_date=_sanitize_date(ev.get('start_date')),
+                        end_date=_sanitize_date(ev.get('end_date')),
+                        scouting_team_number=stn
+                    )
+                    mapping['events'][export_event_id] = created.id
+                    if code:
+                        mapping['events'][code.strip().upper()] = created.id
+                    report['created']['events'] = report['created'].get('events', 0) + 1 if report.get('created') else 1
+                    db.session.commit()
+                    return created.id
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    # Fallback: create a minimal Event record
+                    try:
+                        ev_obj = Event(name='Imported (Missing Event) - Portable Import', code=ev.get('code'), year=ev.get('year') or datetime.now(timezone.utc).year)
+                        ev_obj.scouting_team_number = stn
+                        db.session.add(ev_obj)
+                        db.session.flush()
+                        mapping['events'][export_event_id] = ev_obj.id
+                        if code:
+                            mapping['events'][code.strip().upper()] = ev_obj.id
+                        report['created']['events'] = report['created'].get('events', 0) + 1 if report.get('created') else 1
+                        db.session.commit()
+                        return ev_obj.id
+                    except Exception:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                        return None
+
+            # No exported event record available; fallback to global placeholder
+            if mapping['events'].get(None):
+                return mapping['events'].get(None)
+
+            # Create a generic placeholder event
+            try:
+                placeholder = get_or_create_event(
+                    name='Imported (Missing Event) - Portable Import',
+                    code=f'IMPORT-NULL-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}',
+                    year=datetime.now(timezone.utc).year
+                )
+                mapping['events'][None] = placeholder.id
+                report['created']['events'] = report['created'].get('events', 0) + 1 if report.get('created') else 1
+                db.session.commit()
+                return placeholder.id
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                try:
+                    ev_obj = Event(name='Imported (Missing Event) - Portable Import', code=None, year=datetime.now(timezone.utc).year)
+                    db.session.add(ev_obj)
+                    db.session.flush()
+                    mapping['events'][None] = ev_obj.id
+                    report['created']['events'] = report['created'].get('events', 0) + 1 if report.get('created') else 1
+                    db.session.commit()
+                    return ev_obj.id
+                except Exception:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    return None
 
         # TEAMS
         for t in export_data.get('teams', []):
@@ -358,6 +496,8 @@ def _process_portable_data(export_data):
             old_e = assoc.get('event_id')
             new_t = mapping['teams'].get(old_t)
             new_e = mapping['events'].get(old_e)
+            if not new_e and old_e is not None:
+                new_e = _resolve_event(old_e)
             if new_t and new_e:
                 try:
                     db.session.execute(team_event.insert().values(team_id=new_t, event_id=new_e))
@@ -440,36 +580,39 @@ def _process_portable_data(export_data):
         for m in export_data.get('matches', []):
             # Look up mapped event id. If mapping doesn't contain a key for the
             # exported event_id, fall back to the placeholder (mapping['events'][None])
+            # Prefer resolving the exported event id via code/metadata if possible
             new_event = mapping['events'].get(m.get('event_id'))
             if new_event is None:
-                # If a placeholder wasn't pre-created earlier, create one now
-                if mapping['events'].get(None) is None:
-                    try:
-                        placeholder = get_or_create_event(
-                            name='Imported (Missing Event) - Portable Import',
-                            code=f'IMPORT-NULL-{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}',
-                            year=datetime.now(timezone.utc).year
-                        )
-                        mapping['events'][None] = placeholder.id
-                        db.session.commit()
-                    except Exception:
+                new_event = _resolve_event(m.get('event_id'), fallback_scouting_team=m.get('scouting_team_number'))
+                if new_event is None:
+                    # If still None, ensure a global placeholder exists
+                    if mapping['events'].get(None) is None:
                         try:
-                            db.session.rollback()
-                        except Exception:
-                            pass
-                        # Fallback to creating a minimal Event directly
-                        try:
-                            ev = Event(name='Imported (Missing Event) - Portable Import', code=None, year=datetime.now(timezone.utc).year)
-                            db.session.add(ev)
-                            db.session.flush()
-                            mapping['events'][None] = ev.id
+                            placeholder = get_or_create_event(
+                                name='Imported (Missing Event) - Portable Import',
+                                code=f'IMPORT-NULL-{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}',
+                                year=datetime.now(timezone.utc).year
+                            )
+                            mapping['events'][None] = placeholder.id
                             db.session.commit()
                         except Exception:
                             try:
                                 db.session.rollback()
                             except Exception:
                                 pass
-                new_event = mapping['events'].get(None)
+                            # Fallback to creating a minimal Event directly
+                            try:
+                                ev = Event(name='Imported (Missing Event) - Portable Import', code=None, year=datetime.now(timezone.utc).year)
+                                db.session.add(ev)
+                                db.session.flush()
+                                mapping['events'][None] = ev.id
+                                db.session.commit()
+                            except Exception:
+                                try:
+                                    db.session.rollback()
+                                except Exception:
+                                    pass
+                    new_event = mapping['events'].get(None)
             existing = None
             if new_event:
                 existing = Match.query.filter_by(event_id=new_event, match_type=m.get('match_type'), match_number=m.get('match_number')).first()
@@ -609,7 +752,43 @@ def _process_portable_data(export_data):
         # ALLIANCES / DO_NOT_PICK / AVOID
         for a in export_data.get('alliances', []):
             try:
+                # Resolve event by exported id and exported metadata (prefer code match across servers)
                 new_event = mapping['events'].get(a.get('event_id'))
+                if new_event is None:
+                    new_event = _resolve_event(a.get('event_id'), fallback_scouting_team=a.get('scouting_team_number'))
+                    if new_event is None:
+                        if mapping['events'].get(None) is None:
+                            try:
+                                placeholder = get_or_create_event(
+                                    name='Imported (Missing Event) - Portable Import',
+                                    code=f'IMPORT-NULL-{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")}',
+                                    year=datetime.now(timezone.utc).year,
+                                    scouting_team_number=a.get('scouting_team_number') if a.get('scouting_team_number') else None
+                                )
+                                mapping['events'][None] = placeholder.id
+                                report['created']['events'] = report['created'].get('events', 0) + 1 if report.get('created') else 1
+                                current_app.logger.info(f"Created placeholder event id={placeholder.id} for missing alliance event reference")
+                                db.session.commit()
+                            except Exception:
+                                try:
+                                    db.session.rollback()
+                                except Exception:
+                                    pass
+                                try:
+                                    ev = Event(name='Imported (Missing Event) - Portable Import', code=None, year=datetime.now(timezone.utc).year)
+                                    ev.scouting_team_number = a.get('scouting_team_number') if a.get('scouting_team_number') else None
+                                    db.session.add(ev)
+                                    db.session.flush()
+                                    mapping['events'][None] = ev.id
+                                    report['created']['events'] = report['created'].get('events', 0) + 1 if report.get('created') else 1
+                                    db.session.commit()
+                                except Exception:
+                                    try:
+                                        db.session.rollback()
+                                    except Exception:
+                                        pass
+                        new_event = mapping['events'].get(None)
+
                 new_alliance = AllianceSelection(
                     alliance_number=a.get('alliance_number'),
                     captain=mapping['teams'].get(a.get('captain')) if a.get('captain') else None,
@@ -782,6 +961,130 @@ def _process_portable_data(export_data):
             msg_parts.append(f"{k}: created={c} updated={u}")
 
     return True, '; '.join(msg_parts)
+
+
+def import_portable_from_zip(zip_path):
+    """Process a portable ZIP file (path) and delegate to _process_portable_data.
+
+    This helper is robust to several bundle formats:
+      - Multiple top-level JSON files (events.json, teams.json, etc.)
+      - A single bundle file like export.json / portable_export.json containing a dict with keys
+      - Files nested inside a top-level folder (e.g., "portable_export_.../events.json")
+      - Newline-delimited JSON (JSONL) fallback when standard JSON fails
+
+    Returns (success: bool, message: str).
+    """
+    try:
+        with zipfile.ZipFile(zip_path) as z:
+            names = z.namelist()
+            json_files = [n for n in names if n.lower().endswith('.json')]
+
+            def basename_of(path):
+                return os.path.basename(path).lower()
+
+            # Helper: find a file by basename (handles nested folders)
+            def find_file_by_basename(basename):
+                basename = basename.lower()
+                # prefer exact matches
+                for n in json_files:
+                    if basename_of(n) == basename:
+                        return n
+                # fallback: any path that ends with the basename
+                for n in json_files:
+                    if n.lower().endswith('/' + basename):
+                        return n
+                return None
+
+            # Helper: load a JSON file from the zip. Falls back to JSONL if needed.
+            def load_json_from_zip(path_in_zip):
+                if path_in_zip is None:
+                    return []
+                try:
+                    with z.open(path_in_zip) as f:
+                        raw = f.read()
+                        try:
+                            return json.loads(raw.decode('utf-8'))
+                        except Exception:
+                            # Try lenient fallback: parse as JSONL (one JSON object per line)
+                            try:
+                                text = raw.decode('utf-8', errors='replace')
+                                lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+                                objs = [json.loads(ln) for ln in lines]
+                                return objs
+                            except Exception:
+                                current_app.logger.exception(f"Failed to decode JSON from {path_in_zip}")
+                                return []
+                except KeyError:
+                    return []
+                except Exception:
+                    current_app.logger.exception(f"Error reading {path_in_zip} from zip")
+                    return []
+
+            # First: check for single-bundle JSON files which contain a dict of lists
+            bundle_basenames = ('export.json', 'portable_export.json', 'data.json', 'bundle.json')
+            for b in bundle_basenames:
+                candidate = find_file_by_basename(b)
+                if candidate:
+                    try:
+                        with z.open(candidate) as f:
+                            bundle = json.load(f)
+                    except Exception:
+                        current_app.logger.exception(f"Failed to load bundle {candidate}, will attempt per-file import")
+                        bundle = None
+
+                    if isinstance(bundle, dict) and any(k in bundle for k in ('events', 'teams', 'matches', 'scouting_data')):
+                        export_data = {}
+                        # Normalize expected keys
+                        for key in ('events','teams','team_event','matches','scouting_data','pit_scouting','strategy_drawings','alliances','do_not_pick','avoid','shared_graphs','shared_team_ranks'):
+                            val = bundle.get(key, [])
+                            # If someone exported a single object rather than a list, wrap it
+                            if isinstance(val, dict):
+                                val = [val]
+                            export_data[key] = val if isinstance(val, list) else []
+
+                        success, msg = _process_portable_data(export_data)
+                        if success:
+                            current_app.logger.info(f"Portable bundle import completed: {msg}")
+                        else:
+                            current_app.logger.error(f"Portable bundle import failed: {msg}")
+                        return success, msg
+
+            # Otherwise, assemble export_data from individual JSON files (basename-aware)
+            keys_and_files = {
+                'events': 'events.json',
+                'teams': 'teams.json',
+                'team_event': 'team_event.json',
+                'matches': 'matches.json',
+                'scouting_data': 'scouting_data.json',
+                'pit_scouting': 'pit_scouting.json',
+                'strategy_drawings': 'strategy_drawings.json',
+                'alliances': 'alliances.json',
+                'do_not_pick': 'do_not_pick.json',
+                'avoid': 'avoid.json',
+                'shared_graphs': 'shared_graphs.json',
+                'shared_team_ranks': 'shared_team_ranks.json'
+            }
+
+            export_data = {}
+            for key, fname in keys_and_files.items():
+                matched = find_file_by_basename(fname)
+                data = load_json_from_zip(matched)
+                # Normalize single-object to list
+                if isinstance(data, dict):
+                    data = [data]
+                if not isinstance(data, list):
+                    data = []
+                export_data[key] = data
+
+        success, msg = _process_portable_data(export_data)
+        if success:
+            current_app.logger.info(f"Portable import completed: {msg}")
+        else:
+            current_app.logger.error(f"Portable import failed: {msg}")
+        return success, msg
+    except Exception as e:
+        current_app.logger.exception(f"Error processing portable zip {zip_path}: {e}")
+        return False, str(e)
 
 @bp.route('/')
 @analytics_required
@@ -1656,15 +1959,19 @@ def export_portable():
         events = get_combined_dropdown_events()
         export_data['events'] = []
         for e in events:
+            # Some dropdown events may be synthetic alliance entries (SimpleNamespace) and
+            # may not have all attributes (e.g., start_date/end_date). Use getattr to be safe.
+            ev_start = getattr(e, 'start_date', None)
+            ev_end = getattr(e, 'end_date', None)
             export_data['events'].append({
                 'id': e.id,
-                'name': e.name,
-                'code': e.code,
-                'location': e.location,
-                'start_date': e.start_date.isoformat() if e.start_date else None,
-                'end_date': e.end_date.isoformat() if e.end_date else None,
-                'year': e.year,
-                'scouting_team_number': e.scouting_team_number
+                'name': getattr(e, 'name', None),
+                'code': getattr(e, 'code', None),
+                'location': getattr(e, 'location', None),
+                'start_date': ev_start.isoformat() if ev_start else None,
+                'end_date': ev_end.isoformat() if ev_end else None,
+                'year': getattr(e, 'year', None),
+                'scouting_team_number': getattr(e, 'scouting_team_number', None)
             })
 
         # Teams
@@ -1811,7 +2118,10 @@ def import_portable():
     Returns a summary report.
     """
     if request.method == 'GET':
-        return render_template('data/import_portable.html', **get_theme_context())
+        # If a job_id is provided, show its status on the page
+        job_id = request.args.get('job_id')
+        job_status = import_jobs.get(job_id) if job_id else None
+        return render_template('data/import_portable.html', job_id=job_id, job_status=job_status, **get_theme_context())
 
 
     
@@ -1826,33 +2136,119 @@ def import_portable():
         flash('No file selected', 'error')
         return redirect(request.url)
 
+    # Save uploaded file to a temporary location and queue a background import job
+    import tempfile, threading
+    job_id = str(uuid4())
     try:
-        z = zipfile.ZipFile(file.stream)
+        tmpf = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+        tmpf.write(file.read())
+        tmpf.close()
+        tmp_path = tmpf.name
     except Exception as e:
-        flash('Uploaded file is not a valid ZIP archive', 'error')
+        flash(f'Error saving uploaded file: {e}', 'error')
         return redirect(request.url)
 
-    # Helper to load JSON from zip safely
-    def load_json(name):
+    # Initialize job record. Mark as 'running' immediately so UI won't sit in 'queued' state
+    import_jobs[job_id] = {
+        'status': 'running',
+        'message': 'Import queued and starting',
+        'initiated_by': getattr(current_user, 'id', None) if getattr(current_user, 'is_authenticated', False) else None,
+        'started_at': datetime.now(timezone.utc).isoformat(),
+        'finished_at': None
+    }
+    try:
+        # Notify clients the job is starting (best-effort)
         try:
-            with z.open(name) as f:
-                return json.load(f)
-        except KeyError:
-            return []
+            socketio.emit('import_status', {'job_id': job_id, 'status': 'running', 'message': import_jobs[job_id]['message']}, broadcast=True)
+        except Exception:
+            pass
+    except Exception:
+        pass
 
-    # Read files
-    events = load_json('events.json')
-    teams = load_json('teams.json')
-    team_event = load_json('team_event.json')
-    matches = load_json('matches.json')
-    scouting_data = load_json('scouting_data.json')
-    pit_scouting = load_json('pit_scouting.json')
-    strategy_drawings = load_json('strategy_drawings.json')
-    alliances = load_json('alliances.json')
-    do_not_pick = load_json('do_not_pick.json')
-    avoid = load_json('avoid.json')
-    shared_graphs = load_json('shared_graphs.json')
-    shared_team_ranks = load_json('shared_team_ranks.json')
+    # Capture app for use inside thread
+    app_obj = current_app._get_current_object()
+
+    def _background_import_worker(path, app_obj, job_id, initiated_by=None):
+        try:
+            with app_obj.app_context():
+                import_jobs[job_id]['status'] = 'running'
+                import_jobs[job_id]['started_at'] = datetime.now(timezone.utc).isoformat()
+                app_obj.logger.info(f"Background portable import started from {path} by {initiated_by}")
+                try:
+                    success, msg = import_portable_from_zip(path)
+                    if success:
+                        import_jobs[job_id]['status'] = 'finished'
+                        import_jobs[job_id]['message'] = msg
+                        app_obj.logger.info(f"Background portable import completed for {path}: {msg}")
+                        try:
+                            socketio.emit('import_status', {'job_id': job_id, 'status': 'finished', 'message': msg}, broadcast=True)
+                        except Exception:
+                            pass
+                    else:
+                        import_jobs[job_id]['status'] = 'error'
+                        import_jobs[job_id]['message'] = msg
+                        app_obj.logger.error(f"Background portable import failed for {path}: {msg}")
+                        try:
+                            socketio.emit('import_status', {'job_id': job_id, 'status': 'error', 'message': msg}, broadcast=True)
+                        except Exception:
+                            pass
+                except Exception as e:
+                    import_jobs[job_id]['status'] = 'error'
+                    import_jobs[job_id]['message'] = str(e)
+                    app_obj.logger.exception(f"Error during background portable import: {e}")
+                    try:
+                        socketio.emit('import_status', {'job_id': job_id, 'status': 'error', 'message': import_jobs[job_id]['message']}, broadcast=True)
+                    except Exception:
+                        pass
+                finally:
+                    import_jobs[job_id]['finished_at'] = datetime.now(timezone.utc).isoformat()
+        finally:
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+
+    t = threading.Thread(target=_background_import_worker, args=(tmp_path, app_obj, job_id, getattr(current_user, 'id', None)), daemon=True)
+    t.start()
+
+    flash(f'Import started in background (job id: {job_id}). Check status on this page.', 'success')
+    return redirect(url_for('data.import_portable', job_id=job_id))
+
+
+@bp.route('/import/status')
+def import_status():
+    """Return job status. If a job has been running longer than STALLED_THRESHOLD_MINUTES,
+    mark it as 'stalled' and notify clients so the UI doesn't wait forever."""
+    job_id = request.args.get('job_id')
+    if not job_id:
+        return jsonify({'success': False, 'error': 'job_id required'}), 400
+    job = import_jobs.get(job_id)
+    if not job:
+        return jsonify({'success': False, 'error': 'not_found'}), 404
+
+    # If running too long, mark as stalled
+    try:
+        STALLED_THRESHOLD_MINUTES = current_app.config.get('IMPORT_STALLED_THRESHOLD_MINUTES', 30)
+        if job.get('status') == 'running' and job.get('started_at'):
+            try:
+                started = datetime.fromisoformat(job['started_at'])
+                age = datetime.now(timezone.utc) - started
+                if age.total_seconds() > STALLED_THRESHOLD_MINUTES * 60:
+                    job['status'] = 'stalled'
+                    job['message'] = f"Job marked stalled after {int(age.total_seconds()//60)} minutes"
+                    job['finished_at'] = datetime.now(timezone.utc).isoformat()
+                    # notify clients
+                    try:
+                        socketio.emit('import_status', {'job_id': job_id, 'status': 'stalled', 'message': job['message']}, broadcast=True)
+                    except Exception:
+                        current_app.logger.exception('Error emitting stalled import_status')
+            except Exception:
+                # Ignore parse errors and return current status
+                pass
+    except Exception:
+        pass
+
+    return jsonify({'success': True, 'job': job})
 
     # Mapping from old_id to new_id per model
     mapping = {
@@ -2020,16 +2416,56 @@ def import_portable():
 
         # STRATEGY DRAWINGS
         for s in strategy_drawings:
+            # Remap match id from imported mapping; skip if we couldn't map the match
             new_match = mapping['matches'].get(s.get('match_id'))
-            new_s = StrategyDrawing(
-                match_id=new_match if new_match else None,
-                scouting_team_number=s.get('scouting_team_number'),
-                data_json=s.get('data_json'),
-                background_image=s.get('background_image')
-            )
-            db.session.add(new_s)
-            db.session.flush()
-            mapping['strategy_drawings'][s['id']] = new_s.id
+            if not new_match:
+                # Couldn't find corresponding match in this DB; skip to avoid NOT NULL/UNIQUE issues
+                report['skipped'].setdefault('strategy_drawings', 0)
+                report['skipped']['strategy_drawings'] = report['skipped']['strategy_drawings'] + 1 if report['skipped'].get('strategy_drawings') else 1
+                continue
+
+            # If a drawing already exists for this match, update it instead of inserting (prevents UNIQUE constraint errors)
+            existing = StrategyDrawing.query.filter_by(match_id=new_match).first()
+            if existing:
+                try:
+                    existing.scouting_team_number = s.get('scouting_team_number') if s.get('scouting_team_number') is not None else existing.scouting_team_number
+                    existing.data_json = s.get('data_json') or existing.data_json
+                    existing.background_image = s.get('background_image') or existing.background_image
+                    db.session.add(existing)
+                    db.session.flush()
+                    mapping['strategy_drawings'][s['id']] = existing.id
+                    report['updated'].setdefault('strategy_drawings', 0)
+                    report['updated']['strategy_drawings'] = report['updated']['strategy_drawings'] + 1 if report['updated'].get('strategy_drawings') else 1
+                    continue
+                except Exception:
+                    # If update fails for any reason, rollback and try to continue
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    report['errors'].append(f"Error updating strategy_drawing for imported id {s.get('id')}")
+                    continue
+
+            # Create a new drawing if none exists
+            try:
+                new_s = StrategyDrawing(
+                    match_id=new_match,
+                    scouting_team_number=s.get('scouting_team_number'),
+                    data_json=s.get('data_json') or '[]',
+                    background_image=s.get('background_image')
+                )
+                db.session.add(new_s)
+                db.session.flush()
+                mapping['strategy_drawings'][s['id']] = new_s.id
+                report['created'].setdefault('strategy_drawings', 0)
+                report['created']['strategy_drawings'] = report['created']['strategy_drawings'] + 1 if report['created'].get('strategy_drawings') else 1
+            except Exception as e:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                report['errors'].append(f"Error creating strategy_drawing for imported id {s.get('id')}: {e}")
+                continue
 
         db.session.commit()
 
@@ -2059,19 +2495,103 @@ def import_portable():
         db.session.commit()
 
         # PIT SCOUTING
+        import uuid as _uuid
         for p in pit_scouting:
             new_team = mapping['teams'].get(p.get('team_id'))
             new_event = mapping['events'].get(p.get('event_id'))
             if not new_team:
                 report['skipped']['pit_scouting'] = report['skipped'].get('pit_scouting', 0) + 1 if report['skipped'].get('pit_scouting') else 1
                 continue
-            new_p = PitScoutingData.from_dict(p)
-            # Remap ids
-            new_p.team_id = new_team
-            new_p.event_id = new_event
-            db.session.add(new_p)
-            db.session.flush()
-            mapping['pit_scouting'][p['id']] = new_p.id
+
+            local_id = p.get('local_id')
+            # If local_id exists in target DB, update that record instead of inserting to avoid UNIQUE constraint errors
+            existing = None
+            try:
+                if local_id:
+                    existing = PitScoutingData.query.filter_by(local_id=local_id).first()
+            except Exception:
+                existing = None
+
+            if existing:
+                try:
+                    # Update existing record with imported values (preserve non-null fields when incoming is None)
+                    existing.team_id = new_team or existing.team_id
+                    existing.event_id = new_event if new_event is not None else existing.event_id
+                    existing.scouting_team_number = p.get('scouting_team_number') if p.get('scouting_team_number') is not None else existing.scouting_team_number
+                    existing.scout_name = p.get('scout_name') or existing.scout_name
+                    existing.scout_id = p.get('scout_id') if p.get('scout_id') is not None else existing.scout_id
+                    if p.get('timestamp'):
+                        try:
+                            existing.timestamp = datetime.fromisoformat(p['timestamp'].replace('Z', '+00:00')) if isinstance(p['timestamp'], str) else p['timestamp']
+                        except Exception:
+                            pass
+                    existing.data_json = json.dumps(p.get('data', {})) or existing.data_json
+                    existing.is_uploaded = p.get('is_uploaded', existing.is_uploaded)
+                    if p.get('upload_timestamp'):
+                        try:
+                            existing.upload_timestamp = datetime.fromisoformat(p['upload_timestamp'].replace('Z', '+00:00')) if isinstance(p['upload_timestamp'], str) else p['upload_timestamp']
+                        except Exception:
+                            pass
+                    existing.device_id = p.get('device_id') or existing.device_id
+                    db.session.add(existing)
+                    db.session.flush()
+                    mapping['pit_scouting'][p['id']] = existing.id
+                    report['updated'].setdefault('pit_scouting', 0)
+                    report['updated']['pit_scouting'] = report['updated']['pit_scouting'] + 1 if report['updated'].get('pit_scouting') else 1
+                    continue
+                except Exception as e:
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+                    report['errors'].append(f"Error updating pit_scouting for imported id {p.get('id')}: {e}")
+                    continue
+
+            # Create new PitScoutingData
+            try:
+                # Ensure a unique local_id exists
+                if not local_id:
+                    local_id = str(_uuid.uuid4())
+                    p['local_id'] = local_id
+
+                new_p = PitScoutingData.from_dict(p)
+                # Remap ids
+                new_p.team_id = new_team
+                new_p.event_id = new_event
+                # Ensure local_id is set
+                if not getattr(new_p, 'local_id', None):
+                    new_p.local_id = str(_uuid.uuid4())
+                db.session.add(new_p)
+                db.session.flush()
+                mapping['pit_scouting'][p['id']] = new_p.id
+                report['created'].setdefault('pit_scouting', 0)
+                report['created']['pit_scouting'] = report['created']['pit_scouting'] + 1 if report['created'].get('pit_scouting') else 1
+            except Exception as e:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                # If UNIQUE local_id caused a failure, try to find the conflicting record and update it instead
+                if 'UNIQUE constraint failed' in str(e) and local_id:
+                    try:
+                        conflict = PitScoutingData.query.filter_by(local_id=local_id).first()
+                        if conflict:
+                            conflict.team_id = new_team
+                            conflict.event_id = new_event
+                            conflict.data_json = json.dumps(p.get('data', {})) or conflict.data_json
+                            db.session.add(conflict)
+                            db.session.flush()
+                            mapping['pit_scouting'][p['id']] = conflict.id
+                            report['updated'].setdefault('pit_scouting', 0)
+                            report['updated']['pit_scouting'] = report['updated']['pit_scouting'] + 1 if report['updated'].get('pit_scouting') else 1
+                            continue
+                    except Exception:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                report['errors'].append(f"Error creating pit_scouting for imported id {p.get('id')}: {e}")
+                continue
 
         db.session.commit()
 
@@ -2288,10 +2808,24 @@ def manage_entries():
     
     # Get ALL teams at the current event (regardless of scouting_team_number) and matches
     if current_event:
-        teams = get_all_teams_at_event(event_id=current_event.id)
-        matches = Match.query.filter_by(event_id=current_event.id).all()
-        # Use proper match sorting (handles X-Y playoff format)
-        matches = sorted(matches, key=match_sort_key)
+        if is_alliance_mode:
+            # In alliance mode we need to gather teams and matches across alliance members
+            # Allow synthetic 'alliance_CODE' event ids to be handled by the helpers
+            try:
+                teams, _ = get_all_teams_for_alliance(event_id=current_event.id, event_code=current_event.code)
+            except Exception:
+                teams = get_all_teams_at_event(event_id=current_event.id)
+            try:
+                matches, _ = get_all_matches_for_alliance(event_id=current_event.id, event_code=current_event.code)
+            except Exception:
+                matches = Match.query.filter_by(event_id=current_event.id).all()
+            # Use proper match sorting (handles X-Y playoff format)
+            matches = sorted(matches, key=match_sort_key)
+        else:
+            teams = get_all_teams_at_event(event_id=current_event.id)
+            matches = Match.query.filter_by(event_id=current_event.id).all()
+            # Use proper match sorting (handles X-Y playoff format)
+            matches = sorted(matches, key=match_sort_key)
     else:
         teams = []  # No teams if no current event is set
         matches = []  # No matches if no current event is set
@@ -2538,9 +3072,16 @@ def validate_data():
     if not event:
         flash('No event selected or found.', 'danger')
         return redirect(url_for('data.index'))
-    # Get all matches for this event (respecting team/alliance isolation)
-    from app.utils.team_isolation import filter_matches_by_scouting_team
-    matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
+    # Get all matches for this event (respecting alliance mode when active)
+    # If alliance mode is active, use alliance helpers to gather matches from any alliance member
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
+    if is_alliance_mode:
+        from app.utils.alliance_data import get_all_matches_for_alliance
+        matches, _ = get_all_matches_for_alliance(event_id=event.id, event_code=event.code)
+    else:
+        from app.utils.team_isolation import filter_matches_by_scouting_team
+        matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
     # Get API matches (official scores)
     try:
         api_matches = get_matches_dual_api(event.code)
@@ -2922,10 +3463,23 @@ def data_stats():
                 event_teams = teams_count
                 event_matches = matches_count
             else:
-                event_teams = filter_teams_by_scouting_team(Team.query.join(Team.events)).filter(Event.id == current_event.id).count()
-                event_matches = filter_matches_by_scouting_team(Match.query.filter_by(event_id=current_event.id)).count()
+                # Use event code matching to handle cross-team event lookups
+                from sqlalchemy import func as data_func
+                data_event_code = getattr(current_event, 'code', None)
+                if data_event_code:
+                    event_teams = filter_teams_by_scouting_team(Team.query.join(Team.events)).filter(data_func.upper(Event.code) == data_event_code.upper()).count()
+                    event_matches = filter_matches_by_scouting_team(Match.query.join(Event, Match.event_id == Event.id)).filter(data_func.upper(Event.code) == data_event_code.upper()).count()
+                else:
+                    event_teams = filter_teams_by_scouting_team(Team.query.join(Team.events)).filter(Event.id == current_event.id).count()
+                    event_matches = filter_matches_by_scouting_team(Match.query.filter_by(event_id=current_event.id)).count()
             # Use the student-friendly filter for event entries (includes unassigned entries when appropriate)
-            event_scouting = filter_scouting_data_by_scouting_team(ScoutingData.query.join(Match).filter(Match.event_id == current_event.id)).count()
+            # Use event code matching for cross-team scenarios
+            from sqlalchemy import func as scouting_func
+            scouting_event_code = getattr(current_event, 'code', None)
+            if scouting_event_code:
+                event_scouting = filter_scouting_data_by_scouting_team(ScoutingData.query.join(Match).join(Event, Match.event_id == Event.id)).filter(scouting_func.upper(Event.code) == scouting_event_code.upper()).count()
+            else:
+                event_scouting = filter_scouting_data_by_scouting_team(ScoutingData.query.join(Match).filter(Match.event_id == current_event.id)).count()
             
             event_stats = {
                 'teams': event_teams,

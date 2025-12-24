@@ -80,11 +80,28 @@
             titleDiv.className = 'fw-semibold';
             titleDiv.textContent = n.title || (n.message || 'Notification');
             const metaDiv = document.createElement('div');
-            metaDiv.className = 'notif-meta';
+            // Start clamped to two lines; an expand button will toggle the parent's `expanded` class
+            metaDiv.className = 'notif-meta clamp-2';
             metaDiv.textContent = n.message || '';
 
             content.appendChild(titleDiv);
             content.appendChild(metaDiv);
+
+            // Expand / collapse control (hidden unless message overflows)
+            const expandBtn = document.createElement('button');
+            expandBtn.className = 'notification-expand small';
+            expandBtn.type = 'button';
+            expandBtn.style.display = 'none';
+            expandBtn.textContent = 'More';
+            expandBtn.setAttribute('aria-expanded','false');
+            expandBtn.addEventListener('click', function(e){
+                e.preventDefault();
+                const nowExpanded = item.classList.toggle('expanded');
+                expandBtn.textContent = nowExpanded ? 'Less' : 'More';
+                expandBtn.setAttribute('aria-expanded', nowExpanded ? 'true' : 'false');
+                if (nowExpanded) item.setAttribute('aria-expanded','true'); else item.removeAttribute('aria-expanded');
+            });
+            content.appendChild(expandBtn);
 
             const actions = document.createElement('div');
             actions.className = 'd-flex flex-column align-items-end';
@@ -115,6 +132,21 @@
         }
 
         list.appendChild(frag);
+
+        // Detect overflowed messages and show expand buttons where needed
+        try {
+            Array.from(list.querySelectorAll('.notification-item')).forEach(el => {
+                const meta = el.querySelector('.notif-meta');
+                const btn = el.querySelector('.notification-expand');
+                if (!meta || !btn) return;
+                // If the content is taller than the clamped height, show the toggle
+                if (meta.scrollHeight > meta.clientHeight + 1) {
+                    btn.style.display = '';
+                } else {
+                    btn.style.display = 'none';
+                }
+            });
+        } catch(e) { /* ignore measurement errors */ }
 
         updateBadgeFromList();
     }

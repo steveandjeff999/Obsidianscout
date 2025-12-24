@@ -5,7 +5,8 @@
 <div class="container mt-4">
     <div class="row">
         <div class="col-md-12">
-            <h1>Sync Monitor</h1>
+            {% import '_help_icon.html' as help %}
+            <h1>Sync Monitor {{ help.help_icon('Monitor sync activity and status for your configured teams and events. Use this page to detect delayed or failed sync jobs.', 'Sync Monitor') }}</h1>
             <p class="lead text-muted">Monitor sync activity and status for your configured teams and events.</p>
             <div id="sync-monitor-root">
                 <p class="text-muted">No detailed status available on this page yet.</p>

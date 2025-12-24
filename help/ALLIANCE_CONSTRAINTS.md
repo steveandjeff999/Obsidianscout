@@ -26,6 +26,9 @@ Starting with this update, teams can only be **active** in one alliance at a tim
 - Teams cannot accept invitations to join new alliances while they have an active alliance
 - Clear error message explains the constraint and suggests deactivating current alliance first
 
+### Inline help icons
+Small question-mark help icons have been added across the Scouting Alliances UI next to key headings and controls. Hover or tap these icons to see concise contextual guidance. You can hide these inline help icons from the Settings page using **Show inline help icons** if you prefer a cleaner UI.
+
 ### Benefits
 
 1. **Prevents Confusion**: Teams always know which alliance configuration they're using

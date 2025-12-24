@@ -778,6 +778,40 @@ body {
 .rounded-ui .navbar-actions .btn {
     border-radius: var(--pill-radius) !important; /* pill-like buttons/links */
 }
+
+/* Strategy drawing responsive background and overlay */
+.u-max-w-900 { max-width: 900px; width: 100%; }
+.position-relative.u-max-w-900 { position: relative; }
+#field-image.img-no-drag, #field-image { display: block; max-width: 100%; width: 100%; height: auto; max-height: calc(100vh - 240px); object-fit: contain; margin: 0 auto; }
+.canvas-overlay { position: absolute; left: 0; top: 0; width: 100%; height: 100%; touch-action: none; z-index: 2; display: block; }
+#field-image { z-index: 1; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+
+/* Ensure small screens limit field height a bit more */
+@media (max-width: 576px) {
+    #field-image { max-height: calc(100vh - 200px); }
+}
+
+/* Text input overlay for the drawing canvas */
+#text-input-overlay {
+    position: absolute;
+    z-index: 3;
+    transform: translate(-50%, -50%);
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    background: var(--card-bg, #ffffff);
+    min-width: 120px;
+    max-width: 60%;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+}
+#text-input-overlay:focus {
+    outline: 2px solid rgba(var(--bs-primary-rgb, 13,110,253), 0.2);
+}
+.text-tool-active {
+    background: var(--bs-primary);
+    color: #fff;
+    border-color: var(--bs-primary);
+}
 .rounded-ui .enhanced-search-input,
 .rounded-ui .search-input-wrapper,
 .rounded-ui .search-submit-btn {
@@ -1994,6 +2028,9 @@ body:not(.dark-mode) .toast .btn-close {
 .u-min-h-260 { min-height: 260px; }
 .u-scrollable-200 { max-height: 200px; overflow-y: auto; }
 
+/* Added scrollable utilities for modals and long popups */
+.u-scrollable-420 { max-height: 420px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.u-scrollable-70vh { max-height: 70vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
 /* Ensure dropdowns work properly in dark mode on mobile */
 @media (max-width: 767.98px) {

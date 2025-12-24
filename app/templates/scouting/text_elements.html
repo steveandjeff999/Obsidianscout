@@ -5,8 +5,9 @@
 {% block content %}
 <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-4">
+        {% import '_help_icon.html' as help %}
         <h1 class="mb-0">
-            <i class="fas fa-comment-alt text-primary me-2"></i>Text Elements
+            <i class="fas fa-comment-alt text-primary me-2"></i>Text Elements {{ help.help_icon('View and filter free-text scouting entries submitted by scouts. Use the filters to focus on events and text element types.', 'Text elements') }}
         </h1>
         <a href="{{ url_for('scouting.index') }}" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left me-2"></i> Back to Scouting
@@ -22,12 +23,23 @@
             <div class="d-flex flex-wrap gap-3 align-items-center">
                 <div>
                     <label class="form-label">Filter by event:</label>
+                    {# If any alliance events exist, use a standard dropdown so alliance vs local copies are visible #}
+                    {% set alliance_events = events|selectattr('is_alliance')|list %}
+                    {% if alliance_events|length > 0 %}
+                    <select id="event-filter-select" class="form-select w-auto">
+                        <option value="all" selected>All Events</option>
+                        {% for event in events|dedupe_events %}
+                        <option value="{{ event.id }}" data-event-id="{{ event.id }}">{{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}{% if event.code %} - {{ event.code }}{% endif %}</option>
+                        {% endfor %}
+                    </select>
+                    {% else %}
                     <div class="d-flex gap-2">
                         <button type="button" class="btn btn-outline-secondary event-filter-btn active" data-filter="all">All Events</button>
                         {% for event in events|dedupe_events %}
-                        <button type="button" class="btn btn-outline-secondary event-filter-btn" data-filter="{{ event.code }}">{{ event.code }}</button>
+                        <button type="button" class="btn btn-outline-secondary event-filter-btn" data-filter="{{ event.id }}">{{ event.code }}{% if event.is_alliance %} (Alliance){% endif %}</button>
                         {% endfor %}
                     </div>
+                    {% endif %}
                 </div>
                 <div class="vr"></div>
                 <div>
@@ -71,7 +83,7 @@
                         {% for item in scouting_entries %}
                         {% set entry = item.entry %}
                         {% set text_data = item.text_data %}
-                        <tr class="text-entry-row" data-event-code="{{ entry.match.event.code }}">
+                        <tr class="text-entry-row" data-event-code="{{ entry.match.event.code }}" data-event-id="{{ entry.match.event.id }}">
                             <td>
                                 <a href="{{ url_for('teams.view', team_number=entry.team.team_number) }}" class="text-decoration-none">
                                     <strong>{{ entry.team.team_number }}</strong>
@@ -231,8 +243,9 @@ document.addEventListener('DOMContentLoaded', function() {
         let visibleCount = 0;
         
         dataRows.forEach(row => {
-            const eventCode = row.getAttribute('data-event-code');
-            
+            const eventIdRaw = row.getAttribute('data-event-id') || '';
+            const eventId = eventIdRaw ? String(eventIdRaw).trim() : '';
+
             // Check if the row has the selected text element (if filtering by text element)
             let hasTextElement = true;
             if (currentTextFilter !== 'all') {
@@ -240,7 +253,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 hasTextElement = textElements.length > 0;
             }
             
-            const eventMatch = currentEventFilter === 'all' || eventCode === currentEventFilter;
+            const currentEvent = currentEventFilter ? String(currentEventFilter) : 'all';
+            const eventMatch = (currentEvent === 'all') || (eventId && eventId === currentEvent);
             const textMatch = hasTextElement;
             
             if (eventMatch && textMatch) {
@@ -255,7 +269,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('entries-count').textContent = `Filtered entries: ${visibleCount}`;
     }
 
-    // Event filter handlers
+    // Event filter handlers (buttons)
     eventFilterButtons.forEach(button => {
         button.addEventListener('click', function() {
             eventFilterButtons.forEach(btn => btn.classList.remove('active'));
@@ -264,6 +278,15 @@ document.addEventListener('DOMContentLoaded', function() {
             updateVisibility();
         });
     });
+
+    // Event filter handler (select) - used when alliance events exist
+    const eventFilterSelect = document.getElementById('event-filter-select');
+    if (eventFilterSelect) {
+        eventFilterSelect.addEventListener('change', function() {
+            currentEventFilter = this.value || 'all';
+            updateVisibility();
+        });
+    }
 
     // Text filter handlers
     textFilterButtons.forEach(button => {

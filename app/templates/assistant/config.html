@@ -6,7 +6,8 @@
 <div class="container mt-4">
     <div class="row">
         <div class="col-md-12">
-            <h1>AI Assistant Configuration</h1>
+            {% import '_help_icon.html' as help %}
+            <h1>AI Assistant Configuration {{ help.help_icon('Configure the Scout Assistant API endpoint and key. When enabled, the assistant can answer complex questions.', 'Assistant config') }}</h1>
             <p>Configure the Scout Assistant's AI capabilities.</p>
             
             <div class="card mb-4">

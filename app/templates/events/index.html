@@ -5,7 +5,8 @@
 {% block content %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>Events</h1>
+        {% import '_help_icon.html' as help %}
+        <h1>Events {{ help.help_icon('List and manage events. Sync events from APIs or add manually to schedule matches and teams.', 'Events') }}</h1>
     </div>
 
     {% if events %}
@@ -42,6 +43,7 @@
                     </td>
                     <td>
                         <div class="btn-group">
+                            {% if not (event.is_alliance|default(false)) %}
                             <a href="{{ url_for('matches.index', event_id=event.id) }}" class="btn btn-sm btn-info">Matches</a>
                             <a href="{{ url_for('teams.index', event_id=event.id) }}" class="btn btn-sm btn-primary">Teams</a>
                             <a href="{{ url_for('events.edit', event_id=event.id) }}" class="btn btn-sm btn-warning">Edit</a>
@@ -50,8 +52,12 @@
                                     data-bs-target="#deleteModal{{ event.id }}">
                                 Delete
                             </button>
+                            {% else %}
+                            <span class="text-muted small">Alliance-only event — actions unavailable</span>
+                            {% endif %}
                         </div>
 
+                        {% if not (event.is_alliance|default(false)) %}
                         <!-- Delete Modal -->
                         <div class="modal fade" id="deleteModal{{ event.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ event.id }}" aria-hidden="true">
                             <div class="modal-dialog">
@@ -73,6 +79,7 @@
                                 </div>
                             </div>
                         </div>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}

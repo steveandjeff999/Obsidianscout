@@ -1,8 +1,10 @@
 {% extends 'base.html' %}
 
+{% import '_help_icon.html' as help %}
+
 {% block title %}Edit Alliance Game Configuration - {{ alliance.alliance_name }}{% endblock %}
 
-{% block heading %}Edit Alliance Game Configuration{% endblock %}
+{% block heading %}Edit Alliance Game Configuration {{ help.help_icon('Edit the shared game configuration for this alliance. Changes will be used by all alliance members when alliance mode is active; consider migration impacts when changing element ids.', 'Edit alliance config') }}{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -24,7 +26,7 @@
                 <div class="alert alert-info mb-4">
                     <i class="fas fa-info-circle me-2"></i>
                     <strong>Note:</strong> This configuration will be used by all alliance members when alliance mode is active. 
-                    Changes will affect all alliance members' game scouting forms.
+                    Changes will affect all alliance members' game scouting forms. {{ help.help_icon('This shared config overwrites individual team configs when alliance mode is active. Coordinate with other admins before making large structural changes.', 'Shared config note') }}
                 </div>
                 
                 <form method="POST" action="{{ url_for('scouting_alliances.save_game_config', alliance_id=alliance.id) }}" id="config-form">
@@ -702,10 +704,10 @@
                     <!-- Save Button -->
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
                         <button type="button" class="btn btn-outline-warning me-md-2" data-bs-toggle="modal" data-bs-target="#resetModal">
-                            <i class="fas fa-undo me-1"></i> Reset to Default
+                            <i class="fas fa-undo me-1"></i> Reset to Default {{ help.help_icon('Replace this alliance configuration with a selected default template. This is destructive and will affect all members.', 'Reset to default') }}
                         </button>
                         <button type="submit" class="btn btn-primary btn-lg">
-                            <i class="fas fa-save me-1"></i> Save Configuration
+                            <i class="fas fa-save me-1"></i> Save Configuration {{ help.help_icon('Validate and save the alliance configuration. You may be prompted to remap scoring elements if structure changes are detected.', 'Save configuration') }}
                         </button>
                     </div>
                 </form>

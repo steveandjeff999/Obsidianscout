@@ -1,0 +1,5 @@
+{% macro help_icon(content, title='') -%}
+<span class="help-icon ms-2" tabindex="0" role="button" data-bs-toggle="popover" data-bs-trigger="hover focus click" data-bs-content="{{ content|e }}" data-bs-html="true" {% if title %}title="{{ title|e }}"{% endif %} aria-label="Help: {{ title|default('More info')|e }}">
+    <i class="fas fa-question-circle" aria-hidden="true"></i>
+</span>
+{%- endmacro %}

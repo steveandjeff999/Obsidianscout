@@ -66,17 +66,43 @@ def index():
     if current_event_code:
         current_event = filter_events_by_scouting_team().filter(Event.code == current_event_code).first()
     else:
-        current_event = events[0] if events else None
+        # Prefer a real Event object (with numeric id) as the fallback current event
+        current_event = None
+        if events:
+            # Prefer first ORM Event (numeric id), fall back to first entry regardless
+            current_event = next((e for e in events if isinstance(getattr(e, 'id', None), int)), events[0])
     
     if not current_event:
         flash('No events found. Please create an event first.', 'warning')
         return redirect(url_for('main.index'))
     
     # Get existing alliances for the current event (filtered by scouting team)
-    alliances = filter_alliance_selections_by_scouting_team().filter(
+    # Fetch ordered by alliance_number and newest timestamp first so the first row for a
+    # given alliance_number is the canonical one.
+    raw_alliances = filter_alliance_selections_by_scouting_team().filter(
         AllianceSelection.event_id == current_event.id
-    ).order_by(AllianceSelection.alliance_number).all()
-    
+    ).order_by(AllianceSelection.alliance_number, AllianceSelection.timestamp.desc()).all()
+
+    # Deduplicate by alliance_number, keeping the latest (by timestamp). Collect duplicates
+    # for removal so the database remains clean and the UI doesn't show repeated alliance cards.
+    alliances_by_num = {}
+    duplicates = []
+    for a in raw_alliances:
+        num = a.alliance_number
+        if num not in alliances_by_num:
+            alliances_by_num[num] = a
+        else:
+            duplicates.append(a)
+
+    if duplicates:
+        current_app.logger.info(f"Removing {len(duplicates)} duplicate alliance rows for event {current_event.id}")
+        for dup in duplicates:
+            db.session.delete(dup)
+        db.session.commit()
+
+    # Build final alliances list ordered by alliance_number
+    alliances = [alliances_by_num[n] for n in sorted(alliances_by_num.keys())]
+
     # Create 8 alliances if they don't exist
     if len(alliances) < 8:
         for i in range(1, 9):
@@ -113,6 +139,24 @@ def get_recommendations(event_id):
             Event.id == event_id
         ).order_by(Team.team_number).all()
         
+        # Deduplicate teams in case of duplicate rows from join operations.
+        # Use team_number as the dedupe key so two different DB rows representing the
+        # same real team (same team_number) are not shown twice when server IDs differ.
+        seen_team_numbers = set()
+        unique_all_teams = []
+        for t in all_teams:
+            if not t:
+                continue
+            team_num = getattr(t, 'team_number', None)
+            # Fall back to id if team_number is absent for some reason
+            key = team_num if team_num is not None else getattr(t, 'id', None)
+            if key not in seen_team_numbers:
+                seen_team_numbers.add(key)
+                unique_all_teams.append(t)
+        if len(unique_all_teams) != len(all_teams):
+            current_app.logger.info(f"Deduplicated teams for event {event_id}: {len(all_teams)} -> {len(unique_all_teams)}")
+        all_teams = unique_all_teams
+
         # If no teams found in team_event, fall back to teams with scouting data for this scouting team
         if not all_teams:
             from app.models import Match
@@ -633,7 +677,7 @@ def manage_lists(event_id):
     ).filter(
         team_event.c.event_id == event_id
     ).order_by(Team.team_number).all()
-        
+
     # If no teams found in team_event relationship, fall back to all teams with scouting data
     if not all_teams:
         from app.models import Match
@@ -642,6 +686,18 @@ def manage_lists(event_id):
         ).filter(
             Match.event_id == event_id
         ).distinct().order_by(Team.team_number).all()
+
+    # Deduplicate teams in case the join returns multiple identical rows for the same team
+    # (e.g., duplicate team_event entries). Keep the first occurrence (teams are ordered by team_number).
+    seen_numbers = set()
+    deduped_teams = []
+    for t in all_teams:
+        if t.team_number not in seen_numbers:
+            seen_numbers.add(t.team_number)
+            deduped_teams.append(t)
+    if len(deduped_teams) != len(all_teams):
+        current_app.logger.info(f"Deduplicated {len(all_teams) - len(deduped_teams)} team rows for event {event_id} on manage_lists page")
+    all_teams = deduped_teams
     
     return render_template('alliances/manage_lists.html',
                          event=event,
@@ -718,10 +774,22 @@ def add_to_list():
 def get_alliances(event_id):
     """Get current state of all alliances for an event"""
     try:
-        alliances = filter_alliance_selections_by_scouting_team().filter(
+        # Fetch ordered by alliance_number and newest timestamp so the first seen row is the canonical one
+        raw_alliances = filter_alliance_selections_by_scouting_team().filter(
             AllianceSelection.event_id == event_id
-        ).order_by(AllianceSelection.alliance_number).all()
-        
+        ).order_by(AllianceSelection.alliance_number, AllianceSelection.timestamp.desc()).all()
+
+        # Keep one alliance row per alliance_number (the latest). Do NOT modify DB here; just return a
+        # de-duplicated view for the client. Log any duplicates for later cleanup if needed.
+        seen = set()
+        alliances = []
+        for a in raw_alliances:
+            if a.alliance_number in seen:
+                current_app.logger.info(f"Skipping duplicate alliance row id {a.id} for alliance_number {a.alliance_number} event {event_id}")
+                continue
+            seen.add(a.alliance_number)
+            alliances.append(a)
+
         alliance_data = []
         for alliance in alliances:
             alliance_info = {
@@ -732,7 +800,7 @@ def get_alliances(event_id):
                 'second_pick': None,
                 'third_pick': None
             }
-            
+
             # Get team info for each position
             for position in ['captain', 'first_pick', 'second_pick', 'third_pick']:
                 team_id = getattr(alliance, position)
@@ -744,9 +812,9 @@ def get_alliances(event_id):
                             'team_number': team.team_number,
                             'team_name': team.team_name or f'Team {team.team_number}'
                         }
-            
+
             alliance_data.append(alliance_info)
-        
+
         return jsonify({
             'success': True,
             'alliances': alliance_data

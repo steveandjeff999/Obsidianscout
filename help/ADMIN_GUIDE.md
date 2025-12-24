@@ -509,6 +509,9 @@ VACUUM;
 - Monitor alliance sync status
 - Revoke access after competition if needed
 
+**Tip:** You can use the inline help icons (question-mark) next to headings throughout the Alliances UI to get quick contextual guidance. Toggle these icons in **Settings → Show inline help icons** if you want to hide them.
+
+
 ## Getting Help
 
 ### Resources

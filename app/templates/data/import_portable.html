@@ -13,4 +13,51 @@
     <a href="{{ url_for('data.index') }}" class="btn btn-secondary">Cancel</a>
   </form>
 
+  {% if job_id %}
+  <div class="card mt-4" id="import-status-card">
+    <div class="card-body">
+      <h5 class="card-title">Import status</h5>
+      <p>Job ID: <code id="job-id">{{ job_id }}</code></p>
+      <p>Status: <strong id="job-status">{{ job_status.status if job_status else 'queued' }}</strong></p>
+      <p id="job-message">{{ job_status.message if job_status and job_status.message else '' }}</p>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const jobId = '{{ job_id }}';
+      if (!jobId) return;
+      const statusEl = document.getElementById('job-status');
+      const messageEl = document.getElementById('job-message');
+      let poll = setInterval(async () => {
+        try {
+          const res = await fetch(`{{ url_for('data.import_status') }}?job_id=${jobId}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.success && data.job) {
+            statusEl.textContent = data.job.status;
+            messageEl.textContent = data.job.message || '';
+            if (data.job.status === 'finished' || data.job.status === 'error') {
+              clearInterval(poll);
+              if (data.job.status === 'finished') {
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-success mt-3';
+                alertDiv.textContent = 'Import completed successfully.';
+                document.getElementById('import-status-card').appendChild(alertDiv);
+              } else {
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-danger mt-3';
+                alertDiv.textContent = 'Import failed: ' + (data.job.message || 'unknown error');
+                document.getElementById('import-status-card').appendChild(alertDiv);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Error polling import status', e);
+        }
+      }, 3000);
+    })();
+  </script>
+  {% endif %}
+
 {% endblock %}

@@ -32,6 +32,8 @@ def index():
     # Get event code from config
     game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
+    if current_event_code:
+        current_event_code = str(current_event_code).strip()
     
     # Get the current event
     event = None
@@ -39,7 +41,35 @@ def index():
     
     # Get all events for the dropdown (combined/deduped like /events)
     events = get_combined_dropdown_events()
-    
+
+    # Prefer synthetic alliance entry for current_event_code when present (override local copy when alliance active)
+    try:
+        # Only auto-override with the alliance/current_event when the user did NOT explicitly request an event
+        if not request.args.get('event_id') and current_event_code and events:
+            code_up = str(current_event_code).upper()
+            evt = next((e for e in events if getattr(e, 'is_alliance', False) and (getattr(e, 'code', '') or '').upper() == code_up), None)
+            if evt and get_active_alliance_id():
+                event = evt
+    except Exception:
+        pass
+
+    # Also respect raw event_id param that may contain synthetic ids or codes
+    try:
+        raw_event_param = request.args.get('event_id')
+        if raw_event_param and events:
+            if isinstance(raw_event_param, str):
+                if raw_event_param.startswith('alliance_'):
+                    evt = next((e for e in events if str(getattr(e, 'id', '')) == raw_event_param), None)
+                    if evt:
+                        event = evt
+                else:
+                    code_up = raw_event_param.upper()
+                    evt = next((e for e in events if (getattr(e, 'code', '') or '').upper() == code_up), None)
+                    if evt:
+                        event = evt
+    except Exception:
+        pass
+
     if event_id:
         # If a specific event ID is requested, use that (filtered by scouting team)
         event = filter_events_by_scouting_team().filter(Event.id == event_id).first()
@@ -48,26 +78,115 @@ def index():
             return redirect(url_for('teams.index'))
     elif current_event_code:
         # Otherwise use the current event from config (filtered by scouting team)
-        event = get_event_by_code(current_event_code)
+        if not event:
+            event = get_event_by_code(current_event_code)
         
         # If the config has an event code but it's not in the database yet,
         # suggest syncing teams to create the event
         if not event and events:
             flash(f"Event with code '{current_event_code}' not found. Please sync teams to create this event.", "warning")
+
+    # Post-process: If alliance mode is active and a synthetic alliance entry exists for the
+    # current_event_code, prefer that synthetic entry (override local selection) — but only when
+    # the user did NOT explicitly request an `event_id`.
+    try:
+        if not request.args.get('event_id') and current_event_code and events and get_active_alliance_id():
+            code_up = str(current_event_code).upper()
+            evt = next((e for e in events if getattr(e, 'is_alliance', False) and (getattr(e, 'code', '') or '').upper() == code_up), None)
+            if evt:
+                # No explicit event requested; use the synthetic alliance entry
+                event = evt
+                force_selected_event = False
+    except Exception:
+        pass
+
+    try:
+        force_selected_event
+    except NameError:
+        force_selected_event = False
     
     # Filter teams by the selected event and scouting team
     # In alliance mode, show teams from alliance scouting data
     alliance_id = get_active_alliance_id()
     
+    # If no event selected and we're not in alliance mode, default to the current team's most-recent event
+    try:
+        if not event and not alliance_id:
+            team_event = filter_events_by_scouting_team().order_by(
+                Event.year.desc(), 
+                Event.start_date.desc(), 
+                Event.id.desc()
+            ).first()
+            if team_event:
+                event = team_event
+    except Exception:
+        pass
+
+    # Ensure selected_event matches an entry from the events dropdown list
+    selected_event_for_dropdown = None
+    if event and events:
+        try:
+            # Check if we're in alliance mode
+            is_in_alliance_mode = alliance_id is not None
+            
+            event_id_to_match = getattr(event, 'id', None)
+            event_code_to_match = (getattr(event, 'code', '') or '').upper()
+            
+            # Collect all matching events, then pick the best one
+            matching_events = []
+            for dropdown_evt in events:
+                dropdown_id = getattr(dropdown_evt, 'id', None)
+                dropdown_code = (getattr(dropdown_evt, 'code', '') or '').upper()
+                
+                if (event_id_to_match and dropdown_id == event_id_to_match) or \
+                   (event_code_to_match and dropdown_code == event_code_to_match):
+                    matching_events.append(dropdown_evt)
+            
+            # Prefer alliance events when in alliance mode, non-alliance events otherwise
+            if matching_events:
+                for evt in matching_events:
+                    is_alliance_evt = getattr(evt, 'is_alliance', False)
+                    if is_in_alliance_mode and is_alliance_evt:
+                        selected_event_for_dropdown = evt
+                        break
+                    elif not is_in_alliance_mode and not is_alliance_evt:
+                        selected_event_for_dropdown = evt
+                        break
+                # Fallback to first match if preference not found
+                if not selected_event_for_dropdown:
+                    selected_event_for_dropdown = matching_events[0]
+            
+            if not selected_event_for_dropdown:
+                selected_event_for_dropdown = event
+        except Exception:
+            selected_event_for_dropdown = event
+    else:
+        selected_event_for_dropdown = event
+
     if event:
         if alliance_id:
             # Alliance mode - get teams from alliance scouting data for this event
-            teams, _ = get_all_teams_for_alliance(event_id=event.id)
+            try:
+                is_synthetic = isinstance(getattr(event, 'id', None), str) and str(event.id).startswith('alliance_')
+            except Exception:
+                is_synthetic = False
+            if is_synthetic:
+                teams, _ = get_all_teams_for_alliance(event_code=getattr(event, 'code', None))
+            else:
+                teams, _ = get_all_teams_for_alliance(event_id=event.id)
         else:
             # Normal mode - get teams associated with this event, filtered by scouting team
-            teams = filter_teams_by_scouting_team().join(
-                Team.events
-            ).filter(Event.id == event.id).order_by(Team.team_number).all()
+            # Use event code matching to handle cross-team event lookups
+            from sqlalchemy import func
+            event_code = getattr(event, 'code', None)
+            if event_code:
+                teams = filter_teams_by_scouting_team().join(
+                    Team.events
+                ).filter(func.upper(Event.code) == event_code.upper()).order_by(Team.team_number).all()
+            else:
+                teams = filter_teams_by_scouting_team().join(
+                    Team.events
+                ).filter(Event.id == event.id).order_by(Team.team_number).all()
 
         # Deduplicate teams by team_number using a shared helper that applies
         # the preference rules (prefer alliance teams when alliance active,
@@ -89,7 +208,7 @@ def index():
         else:
             flash("Please select an event to view teams.", "info")
     
-    return render_template('teams/index.html', teams=teams, events=events, selected_event=event, is_alliance_mode=alliance_id is not None, **get_theme_context())
+    return render_template('teams/index.html', teams=teams, events=events, selected_event=selected_event_for_dropdown, force_selected_event=force_selected_event, is_alliance_mode=alliance_id is not None, **get_theme_context())
 
 @bp.route('/sync_from_config')
 def sync_from_config():
@@ -656,23 +775,46 @@ def ranks():
         event = Event.query.get_or_404(event_id)
     elif current_event_code:
         event = get_event_by_code(current_event_code)
+    # Check if alliance mode is active
+    alliance_id = get_active_alliance_id()
+    is_alliance_mode = alliance_id is not None
+
     # Build teams list from event but deduplicate by team_number to avoid duplicate logical teams
     if event:
-        teams = list(event.teams)
+        # If alliance mode is active, get teams for the alliance (includes all alliance members)
+        if alliance_id:
+            try:
+                try:
+                    is_synthetic = isinstance(getattr(event, 'id', None), str) and str(event.id).startswith('alliance_')
+                except Exception:
+                    is_synthetic = False
+                if is_synthetic:
+                    teams, _ = get_all_teams_for_alliance(event_code=getattr(event, 'code', None))
+                else:
+                    teams, _ = get_all_teams_for_alliance(event_id=event.id)
+            except Exception:
+                teams = list(event.teams)
+        else:
+            # Normal mode - get event teams visible to current scouting team
+            try:
+                from app.utils.team_isolation import filter_teams_by_scouting_team
+                teams = filter_teams_by_scouting_team().join(
+                    Team.events
+                ).filter(Event.id == event.id).order_by(Team.team_number).all()
+            except Exception:
+                teams = list(event.teams)
+
+        # Deduplicate teams by team_number using preference rules
         try:
             from app.utils.team_isolation import dedupe_team_list, get_alliance_team_numbers, get_current_scouting_team_number
             alliance_team_nums = get_alliance_team_numbers() or []
             current_scouting_team = get_current_scouting_team_number()
             teams = dedupe_team_list(teams, prefer_alliance=bool(alliance_id), alliance_team_numbers=alliance_team_nums, current_scouting_team=current_scouting_team)
         except Exception:
-            # If deduplication fails, fall back to raw event teams
-            teams = list(event.teams)
+            # If deduplication fails, keep teams as-is
+            pass
     else:
         teams = []
-    
-    # Check if alliance mode is active
-    alliance_id = get_active_alliance_id()
-    is_alliance_mode = alliance_id is not None
     
     # Determine the total metric id from config
     total_metric_id = None
@@ -805,6 +947,16 @@ def view_shared_ranks(share_id):
     
     if not teams:
         teams = Team.query.all()  # Fallback to all teams if no event specified
+        try:
+            # Deduplicate the global teams list to avoid showing multiple Team rows with the same team_number
+            from app.utils.team_isolation import dedupe_team_list, get_alliance_team_numbers, get_current_scouting_team_number
+            from app.utils.alliance_data import get_active_alliance_id
+            alliance_team_nums = get_alliance_team_numbers() or []
+            current_scouting_team = get_current_scouting_team_number()
+            teams = dedupe_team_list(teams, prefer_alliance=bool(get_active_alliance_id()), alliance_team_numbers=alliance_team_nums, current_scouting_team=current_scouting_team)
+        except Exception:
+            # If deduplication fails for any reason, fall back to the original list
+            pass
     
     # Calculate team rankings using the same logic as the main route
     # but without user-specific filtering

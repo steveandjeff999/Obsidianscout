@@ -133,7 +133,8 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <h1>Match Prediction Report</h1>
+            {% import '_help_icon.html' as help %}
+            <h1>Match Prediction Report {{ help.help_icon('Report showing model predictions and confidence for a specific match. Use this for pre-match planning.', 'Prediction report') }}</h1>
             <h2>{{ selected_match.match_type }} {{ selected_match.match_number }}</h2>
             <h3>{{ selected_event.name }} ({{ selected_event.year }})</h3>
             <p>Generated on: {{ now.strftime('%Y-%m-%d %H:%M') }}</p>

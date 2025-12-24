@@ -129,7 +129,8 @@
 <div class="container mt-4">
     <div class="row">
         <div class="col-md-12">
-            <h1>Scout Assistant</h1>
+            {% import '_help_icon.html' as help %}
+            <h1>Scout Assistant {{ help.help_icon('Interactive assistant that helps answer questions about events, matches, and teams. Try asking a question in the box below.', 'Scout Assistant') }}</h1>
             <p>Ask questions about teams, matches, or event data to get insights and visualizations.</p>
             
             <!-- Chat History -->

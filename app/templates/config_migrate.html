@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 
-{% block title %}Migrate Scoring Elements{% endblock %}
+{% block title %}Migrate Configuration{% endblock %}
 
-{% block heading %}Migrate Scoring Elements{% endblock %}
+{% block heading %}Migrate Scoring Elements {{ help.help_icon('Remap existing scouting data when scoring element IDs change. Review suggestions carefully before applying migrations.', 'Migrate scoring elements') }}{% endblock %}
 
 {% block content %}
 <div class="row">

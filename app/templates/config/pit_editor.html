@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 
 {% block title %}Edit Pit Scouting Configuration{% endblock %}
 
-{% block heading %}Edit Pit Scouting Configuration{% endblock %}
+{% block heading %}Edit Pit Scouting Configuration {{ help.help_icon('Configure pit scouting fields and options. Changes affect pit forms used when collecting team robot info.', 'Pit config') }}{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -31,6 +32,9 @@
                 </h6>
             </div>
             <div class="card-body">
+
+                {% include '_alliance_mode_banner.html' %}
+
                 <div class="alert alert-warning">
                     <i class="fas fa-exclamation-triangle me-2"></i>
                     <strong>Warning:</strong> Editing the pit scouting configuration will affect all pit scouting forms. 
@@ -46,12 +50,13 @@
                     
                     <div class="d-flex justify-content-between">
                         <div>
-                            <button type="submit" class="btn btn-success me-2">
+                            <button type="submit" class="btn btn-success me-2" id="saveConfigBtn">
                                 <i class="fas fa-save me-1"></i> Save Configuration
                             </button>
                             <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#resetModal">
                                 <i class="fas fa-undo me-1"></i> Reset to Default
                             </button>
+                            <small id="jsonValidationFeedback" class="form-text text-danger ms-2" role="alert" aria-live="polite" style="display:none;"></small>
                         </div>
                         <a href="{{ url_for('pit_scouting.config') }}" class="btn btn-secondary">
                             <i class="fas fa-times me-1"></i> Cancel
@@ -135,14 +140,88 @@ body.dark-mode #configJsonEditor {
             enableLiveAutocompletion: true
         });
         
-        // Parse the config - it's already JSON from tojson filter
-        const configData = {{ pit_config | tojson | safe }};
-        editor.setValue(JSON.stringify(configData, null, 2));
+        // If a raw (invalid) pit config was captured on the server, prefer showing the raw text
+        const CONFIG_LOAD_RAW = {{ config_load_raw | tojson | safe }};
+        const pitRawText = (CONFIG_LOAD_RAW && CONFIG_LOAD_RAW['pit_config.json']) ? CONFIG_LOAD_RAW['pit_config.json'] : null;
+        if (pitRawText) {
+            try {
+                const parsed = JSON.parse(pitRawText);
+                editor.setValue(JSON.stringify(parsed, null, 2));
+            } catch (e) {
+                editor.setValue(pitRawText);
+            }
+        } else {
+            // Parse the config - it's already JSON from tojson filter
+            const configData = {{ pit_config | tojson | safe }};
+            editor.setValue(JSON.stringify(configData, null, 2));
+        }
         editor.clearSelection();
         editor.gotoLine(1);
         
-        // Update hidden textarea when form is submitted
-        document.getElementById('configForm').addEventListener('submit', function() {
+        const saveBtn = document.getElementById('saveConfigBtn');
+        const feedbackEl = document.getElementById('jsonValidationFeedback');
+
+        function indexToLineCol(text, index) {
+            const lines = text.slice(0, index).split(/\r\n|\r|\n/);
+            const line = lines.length;
+            const col = lines[lines.length-1].length + 1;
+            return {line, col};
+        }
+
+        function debounce(fn, wait) {
+            let t;
+            return function(...args) {
+                clearTimeout(t);
+                t = setTimeout(() => fn.apply(this, args), wait);
+            };
+        }
+
+        function validateJsonAndUpdateUI() {
+            const text = editor.getValue();
+            try {
+                JSON.parse(text);
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.classList.remove('btn-secondary');
+                    saveBtn.classList.add('btn-success');
+                }
+                if (feedbackEl) {
+                    feedbackEl.style.display = 'none';
+                    feedbackEl.textContent = '';
+                }
+                const hidden = document.getElementById('config_json');
+                if (hidden) hidden.value = text;
+                return true;
+            } catch (err) {
+                let msg = err.message || 'Invalid JSON';
+                const m = /at position (\d+)/.exec(msg);
+                if (m) {
+                    const pos = parseInt(m[1], 10);
+                    const lc = indexToLineCol(text, pos);
+                    msg += ` (line ${lc.line}, column ${lc.col})`;
+                }
+                if (saveBtn) {
+                    saveBtn.disabled = true;
+                    saveBtn.classList.remove('btn-success');
+                    saveBtn.classList.add('btn-secondary');
+                }
+                if (feedbackEl) {
+                    feedbackEl.style.display = 'block';
+                    feedbackEl.textContent = 'Invalid JSON: ' + msg;
+                }
+                return false;
+            }
+        }
+
+        const debouncedValidate = debounce(validateJsonAndUpdateUI, 250);
+        editor.session.on('change', debouncedValidate);
+        validateJsonAndUpdateUI();
+
+        document.getElementById('configForm').addEventListener('submit', function(e) {
+            if (!validateJsonAndUpdateUI()) {
+                e.preventDefault();
+                return false;
+            }
             document.getElementById('config_json').value = editor.getValue();
         });
     });

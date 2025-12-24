@@ -1,8 +1,10 @@
 {% extends 'base.html' %}
 
+{% import '_help_icon.html' as help %}
+
 {% block title %}Alliance Recommendations{% endblock %}
 
-{% block heading %}Alliance Recommendations{% endblock %}
+{% block heading %}Alliance Recommendations {{ help.help_icon('Explore suggested alliance partners and complementary team pairings. This tries to balance scoring metrics and role coverage.', 'Alliance recommendations') }}{% endblock %}
 {% block subheading %}Smart alliance partner suggestions{% endblock %}
 
 {% block content %}

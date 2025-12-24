@@ -4,7 +4,8 @@
 
 {% block content %}
 <div class="container mt-4">
-	<h1 class="mb-3">Edit Event</h1>
+	{% import '_help_icon.html' as help %}
+	<h1 class="mb-3">Edit Event {{ help.help_icon('Update event details such as name, location, dates, and event code. Changes affect related matches.', 'Edit Event') }}</h1>
 
 	<div class="card">
 		<div class="card-body">

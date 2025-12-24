@@ -206,6 +206,32 @@ body.dark-mode .modern-layout .topbar.navbar-glass {
 /* Accessibility contrast enhancements for dark mode */
 body.dark-mode .modern-layout .btn-primary { box-shadow: 0 6px 22px rgba(30,130,255,0.18); }
 
+/* Strong visibility for selected (checked) buttons when glass theme + dark-mode are active */
+body.dark-mode .modern-layout .btn-check:checked + .btn,
+body.dark-mode .modern-layout .btn-check:checked + .btn-outline-primary,
+body.dark-mode .modern-layout .btn-check:checked + .btn-outline-danger,
+body.dark-mode .modern-layout .btn-check:checked + .btn-outline-secondary,
+body.dark-mode .modern-layout .btn-check:checked + .btn-outline-success,
+body.dark-mode .modern-layout .btn-check:checked + .btn-outline-warning {
+    color: #fff !important;
+    /* stronger, visible background that contrasts with glass surface */
+    background-color: rgba(255,255,255,0.10) !important;
+    border-color: rgba(255,255,255,0.16) !important;
+    box-shadow: 0 0 0 0.22rem rgba(255,255,255,0.08) !important;
+}
+
+/* Use theme-tinted backgrounds for primary/danger to keep meaning while increasing contrast */
+body.dark-mode .modern-layout .btn-check:checked + .btn-outline-primary {
+    background-color: rgba(var(--bs-primary-rgb,13,110,253),0.16) !important;
+    border-color: rgba(var(--bs-primary-rgb,13,110,253),0.28) !important;
+    box-shadow: 0 0 0 0.22rem rgba(var(--bs-primary-rgb,13,110,253),0.10) !important;
+}
+body.dark-mode .modern-layout .btn-check:checked + .btn-outline-danger {
+    background-color: rgba(var(--bs-danger-rgb,220,53,69),0.16) !important;
+    border-color: rgba(var(--bs-danger-rgb,220,53,69),0.28) !important;
+    box-shadow: 0 0 0 0.22rem rgba(var(--bs-danger-rgb,220,53,69),0.10) !important;
+}
+
 /* Add a thin glass border to header icons and minor UI elements */
 .modern-layout .topbar i, .modern-layout .sidebar i { padding: 6px; border-radius: 8px; background: rgba(255,255,255,0.03); }
 

@@ -1,8 +1,10 @@
 {% extends 'base.html' %}
 
+{% import '_help_icon.html' as help %}
+
 {% block title %}Simple Configuration Editor{% endblock %}
 
-{% block heading %}Simple Configuration Editor{% endblock %}
+{% block heading %}Simple Configuration Editor {{ help.help_icon('Simplified form-based editor for common configuration fields. Designed for quick edits and onboarding.', 'Simple configuration editor') }}{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -12,13 +14,13 @@
                 <h5 class="mb-0">Edit {{ game_config.game_name or 'New Game' }} Configuration</h5>
                 <div>
                     <a href="{{ url_for('main.edit_config') }}" class="btn btn-warning btn-sm me-2">
-                        <i class="fas fa-code me-1"></i> Advanced JSON Editor
+                        <i class="fas fa-code me-1"></i> Advanced JSON Editor {{ help.help_icon('Open raw JSON editor with validation and migration checks.', 'Advanced editor') }}
                     </a>
                     <a href="{{ url_for('main.config') }}" class="btn btn-light btn-sm me-2">
-                        <i class="fas fa-eye me-1"></i> View Configuration
+                        <i class="fas fa-eye me-1"></i> View Configuration {{ help.help_icon('View current JSON configuration without editing.', 'View configuration') }}
                     </a>
                     <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#resetModal">
-                        <i class="fas fa-undo me-1"></i> Reset to Default
+                        <i class="fas fa-undo me-1"></i> Reset to Default {{ help.help_icon('Replace your configuration with a default template; use for clean starts or testing.', 'Reset to default') }}
                     </button>
                 </div>
             <!-- Reset to Default Modal (simple editor) -->
@@ -129,7 +131,7 @@
                                             <div class="row">
                                                 <div class="col-md-6">
                                                     <div class="mb-3">
-                                                        <label for="alliance_size" class="form-label">Alliance Size</label>
+                                                        <label for="alliance_size" class="form-label">Alliance Size {{ help.help_icon('Number of teams per alliance (typically 3). This drives form behaviors and submission rules.', 'Alliance size') }}</label>
                                                         <input type="number" class="form-control" id="alliance_size" name="alliance_size" 
                                                                value="{{ game_config.alliance_size or 3 }}" min="1" max="6" required>
                                                     </div>
@@ -143,7 +145,7 @@
                                                 </div>
                                             </div>
                                             <div class="mb-3">
-                                                <label for="current_event_code" class="form-label">Current Event Code</label>
+                                                <label for="current_event_code" class="form-label">Current Event Code {{ help.help_icon('Event code used to pre-populate match and team imports. Keep this in sync with your active event.', 'Event code') }}</label>
                                                 <input type="text" class="form-control" id="current_event_code" name="current_event_code" 
                                                        value="{{ game_config.current_event_code or '' }}" placeholder="ARLI">
                                             </div>

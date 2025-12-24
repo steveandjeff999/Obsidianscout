@@ -11,7 +11,7 @@ from app.utils.config_manager import get_id_to_perm_id_mapping, get_current_game
 from app.utils.theme_manager import ThemeManager
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
-    filter_events_by_scouting_team, get_event_by_code, get_all_teams_at_event
+    filter_events_by_scouting_team, get_event_by_code, get_all_teams_at_event, get_combined_dropdown_events
 )
 from app.utils.alliance_data import (
     get_all_scouting_data, get_events_with_scouting_data, 
@@ -150,29 +150,90 @@ def index():
     
     # Get current event based on configuration
     current_event_code = game_config.get('current_event_code')
+    if current_event_code:
+        current_event_code = str(current_event_code).strip()
+
     current_event = None
     if current_event_code:
         current_event = get_event_by_code(current_event_code)  # Use filtered function
-    
+
+    # Also get combined events to allow correct synthetic/alliance selection from URL params
+    force_selected_event = False
+    try:
+        events = get_combined_dropdown_events()
+    except Exception:
+        events = []
+
+    # Prefer synthetic alliance entry when configured (override local copy when alliance active)
+    try:
+        if current_event_code and events:
+            code_up = str(current_event_code).upper()
+            evt = next((e for e in events if getattr(e, 'is_alliance', False) and (getattr(e, 'code', '') or '').upper() == code_up), None)
+            if evt and get_active_alliance_id():
+                current_event = evt
+    except Exception:
+        pass
+
+    # Respect raw event_id URL params that may specify synthetic ids or codes
+    try:
+        raw_event_param = request.args.get('event_id')
+        if raw_event_param and events:
+            if isinstance(raw_event_param, str):
+                if raw_event_param.startswith('alliance_'):
+                    evt = next((e for e in events if str(getattr(e, 'id', '')) == raw_event_param), None)
+                    if evt:
+                        current_event = evt
+                else:
+                    code_up = raw_event_param.upper()
+                    evt = next((e for e in events if (getattr(e, 'code', '') or '').upper() == code_up), None)
+                    if evt:
+                        current_event = evt
+    except Exception:
+        pass
+
     # Check if alliance mode is active
     alliance_id = get_active_alliance_id()
     is_alliance_mode = alliance_id is not None
     
+    # If no current_event and not in alliance mode, default to the current team's most-recent event
+    try:
+        if not current_event and not is_alliance_mode:
+            team_event = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.start_date.desc(), Event.id.desc()).first()
+            if team_event:
+                current_event = team_event
+    except Exception:
+        pass
+
     # Get teams - use alliance teams if in alliance mode
     if is_alliance_mode:
         if current_event:
-            teams, _ = get_all_teams_for_alliance(event_id=current_event.id)
+            try:
+                is_synthetic = isinstance(getattr(current_event, 'id', None), str) and str(current_event.id).startswith('alliance_')
+            except Exception:
+                is_synthetic = False
+            if is_synthetic:
+                teams, _ = get_all_teams_for_alliance(event_code=getattr(current_event, 'code', None))
+            else:
+                teams, _ = get_all_teams_for_alliance(event_id=current_event.id)
         else:
             teams, _ = get_all_teams_for_alliance()
     else:
         # Get teams filtered by the current event and scouting team
         if current_event:
-            teams = filter_teams_by_scouting_team().join(
-                Team.events
-            ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+            # Use event code matching to handle cross-team event lookups
+            from sqlalchemy import func
+            event_code = getattr(current_event, 'code', None)
+            if event_code:
+                teams = filter_teams_by_scouting_team().join(
+                    Team.events
+                ).filter(func.upper(Event.code) == event_code.upper()).order_by(Team.team_number).all()
+            else:
+                teams = filter_teams_by_scouting_team().join(
+                    Team.events
+                ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
         else:
             teams = []  # No teams if no current event is set
-    
+
     # Define custom ordering for match types
     match_type_order = {
         'practice': 1,
@@ -191,7 +252,15 @@ def index():
     else:
         # Get matches filtered by the current event if available
         if current_event:
-            all_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).all()
+            # Use event code matching to handle cross-team event lookups
+            from sqlalchemy import func as sqlfunc
+            evt_code = getattr(current_event, 'code', None)
+            if evt_code:
+                all_matches = filter_matches_by_scouting_team().join(
+                    Event, Match.event_id == Event.id
+                ).filter(sqlfunc.upper(Event.code) == evt_code.upper()).all()
+            else:
+                all_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).all()
         else:
             all_matches = filter_matches_by_scouting_team().all()
     
@@ -221,6 +290,7 @@ def index():
                           matches=matches,
                           scouting_data=recent_scouting_data,  
                           game_config=game_config,
+                          force_selected_event=force_selected_event if 'force_selected_event' in locals() else False,
                           is_alliance_mode=is_alliance_mode,
                           **get_theme_context())
 
@@ -239,6 +309,15 @@ def scouting_form():
     # Check if alliance mode is active
     alliance_id = get_active_alliance_id()
     is_alliance_mode = alliance_id is not None
+
+    # If no current_event and not in alliance mode, default to the current team's most-recent event
+    try:
+        if not current_event and not is_alliance_mode:
+            team_event = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.start_date.desc(), Event.id.desc()).first()
+            if team_event:
+                current_event = team_event
+    except Exception:
+        pass
     
     # Get teams - use alliance teams if in alliance mode
     if is_alliance_mode:
@@ -249,9 +328,17 @@ def scouting_form():
     else:
         # Get teams filtered by the current event and scouting team
         if current_event:
-            teams = filter_teams_by_scouting_team().join(
-                Team.events
-            ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+            # Use event code matching to handle cross-team event lookups
+            from sqlalchemy import func
+            event_code = getattr(current_event, 'code', None)
+            if event_code:
+                teams = filter_teams_by_scouting_team().join(
+                    Team.events
+                ).filter(func.upper(Event.code) == event_code.upper()).order_by(Team.team_number).all()
+            else:
+                teams = filter_teams_by_scouting_team().join(
+                    Team.events
+                ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
         else:
             teams = []  # No teams if no current event is set
 
@@ -285,7 +372,15 @@ def scouting_form():
     else:
         # Get matches filtered by the current event if available
         if current_event:
-            all_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).all()
+            # Use event code matching to handle cross-team event lookups
+            from sqlalchemy import func as sql_func
+            event_code = getattr(current_event, 'code', None)
+            if event_code:
+                all_matches = filter_matches_by_scouting_team().join(
+                    Event, Match.event_id == Event.id
+                ).filter(sql_func.upper(Event.code) == event_code.upper()).all()
+            else:
+                all_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).all()
         else:
             all_matches = filter_matches_by_scouting_team().all()
     
@@ -923,6 +1018,15 @@ def offline_data():
     if current_event_code:
         current_event = get_event_by_code(current_event_code)
     
+    # If no current_event, default to the current team's most-recent event
+    try:
+        if not current_event:
+            team_event = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.start_date.desc(), Event.id.desc()).first()
+            if team_event:
+                current_event = team_event
+    except Exception:
+        pass
+    
     # Get ALL teams at the current event (regardless of scouting_team_number)
     if current_event:
         teams = get_all_teams_at_event(event_id=current_event.id)
@@ -940,7 +1044,15 @@ def offline_data():
     
     # Get matches filtered by the current event if available
     if current_event:
-        all_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).all()
+        # Use event code matching to handle cross-team event lookups
+        from sqlalchemy import func as offline_func
+        evt_code = getattr(current_event, 'code', None)
+        if evt_code:
+            all_matches = filter_matches_by_scouting_team().join(
+                Event, Match.event_id == Event.id
+            ).filter(offline_func.upper(Event.code) == evt_code.upper()).all()
+        else:
+            all_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).all()
     else:
         all_matches = filter_matches_by_scouting_team().all()
     
@@ -1253,6 +1365,15 @@ def view_text_elements():
     if current_event_code:
         current_event = get_event_by_code(current_event_code)
     
+    # If no current_event, default to the current team's most-recent event
+    try:
+        if not current_event:
+            team_event = filter_events_by_scouting_team().order_by(Event.year.desc(), Event.start_date.desc(), Event.id.desc()).first()
+            if team_event:
+                current_event = team_event
+    except Exception:
+        pass
+    
     # Get all text elements from configuration
     text_elements = game_config.get('post_match', {}).get('text_elements', [])
     
@@ -1292,9 +1413,14 @@ def view_text_elements():
                  .join(Team)
                  .order_by(ScoutingData.timestamp.desc()))
         
-        # Filter by current event if available (only in non-alliance mode)
+        # Filter by current event if available (use event code matching for cross-team scenarios)
         if current_event:
-            query = query.filter(Event.id == current_event.id)
+            from sqlalchemy import func as text_func
+            evt_code = getattr(current_event, 'code', None)
+            if evt_code:
+                query = query.filter(text_func.upper(Event.code) == evt_code.upper())
+            else:
+                query = query.filter(Event.id == current_event.id)
     
     all_scouting_data = query.all()
     

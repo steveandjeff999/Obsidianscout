@@ -4,7 +4,8 @@
 
 {% block content %}
 <div class="container">
-    <h1 class="mb-4">Edit Match</h1>
+    {% import '_help_icon.html' as help %}
+    <h1 class="mb-4">Edit Match {{ help.help_icon('Edit the details for an existing match. Change teams, scores, and event association here.', 'Edit Match') }}</h1>
     
     <div class="card">
         <div class="card-body">

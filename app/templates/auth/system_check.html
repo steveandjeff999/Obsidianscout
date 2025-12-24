@@ -4,7 +4,8 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h1>System Check</h1>
+    {% import '_help_icon.html' as help %}
+    <h1>System Check {{ help.help_icon('Run a comprehensive system diagnostic to verify database, configuration and background jobs. Useful for troubleshooting installations.', 'System check') }}</h1>
     <p class="lead">This tool verifies the integrity and functionality of all system components.</p>
 
     {% if not results %}

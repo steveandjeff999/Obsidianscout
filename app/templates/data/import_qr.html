@@ -4,7 +4,8 @@
 
 {% block content %}
 <div class="container">
-    <h1>Import QR Code Data</h1>
+    {% import '_help_icon.html' as help %}
+    <h1>Import QR Code Data {{ help.help_icon('Paste or scan QR code payloads to import scouting data quickly from mobile devices or export files.', 'Import QR') }}</h1>
     
     <div class="card mb-4">
         <div class="card-body">

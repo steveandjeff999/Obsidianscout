@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% import '_help_icon.html' as help %}
+
 {% block title %}File Integrity Configuration{% endblock %}
 
 {% block content %}
@@ -6,7 +8,7 @@
     <div class="row">
         <div class="col-md-12">
             <h2>
-                <i class="fas fa-shield-alt"></i> File Integrity Monitoring
+                <i class="fas fa-shield-alt"></i> File Integrity Monitoring {{ help.help_icon('Configure integrity checks that detect unexpected file changes. Use Reinitialize cautiously after legitimate upgrades to reset checksums.', 'File integrity') }}
             </h2>
             <p class="text-muted">Configure and manage file integrity monitoring settings.</p>
         </div>
@@ -71,23 +73,23 @@
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-6">
-                            <h6>Reinitialize Monitoring</h6>
+                            <h6>Reinitialize Monitoring {{ help.help_icon('Recalculates checksums for monitored files. Only use when you have intentionally updated the application files (e.g., after an upgrade).', 'Reinitialize monitoring') }}</h6>
                             <p class="text-muted">
                                 Recalculate checksums for all monitored files. Use this if you've made legitimate changes to the application.
                             </p>
                             <form method="POST" action="{{ url_for('auth.reinitialize_integrity') }}" onsubmit="return confirm('Are you sure you want to reinitialize file integrity monitoring? This will reset all current checksums.')">
                                 <button type="submit" class="btn btn-warning">
-                                    <i class="fas fa-sync-alt"></i> Reinitialize
+                                    <i class="fas fa-sync-alt"></i> Reinitialize {{ help.help_icon('This resets all integrity baselines to current file contents. This is destructive to previous integrity state.', 'Confirm reinitialize') }}
                                 </button>
                             </form>
                         </div>
                         <div class="col-md-6">
-                            <h6>View Monitoring Status</h6>
+                            <h6>View Monitoring Status {{ help.help_icon('Inspect detailed integrity scan results and recent detected changes.', 'View status') }}</h6>
                             <p class="text-muted">
                                 View detailed information about file integrity monitoring.
                             </p>
                             <a href="{{ url_for('integrity.status') }}" class="btn btn-info">
-                                <i class="fas fa-eye"></i> View Status
+                                <i class="fas fa-eye"></i> View Status {{ help.help_icon('Open the full monitoring dashboard with recent findings and historical scans.', 'Open monitoring dashboard') }}
                             </a>
                         </div>
                     </div>
@@ -100,7 +102,7 @@
         <div class="col-md-12">
             <div class="card border-warning">
                 <div class="card-header bg-warning">
-                    <h5><i class="fas fa-exclamation-triangle"></i> Important Information</h5>
+                    <h5><i class="fas fa-exclamation-triangle"></i> Important Information {{ help.help_icon('Important notes and restrictions about file monitoring. Read before reinitializing or changing monitored paths.', 'Important info') }}</h5>
                 </div>
                 <div class="card-body">
                     <ul>

@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 
 {% block title %}500 - Server Error{% endblock %}
 
-{% block heading %}Server error{% endblock %}
+{% block heading %}Server error {{ help.help_icon('An internal server error occurred. Try again later and check server logs or contact an administrator if it persists.', 'Server error') }}{% endblock %}
 
 {% block content %}
 <div class="row">

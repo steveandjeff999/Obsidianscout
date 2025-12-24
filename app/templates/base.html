@@ -216,13 +216,19 @@
     <meta name="endgame_duration" content="{{ game_config.get('endgame_period', {}).get('duration_seconds', 30) }}">
     <script>
         // Pass game configuration as a JavaScript variable to avoid HTML escaping issues
-        window.GAME_CONFIG = JSON.parse('{{ game_config|tojson|safe }}');
+        // Use direct object embedding to avoid JSON.parse on potentially large strings
+        window.GAME_CONFIG = {{ game_config|tojson|safe }};
     </script>
     {% endif %}
     
     <link href="{{ url_for('static', filename='css/vendor/bootstrap.min.css') }}" rel="stylesheet">
     
     <link href="{{ url_for('static', filename='css/vendor/fontawesome-all.min.css') }}" rel="stylesheet">
+    <!-- Preload FontAwesome webfonts to avoid icons briefly missing while fonts load -->
+    <link rel="preload" href="{{ url_for('static', filename='css/vendor/webfonts/fa-solid-900.woff2') }}" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="{{ url_for('static', filename='css/vendor/webfonts/fa-regular-400.woff2') }}" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="{{ url_for('static', filename='css/vendor/webfonts/fa-brands-400.woff2') }}" as="font" type="font/woff2" crossorigin>
+
     <!-- Modern fonts: Inter for UI + Poppins for headings -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1168,13 +1174,12 @@
                     Analytics <i class="fas fa-chevron-down group-chevron ms-2" aria-hidden="true"></i>
                 </button>
                 <div class="nav-group-items" id="group-analytics-items">
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('teams') and request.endpoint != 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.index') }}"><i class="fas fa-users"></i><span>Teams</span></a>
-                <a class="nav-link {% if request.endpoint == 'main.analytics_config_averages' %}active{% endif %}" href="{{ url_for('main.analytics_config_averages') }}"><i class="fas fa-calculator"></i><span>Config Averages</span></a>
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('teams') and not (request.endpoint == 'teams.ranks' or request.endpoint == 'teams.my_ranks_shares') %}active{% endif %}" href="{{ url_for('teams.index') }}"><i class="fas fa-users"></i><span>Teams</span></a>
                 <a class="nav-link {% if request.endpoint == 'teams.ranks' %}active{% endif %}" href="{{ url_for('teams.ranks') }}"><i class="fas fa-list-ol"></i><span>Team Rankings</span></a>
                 <a class="nav-link {% if request.endpoint == 'matches.index' %}active{% endif %}" href="{{ url_for('matches.index') }}"><i class="fas fa-gamepad"></i><span>Matches</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('alliances') %}active{% endif %}" href="{{ url_for('alliances.index') }}"><i class="fas fa-handshake"></i><span>Alliance Selection</span></a>
-                {# Main graphs link: treat as active for graphs pages except the dedicated side-by-side comparison page #}
-                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') and not request.endpoint.startswith('graphs.side_by_side') %}active{% endif %}" href="{{ url_for('graphs.index') }}"><i class="fas fa-chart-line"></i><span>Graphs</span></a>
+                {# Main graphs link: treat as active for top-level graphs pages, but exclude side-by-side, custom pages, scout leaderboard, and my-shares which have their own nav items #}
+                <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs') and not (request.endpoint.startswith('graphs.side_by_side') or request.endpoint.startswith('graphs.pages') or request.endpoint == 'graphs.my_shares' or request.endpoint == 'graphs.scout_leaderboard') %}active{% endif %}" href="{{ url_for('graphs.index') }}"><i class="fas fa-chart-line"></i><span>Graphs</span></a>
                 {# Comparison (side-by-side) link: match the actual endpoint name using underscore #}
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('graphs.side_by_side') %}active{% endif %}" href="{{ url_for('graphs.side_by_side') }}"><i class="fas fa-columns"></i><span>Comparison</span></a>
                 <a class="nav-link {% if request.endpoint == 'main.analytics_config_averages' %}active{% endif %}" href="{{ url_for('main.analytics_config_averages') }}"><i class="fas fa-calculator"></i><span>Config Averages</span></a>
@@ -1559,7 +1564,27 @@
         background: linear-gradient(90deg, rgba(var(--bs-primary-rgb),0.06), transparent);
         border-radius: 6px;
     }
+
+    /* Help icon styling (small question-mark icon used site-wide for contextual help) */
+    .help-icon {
+        color: var(--bs-primary);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.95rem;
+        line-height: 1;
+    }
+    .help-icon:focus { outline: none; box-shadow: 0 0 0 3px rgba(var(--bs-primary-rgb),0.12); border-radius: 6px; }
+    .help-icon .fa-question-circle { font-size: 0.95rem; }
+
+    /* When users choose to hide inline help icons, toggle this class on the <html> or <body> element */
+    .hide-help-icons .help-icon { display: none !important; }
+
     </style>
+
+    <!-- Apply show_help_icons preference as early as possible so hiding is effective site-wide -->
+    <script>(function(){try{var v=localStorage.getItem('show_help_icons'); if(v === 'false'){ document.documentElement.classList.add('hide-help-icons'); document.body.classList.add('hide-help-icons'); } }catch(e){/* ignore */}})();</script>
 
     <script>
     // Accessibility helpers for sidebar: set aria-current on active links,
@@ -1631,6 +1656,12 @@
     {# Embedded site-wide notification banner placed directly under the navbar #}
     {% include '_notification_banner.html' %}
 
+    {# Configuration load issues banner (shown to admins when a config file failed to parse) #}
+    {% include '_config_load_banner.html' %}
+
+    {# Teams configuration banner (shown to admins when teams config is missing or invalid) #}
+    {% include '_teams_config_banner.html' %}
+
     <div class="toast-container position-fixed top-0 end-0 p-3">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -1661,6 +1692,21 @@
             {% endif %}
         {% endwith %}
     </div>
+
+    <script>
+    // Initialize site-wide popovers used by help icons (hover on desktop, tap/click usable on mobile)
+    document.addEventListener('DOMContentLoaded', function(){
+        try {
+            const popTriggers = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+            popTriggers.forEach(function(el){
+                // Avoid double-init
+                if (el._bsPopover) return;
+                const trigger = el.getAttribute('data-bs-trigger') || 'hover focus click';
+                try { new bootstrap.Popover(el, { trigger: trigger, html: true, sanitize: true, container: 'body', boundary: 'viewport' }); } catch(e) { /* non-fatal */ }
+            });
+        } catch(e) { /* ignore */ }
+    });
+    </script>
 
     {% block breadcrumb %}{% endblock %}
 
@@ -2123,7 +2169,8 @@
                 // For each element, determine the eventKey (per-element overrides global)
                 await Promise.all(els.map(async (el) => {
                     try{
-                        const localEventKey = el.getAttribute('data-event-key') || eventKey || null;
+                        // Only use an explicit per-element data-event-key; do NOT fall back to global eventKey.
+                        const localEventKey = el.getAttribute('data-event-key') || null;
                         let localMap = {};
                         if((pref === 'letter' || pref === 'both') && localEventKey){
                             localMap = await fetchRemap(localEventKey);
@@ -2146,7 +2193,8 @@
                             const nm = (sel.name||'').toLowerCase(); const id = (sel.id||'').toLowerCase();
                             if(!looksLikeTeam && !(nm.includes('team') || id.includes('team'))) return;
 
-                            const localEventKey = sel.getAttribute('data-event-key') || eventKey || null;
+                            // Only use an explicit per-select data-event-key; do NOT fall back to global eventKey.
+                            const localEventKey = sel.getAttribute('data-event-key') || null;
                             let localMap = {};
                             if((pref === 'letter' || pref === 'both') && localEventKey){
                                 localMap = await fetchRemap(localEventKey);
@@ -2159,10 +2207,10 @@
                                     const num = opt.dataset && opt.dataset.teamNumber ? String(opt.dataset.teamNumber) : (opt.textContent||'').trim().split(' ')[0];
                                     const name = opt.dataset && opt.dataset.teamName ? opt.dataset.teamName : (opt.textContent||'').split('-').slice(1).join('-').trim();
                                     let letter = (localMap && localMap[num]) ? localMap[num] : null;
-                                    // If we couldn't fetch a per-event remap (page may not expose eventKey),
-                                    // try to find a cached remap in the in-memory cache so previously-fetched
-                                    // remaps still allow letter display on other pages.
-                                    if(!letter){
+                                    // Only fall back to any cached remaps if we have an explicit event context
+                                    // for this select/option (localEventKey). This prevents previously-fetched
+                                    // remaps from leaking into unrelated team dropdowns on other pages.
+                                    if(!letter && localEventKey){
                                         try{
                                             const cache = window._teamRemapCache || {};
                                             for(const k in cache){
@@ -2170,8 +2218,9 @@
                                             }
                                         }catch(e){}
                                     }
-                                    // Last-resort: check persisted localStorage remaps
-                                    if(!letter){
+                                    // Last-resort: check persisted localStorage remaps, but only when we
+                                    // have localEventKey (avoid global leakage to unrelated dropdowns)
+                                    if(!letter && localEventKey){
                                         try{
                                             for(let i=0;i<localStorage.length;i++){
                                                 const key = localStorage.key(i);

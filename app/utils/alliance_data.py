@@ -502,19 +502,26 @@ def get_all_teams_for_alliance(event_id=None, event_code=None):
     not just teams with scouting data.
     
     Args:
-        event_id: Optional event ID to filter by
+        event_id: Optional event ID to filter by (may be a synthetic 'alliance_CODE' id)
         event_code: Optional event code to filter by
     
     Returns:
         tuple: (teams_list, is_alliance_mode)
     """
+    # Support synthetic event ids of the form 'alliance_CODE' used by UI helpers
+    if event_id and isinstance(event_id, str) and str(event_id).startswith('alliance_') and not event_code:
+        try:
+            event_code = str(event_id)[len('alliance_'):]
+        except Exception:
+            event_code = event_id
+
     alliance_id = get_active_alliance_id()
     
     if not alliance_id:
         # Not in alliance mode - use normal team isolation
         from app.utils.team_isolation import filter_teams_by_scouting_team
         query = filter_teams_by_scouting_team()
-        if event_id:
+        if event_id and not (isinstance(event_id, str) and str(event_id).startswith('alliance_')):
             query = query.join(Team.events).filter(Event.id == event_id)
         return query.order_by(Team.team_number).all(), False
     
@@ -602,19 +609,26 @@ def get_all_matches_for_alliance(event_id=None, event_code=None):
     not just matches with scouting data.
     
     Args:
-        event_id: Optional event ID to filter by
+        event_id: Optional event ID to filter by (may be a synthetic 'alliance_CODE' id)
         event_code: Optional event code to filter by
     
     Returns:
         tuple: (matches_list, is_alliance_mode)
     """
+    # Support synthetic event ids of the form 'alliance_CODE' used by UI helpers
+    if event_id and isinstance(event_id, str) and str(event_id).startswith('alliance_') and not event_code:
+        try:
+            event_code = str(event_id)[len('alliance_'):]
+        except Exception:
+            event_code = event_id
+
     alliance_id = get_active_alliance_id()
     
     if not alliance_id:
         # Not in alliance mode - use normal team isolation
         from app.utils.team_isolation import filter_matches_by_scouting_team
         query = filter_matches_by_scouting_team()
-        if event_id:
+        if event_id and not (isinstance(event_id, str) and str(event_id).startswith('alliance_')):
             query = query.filter(Match.event_id == event_id)
         return query.order_by(Match.match_type, Match.match_number).all(), False
     

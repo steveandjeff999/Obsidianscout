@@ -535,6 +535,23 @@ if __name__ == '__main__':
                                 except Exception:
                                     pass
 
+                                # If the event currently has no teams or no matches for this scouting team,
+                                # force an immediate API sync so we populate missing data promptly.
+                                try:
+                                    if scouting_team_number is None:
+                                        teams_count = Team.query.filter(Team.events.any(id=event.id), Team.scouting_team_number.is_(None)).count()
+                                        matches_count = Match.query.filter_by(event_id=event.id, scouting_team_number=None).count()
+                                    else:
+                                        teams_count = Team.query.filter(Team.events.any(id=event.id), Team.scouting_team_number==scouting_team_number).count()
+                                        matches_count = Match.query.filter_by(event_id=event.id, scouting_team_number=scouting_team_number).count()
+
+                                    if (teams_count == 0) or (matches_count == 0):
+                                        print(f"  Event {event_code} has no teams or matches for team {scouting_team_number} (teams={teams_count}, matches={matches_count}) -> forcing immediate API sync")
+                                        # Reset last sync so we won't skip due to interval checks
+                                        last = None
+                                except Exception as e:
+                                    print(f"  Warning checking event team/match counts for immediate sync: {e}")
+
                                 # Check last sync time for this team and skip if within desired interval
                                 last = get_last_sync(scouting_team_number)
                                 if last:

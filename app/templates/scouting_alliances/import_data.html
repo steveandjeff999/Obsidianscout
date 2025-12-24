@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import '_help_icon.html' as help %}
 {% block title %}Share My Data - {{ alliance.alliance_name }}{% endblock %}
 
 {% block head %}
@@ -54,7 +55,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h2 class="mb-0">
-                        <i class="fas fa-file-import"></i> Share My Team's Data
+                        <i class="fas fa-file-import"></i> Share My Team's Data {{ help.help_icon("Share scouting and pit data from your team with the alliance. Select entries to import or ignore ones you don't want shared.", 'Share my data') }}
                     </h2>
                     <p class="text-muted mb-0">
                         Share scouting data from <strong>Team {{ current_team }}</strong> with <strong>{{ alliance.alliance_name }}</strong>
@@ -116,7 +117,7 @@
     <!-- Scan Options -->
     <div class="card mb-4">
         <div class="card-header">
-            <h5 class="mb-0"><i class="fas fa-search me-2"></i>Scan Your Data</h5>
+            <h5 class="mb-0"><i class="fas fa-search me-2"></i>Scan Your Data {{ help.help_icon('Scan your team\'s local scouting and pit data to find entries that can be shared with the alliance. Only new entries are shown.', 'Scan your data') }}</h5>
         </div>
         <div class="card-body">
             <p class="text-muted">
@@ -161,7 +162,7 @@
         <!-- Selection Controls -->
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-list-check me-2"></i>Your Data Available for Sharing</h5>
+                <h5 class="mb-0"><i class="fas fa-list-check me-2"></i>Your Data Available for Sharing {{ help.help_icon('Select the entries you want to share with the alliance. Use ignore mode to permanently skip specific entries.', 'Data selection') }}</h5>
                 <div class="d-flex gap-2">
                     <span class="badge bg-success badge-count" id="selectedCount">0 selected</span>
                     <span class="badge bg-danger badge-count" id="ignoredCount">0 ignored</span>

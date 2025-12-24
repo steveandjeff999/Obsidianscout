@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 
 {% block title %}Team {{ team.team_number }} - {{ team.team_name }}{% endblock %}
 
@@ -10,7 +11,7 @@
         <div class="card">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
-                    <h3 class="mb-0">Team Information</h3>
+                    <h3 class="mb-0">Team Information {{ help.help_icon('Basic team details, events and summary metrics. Use View Statistics to explore historical graphs for this team.', 'Team information') }}</h3>
                     <div>
                         {% if modern_ui %}
                             {{ ui_button.button('Edit Team', href=url_for('teams.edit', team_number=team.team_number), variant='primary', size='md', icon='fas fa-edit') }}
@@ -34,7 +35,7 @@
     <div class="col-md-4">
         <div class="card mb-4">
             <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">Details</h5>
+                <h5 class="mb-0">Details {{ help.help_icon('Team number, name, and location from the database. Contact info is not shown publicly.', 'Team details') }}</h5>
             </div>
             <div class="card-body">
                 <table class="table">
@@ -57,7 +58,7 @@
         <!-- New card for team events -->
         <div class="card mb-4">
             <div class="card-header bg-info text-white">
-                <h5 class="mb-0">Participating Events (2025)</h5>
+                <h5 class="mb-0">Participating Events (2025) {{ help.help_icon('Events this team is scheduled to attend or has attended. Use event links to view match schedules and team lists.', 'Participating events') }}</h5>
             </div>
             <div class="card-body">
                 {% if team_events %}
@@ -113,7 +114,7 @@
         {% if metrics %}
         <div class="card mb-4">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0">Points Summary</h5>
+                <h5 class="mb-0">Points Summary {{ help.help_icon('Summary of key metric values (auto computed). Values come from historical data and may be approximate.', 'Points summary') }}</h5>
             </div>
             <div class="card-body">
                 <div class="row">
@@ -146,7 +147,7 @@
         {% if scouting_data %}
         <div class="card mb-4">
             <div class="card-header bg-info text-white">
-                <h5 class="mb-0">Match History</h5>
+                <h5 class="mb-0">Match History {{ help.help_icon('List of past matches and recorded scores for this team. Use View/Edit to examine scouting entries.', 'Match history') }}</h5>
             </div>
             <div class="card-body">
                 <div class="table-responsive">

@@ -192,7 +192,8 @@ This is a private/team project. For issues or suggestions, contact the developme
 2. **Run diagnostics**: `python test_directory_fix.py`
 3. **Review startup output** for error messages
 4. **Check the logs** in the terminal window
-5. **Contact team admin** for access issues
+6. **Inline help icons**: The Scouting Alliances UI now includes small question-mark help icons next to headings and controls—hover or tap to view contextual guidance. See `docs/SCOUTING_ALLIANCES_DOCS_UPDATE.md` for details and troubleshooting steps.
+7. **Contact team admin** for access issues
 
 ## 
  Updates

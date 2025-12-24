@@ -64,9 +64,9 @@
                         <select class="form-select" id="match_id" name="match_id" onchange="loadMatchStrategy(this.value)">
                             <option value="">Select a match...</option>
                             {% for match in matches %}
-                            <option value="{{ match.id }}" data-search="{{ match.match_type|lower }} {{ match.match_number }} {{ match.red_alliance|lower }} {{ match.blue_alliance|lower }}">
+                            <option value="{{ match.id }}" data-search="{{ match.match_type|lower }} {{ match.match_number }} {{ match.red_teams|join(', ') }} {{ match.blue_teams|join(', ') }}">
                                 {{ match.match_type }} {{ match.match_number }} - 
-                                Red: {{ match.red_alliance }} vs Blue: {{ match.blue_alliance }}
+                                Red: {{ match.red_teams|join(', ') }} vs Blue: {{ match.blue_teams|join(', ') }}
                             </option>
                             {% endfor %}
                         </select>

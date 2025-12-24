@@ -18,7 +18,8 @@ from app.utils.theme_manager import ThemeManager
 from app.utils.config_manager import get_effective_game_config
 from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_matches_by_scouting_team, 
-    filter_events_by_scouting_team, get_event_by_code, get_combined_dropdown_events
+    filter_events_by_scouting_team, get_event_by_code, get_combined_dropdown_events,
+    get_all_teams_at_event
 )
 from app.utils.alliance_data import (
     get_active_alliance_id, get_scouting_data_for_teams,
@@ -183,19 +184,30 @@ def _build_page_context(page, scouting_team_number):
 
             team_data = {}
             if teams:
-                team_ids = [t.id for t in teams]
-                # Use alliance-aware data retrieval
-                scouting_data, _ = get_scouting_data_for_teams(team_ids)
-                for data in scouting_data:
-                    team = data.team
-                    match = data.match
+                from app.utils.analysis import get_analysis_data_for_team
+                for team in teams:
+                    # Use centralized data retrieval which includes synthetic starting points
+                    scouting_data = get_analysis_data_for_team(team.id)
+                    
                     if team.team_number not in team_data:
                         team_data[team.team_number] = {'team_name': team.team_name, 'matches': []}
-                    if metric_alias == 'tot':
-                        metric_value = data.calculate_metric('tot')
-                    else:
-                        metric_value = data.calculate_metric(metric_alias)
-                    team_data[team.team_number]['matches'].append({'match_number': match.match_number if match else None, 'metric_value': metric_value, 'timestamp': match.timestamp if match else None})
+                        
+                    for data in scouting_data:
+                        match = data.match
+                        if metric_alias == 'tot':
+                            metric_value = data.calculate_metric('tot')
+                        else:
+                            metric_value = data.calculate_metric(metric_alias)
+                        
+                        # For synthetic data (match is None), use match_number 0 so it appears at the start
+                        match_num = match.match_number if match else 0
+                        ts = match.timestamp if match else getattr(data, 'timestamp', datetime.min)
+                        
+                        team_data[team.team_number]['matches'].append({
+                            'match_number': match_num, 
+                            'metric_value': metric_value, 
+                            'timestamp': ts
+                        })
 
             # Generate plots unless user_select controls exist
             if widget.get('user_select') or widget.get('graphtype_user_select') or widget.get('teams_user_select'):
@@ -485,84 +497,72 @@ def index():
         print(f"Found {len(teams)} teams")
         
         if teams:
-            team_ids = [team.id for team in teams]
-            
-            # Use alliance-aware data retrieval
-            scouting_data, _ = get_scouting_data_for_teams(team_ids, event_id=selected_event_id if selected_event_id else None)
-            print(f"Found {len(scouting_data)} scouting records for selected teams {'at event ' + str(selected_event_id) if selected_event_id else 'across all events'}")
-        else:
-            scouting_data = []
-        
-        # Generate graphs if we have teams selected
-        if teams:
             # Create team performance graphs using shared graph helper structure
             team_data = {}
+            from app.utils.analysis import get_analysis_data_for_team
             
-            # Process scouting data to match shared graph format
-            if scouting_data:
-                # Calculate selected metric for each team's matches
-                for data in scouting_data:
-                    team = data.team
-                    match = data.match
-                    if team.team_number not in team_data:
-                        team_data[team.team_number] = {
-                            'team_name': team.team_name, 
-                            'matches': []
-                        }
-                    
-                    # Calculate the selected metric for this match
-                    # Handle default 'points' metric which should map to total points
-                    if selected_metric == 'points' or selected_metric == '':
-                        metric_value = data.calculate_metric('tot')  # Use 'tot' for total points
-                    else:
-                        metric_value = data.calculate_metric(selected_metric)
-                    
-                    team_data[team.team_number]['matches'].append({
-                        'match_number': match.match_number,
-                        'match_type': match.match_type,
-                        'metric_value': metric_value,
-                        'timestamp': match.timestamp
-                    })
-            else:
-                # No scouting data found, create empty structure
-                print("No scouting data found")
-                for team in teams:
+            for team in teams:
+                # Use centralized data retrieval which includes synthetic starting points
+                scouting_data = get_analysis_data_for_team(team.id, event_id=selected_event_id if selected_event_id else None)
+                
+                if team.team_number not in team_data:
                     team_data[team.team_number] = {
-                        'team_name': team.team_name,
+                        'team_name': team.team_name, 
                         'matches': []
                     }
+                
+                if scouting_data:
+                    for data in scouting_data:
+                        match = data.match
+                        
+                        # Calculate the selected metric for this match
+                        if selected_metric == 'points' or selected_metric == '':
+                            metric_value = data.calculate_metric('tot')
+                        else:
+                            metric_value = data.calculate_metric(selected_metric)
+                        
+                        # Handle synthetic data
+                        match_num = match.match_number if match else 0
+                        match_type = match.match_type if match else 'Synthetic'
+                        ts = match.timestamp if match else getattr(data, 'timestamp', datetime.min)
+                        
+                        team_data[team.team_number]['matches'].append({
+                            'match_number': match_num,
+                            'match_type': match_type,
+                            'metric_value': metric_value,
+                            'timestamp': ts
+                        })
+                else:
+                    # No data for this team
+                    pass
+        else:
+            team_data = {}
 
-            # Generate the requested graph types using helper functions
-            # Use the selected list of graph types for rendering
-            for graph_type in selected_graph_types:
-                if graph_type == 'bar':
-                    plots.update(_create_bar_chart(team_data, selected_metric, selected_data_view))
-                elif graph_type == 'line':
-                    plots.update(_create_line_chart(team_data, selected_metric, selected_data_view))
-                elif graph_type == 'scatter':
-                    plots.update(_create_scatter_chart(team_data, selected_metric, selected_data_view))
-                elif graph_type == 'histogram':
-                    plots.update(_create_histogram_chart(team_data, selected_metric, selected_data_view))
-                elif graph_type == 'violin':
-                    plots.update(_create_violin_chart(team_data, selected_metric, selected_data_view))
-                elif graph_type == 'box':
-                    plots.update(_create_box_chart(team_data, selected_metric, selected_data_view))
-                elif graph_type == 'sunburst':
-                    plots.update(_create_sunburst_chart(team_data, selected_metric, selected_data_view))
-                elif graph_type == 'treemap':
-                    plots.update(_create_treemap_chart(team_data, selected_metric, selected_data_view))
-                elif graph_type == 'waterfall':
-                    plots.update(_create_waterfall_chart(team_data, selected_metric, selected_data_view))
-                elif graph_type == 'sankey':
-                    plots.update(_create_sankey_chart(team_data, selected_metric, selected_data_view))
-                elif graph_type == 'heatmap':
-                    plots.update(_create_heatmap_chart(team_data, selected_metric, selected_data_view))
-                elif graph_type == 'bubble':
-                    plots.update(_create_bubble_chart(team_data, selected_metric, selected_data_view))
-                elif graph_type == 'area':
-                    plots.update(_create_area_chart(team_data, selected_metric, selected_data_view))
-                elif graph_type == 'radar':
-                    plots.update(_create_radar_chart(team_data, selected_metric, selected_data_view))
+        # Generate the requested graph types using helper functions
+        # Use the selected list of graph types for rendering
+        for graph_type in selected_graph_types:
+            if graph_type == 'bar':
+                plots.update(_create_bar_chart(team_data, selected_metric, selected_data_view))
+            elif graph_type == 'line':
+                plots.update(_create_line_chart(team_data, selected_metric, selected_data_view))
+            elif graph_type == 'scatter':
+                plots.update(_create_scatter_chart(team_data, selected_metric, selected_data_view))
+            elif graph_type == 'histogram':
+                plots.update(_create_histogram_chart(team_data, selected_metric, selected_data_view))
+            elif graph_type == 'violin':
+                plots.update(_create_violin_chart(team_data, selected_metric, selected_data_view))
+            elif graph_type == 'box':
+                plots.update(_create_box_chart(team_data, selected_metric, selected_data_view))
+            elif graph_type == 'sunburst':
+                plots.update(_create_sunburst_chart(team_data, selected_metric, selected_data_view))
+            elif graph_type == 'waterfall':
+                plots.update(_create_waterfall_chart(team_data, selected_metric, selected_data_view))
+            elif graph_type == 'heatmap':
+                plots.update(_create_heatmap_chart(team_data, selected_metric, selected_data_view))
+            elif graph_type == 'area':
+                plots.update(_create_area_chart(team_data, selected_metric, selected_data_view))
+            elif graph_type == 'radar':
+                plots.update(_create_radar_chart(team_data, selected_metric, selected_data_view))
 
     
     return render_template('graphs/index.html', 
@@ -861,12 +861,31 @@ def side_by_side():
         if current_event_code:
             current_event = get_event_by_code(current_event_code)
         
-        # Get ALL teams at the current event (regardless of scouting_team_number)
-        if current_event:
-            teams_raw = get_all_teams_at_event(event_id=current_event.id)
+        # Get all teams similar to /graphs index: prefer current event teams plus teams visible to the current scouting team
+        alliance_id = get_active_alliance_id()
+        is_alliance_mode = alliance_id is not None
+
+        # Import helper to get ALL teams at an event
+        from app.utils.team_isolation import get_all_teams_at_event
+
+        if is_alliance_mode:
+            # Alliance mode - get teams from alliance scouting data
+            if current_event:
+                current_event_teams, _ = get_all_teams_for_alliance(event_code=current_event.code)
+                teams_raw = current_event_teams
+            else:
+                all_teams_for_alliance, _ = get_all_teams_for_alliance()
+                teams_raw = all_teams_for_alliance
         else:
-            # Only include teams visible to the current scouting team
-            teams_raw = filter_teams_by_scouting_team().order_by(Team.team_number).all()
+            if current_event:
+                # Get ALL teams at this event for analysis purposes
+                current_event_teams = get_all_teams_at_event(event_id=current_event.id)
+                # Also include teams from other events that belong to the current scouting team
+                other_teams = filter_teams_by_scouting_team().filter(~Team.id.in_([t.id for t in current_event_teams])).order_by(Team.team_number).all()
+                teams_raw = current_event_teams + other_teams
+            else:
+                # No current event: only show teams visible to the current scouting team
+                teams_raw = filter_teams_by_scouting_team().order_by(Team.team_number).all()
         
         # Deduplicate teams by team_number, preferring ones with scouting data for current scouting team
         from app.utils.team_isolation import get_current_scouting_team_number
@@ -920,7 +939,41 @@ def side_by_side():
             {'id': 'endgame_points', 'name': 'Endgame Points'},
             {'id': 'total_points', 'name': 'Total Points'}
         ])
-        return render_template('graphs/side_by_side_form.html', teams=teams, metrics=metrics, **get_theme_context())
+
+        # Provide events for the event filter (local + alliance entries)
+        try:
+            all_events = get_combined_dropdown_events()
+        except Exception:
+            all_events = []
+
+        # Compute lightweight metrics for teams to display points and sorting
+        team_metrics = {}
+        for team in teams:
+            analytics_result = calculate_team_metrics(team.id)
+            team_metrics[team.team_number] = analytics_result.get('metrics', {})
+
+        # Build mapping of team -> event IDs for client-side filtering
+        team_event_mapping = {team.team_number: [e.id for e in getattr(team, 'events', [])] for team in teams}
+
+        # JSON-ready list of teams for potential client-side usage
+        all_teams_data = []
+        for team in teams:
+            all_teams_data.append({
+                'teamNumber': team.team_number,
+                'teamName': team.team_name or 'Unknown',
+                'displayText': f"{team.team_number} - {team.team_name or 'Unknown'}",
+                'points': team_metrics.get(team.team_number, {}).get('total_points', 0)
+            })
+        all_teams_json = json.dumps(all_teams_data)
+
+        return render_template('graphs/side_by_side_form.html',
+                               teams=teams,
+                               metrics=metrics,
+                               events=all_events,
+                               team_metrics=team_metrics,
+                               team_event_mapping=team_event_mapping,
+                               all_teams_json=all_teams_json,
+                               **get_theme_context())
     
     # Get game configuration
     game_config = get_effective_game_config()
@@ -949,7 +1002,6 @@ def side_by_side():
 
     # Prepare helper imports once
     from app.utils.team_isolation import get_current_scouting_team_number
-    from app.utils.config_manager import get_effective_game_config
 
     scouting_team_number = get_current_scouting_team_number()
     game_config = get_effective_game_config()
@@ -961,6 +1013,11 @@ def side_by_side():
 
         # Fetch scouting data across all team ids - use alliance-aware data retrieval
         scouting_data, _ = get_scouting_data_for_teams(team_ids)
+
+        # Inject starting points
+        from app.utils.analysis import inject_starting_points
+        # We use rep_team for injection config
+        scouting_data = inject_starting_points(rep_team, scouting_data)
 
         # Build team_info container
         team_info = {
@@ -976,7 +1033,12 @@ def side_by_side():
             match_values = []
 
             for data in scouting_data:
-                match_number = data.match.match_number if data.match else f"#{data.id}"
+                if hasattr(data, 'match') and data.match:
+                    match_number = data.match.match_number
+                elif hasattr(data, 'id'):
+                    match_number = f"#{data.id}"
+                else:
+                    match_number = "SP"
 
                 if metric_id == 'auto_points':
                     match_value = data._calculate_auto_points_dynamic(data.data, game_config)
@@ -1138,8 +1200,8 @@ def view_shared(share_id):
 
     # Whitelist of allowed graph types (keeps backend safe)
     available_graph_types = [
-        'bar','line','scatter','histogram','violin','box','sunburst','treemap',
-        'waterfall','sankey','heatmap','bubble','area','radar'
+        'bar','line','scatter','histogram','violin','box','sunburst',
+        'waterfall','heatmap','area','radar'
     ]
 
     # Parse overrides from query params
@@ -1207,29 +1269,50 @@ def view_shared(share_id):
         teams = sorted(unique_map.values(), key=lambda x: x.team_number) if teams else []
         team_data = {}
         
-        # Calculate metrics for each team's matches
+        # Group scouting data by team
+        data_by_team = {}
         for data in scouting_data:
-            team = data.team
-            match = data.match
+            if data.team_id not in data_by_team:
+                data_by_team[data.team_id] = []
+            data_by_team[data.team_id].append(data)
+
+        # Process each team
+        from app.utils.analysis import inject_starting_points
+        for team in teams:
+            team_scouting_data = data_by_team.get(team.id, [])
+            
+            # Inject starting points
+            calc_data = inject_starting_points(team, team_scouting_data, event_id=shared_graph.event_id)
+            
             if team.team_number not in team_data:
                 team_data[team.team_number] = {
                     'team_name': team.team_name, 
                     'matches': []
                 }
-            
-            # Calculate the selected metric for this match
-            # Handle default 'points' metric which should map to total points
-            if shared_graph.metric == 'points' or shared_graph.metric == '':
-                metric_value = data.calculate_metric('tot')  # Use 'tot' for total points
-            else:
-                metric_value = data.calculate_metric(shared_graph.metric)
-            
-            team_data[team.team_number]['matches'].append({
-                'match_number': match.match_number,
-                'match_type': match.match_type,
-                'metric_value': metric_value,
-                'timestamp': match.timestamp
-            })
+
+            for data in calc_data:
+                # Handle FakeSD
+                if hasattr(data, 'match') and data.match:
+                    match_number = data.match.match_number
+                    match_type = data.match.match_type
+                    timestamp = data.match.timestamp
+                else:
+                    match_number = 0
+                    match_type = 'SP'
+                    timestamp = getattr(data, 'timestamp', datetime.min)
+
+                # Calculate metric
+                if shared_graph.metric == 'points' or shared_graph.metric == '':
+                    metric_value = data.calculate_metric('tot')
+                else:
+                    metric_value = data.calculate_metric(shared_graph.metric)
+                
+                team_data[team.team_number]['matches'].append({
+                    'match_number': match_number,
+                    'match_type': match_type,
+                    'metric_value': metric_value,
+                    'timestamp': timestamp
+                })
         
         # Generate the requested graph types
     # Use the selected/overridden list of graph types for rendering
@@ -1248,16 +1331,11 @@ def view_shared(share_id):
                 plots.update(_create_box_chart(team_data, shared_graph.metric, shared_graph.data_view))
             elif graph_type == 'sunburst':
                 plots.update(_create_sunburst_chart(team_data, shared_graph.metric, shared_graph.data_view))
-            elif graph_type == 'treemap':
-                plots.update(_create_treemap_chart(team_data, shared_graph.metric, shared_graph.data_view))
+
             elif graph_type == 'waterfall':
                 plots.update(_create_waterfall_chart(team_data, shared_graph.metric, shared_graph.data_view))
-            elif graph_type == 'sankey':
-                plots.update(_create_sankey_chart(team_data, shared_graph.metric, shared_graph.data_view))
             elif graph_type == 'heatmap':
                 plots.update(_create_heatmap_chart(team_data, shared_graph.metric, shared_graph.data_view))
-            elif graph_type == 'bubble':
-                plots.update(_create_bubble_chart(team_data, shared_graph.metric, shared_graph.data_view))
             elif graph_type == 'area':
                 plots.update(_create_area_chart(team_data, shared_graph.metric, shared_graph.data_view))
             elif graph_type == 'radar':
@@ -1585,22 +1663,42 @@ def public_page_widget_render(token, widget_index):
                 team_data = {}
                 if teams:
                         team_ids = [t.id for t in teams]
+                        # Use alliance-aware data retrieval
+                        scouting_data, _ = get_scouting_data_for_teams(team_ids)
+                        
+                        # Group by team
+                        data_by_team = {}
+                        for data in scouting_data:
+                            if data.team_id not in data_by_team:
+                                data_by_team[data.team_id] = []
+                            data_by_team[data.team_id].append(data)
+
+                        from app.utils.analysis import inject_starting_points
+                        from datetime import datetime
+
                         for t in teams:
                                 if t.team_number not in team_data:
                                         team_data[t.team_number] = {'team_name': t.team_name, 'matches': []}
+                                
+                                team_scouting_data = data_by_team.get(t.id, [])
+                                # Inject starting points
+                                calc_data = inject_starting_points(t, team_scouting_data)
+                                
+                                for data in calc_data:
+                                    # Handle FakeSD
+                                    if hasattr(data, 'match') and data.match:
+                                        match_number = data.match.match_number
+                                        timestamp = data.match.timestamp
+                                    else:
+                                        match_number = 0
+                                        timestamp = getattr(data, 'timestamp', datetime.min)
 
-                        # Use alliance-aware data retrieval
-                        scouting_data, _ = get_scouting_data_for_teams(team_ids)
-                        for data in scouting_data:
-                                team = data.team
-                                match = data.match
-                                if team.team_number not in team_data:
-                                        team_data[team.team_number] = {'team_name': team.team_name, 'matches': []}
-                                if metric_alias == 'tot':
-                                        metric_value = data.calculate_metric('tot')
-                                else:
-                                        metric_value = data.calculate_metric(metric_alias)
-                                team_data[team.team_number]['matches'].append({'match_number': match.match_number if match else None, 'metric_value': metric_value, 'timestamp': match.timestamp if match else None})
+                                    if metric_alias == 'tot':
+                                            metric_value = data.calculate_metric('tot')
+                                    else:
+                                            metric_value = data.calculate_metric(metric_alias)
+                                    
+                                    team_data[t.team_number]['matches'].append({'match_number': match_number, 'metric_value': metric_value, 'timestamp': timestamp})
 
                 for gt in graph_types:
                         if gt == 'bar':
@@ -1617,8 +1715,7 @@ def public_page_widget_render(token, widget_index):
                                 widget_plots.update(_create_box_chart(team_data, metric, data_view))
                         elif gt == 'sunburst':
                                 widget_plots.update(_create_sunburst_chart(team_data, metric, data_view))
-                        elif gt == 'treemap':
-                                widget_plots.update(_create_treemap_chart(team_data, metric, data_view))
+
                         elif gt == 'waterfall':
                                 widget_plots.update(_create_waterfall_chart(team_data, metric, data_view))
                         elif gt == 'sankey':
@@ -1872,7 +1969,16 @@ def public_page_widget_render(token, widget_index):
                         matches = matches_query.all()
                         matches_list = []
                         for match in matches:
-                                match_data = {'match_id': match.id, 'match_type': match.match_type, 'match_number': match.match_number, 'red_alliance': match.red_alliance, 'blue_alliance': match.blue_alliance, 'timestamp': match.timestamp}
+                                match_data = {
+                                    'match_id': match.id,
+                                    'match_type': match.match_type,
+                                    'match_number': match.match_number,
+                                    'red_alliance': match.red_alliance,
+                                    'blue_alliance': match.blue_alliance,
+                                    'red_teams': getattr(match, 'red_teams', []),
+                                    'blue_teams': getattr(match, 'blue_teams', []),
+                                    'timestamp': match.timestamp
+                                }
                                 if show_scores and match.red_score is not None and match.red_score >= 0 and match.blue_score is not None and match.blue_score >= 0:
                                         match_data['red_score'] = match.red_score
                                         match_data['blue_score'] = match.blue_score
@@ -1902,8 +2008,8 @@ def public_page_widget_render(token, widget_index):
                                 {% endif %}
                             </div>
                             <div class="mt-1">
-                                <small class="text-danger">Red: {{ match.red_alliance }}</small>
-                                <small class="text-primary ms-3">Blue: {{ match.blue_alliance }}</small>
+                                <small class="text-danger">Red: {% if match.red_teams is defined %}{{ match.red_teams|join(', ') }}{% else %}{{ match.red_alliance }}{% endif %}</small>
+                                <small class="text-primary ms-3">Blue: {% if match.blue_teams is defined %}{{ match.blue_teams|join(', ') }}{% else %}{{ match.blue_alliance }}{% endif %}</small>
                             </div>
                         </div>
                         {% endfor %}
@@ -2227,8 +2333,7 @@ def pages_widget_render(page_id, widget_index):
                 widget_plots.update(_create_box_chart(team_data, metric, data_view))
             elif gt == 'sunburst':
                 widget_plots.update(_create_sunburst_chart(team_data, metric, data_view))
-            elif gt == 'treemap':
-                widget_plots.update(_create_treemap_chart(team_data, metric, data_view))
+
             elif gt == 'waterfall':
                 widget_plots.update(_create_waterfall_chart(team_data, metric, data_view))
             elif gt == 'sankey':
@@ -3055,13 +3160,13 @@ def _create_bar_chart(team_data, metric, data_view):
         teams = []
         values = []
         
-        for team_number, data in team_data.items():
-            # Include teams even if they have no matches; show zero for no-data teams
-            if data['matches']:
-                avg_value = sum(m['metric_value'] for m in data['matches']) / len(data['matches'])
-            else:
-                avg_value = 0
-            teams.append(f"Team {team_number}")
+        for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
+            # Exclude teams with no valid metric values
+            vals = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
+            if not vals:
+                continue
+            avg_value = sum(vals) / len(vals)
+            teams.append(str(team_number))
             values.append(avg_value)
         
         if teams:
@@ -3072,13 +3177,14 @@ def _create_bar_chart(team_data, metric, data_view):
                 title=f"{metric.replace('_', ' ').title()} by Team - Averages (Bar Chart)",
                 xaxis_title="Team",
                 yaxis_title=metric.replace('_', ' ').title(),
-                margin=dict(l=40, r=20, t=50, b=60)
+                margin=dict(l=40, r=20, t=50, b=60),
+                xaxis=dict(type='category', tickangle=-45)
             )
             plots[f'{metric}_bar_avg'] = pio.to_json(fig)
     else:
         # Match-by-match bar chart
         fig = go.Figure()
-        for team_number, data in team_data.items():
+        for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
             if data['matches']:
                 match_numbers = [m['match_number'] for m in data['matches']]
                 values = [m['metric_value'] for m in data['matches']]
@@ -3106,7 +3212,7 @@ def _create_line_chart(team_data, metric, data_view):
     if data_view == 'matches':
         # Match-by-match line chart
         fig = go.Figure()
-        for team_number, data in team_data.items():
+        for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
             if data['matches']:
                 # Sort matches by match number
                 sorted_matches = sorted(data['matches'], key=lambda x: x['match_number'])
@@ -3129,9 +3235,11 @@ def _create_line_chart(team_data, metric, data_view):
     else:
         # Averages view: show a line across team averages (like index page)
         avg_data = []
-        for team_number, data in team_data.items():
-            values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
-            avg = np.mean(values) if values else 0
+        for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
+            vals = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
+            if not vals:
+                continue
+            avg = np.mean(vals)
             avg_data.append({'team': team_number, 'avg': avg})
 
         if avg_data:
@@ -3148,7 +3256,8 @@ def _create_line_chart(team_data, metric, data_view):
                 title=f"{metric.replace('_', ' ').title()} by Team - Averages (Line Chart)",
                 xaxis_title="Team",
                 yaxis_title=metric.replace('_', ' ').title(),
-                margin=dict(l=40, r=20, t=50, b=60)
+                margin=dict(l=40, r=20, t=50, b=60),
+                xaxis=dict(type='category', tickangle=-45)
             )
             plots[f'{metric}_line_avg'] = pio.to_json(fig_line)
 
@@ -3161,7 +3270,7 @@ def _create_scatter_chart(team_data, metric, data_view):
     if data_view == 'matches':
         # Match-by-match scatter plot
         fig = go.Figure()
-        for team_number, data in team_data.items():
+        for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
             if data['matches']:
                 match_numbers = [m['match_number'] for m in data['matches']]
                 values = [m['metric_value'] for m in data['matches']]
@@ -3183,9 +3292,11 @@ def _create_scatter_chart(team_data, metric, data_view):
     else:
         # Averages view: scatter of team averages
         avg_data = []
-        for team_number, data in team_data.items():
-            values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
-            avg = np.mean(values) if values else 0
+        for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
+            vals = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
+            if not vals:
+                continue
+            avg = np.mean(vals)
             avg_data.append({'team': team_number, 'avg': avg})
 
         if avg_data:
@@ -3201,7 +3312,8 @@ def _create_scatter_chart(team_data, metric, data_view):
                 title=f"{metric.replace('_', ' ').title()} by Team - Averages (Scatter Plot)",
                 xaxis_title="Team",
                 yaxis_title=metric.replace('_', ' ').title(),
-                margin=dict(l=40, r=20, t=50, b=60)
+                margin=dict(l=40, r=20, t=50, b=60),
+                xaxis=dict(type='category', tickangle=-45)
             )
             plots[f'{metric}_scatter_avg'] = pio.to_json(fig_scatter)
 
@@ -3213,7 +3325,7 @@ def _create_histogram_chart(team_data, metric, data_view):
     
     # Collect all values
     all_values = []
-    for team_number, data in team_data.items():
+    for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
         for match in data['matches']:
             if match['metric_value'] is not None:
                 all_values.append(match['metric_value'])
@@ -3247,7 +3359,7 @@ def _create_violin_chart(team_data, metric, data_view):
     
     if data_view == 'matches':
         fig = go.Figure()
-        for team_number, data in team_data.items():
+        for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
             if data['matches'] and len(data['matches']) > 1:
                 values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
                 if values:
@@ -3278,7 +3390,7 @@ def _create_box_chart(team_data, metric, data_view):
     
     if data_view == 'matches':
         fig = go.Figure()
-        for team_number, data in team_data.items():
+        for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
             if data['matches'] and len(data['matches']) > 1:
                 values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
                 if values:
@@ -3308,7 +3420,7 @@ def _create_sunburst_chart(team_data, metric, data_view):
     
     # Collect all values for percentile calculation
     all_values = []
-    for team_number, data in team_data.items():
+    for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
         team_values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
         if team_values:
             if data_view == 'averages':
@@ -3320,7 +3432,7 @@ def _create_sunburst_chart(team_data, metric, data_view):
         import numpy as np
         sunburst_data = []
         
-        for team_number, data in team_data.items():
+        for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
             team_values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
             if team_values:
                 if data_view == 'averages':
@@ -3384,7 +3496,7 @@ def _create_treemap_chart(team_data, metric, data_view):
     
     # Calculate team values
     team_values = []
-    for team_number, data in team_data.items():
+    for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
         team_matches = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
         if team_matches:
             if data_view == 'averages':
@@ -3422,16 +3534,16 @@ def _create_waterfall_chart(team_data, metric, data_view):
     if data_view == 'averages':
         # Team contribution waterfall
         team_values = []
-        for team_number, data in team_data.items():
+        for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
             team_matches = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
             if team_matches:
                 avg_value = sum(team_matches) / len(team_matches)
-                team_values.append((f"Team {team_number}", avg_value))
+                team_values.append((int(team_number), f"Team {team_number}", avg_value))
         
         if team_values:
-            # Sort by value
-            team_values.sort(key=lambda x: x[1])
-            teams, values = zip(*team_values)
+            # Sort by team number
+            team_values.sort(key=lambda x: x[0])
+            teams, values = zip(*[(t[1], t[2]) for t in team_values])
             
             fig = go.Figure(go.Waterfall(
                 name="Team Contributions",
@@ -3464,7 +3576,7 @@ def _create_sankey_chart(team_data, metric, data_view):
     
     # Collect all values for categorization
     all_values = []
-    for team_number, data in team_data.items():
+    for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
         for match in data['matches']:
             if match['metric_value'] is not None:
                 all_values.append(match['metric_value'])
@@ -3509,7 +3621,7 @@ def _create_sankey_chart(team_data, metric, data_view):
             
             # Calculate team averages and thresholds
             team_averages = {}
-            for team_number, data in team_data.items():
+            for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
                 team_values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
                 if team_values:
                     team_averages[team_number] = np.mean(team_values)
@@ -3544,7 +3656,7 @@ def _create_sankey_chart(team_data, metric, data_view):
                 })
             
             # Performance Categories -> Impact Categories
-            for team_number, data in team_data.items():
+            for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
                 team_values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
                 if len(team_values) > 1:
                     avg_value = np.mean(team_values)
@@ -3629,7 +3741,7 @@ def _create_sankey_chart(team_data, metric, data_view):
             threshold_35 = np.percentile(all_values, 35)
             
             # Teams -> Match Performance
-            for team_number, data in team_data.items():
+            for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
                 team_values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
                 team_idx = team_indices[team_number]
                 
@@ -3660,7 +3772,7 @@ def _create_sankey_chart(team_data, metric, data_view):
                             })
             
             # Match Performance -> Consistency
-            for team_number, data in team_data.items():
+            for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
                 team_values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
                 
                 if len(team_values) > 2:
@@ -3769,7 +3881,7 @@ def _create_heatmap_chart(team_data, metric, data_view):
     
     if data_view == 'matches' and len(team_data) > 1:
         # Team vs Match heatmap
-        teams = list(team_data.keys())
+        teams = sorted(team_data.keys(), key=lambda x: int(x))
         all_matches = set()
         
         # Get all match numbers
@@ -3818,7 +3930,7 @@ def _create_bubble_chart(team_data, metric, data_view):
     
     if data_view == 'matches':
         fig = go.Figure()
-        for team_number, data in team_data.items():
+        for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
             if data['matches']:
                 match_numbers = [m['match_number'] for m in data['matches']]
                 values = [m['metric_value'] for m in data['matches'] if m['metric_value'] is not None]
@@ -3858,7 +3970,7 @@ def _create_area_chart(team_data, metric, data_view):
     
     if data_view == 'matches':
         fig = go.Figure()
-        for team_number, data in team_data.items():
+        for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
             if data['matches']:
                 # Sort by match number
                 sorted_matches = sorted(data['matches'], key=lambda x: x['match_number'])
@@ -3905,7 +4017,7 @@ def _create_radar_chart(team_data, metric, data_view):
     all_averages = []
     all_peaks = []
 
-    for team_number, data in team_data.items():
+    for team_number, data in sorted(team_data.items(), key=lambda x: int(x[0])):
         vals = [m['metric_value'] for m in data['matches'] if m.get('metric_value') is not None]
         if vals:
             total = sum(vals)
@@ -3935,14 +4047,14 @@ def _create_radar_chart(team_data, metric, data_view):
 
         fig = go.Figure()
 
-        for team_number, series in team_series.items():
+        for team_number in sorted(team_series.keys(), key=lambda x: int(x)):
+            series = team_series[team_number]
             normalized = [
                 (series['avg'] / max_avg * 100) if max_avg > 0 else 0,
                 (series['total'] / max_total * 100) if max_total > 0 else 0,
                 max(0, min(100, series['consistency'])),
                 (series['peak'] / max_peak * 100) if max_peak > 0 else 0
             ]
-
             fig.add_trace(go.Scatterpolar(
                 r=normalized + [normalized[0]],
                 theta=radar_metrics + [radar_metrics[0]],

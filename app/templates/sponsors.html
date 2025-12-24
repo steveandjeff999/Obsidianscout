@@ -6,8 +6,9 @@
     <div class="row">
         <div class="col-md-12">
             <div class="text-center mb-5">
+                {% import '_help_icon.html' as help %}
                 <h1 class="display-4">
-                    <i class="fas fa-handshake text-primary"></i> Our Sponsor
+                    <i class="fas fa-handshake text-primary"></i> Our Sponsor {{ help.help_icon('Learn about the organizations that support this project. Sponsor logos and descriptions are shown below.', 'Sponsor') }}
                 </h1>
                 <p class="lead text-muted">
                     We gratefully acknowledge the generous support of our sponsor who makes this scouting platform possible.

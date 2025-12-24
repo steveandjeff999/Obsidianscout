@@ -164,3 +164,5 @@ The scouting dashboard shows:
 - Contact your team's admin or lead scout
 - Check the **Troubleshooting** guide for common issues
 - Use the **Assistant** feature for interactive help 
+
+**Quick tip:** Small inline question-mark help icons are available on Scouting Alliances pages; hover (desktop) or tap (mobile) these icons for short contextual explanations. Disable them via **Settings → Show inline help icons**.

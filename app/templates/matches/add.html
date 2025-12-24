@@ -4,7 +4,8 @@
 
 {% block content %}
 <div class="container">
-    <h1 class="mb-4">Add New Match</h1>
+    {% import '_help_icon.html' as help %}
+    <h1 class="mb-4">Add New Match {{ help.help_icon('Create a new match record. Use the event and alliance fields to specify which match this belongs to.', 'Add Match') }}</h1>
     
     <div class="card">
         <div class="card-body">

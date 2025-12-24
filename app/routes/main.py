@@ -87,15 +87,40 @@ def index():
     alliance_id = get_active_alliance_id()
     is_alliance_mode = alliance_id is not None
     
+    # Fallback: If no current event is configured and not in alliance mode, try to find the most recent event
+    if not current_event and not is_alliance_mode:
+        try:
+            from app.utils.team_isolation import filter_events_by_scouting_team
+            from app.models import Event
+            # Get the most recent event for this scouting team
+            # Order by year desc, then start_date desc, then id desc to ensure we get something
+            current_event = filter_events_by_scouting_team().order_by(
+                Event.year.desc(), 
+                Event.start_date.desc(), 
+                Event.id.desc()
+            ).first()
+        except Exception:
+            pass
+
     # Get teams filtered by the current event
     # In alliance mode, get teams from alliance scouting data
     if current_event:
         if alliance_id:
             teams, _ = get_all_teams_for_alliance(event_id=current_event.id)
         else:
-            teams = filter_teams_by_scouting_team().join(
-                Team.events
-            ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
+            # Use event code matching to handle cross-team event lookups
+            # This ensures we find teams associated with events that have the same code
+            # even if the event record belongs to a different scouting team
+            from sqlalchemy import func
+            event_code = getattr(current_event, 'code', None)
+            if event_code:
+                teams = filter_teams_by_scouting_team().join(
+                    Team.events
+                ).filter(func.upper(Event.code) == event_code.upper()).order_by(Team.team_number).all()
+            else:
+                teams = filter_teams_by_scouting_team().join(
+                    Team.events
+                ).filter(Event.id == current_event.id).order_by(Team.team_number).all()
     else:
         teams = []  # No teams if no current event is set
     
@@ -105,8 +130,15 @@ def index():
         if alliance_id:
             matches, _ = get_all_matches_for_alliance(event_id=current_event.id)
         else:
-            matches_query = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id)
-            # filter_matches_by_scouting_team() already handles alliance mode and team isolation
+            # Use event code matching to handle cross-team event lookups
+            from sqlalchemy import func
+            event_code = getattr(current_event, 'code', None)
+            if event_code:
+                matches_query = filter_matches_by_scouting_team().join(
+                    Event, Match.event_id == Event.id
+                ).filter(func.upper(Event.code) == event_code.upper())
+            else:
+                matches_query = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id)
             matches = matches_query.all()
         # Use proper match sorting (handles X-Y playoff format)
         matches = sorted(matches, key=match_sort_key)
@@ -134,7 +166,14 @@ def index():
         else:
             # Normal mode - use team filtering
             from app.utils.team_isolation import filter_scouting_data_by_scouting_team
-            base_q = filter_scouting_data_by_scouting_team().join(Match).filter(Match.event_id == current_event.id)
+            from sqlalchemy import func
+            event_code = getattr(current_event, 'code', None)
+            if event_code:
+                base_q = filter_scouting_data_by_scouting_team().join(Match).join(
+                    Event, Match.event_id == Event.id
+                ).filter(func.upper(Event.code) == event_code.upper())
+            else:
+                base_q = filter_scouting_data_by_scouting_team().join(Match).filter(Match.event_id == current_event.id)
             scout_entries = base_q.order_by(ScoutingData.timestamp.desc()).limit(5).all()
             total_scout_entries = base_q.count()
     else:
@@ -1914,8 +1953,15 @@ def api_sync_status():
                 event_teams = len(all_teams) if current_event_code else 0
                 event_matches = len(all_matches) if current_event_code else 0
             else:
-                event_teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).count()
-                event_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).count()
+                # Use event code matching to handle cross-team event lookups
+                from sqlalchemy import func
+                event_code = getattr(current_event, 'code', None)
+                if event_code:
+                    event_teams = filter_teams_by_scouting_team().join(Team.events).filter(func.upper(Event.code) == event_code.upper()).count()
+                    event_matches = filter_matches_by_scouting_team().join(Event, Match.event_id == Event.id).filter(func.upper(Event.code) == event_code.upper()).count()
+                else:
+                    event_teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).count()
+                    event_matches = filter_matches_by_scouting_team().filter(Match.event_id == current_event.id).count()
         else:
             event_teams = 0
             event_matches = 0
@@ -2025,40 +2071,45 @@ def api_brief_data():
                 current_app.logger.warning(f"Could not fetch matches from API, using local DB: {e}")
             
             # Query matches starting after the last completed match (or all if no API data)
+            # Use event code matching to handle cross-team event lookups
+            from sqlalchemy import func as brief_func
+            brief_event_code = getattr(current_event, 'code', None)
+            
+            def brief_event_filter(query):
+                """Apply event filter using code matching when possible"""
+                if brief_event_code:
+                    return query.join(Event, Match.event_id == Event.id).filter(brief_func.upper(Event.code) == brief_event_code.upper())
+                return query.filter(Match.event_id == current_event.id)
+            
             if last_completed_match_num:
                 # Get matches after the last completed one
-                matches = filter_matches_by_scouting_team()\
-                    .filter(Match.event_id == current_event.id)\
+                matches = brief_event_filter(filter_matches_by_scouting_team())\
                     .filter(Match.match_number > last_completed_match_num)\
                     .order_by(Match.match_type, Match.match_number)\
                     .limit(5).all()
             else:
                 # Fallback to local DB logic - find last match with scores in our DB
-                last_local_match = filter_matches_by_scouting_team()\
-                    .filter(Match.event_id == current_event.id)\
+                last_local_match = brief_event_filter(filter_matches_by_scouting_team())\
                     .filter(Match.red_score >= 0)\
                     .filter(Match.blue_score >= 0)\
                     .order_by(Match.match_number.desc())\
                     .first()
                 
                 if last_local_match:
-                    matches = filter_matches_by_scouting_team()\
-                        .filter(Match.event_id == current_event.id)\
+                    matches = brief_event_filter(filter_matches_by_scouting_team())\
                         .filter(Match.match_number > last_local_match.match_number)\
                         .order_by(Match.match_type, Match.match_number)\
                         .limit(5).all()
                 else:
                     # No completed matches found, show first 5
-                    matches = filter_matches_by_scouting_team()\
-                        .filter(Match.event_id == current_event.id)\
+                    matches = brief_event_filter(filter_matches_by_scouting_team())\
                         .order_by(Match.match_type, Match.match_number)\
                         .limit(5).all()
             
             # If we didn't find any upcoming matches (e.g., event just started or API/DB indicates none),
             # fall back to showing the 5 most recently played matches from the local DB.
             if not matches:
-                matches = filter_matches_by_scouting_team()\
-                    .filter(Match.event_id == current_event.id)\
+                matches = brief_event_filter(filter_matches_by_scouting_team())\
                     .order_by(Match.match_number.desc())\
                     .limit(5).all()
 
@@ -2182,11 +2233,19 @@ def api_brief_data():
         # Top performers (teams with highest average scores)
         top_performers = []
         if current_event:
-            # Get all teams in the event
-            teams = filter_teams_by_scouting_team()\
-                .join(Team.events)\
-                .filter(Event.id == current_event.id)\
-                .all()
+            # Get all teams in the event using event code matching for cross-team scenarios
+            from sqlalchemy import func as perf_func
+            perf_event_code = getattr(current_event, 'code', None)
+            if perf_event_code:
+                teams = filter_teams_by_scouting_team()\
+                    .join(Team.events)\
+                    .filter(perf_func.upper(Event.code) == perf_event_code.upper())\
+                    .all()
+            else:
+                teams = filter_teams_by_scouting_team()\
+                    .join(Team.events)\
+                    .filter(Event.id == current_event.id)\
+                    .all()
             
             team_scores = []
             for team in teams:
@@ -2290,34 +2349,39 @@ def api_live_matches():
                 # Best-effort; continue with DB-only fallback
                 last_completed_match_num = None
 
+            # Use event code matching to handle cross-team event lookups
+            from sqlalchemy import func as live_func
+            live_event_code = getattr(current_event, 'code', None)
+            
+            def live_event_filter(query):
+                """Apply event filter using code matching when possible"""
+                if live_event_code:
+                    return query.join(Event, Match.event_id == Event.id).filter(live_func.upper(Event.code) == live_event_code.upper())
+                return query.filter(Match.event_id == current_event.id)
+            
             if last_completed_match_num:
-                matches = filter_matches_by_scouting_team()\
-                    .filter(Match.event_id == current_event.id)\
+                matches = live_event_filter(filter_matches_by_scouting_team())\
                     .filter(Match.match_number > last_completed_match_num)\
                     .order_by(Match.match_type, Match.match_number)\
                     .limit(5).all()
             else:
-                last_local_match = filter_matches_by_scouting_team()\
-                    .filter(Match.event_id == current_event.id)\
+                last_local_match = live_event_filter(filter_matches_by_scouting_team())\
                     .filter(Match.red_score >= 0)\
                     .filter(Match.blue_score >= 0)\
                     .order_by(Match.match_number.desc())\
                     .first()
                 if last_local_match:
-                    matches = filter_matches_by_scouting_team()\
-                        .filter(Match.event_id == current_event.id)\
+                    matches = live_event_filter(filter_matches_by_scouting_team())\
                         .filter(Match.match_number > last_local_match.match_number)\
                         .order_by(Match.match_type, Match.match_number)\
                         .limit(5).all()
                 else:
-                    matches = filter_matches_by_scouting_team()\
-                        .filter(Match.event_id == current_event.id)\
+                    matches = live_event_filter(filter_matches_by_scouting_team())\
                         .order_by(Match.match_type, Match.match_number)\
                         .limit(5).all()
 
             if not matches:
-                matches = filter_matches_by_scouting_team()\
-                    .filter(Match.event_id == current_event.id)\
+                matches = live_event_filter(filter_matches_by_scouting_team())\
                     .order_by(Match.match_number.desc())\
                     .limit(5).all()
 

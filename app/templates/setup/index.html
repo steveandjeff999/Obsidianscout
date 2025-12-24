@@ -14,7 +14,8 @@
                     <img src="{{ url_for('static', filename='img/obsidian.png') }}" alt="ObsidianScout" 
                          class="img-fluid u-max-h-80">
                 </div>
-                <h1 class="display-5 fw-bold text-primary">ObsidianScout</h1>
+                {% import '_help_icon.html' as help %}
+                <h1 class="display-5 fw-bold text-primary">ObsidianScout {{ help.help_icon('Welcome to ObsidianScout — a lightweight scouting platform. Use the setup and features pages to get started.', 'Welcome') }}</h1>
                 <p class="lead text-muted">Professional FRC Scouting Platform</p>
             </div>
 

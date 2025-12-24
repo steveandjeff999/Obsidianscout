@@ -8,7 +8,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <div class="mb-2">
           <label class="form-label" for="new-message">Message</label>
-          <textarea id="new-message" name="message" class="form-control" required></textarea>
+          <textarea id="new-message" name="message" class="form-control text-break" style="white-space:pre-wrap;overflow-wrap:anywhere;" required></textarea>
         </div>
         <div class="mb-2 d-flex gap-2">
           <select name="level" id="new-level" class="form-select w-auto">
@@ -43,12 +43,12 @@
       <div class="list-group">
         {% for n in notifications %}
             <div class="list-group-item d-flex justify-content-between align-items-center">
-            <div>
-              <strong>[{{ n.level|upper }}]</strong> {{ n.message|safe }}
+            <div class="flex-grow-1 me-3 text-break">
+              <strong>[{{ n.level|upper }}]</strong> <span class="d-inline-block text-break">{{ n.message|safe }}</span>
               <div class="small text-muted">Audience: {{ n.audience }} Teams: {{ (n.teams|default([]))|join(', ') }} Users: {{ (n.users|default([]))|join(', ') }}</div>
             </div>
               <div>
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editNotificationModal-{{ n.id }}">Edit</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary edit-notification-btn" data-bs-toggle="modal" data-bs-target="#editNotificationModal-{{ n.id }}">Edit</button>
                 <form method="POST" action="{{ url_for('auth.delete_notification', notif_id=n.id) }}" class="d-inline ms-1">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                   <button type="submit" class="btn btn-sm btn-danger">Delete</button>
@@ -81,7 +81,7 @@
       <div class="modal-body">
         <div class="mb-3">
           <label class="form-label" for="edit-message-{{ n.id }}">Message</label>
-          <textarea id="edit-message-{{ n.id }}" name="message" class="form-control" required>{{ n.message }}</textarea>
+          <textarea id="edit-message-{{ n.id }}" name="message" class="form-control text-break" style="white-space:pre-wrap;overflow-wrap:anywhere;" required>{{ n.message }}</textarea>
         </div>
         <div class="row mb-2">
           <div class="col-md-4">
@@ -123,4 +123,24 @@
 {% block scripts %}
   {{ super() }}
   <script src="{{ url_for('static', filename='js/notifications-autocomplete.js') }}"></script>
+  <script>
+    // Defensive: ensure Edit buttons open their modal even if data-bs attributes aren't handled
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('.edit-notification-btn').forEach(function(btn) {
+        btn.addEventListener('click', function (e) {
+          // If Bootstrap already opened modal via data-bs attributes, this will be harmless.
+          const tgt = btn.getAttribute('data-bs-target') || btn.dataset.bsTarget;
+          if (!tgt) return;
+          const id = tgt.startsWith('#') ? tgt.slice(1) : tgt;
+          const modalEl = document.getElementById(id);
+          if (!modalEl) return;
+          try {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+          } catch (err) {
+            console.error('Could not show edit notification modal', err);
+          }
+        });
+      });
+    });
+  </script>
 {% endblock %}

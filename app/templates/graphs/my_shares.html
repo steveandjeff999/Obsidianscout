@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 
 {% block title %}My Shared Graphs{% endblock %}
 
-{% block heading %}My Shared Graphs{% endblock %}
+{% block heading %}My Shared Graphs {{ help.help_icon('Graphs you have shared with others. Use these saved views to quickly apply metrics and filters.', 'My shared graphs') }}{% endblock %}
 
 {% block content %}
 <div class="row mb-4">

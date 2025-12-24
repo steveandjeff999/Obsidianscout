@@ -1,0 +1,21 @@
+{# Shows a prominent informational banner when a user's team is in alliance mode #}
+{% if is_alliance_mode_active %}
+<div id="alliance-mode-banner" class="site-notification-container mb-3">
+  <div class="site-notification alert alert-info notification-level-info mb-0 d-flex align-items-center justify-content-between" role="alert">
+    <div class="d-flex align-items-center">
+      <strong class="me-2">Alliance mode active</strong>
+      <div class="notification-message">You're currently in <strong>alliance mode</strong>. To change settings that apply to your current setup, update the alliance configuration in <a href="{{ url_for('scouting_alliances.dashboard') }}">Scouting Alliances</a>{% if active_alliance_info and active_alliance_info.alliance_id %} &mdash; <a href="{{ url_for('scouting_alliances.view_alliance', alliance_id=active_alliance_info.alliance_id) }}">{{ active_alliance_info.alliance_name }}</a>{% endif %}.</div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <a href="{{ url_for('scouting_alliances.dashboard') }}" class="btn btn-sm btn-outline-primary">Scouting Alliances</a>
+    </div>
+  </div>
+</div>
+<style>
+  #alliance-mode-banner { z-index: 1049; position: relative; width: 100%; }
+  @media (min-width: 992px){
+    body.with-sidebar #alliance-mode-banner { margin-left: var(--sidebar-width); width: calc(100% - var(--sidebar-width)); transition: margin-left .25s ease, width .25s ease; }
+    body.with-sidebar.sidebar-collapsed #alliance-mode-banner { margin-left: 64px; width: calc(100% - 64px); }
+  }
+</style>
+{% endif %}

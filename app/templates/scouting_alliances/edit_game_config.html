@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import '_help_icon.html' as help %}
 
 {% block title %}Edit Alliance Game Configuration - {{ alliance.alliance_name }}{% endblock %}
 
@@ -97,7 +98,7 @@
                 <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
                         <i class="fas fa-cogs"></i> 
-                        Edit Alliance Game Configuration
+                        Edit Alliance Game Configuration {{ help.help_icon('Create or edit the shared game scouting form for the alliance. Changes apply to all members when Alliance Mode is active.', 'Edit game configuration') }}
                         <small class="text-light">({{ alliance.alliance_name }})</small>
                     </h5>
                     <div>
@@ -116,7 +117,7 @@
 
                     <!-- Copy Scouting Team Config Section -->
                     <div class="template-import">
-                        <h5><i class="fas fa-copy"></i> Copy from Scouting Team Configuration</h5>
+                        <h5><i class="fas fa-copy"></i> Copy from Scouting Team Configuration {{ help.help_icon('Copy an existing team\'s game configuration to use as the alliance starting point. Useful for quick setup.', 'Copy configuration') }}</h5>
                         <p class="text-muted">Copy your scouting team's game configuration as the alliance starting point.</p>
                         <div class="d-flex align-items-center">
                             <button type="button" id="copy-scouting-team-btn" class="btn btn-primary">
@@ -149,7 +150,7 @@
                             <!-- Navigation Tabs -->
                             <ul class="nav nav-tabs" id="configTabs" role="tablist">
                                 <li class="nav-item">
-                                    <a class="nav-link active" id="basic-tab" data-bs-toggle="tab" href="#basic" role="tab">Basic Settings</a>
+                                    <a class="nav-link active" id="basic-tab" data-bs-toggle="tab" href="#basic" role="tab">Basic Settings {{ help.help_icon('Basic game metadata and general settings for match scouting.', 'Basic settings') }}</a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link" id="periods-tab" data-bs-toggle="tab" href="#periods" role="tab">Game Periods</a>
@@ -170,7 +171,7 @@
                                 <div class="tab-pane fade show active" id="basic" role="tabpanel">
                                     <div class="row mt-3">
                                         <div class="col-md-6">
-                                            <h4>Game Information</h4>
+                                            <h4>Game Information {{ help.help_icon('Game name, season, alliance size, and other high-level settings used by scouting forms.', 'Game information') }}</h4>
                                             <div class="form-group mb-3">
                                                 <label for="game_name">Game Name</label>
                                                 <input type="text" class="form-control" id="game_name" name="game_name" 

@@ -318,23 +318,49 @@ def sync():
     flash('Event syncing not implemented in this version', 'warning')
     return redirect(url_for('events.index'))
 
-@bp.route('/set_current_event/<int:event_id>', methods=['GET'])
-def set_current_event(event_id):
-    """Set the current event in the game configuration"""
-    event = Event.query.get_or_404(event_id)
-    
+@bp.route('/set_current_event/<event_identifier>', methods=['GET'])
+def set_current_event(event_identifier):
+    """Set the current event in the game configuration.
+
+    Accepts either numeric event id (int) or an alliance identifier like 'alliance_CODE' or an event code string.
+    """
+    # Determine whether identifier is numeric id or an alliance/code string
+    event = None
+    event_code_to_set = None
+    try:
+        # Try numeric id first
+        event_id_int = int(event_identifier)
+        event = Event.query.get_or_404(event_id_int)
+        event_code_to_set = event.code
+    except (ValueError, TypeError):
+        # Treat as string code or alliance identifier
+        code = str(event_identifier)
+        if code.startswith('alliance_'):
+            code = code.split('alliance_', 1)[1]
+        event_code_upper = code.strip().upper()
+        # Try to find a team-scoped event first
+        try:
+            event = filter_events_by_scouting_team().filter(func.upper(Event.code) == event_code_upper).first()
+        except Exception:
+            event = None
+        if event:
+            event_code_to_set = event.code
+        else:
+            # Use the uppercase code even if no Event row exists locally
+            event_code_to_set = event_code_upper
+
     # Update the game configuration
     game_config = get_current_game_config()
-    game_config['current_event_code'] = event.code
-    
+    game_config['current_event_code'] = event_code_to_set
+
     # Save the updated configuration to file
     if save_game_config(game_config):
         # Update the app config as well
         current_app.config['GAME_CONFIG'] = game_config
-        flash(f'Current event set to: {event.name}', 'success')
+        flash(f'Current event set to: {event.name if event else event_code_to_set}', 'success')
     else:
         flash(f'Error setting current event', 'danger')
-    
+
     # Redirect to the referring page or specified route
     redirect_to = request.args.get('redirect_to')
     if redirect_to:

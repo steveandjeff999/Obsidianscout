@@ -1,15 +1,19 @@
 {% extends 'base.html' %}
 
 {% block title %}
-{% if datasets %}Team Trends - Multiple Teams{% else %}Team {{ team_number }} Trends{% endif %}
+{% if team_numbers and team_numbers|length > 1 %}Team Trends - Multiple Teams{% else %}Team {{ team_number }} Trends{% endif %}
 {% endblock %}
 
 {% block content %}
 <div class="container">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
     <div>
-      <h2 style="margin:0">Team {{ team_number }} Trends</h2>
-      {% if team %}
+      {% if team_numbers and team_numbers|length > 1 %}
+        <h2 style="margin:0">Team Trends - Multiple Teams</h2>
+      {% else %}
+        <h2 style="margin:0">Team {{ team_number }} Trends</h2>
+      {% endif %}
+      {% if team and not (team_numbers and team_numbers|length > 1) %}
         <div style="font-size:0.95rem;color:var(--muted-color, #999)">{{ team.team_name }}</div>
       {% endif %}
     </div>
@@ -36,33 +40,38 @@
 
   <h3>Timeline</h3>
   {% if datasets %}
-    <div style="max-width:900px; margin-bottom:20px;">
-      <canvas id="pointsChart" width="900" height="300"></canvas>
-    </div>
-    <div class="mb-3">
-      <strong>Overlaid Teams:</strong>
-      {% for ds in datasets %}
-        <span class="badge" style="background-color:{{ ds.color }}; color:#fff; margin-right:6px;">
-          {{ ds.team_number }}{% if ds.team_name %} - {{ ds.team_name }}{% endif %}
-          <small style="margin-left:6px;opacity:0.9">(prediction: {{ '%.1f'|format(ds.predicted_next if ds.predicted_next is not none else 0) }})</small>
-        </span>
-      {% endfor %}
-    </div>
-    <div class="mb-3">
-      <table class="table table-sm table-bordered" style="max-width:800px">
-        <thead><tr><th>Team</th><th>Prediction</th><th>Mean</th><th>Stddev</th></tr></thead>
-        <tbody>
-          {% for ds in datasets %}
-            <tr>
-              <td>{{ ds.team_number }}{% if ds.team_name %} - {{ ds.team_name }}{% endif %}</td>
-                <td>{{ '%.1f'|format(ds.predicted_next if ds.predicted_next is not none else 0) }}</td>
-              <td>{{ '%.1f'|format(ds.mean if ds.mean is not none else 0) }}</td>
-              <td>{{ '%.1f'|format(ds.stddev if ds.stddev is not none else 0) }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    {% if not has_data %}
+      <div class="alert alert-warning">No scouting records found for the selected teams. Try selecting different teams or event scope.</div>
+    {% else %}
+      <div style="max-width:900px; margin-bottom:20px;">
+        <canvas id="pointsChart" width="900" height="300"></canvas>
+      </div>
+      <div class="mb-3">
+        <strong>Overlaid Teams:</strong>
+        {% for ds in datasets %}
+          <span class="badge" style="background-color:{{ ds.color }}; color:#fff; margin-right:6px;">
+            {{ ds.team_number }}{% if ds.team_name %} - {{ ds.team_name }}{% endif %}
+            <small style="margin-left:6px;opacity:0.9">(prediction: {{ '%.1f'|format(ds.predicted_next if ds.predicted_next is not none else 0) }})</small>
+          </span>
+        {% endfor %}
+      </div>
+      <div class="mb-3">
+        <table class="table table-sm table-bordered" style="max-width:800px">
+          <thead><tr><th>Team</th><th>Prediction</th><th>Mean</th><th>Stddev</th></tr></thead>
+          <tbody>
+            {% for ds in datasets %}
+              <tr>
+                <td>{{ ds.team_number }}{% if ds.team_name %} - {{ ds.team_name }}{% endif %}</td>
+                  <td>{{ '%.1f'|format(ds.predicted_next if ds.predicted_next is not none else 0) }}</td>
+                <td>{{ '%.1f'|format(ds.mean if ds.mean is not none else 0) }}</td>
+                <td>{{ '%.1f'|format(ds.stddev if ds.stddev is not none else 0) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+
     <div>
       {% for ds in datasets %}
         <h5>Team {{ ds.team_number }} Timeline</h5>

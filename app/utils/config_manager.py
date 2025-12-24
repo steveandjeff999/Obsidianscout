@@ -5,6 +5,12 @@ from flask_login import current_user
 import shutil
 import copy
 
+# Map of (config_name, team_number) -> error message for configs that failed to parse
+CONFIG_LOAD_ERRORS = {}
+# Map of (config_name, team_number) -> raw file content when parsing failed
+CONFIG_RAW_CONTENT = {}
+
+
 class ConfigManager:
     def __init__(self, app=None):
         self.app = app
@@ -200,8 +206,50 @@ def load_config(config_name, team_number=None):
         config_to_load = team_config_path
 
     if os.path.exists(config_to_load):
-        with open(config_to_load, 'r') as f:
-            return json.load(f)
+        try:
+            with open(config_to_load, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            # If we successfully parsed previously recorded error for this file, clear it
+            try:
+                CONFIG_LOAD_ERRORS.pop((config_name, team_number), None)
+                CONFIG_RAW_CONTENT.pop((config_name, team_number), None)
+            except Exception:
+                pass
+            return data
+        except json.JSONDecodeError as e:
+            # Record parse error and capture raw content so editors can show it
+            msg = f"Invalid JSON in {config_to_load}: {e.msg} (line {e.lineno} column {e.colno})"
+            try:
+                current_app.logger.error(msg)
+            except Exception:
+                print(msg)
+            CONFIG_LOAD_ERRORS[(config_name, team_number)] = msg
+            # Read raw content of file so editors can present it to admins for fixing
+            try:
+                with open(config_to_load, 'r', encoding='utf-8') as f2:
+                    raw = f2.read()
+                CONFIG_RAW_CONTENT[(config_name, team_number)] = raw
+            except Exception as re:
+                try:
+                    current_app.logger.exception(f"Failed to read raw content of {config_to_load}: {re}")
+                except Exception:
+                    print(f"Failed to read raw content of {config_to_load}: {re}")
+            return {}
+        except Exception as e:
+            # Other errors (IO, permissions) should be logged but not crash the site
+            msg = f"Error loading {config_to_load}: {e}"
+            try:
+                current_app.logger.exception(msg)
+            except Exception:
+                print(msg)
+            CONFIG_LOAD_ERRORS[(config_name, team_number)] = msg
+            try:
+                with open(config_to_load, 'r', encoding='utf-8') as f2:
+                    raw = f2.read()
+                CONFIG_RAW_CONTENT[(config_name, team_number)] = raw
+            except Exception:
+                pass
+            return {}
     return {}
 
 def load_game_config(team_number=None):
@@ -563,6 +611,41 @@ def load_default_config(filename):
     """Load a specific default configuration file"""
     # Prefer config/defaults/<year>/file
     base_defaults_dir = os.path.join(os.getcwd(), 'config', 'defaults')
+
+
+def get_config_load_issues():
+    """Return a list of current config load issues (used by templates/context processors)."""
+    issues = []
+    try:
+        for (cfg_name, team_number), msg in CONFIG_LOAD_ERRORS.items():
+            issues.append({
+                'config_name': cfg_name,
+                'team_number': team_number,
+                'message': msg
+            })
+    except Exception:
+        pass
+    return issues
+
+
+def get_config_raw_contents(team_number=None):
+    """Return a mapping of config_name -> raw_text for configs that failed to parse.
+
+    This prefers entries for the provided team_number, but will also include global
+    (team_number None) entries when present.
+    """
+    result = {}
+    try:
+        for (cfg_name, tnum), raw in CONFIG_RAW_CONTENT.items():
+            if team_number is not None and tnum == team_number:
+                result[cfg_name] = raw
+        # Include global raw contents if not overridden by team-specific
+        for (cfg_name, tnum), raw in CONFIG_RAW_CONTENT.items():
+            if tnum is None and cfg_name not in result:
+                result[cfg_name] = raw
+    except Exception:
+        pass
+    return result
 
     if '/' in filename or os.path.sep in filename:
         filepath = os.path.join(base_defaults_dir, *filename.replace('\\', '/').split('/'))
