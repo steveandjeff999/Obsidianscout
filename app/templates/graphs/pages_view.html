@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 {% block title %}{{ page.title }}{% endblock %}
-{% block heading %}{{ page.title }}{% endblock %}
+{% block heading %}{{ page.title }} {{ help.help_icon('Page title and description for this graph page. Use Edit Page to change widgets and headings.', 'Page title') }}{% endblock %}
 
 {% block content %}
   <div class="mb-3">
@@ -86,17 +87,17 @@
             {% set heading_size = widget.config.heading_size or 'h3' %}
             {% set heading_color = widget.config.heading_color or '#212529' %}
             {% if heading_size == 'h1' %}
-              <h1 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }}</h1>
+              <h1 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }} {{ help.help_icon(widget.config.heading_text or 'Heading', 'Widget heading') }}</h1>
             {% elif heading_size == 'h2' %}
-              <h2 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }}</h2>
+              <h2 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }} {{ help.help_icon(widget.config.heading_text or 'Heading', 'Widget heading') }}</h2>
             {% elif heading_size == 'h3' %}
-              <h3 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }}</h3>
+              <h3 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }} {{ help.help_icon(widget.config.heading_text or 'Heading', 'Widget heading') }}</h3>
             {% elif heading_size == 'h4' %}
-              <h4 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }}</h4>
+              <h4 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }} {{ help.help_icon(widget.config.heading_text or 'Heading', 'Widget heading') }}</h4>
             {% elif heading_size == 'h5' %}
-              <h5 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }}</h5>
+              <h5 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }} {{ help.help_icon(widget.config.heading_text or 'Heading', 'Widget heading') }}</h5>
             {% else %}
-              <h6 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }}</h6>
+              <h6 style="color: {{ heading_color }};">{{ widget.config.heading_text or 'Heading' }} {{ help.help_icon(widget.config.heading_text or 'Heading', 'Widget heading') }}</h6>
             {% endif %}
           </div>
         {% elif widget.config.type == 'image' %}
@@ -397,8 +398,8 @@
                     {% endif %}
                   </div>
                   <div class="mt-1">
-                    <small class="text-danger">Red: {{ match.red_alliance }}</small>
-                    <small class="text-primary ms-3">Blue: {{ match.blue_alliance }}</small>
+                    <small class="text-danger">Red: {% if match.red_teams is defined %}{{ match.red_teams|join(', ') }}{% else %}{{ match.red_alliance }}{% endif %}</small>
+                    <small class="text-primary ms-3">Blue: {% if match.blue_teams is defined %}{{ match.blue_teams|join(', ') }}{% else %}{{ match.blue_alliance }}{% endif %}</small>
                   </div>
                 </div>
                 {% endfor %}

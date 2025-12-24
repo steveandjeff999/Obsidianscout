@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 
-{% block title %}User Profile{% endblock %}
+{% block title %}Profile{% endblock %}
 
-{% block heading %}User Profile{% endblock %}
+{% block heading %}User Profile {{ help.help_icon('View and edit your personal information, preferences, and connected devices.', 'User profile') }}{% endblock %}
 
 {% block content %}
 <div class="row">

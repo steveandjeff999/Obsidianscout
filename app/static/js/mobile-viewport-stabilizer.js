@@ -90,10 +90,13 @@
                     contain: layout style;
                 }
                 
-                /* Force hardware acceleration on interactive elements */
-                button, .btn, [role="button"] {
+                /* Force hardware acceleration on interactive elements and prevent double-tap zoom */
+                button, .btn, [role="button"], .custom-select-toggle, .custom-select-item, .counter-btn {
                     transform: translateZ(0);
                     -webkit-transform: translateZ(0);
+                    /* Avoid double-tap-to-zoom on mobile when tapping buttons quickly */
+                    touch-action: manipulation;
+                    -ms-touch-action: manipulation;
                 }
             }
         `;
@@ -351,7 +354,100 @@
                 scrollProtectionActive = true;
                 setTimeout(() => { scrollProtectionActive = false; }, duration);
             };
-            
+
+            // Prevent double-tap-to-zoom on quick successive taps for interactive elements
+            // We intercept touchend and, when two taps occur within a short interval on an interactive
+            // target (buttons, custom-select items, counter buttons, etc.), preventDefault to stop
+            // the browser triggering a double-tap zoom. We then synthesize a click on the element
+            // to preserve its behavior.
+            const preventDoubleTapZoom = () => {
+                let lastTouchTime = 0;
+                document.addEventListener('touchend', (e) => {
+                    try {
+                        const now = Date.now();
+
+                        // Only consider taps on explicit interactive targets
+                        const interactive = e.target && e.target.closest ? e.target.closest('button, .btn, [role="button"], .counter-btn, .custom-select-toggle, .custom-select-item, .match-period-tab, .nav-link, .custom-select-item') : null;
+
+                        // Update lastTouchTime for non-interactive targets and bail
+                        if (!interactive) {
+                            lastTouchTime = now;
+                            return;
+                        }
+
+                        // If second tap within 300ms, prevent double-tap zoom and trigger click
+                        if (now - lastTouchTime <= 300) {
+                            e.preventDefault(); // requires passive: false on listener
+
+                            try {
+                                if (typeof interactive.click === 'function') {
+                                    interactive.click();
+                                }
+                            } catch (err) {
+                                // swallow errors to avoid breaking page
+                                console.warn('Mobile Viewport Stabilizer: Error synthesizing click on double-tap:', err);
+                            }
+                        }
+
+                        lastTouchTime = now;
+                    } catch (err) {
+                        // ignore errors
+                    }
+                }, { passive: false, capture: true });
+            };
+
+            // Activate the double-tap prevention
+            preventDoubleTapZoom();
+
+            // Sidebar open specific touch-action fixes
+            const interactiveSelector = 'button, .btn, [role="button"], .counter-btn, .custom-select-toggle, .custom-select-item, .match-period-tab, .nav-link';
+
+            const applySidebarTouchFix = () => {
+                try {
+                    const els = document.querySelectorAll(interactiveSelector);
+                    els.forEach(el => {
+                        // Backup existing inline style so we can restore it later
+                        if (el.dataset && el.dataset._touchActionBackup === undefined) {
+                            el.dataset._touchActionBackup = el.style.touchAction || '';
+                        }
+                        el.style.touchAction = 'manipulation';
+                        el.style.msTouchAction = 'manipulation';
+                    });
+                } catch (e) { /* ignore */ }
+            };
+
+            const removeSidebarTouchFix = () => {
+                try {
+                    const els = document.querySelectorAll(interactiveSelector);
+                    els.forEach(el => {
+                        if (el.dataset && el.dataset._touchActionBackup !== undefined) {
+                            el.style.touchAction = el.dataset._touchActionBackup || '';
+                            el.style.msTouchAction = el.dataset._touchActionBackup || '';
+                            delete el.dataset._touchActionBackup;
+                        }
+                    });
+                } catch (e) { /* ignore */ }
+            };
+
+            // Observe body class changes to detect sidebar open/close and apply fixes dynamically
+            try {
+                const bodyObserver = new MutationObserver(() => {
+                    if (document.body.classList.contains('sidebar-open')) {
+                        applySidebarTouchFix();
+                    } else {
+                        removeSidebarTouchFix();
+                    }
+                });
+                bodyObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+                // Apply immediately if the sidebar is open on initialization
+                if (document.body.classList.contains('sidebar-open')) {
+                    applySidebarTouchFix();
+                }
+            } catch (e) {
+                // ignore observer failures
+            }
+
             console.log('Mobile Viewport Stabilizer: All features initialized');
         } catch (error) {
             console.warn('Mobile Viewport Stabilizer: Error during initialization:', error);

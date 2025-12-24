@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 
 {% block title %}Settings{% endblock %}
 
@@ -14,7 +15,7 @@
                 <p class="text-muted">Control how offseason teams with letter suffixes are shown in the UI. This preference is saved in your browser only.</p>
 
                 <div class="mb-3">
-                    <label class="form-label">Team number display</label>
+                    <label class="form-label">Team number display {{ help.help_icon('Choose how offseason teams are displayed: numeric placeholder (99xx), original letter suffix when available, or both. This setting only affects your local browser.', 'Team number display') }}</label>
                     <div class="form-check">
                         <input class="form-check-input" type="radio" name="display_pref" id="pref_99xx" value="99xx">
                         <label class="form-check-label" for="pref_99xx">Show numeric 99xx placeholder (default)</label>
@@ -40,7 +41,7 @@
                 <p class="text-muted">Control whether numeric count-up animations run on this device. This preference is saved in your browser.</p>
                 <div class="form-check form-switch mb-3">
                     <input class="form-check-input" type="checkbox" id="countupEnabledToggle">
-                    <label class="form-check-label" for="countupEnabledToggle">Enable numeric count-up animations</label>
+                    <label class="form-check-label" for="countupEnabledToggle">Enable numeric count-up animations {{ help.help_icon('When enabled, numbers animate from 0 to their final values on certain dashboards for a visual effect. Disable for performance or accessibility.', 'Count-up animations') }}</label>
                 </div>
 
                 <hr />
@@ -49,24 +50,29 @@
 
                 <div class="form-check form-switch mb-2">
                     <input class="form-check-input" type="checkbox" id="darkModeToggle">
-                    <label class="form-check-label" for="darkModeToggle">Enable dark mode</label>
+                    <label class="form-check-label" for="darkModeToggle">Enable dark mode {{ help.help_icon('Toggle dark mode for the UI. This is stored locally and affects charts, forms, and popovers for readability in low-light environments.', 'Dark mode') }}</label>
                 </div>
 
                 <!-- Theme selection removed: controlled via system or server-side theme manager -->
 
                 <div class="form-check form-switch mb-2">
                     <input class="form-check-input" type="checkbox" id="sidebarCollapsedToggle">
-                    <label class="form-check-label" for="sidebarCollapsedToggle">Collapse sidebar by default on desktop</label>
+                    <label class="form-check-label" for="sidebarCollapsedToggle">Collapse sidebar by default on desktop {{ help.help_icon('Collapse the sidebar on wide screens to increase content area. You can still toggle it manually.', 'Sidebar collapse') }}</label>
                 </div>
 
                 <div class="form-check form-switch mb-2">
                     <input class="form-check-input" type="checkbox" id="compactDensityToggle">
-                    <label class="form-check-label" for="compactDensityToggle">Use compact layout density</label>
+                    <label class="form-check-label" for="compactDensityToggle">Use compact layout density {{ help.help_icon('Compress spacing across the UI for more content per screen; may reduce readability on small devices.', 'Compact density') }}</label>
                 </div>
 
                 <div class="form-check form-switch mb-2">
                     <input class="form-check-input" type="checkbox" id="liquidGlassToggle">
-                    <label class="form-check-label" for="liquidGlassToggle">Enable Liquid Glass Buttons (requires server)</label>
+                    <label class="form-check-label" for="liquidGlassToggle">Enable Liquid Glass Buttons (requires server) {{ help.help_icon('A visual appearance option that gives buttons a frosted, glass-like look. Requires server enablement for your team.', 'Liquid glass buttons') }}</label>
+                </div>
+
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="showHelpIconsToggle">
+                    <label class="form-check-label" for="showHelpIconsToggle">Show inline help icons {{ help.help_icon('Show or hide the small question-mark help icons across the site. This preference is stored in your browser and affects popovers and inline hints.', 'Show help icons') }}</label>
                 </div>
 
                 <!-- Rounded UI toggle removed from settings (sitewide control preserved) -->
@@ -84,14 +90,14 @@
                 <!-- Glass control removed from Settings (controlled sitewide) -->
 
                 <div class="mb-3">
-                    <label class="form-label">Font size <span id="fontSizeLabel" class="small text-muted ms-2"></span></label>
+                    <label class="form-label">Font size {{ help.help_icon('Adjust the base font size (in pixels). This helps make the UI easier to read on different devices; changes apply immediately and are stored locally.', 'Font size') }} <span id="fontSizeLabel" class="small text-muted ms-2"></span></label>
                     <input type="range" id="fontSizeSlider" class="form-range" min="14" max="20" step="1" title="Adjust base font size" aria-label="Adjust base font size" />
                     <div class="form-text">Drag to adjust the base font size (px). Changes apply immediately.</div>
                 </div>
 
                 <div class="form-check form-switch mb-2">
                     <input class="form-check-input" type="checkbox" id="reducedMotionToggle">
-                    <label class="form-check-label" for="reducedMotionToggle">Reduce motion / disable animations</label>
+                    <label class="form-check-label" for="reducedMotionToggle">Reduce motion / disable animations {{ help.help_icon('Reduce non-essential motion for accessibility or device performance. This disables animated transitions and count-up effects where possible.', 'Reduce motion') }}</label>
                 </div>
 
                 <hr />
@@ -139,6 +145,22 @@
         // Appearance / layout controls
         var darkToggle = document.getElementById('darkModeToggle');
         try{ if(darkToggle) darkToggle.checked = (localStorage.getItem('darkMode') === 'true'); }catch(e){}
+        // Wire the settings page dark mode toggle to update the stored preference and page classes
+        try {
+            if (darkToggle) {
+                darkToggle.addEventListener('change', function(evt){
+                    try {
+                        var now = !!evt.target.checked;
+                        try { localStorage.setItem('darkMode', now ? 'true' : 'false'); } catch(e) {}
+                        // Keep both html and body in sync so observers react
+                        try { if (now) { document.documentElement.classList.add('dark-mode'); document.body.classList.add('dark-mode'); } else { document.documentElement.classList.remove('dark-mode'); document.body.classList.remove('dark-mode'); } } catch(e) {}
+                        // Retheme charts and widgets through existing observers
+                        try { if (window.rethemePlotlyCharts) window.rethemePlotlyCharts(); } catch(e) {}
+                        try { if (window.updateChartJsTheme) window.updateChartJsTheme ? window.updateChartJsTheme() : null; } catch(e) {}
+                    } catch(e) {}
+                });
+            }
+        } catch(e) {}
 
         var themeSelect = document.getElementById('themeSelect');
         try{ if(themeSelect){ var t = localStorage.getItem('obsidian_theme'); if(t) themeSelect.value = t; } }catch(e){}
@@ -171,6 +193,8 @@
 
         // Liquid glass button control (per-user preference, honored only if server enabled)
         var liquidToggle = document.getElementById('liquidGlassToggle');
+        // Show-help-icons toggle
+        var showHelpToggle = document.getElementById('showHelpIconsToggle');
         async function refreshLiquidGlassStatus() {
             try {
                 const resp = await fetch("{{ url_for('auth.liquid_glass_status') }}", {headers: {'X-Requested-With':'XMLHttpRequest'}});
@@ -205,6 +229,26 @@
             });
             refreshLiquidGlassStatus();
         }
+
+        // Initialize show-help-icons toggle state and apply preference
+        try {
+            if (showHelpToggle) {
+                showHelpToggle.checked = readBool('show_help_icons', true);
+                // Apply class when preference indicates hiding
+                var showHelp = readBool('show_help_icons', true);
+                if (!showHelp) {
+                    document.documentElement.classList.add('hide-help-icons');
+                    document.body.classList.add('hide-help-icons');
+                } else {
+                    document.documentElement.classList.remove('hide-help-icons');
+                    document.body.classList.remove('hide-help-icons');
+                }
+                showHelpToggle.addEventListener('change', function(e){
+                    try { writeBool('show_help_icons', e.target.checked); if(!e.target.checked){ document.documentElement.classList.add('hide-help-icons'); document.body.classList.add('hide-help-icons'); } else { document.documentElement.classList.remove('hide-help-icons'); document.body.classList.remove('hide-help-icons'); } showStatus('Help icon preference updated locally.','success'); } catch(e){}
+                });
+            }
+        } catch(e) {}
+
 
         // Accent color control
         // Accent color controls removed from UI
@@ -246,6 +290,7 @@
             }catch(e){}
 
             try{ if (toggle) writeBool('countup_enabled', toggle.checked); } catch(e) {}
+            try{ if (showHelpToggle) writeBool('show_help_icons', showHelpToggle.checked); } catch(e) {}
 
             // Appearance options
             try{ if(darkToggle){ writeBool('darkMode', darkToggle.checked); if(darkToggle.checked){ document.documentElement.classList.add('dark-mode'); document.body.classList.add('dark-mode'); } else { document.documentElement.classList.remove('dark-mode'); document.body.classList.remove('dark-mode'); } } }catch(e){}
@@ -278,6 +323,7 @@
 
             // Reset newly added settings to defaults
             try{ localStorage.removeItem('countup_enabled'); if (toggle) toggle.checked = true; } catch(e) {}
+            try{ localStorage.removeItem('show_help_icons'); if(showHelpToggle) { showHelpToggle.checked = true; document.documentElement.classList.remove('hide-help-icons'); document.body.classList.remove('hide-help-icons'); } }catch(e){}
             try{ localStorage.removeItem('darkMode'); if(darkToggle) darkToggle.checked = false; document.documentElement.classList.remove('dark-mode'); document.body.classList.remove('dark-mode'); }catch(e){}
             try{ localStorage.removeItem('obsidian_theme'); if(themeSelect) themeSelect.value = ''; }catch(e){}
             try{ localStorage.removeItem('obsidian_sidebar_collapsed'); if(sidebarToggle) sidebarToggle.checked = false; if(typeof setSidebarCollapsed === 'function') setSidebarCollapsed(false); }catch(e){}

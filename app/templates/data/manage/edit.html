@@ -4,7 +4,8 @@
 
 {% block content %}
 <div class="container">
-    <h1 class="mb-4">Edit Scouting Data</h1>
+    {% import '_help_icon.html' as help %}
+    <h1 class="mb-4">Edit Scouting Data {{ help.help_icon('Inspect and modify a single scouting entry. Use Save to persist changes and note any automated calculations.', 'Edit Scouting Data') }}</h1>
     
     <div class="card mb-4">
         <div class="card-header {% if entry.alliance == 'red' %}bg-danger text-white{% elif entry.alliance == 'blue' %}bg-primary text-white{% else %}bg-secondary text-white{% endif %}">

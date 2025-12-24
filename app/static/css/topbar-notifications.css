@@ -15,9 +15,35 @@
   gap: 10px;
   align-items: flex-start;
 }
+/* Meta/body text: clamp to 2 lines with ellipsis when not expanded */
 .topbar-notifications .notification-item .notif-meta {
   font-size: 0.75rem;
   color: var(--bs-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 2.6em; /* approx 2 lines */
+  line-height: 1.25em;
+  transition: max-height 0.15s ease;
+}
+/* When expanded, show full message */
+.topbar-notifications .notification-item.expanded .notif-meta {
+  -webkit-line-clamp: initial;
+  display: block;
+  max-height: 1200px;
+  white-space: normal;
+}
+/* Small inline button to toggle full message */
+.topbar-notifications .notification-expand {
+  border: none;
+  background: transparent;
+  color: var(--bs-primary);
+  padding: 0 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  display: inline-block;
 }
 .topbar-notifications .notification-dismiss {
   border: none;

@@ -26,19 +26,68 @@
     <div class="col-md-6 text-end">
         <label for="color-picker" class="me-2 fw-bold">Color:</label>
         <input type="color" id="color-picker" value="#ff0000">
-        <label for="bg-upload" class="ms-3 btn btn-outline-secondary btn-sm mb-0">Upload Background</label>
+        <button id="preset-red" class="btn btn-sm ms-2 preset-color" title="Preset Red" aria-label="Preset Red" style="background:#ff0000;border:1px solid #b30000"></button>
+        <button id="preset-blue" class="btn btn-sm ms-1 preset-color" title="Preset Blue" aria-label="Preset Blue" style="background:#0000ff;border:1px solid #00008b"></button>
+        <label id="text-tool" class="ms-3 btn btn-outline-secondary btn-sm mb-0" role="button" title="Text Tool">Text</label>
+        <label id="select-tool" class="ms-1 btn btn-outline-secondary btn-sm mb-0" role="button" title="Select Tool">Select</label>
+        <label for="bg-upload" class="ms-2 btn btn-outline-secondary btn-sm mb-0">Upload Background</label>
         <input type="file" id="bg-upload" accept="image/*" class="d-none">
     </div>
 </div>
 <div class="position-relative u-max-w-900 mx-auto">
     <img id="field-image" src="{{ url_for('static', filename='Feild-2025.png') }}" alt="Field" class="img-no-drag" draggable="false">
     <canvas id="drawing-canvas" class="canvas-overlay"></canvas>
+    <input type="text" id="text-input-overlay" class="d-none" maxlength="200" aria-label="Canvas text input">
+    <button id="delete-text" class="d-none" aria-label="Delete text">✕</button>
 </div>
 <div class="mt-3 text-center">
     <button id="clear-canvas" class="btn btn-warning">Clear Drawing</button>
     <button id="save-drawing" class="btn btn-primary ms-2">Save Drawing</button>
     <span id="save-status" class="ms-3 text-muted">Drawings are synced in real time and can be saved for later.</span>
 </div>
+<div class="mt-2 text-center">
+    <small class="text-muted">💡 Tip: Tap text to edit; on mobile, use the <strong>Select</strong> tool and the on-screen <strong>Delete</strong> button to remove text (or clear input and press Delete/Backspace)</small>
+</div>
+<style>
+#text-input-overlay {
+    position: absolute;
+    z-index: 1000;
+    padding: 4px 8px;
+    border: 2px solid #007bff;
+    border-radius: 4px;
+    background: white;
+    font-size: 16px;
+    min-width: 100px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+#delete-text {
+    position: absolute;
+    z-index: 1001;
+    border: none;
+    background: #dc3545;
+    color: white;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+#delete-text.d-none { display: none; }
+.preset-color {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border-radius: 4px;
+    box-shadow: none;
+}
+.preset-color.active {
+    outline: 3px solid rgba(0,0,0,0.12);
+    transform: translateY(-1px);
+}
+</style>
 <script src="{{ url_for('static', filename='js/vendor/socket.io.min.js') }}"></script>
 <script>
 const fieldImage = document.getElementById('field-image');
@@ -56,7 +105,9 @@ let currentColor = colorPicker.value;
 let currentMatchId = matchSelect.value;
 let socket = io();
 let drawingData = [];
+let drawingLastUpdated = null; // ISO timestamp of the drawing on server (used to detect updates) 
 let defaultFieldImage = "{{ url_for('static', filename='Feild-2025.png') }}";
+let hoveredTextId = null;
 
 function resizeCanvas() {
     // Size the canvas to match the displayed image size
@@ -75,19 +126,46 @@ function redraw() {
     // Use the displayed size (bounding rect) so drawing matches pointer coordinates
     const rect = canvas.getBoundingClientRect();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (const line of drawingData) {
-        ctx.strokeStyle = line.color;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(line.points[0].x * rect.width, line.points[0].y * rect.height);
-        for (let i = 1; i < line.points.length; i++) {
-            ctx.lineTo(line.points[i].x * rect.width, line.points[i].y * rect.height);
+    for (const item of drawingData) {
+        if (item && item.type === 'text') {
+            ctx.fillStyle = item.color || '#000';
+            ctx.textBaseline = 'middle';
+            const baseFont = item.fontSize || 24;
+            const fontSize = Math.max(10, Math.round(baseFont * rect.width / 900));
+            ctx.font = `${fontSize}px sans-serif`;
+            
+            // Draw highlight if this text is hovered
+            if (hoveredTextId === item.id) {
+                ctx.save();
+                const metrics = ctx.measureText(item.text);
+                const textX = item.x * rect.width;
+                const textY = item.y * rect.height;
+                const padding = 5;
+                ctx.fillStyle = 'rgba(135, 206, 250, 0.3)'; // Light blue highlight
+                ctx.fillRect(textX - padding, textY - fontSize / 2 - padding, 
+                           metrics.width + padding * 2, fontSize + padding * 2);
+                ctx.restore();
+                ctx.fillStyle = item.color || '#000';
+            }
+            
+            // Simple single-line text rendering for now
+            ctx.fillText(item.text, item.x * rect.width, item.y * rect.height);
+        } else if (item && item.points && item.points.length) {
+            ctx.strokeStyle = item.color;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(item.points[0].x * rect.width, item.points[0].y * rect.height);
+            for (let i = 1; i < item.points.length; i++) {
+                ctx.lineTo(item.points[i].x * rect.width, item.points[i].y * rect.height);
+            }
+            ctx.stroke();
         }
-        ctx.stroke();
     }
 }
 
 function startDraw(e) {
+    // Only draw when in draw mode
+    if (toolMode && toolMode !== 'draw') return;
     // prevent touch from scrolling while drawing
     if (e.type && e.type.startsWith('touch')) e.preventDefault();
     drawing = true;
@@ -158,9 +236,13 @@ function loadDrawing(matchId) {
     fetch(`/matches/api/strategy_drawing/${matchId}`)
         .then(res => res.json())
         .then(data => {
-            drawingData = data.data || [];
-            redraw();
-        });
+            // Update only if there's new content (or on first load)
+            if (String(data.last_updated) !== String(drawingLastUpdated)) {
+                drawingData = data.data || [];
+                drawingLastUpdated = data.last_updated || null;
+                redraw();
+            }
+        }).catch(err => { /* ignore transient errors */ });
 }
 
 function setFieldImage(src) {
@@ -182,6 +264,254 @@ bgUpload.addEventListener('change', function() {
             setFieldImage(data.background_image);
         }
     });
+});
+
+// Text tool support
+const textTool = document.getElementById('text-tool');
+const textInput = document.getElementById('text-input-overlay');
+let toolMode = 'draw';
+let pendingTextPos = null;
+let lastToolBeforeEdit = null;
+let skipBlurCommit = false; // used to prevent blur from committing when delete is tapped
+const selectTool = document.getElementById('select-tool');
+const deleteBtn = document.getElementById('delete-text');
+
+if (textTool) {
+    textTool.addEventListener('click', (e) => {
+        if (toolMode === 'text') {
+            // deactivate
+            toolMode = 'draw';
+            textTool.classList.remove('btn-primary');
+            textTool.classList.add('btn-outline-secondary');
+        } else {
+            toolMode = 'text';
+            // deactivate select tool if active
+            if (selectTool) { selectTool.classList.remove('btn-primary'); selectTool.classList.add('btn-outline-secondary'); }
+            textTool.classList.remove('btn-outline-secondary');
+            textTool.classList.add('btn-primary');
+        }
+    });
+}
+
+if (selectTool) {
+    selectTool.addEventListener('click', (e) => {
+        if (toolMode === 'select') {
+            toolMode = 'draw';
+            selectTool.classList.remove('btn-primary');
+            selectTool.classList.add('btn-outline-secondary');
+        } else {
+            toolMode = 'select';
+            // deactivate text tool if active
+            if (textTool) { textTool.classList.remove('btn-primary'); textTool.classList.add('btn-outline-secondary'); }
+            selectTool.classList.remove('btn-outline-secondary');
+            selectTool.classList.add('btn-primary');
+        }
+    });
+}
+
+function hideTextInput() {
+    pendingTextPos = null;
+    if (textInput) {
+        textInput.classList.add('d-none');
+        textInput.style.display = '';
+        textInput.value = '';
+    }
+    if (deleteBtn) {
+        deleteBtn.classList.add('d-none');
+    }
+    // Restore previous tool that was active before editing (if any)
+    if (lastToolBeforeEdit === 'select') {
+        toolMode = 'select';
+        if (selectTool) { selectTool.classList.remove('btn-outline-secondary'); selectTool.classList.add('btn-primary'); }
+        if (textTool) { textTool.classList.remove('btn-primary'); textTool.classList.add('btn-outline-secondary'); }
+    } else {
+        toolMode = 'draw';
+        if (textTool) { textTool.classList.remove('btn-primary'); textTool.classList.add('btn-outline-secondary'); }
+        if (selectTool) { selectTool.classList.remove('btn-primary'); selectTool.classList.add('btn-outline-secondary'); }
+    }
+    lastToolBeforeEdit = null;
+}
+
+function commitText() {
+    if (!pendingTextPos || !textInput) return hideTextInput();
+    const val = textInput.value.trim();
+    if (val) {
+        // Check if we're editing existing text
+        if (pendingTextPos.editingId) {
+            // Update existing text
+            const textItem = drawingData.find(item => item.id === pendingTextPos.editingId);
+            if (textItem) {
+                textItem.text = val;
+                textItem.color = currentColor;
+            }
+        } else {
+            // Create new text
+            drawingData.push({type: 'text', text: val, x: pendingTextPos.x, y: pendingTextPos.y, color: currentColor, fontSize: 24, id: Date.now()});
+        }
+        redraw();
+        sendDrawingUpdate();
+    }
+    hideTextInput();
+}
+
+function cancelTextInput() {
+    hideTextInput();
+}
+
+function handleCanvasClickForText(e) {
+    if (toolMode !== 'text') {
+        // Check if user clicked on existing text to edit it
+        const {x, y} = getPos(e);
+        const rect = canvas.getBoundingClientRect();
+        const clickX = x * rect.width;
+        const clickY = y * rect.height;
+        
+        // Find if we clicked on any text
+        for (let i = drawingData.length - 1; i >= 0; i--) {
+            const item = drawingData[i];
+            if (item && item.type === 'text') {
+                const baseFont = item.fontSize || 24;
+                const fontSize = Math.max(10, Math.round(baseFont * rect.width / 900));
+                ctx.font = `${fontSize}px sans-serif`;
+                const metrics = ctx.measureText(item.text);
+                const textX = item.x * rect.width;
+                const textY = item.y * rect.height;
+                
+                // Check if click is within text bounds (with some padding)
+                const padding = 10;
+                if (clickX >= textX - padding && clickX <= textX + metrics.width + padding &&
+                    clickY >= textY - fontSize / 2 - padding && clickY <= textY + fontSize / 2 + padding) {
+                    // Found a text item - record where we came from and enter edit mode
+                    lastToolBeforeEdit = toolMode;
+                    toolMode = 'text';
+                    textTool.classList.remove('btn-outline-secondary');
+                    textTool.classList.add('btn-primary');
+                    
+                    if (textInput) {
+                        textInput.style.left = textX + 'px';
+                        textInput.style.top = textY + 'px';
+                        textInput.style.transform = 'translate(-50%, -50%)';
+                        textInput.classList.remove('d-none');
+                        textInput.style.display = 'block';
+                        textInput.value = item.text;
+                        pendingTextPos = {x: item.x, y: item.y, editingId: item.id};
+                        // Position and show delete button near input for easy mobile access
+                        if (deleteBtn) {
+                            deleteBtn.style.left = (textX + 20) + 'px';
+                            deleteBtn.style.top = (textY - 20) + 'px';
+                            deleteBtn.classList.remove('d-none');
+                        }
+                        setTimeout(() => textInput.focus(), 20);
+                    }
+                    e.preventDefault();
+                    return;
+                }
+            }
+        }
+        return;
+    }
+    
+    if (e.type && e.type.startsWith('touch')) e.preventDefault();
+    const {x, y} = getPos(e);
+    const rect = canvas.getBoundingClientRect();
+    if (textInput) {
+        textInput.style.left = (x * rect.width) + 'px';
+        textInput.style.top = (y * rect.height) + 'px';
+        textInput.style.transform = 'translate(-50%, -50%)';
+        textInput.classList.remove('d-none');
+        textInput.style.display = 'block';
+        textInput.value = '';
+        pendingTextPos = {x, y};
+        if (deleteBtn) deleteBtn.classList.add('d-none');
+        setTimeout(() => textInput.focus(), 20);
+    }
+}
+
+if (textInput) {
+    textInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { commitText(); }
+        else if (e.key === 'Escape') { cancelTextInput(); }
+        else if ((e.key === 'Delete' || e.key === 'Backspace') && textInput.value === '' && pendingTextPos && pendingTextPos.editingId) {
+            // Delete the text item if input is empty and we're editing
+            e.preventDefault();
+            drawingData = drawingData.filter(item => item.id !== pendingTextPos.editingId);
+            redraw();
+            sendDrawingUpdate();
+            hideTextInput();
+        }
+    });
+    textInput.addEventListener('blur', (e) => {
+        // If a pointerdown on delete just occurred, skip committing on blur so delete can run first
+        if (skipBlurCommit) {
+            // Clear flag after short delay to avoid swallowing future blurs
+            setTimeout(() => { skipBlurCommit = false; }, 0);
+            return;
+        }
+        commitText();
+    });
+}
+
+if (deleteBtn) {
+    // Ensure deletion runs before blur handlers by listening to pointerdown/touchstart
+    deleteBtn.addEventListener('pointerdown', (e) => {
+        // Mark that blur should not commit (delete will run next)
+        skipBlurCommit = true;
+    });
+    deleteBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (pendingTextPos && pendingTextPos.editingId) {
+            drawingData = drawingData.filter(item => item.id !== pendingTextPos.editingId);
+            redraw();
+            sendDrawingUpdate();
+        }
+        // Reset flag in case blur occurs after
+        skipBlurCommit = false;
+        hideTextInput();
+    });
+}
+// make canvas click handle text insertion
+canvas.addEventListener('click', handleCanvasClickForText);
+
+// Add cursor change when hovering over text
+canvas.addEventListener('mousemove', (e) => {
+    if (drawing) return; // Don't interfere while drawing
+    
+    const {x, y} = getPos(e);
+    const rect = canvas.getBoundingClientRect();
+    const clickX = x * rect.width;
+    const clickY = y * rect.height;
+    
+    // Check if hovering over any text
+    let hoveringText = false;
+    let newHoveredId = null;
+    for (let i = drawingData.length - 1; i >= 0; i--) {
+        const item = drawingData[i];
+        if (item && item.type === 'text') {
+            const baseFont = item.fontSize || 24;
+            const fontSize = Math.max(10, Math.round(baseFont * rect.width / 900));
+            ctx.font = `${fontSize}px sans-serif`;
+            const metrics = ctx.measureText(item.text);
+            const textX = item.x * rect.width;
+            const textY = item.y * rect.height;
+            
+            const padding = 10;
+            if (clickX >= textX - padding && clickX <= textX + metrics.width + padding &&
+                clickY >= textY - fontSize / 2 - padding && clickY <= textY + fontSize / 2 + padding) {
+                hoveringText = true;
+                newHoveredId = item.id;
+                break;
+            }
+        }
+    }
+    
+    // Update hover state and redraw if changed
+    if (newHoveredId !== hoveredTextId) {
+        hoveredTextId = newHoveredId;
+        redraw();
+    }
+    
+    canvas.style.cursor = hoveringText ? 'pointer' : 'crosshair';
 });
 
 // Always use the global background if it exists
@@ -230,6 +560,7 @@ matchSelect.addEventListener('change', () => {
         joinMatchRoom(currentMatchId);
         loadDrawing(currentMatchId);
         checkGlobalBackground();
+        startStrategyPolling(); // begin periodic checks for updates
     } else {
         drawingData = [];
         setFieldImage(defaultFieldImage);
@@ -266,17 +597,79 @@ fieldImage.addEventListener('dragstart', e => e.preventDefault());
 
 // Socket.IO events
 socket.on('drawing_data', data => {
-    if (data.match_id == currentMatchId && data.data) {
-        drawingData = data.data;
+    if (data.match_id == currentMatchId) {
+        // Some emits may send null/empty - handle gracefully
+        drawingData = data.data || [];
+        drawingLastUpdated = data.last_updated || null;
         redraw();
     }
 });
 
-// Initialize
+// Poll server periodically to detect updates (covers multi-process / missing socket broadcasts)
+let _strategy_poll_interval = null;
+function startStrategyPolling() {
+    if (_strategy_poll_interval) return;
+    _strategy_poll_interval = setInterval(() => {
+        if (!currentMatchId) return;
+        // Lightweight check: compare last_updated timestamp
+        fetch(`/matches/api/strategy_drawing/${currentMatchId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (!data) return;
+                if (String(data.last_updated) !== String(drawingLastUpdated)) {
+                    drawingData = data.data || [];
+                    drawingLastUpdated = data.last_updated || null;
+                    redraw();
+                    if (saveStatus) saveStatus.textContent = 'Updated by sync';
+                    setTimeout(() => { if (saveStatus && saveStatus.textContent === 'Updated by sync') saveStatus.textContent = 'Drawings are synced in real time and can be saved for later.'; }, 1500);
+                }
+            }).catch(() => { /* ignore errors */ });
+    }, 3000);
+}
+function stopStrategyPolling() {
+    if (_strategy_poll_interval) { clearInterval(_strategy_poll_interval); _strategy_poll_interval = null; }
+}
+
+socket.on('connect', () => {
+    console.debug('Strategy drawing socket connected');
+    if (currentMatchId) {
+        joinMatchRoom(currentMatchId); // ensure we're in the right room after reconnect
+        loadDrawing(currentMatchId);   // fetch latest drawing on reconnect
+    }
+    // keep polling running to handle cross-process cases where broadcasts are missed
+});
+
+socket.on('disconnect', (reason) => {
+    console.warn('Strategy drawing socket disconnected:', reason);
+    // still keep polling running so updates arrive via REST
+});
+
+// Initialize - prefer current event's first match when present
 if (matchSelect.value) {
     currentMatchId = matchSelect.value;
     joinMatchRoom(currentMatchId);
     loadDrawing(currentMatchId);
+    checkGlobalBackground();
+    startStrategyPolling();
+} else if (eventSelect && eventSelect.value) {
+    // Auto-select the first available match (skip the placeholder option)
+    let firstMatchOpt = null;
+    for (const opt of matchSelect.options) {
+        if (opt.value) { firstMatchOpt = opt.value; break; }
+    }
+    if (firstMatchOpt) {
+        matchSelect.value = firstMatchOpt;
+        currentMatchId = matchSelect.value;
+        joinMatchRoom(currentMatchId);
+        loadDrawing(currentMatchId);
+        checkGlobalBackground();
+        startStrategyPolling();
+    } else {
+        // No matches for this event, still ensure background is set
+        checkGlobalBackground();
+    }
+} else {
+    // No event selected and no match chosen
     checkGlobalBackground();
 }
 
@@ -296,7 +689,33 @@ clearBtn.addEventListener('click', () => {
 // Keep currentColor in sync with the color picker
 colorPicker.addEventListener('input', (e) => {
     currentColor = e.target.value;
+    // clear preset active states when user picks a custom color
+    if (presetRed) presetRed.classList.remove('active');
+    if (presetBlue) presetBlue.classList.remove('active');
 });
+
+// Preset color buttons (red/blue)
+const presetRed = document.getElementById('preset-red');
+const presetBlue = document.getElementById('preset-blue');
+function setPresetColor(hex, btn) {
+    colorPicker.value = hex;
+    currentColor = hex;
+    if (presetRed) presetRed.classList.remove('active');
+    if (presetBlue) presetBlue.classList.remove('active');
+    if (btn) btn.classList.add('active');
+}
+if (presetRed) {
+    presetRed.addEventListener('click', (e) => { setPresetColor('#ff0000', presetRed); });
+}
+if (presetBlue) {
+    presetBlue.addEventListener('click', (e) => { setPresetColor('#0000ff', presetBlue); });
+}
+// Initialize preset active state if color matches
+if (colorPicker && colorPicker.value) {
+    const val = colorPicker.value.toLowerCase();
+    if (val === '#ff0000' && presetRed) presetRed.classList.add('active');
+    else if ((val === '#0000ff' || val === '#00f') && presetBlue) presetBlue.classList.add('active');
+}
 
 // Manual save button: persist drawing to server and show status
 const saveBtn = document.getElementById('save-drawing');

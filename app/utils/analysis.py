@@ -126,8 +126,11 @@ def _detect_outliers_adaptive(values):
             # Calculate distance to nearest neighbors
             other_vals = values[:i] + values[i+1:]
             min_distance = min(abs(val - other) for other in other_vals)
-            typical_distance = statistics.median([abs(a - b) for a in values for b in values if a != b])
-            
+            # Compute pairwise distances using indices so equal values (at different indices)
+            # are included as zeros rather than being filtered out; guard against empty.
+            pairwise_distances = [abs(values[a] - values[b]) for a in range(n) for b in range(a + 1, n)]
+            typical_distance = statistics.median(pairwise_distances) if pairwise_distances else 0
+
             if typical_distance > 0 and min_distance > 3 * typical_distance:
                 isolation_score = min(1.0, min_distance / (4 * typical_distance))
                 outlier_scores[i] = max(outlier_scores[i], isolation_score)
@@ -361,6 +364,135 @@ def _calculate_consistency_factor(values, weights=None):
     consistency_factor = 1.0 / (1.0 + cv * 0.5)
     return max(0.9, min(1.0, consistency_factor))
 
+class _FakeSD:
+    def __init__(self, val, team=None):
+        self.data = {}
+        self.match = None
+        self.scout_name = 'StartingPoints'
+        self._sp = val
+        self.timestamp = datetime.min
+        self.team = team
+    def _calculate_auto_points_dynamic(self, data, game_config):
+        return 0
+    def _calculate_teleop_points_dynamic(self, data, game_config):
+        return self._sp
+    def _calculate_endgame_points_dynamic(self, data, game_config):
+        return 0
+    def calculate_metric(self, formula_or_id):
+        if isinstance(formula_or_id, str) and ('tot' in formula_or_id.lower() or formula_or_id == 'tot'):
+            return self._sp
+        return 0
+
+def inject_starting_points(team, scouting_data, event_id=None):
+    """Inject synthetic starting points into scouting data if configured."""
+    calc_data = list(scouting_data)
+    starting_points_applied = False
+
+    # 1. Try event-level starting points
+    try:
+        from app.models import team_event
+        from app import db
+        if event_id is not None and team is not None:
+            row = db.session.execute(team_event.select().where(
+                team_event.c.team_id == team.id,
+                team_event.c.event_id == event_id
+            )).first()
+            if row and getattr(row, 'starting_points_enabled', False) and getattr(row, 'starting_points', None) is not None:
+                sp_val = float(getattr(row, 'starting_points', 0) or 0)
+                sp_thresh = int(getattr(row, 'starting_points_threshold', 2) or 2)
+                sc_count = len(scouting_data)
+                add_count = max(0, sp_thresh - sc_count)
+                if add_count > 0 and sp_val != 0:
+                    for _ in range(add_count):
+                        calc_data.append(_FakeSD(sp_val, team=team))
+                    starting_points_applied = True
+    except Exception:
+        pass
+
+    # 2. Try team-level starting points
+    if not starting_points_applied:
+        try:
+            if team is not None and getattr(team, 'starting_points_enabled', False) and getattr(team, 'starting_points', None) is not None:
+                sp_val = float(getattr(team, 'starting_points', 0) or 0)
+                sp_thresh = int(getattr(team, 'starting_points_threshold', 2) or 2)
+                sc_count = len(scouting_data)
+                add_count = max(0, sp_thresh - sc_count)
+                if add_count > 0 and sp_val != 0:
+                    for _ in range(add_count):
+                        calc_data.append(_FakeSD(sp_val, team=team))
+        except Exception:
+            pass
+            
+    return calc_data
+
+def get_analysis_data_for_team(team_id, event_id=None):
+    """Get all scouting data for a team, including synthetic starting points."""
+    team = Team.query.get(team_id)
+    if not team:
+        return []
+
+    # Get real scouting data
+    scouting_data = []
+    
+    # Use the alliance_data utilities for consistent behavior across the app
+    try:
+        from app.utils.alliance_data import get_scouting_data_for_team as alliance_get_scouting_data
+        data, is_alliance_mode = alliance_get_scouting_data(team.id, event_id=event_id)
+        if data:
+            scouting_data = data
+    except Exception:
+        pass
+
+    if not scouting_data:
+        # Fallback: Check if alliance mode is active using legacy method
+        try:
+            if TeamAllianceStatus.is_alliance_mode_active_for_team(team.team_number):
+                alliance = TeamAllianceStatus.get_active_alliance_for_team(team.team_number)
+                if alliance:
+                    member_numbers = alliance.get_all_team_numbers()
+                    query = ScoutingData.query.filter(ScoutingData.team_id == team.id,
+                                                     ScoutingData.scouting_team_number.in_(member_numbers))
+                    if event_id:
+                        query = query.join(Match).filter(Match.event_id == event_id)
+                    scouting_data = query.all()
+        except Exception:
+            pass
+
+    if not scouting_data:
+        # Default behavior
+        scouting_team_number = get_current_scouting_team_number()
+        if scouting_team_number is not None:
+            query = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=scouting_team_number)
+            from sqlalchemy import or_
+            query = query.filter(
+                or_(
+                    ScoutingData.scout_name == None,
+                    ~ScoutingData.scout_name.like('[Alliance-%')
+                )
+            )
+            if event_id:
+                query = query.join(Match).filter(Match.event_id == event_id)
+            scouting_data = query.all()
+        else:
+            query = ScoutingData.query.filter_by(team_id=team.id, scouting_team_number=None)
+            from sqlalchemy import or_
+            query = query.filter(
+                or_(
+                    ScoutingData.scout_name == None,
+                    ~ScoutingData.scout_name.like('[Alliance-%')
+                )
+            )
+            if event_id:
+                match_ids = [m.id for m in Match.query.filter_by(event_id=event_id).all()]
+                if match_ids:
+                    query = query.filter(ScoutingData.match_id.in_(match_ids))
+                else:
+                    scouting_data = []
+            if scouting_data is None: # if not set by else block above
+                 scouting_data = query.all()
+
+    return inject_starting_points(team, scouting_data, event_id)
+
 def calculate_team_metrics(team_id, event_id=None, game_config=None):
     """Calculate key performance metrics for a team based on their scouting data using dynamic period calculations
     
@@ -372,119 +504,11 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
     team = Team.query.get(team_id)
     team_number = team.team_number if team else team_id
     
-    # Get all scouting data for this team.
-    # If the team is currently in alliance-mode, use scouting data from shared alliance tables.
-    # Otherwise, respect the normal scouting team isolation rules.
-    def _get_scouting_data_for_team(team_obj, event_filter=None):
-        """Return a list of ScoutingData objects to use for analytics for the given Team object or id."""
-        # Accept either Team instance or team id
-        if isinstance(team_obj, int):
-            team_obj = Team.query.get(team_obj)
-        if not team_obj:
-            return []
-
-        # Use the alliance_data utilities for consistent behavior across the app
-        try:
-            from app.utils.alliance_data import get_scouting_data_for_team as alliance_get_scouting_data
-            scouting_data, is_alliance_mode = alliance_get_scouting_data(team_obj.id, event_id=event_filter)
-            if scouting_data:
-                return scouting_data
-        except Exception as e:
-            print(f"    DEBUG: alliance_data utility error: {e}")
-            # Fall back to legacy approach if utility fails
-            pass
-
-        # Fallback: Check if alliance mode is active using legacy method
-        try:
-            if TeamAllianceStatus.is_alliance_mode_active_for_team(team_obj.team_number):
-                alliance = TeamAllianceStatus.get_active_alliance_for_team(team_obj.team_number)
-                if alliance:
-                    # Use get_all_team_numbers to include game_config_team for data filtering
-                    member_numbers = alliance.get_all_team_numbers()
-                    # Use scouting entries contributed by alliance members for this team
-                    query = ScoutingData.query.filter(ScoutingData.team_id == team_obj.id,
-                                                     ScoutingData.scouting_team_number.in_(member_numbers))
-                    # Apply event filter if provided
-                    if event_filter:
-                        query = query.join(Match).filter(Match.event_id == event_filter)
-                    return query.all()
-        except Exception:
-            # Fall back to normal isolation if alliance lookup fails
-            pass
-
-        # Default behavior: Use EXACT same filter as /data/manage for consistency
-        # This ensures predictions see exactly the same data that appears in /data/manage
-        scouting_team_number = get_current_scouting_team_number()
-        print(f"    DEBUG: Current scouting_team_number = {scouting_team_number}")
-        if scouting_team_number is not None:
-            # Use exact match filter (same as /data/manage) - no NULL entries
-            query = ScoutingData.query.filter_by(team_id=team_obj.id, scouting_team_number=scouting_team_number)
-            # Exclude alliance-copied data when not in alliance mode
-            from sqlalchemy import or_
-            query = query.filter(
-                or_(
-                    ScoutingData.scout_name == None,
-                    ~ScoutingData.scout_name.like('[Alliance-%')
-                )
-            )
-            # Apply event filter if provided
-            if event_filter:
-                query = query.join(Match).filter(Match.event_id == event_filter)
-            results = query.all()
-            print(f"    DEBUG: Found {len(results)} scouting entries for team {team_obj.team_number} with scouting_team {scouting_team_number} and event_filter={event_filter}")
-            return results
-        
-        query = ScoutingData.query.filter_by(team_id=team_obj.id, scouting_team_number=None)
-        # Exclude alliance-copied data
-        from sqlalchemy import or_
-        query = query.filter(
-            or_(
-                ScoutingData.scout_name == None,
-                ~ScoutingData.scout_name.like('[Alliance-%')
-            )
-        )
-        # Apply event filter if provided - get match IDs first to avoid JOIN issues
-        if event_filter:
-            match_ids = [m.id for m in Match.query.filter_by(event_id=event_filter).all()]
-            if match_ids:
-                query = query.filter(ScoutingData.match_id.in_(match_ids))
-            else:
-                return []
-        return query.all()
+    # Get all scouting data for this team (including synthetic starting points)
+    calc_data = get_analysis_data_for_team(team_id, event_id)
     
-    scouting_data = _get_scouting_data_for_team(team, event_id)
-
-    # Determine if there are configured starting points for this team/event.
-    # We'll create a separate calculation list so we do not alter the canonical scouting_data
-    calc_data = list(scouting_data)
-    try:
-        # Use team-level starting points (applies across all events for the team)
-        if team is not None and getattr(team, 'starting_points_enabled', False) and getattr(team, 'starting_points', None) is not None:
-            sp_val = float(getattr(team, 'starting_points', 0) or 0)
-            sp_thresh = int(getattr(team, 'starting_points_threshold', 2) or 2)
-            sc_count = len(scouting_data)
-            add_count = max(0, sp_thresh - sc_count)
-            if add_count > 0 and sp_val != 0:
-                class _FakeSD:
-                    def __init__(self, val):
-                        self.data = {}
-                        self.match = None
-                        self.scout_name = 'StartingPoints'
-                        self._sp = val
-                    def _calculate_auto_points_dynamic(self, data, game_config):
-                        return 0
-                    def _calculate_teleop_points_dynamic(self, data, game_config):
-                        return 0
-                    def _calculate_endgame_points_dynamic(self, data, game_config):
-                        return 0
-                    def calculate_metric(self, formula_or_id):
-                        if isinstance(formula_or_id, str) and ('tot' in formula_or_id.lower() or formula_or_id == 'tot'):
-                            return self._sp
-                        return 0
-                for _ in range(add_count):
-                    calc_data.append(_FakeSD(sp_val))
-    except Exception:
-        pass
+    # Separate real scouting data for logging/counting purposes
+    scouting_data = [d for d in calc_data if not isinstance(d, _FakeSD)]
 
     if not scouting_data and not calc_data:
         print(f"    No scouting data found for team {team_number} (ID: {team_id})")
@@ -502,44 +526,6 @@ def calculate_team_metrics(team_id, event_id=None, game_config=None):
     # Get game configuration (use provided game_config if given, otherwise fall back to current user's config)
     if game_config is None:
         game_config = get_current_game_config()
-    
-    # Determine if there are configured starting points for this team/event.
-    # We'll create a separate calculation list so we do not alter the canonical scouting_data
-    calc_data = list(scouting_data)
-    try:
-        from app.models import team_event
-        from app import db
-        if event_id is not None and team is not None:
-            row = db.session.execute(team_event.select().where(
-                team_event.c.team_id == team.id,
-                team_event.c.event_id == event_id
-            )).first()
-            if row and getattr(row, 'starting_points_enabled', False) and getattr(row, 'starting_points', None) is not None:
-                sp_val = float(getattr(row, 'starting_points', 0) or 0)
-                sp_thresh = int(getattr(row, 'starting_points_threshold', 2) or 2)
-                sc_count = len(scouting_data)
-                add_count = max(0, sp_thresh - sc_count)
-                if add_count > 0 and sp_val != 0:
-                    class _FakeSD:
-                        def __init__(self, val):
-                            self.data = {}
-                            self.match = None
-                            self.scout_name = 'StartingPoints'
-                            self._sp = val
-                        def _calculate_auto_points_dynamic(self, data, game_config):
-                            return 0
-                        def _calculate_teleop_points_dynamic(self, data, game_config):
-                            return 0
-                        def _calculate_endgame_points_dynamic(self, data, game_config):
-                            return 0
-                        def calculate_metric(self, formula_or_id):
-                            if isinstance(formula_or_id, str) and ('tot' in formula_or_id.lower() or formula_or_id == 'tot'):
-                                return self._sp
-                            return 0
-                    for _ in range(add_count):
-                        calc_data.append(_FakeSD(sp_val))
-    except Exception:
-        pass
 
     # Calculate exponential weights based on match recency - use calc_data which may include synthetic entries
     time_weights = _calculate_exponential_weights(calc_data, decay_factor=0.15)

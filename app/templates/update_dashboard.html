@@ -176,7 +176,8 @@
     <div class="row">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h1>Server Update Dashboard</h1>
+                {% import '_help_icon.html' as help %}
+                <h1>Server Update Dashboard {{ help.help_icon('Monitor server update status and apply updates. Shows the last update timestamp and pending items.', 'Updates') }}</h1>
                 <div>
                     <button class="btn btn-secondary" onclick="toggleAutoRefresh()">
                         <i class="fas fa-sync-alt"></i> Auto Refresh: <span id="autoRefreshStatus">ON</span>

@@ -2,7 +2,9 @@
 
 {% block title %}Global Configuration Management{% endblock %}
 
-{% block heading %}Global Configuration Management{% endblock %}
+{% import '_help_icon.html' as help %}
+
+{% block heading %}Global Configuration Management {{ help.help_icon('Manage runtime configuration and global operational behaviors. Use the reload option to push changes to connected devices; exercise caution when broadcasting messages.', 'Global configuration') }}{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -24,7 +26,7 @@
             <div class="card-body">
                 <!-- Alliance Status -->
                 <div class="mb-3">
-                    <h6><i class="fas fa-users me-2"></i>Alliance Mode</h6>
+                    <h6><i class="fas fa-users me-2"></i>Alliance Mode {{ help.help_icon('Show whether alliance-mode is active for the event. When active, some scouting and match flows change to support alliance-based workflows.', 'Alliance mode') }}</h6>
                     {% if current_config.alliance_status.is_active %}
                     <div class="alert alert-success">
                         <strong>Active:</strong> Alliance {{ current_config.alliance_status.alliance_info.color|title }} 
@@ -90,7 +92,7 @@
             <div class="card-body">
                 <!-- Reload All Configurations -->
                 <div class="mb-4">
-                    <h6><i class="fas fa-sync me-2"></i>Force Configuration Reload</h6>
+                    <h6><i class="fas fa-sync me-2"></i>Force Configuration Reload {{ help.help_icon('Push the current configuration to all connected clients immediately. Use this for urgent updates; this affects live systems immediately.', 'Reload all configurations') }}</h6>
                     <p class="text-muted small">
                         Immediately reload configuration on all connected devices. Use this when configuration files 
                         have been manually edited or when troubleshooting sync issues.
@@ -106,7 +108,7 @@
                 
                 <!-- Broadcast Custom Message -->
                 <div class="mb-4">
-                    <h6><i class="fas fa-bullhorn me-2"></i>Broadcast Message</h6>
+                    <h6><i class="fas fa-bullhorn me-2"></i>Broadcast Message {{ help.help_icon('Send a short notification to all connected users. Useful for quick alerts, but avoid sending sensitive information.', 'Broadcast message') }}</h6>
                     <p class="text-muted small">
                         Send a custom notification message to all connected users. This will appear as a config update notification.
                     </p>
@@ -134,7 +136,7 @@
     <div class="col-md-12">
         <div class="card">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="fas fa-satellite-dish me-2"></i>Real-time Status Monitor</h5>
+                <h5 class="mb-0"><i class="fas fa-satellite-dish me-2"></i>Real-time Status Monitor {{ help.help_icon('Shows connection status and live events like config changes and connectivity. Useful for troubleshooting: use Test Connection to validate Socket.IO.', 'Real-time status') }}</h5>
             </div>
             <div class="card-body">
                 <div id="status-container">
@@ -148,7 +150,7 @@
                 <!-- Connection Test -->
                 <div class="mt-3">
                     <button type="button" class="btn btn-outline-primary" onclick="testConnection()">
-                        <i class="fas fa-wifi me-2"></i>Test Connection
+                        <i class="fas fa-wifi me-2"></i>Test Connection {{ help.help_icon('Ping the real-time monitoring service to validate current connectivity for this admin console.', 'Test connection') }}
                     </button>
                     <button type="button" class="btn btn-outline-secondary" onclick="clearLogs()">
                         <i class="fas fa-broom me-2"></i>Clear Logs
@@ -157,7 +159,7 @@
                 
                 <!-- Activity Log -->
                 <div class="mt-4">
-                    <h6><i class="fas fa-list me-2"></i>Recent Activity</h6>
+                    <h6><i class="fas fa-list me-2"></i>Recent Activity {{ help.help_icon('A short live activity log of recent configuration changes, broadcasts, and connection events. Useful for auditing quick changes.', 'Activity log') }}</h6>
                     <div id="activity-log" class="border rounded p-3 json-editor notifications-list">
                         <div class="text-muted">Activity log will appear here...</div>
                     </div>

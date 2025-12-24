@@ -1118,7 +1118,40 @@ def create_app(test_config=None):
             return {'shared_event_codes': upper_shared}
         except Exception:
             return {'shared_event_codes': []}
-    
+
+    # Inject configuration load issues (admin-only banner will show these)
+    @app.context_processor
+    def inject_config_load_issues():
+        try:
+            from app.utils.config_manager import get_config_load_issues
+            from flask_login import current_user
+
+            if not (hasattr(current_user, 'is_authenticated') and current_user.is_authenticated):
+                return {'config_load_issues': []}
+
+            # Only show issues to admins or superadmins to avoid alarming scouts
+            try:
+                roles = [r.name for r in getattr(current_user, 'roles', []) if hasattr(r, 'name')]
+            except Exception:
+                roles = []
+            if not any(r in ('admin', 'superadmin') for r in roles):
+                return {'config_load_issues': []}
+
+            # Also provide raw file contents for the current team so editors can display
+            from app.utils.config_manager import get_config_raw_contents
+            team_number = None
+            try:
+                if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated and hasattr(current_user, 'scouting_team_number'):
+                    team_number = current_user.scouting_team_number
+            except Exception:
+                team_number = None
+
+            return {
+                'config_load_issues': get_config_load_issues(),
+                'config_load_raw': get_config_raw_contents(team_number=team_number)
+            }
+        except Exception:
+            return {'config_load_issues': [], 'config_load_raw': {}}    
     @app.context_processor
     def inject_csrf_token():
         """Make csrf_token function available to all templates"""
@@ -1244,6 +1277,58 @@ def create_app(test_config=None):
             from app.utils.config_manager import get_current_game_config
             effective_cfg = get_current_game_config()
         return dict(game_config=effective_cfg, display_team_label=display_team_label)
+
+    # Add a context processor to surface teams configuration status to templates
+    @app.context_processor
+    def inject_teams_config_status():
+        """Detect missing/invalid teams configuration and expose a helpful message.
+
+        This only shows the banner to authenticated users with admin or superadmin
+        roles so normal scouts aren't presented with setup messages.
+        """
+        try:
+            from flask_login import current_user
+            # Only show to admins/superadmins
+            if not (hasattr(current_user, 'is_authenticated') and current_user.is_authenticated):
+                return {'teams_config_issue': None}
+            try:
+                roles = [r.name for r in getattr(current_user, 'roles', []) if hasattr(r, 'name')]
+            except Exception:
+                roles = []
+            if not any(r in ('admin', 'superadmin') for r in roles):
+                return {'teams_config_issue': None}
+
+            from app.models import Team, Event
+            from app.utils.config_manager import get_effective_game_config
+            cfg = get_effective_game_config() or {}
+
+            # Default: assume valid
+            issue = None
+
+            # If we have no teams at all, suggest syncing/adding teams
+            try:
+                teams_count = Team.query.count()
+                if teams_count == 0:
+                    issue = 'No teams are configured on this server. Please add teams or use Teams → Sync from config to populate teams.'
+            except Exception:
+                # If database not available, don't show a misleading banner
+                issue = None
+
+            # If game config references a current_event_code but the event doesn't exist, warn
+            if not issue:
+                try:
+                    event_code = cfg.get('current_event_code') if isinstance(cfg, dict) else None
+                    if event_code:
+                        ev = Event.query.filter_by(code=event_code).first()
+                        if not ev:
+                            issue = f"Event code '{event_code}' in configuration was not found. Run Teams → Sync from config to create event and teams."
+                except Exception:
+                    # ignore
+                    pass
+
+            return {'teams_config_issue': issue}
+        except Exception:
+            return {'teams_config_issue': None}
     
     # Add a context processor to make theme data available in all templates
     @app.context_processor

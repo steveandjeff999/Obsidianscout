@@ -46,6 +46,8 @@ def index():
     # Get event code from config
     game_config = get_effective_game_config()
     current_event_code = game_config.get('current_event_code')
+    if current_event_code:
+        current_event_code = str(current_event_code).strip()
     
     # Get the current event
     event = None
@@ -63,7 +65,98 @@ def index():
     
     # Get all events for the dropdown (combined/deduped like /events)
     events = get_combined_dropdown_events()
-    
+
+    # Handle raw event_id URL params that may use synthetic ids (like 'alliance_CODE') or event codes
+    force_selected_event = False
+    try:
+        raw_event_param = request.args.get('event_id')
+        if raw_event_param and events:
+            if isinstance(raw_event_param, str):
+                if raw_event_param.startswith('alliance_'):
+                    evt = next((e for e in events if str(getattr(e, 'id', '')) == raw_event_param), None)
+                    if evt:
+                        event = evt
+                else:
+                    # If a code string was passed, match by code
+                    code_up = raw_event_param.upper()
+                    evt = next((e for e in events if (getattr(e, 'code', '') or '').upper() == code_up), None)
+                    if evt:
+                        event = evt
+    except Exception:
+        pass
+
+    # Prefer synthetic alliance entry for current_event_code when present (override local copy when alliance active)
+    try:
+        # Only auto-override with the alliance/current_event when the user did NOT explicitly request an event
+        if not request.args.get('event_id') and current_event_code and events and get_active_alliance_id():
+            code_up = str(current_event_code).upper()
+            evt = next((e for e in events if getattr(e, 'is_alliance', False) and (getattr(e, 'code', '') or '').upper() == code_up), None)
+            if evt:
+                # No explicit event requested; use the synthetic alliance entry
+                event = evt
+    except Exception:
+        pass
+
+    # If no event selected and we're not in alliance mode, default to the current team's most-recent event
+    try:
+        if not event and not get_active_alliance_id():
+            team_event = filter_events_by_scouting_team().order_by(
+                Event.year.desc(), 
+                Event.start_date.desc(), 
+                Event.id.desc()
+            ).first()
+            if team_event:
+                event = team_event
+    except Exception:
+        pass
+
+    # Ensure selected_event matches an entry from the events dropdown list
+    # This is critical for proper dropdown selection in the template
+    selected_event_for_dropdown = None
+    if event and events:
+        try:
+            # Check if we're in alliance mode
+            alliance_id = get_active_alliance_id()
+            is_in_alliance_mode = alliance_id is not None
+            
+            # Try to find the event in the dropdown list by matching ID or code
+            event_id_to_match = getattr(event, 'id', None)
+            event_code_to_match = (getattr(event, 'code', '') or '').upper()
+            
+            # Collect all matching events, then pick the best one
+            matching_events = []
+            for dropdown_evt in events:
+                dropdown_id = getattr(dropdown_evt, 'id', None)
+                dropdown_code = (getattr(dropdown_evt, 'code', '') or '').upper()
+                is_alliance_evt = getattr(dropdown_evt, 'is_alliance', False)
+                
+                # Check if this event matches by ID or code
+                if (event_id_to_match and dropdown_id == event_id_to_match) or \
+                   (event_code_to_match and dropdown_code == event_code_to_match):
+                    matching_events.append(dropdown_evt)
+            
+            # Prefer alliance events when in alliance mode, non-alliance events otherwise
+            if matching_events:
+                for evt in matching_events:
+                    is_alliance_evt = getattr(evt, 'is_alliance', False)
+                    if is_in_alliance_mode and is_alliance_evt:
+                        selected_event_for_dropdown = evt
+                        break
+                    elif not is_in_alliance_mode and not is_alliance_evt:
+                        selected_event_for_dropdown = evt
+                        break
+                # Fallback to first match if preference not found
+                if not selected_event_for_dropdown:
+                    selected_event_for_dropdown = matching_events[0]
+            
+            # Fallback: if not found, use the event itself
+            if not selected_event_for_dropdown:
+                selected_event_for_dropdown = event
+        except Exception:
+            selected_event_for_dropdown = event
+    else:
+        selected_event_for_dropdown = event
+
     # Filter matches by the selected event and scouting team
     if event:
         # Check for alliance mode
@@ -75,11 +168,20 @@ def index():
             # Keep the list of matches provided by the helper (it may have times populated in-memory)
         else:
             # Build base query for this event (filtered by scouting team)
-            query = filter_matches_by_scouting_team().filter(Match.event_id == event.id)
+            # Use event code matching to handle cross-team event lookups
+            from sqlalchemy import func
+            from app.utils.team_isolation import get_current_scouting_team_number
+            event_code = getattr(event, 'code', None)
+            current_scouting_team = get_current_scouting_team_number()
+            
+            if event_code:
+                query = filter_matches_by_scouting_team().join(
+                    Event, Match.event_id == Event.id
+                ).filter(func.upper(Event.code) == event_code.upper())
+            else:
+                query = filter_matches_by_scouting_team().filter(Match.event_id == event.id)
             
             # Defensive check: ensure we only show matches for current scouting team
-            from app.utils.team_isolation import get_current_scouting_team_number
-            current_scouting_team = get_current_scouting_team_number()
             if current_scouting_team is not None:
                 query = query.filter(Match.scouting_team_number == current_scouting_team)
             else:
@@ -277,7 +379,7 @@ def index():
     except Exception:
         next_unplayed_match_id = None
 
-    return render_template('matches/index.html', matches=matches, events=events, selected_event=event, display_scores=display_scores, next_unplayed_match_id=next_unplayed_match_id, adjusted_predictions=adjusted_predictions, **get_theme_context())
+    return render_template('matches/index.html', matches=matches, events=events, selected_event=selected_event_for_dropdown, force_selected_event=force_selected_event, display_scores=display_scores, next_unplayed_match_id=next_unplayed_match_id, adjusted_predictions=adjusted_predictions, **get_theme_context())
 
 @bp.route('/sync_from_config')
 def sync_from_config():
@@ -294,9 +396,55 @@ def sync_from_config():
         # Find or create the event in our database (filtered by scouting team)
         current_year = game_config.get('season', 2026)
         event = get_event_by_code(event_code)
-        if not event:
-            # Try to fetch full event details including timezone from API
+
+        # If `get_event_by_code` returned a synthetic alliance entry (id like 'alliance_<CODE>'),
+        # convert it to a real DB Event record under the current scouting team so
+        # subsequent database writes use an integer `event.id`.
+        try:
+            from sqlalchemy import func
+            from app.utils.team_isolation import get_current_scouting_team_number
             from app.utils.api_utils import get_event_details_dual_api
+            from app.routes.data import get_or_create_event
+
+            current_scouting_team = get_current_scouting_team_number()
+            if event and isinstance(getattr(event, 'id', None), str) and str(event.id).startswith('alliance_'):
+                # Try to find a real event record for this code under the current scouting team
+                real_event = Event.query.filter(
+                    func.upper(Event.code) == str(event.code).upper(),
+                    Event.scouting_team_number == current_scouting_team
+                ).first()
+
+                if not real_event:
+                    # Attempt to fetch details from API and create the event record
+                    try:
+                        event_details = get_event_details_dual_api(event.code)
+                    except Exception:
+                        event_details = None
+
+                    real_event = get_or_create_event(
+                        name=event_details.get('name', f"Event {event.code}") if event_details else f"Event {event.code}",
+                        code=event.code,
+                        year=event_details.get('year', current_year) if event_details else current_year,
+                        location=event_details.get('location') if event_details else None,
+                        start_date=event_details.get('start_date') if event_details else None,
+                        end_date=event_details.get('end_date') if event_details else None,
+                        scouting_team_number=current_scouting_team
+                    )
+
+                    if event_details and event_details.get('timezone') and not getattr(real_event, 'timezone', None):
+                        real_event.timezone = event_details.get('timezone')
+                        db.session.add(real_event)
+                        db.session.commit()
+
+                # Replace the synthetic object with the concrete DB record for the rest of this route
+                event = real_event
+        except Exception:
+            # If anything goes wrong, continue and let later code handle missing `event` gracefully
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
             from app.routes.data import get_or_create_event
             from app.utils.team_isolation import get_current_scouting_team_number
             current_scouting_team = get_current_scouting_team_number()
@@ -756,19 +904,42 @@ def strategy():
     # Get all events for the dropdown (combined/deduped like /events)
     events = get_combined_dropdown_events()
     
-    # Get event from URL parameter or form
-    event_id = request.args.get('event_id', type=int) or request.form.get('event_id', type=int)
+    # Get event from URL parameter or form (accept synthetic 'alliance_CODE' ids)
+    raw_event_param = request.args.get('event_id') or request.form.get('event_id')
     event = None
     matches = []
-    
-    if event_id:
-        # If a specific event ID is requested, use that
-        event = Event.query.get_or_404(event_id)
-        
-        # Get all matches for this event
-        matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
-        # Use global match_sort_key for proper ordering (handles X-Y playoff format)
-        matches = sorted(matches, key=match_sort_key)
+
+    if raw_event_param:
+        # If the param is numeric, treat it as a DB id; otherwise treat as a synthetic alliance id or code
+        try:
+            event_id = int(raw_event_param)
+            event = Event.query.get_or_404(event_id)
+            # If alliance mode is active, prefer alliance-aware match gathering
+            alliance_id = get_active_alliance_id()
+            if alliance_id:
+                matches, _ = get_all_matches_for_alliance(event_id=event.id, event_code=getattr(event, 'code', None))
+            else:
+                matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
+        except Exception:
+            # Non-numeric ids: handle synthetic 'alliance_CODE' or raw event code
+            try:
+                param_str = str(raw_event_param)
+                # If form of 'alliance_CODE', extract code portion
+                if param_str.startswith('alliance_'):
+                    code = param_str[len('alliance_'):]
+                else:
+                    code = param_str
+                # Use helper to build a representative event object (may return synthetic or real event)
+                event = get_event_by_code(code)
+                # Use alliance helper to fetch matches across alliance members
+                matches, _ = get_all_matches_for_alliance(event_id=param_str, event_code=code)
+            except Exception:
+                matches = []
+        # Sort matches for display
+        try:
+            matches = sorted(matches, key=match_sort_key)
+        except Exception:
+            pass
     
     # Get game configuration (alliance-aware)
     game_config = get_effective_game_config()
@@ -826,17 +997,36 @@ def strategy_all():
     # Get all events for the dropdown (combined/deduped like /events)
     events = get_combined_dropdown_events()
 
-    # Get event from URL parameter or form
-    event_id = request.args.get('event_id', type=int) or request.form.get('event_id', type=int)
+    # Get event from URL parameter or form (accept synthetic 'alliance_CODE' ids)
+    raw_event_param = request.args.get('event_id') or request.form.get('event_id')
     event = None
     matches = []
     summaries = []
 
-    if event_id:
-        event = Event.query.get_or_404(event_id)
-        matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
-        # Use global match_sort_key for proper ordering (handles X-Y playoff format)
-        matches = sorted(matches, key=match_sort_key)
+    if raw_event_param:
+        try:
+            event_id = int(raw_event_param)
+            event = Event.query.get_or_404(event_id)
+            alliance_id = get_active_alliance_id()
+            if alliance_id:
+                matches, _ = get_all_matches_for_alliance(event_id=event.id, event_code=getattr(event, 'code', None))
+            else:
+                matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
+        except Exception:
+            try:
+                param_str = str(raw_event_param)
+                if param_str.startswith('alliance_'):
+                    code = param_str[len('alliance_'):]
+                else:
+                    code = param_str
+                event = get_event_by_code(code)
+                matches, _ = get_all_matches_for_alliance(event_id=param_str, event_code=code)
+            except Exception:
+                matches = []
+        try:
+            matches = sorted(matches, key=match_sort_key)
+        except Exception:
+            pass
 
     # Get game configuration (alliance-aware)
     game_config = get_effective_game_config()
@@ -1333,11 +1523,37 @@ def strategy_draw():
     if event_id:
         event = Event.query.get_or_404(event_id)
     elif current_event_code:
-        event = get_event_by_code(current_event_code)
+        # Prefer an alliance synthetic entry when alliance mode is active
+        try:
+            # events list may contain synthetic alliance entries created in get_combined_dropdown_events
+            evt = next((e for e in events if getattr(e, 'is_alliance', False) and (getattr(e, 'code', '') or '').upper() == str(current_event_code).upper()), None)
+            if evt:
+                event = evt
+            else:
+                event = get_event_by_code(current_event_code)
+        except Exception:
+            event = get_event_by_code(current_event_code)
+
     if event:
-        matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
-        # Use global match_sort_key for proper ordering (handles X-Y playoff format)
-        matches = sorted(matches, key=match_sort_key)
+        # If the selected event is a synthetic alliance entry (id like 'alliance_CODE'),
+        # match by event code across alliance members instead of by numeric id.
+        try:
+            is_synthetic = isinstance(getattr(event, 'id', None), str) and str(event.id).startswith('alliance_')
+        except Exception:
+            is_synthetic = False
+
+        if is_synthetic:
+            code = getattr(event, 'code', None)
+            if code:
+                from sqlalchemy import func
+                matches = filter_matches_by_scouting_team().join(Event, Match.event_id == Event.id).filter(func.upper(Event.code) == str(code).upper()).all()
+                matches = sorted(matches, key=match_sort_key)
+            else:
+                matches = []
+        else:
+            matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
+            # Use global match_sort_key for proper ordering (handles X-Y playoff format)
+            matches = sorted(matches, key=match_sort_key)
     return render_template(
         'matches/strategy_draw.html',
         events=events,
@@ -1400,9 +1616,14 @@ def save_strategy_drawing(match_id):
 @socketio.on('join_strategy_room')
 def on_join_strategy_room(data):
     match_id = data.get('match_id')
+    try:
+        sid = getattr(request, 'sid', None)
+    except Exception:
+        sid = None
     if match_id:
         room = f'strategy_match_{match_id}'
         join_room(room)
+        current_app.logger.debug(f"Socket join_strategy_room: sid={sid} joining room={room}")
         # Send current drawing data to the new client
         drawing = StrategyDrawing.query.filter_by(match_id=match_id).first()
         emit('drawing_data', {
@@ -1415,8 +1636,13 @@ def on_join_strategy_room(data):
 def on_drawing_update(data):
     match_id = data.get('match_id')
     drawing_data = data.get('data')
+    try:
+        sid = getattr(request, 'sid', None)
+    except Exception:
+        sid = None
     if not match_id or drawing_data is None:
         return
+    current_app.logger.debug(f"drawing_update received from sid={sid} for match={match_id}; points={len(drawing_data) if drawing_data else 0}")
     # Save to DB
     drawing = StrategyDrawing.query.filter_by(match_id=match_id).first()
     if not drawing:
@@ -1426,6 +1652,7 @@ def on_drawing_update(data):
     db.session.commit()
     # Broadcast to all clients in the room (except sender)
     room = f'strategy_match_{match_id}'
+    current_app.logger.debug(f"Broadcasting drawing_data to room={room} (include_self=False)")
     emit('drawing_data', {
         'match_id': match_id,
         'data': drawing_data,
@@ -1523,8 +1750,13 @@ def matches_data():
                 'timestamp': datetime.now().isoformat()
             })
         
-        # Get matches for this event
-        matches_query = filter_matches_by_scouting_team().filter_by(event_id=current_event.id)
+        # Get matches for this event using event code matching for cross-team scenarios
+        from sqlalchemy import func as match_func
+        match_event_code = getattr(current_event, 'code', None)
+        if match_event_code:
+            matches_query = filter_matches_by_scouting_team().join(Event, Match.event_id == Event.id).filter(match_func.upper(Event.code) == match_event_code.upper())
+        else:
+            matches_query = filter_matches_by_scouting_team().filter_by(event_id=current_event.id)
         # Defensive check: ensure we only show matches for current scouting team
         from app.utils.team_isolation import get_current_scouting_team_number
         current_scouting_team = get_current_scouting_team_number()
@@ -1536,8 +1768,13 @@ def matches_data():
         # Use global match_sort_key for proper ordering (handles X-Y playoff format)
         matches = sorted(matches, key=match_sort_key)
         
-        # Get team data for context
-        teams = db.session.query(Team).join(Team.events).filter(Event.id == current_event.id).all()
+        # Get team data for context - use event code matching for cross-team scenarios
+        from sqlalchemy import func as ctx_func
+        ctx_event_code = getattr(current_event, 'code', None)
+        if ctx_event_code:
+            teams = filter_teams_by_scouting_team().join(Team.events).filter(ctx_func.upper(Event.code) == ctx_event_code.upper()).all()
+        else:
+            teams = filter_teams_by_scouting_team().join(Team.events).filter(Event.id == current_event.id).all()
         
         # Prepare matches data for JSON
         matches_data = []

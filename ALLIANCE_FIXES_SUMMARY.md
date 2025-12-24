@@ -159,5 +159,6 @@ All scouting alliance issues have been resolved:
 - ✅ Automatic data sharing works in real-time and via periodic sync
 - ✅ Proper member validation prevents unauthorized activation
 - ✅ Clear error messages guide users through proper setup
+- ✅ UI: Inline help icons added across alliance pages (hover/tap for context); can be toggled in **Settings → Show inline help icons**
 
 The scouting alliance system is now fully functional and ready for use!

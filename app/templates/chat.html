@@ -4,7 +4,8 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-4">Chat</h1>
+    {% import '_help_icon.html' as help %}
+    <h1 class="mb-4">Chat {{ help.help_icon('Team chat and direct messages. Follow youth protection rules and avoid sharing private data publicly.', 'Chat') }}</h1>
 
     <!-- YPP Reminder Card -->
     <div class="card mb-3 border-warning">

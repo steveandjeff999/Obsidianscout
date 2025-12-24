@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 
-{% block title %}404 — Page not found{% endblock %}
+{% block title %}Page not found{% endblock %}
 
-{% block heading %}Page not found{% endblock %}
+{% block heading %}Page not found {{ help.help_icon('The page could not be found. Use the navigation bar or search to find the content you need.', 'Page not found') }}{% endblock %}
 
 {% block content %}
 <div class="row">

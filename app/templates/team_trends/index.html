@@ -4,7 +4,8 @@
 
 {% block content %}
 <div class="container">
-  <h1>Team Trends</h1>
+  {% import '_help_icon.html' as help %}
+  <h1>Team Trends {{ help.help_icon('Explore per-team metric trends across events. Use the filters to change event or timespan.', 'Team Trends') }}</h1>
   <p>Enter one or more team numbers (comma-separated) to overlay multiple teams for comparison.</p>
   {% if error %}
     <div class="alert alert-danger">{{ error }}</div>
@@ -15,6 +16,12 @@
       <div class="input-group mb-1">
         <span class="input-group-text"><i class="fas fa-search"></i></span>
         <input type="search" id="team-search" class="form-control form-control-sm" placeholder="Search teams by number or name" aria-label="Search teams">
+      </div>
+      <div class="d-flex justify-content-between mb-2">
+        <div>
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="team-select-all">Select all</button>
+        </div>
+        <div class="form-text text-end"><small>Tip: hold Ctrl/Cmd to select multiple. You can also paste comma-separated values into the search box and press Analyze.</small></div>
       </div>
       <select class="form-select team-select" id="teams" name="teams" multiple size="8">
         {% for t in teams %}
@@ -55,6 +62,30 @@
       if (visible.length === 1) {
         select.value = visible[0].value;
       }
+
+      // Update Select All button state
+      try {
+        const btn = document.getElementById('team-select-all');
+        if (btn) {
+          const allSelected = visible.length > 0 && visible.every(o => o.selected);
+          btn.textContent = allSelected ? 'Clear selection' : 'Select all';
+        }
+      } catch (e) {}
+    }
+
+    // Select All / Clear selection behavior
+    const selectAllBtn = document.getElementById('team-select-all');
+    if (selectAllBtn) {
+      selectAllBtn.addEventListener('click', function() {
+        const visible = Array.from(select.options).filter(o => o.value && !o.hidden);
+        if (!visible.length) return;
+        const allSelected = visible.every(o => o.selected);
+        visible.forEach(o => { o.selected = !allSelected; });
+        // Notify Select2 if initialized
+        try { if (window.$ && typeof window.$ === 'function') { window.$('#teams').trigger('change'); } } catch (e) {}
+        // Update button text
+        selectAllBtn.textContent = allSelected ? 'Select all' : 'Clear selection';
+      });
     }
 
     function debounce(fn, wait) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), wait); }; }

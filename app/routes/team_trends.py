@@ -25,6 +25,70 @@ def _simple_linear_regression(x_vals, y_vals):
     return slope, intercept
 
 
+def _compute_total_points_from_data(data):
+    """Compute a reasonable numeric 'total points' metric from arbitrary scouting `data`.
+
+    This mirrors the logic used in the single-team analyzer: prefer explicit
+    total_points fields if present, otherwise use the game config scoring
+    elements to compute a weighted total, and finally fall back to summing
+    numeric fields. Always returns a non-negative float.
+    """
+    total_points = None
+    if isinstance(data, dict):
+        total_points = data.get('total_points') or data.get('tot') or data.get('points')
+
+    if total_points is None:
+        # Use game config scoring elements to compute point totals if available
+        game_config = get_effective_game_config() or {}
+
+        def compute_period_points(period_name):
+            pts = 0
+            period = game_config.get(period_name, {})
+            for el in period.get('scoring_elements', []):
+                perm_id = el.get('perm_id') or el.get('id')
+                # For counters and numeric fields, multiply by points if defined
+                if isinstance(data, dict) and perm_id in data:
+                    val = data.get(perm_id)
+                    try:
+                        val_num = float(val) if val is not None and val != '' else 0
+                    except Exception:
+                        val_num = 0
+                    # If element defines points per unit
+                    points_per = el.get('points') or el.get('point_value') or 0
+                    if isinstance(points_per, dict):
+                        # If points depend on option, skip complex mapping and try direct numeric
+                        pts += val_num
+                    else:
+                        try:
+                            pts += val_num * float(points_per)
+                        except Exception:
+                            pts += val_num
+                else:
+                    # no data for this element; skip
+                    pass
+            return pts
+
+        total_points = 0
+        total_points += compute_period_points('auto_period')
+        total_points += compute_period_points('teleop_period')
+        total_points += compute_period_points('endgame_period')
+
+        # As a final fallback, if still zero, sum numeric fields
+        if not total_points:
+            numeric_values = [v for v in (data.values() if isinstance(data, dict) else []) if isinstance(v, (int, float))]
+            total_points = sum(numeric_values) if numeric_values else 0
+
+    try:
+        total_points = float(total_points)
+    except Exception:
+        total_points = 0
+
+    if total_points < 0:
+        total_points = 0
+
+    return total_points
+
+
 @bp.route('/')
 def index():
     # Provide a team selection dropdown populated from the current event code.
@@ -36,9 +100,21 @@ def index():
         event_code = game_config.get('current_event_code')
         if event_code:
             # Use the team isolation helper to respect multi-tenant filtering
-            q = filter_teams_by_scouting_team(Team.query)
-            # Join to events and filter by code, use distinct to avoid duplicates
-            teams = q.join(Team.events).filter(Event.code == event_code).order_by(Team.team_number).distinct(Team.team_number).all()
+            # Use get_all_teams_at_event to collect event teams (deduped by team_number),
+            # then scope those numbers to the current user's visible teams and apply
+            # deduplication preference (prefer alliance or current team's copy) to
+            # avoid duplicate entries appearing in the dropdown.
+            try:
+                from app.utils.team_isolation import get_all_teams_at_event, dedupe_team_list, get_alliance_team_numbers, get_current_scouting_team_number
+                event_teams = get_all_teams_at_event(event_code=event_code)
+                team_numbers = [t.team_number for t in event_teams]
+                if team_numbers:
+                    scoped = filter_teams_by_scouting_team().filter(Team.team_number.in_(team_numbers)).order_by(Team.team_number).all()
+                    teams = dedupe_team_list(scoped, prefer_alliance=True, alliance_team_numbers=get_alliance_team_numbers(), current_scouting_team=get_current_scouting_team_number())
+                else:
+                    teams = []
+            except Exception:
+                teams = []
         else:
             # Fallback: show all teams visible to this scouting team
             teams = filter_teams_by_scouting_team().order_by(Team.team_number).all()
@@ -131,63 +207,7 @@ def _analyze_team(team_number):
     for idx, entry in enumerate(entries):
         try:
             data = entry.data
-            # Prefer an explicit 'total_points' field if present
-            total_points = None
-            if isinstance(data, dict):
-                total_points = data.get('total_points') or data.get('tot') or data.get('points')
-
-            # If no explicit total, compute from game config periods (auto + teleop + endgame)
-            if total_points is None:
-                # Use game config scoring elements to compute point totals if available
-                game_config = get_effective_game_config() or {}
-                total_points = 0
-
-                def compute_period_points(period_name):
-                    pts = 0
-                    period = game_config.get(period_name, {})
-                    for el in period.get('scoring_elements', []):
-                        perm_id = el.get('perm_id') or el.get('id')
-                        el_type = el.get('type')
-                        # For counters and numeric fields, multiply by points if defined
-                        if isinstance(data, dict) and perm_id in data:
-                            val = data.get(perm_id)
-                            try:
-                                val_num = float(val) if val is not None and val != '' else 0
-                            except Exception:
-                                val_num = 0
-                            # If element defines points per unit
-                            points_per = el.get('points') or el.get('point_value') or 0
-                            if isinstance(points_per, dict):
-                                # If points depend on option, skip complex mapping and try direct numeric
-                                pts += val_num
-                            else:
-                                try:
-                                    pts += val_num * float(points_per)
-                                except Exception:
-                                    pts += val_num
-                        else:
-                            # no data for this element; skip
-                            pass
-                    return pts
-
-                total_points += compute_period_points('auto_period')
-                total_points += compute_period_points('teleop_period')
-                total_points += compute_period_points('endgame_period')
-
-                # As a final fallback, if still zero, sum numeric fields
-                if not total_points:
-                    numeric_values = [v for v in (data.values() if isinstance(data, dict) else []) if isinstance(v, (int, float))]
-                    total_points = sum(numeric_values) if numeric_values else 0
-            # Never allow negative points
-            try:
-                total_points = float(total_points)
-            except Exception:
-                total_points = 0
-            if total_points < 0:
-                total_points = 0
-
-            timeline.append({'timestamp': entry.timestamp.isoformat(), 'total_points': total_points})
-            x_vals.append(idx)
+            total_points = _compute_total_points_from_data(data)
             y_vals.append(total_points)
         except Exception:
             continue
@@ -397,13 +417,7 @@ def _analyze_multiple_teams(team_numbers):
         for i, entry in enumerate(entries):
             try:
                 data = entry.data
-                total_points = None
-                if isinstance(data, dict):
-                    total_points = data.get('total_points') or data.get('tot') or data.get('points')
-                if total_points is None:
-                    numeric_values = [v for v in (data.values() if isinstance(data, dict) else []) if isinstance(v, (int, float))]
-                    total_points = sum(numeric_values) if numeric_values else 0
-                tp = float(total_points)
+                tp = _compute_total_points_from_data(data)
                 timeline.append({'timestamp': entry.timestamp.isoformat(), 'total_points': tp})
                 x_vals.append(i)
                 y_vals.append(tp)
@@ -468,6 +482,10 @@ def _analyze_multiple_teams(team_numbers):
     combined_context.setdefault('overall_classification', 'multiple teams')
     combined_context.setdefault('recent_classification', 'multiple teams')
     combined_context.setdefault('predicted_next', 0)
+
+    # Indicate whether any dataset contains timeline rows so the template can
+    # display a friendly message when there is no data to plot.
+    combined_context['has_data'] = any(len(ds.get('timeline') or []) > 0 for ds in combined_context['datasets'])
 
     return render_template('team_trends/analyze.html', **combined_context)
 

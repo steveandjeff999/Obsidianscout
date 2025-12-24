@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, jsonify, current_app
 from flask_login import login_required, current_user
 from app.routes.auth import analytics_required
 from app.models import Team, Event
-from app.utils.team_isolation import filter_teams_by_scouting_team, filter_events_by_scouting_team, get_combined_dropdown_events
+from app.utils.team_isolation import filter_teams_by_scouting_team, filter_events_by_scouting_team, get_combined_dropdown_events, dedupe_team_list, get_alliance_team_numbers, get_current_scouting_team_number
 import json
 from app.utils.analysis import calculate_team_metrics, _simulate_match_outcomes
 from app.utils.config_manager import get_effective_game_config
@@ -25,7 +25,13 @@ bp = Blueprint('simulations', __name__, url_prefix='/simulations')
 def index():
     # Reuse the team selection logic from graphs to provide a modern UI
     teams_query = filter_teams_by_scouting_team().order_by(Team.team_number).all()
-    teams = teams_query
+    # Deduplicate by team_number (prefer alliance copies when present) to avoid
+    # duplicate team entries appearing in the UI when multiple teams with the
+    # same team_number exist across scouting_team_number values.
+    try:
+        teams = dedupe_team_list(teams_query, prefer_alliance=True, alliance_team_numbers=get_alliance_team_numbers(), current_scouting_team=get_current_scouting_team_number())
+    except Exception:
+        teams = teams_query
     events = get_combined_dropdown_events()
 
     # Calculate metrics and event mapping for client-side helpers
@@ -70,8 +76,21 @@ def run_simulation():
     except Exception:
         return jsonify({'ok': False, 'error': 'Team numbers must be integers'}), 400
 
-    # Lookup teams
-    teams_map = {t.team_number: t for t in Team.query.filter(Team.team_number.in_(red_numbers + blue_numbers)).all()}
+    # Lookup teams - ensure we select the team record scoped to the current user's view
+    # (prefer current user's scouting team or alliance copy). This avoids choosing an
+    # arbitrary duplicate team record and producing inconsistent metrics.
+    from app.utils.team_isolation import get_team_by_number
+    teams_map = {}
+    for tn in set(red_numbers + blue_numbers):
+        try:
+            t = get_team_by_number(tn)
+            if not t:
+                # Final fallback to any record with this number
+                t = Team.query.filter_by(team_number=tn).first()
+            if t:
+                teams_map[tn] = t
+        except Exception:
+            continue
 
     if not teams_map:
         return jsonify({'ok': False, 'error': 'No matching teams found'}), 400

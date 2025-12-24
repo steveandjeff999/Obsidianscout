@@ -4,7 +4,8 @@
 
 {% block content %}
 <div class="container">
-    <h1 class="mb-4">Match Prediction</h1>
+    {% import '_help_icon.html' as help %}
+    <h1 class="mb-4">Match Prediction {{ help.help_icon('View or generate predictions for upcoming matches. Select an event to see event-wide predictions.', 'Match Predictions') }}</h1>
     
     <div class="card mb-4">
         <div class="card-header">

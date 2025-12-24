@@ -118,6 +118,10 @@ During FRC competitions, teams often form alliances and need to share scouting d
 - User account information
 - Configuration settings
 
+### Inline help icons
+The Scouting Alliances pages now include small help icons (a question-mark) next to major headings and controls. Hover (desktop) or tap (mobile) these icons to view short, contextual popovers explaining the feature. If you prefer not to see these inline hints, disable them in **Settings → Show inline help icons**.
+
+
 ### Alliance Sync Frequency
 
 - Real-time sync for active matches

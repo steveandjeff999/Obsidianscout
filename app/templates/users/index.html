@@ -2,7 +2,8 @@
 {% block title %}Users{% endblock %}
 {% block content %}
 <div class="container mt-4">
-  <h1 class="mb-4">Users</h1>
+  {% import '_help_icon.html' as help %}
+  <h1 class="mb-4">Users {{ help.help_icon('List of user accounts. Click a user to view profile or edit roles and permissions.', 'Users') }}</h1>
   <div class="row row-cols-1 row-cols-md-3 g-4">
     {% for user in users %}
     <div class="col">

@@ -1,14 +1,18 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 
 {% block title %}Matches{% endblock %}
 
 {% block heading %}Matches{% endblock %}
 
 {% block content %}
+
+{% include '_alliance_mode_banner.html' %}
+
 <div class="row mb-3">
     <div class="col-12 d-flex justify-content-between align-items-center">
         <div>
-            <h2 class="mb-0">Matches</h2>
+            <h2 class="mb-0">Matches {{ help.help_icon('View and manage matches. Use filters to narrow by event and match type; you can add or sync matches for your event.', 'Matches') }}</h2>
             <p class="text-muted mb-0">View and manage matches for events.</p>
         </div>
         <div class="d-flex gap-2">
@@ -26,7 +30,7 @@
     <div class="col-lg-4 col-md-12 mb-3">
         <div class="card h-100">
             <div class="card-body">
-                <h6 class="card-title">Total Matches</h6>
+                <h6 class="card-title">Total Matches {{ help.help_icon('Total number of matches currently in the system. Use Sync Matches to refresh from configured event data.', 'Total matches') }}</h6>
                 <p class="display-6 mb-0">{{ matches|length if matches is not none else 0 }}</p>
             </div>
         </div>
@@ -34,7 +38,7 @@
     <div class="col-lg-4 col-md-6 mb-3">
         <div class="card h-100">
             <div class="card-body">
-                <h6 class="card-title">Events</h6>
+                <h6 class="card-title">Events {{ help.help_icon('Number of events available to filter matches. Select an event to narrow match listings.', 'Events') }}</h6>
                 <p class="display-6 mb-0">{{ events|length if events is not none else 0 }}</p>
             </div>
         </div>
@@ -42,7 +46,7 @@
     <div class="col-lg-4 col-md-6 mb-3">
         <div class="card h-100">
             <div class="card-body">
-                <h6 class="card-title">Current Event Code</h6>
+                <h6 class="card-title">Current Event Code {{ help.help_icon('The currently configured event code used for importing and mapping event data to matches and teams.', 'Current event code') }}</h6>
                 <p class="mb-0">{% if game_config and game_config.get('current_event_code') %}<strong>{{ game_config.get('current_event_code') }}</strong>
                 <a href="{{ url_for('main.edit_config') }}" class="ms-2">Change</a>
                 {% else %}<span class="text-muted">Not configured</span>
@@ -61,7 +65,7 @@
                         <input type="search" name="q" value="{{ request.args.get('q','') }}" class="form-control" placeholder="Search by match number or team">
                     </div>
                     <div class="col-12">
-                        <label class="form-label mb-1 mt-2">Match Type</label>
+                        <label class="form-label mb-1 mt-2">Match Type {{ help.help_icon('Filter by practice/qualification/playoff match types.', 'Match Type') }}</label>
                         <select name="match_type" class="form-select">
                             <option value="" {% if not request.args.get('match_type') %}selected{% endif %}>All</option>
                             <option value="Practice" {% if request.args.get('match_type') == 'Practice' %}selected{% endif %}>Practice</option>
@@ -70,10 +74,11 @@
                         </select>
                     </div>
                     <div class="col-12">
-                        <label class="form-label mb-1 mt-2">Event</label>
+                        <label class="form-label mb-1 mt-2">Event {{ help.help_icon('Filter matches by event. Select "All" to include matches across events.', 'Event filter') }}</label>
                         <select name="event_id" class="form-select">
                             {% for event in events|dedupe_events %}
-                            <option value="{{ event.id }}" data-event-code="{{ event.code|upper if event.code else '' }}" {% if (request.args.get('event_id') and request.args.get('event_id')|int == event.id) or (not request.args.get('event_id') and selected_event and selected_event.id == event.id) %}selected{% endif %}>{{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}</option>
+                            {% set _req_eid = request.args.get('event_id') %}
+                            <option value="{{ event.id }}" data-event-code="{{ event.code|upper if event.code else '' }}" {% if (_req_eid and (_req_eid|int == event.id or _req_eid == event.id)) or (selected_event and selected_event.id == event.id) %}selected{% endif %}>{{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}</option>
                             {% endfor %}
                         </select>
                     </div>

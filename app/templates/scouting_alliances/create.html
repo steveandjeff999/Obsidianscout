@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import '_help_icon.html' as help %}
 {% block title %}Create Scouting Alliance{% endblock %}
 
 {% block content %}
@@ -8,7 +9,7 @@
             <div class="card">
                 <div class="card-header bg-primary text-white">
                     <h4 class="mb-0">
-                        <i class="fas fa-plus"></i> Create Scouting Alliance
+                        <i class="fas fa-plus"></i> Create Scouting Alliance {{ help.help_icon('Create a new scouting alliance and invite other teams. You will become the alliance administrator and can manage events, members, and shared configurations.', 'Create alliance') }}
                     </h4>
                 </div>
                 <div class="card-body">
@@ -28,7 +29,7 @@
                         </div>
                         
                         <div class="alert alert-info">
-                            <h6><i class="fas fa-info-circle"></i> Alliance Features</h6>
+                            <h6><i class="fas fa-info-circle"></i> Alliance Features {{ help.help_icon('Share scouting data and chat with alliance members; configure events and shared forms that apply to the whole alliance. Sensitive files remain private by default.', 'Alliance features') }}</h6>
                             <ul class="mb-0">
                                 <li>Share scouting data and pit scouting information</li>
                                 <li>Real-time chat with alliance members</li>
@@ -39,7 +40,7 @@
                         </div>
                         
                         <div class="alert alert-warning">
-                            <h6><i class="fas fa-exclamation-triangle"></i> Important Constraint</h6>
+                            <h6><i class="fas fa-exclamation-triangle"></i> Important Constraint {{ help.help_icon('Teams can be members of multiple alliances but can only be active in one at a time. Activating an alliance will switch your team to use that alliance\'s shared configs.', 'One active alliance') }}</h6>
                             <p class="mb-2">
                                 <strong>One Active Alliance:</strong> Teams can only be active in one alliance at a time. 
                                 When a team activates alliance mode, it will automatically deactivate any other active alliance.
@@ -52,7 +53,7 @@
                         <div class="alert alert-warning">
                             <i class="fas fa-crown"></i>
                             <strong>Alliance Administrator:</strong> You will be the administrator of this alliance 
-                            and can invite other teams, manage events, and configure settings.
+                            and can invite other teams, manage events, and configure settings. {{ help.help_icon('As the alliance administrator you control invites, event assignments, and shared configurations. Coordinate with co-admins for major changes.', 'Alliance admin') }}
                         </div>
                         
                         <div class="d-flex justify-content-between">

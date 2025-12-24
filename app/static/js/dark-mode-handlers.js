@@ -80,3 +80,65 @@ const __plotlyRethemeObserver = new MutationObserver(function(muts){
     });
 });
 __plotlyRethemeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+// Apply Chart.js theme updates to match dark mode when available
+function updateChartJsTheme() {
+    if (typeof Chart === 'undefined') return;
+    try {
+        const isDark = document.body.classList.contains('dark-mode');
+        const textColor = isDark ? '#e6e6e6' : '#222';
+        const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+        const tooltipBg = isDark ? 'rgba(17,17,18,0.95)' : '#ffffff';
+        const tooltipTitle = isDark ? '#ffffff' : '#000000';
+        const tooltipBody = isDark ? '#e6e6e6' : '#000000';
+
+        // Global defaults
+        Chart.defaults.color = textColor;
+        Chart.defaults.borderColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+        Chart.defaults.backgroundColor = isDark ? 'rgba(255,255,255,0.03)' : '#ffffff';
+        Chart.defaults.plugins = Chart.defaults.plugins || {};
+        Chart.defaults.plugins.tooltip = Chart.defaults.plugins.tooltip || {};
+        Chart.defaults.plugins.tooltip.backgroundColor = tooltipBg;
+        Chart.defaults.plugins.tooltip.titleColor = tooltipTitle;
+        Chart.defaults.plugins.tooltip.bodyColor = tooltipBody;
+        Chart.defaults.plugins.legend = Chart.defaults.plugins.legend || {};
+        Chart.defaults.plugins.legend.labels = Chart.defaults.plugins.legend.labels || {};
+        Chart.defaults.plugins.legend.labels.color = textColor;
+
+        // Set sensible defaults for all known scales
+        if (Chart.defaults.scales) {
+            Object.keys(Chart.defaults.scales).forEach(scaleName => {
+                try {
+                    const sc = Chart.defaults.scales[scaleName];
+                    sc.grid = sc.grid || {};
+                    sc.ticks = sc.ticks || {};
+                    sc.grid.color = gridColor;
+                    sc.ticks.color = textColor;
+                } catch (e) { /* non fatal */ }
+            });
+        }
+
+        // Update existing charts on the page
+        document.querySelectorAll('canvas').forEach(c => {
+            try {
+                const chart = Chart.getChart(c);
+                if (chart) chart.update();
+            } catch (e) { /* ignore */ }
+        });
+    } catch (e) { console.warn('Failed to apply Chart.js theme', e); }
+}
+
+// Ensure Chart.js theme is applied when body class changes
+const __chartJsRethemeObserver = new MutationObserver(function(muts){
+    muts.forEach(m => {
+        if (m.type === 'attributes' && m.attributeName === 'class' && m.target === document.body) {
+            try { updateChartJsTheme(); } catch(e) { console.warn('Chart.js retheme failed', e); }
+        }
+    });
+});
+__chartJsRethemeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+// Apply initially (in case charts were created before handlers ran)
+try { updateChartJsTheme(); } catch(e) { console.warn('Initial Chart.js theme apply failed', e); }
+// Make accessible for callers from other scripts
+try { window.updateChartJsTheme = updateChartJsTheme; } catch(e) {}

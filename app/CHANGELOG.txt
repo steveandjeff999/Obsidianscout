@@ -1,6 +1,12 @@
 Changelog
 =========
 
+Version 1.0.1.9 - UI: Inline help icons and docs updates
+------------------------------------------------
+- Added inline question-mark help icons (popover tooltips) across Scouting Alliances pages and management screens.
+- Help icons show brief contextual guidance on hover/tap; users can disable them in Settings → Show inline help icons.
+- Updated help docs (`help/`) and `ALLIANCE_FIXES_SUMMARY.md` to document the new UI guidance.
+
 Version 1.0.1.6 - Strategy Drawing, Real-Time Sync, and Custom Backgrounds
 ------------------------------------------------
 - Added a new Strategy Drawing page accessible from the navbar under Competition.

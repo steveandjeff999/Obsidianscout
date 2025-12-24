@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 
 {% block title %}Add User{% endblock %}
 
-{% block heading %}Add New User{% endblock %}
+{% block heading %}Add New User {{ help.help_icon('Create a new user account and assign roles. Choose appropriate roles for the user to grant access to features.', 'Add user') }}{% endblock %}
 
 {% block content %}
 <div class="row">

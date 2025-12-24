@@ -154,12 +154,54 @@ def index():
         else:
             teams, _ = get_all_teams_for_alliance()
     else:
-        # Get ALL teams at the current event (regardless of scouting_team_number)
+        # Get teams for the current event, but scoped to this user's scouting team when possible
         if current_event:
-            teams = get_all_teams_at_event(event_id=current_event.id)
+            # Prefer the scouting team's own event and teams at that event when available
+            from app.utils.team_isolation import get_current_scouting_team_number
+            scouting_team_number = get_current_scouting_team_number()
+            if scouting_team_number:
+                # Try to find an Event record for this scouting team that matches the current_event code
+                team_event = Event.query.filter_by(code=current_event.code, scouting_team_number=scouting_team_number).first()
+                if not team_event:
+                    # Fall back to the most recent event for this scouting team
+                    team_event = Event.query.filter_by(scouting_team_number=scouting_team_number).order_by(Event.start_date.desc(), Event.id.desc()).first()
+                if team_event:
+                    # Use the centralized helper (it deduplicates by team_number) then limit to this scouting team
+                    teams = get_all_teams_at_event(event_id=team_event.id)
+                    teams = [t for t in teams if t.scouting_team_number == scouting_team_number]
+                    # If filtering to the scouting team removed all entries, fall back to event-wide teams
+                    if not teams:
+                        teams = get_all_teams_at_event(event_id=current_event.id)
+                else:
+                    # No team-specific event found; use event-wide teams
+                    teams = get_all_teams_at_event(event_id=current_event.id)
+            else:
+                teams = get_all_teams_at_event(event_id=current_event.id)
         else:
             teams = filter_teams_by_scouting_team().all()
+            # Fall back to showing ALL teams if the scoped filter returned no results
+            # (this can happen when the current user has no scouting_team_number assigned)
+            if not teams:
+                teams = Team.query.order_by(Team.team_number).all()
     
+    # Deduplicate teams by team_number (prefer teams with meaningful names)
+    try:
+        _teams_by_number = {}
+        for _t in teams:
+            _tn = _t.team_number
+            if _tn not in _teams_by_number:
+                _teams_by_number[_tn] = _t
+            else:
+                _existing = _teams_by_number[_tn]
+                _existing_name = (getattr(_existing, 'team_name', '') or '').strip()
+                _t_name = (getattr(_t, 'team_name', '') or '').strip()
+                if _t_name and (not _existing_name or _existing_name.isdigit()):
+                    _teams_by_number[_tn] = _t
+        teams = sorted(_teams_by_number.values(), key=lambda x: x.team_number)
+    except Exception:
+        # Be resilient and fall back to original list if anything goes wrong
+        pass
+
     # Get recent entries (limit to 10 for display)
     recent_pit_data = all_pit_data_list[:10] if all_pit_data_list else []
     
@@ -228,11 +270,54 @@ def form():
     if current_event_code:
         current_event = get_event_by_code(current_event_code)
     
-    # Get ALL teams at the current event (regardless of scouting_team_number)
-    if current_event:
-        teams = get_all_teams_at_event(event_id=current_event.id)
+    # Get teams - use alliance teams if alliance mode is active
+    is_alliance_mode = is_alliance_mode_active()
+    if is_alliance_mode:
+        if current_event:
+            teams, _ = get_all_teams_for_alliance(event_id=current_event.id)
+        else:
+            teams, _ = get_all_teams_for_alliance()
     else:
-        teams = filter_teams_by_scouting_team().all()
+        # Get teams for the current event, but scoped to this user's scouting team when possible
+        if current_event:
+            from app.utils.team_isolation import get_current_scouting_team_number
+            scouting_team_number = get_current_scouting_team_number()
+            if scouting_team_number:
+                team_event = Event.query.filter_by(code=current_event.code, scouting_team_number=scouting_team_number).first()
+                if not team_event:
+                    team_event = Event.query.filter_by(scouting_team_number=scouting_team_number).order_by(Event.start_date.desc(), Event.id.desc()).first()
+                if team_event:
+                    teams = Team.query.join(Team.events).filter(
+                        Event.id == team_event.id,
+                        Team.scouting_team_number == scouting_team_number
+                    ).distinct(Team.team_number).order_by(Team.team_number).all()
+                else:
+                    teams = get_all_teams_at_event(event_id=current_event.id)
+            else:
+                teams = get_all_teams_at_event(event_id=current_event.id)
+        else:
+            teams = filter_teams_by_scouting_team().all()
+            # Fall back to showing ALL teams if the scoped filter returned no results
+            # (this can happen when the current user has no scouting_team_number assigned)
+            if not teams:
+                teams = Team.query.order_by(Team.team_number).all()
+
+    # Deduplicate teams by team_number (prefer teams with meaningful names)
+    try:
+        _teams_by_number = {}
+        for _t in teams:
+            _tn = _t.team_number
+            if _tn not in _teams_by_number:
+                _teams_by_number[_tn] = _t
+            else:
+                _existing = _teams_by_number[_tn]
+                _existing_name = (getattr(_existing, 'team_name', '') or '').strip()
+                _t_name = (getattr(_t, 'team_name', '') or '').strip()
+                if _t_name and (not _existing_name or _existing_name.isdigit()):
+                    _teams_by_number[_tn] = _t
+        teams = sorted(_teams_by_number.values(), key=lambda x: x.team_number)
+    except Exception:
+        pass
 
     # Gather all pit entries for these teams so the form can show scouted status
     team_ids = [t.id for t in teams]
@@ -359,7 +444,7 @@ def form():
             pit_data = PitScoutingData(
                 local_id=str(uuid.uuid4()),
                 team_id=team.id,
-                event_id=current_event.id if current_event else None,
+                event_id=current_event.id if (current_event and isinstance(getattr(current_event, 'id', None), int)) else None,
                 scouting_team_number=getattr(current_user, 'scouting_team_number', None),
                 scout_name=current_user.username,
                 scout_id=current_user.id,
@@ -375,7 +460,7 @@ def form():
             auto_sync_alliance_pit_data(pit_data)
             
             # Emit real-time update
-            if current_event:
+            if current_event and isinstance(getattr(current_event, 'id', None), int):
                 emit_pit_data_update(current_event.id, 'added', pit_data.to_dict())
             
             flash(f'Pit scouting data for Team {team_number} saved successfully!', 'success')
@@ -571,7 +656,7 @@ def edit(id):
                     current_event = None
                     if current_event_code:
                         current_event = get_event_by_code(current_event_code)
-                    if current_event:
+                    if current_event and isinstance(getattr(current_event, 'id', None), int):
                         pit_data.event_id = current_event.id
 
             # Collect form data based on pit config
@@ -626,11 +711,54 @@ def edit(id):
     if current_event_code:
         current_event = get_event_by_code(current_event_code)
 
-    # Get ALL teams at the current event (regardless of scouting_team_number)
-    if current_event:
-        teams = get_all_teams_at_event(event_id=current_event.id)
+    # Get teams - use alliance teams if alliance mode is active
+    is_alliance_mode = is_alliance_mode_active()
+    if is_alliance_mode:
+        if current_event:
+            teams, _ = get_all_teams_for_alliance(event_id=current_event.id)
+        else:
+            teams, _ = get_all_teams_for_alliance()
     else:
-        teams = filter_teams_by_scouting_team().all()
+        # Get teams for the current event, but scoped to this user's scouting team when possible
+        if current_event:
+            from app.utils.team_isolation import get_current_scouting_team_number
+            scouting_team_number = get_current_scouting_team_number()
+            if scouting_team_number:
+                team_event = Event.query.filter_by(code=current_event.code, scouting_team_number=scouting_team_number).first()
+                if not team_event:
+                    team_event = Event.query.filter_by(scouting_team_number=scouting_team_number).order_by(Event.start_date.desc(), Event.id.desc()).first()
+                if team_event:
+                    teams = Team.query.join(Team.events).filter(
+                        Event.id == team_event.id,
+                        Team.scouting_team_number == scouting_team_number
+                    ).distinct(Team.team_number).order_by(Team.team_number).all()
+                else:
+                    teams = get_all_teams_at_event(event_id=current_event.id)
+            else:
+                teams = get_all_teams_at_event(event_id=current_event.id)
+        else:
+            teams = filter_teams_by_scouting_team().all()
+            # Fall back to showing ALL teams if the scoped filter returned no results
+            # (this can happen when the current user has no scouting_team_number assigned)
+            if not teams:
+                teams = Team.query.order_by(Team.team_number).all()
+
+    # Deduplicate teams by team_number (prefer teams with meaningful names)
+    try:
+        _teams_by_number = {}
+        for _t in teams:
+            _tn = _t.team_number
+            if _tn not in _teams_by_number:
+                _teams_by_number[_tn] = _t
+            else:
+                _existing = _teams_by_number[_tn]
+                _existing_name = (getattr(_existing, 'team_name', '') or '').strip()
+                _t_name = (getattr(_t, 'team_name', '') or '').strip()
+                if _t_name and (not _existing_name or _existing_name.isdigit()):
+                    _teams_by_number[_tn] = _t
+        teams = sorted(_teams_by_number.values(), key=lambda x: x.team_number)
+    except Exception:
+        pass
 
     # Gather all pit entries for these teams so the edit form can show scouted status
     team_ids = [t.id for t in teams]
@@ -1292,7 +1420,7 @@ def sync_download():
         # Download data from server
         download_result = sync_manager.download_pit_data(
             since_timestamp=last_sync,
-            event_id=current_event.id if current_event else None
+            event_id=current_event.id if (current_event and isinstance(getattr(current_event, 'id', None), int)) else None
         )
         
         if download_result['success']:
@@ -1398,7 +1526,7 @@ def sync_full():
             current_event = get_event_by_code(current_event_code)
         
         # Get all local data for context
-        if current_event:
+        if current_event and isinstance(getattr(current_event, 'id', None), int):
             all_local_data = PitScoutingData.query.filter_by(event_id=current_event.id).all()
         else:
             all_local_data = PitScoutingData.query.all()
@@ -1409,7 +1537,7 @@ def sync_full():
         # Perform sync
         sync_result = sync_manager.sync_pit_data(
             unuploaded_data,
-            event_id=current_event.id if current_event else None
+            event_id=current_event.id if (current_event and isinstance(getattr(current_event, 'id', None), int)) else None
         )
         
         # Process results

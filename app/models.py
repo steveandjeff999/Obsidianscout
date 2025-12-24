@@ -273,11 +273,21 @@ class Match(ConcurrentModelMixin, db.Model):
     
     @property
     def red_teams(self):
-        return [int(team_num) for team_num in self.red_alliance.split(',') if team_num]
+        if not self.red_alliance:
+            return []
+        try:
+            return [int(team_num.strip()) for team_num in str(self.red_alliance).split(',') if team_num.strip().isdigit()]
+        except Exception:
+            return []
     
     @property
     def blue_teams(self):
-        return [int(team_num) for team_num in self.blue_alliance.split(',') if team_num]
+        if not self.blue_alliance:
+            return []
+        try:
+            return [int(team_num.strip()) for team_num in str(self.blue_alliance).split(',') if team_num.strip().isdigit()]
+        except Exception:
+            return []
     
     # Add a method to get team objects
     def get_teams(self):

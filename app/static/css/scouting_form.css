@@ -329,3 +329,9 @@ body.dark-mode .custom-select-menu {
 .custom-select-menu::-webkit-scrollbar-track { background: rgba(2,6,23,0.02); border-radius:6px }
 .custom-select-menu::-webkit-scrollbar-thumb { background: rgba(2,6,23,0.12); border-radius:6px }
 .custom-select-menu::-webkit-scrollbar-thumb:hover { background: rgba(2,6,23,0.18) }
+
+/* Prevent double-tap-to-zoom on quick taps for interactive elements (mobile) */
+button, .btn, [role="button"], .custom-select-toggle, .custom-select-item, .counter-btn {
+    touch-action: manipulation;
+    -ms-touch-action: manipulation; /* IE/Edge */
+}

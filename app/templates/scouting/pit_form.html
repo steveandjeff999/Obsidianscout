@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 
 {% block title %}
     {% if edit_mode %}Edit Pit Scouting{% else %}Pit Scouting Form{% endif %}
@@ -51,6 +52,11 @@
                                                 {{ element.name }}
                                                 {% if element.required %}
                                                     <span class="text-danger">*</span>
+                                                {% endif %}
+                                                {% if element.help %}
+                                                    {{ help.help_icon(element.help, '') }}
+                                                {% elif element.description %}
+                                                    {{ help.help_icon(element.description, '') }}
                                                 {% endif %}
                                             </label>
 
@@ -144,6 +150,12 @@
     </div>
 </div>
 
+<!-- JSON payloads for client-side team grid -->
+<script id="teams_for_js" type="application/json">{{ teams_for_js|tojson }}</script>
+<script id="scouted_local_ids" type="application/json">{{ scouted_local_ids|tojson }}</script>
+<script id="scouted_server_ids" type="application/json">{{ scouted_server_ids|tojson }}</script>
+<script id="scouted_local_numbers" type="application/json">{{ scouted_local_numbers|tojson }}</script>
+<script id="scouted_server_numbers" type="application/json">{{ scouted_server_numbers|tojson }}</script>
 
 <script>
 // Populate team selection grid with scouted status

@@ -31,6 +31,8 @@ This page explains what data Obsidian-Scout collects, why we collect it, and how
 - **Alliances**: Alliance sharing is explicit; during Alliance Sync, shared data includes match scouting entries, team rankings, and strategy notes if opted in. Pit scouting and private notes are NOT shared unless explicitly opted in.
 - **Revocation & control**: Members can leave or revoke alliance sharing anytime; no data is shared without explicit alliance membership.
 
+**Note:** The Scouting Alliances UI includes small question-mark help icons next to many headings and controls that provide quick contextual guidance. You can disable these inline help icons in **Settings → Show inline help icons**.
+
 ## Security and Protections
 
 - **Authentication**: Token-based authentication is used for API and sync operations.

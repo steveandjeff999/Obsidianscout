@@ -40,11 +40,13 @@
         {% if scouting_data %}        <div class="d-flex gap-3 mb-3">
             <div>
                 <label class="form-label">Filter by event:</label>
-                <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-outline-secondary event-filter-btn active" data-filter="all">All Events</button>
-                    {% for event in events|dedupe_events %}
-                    <button type="button" class="btn btn-outline-secondary event-filter-btn" data-filter="{{ event.code }}">{{ event.code }}</button>
-                    {% endfor %}
+                <div>
+                    <select id="event-filter-select" class="form-select w-auto">
+                        <option value="all" selected>All Events</option>
+                        {% for event in events|dedupe_events %}
+                        <option value="{{ event.id }}" data-event-id="{{ event.id }}">{{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}{% if event.code %} - {{ event.code }}{% endif %}</option>
+                        {% endfor %}
+                    </select>
                 </div>
             </div>
             <div class="vr"></div>
@@ -74,12 +76,13 @@
                 </thead>
                 <tbody>
                     {% for data in scouting_data %}
-                    <tr>
+                    <tr data-event-id="{{ data.match.event.id }}">
                         <td>
                             <a href="{{ url_for('teams.view', team_number=data.team.team_number) }}">
                                 {{ data.team.team_number }}
                             </a>
-                        </td>                        <td>
+                        </td>
+                        <td>
                             <span class="badge bg-secondary">{{ data.match.event.code }}</span>
                             <span class="badge {% if data.match.match_type == 'Qualification' %}bg-primary{% elif data.match.match_type == 'Playoff' %}bg-danger{% elif data.match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %}">
                                 {{ data.match.match_type }}
@@ -166,35 +169,42 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const dataRows = document.querySelectorAll('tbody tr');
-        const eventFilterButtons = document.querySelectorAll('.event-filter-btn');
         const matchFilterButtons = document.querySelectorAll('.match-filter-btn');
         let currentEventFilter = 'all';
         let currentMatchFilter = 'all';
 
         function updateVisibility() {
             dataRows.forEach(row => {
-                const eventCode = row.querySelector('td:nth-child(2) .badge:first-child').textContent.trim();
-                const matchType = row.querySelector('td:nth-child(2) .badge:nth-child(2)').textContent.trim();
+                // Use data-event-id attribute on rows and compare by id
+                const eventId = row.getAttribute('data-event-id') || '';
+                const matchTypeEl = row.querySelector('td:nth-child(2) .badge:nth-child(2)');
+                const matchType = matchTypeEl ? matchTypeEl.textContent.trim().toUpperCase() : '';
+
+                const currentEvent = currentEventFilter ? String(currentEventFilter) : 'all';
+                const currentMatch = currentMatchFilter ? currentMatchFilter.toUpperCase() : 'ALL';
                 
-                const eventMatch = currentEventFilter === 'all' || eventCode === currentEventFilter;
-                const matchTypeMatch = currentMatchFilter === 'all' || matchType === currentMatchFilter;
-                
+                const eventMatch = (currentEvent === 'all') || (eventId && eventId === currentEvent);
+                const matchTypeMatch = currentMatch === 'ALL' || matchType === currentMatch;
                 row.style.display = eventMatch && matchTypeMatch ? '' : 'none';
             });
 
             // Update the total records count
             const visibleRows = document.querySelectorAll('tbody tr:not([style*="display: none"])');
-            document.querySelector('.card-footer span').textContent = `Filtered records: ${visibleRows.length}`;
+            const footerSpan = document.querySelector('.card-footer span');
+            if (footerSpan) footerSpan.textContent = `Filtered records: ${visibleRows.length}`;
         }
 
-        eventFilterButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                eventFilterButtons.forEach(btn => btn.classList.remove('active'));
-                this.classList.add('active');
-                currentEventFilter = this.getAttribute('data-filter');
+        // Event filter handler (select)
+        const eventFilterSelect = document.getElementById('event-filter-select');
+        if (eventFilterSelect) {
+            eventFilterSelect.addEventListener('change', function() {
+                currentEventFilter = this.value || 'all';
                 updateVisibility();
             });
-        });
+        }
+
+        // Initial visibility update
+        updateVisibility();
 
         matchFilterButtons.forEach(button => {
             button.addEventListener('click', function() {

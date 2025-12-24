@@ -1,8 +1,10 @@
 {% extends 'base.html' %}
 
+{% import '_help_icon.html' as help %}
+
 {% block title %}Game Configuration{% endblock %}
 
-{% block heading %}Game Configuration{% endblock %}
+{% block heading %}Game Configuration {{ help.help_icon('View and manage the current game configuration. Use Simple Edit for form-based changes or Advanced Edit for raw JSON edits. Be careful: element id changes can affect stored data.', 'Game configuration') }}{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -12,10 +14,10 @@
                 <h5 class="mb-0">{{ game_config.game_name }} Configuration</h5>
                 <div>
                     <a href="{{ url_for('main.simple_edit_config') }}" class="btn btn-success btn-sm me-2">
-                        <i class="fas fa-edit me-1"></i> Simple Edit
+                        <i class="fas fa-edit me-1"></i> Simple Edit {{ help.help_icon('Form-driven editor for common configuration tasks; safer for most users.', 'Simple editor') }}
                     </a>
                     <a href="{{ url_for('main.edit_config') }}" class="btn btn-light btn-sm">
-                        <i class="fas fa-code me-1"></i> Advanced Edit
+                        <i class="fas fa-code me-1"></i> Advanced Edit {{ help.help_icon('Raw JSON editor for advanced changes. Changes are validated before save. Use with caution and back up before large edits.', 'Advanced JSON editor') }}
                     </a>
                 </div>
             </div>
@@ -32,7 +34,7 @@
         
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Full Configuration JSON</h5>
+                <h5 class="mb-0">Full Configuration JSON {{ help.help_icon('Read-only view of the full game configuration as JSON. Use Advanced Edit to make changes.', 'Full JSON view') }}</h5>
             </div>
             <div class="card-body">
                 <pre class="config-json">{{ game_config | tojson(indent=2) }}</pre>

@@ -1,15 +1,19 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 
 {% block title %}Teams{% endblock %}
 
 {% block heading %}Teams{% endblock %}
 
 {% block content %}
+
+{% include '_alliance_mode_banner.html' %}
+
 <div class="row mb-4">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center">
             <div>
-                <h2 class="mb-0">Teams</h2>
+                <h2 class="mb-0">Teams {{ help.help_icon('Browse team records, sync from event data, and add teams manually. Use filters to limit teams by event.', 'Teams') }}</h2>
                 <p class="text-muted mb-0">Browse and manage teams for your events.</p>
             </div>
 
@@ -39,7 +43,7 @@
         {% else %}
         <div class="card h-100">
             <div class="card-body">
-                <h6 class="card-title">Events</h6>
+                <h6 class="card-title">Events {{ help.help_icon('Events this installation knows about. Use Sync Teams to import teams by event.', 'Events') }}</h6>
                 <p class="display-6 mb-0">{{ events|length if events is not none else 0 }}</p>
             </div>
         </div>
@@ -48,7 +52,7 @@
     <div class="col-lg-4 col-md-6 mb-3">
         <div class="card h-100">
             <div class="card-body">
-                <h6 class="card-title">Teams</h6>
+                <h6 class="card-title">Teams {{ help.help_icon('Number of teams currently stored. This reflects your selected event when applicable.', 'Teams') }}</h6>
                 <p class="display-6 mb-0">{{ teams|length if teams is not none else 0 }}</p>
             </div>
         </div>
@@ -56,7 +60,7 @@
     <div class="col-lg-4 col-md-12 mb-3">
         <div class="card h-100">
             <div class="card-body">
-                <h6 class="card-title">Current Event Code</h6>
+                <h6 class="card-title">Current Event Code {{ help.help_icon('The event code used to prefill or import matches and teams. Change through configuration.', 'Current event code') }}</h6>
                     <p class="mb-0">{% if game_config and game_config.get('current_event_code') %}<strong>{{ game_config.get('current_event_code') }}</strong>
                 <a href="{{ url_for('main.edit_config') }}" class="ms-2">Change</a>
                 {% else %}<span class="text-muted">Not configured</span>
@@ -72,11 +76,12 @@
             <div class="card-body">
                 <form method="get" action="{{ url_for('teams.index') }}" class="row gx-2 gy-2 align-items-center">
                     <div class="col-12">
-                        <label class="form-label mb-1"><strong>Filter teams by event</strong></label>
+                        <label class="form-label mb-1"><strong>Filter teams by event</strong> {{ help.help_icon('Select an event to narrow the team list. Choose "All" to show every team.', 'Filter teams') }}</label>
                         <select id="event-selector" name="event_id" class="form-select" onchange="this.form.submit()">
                             <option value="">-- All Events --</option>
                             {% for event in events|dedupe_events %}
-                            <option value="{{ event.id }}" data-event-code="{{ event.code|upper if event.code else '' }}" {% if selected_event and selected_event.id == event.id %}selected{% endif %}>
+                            {% set _req_eid = request.args.get('event_id') %}
+                            <option value="{{ event.id }}" data-event-code="{{ event.code|upper if event.code else '' }}" {% if (_req_eid and (_req_eid|int == event.id or _req_eid == event.id)) or (selected_event and selected_event.id == event.id) %}selected{% endif %}>
                                 {{ event.name }} ({{ event.year }}){% if event.is_alliance %} (Alliance){% endif %}
                             </option>
                             {% endfor %}

@@ -192,7 +192,7 @@ Pit configuration stored in:
 - Match strategy analysis references pit capabilities
 - Graphs can incorporate pit scouting metrics
 - Search includes pit scouting notes
-
+**Tip:** Inline help icons (question-mark) next to these integration headings explain how pit and match scouting interact — hover/tap to see brief guidance. Toggle them in **Settings → Show inline help icons**.
 ### Combined Analysis
 
 1. Go to **Graphs** > **Side-by-Side Comparison**

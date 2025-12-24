@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 
 {% block title %}Simple Configuration Editor{% endblock %}
 
-{% block heading %}Simple Configuration Editor{% endblock %}
+{% block heading %}Simple Configuration Editor {{ help.help_icon('A simplified, form-based configuration editor for common settings. Safer for quick changes and onboarding.', 'Simple editor (old)') }}{% endblock %}
 
 {% block content %}
 <div class="row">

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import '_help_icon.html' as help %}
 {% block title %}Admin Settings{% endblock %}
 
 {% block head %}
@@ -41,7 +42,7 @@
     <div class="row">
         <div class="col-md-12">
             <h2>
-                <i class="fas fa-cogs"></i> Admin Settings
+                <i class="fas fa-cogs"></i> Admin Settings {{ help.help_icon('Administrative settings and system configuration options. Manage users, API keys, exports and more from here.', 'Admin settings') }}
             </h2>
             <p class="text-muted">Administrative settings and system configuration options.</p>
         </div>
@@ -51,7 +52,7 @@
         <div class="col-md-4">
             <div class="card">
                 <div class="card-header">
-                    <h5><i class="fas fa-users"></i> User Management</h5>
+                    <h5><i class="fas fa-users"></i> User Management {{ help.help_icon('Create and manage user accounts and roles. Invite or revoke access and assign permissions.', 'User management') }}</h5>
                 </div>
                 <div class="card-body">
                     <p>Manage user accounts, roles, and permissions.</p>
@@ -65,7 +66,7 @@
         <div class="col-md-4">
             <div class="card">
                 <div class="card-header">
-                    <h5><i class="fas fa-user-lock"></i> Account Settings</h5>
+                    <h5><i class="fas fa-user-lock"></i> Account Settings {{ help.help_icon('Control new account registration and lock/unlock account creation for your installation.', 'Account settings') }}</h5>
                 </div>
                 <div class="card-body">
                     <p>Control new account registration for your team.</p>
@@ -84,7 +85,7 @@
         <div class="col-md-4">
             <div class="card">
                 <div class="card-header">
-                    <h5><i class="fas fa-palette"></i> Appearance</h5>
+                    <h5><i class="fas fa-palette"></i> Appearance {{ help.help_icon('Manage site appearance settings and visual features that apply to all users on this installation.', 'Appearance') }}</h5>
                 </div>
                 <div class="card-body">
                     <p>Toggle a modern 'liquid glass' frosted button appearance across the UI for your team's users.</p>
@@ -103,7 +104,7 @@
         <div class="col-md-4">
             <div class="card">
                 <div class="card-header">
-                    <h5><i class="fas fa-cog"></i> Game Configuration</h5>
+                    <h5><i class="fas fa-cog"></i> Game Configuration {{ help.help_icon('Open the game configuration editor to manage scoring elements, match periods, and API settings. Changes affect the entire installation.', 'Game config') }}</h5>
                 </div>
                 <div class="card-body">
                     <p>Configure game settings and scouting parameters.</p>
@@ -119,7 +120,7 @@
         <div class="col-md-4">
             <div class="card">
                 <div class="card-header">
-                    <h5><i class="fas fa-handshake"></i> Scouting Alliances</h5>
+                    <h5><i class="fas fa-handshake"></i> Scouting Alliances {{ help.help_icon('Manage alliance collaboration settings for scouts. Configure shared dashboards, event participation, and data sharing preferences here.', 'Scouting alliances') }}</h5>
                 </div>
                 <div class="card-body">
                     <p>Collaborate with other scouting teams by sharing data and resources.</p>
@@ -133,7 +134,7 @@
         <div class="col-md-4">
             <div class="card">
                 <div class="card-header">
-                    <h5><i class="fas fa-key"></i> API Keys</h5>
+                    <h5><i class="fas fa-key"></i> API Keys {{ help.help_icon('Manage programmatic access via API keys. Revoke compromised keys and rotate periodically.', 'API keys') }}</h5>
                 </div>
                 <div class="card-body">
                     <p>Manage API keys for programmatic access to your team's data.</p>
@@ -149,7 +150,7 @@
         <div class="col-md-4">
             <div class="card">
                 <div class="card-header">
-                    <h5><i class="fas fa-database"></i> System Status</h5>
+                    <h5><i class="fas fa-database"></i> System Status {{ help.help_icon('View system health and monitoring information including recent integrity checks and background jobs.', 'System status') }}</h5>
                 </div>
                 <div class="card-body">
                     <p>View system health and monitoring information.</p>
@@ -165,7 +166,7 @@
         <div class="col-md-4">
             <div class="card">
                 <div class="card-header">
-                    <h5><i class="fas fa-download"></i> Data Export</h5>
+                    <h5><i class="fas fa-download"></i> Data Export {{ help.help_icon('Export scouting data and system configurations to Excel or CSV for offline analysis or backups.', 'Data export') }}</h5>
                 </div>
                 <div class="card-body">
                     <p>Export scouting data and system configurations.</p>

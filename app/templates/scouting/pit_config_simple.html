@@ -22,6 +22,9 @@
                 </div>
                 
                 <div class="card-body">
+
+                    {% include '_alliance_mode_banner.html' %}
+
                     <form method="POST" action="{{ url_for('pit_scouting.config_simple_save') }}" id="pitConfigForm">
                         <!-- Basic Settings -->
                         <div class="row mb-4">

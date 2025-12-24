@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% import '_help_icon.html' as help %}
+
 {% block title %}Scouting Alliance Dashboard{% endblock %}
 
 {% block head %}
@@ -39,11 +41,11 @@
         <div class="col-md-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2>
-                    <i class="fas fa-handshake"></i> Scouting Alliance Dashboard
+                    <i class="fas fa-handshake"></i> Scouting Alliance Dashboard {{ help.help_icon('Dashboard for managing alliances, invitations, data sharing and activation of alliance-mode. Create new alliances or manage existing ones here.', 'Alliance dashboard') }}
                 </h2>
                 <div>
                     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createAllianceModal">
-                        <i class="fas fa-plus"></i> Create Alliance
+                        <i class="fas fa-plus"></i> Create Alliance {{ help.help_icon('Create a new scouting alliance and invite other teams. You will become the alliance administrator of the new alliance.', 'Create alliance') }}
                     </button>
                     <button class="btn btn-outline-secondary" onclick="searchTeams()">
                         <i class="fas fa-search"></i> Search Teams
@@ -54,7 +56,11 @@
             <div class="alert alert-info">
                 <i class="fas fa-info-circle"></i>
                 <strong>Scouting Alliances</strong> allow multiple teams to share scouting data and collaborate during events. 
-                Only scouting data and chat are shared - strategy drawings and other sensitive information remain private.
+                Only scouting data and chat are shared - strategy drawings and other sensitive information remain private. {{ help.help_icon('Scouting alliances enable data and chat sharing among teams. Sensitive files and private notes are not shared by default.', 'Scouting alliances') }}
+                <div class="mt-2 alert alert-warning py-2 mb-0">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Experimental:</strong> Scouting Alliances are experimental and may cause unexpected issues. Use with caution.
+                </div>
             </div>
         </div>
     </div>
@@ -165,7 +171,7 @@
                     <!-- Alliance Mode Toggle -->
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <small class="text-muted">
-                            <strong>Alliance Mode:</strong>
+                            <strong>Alliance Mode:</strong> {{ help.help_icon('Toggle Alliance Mode to use shared configs and data. Activating will switch your team to the alliance context (may affect forms and metrics).', 'Alliance mode toggle') }}
                         </small>
                         <div class="form-check form-switch">
                             {% set is_this_alliance_active = is_alliance_mode_active and active_alliance and active_alliance.id == alliance.id %}
@@ -201,7 +207,7 @@
                             <i class="fas fa-eye"></i> View
                         </a>
                         <button class="btn btn-outline-primary btn-sm" onclick="syncAllianceData({{ alliance.id }})">
-                            <i class="fas fa-sync"></i> Sync
+                            <i class="fas fa-sync"></i> Sync {{ help.help_icon('Manually synchronize shared scouting and pit data with other alliance members. Use when you want to force an immediate sync.', 'Manual sync') }}
                         </button>
                         <button class="btn btn-outline-info btn-sm" onclick="openChat({{ alliance.id }})">
                             <i class="fas fa-comments"></i> Chat
@@ -358,7 +364,7 @@
 
 <!-- Deactivate Alliance Modal -->
 <div class="modal fade" id="deactivateAllianceModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-exclamation-triangle text-warning me-2"></i>Deactivate Alliance Mode</h5>

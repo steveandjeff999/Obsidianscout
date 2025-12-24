@@ -1,4 +1,5 @@
 <!-- Alliance Indicator Bar -->
+{% import '_help_icon.html' as help %}
 <div class="alliance-indicator {% if alliance == 'red' %}bg-danger{% elif alliance == 'blue' %}bg-primary{% else %}bg-warning alliance-unknown{% endif %} mb-4 py-3 px-4 rounded-4 shadow-sm">
     <div class="d-flex align-items-center">
         <div class="alliance-icon me-3">
@@ -174,14 +175,14 @@
                                     <input class="form-check-input" type="checkbox" id="{{ element.id }}" name="{{ element.id }}" role="switch"
                                             {% if form_data.get(element.id, element.default) %}checked{% endif %}>
                                     <label class="form-check-label fs-5" for="{{ element.id }}">
-                                        {{ element.name }}
+                                        {{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}
                                     </label>
                                 </div>
                                 {% if element.description %}
                                 <small class="text-muted d-block mt-1">{{ element.description }}</small>
                                 {% endif %}
                             {% elif element.type == 'counter' %}
-                                <label for="{{ element.id }}" class="form-label fw-medium">{{ element.name }}</label>
+                                <label for="{{ element.id }}" class="form-label fw-medium">{{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}</label>
                                 {% if element.description %}
                                 <small class="text-muted d-block mb-2">{{ element.description }}</small>
                                 {% endif %}
@@ -196,7 +197,7 @@
                                     </button>
                                 </div>
                             {% elif element.type == 'select' or element.type == 'multiple_choice' %}
-                                <label for="{{ element.id }}" class="form-label fw-medium">{{ element.name }}</label>
+                                <label for="{{ element.id }}" class="form-label fw-medium">{{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}</label>
                                 {% if element.description %}
                                 <small class="text-muted d-block mb-2">{{ element.description }}</small>
                                 {% endif %}
@@ -251,7 +252,7 @@
                                     <input class="form-check-input" type="checkbox" id="{{ element.id }}" name="{{ element.id }}" role="switch"
                                             {% if form_data.get(element.id, element.default) %}checked{% endif %}>
                                     <label class="form-check-label fs-5" for="{{ element.id }}">
-                                        {{ element.name }}
+                                        {{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}
                                     </label>
                                 </div>
                                 {% if element.description %}
@@ -328,7 +329,7 @@
                                     <input class="form-check-input" type="checkbox" id="{{ element.id }}" name="{{ element.id }}" role="switch"
                                             {% if form_data.get(element.id, element.default) %}checked{% endif %}>
                                     <label class="form-check-label fs-5" for="{{ element.id }}">
-                                        {{ element.name }}
+                                        {{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}
                                     </label>
                                 </div>
                                 {% if element.description %}

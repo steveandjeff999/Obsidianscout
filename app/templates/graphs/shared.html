@@ -56,8 +56,9 @@
         <div class="container">
             <div class="row">
                 <div class="col-12">
+                    {% import '_help_icon.html' as help %}
                     <h1 class="mb-3">
-                        <i class="fas fa-chart-line me-3"></i>{{ shared_graph.title }}
+                        <i class="fas fa-chart-line me-3"></i>{{ shared_graph.title }} {{ help.help_icon('Shared graph view: interactive charts exported for sharing. Embedded metadata and team list are shown below.', 'Shared graph') }}
                     </h1>
                     {% if shared_graph.description %}
                     <p class="lead mb-3">{{ shared_graph.description }}</p>
@@ -501,7 +502,7 @@
         // Quick-select handlers for graph types (mimic index page behavior)
         $('#select-basic-graphs').on('click', function() { $('select[name="graph_types"]').val(['bar','line','scatter','area']).trigger('change'); });
         $('#select-distribution-graphs').on('click', function() { $('select[name="graph_types"]').val(['box','violin','histogram']).trigger('change'); });
-        $('#select-advanced-graphs').on('click', function() { $('select[name="graph_types"]').val(['radar','heatmap','bubble','sunburst','treemap']).trigger('change'); });
+        $('#select-advanced-graphs').on('click', function() { $('select[name="graph_types"]').val(['radar','heatmap','sunburst']).trigger('change'); });
         $('#clear-graph-types').on('click', function() { $('select[name="graph_types"]').val(null).trigger('change'); });
 
         // When the filter form is submitted, if the desktop multi-select is visible, convert its selected values

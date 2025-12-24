@@ -38,7 +38,37 @@
   <style>
     /* Embedded banner styles - use hard-coded high-contrast colors so themes/dark-mode don't override them */
     .site-notification { border-radius: 0; margin: 0; padding: 0.75rem 1rem; }
-    .site-notification .notification-message { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Clamp the visible message to 2 lines with ellipsis; expand via `.expanded` on the parent */
+    .site-notification .notification-message {
+      max-width: 100%;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: normal;
+      line-height: 1.15em;
+      max-height: 2.5em; /* ~2 lines */
+      transition: max-height 0.15s ease;
+    }
+    .site-notification.expanded .notification-message {
+      -webkit-line-clamp: initial;
+      max-height: 1200px;
+      white-space: normal;
+    }
+
+    /* Expand toggle button (hidden by default, shown when content overflow detected) */
+    .site-notification .notification-expand {
+      border: none;
+      background: transparent;
+      color: inherit;
+      padding-left: 0.5rem;
+      padding-right: 0.25rem;
+      font-size: 0.9rem;
+      text-decoration: underline;
+      cursor: pointer;
+      display: inline-block;
+    }
 
     /* Importance colors - literal values to resist theme overrides */
     .notification-level-info { background-color: var(--bs-primary, #0d6efd) !important; color: #ffffff !important; }

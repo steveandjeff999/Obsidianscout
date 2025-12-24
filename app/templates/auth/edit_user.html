@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
 
 {% block title %}Edit User{% endblock %}
 
-{% block heading %}Edit User: {{ user.username }}{% endblock %}
+{% block heading %}Edit User: {{ user.username }} {{ help.help_icon('Update user details and role assignments. Changes are applied immediately and may affect access.', 'Edit user') }}{% endblock %}
 
 {% block content %}
 <div class="row">

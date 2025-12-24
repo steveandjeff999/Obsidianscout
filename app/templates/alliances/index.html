@@ -2,7 +2,9 @@
 
 {% block title %}Alliance Selection{% endblock %}
 
-{% block heading %}Alliance Selection{% endblock %}
+{% import '_help_icon.html' as help %}
+
+{% block heading %}Alliance Selection {{ help.help_icon('Create and manage alliance selections for events. Use the recommendations panel and assignment modal to build competitive alliances quickly.', 'Alliance selection') }}{% endblock %}
 {% block subheading %}Build competitive alliances for {{ current_event.name }}{% endblock %}
 
 {% block content %}
@@ -29,7 +31,7 @@
                         <ul class="dropdown-menu" aria-labelledby="eventDropdown">
                             {% for event in events|dedupe_events %}
                                 <li><a class="dropdown-item {% if event.id == current_event.id %}active{% endif %}" 
-                                href="{{ url_for('events.set_current_event', event_id=event.id, redirect_to='alliances.index') }}">
+                                href="{{ url_for('events.set_current_event', event_identifier=event.id, redirect_to='alliances.index') }}">
                                 {{ event.name }} ({{ event.year }}){% if event.is_alliance %} (Alliance){% endif %}
                             </a></li>
                             {% endfor %}
@@ -41,17 +43,19 @@
                     <!-- Trend toggle: default ON -->
                     <div class="form-check form-switch align-self-center ms-2">
                         <input class="form-check-input" type="checkbox" id="trend-toggle" checked>
-                        <label class="form-check-label small text-muted" for="trend-toggle">Use recent trends</label>
+                        <label class="form-check-label small text-muted" for="trend-toggle">Use recent trends {{ help.help_icon('When enabled, recent match trends influence team rankings for recommendations. Turn off for static ranking based only on historical averages.', 'Use recent trends') }}</label>
                     </div>
+                    {% if not (current_event.is_alliance|default(false)) %}
                     <a href="{{ url_for('alliances.manage_lists', event_id=current_event.id) }}" 
                        class="btn btn-info btn-sm">
-                        <i class="fas fa-list me-1"></i> Manage Lists
+                        <i class="fas fa-list me-1"></i> Manage Lists {{ help.help_icon('Manage decline, avoid and do-not-pick lists which influence recommendations.', 'Manage lists') }}
                     </a>
                     <a href="{{ url_for('alliances.reset_alliances', event_id=current_event.id) }}" 
                        class="btn btn-warning btn-sm" 
                        onclick="return confirm('Are you sure you want to reset all alliance selections?')">
-                        <i class="fas fa-undo me-1"></i> Reset All
+                        <i class="fas fa-undo me-1"></i> Reset All {{ help.help_icon('Clear all current alliance selections for the event. This is reversible only if you have saved or exported previous selections.', 'Reset all') }}
                     </a>
+                    {% endif %}
                 </div>
             </div>
             <div class="card-body">
@@ -207,7 +211,7 @@
         <div class="card">
             <div class="card-header bg-success text-white">
                 <h5 class="mb-0">
-                    <i class="fas fa-chart-line me-2"></i>Team Recommendations
+                    <i class="fas fa-chart-line me-2"></i>Team Recommendations {{ help.help_icon('Teams ranked by predicted performance for the current event. Use the Decline or Do-not-pick actions to refine recommendations.', 'Team recommendations') }}
                 </h5>
             </div>
             <div class="card-body">
@@ -242,7 +246,7 @@
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
-                    <small class="text-muted">Press Enter to select if only one team matches</small>
+                    <small class="text-muted">Press Enter to select if only one team matches {{ help.help_icon('Press Enter to select the first matching team when the list is narrowed to one result — useful on devices with keyboard or for quick selection.', 'Quick select') }}</small>
                 </div>
                 <div id="teamSelectionList" class="list-group" style="max-height: 400px; overflow-y: auto;">
                     <!-- Teams will be populated here -->

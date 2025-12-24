@@ -18,7 +18,7 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card toolbox-card">
         <div class="card-header">Toolbox</div>
         <div class="card-body">
           <div class="toolbox-item list-group mb-2" draggable="true" data-widget-type="graph" style="cursor:grab;">
@@ -361,7 +361,6 @@
   top: 80px;
   width: 320px;
   max-height: calc(100vh - 180px);
-  overflow-y: auto;
   z-index: 10000;
   background: var(--bs-card-bg, #fff);
   border: 2px solid var(--bs-border-color, #dee2e6);
@@ -369,7 +368,9 @@
   box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.3);
   transition: transform 0.3s ease;
   padding: 0;
-}
+  display: flex;
+  flex-direction: column;
+} 
 
 .fullscreen-toolbox.collapsed {
   transform: translateX(-350px);
@@ -391,6 +392,10 @@
 .fullscreen-toolbox .card-body {
   padding: 1rem;
   background: var(--bs-card-bg, #fff);
+  /* make the body flexible and scrollable while header remains visible */
+  flex: 1 1 auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 220px);
 }
 
 .fullscreen-toolbox-toggle {
@@ -404,6 +409,12 @@
 
 .fullscreen-toolbox-toggle:hover {
   opacity: 1;
+}
+
+/* Make the toolbox card body scrollable when content is long */
+.toolbox-card .card-body {
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
 }
 
 .fullscreen-toolbox.collapsed + .fullscreen-toolbox-toggle {

@@ -410,6 +410,12 @@ Look for specific error messages.
 2. Check status shows "Accepted"
 3. Ensure current event matches alliance event
 
+**Check help icons and popovers:**
+- If the small question-mark help icons do not show popovers, verify that **Show inline help icons** is enabled in **Settings**.
+- Ensure JavaScript is enabled and your browser supports Bootstrap popovers (modern Chrome/Edge/Firefox recommended).
+- If popovers still fail, check browser console for JS errors and report via the support channel.
+
+
 **Re-invite member:**
 - Remove member from alliance
 - Wait 30 seconds

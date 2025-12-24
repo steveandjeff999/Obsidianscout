@@ -187,6 +187,45 @@ body.dark-mode.liquid-glass-buttons .btn.btn-primary {
     background: linear-gradient(180deg, rgba(var(--ui-accent-rgb),0.14), rgba(var(--ui-accent-rgb),0.08));
 }
 
+/* Ensure checked/selected state is visible when liquid glass buttons are active */
+body.liquid-glass-buttons .btn-check:checked + .btn,
+body.liquid-glass-buttons .btn-check:checked + .btn:focus,
+body.liquid-glass-buttons .btn-check:checked + .btn:active {
+    color: #fff !important;
+    background-color: rgba(255,255,255,0.08) !important;
+    border-color: rgba(255,255,255,0.12) !important;
+    box-shadow: 0 0 0 0.18rem rgba(255,255,255,0.04) !important;
+}
+
+/* Stronger, theme-tinted checked states in dark mode to preserve meaning (primary/danger) */
+body.dark-mode.liquid-glass-buttons .btn-check:checked + .btn-outline-primary,
+body.dark-mode.liquid-glass-buttons .btn-check:checked + .btn-outline-primary:focus,
+body.dark-mode.liquid-glass-buttons .btn-check:checked + .btn-outline-primary:active {
+    color: #fff !important;
+    background-color: rgba(var(--ui-accent-rgb),0.20) !important;
+    border-color: rgba(var(--ui-accent-rgb),0.34) !important;
+    box-shadow: 0 0 0 0.22rem rgba(var(--ui-accent-rgb),0.10) !important;
+}
+
+body.dark-mode.liquid-glass-buttons .btn-check:checked + .btn-outline-danger,
+body.dark-mode.liquid-glass-buttons .btn-check:checked + .btn-outline-danger:focus,
+body.dark-mode.liquid-glass-buttons .btn-check:checked + .btn-outline-danger:active {
+    color: #fff !important;
+    background-color: rgba(var(--bs-danger-rgb,220,53,69),0.20) !important;
+    border-color: rgba(var(--bs-danger-rgb,220,53,69),0.34) !important;
+    box-shadow: 0 0 0 0.22rem rgba(var(--bs-danger-rgb,220,53,69),0.10) !important;
+}
+
+/* Fallback for other outline/secondary buttons in dark liquid glass mode */
+body.dark-mode.liquid-glass-buttons .btn-check:checked + .btn-outline-secondary,
+body.dark-mode.liquid-glass-buttons .btn-check:checked + .btn-outline-secondary:focus,
+body.dark-mode.liquid-glass-buttons .btn-check:checked + .btn-outline-secondary:active {
+    color: #fff !important;
+    background-color: rgba(255,255,255,0.06) !important;
+    border-color: rgba(255,255,255,0.12) !important;
+    box-shadow: 0 0 0 0.18rem rgba(255,255,255,0.04) !important;
+}
+
 /* Toasts & Alerts */
 .toast { border-radius: var(--card-radius, 12px); box-shadow: 0 10px 30px rgba(2,6,23,0.08); }
 .alert { border-radius: var(--card-radius, 12px); }

@@ -509,33 +509,86 @@ def get_team_by_number(team_number):
 
 def get_event_by_code(event_code):
     """Get an event by code, filtered by current scouting team.
-    
+
     Uses case-insensitive comparison to handle event codes consistently
     regardless of how they were originally stored.
-    
-    In alliance mode, also searches alliance member events if not found
-    in the current user's events.
+
+    In alliance mode, prefer a synthetic alliance entry when the code is part
+    of the active alliance's shared events (this ensures pages show the
+    '(Alliance)' choice instead of the local team copy when appropriate).
     """
     if not event_code:
         return None
-    
-    # Normalize to uppercase for comparison
-    event_code_upper = event_code.upper()
-    
-    # First try to find in current user's events
+
+    # Normalize to uppercase and strip whitespace for comparison
+    event_code_upper = str(event_code).strip().upper()
+
+    # First try to find in current user's events (scoped by scouting team)
     event = filter_events_by_scouting_team().filter(func.upper(Event.code) == event_code_upper).first()
-    
+
+    # Determine if we are in an active alliance that shares this code
+    current_team = get_current_scouting_team_number()
+    try:
+        from app.models import TeamAllianceStatus, ScoutingAllianceEvent
+        active_alliance = TeamAllianceStatus.get_active_alliance_for_team(current_team) if current_team else None
+    except Exception:
+        active_alliance = None
+
+    # If alliance is active and the code is a shared alliance event (or present in ScoutingAllianceEvent table),
+    # prefer returning a synthetic alliance entry so UI dropdowns select the alliance copy.
+    try:
+        is_shared_by_alliance = False
+        if active_alliance:
+            shared_codes = [c.strip().upper() for c in (active_alliance.get_shared_events() or []) if c]
+            if event_code_upper in shared_codes:
+                is_shared_by_alliance = True
+        # Also check ScoutingAllianceEvent table for an active mapping
+        sae_exists = False
+        try:
+            sae_exists = ScoutingAllianceEvent.query.filter(func.upper(ScoutingAllianceEvent.event_code) == event_code_upper, ScoutingAllianceEvent.is_active == True).first() is not None
+        except Exception:
+            sae_exists = False
+
+        if (is_shared_by_alliance or (active_alliance and sae_exists)):
+            # Find a local event copy to borrow display attributes if available (any member's event)
+            local = Event.query.filter(func.upper(Event.code) == event_code_upper).first()
+            from types import SimpleNamespace
+            obj = SimpleNamespace()
+            obj.id = f'alliance_{event_code_upper}'
+            obj.name = getattr(local, 'name', None) or event_code_upper
+            obj.code = event_code_upper
+            obj.location = getattr(local, 'location', None) if local else None
+            obj.year = getattr(local, 'year', None) if local else None
+            obj.scouting_team_number = None
+            obj.is_alliance = True
+            return obj
+    except Exception:
+        # On error, fall back to DB results
+        pass
+
+    # If we found an event scoped to current user's team, return it
     if event:
         return event
-    
-    # If not found and in alliance mode, search alliance member events
+
+    # Otherwise, if alliance mode is active, search alliance member events
     alliance_team_numbers = get_alliance_team_numbers()
     if alliance_team_numbers:
         event = Event.query.filter(
             func.upper(Event.code) == event_code_upper,
             Event.scouting_team_number.in_(alliance_team_numbers)
         ).first()
-    
+        if event:
+            return event
+
+    # Final fallback: find any event with this code (case-insensitive) regardless of scouting_team_number.
+    # This helps cases where the configured current_event_code refers to an event imported by another team.
+    try:
+        fallback_event = Event.query.filter(func.upper(Event.code) == event_code_upper).first()
+        if fallback_event:
+            return fallback_event
+    except Exception:
+        pass
+
     return event
 
 

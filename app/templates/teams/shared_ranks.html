@@ -56,8 +56,9 @@
         <div class="container">
             <div class="row">
                 <div class="col-12">
+                    {% import '_help_icon.html' as help %}
                     <h1 class="mb-3">
-                        <i class="fas fa-trophy me-3"></i>{{ shared_ranks.title }}
+                        <i class="fas fa-trophy me-3"></i>{{ shared_ranks.title }} {{ help.help_icon('Shared team rankings. View top teams and the underlying data used to compute ranks.', 'Shared rankings') }}
                     </h1>
                     {% if shared_ranks.description %}
                     <p class="lead mb-3">{{ shared_ranks.description }}</p>

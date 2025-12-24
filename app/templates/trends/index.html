@@ -3,7 +3,8 @@
 {% block title %}Team Trends{% endblock %}
 
 {% block content %}
-<h1>Team Trends</h1>
+{% import '_help_icon.html' as help %}
+<h1>Team Trends {{ help.help_icon('Explore per-team metric trends across events. Use the filters to change event or timespan.', 'Team Trends') }}</h1>
 <p>Select a team to view historical points and a simple prediction.</p>
 <ul>
   {% for team in teams %}

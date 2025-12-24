@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import '_help_icon.html' as help %}
 {% block title %}{{ alliance.alliance_name }} - Scouting Alliance{% endblock %}
 
 {% block head %}
@@ -40,7 +41,7 @@
             <div class="card mb-4">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="fas fa-users"></i> Alliance Members ({{ members|length }})
+                        <i class="fas fa-users"></i> Alliance Members ({{ members|length }}) {{ help.help_icon('List of teams currently in the alliance. Admins can invite, promote, or remove teams.', 'Alliance members') }}
                     </h5>
                 </div>
                 <div class="card-body">
@@ -101,8 +102,8 @@
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
-                        <i class="fas fa-cogs"></i> Alliance Configuration
-                    </h5>
+                        <i class="fas fa-cogs"></i> Alliance Configuration {{ help.help_icon('Shared settings for game and pit scouting forms that can be applied across the entire alliance. When Alliance Mode is active for your team, these settings override your individual team settings.', 'Alliance configuration') }}
+                    </h5> 
                     {% if member.role == 'admin' %}
                     <div class="dropdown">
                         <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" id="configDropdown" 
@@ -131,7 +132,7 @@
                             <div class="card border-primary">
                                 <div class="card-header bg-primary text-white">
                                     <h6 class="mb-0">
-                                        <i class="fas fa-toggle-on me-2"></i>Alliance Mode Control
+                                        <i class="fas fa-toggle-on me-2"></i>Alliance Mode Control {{ help.help_icon('Toggle whether your team uses the alliance-wide shared configurations. This setting is per-team and does not affect other teams.', 'Alliance mode control') }}
                                     </h6>
                                 </div>
                                 <div class="card-body">
@@ -183,7 +184,7 @@
                             <div class="card border-0 bg-light">
                                 <div class="card-body">
                                     <h6 class="card-title">
-                                        <i class="fas fa-gamepad me-2 text-primary"></i>Game Configuration
+                                        <i class="fas fa-gamepad me-2 text-primary"></i>Game Configuration {{ help.help_icon('The shared game scouting form used by alliance members when Alliance Mode is active.', 'Game configuration') }}
                                     </h6>
                                     {% if alliance.game_config_team %}
                                         <span class="badge bg-success">
@@ -210,7 +211,7 @@
                             <div class="card border-0 bg-light">
                                 <div class="card-body">
                                     <h6 class="card-title">
-                                        <i class="fas fa-tools me-2 text-info"></i>Pit Configuration
+                                        <i class="fas fa-tools me-2 text-info"></i>Pit Configuration {{ help.help_icon('The shared pit scouting form used by alliance members when Alliance Mode is active.', 'Pit configuration') }}
                                     </h6>
                                     {% if alliance.pit_config_team %}
                                         <span class="badge bg-success">
@@ -430,7 +431,7 @@
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
-                        <i class="fas fa-calendar"></i> Shared Events ({{ events|length }})
+                        <i class="fas fa-calendar"></i> Shared Events ({{ events|length }}) {{ help.help_icon('Events configured here determine which event and match data is shared across alliance members.', 'Shared events') }}
                     </h5>
                     {% if member.role == 'admin' %}
                     <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addEventModal">
@@ -467,7 +468,7 @@
             <div class="card mb-4">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="fas fa-sync"></i> Data Synchronization
+                        <i class="fas fa-sync"></i> Data Synchronization {{ help.help_icon('When Alliance Mode is active, scouting and pit data syncs automatically between members. Use Manual Sync to force an immediate update.', 'Data synchronization') }}
                         <span class="badge bg-success ms-2">Auto-Sync Active</span>
                     </h5>
                 </div>
@@ -513,7 +514,7 @@
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
-                        <i class="fas fa-database"></i> Alliance Shared Data
+                        <i class="fas fa-database"></i> Alliance Shared Data {{ help.help_icon('Central shared storage for events, teams, and match data used by alliance members. Admins can sync and populate data here.', 'Shared data') }}
                     </h5>
                     <div class="btn-group">
                         <button class="btn btn-sm btn-success" onclick="syncAndPopulateData()" id="syncPopulateBtn">
@@ -714,7 +715,7 @@
 
 <!-- Deactivate Alliance Modal -->
 <div class="modal fade" id="deactivateAllianceModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-exclamation-triangle text-warning me-2"></i>Deactivate Alliance Mode</h5>

@@ -2,7 +2,9 @@
 
 {% block title %}Manage Team Lists{% endblock %}
 
-{% block heading %}Manage Team Lists{% endblock %}
+{% import '_help_icon.html' as help %}
+
+{% block heading %}Manage Team Lists {{ help.help_icon('Maintain Avoid, Do-not-pick, and Declined lists that affect alliance recommendations. Changes propagate in real-time and can be restored.', 'Manage lists') }}{% endblock %}
 {% block subheading %}Configure avoid and do not pick lists for {{ event.name }}{% endblock %}
 
 {% block content %}
@@ -25,7 +27,7 @@
         <div class="card border-warning">
             <div class="card-header bg-warning text-dark">
                 <h5 class="mb-0">
-                    <i class="fas fa-exclamation-triangle me-2"></i>Avoid List
+                    <i class="fas fa-exclamation-triangle me-2"></i>Avoid List {{ help.help_icon('Teams here are penalized in recommendation rankings (default 30% reduction). Use for teams you want deprioritized.', 'Avoid list') }}
                 </h5>
                 <small>Teams in this list will have their ranking lowered (30% penalty)</small>
             </div>
@@ -78,7 +80,7 @@
         <div class="card border-danger">
             <div class="card-header bg-danger text-white">
                 <h5 class="mb-0">
-                    <i class="fas fa-ban me-2"></i>Do Not Pick List
+                    <i class="fas fa-ban me-2"></i>Do Not Pick List {{ help.help_icon('Teams here are effectively excluded from normal recommendations except as a last resort. Use for teams you do not want to pick.', 'Do not pick list') }}
                 </h5>
                 <small>Teams will only be recommended if no other options are available</small>
             </div>
@@ -131,7 +133,7 @@
         <div class="card border-secondary">
             <div class="card-header bg-secondary text-white">
                 <h5 class="mb-0">
-                    <i class="fas fa-user-times me-2"></i>Declined List
+                    <i class="fas fa-user-times me-2"></i>Declined List {{ help.help_icon('Teams here were explicitly declined from recommendations. You can restore them if needed.', 'Declined list') }}
                 </h5>
                 <small>Teams removed from recommendations (can be restored)</small>
             </div>
@@ -182,7 +184,7 @@
 <div class="row">
     <div class="col-12">
         <div class="alert alert-info">
-            <h6><i class="fas fa-info-circle me-2"></i>How these lists work:</h6>
+            <h6><i class="fas fa-info-circle me-2"></i>How these lists work: {{ help.help_icon('Short explanation of the Avoid, Do-not-pick, and Declined lists and how they affect recommendations and assignments.', 'How lists work') }}</h6>
             <ul class="mb-0">
                 <li><strong>Avoid List:</strong> Teams will still appear in recommendations but with a 30% reduction in their ranking score</li>
                 <li><strong>Do Not Pick List:</strong> Teams will only be recommended if there are no other available teams</li>

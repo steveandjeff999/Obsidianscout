@@ -5,7 +5,8 @@
 <div class="container mt-4">
     <div class="row">
         <div class="col-md-12 text-center">
-            <h1>About ObsidianScout</h1>
+            {% import '_help_icon.html' as help %}
+            <h1>About ObsidianScout {{ help.help_icon('About this project, version and licensing. Contact your admin for more information about your installation.', 'About') }}</h1>
             <p class="lead text-muted">A lightweight scouting dashboard with match management tools.</p>
             <p class="small">Version: unknown</p>
         </div>
