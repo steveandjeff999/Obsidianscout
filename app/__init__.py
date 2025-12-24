@@ -1319,7 +1319,15 @@ def create_app(test_config=None):
                 try:
                     event_code = cfg.get('current_event_code') if isinstance(cfg, dict) else None
                     if event_code:
-                        ev = Event.query.filter_by(code=event_code).first()
+                        # Use the team-isolation helper which handles case-insensitive
+                        # lookup, alliance synthetic entries, and cross-team fallbacks.
+                        try:
+                            from app.utils.team_isolation import get_event_by_code
+                            ev = get_event_by_code(event_code)
+                        except Exception:
+                            # Fallback to simple DB lookup if helper import fails
+                            ev = Event.query.filter_by(code=event_code).first()
+
                         if not ev:
                             issue = f"Event code '{event_code}' in configuration was not found. Run Teams → Sync from config to create event and teams."
                 except Exception:
