@@ -153,10 +153,11 @@ def _build_html_email(subject, body, from_addr=None, to_list=None):
         return html
 
 
-def send_email(to, subject, body, html=None, from_addr=None, bypass_user_opt_out=False):
+def send_email(to, subject, body, html=None, from_addr=None, bypass_user_opt_out=False, reply_to=None):
     """Send an email using Flask-Mail configured from instance/email_config.json.
 
     `to` may be a string or list of addresses.
+    `reply_to` may be provided to allow recipients to reply directly to the given address.
     Returns (success: bool, message: str)
     """
     cfg = load_email_config()
@@ -257,11 +258,12 @@ def send_email(to, subject, body, html=None, from_addr=None, bypass_user_opt_out
         msg = Message(subject=subject,
                       recipients=recipients,
                       body=body,
-                      sender=from_addr or current_app.config.get('MAIL_DEFAULT_SENDER'))
+                      sender=from_addr or current_app.config.get('MAIL_DEFAULT_SENDER'),
+                      reply_to=reply_to)
         if html:
             msg.html = html
         mail.send(msg)
-        return True, 'Email sent'
+        return True, 'Email sent' 
     except Exception as e:
         # Return exception type and message for clearer diagnostics
         # Also log exception with traceback to app logger (without printing password)

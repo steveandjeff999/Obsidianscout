@@ -371,8 +371,14 @@ class SystemCheck:
                     try:
                         current_event_code = game_config.get('current_event_code')
                         if current_event_code:
-                            # Try to find it in the database
-                            event = Event.query.filter_by(code=current_event_code).first()
+                            # Use the team-isolation helper which handles case-insensitive and
+                            # alliance-aware lookups so the system check matches UI discovery
+                            try:
+                                from app.utils.team_isolation import get_event_by_code
+                                event = get_event_by_code(current_event_code)
+                            except Exception:
+                                event = Event.query.filter_by(code=current_event_code).first()
+
                             if event:
                                 self.results["config"]["details"].append({
                                     "name": "Current Event", 

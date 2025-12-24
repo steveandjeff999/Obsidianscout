@@ -195,6 +195,43 @@ def about():
     """About page with info about the scouting system"""
     return render_template('about.html', **get_theme_context())
 
+@bp.route('/contact', methods=['GET', 'POST'])
+@login_required
+def contact():
+    """Contact page with a simple message form. Sends to obsidianscoutfrc@gmail.com if SMTP configured."""
+    from app.utils.emailer import send_email, load_email_config
+
+    target = 'obsidianscoutfrc@gmail.com'
+    cfg = load_email_config()
+    email_configured = bool(cfg.get('host'))
+
+    if request.method == 'POST':
+        message = (request.form.get('message') or '').strip()
+        reply_to = (request.form.get('reply_to') or '').strip()
+        category = (request.form.get('category') or 'Other').strip()
+        if category not in ('Question', 'Bug', 'Other'):
+            category = 'Other'
+
+        if not message:
+            flash('Please enter a message.', 'warning')
+            return render_template('pages/contact.html', email=target, email_configured=email_configured, **get_theme_context())
+
+        subject = f'[{category}] Contact form message from {getattr(current_user, "username", "anonymous")}'
+        body = f"From: {getattr(current_user, 'username', 'anonymous')} <{getattr(current_user, 'email', '')}>\n"
+        if reply_to:
+            body += f"Reply-To: {reply_to}\n"
+        body += f"\n{message}"
+        ok, err = send_email(target, subject, body, reply_to=reply_to or None)
+        if ok:
+            flash('Message sent. Thank you!', 'success')
+        else:
+            if 'Email not configured' in err:
+                flash('Server email is not configured; message was not sent. You can still email: obsidianscoutfrc@gmail.com', 'warning')
+            else:
+                flash(f'Failed to send message: {err}', 'danger')
+
+    return render_template('pages/contact.html', email=target, email_configured=email_configured, **get_theme_context())
+
 @bp.route('/sponsors')
 @login_required
 def sponsors():

@@ -1206,6 +1206,7 @@
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('assistant') %}active{% endif %}" href="{{ url_for('assistant.index') }}"><i class="fas fa-robot"></i><span>Assistant</span></a>
                 <a class="nav-link {% if request.endpoint == 'notifications.index' %}active{% endif %}" href="{{ url_for('notifications.index') }}"><i class="fas fa-bell"></i><span>Notifications</span></a>
                 <a class="nav-link {% if request.endpoint == 'main.sponsors' %}active{% endif %}" href="{{ url_for('main.sponsors') }}"><i class="fas fa-handshake"></i><span>Sponsors</span></a>
+                <a class="nav-link {% if request.endpoint == 'main.contact' %}active{% endif %}" href="{{ url_for('main.contact') }}"><i class="fas fa-envelope"></i><span>Contact</span></a>
                 <a class="nav-link {% if request.endpoint == 'graphs.scout_leaderboard' %}active{% endif %}" href="{{ url_for('graphs.scout_leaderboard') }}"><i class="fas fa-medal"></i><span>Scout Leaderboard</span></a>
                 </div>
             </div>
