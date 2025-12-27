@@ -94,15 +94,17 @@ def _ensure_mail_extension():
 
 
 def _build_html_email(subject, body, from_addr=None, to_list=None):
-        """Return a simple, clean HTML wrapper for plaintext email bodies.
+        """Return a modern, email-friendly HTML wrapper for plaintext email bodies.
 
-        Keeps inline styles simple and preserves paragraphs/newlines.
+        - Adds a hidden preheader for email client previews
+        - Uses a cleaner header, improved spacing, and a modern color accent
+        - Keeps styles inline for compatibility with a wide range of email clients
         """
         brand = current_app.config.get('APP_NAME') or 'ObsidianScout'
         preheader = ''
         body_str = str(body or '')
         try:
-            # Find the first non-empty line to use as preheader
+            # Find the first non-empty line to use as preheader (preview snippet in inbox)
             lines = [l for l in body_str.splitlines() if l.strip()]
             preheader = lines[0][:120] if lines else ''
         except Exception:
@@ -118,11 +120,21 @@ def _build_html_email(subject, body, from_addr=None, to_list=None):
         if body_content:
             for para in body_content.split('\n\n'):
                 safe_para = para.replace('\n', '<br>')
-                parts.append(f"<p style=\"margin:0 0 1rem 0;line-height:1.5;color:#333;\">{safe_para}</p>")
+                # Slightly larger body text and more comfortable line-height
+                parts.append(f"<p style=\"margin:0 0 1rem 0;line-height:1.6;color:#333;font-size:15px;\">{safe_para}</p>")
         content_html = '\n'.join(parts) if parts else ''
+
+        # Hidden preheader snippet (useful for inbox previews, visually hidden in the email body)
+        hidden_preheader = ''
+        if preheader:
+            hidden_preheader = (f"<div style=\"display:none;visibility:hidden;mso-hide:all;font-size:1px;color:#ffffff;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;\">{preheader}</div>")
 
         footer_email = from_addr or current_app.config.get('MAIL_DEFAULT_SENDER') or ''
         recipients = ', '.join(to_list) if to_list else ''
+
+        # Modern accent colors (email-compatible inline styles)
+        primary_start = '#2563eb'
+        primary_end = '#06b6d4'
 
         html = f"""
 <!doctype html>
@@ -132,19 +144,19 @@ def _build_html_email(subject, body, from_addr=None, to_list=None):
         <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"> 
         <title>{subject}</title>
     </head>
-    <body style=\"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background:#f6f7fb; margin:0; padding:20px;\">
-        <div style=\"max-width:680px;margin:0 auto;background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e6e9ef;\">
-            <div style=\"padding:18px 24px;background:linear-gradient(90deg,#1f2937,#374151);color:#fff\">
-                <h1 style=\"margin:0;font-size:18px;font-weight:600;\">{brand}</h1>
-                <div style=\"font-size:13px;opacity:0.9\">{subject}</div>
+    <body style=\"font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background:#f4f6f8;margin:0;padding:20px;\">
+        {hidden_preheader}
+        <div style=\"max-width:680px;margin:0 auto;\">
+            <div style=\"background:linear-gradient(90deg,{primary_start},{primary_end});padding:20px;border-radius:10px 10px 0 0;color:#fff;\">
+                <h1 style=\"margin:0;font-size:20px;font-weight:600;line-height:1;\">{brand}</h1>
+                <div style=\"font-size:13px;opacity:0.95;margin-top:6px\">{subject}</div>
             </div>
-            <div style=\"padding:20px 24px;color:#111;\">
-                <div style=\"font-size:14px;margin-bottom:8px;color:#555;\">{preheader}</div>
+            <div style=\"background:#ffffff;padding:24px;border:1px solid #e6e9ef;border-top:none;border-radius:0 0 8px 8px;color:#111;\">
                 {content_html}
             </div>
-            <div style=\"padding:12px 24px;background:#fafafa;border-top:1px solid #f0f0f3;font-size:12px;color:#666;\">
+            <div style=\"margin-top:10px;color:#8892a6;font-size:12px;text-align:left;max-width:680px;margin-left:auto;margin-right:auto;\">
                 <div>From: {footer_email}</div>
-                <div style=\"margin-top:6px;color:#999;font-size:11px\">This message was sent to: {recipients}</div>
+                <div style=\"margin-top:6px;color:#a0a7b7;font-size:11px\">Sent to: {recipients}</div>
             </div>
         </div>
     </body>

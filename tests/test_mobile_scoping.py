@@ -275,3 +275,188 @@ def test_mobile_alliance_mode_filters_events_teams_matches():
         assert pit_resp.status_code == 200
         pit_json = pit_resp.get_json()
         assert pit_json.get('config', {}).get('pit_field') == 'alliance_value'
+
+
+def test_mobile_alliance_endpoints_create_invite_respond_and_toggle():
+    app = create_app()
+    with app.app_context():
+        try:
+            db.create_all()
+        except Exception:
+            pass
+
+        client = app.test_client()
+
+        # Create two team users
+        u1 = User(username='a_admin', scouting_team_number=1111)
+        u1.set_password('pass')
+        u1.roles = []
+        db.session.add(u1)
+
+        u2 = User(username='b_user', scouting_team_number=2222)
+        u2.set_password('pass')
+        db.session.add(u2)
+
+        # Give u1 admin role
+        r_admin = Role.query.filter_by(name='admin').first()
+        if not r_admin:
+            r_admin = Role(name='admin')
+            db.session.add(r_admin)
+            db.session.flush()
+        u1.roles.append(r_admin)
+        db.session.commit()
+
+        from app.routes import mobile_api as ma
+        token1 = ma.create_token(u1.id, u1.username, u1.scouting_team_number)
+        token2 = ma.create_token(u2.id, u2.username, u2.scouting_team_number)
+
+        # Create alliance via mobile API
+        resp = client.post('/api/mobile/alliances', json={'name': 'Mobile Alliance', 'description': 'desc'}, headers={'Authorization': f'Bearer {token1}'})
+        assert resp.status_code == 200
+        j = resp.get_json()
+        assert j.get('success') is True
+        alliance_id = j.get('alliance_id')
+        assert alliance_id is not None
+
+        # List alliances for team1 - should include created alliance
+        rlist = client.get('/api/mobile/alliances', headers={'Authorization': f'Bearer {token1}'})
+        assert rlist.status_code == 200
+        jl = rlist.get_json()
+        assert any(a.get('id') == alliance_id for a in jl.get('my_alliances', []))
+
+        # Send invitation from team1 to team2
+        rinv = client.post(f'/api/mobile/alliances/{alliance_id}/invite', json={'team_number': 2222}, headers={'Authorization': f'Bearer {token1}'})
+        assert rinv.status_code == 200
+        jr = rinv.get_json()
+        assert jr.get('success') is True
+
+        # Team2 should see a pending invitation
+        rlist2 = client.get('/api/mobile/alliances', headers={'Authorization': f'Bearer {token2}'})
+        assert rlist2.status_code == 200
+        jl2 = rlist2.get_json()
+        assert any(inv.get('alliance_id') == alliance_id for inv in jl2.get('pending_invitations', []))
+
+        # Respond to invitation (accept)
+        # Find the invitation id
+        inv_id = jl2.get('pending_invitations')[0].get('id')
+        rresp = client.post(f'/api/mobile/invitations/{inv_id}/respond', json={'response': 'accept'}, headers={'Authorization': f'Bearer {token2}'})
+        assert rresp.status_code == 200
+        jr2 = rresp.get_json()
+        assert jr2.get('success') is True
+
+        # Verify member record exists
+        m = ScoutingAllianceMember.query.filter_by(alliance_id=alliance_id, team_number=2222).first()
+        assert m is not None and m.status == 'accepted'
+
+        # Toggle activation for team2 (activate)
+        rtog = client.post(f'/api/mobile/alliances/{alliance_id}/toggle', json={'activate': True}, headers={'Authorization': f'Bearer {token2}'})
+        assert rtog.status_code == 200
+        jt = rtog.get_json()
+        assert jt.get('success') is True
+
+        # Ensure TeamAllianceStatus shows active alliance
+        active = TeamAllianceStatus.get_active_alliance_for_team(2222)
+        assert active and active.id == alliance_id
+
+        # Prepare some shared data for team2 to exercise copy/remove behavior
+        # Create a Team and Match and some scouting/pit data
+        team_b = Team(team_number=2222, team_name='Team B')
+        db.session.add(team_b)
+        ev = Event(name='Test Event', code='TEVT')
+        db.session.add(ev)
+        db.session.flush()
+        match_b = Match(event_id=ev.id, match_number=1)
+        db.session.add(match_b)
+        db.session.commit()
+
+        sd = ScoutingData(match_id=match_b.id, team_id=team_b.id, scouting_team_number=2222)
+        sd.data = {'foo': 'bar'}
+        db.session.add(sd)
+        pd = PitScoutingData(team_id=team_b.id, event_id=ev.id, scouting_team_number=2222, scout_name='pitter', local_id='local-1')
+        pd.data = {'pit': 'info'}
+        db.session.add(pd)
+        db.session.commit()
+
+        # Create shared copies in the alliance
+        shared_sd = AllianceSharedScoutingData.create_from_scouting_data(sd, alliance_id, shared_by_team=2222)
+        db.session.add(shared_sd)
+        shared_pd = AllianceSharedPitData()
+        shared_pd.alliance_id = alliance_id
+        shared_pd.original_pit_data_id = pd.id
+        shared_pd.source_scouting_team_number = 2222
+        shared_pd.team_id = pd.team_id
+        shared_pd.event_id = pd.event_id
+        shared_pd.scout_name = pd.scout_name
+        shared_pd.scout_id = pd.scout_id
+        shared_pd.timestamp = pd.timestamp
+        shared_pd.data_json = pd.data_json
+        shared_pd.shared_by_team = 2222
+        db.session.add(shared_pd)
+        db.session.commit()
+
+        # Team2 leaves but requests copying data back to their personal tables
+        rleave_copy = client.post(f'/api/mobile/alliances/{alliance_id}/leave', headers={'Authorization': f'Bearer {token2}'}, json={'copy_shared_data': True})
+        assert rleave_copy.status_code == 200
+        jc = rleave_copy.get_json()
+        assert jc.get('success') is True
+
+        # Verify team2 member removed
+        m2 = ScoutingAllianceMember.query.filter_by(alliance_id=alliance_id, team_number=2222).first()
+        assert m2 is None
+
+        # Verify that a scouting data copy exists for the team (count increased)
+        copied_sd = ScoutingData.query.filter_by(team_id=team_b.id).all()
+        assert len(copied_sd) >= 1
+
+        # Recreate shared entries for team2 and test remove_shared_data behavior
+        shared_sd2 = AllianceSharedScoutingData.create_from_scouting_data(sd, alliance_id, shared_by_team=2222)
+        db.session.add(shared_sd2)
+        shared_pd2 = AllianceSharedPitData()
+        shared_pd2.alliance_id = alliance_id
+        shared_pd2.original_pit_data_id = pd.id
+        shared_pd2.source_scouting_team_number = 2222
+        shared_pd2.team_id = pd.team_id
+        shared_pd2.event_id = pd.event_id
+        shared_pd2.scout_name = pd.scout_name
+        shared_pd2.scout_id = pd.scout_id
+        shared_pd2.timestamp = pd.timestamp
+        shared_pd2.data_json = pd.data_json
+        shared_pd2.shared_by_team = 2222
+        db.session.add(shared_pd2)
+        db.session.commit()
+
+        # Team2 joins again for test (re-add member and make them admin to leave)
+        m = ScoutingAllianceMember(alliance_id=alliance_id, team_number=2222, team_name='Team 2222', role='member', status='accepted')
+        db.session.add(m)
+        db.session.commit()
+
+        # Team2 leaves and requests removal of shared data
+        rleave_remove = client.post(f'/api/mobile/alliances/{alliance_id}/leave', headers={'Authorization': f'Bearer {token2}'}, json={'remove_shared_data': True})
+        assert rleave_remove.status_code == 200
+        jr = rleave_remove.get_json()
+        assert jr.get('success') is True
+
+        # Ensure shared data for team2 is removed
+        rem_sd = AllianceSharedScoutingData.query.filter_by(alliance_id=alliance_id, source_scouting_team_number=2222).all()
+        assert len(rem_sd) == 0
+
+        # Team1 (admin) leaves; since now they are alone, alliance should be deleted
+        rleave_admin = client.post(f'/api/mobile/alliances/{alliance_id}/leave', headers={'Authorization': f'Bearer {token1}'})
+        assert rleave_admin.status_code == 200
+        ja = rleave_admin.get_json()
+        assert ja.get('success') is True
+        assert ja.get('alliance_deleted') is True
+
+        # Confirm alliance no longer exists
+        al = ScoutingAlliance.query.get(alliance_id)
+        assert al is None
+
+        # Deactivate
+        rdeact = client.post(f'/api/mobile/alliances/{alliance_id}/toggle', json={'activate': False}, headers={'Authorization': f'Bearer {token2}'})
+        assert rdeact.status_code == 200
+        jd = rdeact.get_json()
+        assert jd.get('success') is True
+
+        active2 = TeamAllianceStatus.get_active_alliance_for_team(2222)
+        assert not (active2 and active2.is_active)
+

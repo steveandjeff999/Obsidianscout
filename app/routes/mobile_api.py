@@ -17,9 +17,11 @@ import statistics
 
 from app.models import (
     User, Team, Event, Match, ScoutingData, PitScoutingData, 
-    DoNotPickEntry, AvoidEntry, ScoutingAllianceChat, TeamAllianceStatus, ScoutingDirectMessage, db, Role,
+    DoNotPickEntry, AvoidEntry, ScoutingAlliance, ScoutingAllianceMember, ScoutingAllianceInvitation, ScoutingAllianceEvent,
+    ScoutingAllianceChat, TeamAllianceStatus, ScoutingDirectMessage, db, Role,
     AllianceSharedScoutingData, AllianceSharedPitData
 )
+from app import socketio
 from app import load_user_chat_history, load_group_chat_history, load_assistant_chat_history, save_user_chat_history, save_group_chat_history, get_user_chat_file_path, load_group_members, save_group_members, get_group_members_file_path
 from app.models_misc import NotificationQueue, NotificationSubscription, NotificationLog, DeviceToken
 from app.utils.team_isolation import (
@@ -405,6 +407,461 @@ def sync_pit_to_alliance(pit_data_entry, team_number):
             db.session.add(shared_data)
     except Exception as e:
         current_app.logger.error(f"Error syncing pit data to alliance: {str(e)}")
+
+
+# ======== MOBILE ALLIANCE MANAGEMENT ENDPOINTS ========
+
+@mobile_api.route('/alliances', methods=['GET'])
+def mobile_list_alliances():
+    """List alliances for the requesting team and show pending/sent invitations"""
+    team = getattr(request, 'mobile_team_number', None)
+    if team is None:
+        return jsonify({'success': False, 'error': 'Scouting team not resolved'}), 400
+
+    # Alliances current team is a member of
+    my_alliances = db.session.query(ScoutingAlliance).join(ScoutingAllianceMember).filter(
+        ScoutingAllianceMember.team_number == team,
+        ScoutingAllianceMember.status == 'accepted'
+    ).all()
+
+    # Determine which alliance (if any) is currently active for this team
+    active_alliance = TeamAllianceStatus.get_active_alliance_for_team(team)
+    active_id = active_alliance.id if active_alliance else None
+
+    my_list = []
+    for a in my_alliances:
+        members = a.get_active_members() if hasattr(a, 'get_active_members') else []
+        my_list.append({
+            'id': a.id,
+            'name': a.alliance_name,
+            'description': a.description,
+            'member_count': len(members),
+            'is_active': (active_id == a.id),
+            'config_status': getattr(a, 'config_status', None),
+            'is_config_complete': a.is_config_complete() if hasattr(a, 'is_config_complete') else None
+        })
+
+    pending = ScoutingAllianceInvitation.query.filter_by(to_team_number=team, status='pending').all()
+    sent = ScoutingAllianceInvitation.query.filter_by(from_team_number=team, status='pending').all()
+
+    active = TeamAllianceStatus.get_active_alliance_for_team(team)
+
+    # Include alliance_name for invitations to make UI-friendly payloads
+    def inv_to_payload(i):
+        return {
+            'id': i.id,
+            'alliance_id': i.alliance_id,
+            'alliance_name': getattr(i.alliance, 'alliance_name', None),
+            'from_team': i.from_team_number
+        }
+
+    def sent_to_payload(i):
+        return {
+            'id': i.id,
+            'to_team': i.to_team_number,
+            'alliance_id': i.alliance_id,
+            'alliance_name': getattr(i.alliance, 'alliance_name', None)
+        }
+
+    return jsonify({
+        'success': True,
+        'my_alliances': my_list,
+        'pending_invitations': [inv_to_payload(i) for i in pending],
+        'sent_invitations': [sent_to_payload(i) for i in sent],
+        'active_alliance_id': active.id if active else None
+    })
+
+
+@mobile_api.route('/alliances', methods=['POST'])
+def mobile_create_alliance():
+    """Create a new alliance (requires user with admin role)"""
+    user = getattr(request, 'mobile_user', None)
+    if not user or not (user.has_role('admin') or user.has_role('superadmin')):
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'success': False, 'error': 'Alliance name is required'}), 400
+
+    try:
+        alliance = ScoutingAlliance(
+            alliance_name=name,
+            description=data.get('description', ''),
+            config_status='pending'
+        )
+        db.session.add(alliance)
+        db.session.flush()
+
+        member = ScoutingAllianceMember(
+            alliance_id=alliance.id,
+            team_number=request.mobile_team_number,
+            team_name=f"Team {request.mobile_team_number}",
+            role='admin',
+            status='accepted'
+        )
+        db.session.add(member)
+        db.session.commit()
+
+        return jsonify({'success': True, 'alliance_id': alliance.id})
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error creating alliance via mobile API: {str(e)}")
+        return jsonify({'success': False, 'error': f'Error creating alliance: {str(e)}'}), 500
+
+
+@mobile_api.route('/alliances/<int:alliance_id>/toggle', methods=['POST'])
+def mobile_toggle_alliance(alliance_id):
+    """Activate or deactivate alliance mode for the requesting team"""
+    team = getattr(request, 'mobile_team_number', None)
+    if team is None:
+        return jsonify({'success': False, 'error': 'Scouting team not resolved'}), 400
+
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=team,
+        status='accepted'
+    ).first()
+
+    if not member:
+        return jsonify({'success': False, 'error': 'You are not an active member of this alliance'}), 403
+
+    data = request.get_json() or {}
+    activate = bool(data.get('activate', False))
+    remove_shared_data = bool(data.get('remove_shared_data', False))
+
+    try:
+        if activate:
+            if not alliance.is_config_complete():
+                return jsonify({'success': False, 'error': 'Alliance configuration must be complete before activation'}), 400
+
+            # Check if currently active in other alliance
+            current_status = TeamAllianceStatus.query.filter_by(team_number=team).first()
+            if current_status and current_status.is_alliance_mode_active and current_status.active_alliance_id != alliance_id:
+                current_alliance = current_status.active_alliance
+                message = f'Switched from "{current_alliance.alliance_name}" to "{alliance.alliance_name}"'
+            else:
+                message = f'Alliance mode activated for {alliance.alliance_name}'
+
+            TeamAllianceStatus.activate_alliance_for_team(team, alliance_id)
+            member.is_data_sharing_active = True
+            member.data_sharing_deactivated_at = None
+
+            if alliance.game_config_team:
+                from app.utils.config_manager import load_game_config
+                game_config = load_game_config(team_number=alliance.game_config_team)
+                alliance.shared_game_config = json.dumps(game_config)
+            if alliance.pit_config_team:
+                from app.utils.config_manager import load_pit_config
+                pit_config = load_pit_config(team_number=alliance.pit_config_team)
+                alliance.shared_pit_config = json.dumps(pit_config)
+
+            alliance.update_config_status()
+            db.session.commit()
+
+        else:
+            TeamAllianceStatus.deactivate_alliance_for_team(team, remove_shared_data=remove_shared_data)
+            db.session.commit()
+            if remove_shared_data:
+                message = 'Alliance mode deactivated - your shared data has been removed from the alliance'
+            else:
+                message = 'Alliance mode deactivated - your existing shared data remains (new syncs will not get your data)'
+
+        from app.utils.config_manager import get_effective_game_config, get_effective_pit_config, is_alliance_mode_active, get_active_alliance_info
+
+        effective_game_config = get_effective_game_config()
+        effective_pit_config = get_effective_pit_config()
+        alliance_status = is_alliance_mode_active()
+        alliance_info = get_active_alliance_info()
+
+        config_update_data = {
+            'alliance_id': alliance_id,
+            'team_number': team,
+            'is_active': activate,
+            'message': message,
+            'effective_game_config': effective_game_config,
+            'effective_pit_config': effective_pit_config,
+            'alliance_status': alliance_status,
+            'alliance_info': alliance_info
+        }
+
+        socketio.emit('alliance_mode_toggled', config_update_data, room=f'alliance_{alliance_id}')
+        socketio.emit('config_updated', config_update_data, room=f'team_{team}')
+        socketio.emit('alliance_status_changed', {
+            'team_number': team,
+            'alliance_status': alliance_status,
+            'alliance_info': alliance_info
+        })
+
+        socketio.emit('global_config_changed', {
+            'type': 'alliance_toggle',
+            'team_number': team,
+            'alliance_id': alliance_id,
+            'is_active': activate,
+            'effective_game_config': effective_game_config,
+            'effective_pit_config': effective_pit_config,
+            'alliance_status': alliance_status,
+            'alliance_info': alliance_info,
+            'timestamp': datetime.now().isoformat(),
+            'message': message
+        })
+
+        return jsonify({'success': True, 'message': message, 'is_active': activate})
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error toggling alliance mode via mobile API: {str(e)}")
+        return jsonify({'success': False, 'error': f'Error toggling alliance mode: {str(e)}'}), 500
+
+
+@mobile_api.route('/alliances/<int:alliance_id>/invite', methods=['POST'])
+def mobile_send_invitation(alliance_id):
+    """Send alliance invitation to another team via mobile API"""
+    team = getattr(request, 'mobile_team_number', None)
+    if team is None:
+        return jsonify({'success': False, 'error': 'Scouting team not resolved'}), 400
+
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=team,
+        role='admin',
+        status='accepted'
+    ).first()
+
+    if not member:
+        return jsonify({'success': False, 'error': 'You must be an alliance admin to send invitations'}), 403
+
+    data = request.get_json() or {}
+    dest_team = data.get('team_number')
+    if not dest_team:
+        return jsonify({'success': False, 'error': 'team_number is required'}), 400
+
+    try:
+        dest_team = int(dest_team)
+    except Exception:
+        return jsonify({'success': False, 'error': 'Invalid team number'}), 400
+
+    existing = ScoutingAllianceInvitation.query.filter_by(
+        alliance_id=alliance_id,
+        to_team_number=dest_team,
+        status='pending'
+    ).first()
+
+    if existing:
+        return jsonify({'success': False, 'error': 'Invitation already sent to this team'}), 400
+
+    invitation = ScoutingAllianceInvitation(
+        alliance_id=alliance_id,
+        from_team_number=team,
+        to_team_number=dest_team,
+        message=data.get('message', '')
+    )
+    db.session.add(invitation)
+    db.session.commit()
+
+    socketio.emit('alliance_invitation', {
+        'to_team': dest_team,
+        'from_team': team,
+        'alliance_name': member.alliance.alliance_name,
+        'message': data.get('message', '')
+    }, room=f'team_{dest_team}')
+
+    return jsonify({'success': True})
+
+
+@mobile_api.route('/alliances/<int:alliance_id>/leave', methods=['POST'])
+def mobile_leave_alliance(alliance_id):
+    """Mobile endpoint to leave an alliance; mirrors web behavior."""
+    team = getattr(request, 'mobile_team_number', None)
+    if team is None:
+        return jsonify({'success': False, 'error': 'Scouting team not resolved'}), 400
+
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    try:
+        member = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance_id,
+            team_number=team,
+            status='accepted'
+        ).first()
+
+        if not member:
+            return jsonify({'success': False, 'error': 'Not a member of this alliance.'}), 404
+
+        data = request.get_json() or {}
+        remove_shared_data = bool(data.get('remove_shared_data', False))
+        copy_shared_data = bool(data.get('copy_shared_data', False))
+
+        # Check if this is the only admin - prevent leaving if so
+        admin_members = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance_id,
+            role='admin',
+            status='accepted'
+        ).all()
+
+        if member.role == 'admin' and len(admin_members) == 1:
+            other_members = ScoutingAllianceMember.query.filter_by(
+                alliance_id=alliance_id,
+                status='accepted'
+            ).filter(ScoutingAllianceMember.team_number != team).all()
+
+            if other_members:
+                return jsonify({
+                    'success': False,
+                    'error': 'You are the only administrator. Please transfer admin rights to another member before leaving.'
+                }), 400
+
+        # If this team has alliance mode active for this alliance, optionally copy or remove shared data
+        alliance_status = TeamAllianceStatus.query.filter_by(
+            team_number=team,
+            is_alliance_mode_active=True,
+            active_alliance_id=alliance_id
+        ).first()
+
+        if alliance_status:
+            # If requested, copy shared alliance data back into the team's local tables
+            if copy_shared_data:
+                # Copy scouting data
+                shared_scouting = AllianceSharedScoutingData.query.filter_by(
+                    alliance_id=alliance_id,
+                    source_scouting_team_number=team,
+                    is_active=True
+                ).all()
+                for s in shared_scouting:
+                    try:
+                        new = ScoutingData(
+                            match_id=s.match_id,
+                            team_id=s.team_id,
+                            scouting_team_number=team,
+                            scout_name=s.scout_name or f"Team {team}",
+                            scout_id=s.scout_id,
+                            scouting_station=s.scouting_station,
+                            timestamp=s.timestamp,
+                            alliance=s.alliance,
+                            data_json=s.data_json
+                        )
+                        db.session.add(new)
+                    except Exception as e:
+                        current_app.logger.error(f"Error copying shared scouting data back to team {team}: {str(e)}")
+
+                # Copy pit data
+                shared_pit = AllianceSharedPitData.query.filter_by(
+                    alliance_id=alliance_id,
+                    source_scouting_team_number=team,
+                    is_active=True
+                ).all()
+                for p in shared_pit:
+                    try:
+                        import uuid as _uuid
+                        newp = PitScoutingData(
+                            team_id=p.team_id,
+                            event_id=p.event_id,
+                            scouting_team_number=team,
+                            scout_name=p.scout_name,
+                            scout_id=p.scout_id,
+                            timestamp=p.timestamp,
+                            data_json=p.data_json,
+                            local_id=str(_uuid.uuid4())
+                        )
+                        db.session.add(newp)
+                    except Exception as e:
+                        current_app.logger.error(f"Error copying shared pit data back to team {team}: {str(e)}")
+
+            # Now deactivate alliance mode for the team (this will remove shared data if requested)
+            TeamAllianceStatus.deactivate_alliance_for_team(team, remove_shared_data=remove_shared_data)
+
+        # Remove the member from the alliance
+        alliance_name = alliance.alliance_name
+        db.session.delete(member)
+
+        # If this was the last member, delete the alliance entirely
+        remaining_members = ScoutingAllianceMember.query.filter_by(
+            alliance_id=alliance_id,
+            status='accepted'
+        ).filter(ScoutingAllianceMember.team_number != team).all()
+
+        alliance_deleted = False
+        if not remaining_members:
+            # Delete any pending invitations first to avoid foreign key NOT NULL errors
+            ScoutingAllianceInvitation.query.filter_by(alliance_id=alliance_id).delete()
+            db.session.delete(alliance)
+            alliance_deleted = True
+
+        db.session.commit()
+
+        # Emit notification to remaining alliance members
+        if not alliance_deleted:
+            socketio.emit('alliance_member_left', {
+                'alliance_id': alliance_id,
+                'team_number': team,
+                'team_name': f"Team {team}",
+                'alliance_name': alliance_name
+            }, room=f'alliance_{alliance_id}')
+
+        return jsonify({
+            'success': True,
+            'message': f'Successfully left the alliance "{alliance_name}"',
+            'alliance_deleted': alliance_deleted
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error leaving alliance via mobile API: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@mobile_api.route('/invitations/<int:invitation_id>/respond', methods=['POST'])
+def mobile_respond_invitation(invitation_id):
+    """Respond to alliance invitation via mobile API"""
+    data = request.get_json() or {}
+    team = getattr(request, 'mobile_team_number', None)
+    if team is None:
+        return jsonify({'success': False, 'error': 'Scouting team not resolved'}), 400
+
+    invitation = ScoutingAllianceInvitation.query.get_or_404(invitation_id)
+    if invitation.to_team_number != team:
+        return jsonify({'success': False, 'error': 'Not authorized'}), 403
+
+    response = data.get('response')
+    if response not in ('accept', 'decline'):
+        return jsonify({'success': False, 'error': 'Invalid response'}), 400
+
+    try:
+        if response == 'accept':
+            if not TeamAllianceStatus.can_team_join_alliance(team, invitation.alliance_id):
+                active_alliance_name = TeamAllianceStatus.get_active_alliance_name(team)
+                return jsonify({'success': False, 'error': f'Cannot join alliance - your team is currently active in "{active_alliance_name}". Please deactivate your current alliance first.'}), 400
+
+            member = ScoutingAllianceMember(
+                alliance_id=invitation.alliance_id,
+                team_number=team,
+                team_name=f"Team {team}",
+                role='member',
+                status='accepted',
+                invited_by=invitation.from_team_number
+            )
+            db.session.add(member)
+            invitation.status = 'accepted'
+            invitation.responded_at = datetime.now(timezone.utc)
+
+            socketio.emit('alliance_member_joined', {
+                'alliance_id': invitation.alliance_id,
+                'team_number': team,
+                'team_name': f"Team {team}"
+            }, room=f'alliance_{invitation.alliance_id}')
+
+        else:
+            invitation.status = 'declined'
+            invitation.responded_at = datetime.now(timezone.utc)
+
+        db.session.commit()
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error responding to invitation via mobile API: {str(e)}")
+        return jsonify({'success': False, 'error': f'Error responding to invitation: {str(e)}'}), 500
 
 
 # ============================================================================

@@ -215,6 +215,199 @@ Content-Type: application/json
 }
 ```
 
+---
+
+## Scouting Alliances (Collaboration)
+These endpoints let teams create and manage scouting-focused alliances (sharing scouting/pit data, inviting teams, and activating alliance mode).
+
+> All endpoints below require a valid Bearer token in the `Authorization` header.
+
+### List my alliances and invitations
+**Endpoint:** `GET /api/mobile/alliances`
+
+**Headers:**
+```
+Authorization: Bearer YOUR_TOKEN_HERE
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "my_alliances": [
+    {
+      "id": 8,
+      "name": "Mobile Alliance",
+      "description": "desc",
+      "member_count": 2,
+      "is_active": false,
+      "config_status": "configured",
+      "is_config_complete": true
+    }
+  ],
+  "pending_invitations": [
+    {
+      "id": 4,
+      "alliance_id": 8,
+      "alliance_name": "Mobile Alliance",
+      "from_team": 1111
+    }
+  ],
+  "sent_invitations": [
+    {
+      "id": 5,
+      "to_team": 2222,
+      "alliance_id": 8,
+      "alliance_name": "Mobile Alliance"
+    }
+  ],
+  "active_alliance_id": null
+}
+```
+
+### Create an alliance
+**Endpoint:** `POST /api/mobile/alliances`
+
+**Headers:**
+```
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+```
+
+**Request:**
+```json
+{
+  "name": "Mobile Alliance",
+  "description": "Optional description"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "alliance_id": 8
+}
+```
+
+### Send an invitation
+**Endpoint:** `POST /api/mobile/alliances/{alliance_id}/invite`
+
+**Headers:**
+```
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+```
+
+**Request:**
+```json
+{
+  "team_number": 2222,
+  "message": "Please join our alliance"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true
+}
+```
+
+### Respond to an invitation
+**Endpoint:** `POST /api/mobile/invitations/{invitation_id}/respond`
+
+**Headers:**
+```
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+```
+
+**Request:**
+```json
+{
+  "response": "accept"  // or "decline"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true
+}
+```
+
+### Activate / Deactivate alliance mode
+**Endpoint:** `POST /api/mobile/alliances/{alliance_id}/toggle`
+
+**Headers:**
+```
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+```
+
+**Request (activate):**
+```json
+{
+  "activate": true
+}
+```
+
+**Request (deactivate, optional remove shared data):**
+```json
+{
+  "activate": false,
+  "remove_shared_data": true
+}
+```
+
+**Response (success):**
+```json
+{
+  "success": true,
+  "message": "Alliance mode activated for Mobile Alliance",
+  "is_active": true
+}
+```
+
+### Leave an alliance
+**Endpoint:** `POST /api/mobile/alliances/{alliance_id}/leave`
+
+**Headers:**
+```
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+```
+
+**Request (optional body):**
+```json
+{
+  "remove_shared_data": false,   // If true, removes all shared data this team contributed to the alliance
+  "copy_shared_data": false      // If true, copies shared alliance data back into the team's local tables before deactivation
+}
+```
+
+**Response (success):**
+```json
+{
+  "success": true,
+  "message": "Successfully left the alliance \"Mobile Alliance\"",
+  "alliance_deleted": false
+}
+```
+
+**Notes:**
+- If `copy_shared_data` is provided and true, the server will create local `ScoutingData` and `PitScoutingData` records for the leaving team by copying the relevant `AllianceSharedScoutingData` and `AllianceSharedPitData` entries before deactivating alliance mode.
+- If `remove_shared_data` is provided and true, the server will delete the leaving team's shared entries from the alliance (useful when you want to purge your shared contributions). If both flags are set, copying occurs first, then shared entries are removed.
+
+---
+
+Notes:
+- Invitation objects include `alliance_name` to make client UI rendering easier.
+- When the last member leaves an alliance, pending invitations for that alliance are deleted to avoid foreign key issues and the alliance record is removed.
+- Activating alliance mode may update effective game/pit config and will emit socket events (`alliance_mode_toggled`, `config_updated`) so clients can react in real-time.
+
+
 ### Get Team Recommendations
 **Endpoint:** `GET /api/mobile/alliances/recommendations?event_id={event_id}&exclude_teams=5454,1234`
 
