@@ -4443,7 +4443,24 @@
         
         if (searchSuggestions) {
             searchSuggestions.classList.remove('show');
-            searchSuggestions.style.display = 'none';
+            // Force-hide and clear positioning so nothing remains visible
+            try {
+                searchSuggestions.style.setProperty('display', 'none', 'important');
+                searchSuggestions.style.setProperty('visibility', 'hidden', 'important');
+                searchSuggestions.style.setProperty('opacity', '0', 'important');
+                searchSuggestions.style.setProperty('pointer-events', 'none', 'important');
+                // Remove leftover positioning to avoid thin lines from borders/shadows
+                searchSuggestions.style.removeProperty('left');
+                searchSuggestions.style.removeProperty('top');
+                searchSuggestions.style.removeProperty('right');
+                searchSuggestions.style.removeProperty('bottom');
+                searchSuggestions.style.removeProperty('position');
+                searchSuggestions.style.removeProperty('width');
+                searchSuggestions.style.removeProperty('border');
+                searchSuggestions.style.removeProperty('box-shadow');
+                searchSuggestions.style.removeProperty('background');
+            } catch (e) { /* non-fatal */ }
+
             selectedIndex = -1;
             if (searchInput) {
                 searchInput.setAttribute('aria-expanded', 'false');
@@ -4525,36 +4542,55 @@
         
         // Position search suggestions using absolute positioning
         function positionSearchSuggestions() {
-            if (searchSuggestions && searchInput) {
-                console.log('Positioning search suggestions');
-                
-                // Get the search input wrapper position
-                const inputWrapper = searchInput.closest('.search-input-wrapper');
-                const inputRect = inputWrapper.getBoundingClientRect();
-                
-                // Position dropdown directly below the search bar
-                searchSuggestions.style.cssText = `
-                    position: fixed !important;
-                    top: ${inputRect.bottom + 8}px !important;
-                    left: ${inputRect.left}px !important;
-                    width: ${Math.max(inputRect.width, 300)}px !important;
-                    z-index: 2147483647 !important;
-                    background: var(--bs-body-bg) !important;
-                    border: 1px solid var(--bs-border-color) !important;
-                    border-radius: 12px !important;
-                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
-                    display: block !important;
-                    opacity: 1 !important;
-                    visibility: visible !important;
-                    pointer-events: auto !important;
-                    overflow-y: auto !important;
-                    max-height: 400px !important;
-                    backdrop-filter: blur(10px) !important;
-                    -webkit-backdrop-filter: blur(10px) !important;
-                `;
-                
-                console.log('Modern dropdown positioning applied');
+            if (!searchSuggestions || !searchInput) return;
+
+            // If the dropdown is not currently being shown, ensure it remains hidden
+            if (!searchSuggestions.classList.contains('show') && !searchSuggestions.querySelector('.search-loading') && !searchSuggestions.querySelector('.suggestion-item')) {
+                // Remove any aggressive positioning and force-hide to avoid a visible border or thin line
+                try {
+                    searchSuggestions.style.setProperty('display', 'none', 'important');
+                    searchSuggestions.style.setProperty('visibility', 'hidden', 'important');
+                    searchSuggestions.style.setProperty('opacity', '0', 'important');
+                    // Also remove position to avoid any residual artifacts
+                    searchSuggestions.style.removeProperty('left');
+                    searchSuggestions.style.removeProperty('top');
+                    searchSuggestions.style.removeProperty('right');
+                    searchSuggestions.style.removeProperty('bottom');
+                    searchSuggestions.style.removeProperty('position');
+                    searchSuggestions.style.removeProperty('width');
+                } catch (e) { /* non-fatal */ }
+                return;
             }
+
+            console.log('Positioning search suggestions');
+
+            // Get the search input wrapper position
+            const inputWrapper = searchInput.closest('.search-input-wrapper');
+            if (!inputWrapper) return;
+            const inputRect = inputWrapper.getBoundingClientRect();
+
+            // Position dropdown directly below the search bar (only apply when visible)
+            searchSuggestions.style.setProperty('position', 'fixed', 'important');
+            searchSuggestions.style.setProperty('top', (inputRect.bottom + 8) + 'px', 'important');
+            searchSuggestions.style.setProperty('left', inputRect.left + 'px', 'important');
+            searchSuggestions.style.setProperty('width', Math.max(inputRect.width, 300) + 'px', 'important');
+            searchSuggestions.style.setProperty('z-index', '2147483647', 'important');
+            searchSuggestions.style.setProperty('background', 'var(--bs-body-bg)', 'important');
+            searchSuggestions.style.setProperty('border', '1px solid var(--bs-border-color)', 'important');
+            searchSuggestions.style.setProperty('border-radius', '12px', 'important');
+            searchSuggestions.style.setProperty('box-shadow', '0 8px 32px rgba(0, 0, 0, 0.15)', 'important');
+            searchSuggestions.style.setProperty('pointer-events', 'auto', 'important');
+            searchSuggestions.style.setProperty('overflow-y', 'auto', 'important');
+            searchSuggestions.style.setProperty('max-height', '400px', 'important');
+            searchSuggestions.style.setProperty('backdrop-filter', 'blur(10px)', 'important');
+            searchSuggestions.style.setProperty('-webkit-backdrop-filter', 'blur(10px)', 'important');
+
+            // Ensure display/visibility/opactiy are set only when actually showing
+            searchSuggestions.style.setProperty('display', 'block', 'important');
+            searchSuggestions.style.setProperty('visibility', 'visible', 'important');
+            searchSuggestions.style.setProperty('opacity', '1', 'important');
+
+            console.log('Modern dropdown positioning applied');
         }
         
         // Show loading state

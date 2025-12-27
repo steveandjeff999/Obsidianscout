@@ -159,6 +159,22 @@
     color: #000000 !important; /* Black text for contrast */
 }
 
+/* Hide the suggestions container when it has no items to avoid a thin visible line */
+.enhanced-search-suggestions:empty,
+.enhanced-search-suggestions.show:empty,
+.enhanced-search-suggestions:not(:has(.suggestion-item)) {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    margin-top: 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+}
+
 @keyframes searchFadeIn {
     from {
         opacity: 0;

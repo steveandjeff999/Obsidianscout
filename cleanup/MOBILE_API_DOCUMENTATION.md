@@ -129,6 +129,178 @@ Create a new user account scoped to a scouting team. Teams may have account crea
 
 Refresh an authentication token before it expires.
 
+---
+
+## Scouting Alliances (Collaboration)
+Scouting alliances allow teams to collaborate by sharing scouting and pit data, inviting teams, and activating an alliance mode that adjusts what data is visible to alliance members.
+
+> All Scouting Alliances endpoints require a valid Bearer token in the `Authorization` header.
+
+### List my alliances and invitations
+**Endpoint:** `GET /api/mobile/alliances`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "my_alliances": [
+    {
+      "id": 8,
+      "name": "Mobile Alliance",
+      "description": "desc",
+      "member_count": 2,
+      "is_active": false,
+      "config_status": "configured",
+      "is_config_complete": true
+    }
+  ],
+  "pending_invitations": [
+    {
+      "id": 4,
+      "alliance_id": 8,
+      "alliance_name": "Mobile Alliance",
+      "from_team": 1111
+    }
+  ],
+  "sent_invitations": [
+    {
+      "id": 5,
+      "to_team": 2222,
+      "alliance_id": 8,
+      "alliance_name": "Mobile Alliance"
+    }
+  ],
+  "active_alliance_id": null
+}
+```
+
+### Create an alliance
+**Endpoint:** `POST /api/mobile/alliances`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request:**
+```json
+{
+  "name": "Mobile Alliance",
+  "description": "Optional description"
+}
+```
+
+**Success Response (200):**
+```json
+{ "success": true, "alliance_id": 8 }
+```
+
+### Send an invitation
+**Endpoint:** `POST /api/mobile/alliances/{alliance_id}/invite`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request:**
+```json
+{ "team_number": 2222, "message": "Please join our alliance" }
+```
+
+**Success Response (200):**
+```json
+{ "success": true }
+```
+
+### Respond to an invitation
+**Endpoint:** `POST /api/mobile/invitations/{invitation_id}/respond`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request:**
+```json
+{ "response": "accept" }  // or "decline"
+```
+
+**Success Response (200):**
+```json
+{ "success": true }
+```
+
+### Activate / Deactivate alliance mode
+**Endpoint:** `POST /api/mobile/alliances/{alliance_id}/toggle`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request (activate):**
+```json
+{ "activate": true }
+```
+
+**Request (deactivate):**
+```json
+{ "activate": false, "remove_shared_data": true }
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Alliance mode activated for Mobile Alliance",
+  "is_active": true
+}
+```
+
+### Leave an alliance
+**Endpoint:** `POST /api/mobile/alliances/{alliance_id}/leave`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request (optional body):**
+```json
+{
+  "remove_shared_data": false,   // If true, removes all shared data this team contributed to the alliance
+  "copy_shared_data": false      // If true, copies shared alliance data back into the team's local tables before deactivation
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Successfully left the alliance \"Mobile Alliance\"",
+  "alliance_deleted": false
+}
+```
+
+**Notes:**
+- Invitations returned in `pending_invitations` include `alliance_name` to simplify client UIs.
+- When an alliance is deleted (last member leaves), pending invitations for that alliance are removed first to avoid FK/NOT NULL errors.
+- If `copy_shared_data` is provided and true, the server will create local `ScoutingData` and `PitScoutingData` records for the leaving team by copying the relevant `AllianceSharedScoutingData` and `AllianceSharedPitData` entries before deactivating alliance mode.
+- If `remove_shared_data` is provided and true, the server will delete the leaving team's shared entries from the alliance (useful when you want to purge your shared contributions). If both flags are set, copying occurs first, then shared entries are removed.
+- Activating alliance mode may update the effective game/pit config and emits socket events (`alliance_mode_toggled`, `config_updated`) so clients can react in real time.
+
+---
 
 List and fetch messages
 -----------------------
