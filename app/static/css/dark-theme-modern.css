@@ -38,6 +38,113 @@ html.dark-mode, body.dark-mode {
     backdrop-filter: blur(6px);
 }
 
+/* Page bar / Card header enhancements (dark mode) */
+:root.dark-mode .card-header,
+html.dark-mode .card-header {
+    /* Subtle glass surface for page headers to separate from content */
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    color: var(--text);
+    padding: 0.9rem 1rem;
+    backdrop-filter: blur(4px);
+    transition: background 160ms ease, box-shadow 160ms ease;
+}
+
+/* Tone down semantic color extremes while preserving affordance */
+:root.dark-mode .card-header.bg-danger {
+    background: linear-gradient(90deg, rgba(220,53,69,0.16), rgba(200,30,40,0.08));
+    color: #fff !important;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    box-shadow: inset 0 -2px 10px rgba(0,0,0,0.45);
+}
+
+:root.dark-mode .card-header.bg-primary {
+    background: linear-gradient(90deg, rgba(90,166,255,0.14), rgba(60,120,220,0.06));
+    color: #fff !important;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+:root.dark-mode .card-header.bg-success {
+    background: linear-gradient(90deg, rgba(123,211,137,0.12), rgba(90,190,110,0.06));
+    color: #fff !important;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+/* Make header text and icons slightly brighter for readability */
+:root.dark-mode .card-header .text-light,
+html.dark-mode .card-header .text-light {
+    color: rgba(255,255,255,0.92) !important;
+}
+
+:root.dark-mode .card-header i,
+:root.dark-mode .card-header .fa {
+    color: rgba(255,255,255,0.95) !important;
+}
+
+/* Keyboard focus ring for accessibility */
+:root.dark-mode .card-header:focus {
+    outline: 3px solid rgba(var(--accent-rgb),0.12);
+    outline-offset: 2px;
+}
+
+/* Pagination: dark-mode-friendly page controls (small & regular) */
+:root.dark-mode .pagination,
+html.dark-mode .pagination {
+    background: transparent;
+    margin: 0;
+}
+
+:root.dark-mode .pagination .page-item .page-link,
+html.dark-mode .pagination .page-item .page-link {
+    color: var(--muted) !important;
+    background: rgba(255,255,255,0.02) !important;
+    border: 1px solid rgba(255,255,255,0.03) !important;
+    border-radius: 8px !important;
+    padding: 0.27rem 0.55rem !important;
+    margin: 0 4px !important;
+    transition: background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+:root.dark-mode .pagination .page-item.active .page-link,
+html.dark-mode .pagination .page-item.active .page-link {
+    color: #fff !important;
+    background: linear-gradient(90deg, rgba(var(--accent-rgb),0.16), rgba(24,138,255,0.06)) !important;
+    border-color: rgba(var(--accent-rgb),0.18) !important;
+    box-shadow: 0 6px 18px rgba(var(--accent-rgb),0.08) !important;
+    transform: translateY(-1px);
+}
+
+:root.dark-mode .pagination .page-item .page-link:hover,
+html.dark-mode .pagination .page-item .page-link:hover,
+:root.dark-mode .pagination .page-item .page-link:focus,
+html.dark-mode .pagination .page-item .page-link:focus {
+    color: var(--text) !important;
+    background: rgba(255,255,255,0.035) !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35) !important;
+    text-decoration: none !important;
+}
+
+:root.dark-mode .pagination .page-item.disabled .page-link,
+html.dark-mode .pagination .page-item.disabled .page-link {
+    color: rgba(255,255,255,0.36) !important;
+    background: transparent !important;
+    border-color: rgba(255,255,255,0.02) !important;
+    cursor: default !important;
+}
+
+/* Compact size tweaks */
+:root.dark-mode .pagination.pagination-sm .page-link,
+html.dark-mode .pagination.pagination-sm .page-link {
+    padding: 0.18rem 0.45rem !important;
+    font-size: 0.875rem !important;
+}
+
+/* Ensure pagination doesn't wrap awkwardly on small containers */
+:root.dark-mode .pagination { display: flex; flex-wrap: nowrap; align-items: center; }
+
+/* Small visual helper for the team pages text */
+:root.dark-mode .text-muted.small { color: rgba(255,255,255,0.65) !important; }
+
 /* Cards: softer rounded corners, subtle elevation */
 .card, .stat-card, .dashboard-card {
     border-radius: var(--card-radius, 12px) !important;
@@ -319,6 +426,65 @@ body:not(.dark-mode) input[type="button"],
 html:not(.dark-mode) input[type="button"] {
     border-radius: 10px !important;
 }
+
+/* Light mode: pagination styling to match modern light surfaces */
+body:not(.dark-mode) .pagination,
+html:not(.dark-mode) .pagination {
+    background: transparent;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+body:not(.dark-mode) .pagination .page-item .page-link,
+html:not(.dark-mode) .pagination .page-item .page-link {
+    color: #495057 !important; /* Bootstrap body text */
+    background: #ffffff !important;
+    border: 1px solid rgba(15,23,36,0.06) !important;
+    border-radius: 8px !important;
+    padding: 0.28rem 0.6rem !important;
+    margin: 0 !important;
+    transition: background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+    box-shadow: 0 2px 6px rgba(2,6,23,0.04);
+}
+
+body:not(.dark-mode) .pagination .page-item.active .page-link,
+html:not(.dark-mode) .pagination .page-item.active .page-link {
+    color: #fff !important;
+    background: linear-gradient(90deg, rgba(13,110,253,0.16), rgba(13,110,253,0.06)) !important; /* primary tint */
+    border-color: rgba(13,110,253,0.18) !important;
+    box-shadow: 0 8px 20px rgba(13,110,253,0.06) !important;
+    transform: translateY(-1px);
+}
+
+body:not(.dark-mode) .pagination .page-item .page-link:hover,
+html:not(.dark-mode) .pagination .page-item .page-link:hover,
+body:not(.dark-mode) .pagination .page-item .page-link:focus,
+html:not(.dark-mode) .pagination .page-item .page-link:focus {
+    color: #0f1724 !important;
+    background: #f6f8fb !important;
+    box-shadow: 0 6px 18px rgba(2,6,23,0.04) !important;
+    text-decoration: none !important;
+}
+
+body:not(.dark-mode) .pagination .page-item.disabled .page-link,
+html:not(.dark-mode) .pagination .page-item.disabled .page-link {
+    color: #adb5bd !important; /* muted */
+    background: transparent !important;
+    border-color: rgba(2,6,23,0.03) !important;
+    cursor: default !important;
+}
+
+/* Compact size tweaks for pagination-sm */
+body:not(.dark-mode) .pagination.pagination-sm .page-link,
+html:not(.dark-mode) .pagination.pagination-sm .page-link {
+    padding: 0.18rem 0.45rem !important;
+    font-size: 0.9rem !important;
+}
+
+/* Small helper text contrast for teams summary */
+body:not(.dark-mode) .text-muted.small { color: #6c757d !important; }
 
 /* ---------------------------------------------------------------------------
    Large outline primary button tweaks for light mode (Sync button, full-width

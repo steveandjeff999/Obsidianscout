@@ -42,6 +42,30 @@
                     </div>
                 </form>
                 {% if users %}
+                {% if current_user.has_role('superadmin') %}
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        {% if total_team_pages and total_team_pages > 1 %}
+                        <nav aria-label="Team pages">
+                            <ul class="pagination pagination-sm mb-0">
+                                <li class="page-item {% if team_page <= 1 %}disabled{% endif %}">
+                                    <a class="page-link" href="{{ url_for('auth.manage_users', search=search, team_page=team_page-1) }}">« Prev</a>
+                                </li>
+                                {% for p in range(1, total_team_pages+1) %}
+                                    <li class="page-item {% if p == team_page %}active{% endif %}">
+                                        <a class="page-link" href="{{ url_for('auth.manage_users', search=search, team_page=p) }}">{{ p }}</a>
+                                    </li>
+                                {% endfor %}
+                                <li class="page-item {% if team_page >= total_team_pages %}disabled{% endif %}">
+                                    <a class="page-link" href="{{ url_for('auth.manage_users', search=search, team_page=team_page+1) }}">Next »</a>
+                                </li>
+                            </ul>
+                        </nav>
+                        {% endif %}
+                    </div>
+                    <div class="text-muted small">Showing teams {{ team_start }}–{{ team_end }} of {{ total_teams }}</div>
+                </div>
+                {% endif %}
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead class="table-dark">
