@@ -258,6 +258,67 @@ def test_mobile_alliance_mode_filters_events_teams_matches():
         assert any(m.get('match_number') == matchB.match_number for m in jrm.get('matches', []))
 
         # And for token2 (other member), if not activated, they should not see EVTA
+
+
+def test_mobile_can_access_alliance_config_when_not_active():
+    """A team that is an accepted alliance member should be able to fetch the
+    alliance's shared game/pit config via mobile API even when alliance mode is
+    *not* active for that team. Non-members should be forbidden."""
+    app = create_app()
+    with app.app_context():
+        try:
+            db.create_all()
+        except Exception:
+            pass
+
+        client = app.test_client()
+
+        # Create users and an alliance
+        user1 = User(username='member_user', scouting_team_number=1111)
+        user1.set_password('pass')
+        db.session.add(user1)
+
+        user2 = User(username='other_user', scouting_team_number=2222)
+        user2.set_password('pass')
+        db.session.add(user2)
+        db.session.flush()
+
+        alliance = ScoutingAlliance(alliance_name='Config Access Alliance', is_active=False)
+        alliance.shared_game_config = json.dumps({'game_name': 'Alliance Game', 'current_event_code': 'EVX'})
+        alliance.shared_pit_config = json.dumps({'pit_field': 'alliance_pit_value'})
+        db.session.add(alliance)
+        db.session.flush()
+
+        # Add an accepted member whose scouting_team_number is 1111
+        m = ScoutingAllianceMember(alliance_id=alliance.id, team_number=1111, status='accepted')
+        db.session.add(m)
+        db.session.commit()
+
+        from app.routes import mobile_api as ma
+        token1 = ma.create_token(user1.id, user1.username, user1.scouting_team_number)
+        token2 = ma.create_token(user2.id, user2.username, user2.scouting_team_number)
+
+        # Member should be able to GET alliance game config even though alliance is not active
+        resp_g = client.get(f"/api/mobile/alliances/{alliance.id}/config/game", headers={'Authorization': f'Bearer {token1}'})
+        assert resp_g.status_code == 200
+        jg = resp_g.get_json()
+        assert jg.get('success') is True
+        assert jg.get('config', {}).get('game_name') == 'Alliance Game'
+
+        # Member should be able to GET alliance pit config
+        resp_p = client.get(f"/api/mobile/alliances/{alliance.id}/config/pit", headers={'Authorization': f'Bearer {token1}'})
+        assert resp_p.status_code == 200
+        jp = resp_p.get_json()
+        assert jp.get('success') is True
+        assert jp.get('config', {}).get('pit_field') == 'alliance_pit_value'
+
+        # Non-member should be forbidden
+        resp_non = client.get(f"/api/mobile/alliances/{alliance.id}/config/game", headers={'Authorization': f'Bearer {token2}'})
+        assert resp_non.status_code == 403
+        jn = resp_non.get_json()
+        assert jn.get('success') is False
+        assert 'Forbidden' in jn.get('error', '')
+
         resp2 = client.get('/api/mobile/events', headers={'Authorization': f'Bearer {token2}'})
         j2 = resp2.get_json()
         codes2 = [ev.get('code') for ev in j2.get('events', [])]
@@ -275,6 +336,93 @@ def test_mobile_alliance_mode_filters_events_teams_matches():
         assert pit_resp.status_code == 200
         pit_json = pit_resp.get_json()
         assert pit_json.get('config', {}).get('pit_field') == 'alliance_value'
+
+
+def test_mobile_alliance_admin_can_write_config_when_not_active():
+    """Alliance admins should be able to update alliance-shared configs via mobile API
+    even when their team has not activated alliance mode. Non-admin members are forbidden."""
+    app = create_app()
+    with app.app_context():
+        try:
+            db.create_all()
+        except Exception:
+            pass
+
+        client = app.test_client()
+
+        # Create a user who will act as alliance admin
+        user_admin = User(username='admin_member', scouting_team_number=1111)
+        user_admin.set_password('pass')
+        db.session.add(user_admin)
+
+        # Non-admin member
+        user_member = User(username='normal_member', scouting_team_number=2222)
+        user_member.set_password('pass')
+        db.session.add(user_member)
+        db.session.flush()
+
+        # Create alliance (inactive)
+        alliance = ScoutingAlliance(alliance_name='WriteTestAlliance', is_active=False)
+        db.session.add(alliance)
+        db.session.flush()
+
+        # Add admin member (team 1111) and regular member (team 2222)
+        m_admin = ScoutingAllianceMember(alliance_id=alliance.id, team_number=1111, role='admin', status='accepted')
+        m_member = ScoutingAllianceMember(alliance_id=alliance.id, team_number=2222, role='member', status='accepted')
+        db.session.add(m_admin)
+        db.session.add(m_member)
+        db.session.commit()
+
+        from app.routes import mobile_api as ma
+        token_admin = ma.create_token(user_admin.id, user_admin.username, user_admin.scouting_team_number)
+        token_member = ma.create_token(user_member.id, user_member.username, user_member.scouting_team_number)
+
+        # Admin should be able to PUT game config for alliance even when not active
+        new_game_cfg = {'game_name': 'Updated Alliance Game', 'current_event_code': 'EVZ'}
+        resp_put = client.put(f"/api/mobile/alliances/{alliance.id}/config/game", json=new_game_cfg, headers={'Authorization': f'Bearer {token_admin}'})
+        assert resp_put.status_code == 200
+        j = resp_put.get_json()
+        assert j.get('success') is True
+
+        a = ScoutingAlliance.query.get(alliance.id)
+        assert a is not None
+        assert json.loads(a.shared_game_config).get('game_name') == 'Updated Alliance Game'
+
+        # Admin should also be able to PUT pit config
+        new_pit_cfg = {'pit_field': 'admin_updated'}
+        resp_put2 = client.put(f"/api/mobile/alliances/{alliance.id}/config/pit", json=new_pit_cfg, headers={'Authorization': f'Bearer {token_admin}'})
+        assert resp_put2.status_code == 200
+        j2 = resp_put2.get_json()
+        assert j2.get('success') is True
+        a2 = ScoutingAlliance.query.get(alliance.id)
+        assert json.loads(a2.shared_pit_config).get('pit_field') == 'admin_updated'
+
+        # Non-admin member should be forbidden to update alliance configs
+        resp_forbidden = client.put(f"/api/mobile/alliances/{alliance.id}/config/game", json={'game_name': 'bad'}, headers={'Authorization': f'Bearer {token_member}'})
+        assert resp_forbidden.status_code == 403
+        jf = resp_forbidden.get_json()
+        assert jf.get('success') is False
+
+        # Site superadmin should be able to update even if not a member
+        # Ensure superadmin role exists
+        from app.models import Role
+        r_super = Role.query.filter_by(name='superadmin').first()
+        if not r_super:
+            r_super = Role(name='superadmin')
+            db.session.add(r_super)
+            db.session.commit()
+
+        super_user = User(username='super_user', scouting_team_number=None)
+        super_user.set_password('pass')
+        super_user.roles.append(r_super)
+        db.session.add(super_user)
+        db.session.commit()
+
+        token_super = ma.create_token(super_user.id, super_user.username, super_user.scouting_team_number)
+        resp_super = client.put(f"/api/mobile/alliances/{alliance.id}/config/game", json={'game_name': 'super_update'}, headers={'Authorization': f'Bearer {token_super}'})
+        assert resp_super.status_code == 200
+        jsr = resp_super.get_json()
+        assert jsr.get('success') is True
 
 
 def test_mobile_alliance_endpoints_create_invite_respond_and_toggle():

@@ -2,5 +2,11 @@
   "lastRead": {
     "dm:admin": "a05f9dbd-45ea-4122-9cd8-45848474657e"
   },
-  "unreadCount": 0
+  "unreadCount": 3,
+  "lastSource": {
+    "type": "dm",
+    "id": "5454"
+  },
+  "notified": true,
+  "lastNotified": "2025-12-30T20:12:10.243757+00:00"
 }

@@ -573,8 +573,12 @@ def on_connect():
     try:
         from flask_login import current_user
         if current_user.is_authenticated:
-            # Join user-specific room
-            join_room(current_user.username)
+            # Join user-specific room (use normalized username to avoid case/whitespace mismatches)
+            try:
+                join_room(normalize_username(current_user.username))
+            except Exception:
+                # Fallback to raw username if normalization unexpectedly fails
+                join_room(current_user.username)
             
             # Join team-specific room for config updates
             if hasattr(current_user, 'scouting_team_number') and current_user.scouting_team_number:
@@ -1341,10 +1345,15 @@ def create_app(test_config=None):
     # Add a context processor to make theme data available in all templates
     @app.context_processor
     def inject_theme_data():
-        # Keep minimal theme context needed for templates. We no longer provide full theme management server-side.
+        # Provide minimal theme context by reading config/theme_config.json when present.
         try:
-            # Provide basic values so templates that reference these keys won't error.
-            return dict(current_theme={}, current_theme_id='light', theme_css_variables='', themes={})
+            from app.utils.theme_manager import ThemeManager
+            tm = ThemeManager()
+            themes = tm.get_available_themes() or {}
+            current_id = tm.get_current_theme_from_preference() or tm.current_theme
+            theme_css = tm.get_theme_css_variables() or ''
+            current_theme = themes.get(current_id, {})
+            return dict(current_theme=current_theme, current_theme_id=current_id, theme_css_variables=theme_css, themes=themes)
         except Exception:
             return dict(current_theme={}, current_theme_id='light', theme_css_variables='', themes={})
     

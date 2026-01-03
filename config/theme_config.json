@@ -28,7 +28,12 @@
         "card-header": "#f8f9fa",
         "text-main": "#212529",
         "text-muted": "#6c757d",
-        "background": "#ffffff"
+        "background": "#ffffff",
+        "accent": "#5b3bff",
+        "accent-contrast": "#ffffff",
+        "nav-accent": "#0d6efd",
+        "nav-accent-2": "#3d8bfd",
+        "nav-accent-contrast": "#ffffff"
       },
       "typography": {
         "font-family-base": "'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif",
@@ -68,7 +73,12 @@
         "card-header": "#0f1720",
         "text-main": "#e6eef8",
         "text-muted": "rgba(255,255,255,0.6)",
-        "background": "#0b0f12"
+        "background": "#0b0f12",
+        "accent": "#ffd166",
+        "accent-contrast": "#0b0f12",
+        "nav-accent": "#263653",
+        "nav-accent-2": "#6ea8fe",
+        "nav-accent-contrast": "#ffffff"
       },
       "typography": {
         "font-family-base": "'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif",
