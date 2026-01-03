@@ -61,6 +61,28 @@ function applyUserPreferences() {
             else { document.documentElement.classList.remove('dark-mode'); document.body.classList.remove('dark-mode'); }
         } catch (e) { console.warn('applyUserPreferences darkMode error', e); }
 
+        // Accent color (per-user override stored in localStorage)
+        try {
+            const accent = localStorage.getItem('accent_color');
+            if (accent && /^#([0-9A-F]{3}){1,2}$/i.test(accent)) {
+                document.documentElement.style.setProperty('--accent', accent);
+                document.documentElement.style.setProperty('--nav-accent', accent);
+                // derive rgb and set --accent-rgb for components that use rgb variants
+                const toRgb = (hex => {
+                    const v = hex.replace('#','');
+                    const r = parseInt(v.length === 3 ? v[0]+v[0] : v.slice(0,2),16);
+                    const g = parseInt(v.length === 3 ? v[1]+v[1] : v.slice(2,4),16);
+                    const b = parseInt(v.length === 3 ? v[2]+v[2] : v.slice(4,6),16);
+                    return `${r},${g},${b}`;
+                })(accent);
+                document.documentElement.style.setProperty('--accent-rgb', toRgb);
+            } else {
+                document.documentElement.style.removeProperty('--accent');
+                document.documentElement.style.removeProperty('--nav-accent');
+                document.documentElement.style.removeProperty('--accent-rgb');
+            }
+        } catch (e) { console.warn('applyUserPreferences accent error', e); }
+
         // Sidebar collapsed (use existing helper if available)
         try {
             const sb = localStorage.getItem('obsidian_sidebar_collapsed');

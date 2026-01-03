@@ -811,6 +811,195 @@ def mobile_leave_alliance(alliance_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# New endpoints: allow mobile clients (alliance members) to fetch alliance-shared
+# configs even when the team's alliance mode is not active.
+@mobile_api.route('/alliances/<int:alliance_id>/config/game', methods=['GET'])
+@token_required
+def mobile_get_alliance_game_config(alliance_id):
+    """Return the alliance shared game configuration to accepted alliance members."""
+    team = getattr(request, 'mobile_team_number', None)
+    if team is None:
+        return jsonify({'success': False, 'error': 'Scouting team not resolved'}), 400
+
+    # Verify requester is an accepted member of the alliance
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=team,
+        status='accepted'
+    ).first()
+
+    if not member:
+        return jsonify({'success': False, 'error': 'Forbidden: not an alliance member'}), 403
+
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+
+    # Prefer explicit shared_game_config; fall back to alliance.game_config_team if set
+    cfg = None
+    if getattr(alliance, 'shared_game_config', None):
+        try:
+            cfg = json.loads(alliance.shared_game_config)
+        except Exception:
+            cfg = None
+    elif getattr(alliance, 'game_config_team', None):
+        try:
+            from app.utils.config_manager import load_game_config
+            cfg = load_game_config(team_number=alliance.game_config_team)
+        except Exception:
+            cfg = None
+    else:
+        cfg = {}
+
+    return jsonify({'success': True, 'config': cfg, 'alliance_id': alliance_id, 'alliance_name': alliance.alliance_name}), 200
+
+
+@mobile_api.route('/alliances/<int:alliance_id>/config/pit', methods=['GET'])
+@token_required
+def mobile_get_alliance_pit_config(alliance_id):
+    """Return the alliance shared pit configuration to accepted alliance members."""
+    team = getattr(request, 'mobile_team_number', None)
+    if team is None:
+        return jsonify({'success': False, 'error': 'Scouting team not resolved'}), 400
+
+    member = ScoutingAllianceMember.query.filter_by(
+        alliance_id=alliance_id,
+        team_number=team,
+        status='accepted'
+    ).first()
+
+    if not member:
+        return jsonify({'success': False, 'error': 'Forbidden: not an alliance member'}), 403
+
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+
+    cfg = None
+    if getattr(alliance, 'shared_pit_config', None):
+        try:
+            cfg = json.loads(alliance.shared_pit_config)
+        except Exception:
+            cfg = None
+    elif getattr(alliance, 'pit_config_team', None):
+        try:
+            from app.utils.config_manager import load_pit_config
+            cfg = load_pit_config(team_number=alliance.pit_config_team)
+        except Exception:
+            cfg = None
+    else:
+        cfg = {}
+
+    return jsonify({'success': True, 'config': cfg, 'alliance_id': alliance_id, 'alliance_name': alliance.alliance_name}), 200
+
+
+@mobile_api.route('/alliances/<int:alliance_id>/config/game', methods=['POST', 'PUT'])
+@token_required
+def mobile_set_alliance_game_config(alliance_id):
+    """Update the alliance shared game configuration via mobile API.
+
+    Allows site admins (`admin`/`superadmin`) or alliance admins to update
+    the alliance shared config even when the requesting team has not
+    activated alliance mode. Requires JSON body containing the config.
+    """
+    user = getattr(request, 'mobile_user', None)
+    if not user:
+        return jsonify({'success': False, 'error': 'Authentication required', 'error_code': 'AUTH_REQUIRED'}), 401
+
+    data = request.get_json()
+    if not data or not isinstance(data, dict):
+        return jsonify({'success': False, 'error': 'Missing or invalid JSON body', 'error_code': 'MISSING_BODY'}), 400
+
+    # Permission: site admin or alliance admin for this alliance
+    allowed = False
+    try:
+        if user.has_role('admin') or user.has_role('superadmin'):
+            allowed = True
+    except Exception:
+        allowed = False
+
+    if not allowed:
+        team = getattr(request, 'mobile_team_number', None)
+        try:
+            member = None
+            if team is not None:
+                member = ScoutingAllianceMember.query.filter_by(
+                    alliance_id=alliance_id,
+                    team_number=team,
+                    role='admin',
+                    status='accepted'
+                ).first()
+            if member:
+                allowed = True
+        except Exception:
+            allowed = False
+
+    if not allowed:
+        return jsonify({'success': False, 'error': 'Forbidden: alliance admin required', 'error_code': 'FORBIDDEN'}), 403
+
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    try:
+        alliance.shared_game_config = json.dumps(data)
+        db.session.add(alliance)
+        db.session.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception(f"Failed to update alliance shared_game_config via mobile API: {e}")
+        return jsonify({'success': False, 'error': 'Failed to save alliance config', 'error_code': 'SAVE_FAILED'}), 500
+
+
+@mobile_api.route('/alliances/<int:alliance_id>/config/pit', methods=['POST', 'PUT'])
+@token_required
+def mobile_set_alliance_pit_config(alliance_id):
+    """Update the alliance shared pit configuration via mobile API.
+
+    Mirrors the game config endpoint and enforces the same permission
+    requirements (site admin or alliance admin).
+    """
+    user = getattr(request, 'mobile_user', None)
+    if not user:
+        return jsonify({'success': False, 'error': 'Authentication required', 'error_code': 'AUTH_REQUIRED'}), 401
+
+    data = request.get_json()
+    if not data or not isinstance(data, dict):
+        return jsonify({'success': False, 'error': 'Missing or invalid JSON body', 'error_code': 'MISSING_BODY'}), 400
+
+    # Permission check
+    allowed = False
+    try:
+        if user.has_role('admin') or user.has_role('superadmin'):
+            allowed = True
+    except Exception:
+        allowed = False
+
+    if not allowed:
+        team = getattr(request, 'mobile_team_number', None)
+        try:
+            member = None
+            if team is not None:
+                member = ScoutingAllianceMember.query.filter_by(
+                    alliance_id=alliance_id,
+                    team_number=team,
+                    role='admin',
+                    status='accepted'
+                ).first()
+            if member:
+                allowed = True
+        except Exception:
+            allowed = False
+
+    if not allowed:
+        return jsonify({'success': False, 'error': 'Forbidden: alliance admin required', 'error_code': 'FORBIDDEN'}), 403
+
+    alliance = ScoutingAlliance.query.get_or_404(alliance_id)
+    try:
+        alliance.shared_pit_config = json.dumps(data)
+        db.session.add(alliance)
+        db.session.commit()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception(f"Failed to update alliance shared_pit_config via mobile API: {e}")
+        return jsonify({'success': False, 'error': 'Failed to save alliance config', 'error_code': 'SAVE_FAILED'}), 500
+
+
 @mobile_api.route('/invitations/<int:invitation_id>/respond', methods=['POST'])
 def mobile_respond_invitation(invitation_id):
     """Respond to alliance invitation via mobile API"""
@@ -2027,10 +2216,11 @@ def get_events():
                 events = events_q.all()
                 events = [e for e in events if not (e.scouting_team_number == team_number)]
         else:
-            # Default behavior: show events that involve teams from this scouting team
+            # Default behavior: show events that involve teams from this scouting team.
+            # Order by most recent year first and then by name to be consistent with UI dropdowns.
             events = Event.query.join(Event.teams).filter(
                 Team.scouting_team_number == team_number
-            ).distinct().all()
+            ).distinct().order_by(Event.year.desc(), Event.name).all()
         
         # Deduplicate events by code and mark if they are from an alliance
         from app.models import ScoutingAllianceEvent
@@ -2049,8 +2239,19 @@ def get_events():
         for e in events:
             key = (e.code or f'__id_{e.id}').strip().upper()
             if key in events_by_code:
-                if event_score(e) > event_score(events_by_code[key]):
+                existing = events_by_code[key]
+                s_new = event_score(e)
+                s_existing = event_score(existing)
+                if s_new > s_existing:
                     events_by_code[key] = e
+                elif s_new == s_existing:
+                    # Tie-break deterministically: prefer the event with more associated teams, then by larger id
+                    teams_new = len(getattr(e, 'teams', []) or [])
+                    teams_existing = len(getattr(existing, 'teams', []) or [])
+                    if teams_new > teams_existing:
+                        events_by_code[key] = e
+                    elif teams_new == teams_existing and getattr(e, 'id', 0) > getattr(existing, 'id', 0):
+                        events_by_code[key] = e
             else:
                 events_by_code[key] = e
 
@@ -5568,9 +5769,15 @@ def chat_send():
 
             # Emit Socket.IO event so online recipients receive the DM in real-time
             try:
-                from app import socketio
-                socketio.emit('dm_message', message, room=user.username)
-                socketio.emit('dm_message', message, room=other.username)
+                from app import socketio, normalize_username
+                try:
+                    socketio.emit('dm_message', message, room=normalize_username(user.username))
+                except Exception:
+                    socketio.emit('dm_message', message, room=user.username)
+                try:
+                    socketio.emit('dm_message', message, room=normalize_username(other.username))
+                except Exception:
+                    socketio.emit('dm_message', message, room=other.username)
             except Exception:
                 pass
 

@@ -72,6 +72,12 @@
             const item = document.createElement('div');
             item.className = 'list-group-item notification-item';
             item.setAttribute('data-notif-id', n.id);
+            // Mark chat-derived entries so socket handler can find/update them
+            try {
+                if (String(n.id || '').toLowerCase().startsWith('chat')) {
+                    item.setAttribute('data-source', 'chat');
+                }
+            } catch(e) {}
 
             const content = document.createElement('div');
             content.style.flex = '1';
@@ -238,13 +244,18 @@
                 // If not on chat page, increment unread indicator
                 if (!window.location.pathname.startsWith('/chat')) {
                     try {
-                        // Add a simple entry for chat unread and re-render
                         const list = document.getElementById('notificationsList');
                         if (!list) return;
-                        // If a chat-unread entry exists, update its text
+
+                        // Try to find an existing chat entry and update it in-place
                         const existing = list.querySelector('.notification-item[data-source="chat"]');
                         if (existing) {
-                            // noop: increment handled by server poll; keep simple
+                            try {
+                                const titleEl = existing.querySelector('.fw-semibold');
+                                const metaEl = existing.querySelector('.notif-meta');
+                                if (titleEl) titleEl.textContent = `New chat message from ${msg.sender || 'someone'}`;
+                                if (metaEl) metaEl.textContent = msg.text || '';
+                            } catch(e) {}
                         } else {
                             const entry = { id: 'chat-unread', title: `New chat message from ${msg.sender || 'someone'}`, message: msg.text || '' };
                             // prepend
@@ -252,6 +263,21 @@
                                 return { id: ch.getAttribute && ch.getAttribute('data-notif-id') || Math.random().toString(36).slice(2), title: ch.querySelector('.fw-semibold') ? ch.querySelector('.fw-semibold').textContent : '', message: ch.querySelector('.notif-meta') ? ch.querySelector('.notif-meta').textContent : '' };
                             })));
                         }
+
+                        // Optimistically increment visible badge for immediate feedback
+                        try {
+                            const badge = document.getElementById('notificationsBadge');
+                            if (badge) {
+                                let cur = 0;
+                                const txt = badge.textContent && badge.textContent.trim();
+                                if (txt) {
+                                    if (txt === '99+') cur = 99;
+                                    else cur = parseInt(txt.replace(/[^0-9]/g, '')) || 0;
+                                }
+                                setBadge(cur + 1);
+                            }
+                        } catch(e) {}
+
                         // Also update chat unread badge if backend supports /chat/state
                         fetchChatState().then(state => { if (state && typeof state.unreadCount !== 'undefined') setBadge(state.unreadCount); });
                     } catch(e){}

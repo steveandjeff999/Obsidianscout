@@ -1323,7 +1323,7 @@ def send_dm():
     # Use canonical DB username for recipient
     recipient_canonical = other.username
     
-    from app import save_chat_message
+    from app import save_chat_message, normalize_username
     import uuid
     message = {
         'id': str(uuid.uuid4()),
@@ -1334,10 +1334,16 @@ def send_dm():
         'reactions': []
     }
     save_chat_message(message)
-    # Emit real-time DM event to both sender and recipient
+    # Emit real-time DM event to both sender and recipient using normalized room names
     from app import socketio
-    socketio.emit('dm_message', message, room=sender)
-    socketio.emit('dm_message', message, room=recipient_canonical)
+    try:
+        socketio.emit('dm_message', message, room=normalize_username(sender))
+    except Exception:
+        socketio.emit('dm_message', message, room=sender)
+    try:
+        socketio.emit('dm_message', message, room=normalize_username(recipient_canonical))
+    except Exception:
+        socketio.emit('dm_message', message, room=recipient_canonical)
 
     # Increment recipient's chat state so their UI polling picks up the unread
     try:

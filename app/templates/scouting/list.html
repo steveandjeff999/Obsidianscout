@@ -37,6 +37,10 @@
             {% endif %}
         </div>
         {% endif %}
+        <div class="alert alert-secondary mb-3">
+            <i class="fas fa-boxes me-2"></i>
+            <strong>Pit Data:</strong> To view pit data, visit <a href="{{ url_for('pit_scouting.list_dynamic') }}" class="alert-link">/pit-scouting/list-dynamic</a>.
+        </div>
         {% if scouting_data %}        <div class="d-flex gap-3 mb-3">
             <div>
                 <label class="form-label">Filter by event:</label>

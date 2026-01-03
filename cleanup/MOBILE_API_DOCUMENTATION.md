@@ -1184,20 +1184,38 @@ Notes:
 
 ### Get Game Configuration
 
-Retrieve game configuration for mobile app. The mobile API now exposes two read endpoints to make the distinction explicit:
+Retrieve game configuration for mobile app. The mobile API now exposes multiple read endpoints to make the distinction explicit:
 
 - **Active config (team or alliance):** `GET /api/mobile/config/game` and `GET /api/mobile/config/game/active` — returns the ``active`` configuration for the requester. If the requesting team's alliance mode is active and the alliance has a shared config, the active config will be the alliance-shared configuration; otherwise it is the team's explicit saved config.
 - **Per-team explicit config file:** `GET /api/mobile/config/game/team` — returns the explicit saved per-team `game_config.json` (instance file) if present. This never merges alliance config and is useful for showing or downloading the raw team-level file.
+- **Alliance shared config (by alliance id):** `GET /api/mobile/alliances/<alliance_id>/config/game` — returns the alliance's shared game configuration for the specified alliance if the requesting user is a member of that alliance (status `accepted`). This endpoint is designed to allow alliance members to fetch the alliance-shared configuration even when *their team has not activated alliance mode*; it requires a valid mobile JWT and membership in the alliance and will return `403 FORBIDDEN` if the caller is not a member.
 
 All GET endpoints return the full gameconfig JSON used by the web UI (not a trimmed subset). Mobile clients should expect the complete configuration including sections, rules, validation, and any custom fields.
 
 By default the server will attempt to return the team-level file from `instance/configs/<scouting_team_number>/game_config.json` when requested via `team`, otherwise the loader may return defaults or the alliance-shared JSON (when requesting `active`).
+
+Examples:
+
+- Fetch active config (may be alliance-shared if your team is active in an alliance):
+```bash
+curl -H "Authorization: Bearer $TOKEN" "https://your-server.com/api/mobile/config/game"
+```
+
+- Fetch alliance shared config by alliance id (requires alliance membership):
+```bash
+curl -H "Authorization: Bearer $TOKEN" "https://your-server.com/api/mobile/alliances/123/config/game"
+```
 
 ### Set / Update Game Configuration
 
 There are now two write endpoints to clearly separate editing of the active configuration vs. the explicit team file:
 
 - **Active config (team or alliance):** `POST/PUT /api/mobile/config/game` and `POST/PUT /api/mobile/config/game/active` — Updates the active configuration for the requesting team. If the requesting team is in alliance mode and the alliance has a shared config, this endpoint will save to the alliance's `ScoutingAlliance.shared_game_config` and **requires the caller to be an alliance admin**. Otherwise it behaves as a team-save (admins may still use it to update their own team's config).
+
+  **Note:** Mobile clients may now *read* alliance-shared configs directly by alliance id (see `GET /api/mobile/alliances/<alliance_id>/config/game`) even when the caller's team has not activated alliance mode. For **writing**:
+
+  - If your team is in alliance mode, `POST/PUT /api/mobile/config/game` will save to the alliance's shared config (requires alliance-admin privileges).
+  - If your team is *not* active but you are an **alliance admin** (accepted member with `role='admin'`) or a site `admin`/`superadmin`, you may update the alliance shared config directly using `POST/PUT /api/mobile/alliances/<alliance_id>/config/game` (new endpoint). This mirrors the web UI behavior that allows alliance admins to manage shared configs regardless of activation state.
 - **Per-team config file:** `POST/PUT /api/mobile/config/game/team` — Updates the explicit per-team `game_config.json` file (team-only). This requires the caller to be a team `admin` or `superadmin`.
 
 **Headers:**
@@ -1217,7 +1235,7 @@ Content-Type: application/json
 
 **Errors:**
 - 401 / AUTH_REQUIRED: Missing or invalid token
-- 403 / FORBIDDEN: Caller lacks admin permissions
+- 403 / FORBIDDEN: Caller lacks admin permissions (or is not an alliance admin/member when calling alliance-specific endpoints)
 - 400 / MISSING_BODY: Missing or invalid JSON payload
 - 500 / SAVE_FAILED: Server failed to persist the configuration
 
@@ -1239,6 +1257,14 @@ curl -X PUT "https://your-server.com/api/mobile/config/game" \
   -d @new_game_config.json
 ```
 
+- Update alliance shared config directly by alliance id (requires alliance admin or site admin; useful when your team is not active):
+```bash
+curl -X PUT "https://your-server.com/api/mobile/alliances/123/config/game" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @alliance_game_config.json
+```
+
 - Update explicit per-team file (always updates team file regardless of alliance mode):
 ```bash
 curl -X PUT "https://your-server.com/api/mobile/config/game/team" \
@@ -1249,14 +1275,39 @@ curl -X PUT "https://your-server.com/api/mobile/config/game/team" \
 
 ### Get Pit Configuration
 
-Retrieve pit configuration for mobile app. The mobile API now exposes two read endpoints:
+Retrieve pit configuration for mobile app. The mobile API now exposes multiple read endpoints:
 
 - **Active config (team or alliance):** `GET /api/mobile/config/pit` and `GET /api/mobile/config/pit/active` — returns the active pit configuration (alliance's shared pit config if the token team is in alliance mode and alliance config present; otherwise the team's explicit config).
 - **Per-team explicit config file:** `GET /api/mobile/config/pit/team` — returns the explicit per-team pit config file located at `instance/configs/<scouting_team_number>/pit_config.json` if present (no alliance merge).
+- **Alliance shared pit config (by alliance id):** `GET /api/mobile/alliances/<alliance_id>/config/pit` — returns the alliance's shared pit configuration for the specified alliance if the requesting user is a member (`accepted`). This allows alliance members to fetch the shared pit configuration even when their team has not activated alliance mode; it requires authentication and alliance membership and will return `403 FORBIDDEN` if not a member.
 
+Examples:
+
+- Fetch active pit config:
+```bash
+curl -H "Authorization: Bearer $TOKEN" "https://your-server.com/api/mobile/config/pit"
+```
+
+- Fetch alliance shared pit config by alliance id (requires alliance membership):
+```bash
+curl -H "Authorization: Bearer $TOKEN" "https://your-server.com/api/mobile/alliances/123/config/pit"
+```
+
+- Update alliance shared pit config directly by alliance id (requires alliance admin or site admin; useful when your team is not active):
+```bash
+curl -X PUT "https://your-server.com/api/mobile/alliances/123/config/pit" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @alliance_pit_config.json
+```
 ### Set / Update Pit Configuration
 
 Write endpoints for pit config mirror the game config endpoints:
+
+**Note:** Mobile clients may fetch an alliance's shared pit config by alliance id (`GET /api/mobile/alliances/<alliance_id>/config/pit`) even when their team has not activated alliance mode, provided the caller is an accepted alliance member.
+
+  - If your team is in alliance mode, `POST/PUT /api/mobile/config/pit` will save to the alliance's shared pit config (requires alliance-admin privileges).
+  - If your team is *not* active but you are an **alliance admin** (accepted member with `role='admin'`) or a site `admin`/`superadmin`, you may update the alliance shared pit config directly using `POST/PUT /api/mobile/alliances/<alliance_id>/config/pit` (new endpoint). This mirrors the web UI behavior that allows alliance admins to manage shared configs regardless of activation state.
 
 - **Active config (team or alliance):** `POST/PUT /api/mobile/config/pit` and `POST/PUT /api/mobile/config/pit/active` — Updates the active pit configuration. If in alliance mode and the alliance defines a shared pit config, this requires the caller to be an alliance admin and will persist to `ScoutingAlliance.shared_pit_config`.
 - **Per-team config file:** `POST/PUT /api/mobile/config/pit/team` — Updates the per-team `pit_config.json` file. This requires the caller to be a team `admin` or `superadmin`.
