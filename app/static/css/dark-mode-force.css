@@ -754,6 +754,145 @@ html body.dark-mode .select2-container--default .select2-dropdown {
     color: #e6e6e6 !important;
 }
 
+/* Buttons and interactive controls - ensure outlines and counters are visible in dark mode */
+html body.modern-layout.dark-mode .btn,
+html body.dark-mode .btn {
+    background-color: rgba(255,255,255,0.02) !important;
+    border-color: rgba(255,255,255,0.06) !important;
+    color: #e6e6e6 !important;
+}
+
+html body.modern-layout.dark-mode .btn-outline-primary,
+html body.modern-layout.dark-mode .btn-outline-secondary,
+html body.modern-layout.dark-mode .btn-outline-success,
+html body.modern-layout.dark-mode .btn-outline-danger,
+html body.modern-layout.dark-mode .btn-outline-info,
+html body.dark-mode .btn-outline-primary,
+html body.dark-mode .btn-outline-secondary,
+html body.dark-mode .btn-outline-success,
+html body.dark-mode .btn-outline-danger,
+html body.dark-mode .btn-outline-info {
+    background-color: transparent !important;
+    border-color: rgba(255,255,255,0.06) !important;
+    color: #e6e6e6 !important;
+}
+
+html body.modern-layout.dark-mode .btn-counter,
+html body.dark-mode .btn-counter {
+    background-color: rgba(255,255,255,0.02) !important;
+    border-color: rgba(255,255,255,0.06) !important;
+    color: #e6e6e6 !important;
+}
+
+html body.modern-layout.dark-mode .counter-container .counter-input,
+html body.dark-mode .counter-container .counter-input,
+html body.modern-layout.dark-mode input.counter-input,
+html body.dark-mode input.counter-input {
+    background-color: rgba(255,255,255,0.03) !important;
+    border-color: rgba(255,255,255,0.06) !important;
+    color: #e6e6e6 !important;
+}
+
+html body.modern-layout.dark-mode textarea.form-control,
+html body.dark-mode textarea.form-control {
+    background-color: rgba(255,255,255,0.03) !important;
+    border-color: rgba(255,255,255,0.06) !important;
+    color: #e6e6e6 !important;
+}
+
+html body.modern-layout.dark-mode .form-control::placeholder,
+html body.dark-mode .form-control::placeholder {
+    color: rgba(230,230,230,0.6) !important;
+}
+
+/* Make chart canvases' container adopt transparent/dark surface for legibility */
+html body.modern-layout.dark-mode canvas,
+html body.dark-mode canvas,
+html.dark-mode canvas {
+    background-color: transparent !important;
+}
+
+/* Constrain tutorial preview canvases so they don't expand the page vertically */
+#analyticsPreview canvas,
+#analyticsPreviewPanel canvas,
+.demo-preview canvas,
+.sample-chart {
+    max-height: 360px !important;
+    height: 180px !important;
+    width: 100% !important;
+    display: block !important;
+}
+
+/* Also limit the preview container to avoid runaway expansion */
+.demo-preview {
+    max-height: 420px !important;
+    overflow: auto !important;
+}
+
+/* Tutorial preview specific overrides: ensure demo frames, preview forms and controls look dark */
+html body.modern-layout.dark-mode .demo-frame,
+html body.dark-mode .demo-frame,
+html.dark-mode .demo-frame,
+html body.modern-layout.dark-mode .demo-preview,
+html body.dark-mode .demo-preview,
+html.dark-mode .demo-preview {
+    background-color: #262a2d !important;
+    border-color: #3b3f44 !important;
+    color: #e6e6e6 !important;
+}
+
+/* Preview placeholders and small help text */
+html body.modern-layout.dark-mode .demo-preview .preview-placeholder,
+html body.dark-mode .demo-preview .preview-placeholder,
+html.dark-mode .demo-preview .preview-placeholder {
+    color: rgba(230,230,230,0.65) !important;
+}
+
+/* Scope form controls inside demo frames specifically to ensure high specificity */
+html body.modern-layout.dark-mode .demo-preview .form-control,
+html body.dark-mode .demo-preview .form-control,
+html.dark-mode .demo-preview .form-control,
+html body.modern-layout.dark-mode .demo-preview .form-select,
+html body.dark-mode .demo-preview .form-select,
+html.dark-mode .demo-preview .form-select {
+    background-color: rgba(255,255,255,0.03) !important;
+    border-color: rgba(255,255,255,0.06) !important;
+    color: #e6e6e6 !important;
+}
+
+/* Buttons inside previews */
+html body.modern-layout.dark-mode .demo-preview .btn,
+html body.dark-mode .demo-preview .btn,
+html.dark-mode .demo-preview .btn {
+    background-color: rgba(255,255,255,0.02) !important;
+    border-color: rgba(255,255,255,0.06) !important;
+    color: #e6e6e6 !important;
+}
+
+/* Counter widgets in previews */
+html body.modern-layout.dark-mode .demo-preview .counter-container .btn-counter,
+html body.dark-mode .demo-preview .counter-container .btn-counter,
+html.dark-mode .demo-preview .counter-container .btn-counter {
+    background-color: rgba(255,255,255,0.02) !important;
+    border-color: rgba(255,255,255,0.06) !important;
+    color: #e6e6e6 !important;
+}
+
+/* Force any inline white backgrounds inside demo frames to be darkened */
+html body.modern-layout.dark-mode .demo-preview [style*="background-color:"],
+html body.dark-mode .demo-preview [style*="background-color:"],
+html.dark-mode .demo-preview [style*="background-color:"] {
+    background-color: rgba(255,255,255,0.02) !important;
+    color: #e6e6e6 !important;
+}
+
+/* Tutorial highlight helper */
+.tutorial-highlight {
+    outline: 3px solid rgba(255,193,7,0.15);
+    box-shadow: 0 0 0 3px rgba(255,193,7,0.06);
+    transition: box-shadow 0.25s ease, outline 0.25s ease;
+}
+
 /* Final safety: ensure team selection modal styling is preserved as intended */
 html body.modern-layout.dark-mode #teamSelectionModal .modal-content,
 html body.dark-mode #teamSelectionModal .modal-content,

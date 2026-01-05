@@ -12,318 +12,248 @@
             <div class="text-center mb-4">
                 <h2><i class="fas fa-graduation-cap me-2"></i>Interactive Tutorial</h2>
                 <p class="lead text-muted">Learn how to use ObsidianScout effectively</p>
-                <div class="text-center mt-4">
-                    <a href="{{ url_for('setup.index') }}" class="btn btn-outline-secondary btn-sm me-2">
-                        <i class="fas fa-home me-1"></i>Setup Home
-                    </a>
-                    <a href="{{ url_for('main.help_page') }}" class="btn btn-outline-info btn-sm me-2">
-                        <i class="fas fa-question-circle me-1"></i>Help Center
-                    </a>
-                    <a href="{{ url_for('setup.features') }}" class="btn btn-outline-warning btn-sm">
-                        <i class="fas fa-star me-1"></i>Features Overview
-                    </a>
+                <div class="text-center mt-3 d-flex justify-content-center align-items-center gap-3">
+                    <div class="btn-group" role="group" aria-label="Tutorial mode">
+                        <button id="mode-guided" class="btn btn-outline-primary btn-sm active" aria-pressed="true">Guided Mode</button>
+                        <button id="mode-compact" class="btn btn-outline-secondary btn-sm" aria-pressed="false">Compact Mode</button>
+                    </div>
+                    <div>
+                        <a href="{{ url_for('setup.index') }}" class="btn btn-outline-secondary btn-sm me-2">
+                            <i class="fas fa-home me-1"></i>Setup Home
+                        </a>
+                        <a href="{{ url_for('main.help_page') }}" class="btn btn-outline-info btn-sm me-2">
+                            <i class="fas fa-question-circle me-1"></i>Help Center
+                        </a>
+                        <a href="{{ url_for('setup.features') }}" class="btn btn-outline-warning btn-sm">
+                            <i class="fas fa-star me-1"></i>Features Overview
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Hub: Split tutorials -->
+                <div class="d-flex gap-2 justify-content-center my-3">
+                    <a href="{{ url_for('setup.tutorial_scout') }}" class="btn btn-lg btn-success">Scouting Tutorial</a>
+                    <a href="{{ url_for('setup.tutorial_analytics') }}" class="btn btn-lg btn-warning">Analytics Tutorial</a>
                 </div>
             </div>
 
-            <!-- Tutorial Steps -->
+            <!-- Quick Navigation: Where to go and what each page does -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0"><i class="fas fa-compass me-2"></i>Quick Navigation</h6>
+                </div>
+                <div class="card-body p-3">
+                    <p class="small text-muted mb-3">This panel shows the common pages scouts and data users will need and how to access them. Use <strong>Open</strong> to open the full page in a new tab, or <strong>Show</strong> to jump to the related tutorial step for a short explanation.</p>
+                    <div class="row g-2 align-items-stretch">
+                        <div class="col-sm-6 col-md-4">
+                            <div class="d-flex gap-2 align-items-center">
+                                <div class="flex-fill small">
+                                    <strong>Start Scouting</strong>
+                                    <div class="text-muted small">Open the match scouting form to record match observations quickly.</div>
+                                </div>
+                                <div class="text-end">
+                                    <button class="btn btn-sm btn-outline-success" onclick="window.open('{{ url_for('scouting.scouting_form') }}','_blank','noopener')">Open</button>
+                                    <button class="btn btn-sm btn-outline-primary tutorial-nav-show" data-step="#step-2">Show</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-sm-6 col-md-4">
+                            <div class="d-flex gap-2 align-items-center">
+                                <div class="flex-fill small">
+                                    <strong>Scouting Dashboard</strong>
+                                    <div class="text-muted small">View assignments, recent submissions, and access tools to review your data.</div>
+                                </div>
+                                <div class="text-end">
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="window.open('{{ url_for('scouting.index') }}','_blank','noopener')">Open</button>
+                                    <button class="btn btn-sm btn-outline-primary tutorial-nav-show" data-step="#step-3">Show</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-sm-6 col-md-4">
+                            <div class="d-flex gap-2 align-items-center">
+                                <div class="flex-fill small">
+                                    <strong>Pit Scouting</strong>
+                                    <div class="text-muted small">Record robot specs and team notes to enrich your scouting dataset.</div>
+                                </div>
+                                <div class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="window.open('{{ url_for('pit_scouting.index') }}','_blank','noopener')">Open</button>
+                                    <button class="btn btn-sm btn-outline-primary tutorial-nav-show" data-step="#step-2">Show</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-sm-6 col-md-4">
+                            <div class="d-flex gap-2 align-items-center">
+                                <div class="flex-fill small">
+                                    <strong>Analytics</strong>
+                                    <div class="text-muted small">Use charts and filters to compare teams and identify trends.</div>
+                                </div>
+                                <div class="text-end">
+                                    <button class="btn btn-sm btn-outline-warning" onclick="window.open('{{ url_for('graphs.index') }}','_blank','noopener')">Open</button>
+                                    <button class="btn btn-sm btn-outline-primary tutorial-nav-show" data-step="#step-4">Show</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-sm-6 col-md-4">
+                            <div class="d-flex gap-2 align-items-center">
+                                <div class="flex-fill small">
+                                    <strong>Game Configuration</strong>
+                                    <div class="text-muted small">Edit game-specific scoring, counters, and map elements (admin-level).</div>
+                                </div>
+                                <div class="text-end">
+                                    <button class="btn btn-sm btn-outline-info" onclick="window.open('{{ url_for('main.config') }}','_blank','noopener')">Open</button>
+                                    <button class="btn btn-sm btn-outline-primary tutorial-nav-show" data-step="#step-5">Show</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-sm-6 col-md-4">
+                            <div class="d-flex gap-2 align-items-center">
+                                <div class="flex-fill small">
+                                    <strong>Team & Match Lists</strong>
+                                    <div class="text-muted small">Quick access to teams, matches, and other lists used during scouting and analysis.</div>
+                                </div>
+                                <div class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="window.open('{{ url_for('teams.index') }}','_blank','noopener')">Open</button>
+                                    <button class="btn btn-sm btn-outline-primary tutorial-nav-show" data-step="#step-4">Show</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- New Tutorial Steps (Intro, Basic, Practice, Analytics, Config, Wrap) -->
             <div id="tutorial-container">
-                <!-- Step 1: Overview -->
+                <!-- Step: Intro -->
                 <div class="tutorial-step d-block active-step" id="step-1">
                     <div class="card shadow">
                         <div class="card-header bg-primary text-white">
-                            <h5 class="mb-0">
-                                <span class="badge bg-light text-primary me-2">1</span>
-                                Welcome to ObsidianScout
-                            </h5>
+                            <h5 class="mb-0"><span class="badge bg-light text-primary me-2">1</span>Welcome to ObsidianScout</h5>
                         </div>
                         <div class="card-body p-4">
                             <div class="row">
                                 <div class="col-md-8">
-                                    <h6>What is ObsidianScout?</h6>
-                                    <p>ObsidianScout is a comprehensive FRC scouting platform that helps teams:</p>
-                                    <ul>
-                                        <li><strong>Collect Data:</strong> Scout matches and pits efficiently</li>
-                                        <li><strong>Analyze Performance:</strong> View graphs and team rankings</li>
-                                        <li><strong>Share Insights:</strong> Collaborate with team members</li>
-                                        <li><strong>Make Decisions:</strong> Use data for strategy and alliance selection</li>
-                                    </ul>
-                                    <div class="alert alert-info">
-                                        <i class="fas fa-lightbulb me-2"></i>
-                                        <strong>Tip:</strong> Use the navigation bar at the top to access different features.
-                                    </div>
-                                    
-                                    <!-- Interactive Navigation Guide -->
-                                    <div class="card border-primary mt-3">
-                                        <div class="card-header bg-primary text-white">
-                                            <i class="fas fa-map-signs me-2"></i>Quick Navigation Guide
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="row g-2">
-                                                <div class="col-md-6">
-                                                    <div class="d-flex align-items-center p-2 border rounded bg-light">
-                                                        <div class="nav-demo-icon me-3">
-                                                            <i class="fas fa-home fa-lg text-primary"></i>
-                                                        </div>
-                                                        <div>
-                                                            <strong>Dashboard</strong>
-                                                            <div class="small text-muted">Your mission control center</div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <div class="d-flex align-items-center p-2 border rounded bg-light">
-                                                        <div class="nav-demo-icon me-3">
-                                                            <i class="fas fa-clipboard-list fa-lg text-success"></i>
-                                                        </div>
-                                                        <div>
-                                                            <strong>Scouting</strong>
-                                                            <div class="small text-muted">Record match & pit data</div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <div class="d-flex align-items-center p-2 border rounded bg-light">
-                                                        <div class="nav-demo-icon me-3">
-                                                            <i class="fas fa-chart-bar fa-lg text-warning"></i>
-                                                        </div>
-                                                        <div>
-                                                            <strong>Analytics</strong>
-                                                            <div class="small text-muted">Graphs, rankings & insights</div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <div class="d-flex align-items-center p-2 border rounded bg-light">
-                                                        <div class="nav-demo-icon me-3">
-                                                            <i class="fas fa-cogs fa-lg text-info"></i>
-                                                        </div>
-                                                        <div>
-                                                            <strong>Configuration</strong>
-                                                            <div class="small text-muted">Customize your setup</div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                    <h6>Friendly quick start</h6>
+                                    <p class="small">This guided tutorial covers Scouting basics (quick form practice) and Advanced topics (Analytics preview and Configuration). Switch between <strong>Guided</strong> and <strong>Compact</strong> modes using the buttons above.</p>
+                                    <div class="mt-3">
+                                        <a href="{{ url_for('main.index') }}" class="btn btn-success btn-sm me-2"><i class="fas fa-rocket me-1"></i>Start Scouting</a>
+                                        <a href="{{ url_for('main.help_page') }}" class="btn btn-outline-info btn-sm">Help Center</a>
                                     </div>
                                 </div>
                                 <div class="col-md-4 text-center">
-                                    <img src="{{ url_for('static', filename='img/obsidian.png') }}" 
-                                         alt="ObsidianScout" class="img-fluid mb-3" style="max-height: 100px;">
-                                    <p class="text-muted small">Your professional scouting platform</p>
+                                    <img src="{{ url_for('static', filename='img/obsidian.png') }}" alt="Obsidian" class="img-fluid" style="max-height:70px;">
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Step 2: Navigation -->
+                <!-- Step: Basic Scouting -->
                 <div class="tutorial-step d-none" id="step-2">
                     <div class="card shadow">
-                        <div class="card-header bg-info text-white">
-                            <h5 class="mb-0">
-                                <span class="badge bg-light text-info me-2">2</span>
-                                Navigation & Advanced Features
-                            </h5>
-                        </div>
+                        <div class="card-header bg-success text-white"><h5 class="mb-0"><span class="badge bg-light text-success me-2">2</span>Basic: Scouting</h5></div>
                         <div class="card-body p-4">
-                            <h6>Main Navigation Areas</h6>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <div class="card bg-light">
-                                        <div class="card-body">
-                                            <h6><i class="fas fa-home text-primary me-2"></i>Dashboard</h6>
-                                            <p class="small mb-0">Main overview with recent activity and quick stats</p>
-                                        </div>
+                            <div class="row g-3">
+                                <div class="col-lg-7">
+                                    <h6>Record match data quickly</h6>
+                                    <p class="small">Use the sample form on the right to practice entering a team, match, and a short note. This is preview-only and won't affect your database.</p>
+                                    <div class="mt-3">
+                                        <button id="basicOpenBtn" class="btn btn-outline-secondary btn-sm me-2" type="button" onclick="window.open('{{ url_for('scouting.scouting_form') }}','_blank','noopener')"><i class="fas fa-up-right-from-square me-1"></i>Open full Scouting page</button>
+                                        <button id="basicJump" class="btn btn-primary btn-sm">Practice Now</button>
                                     </div>
                                 </div>
-                                <div class="col-md-6 mb-3">
-                                    <div class="card bg-light">
-                                        <div class="card-body">
-                                            <h6><i class="fas fa-clipboard-list text-success me-2"></i>Scouting</h6>
-                                            <p class="small mb-0">Record match data and pit scouting information</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <div class="card bg-light">
-                                        <div class="card-body">
-                                            <h6><i class="fas fa-chart-line text-warning me-2"></i>Analytics</h6>
-                                            <p class="small mb-0">View graphs, team rankings, and data analysis</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <div class="card bg-light">
-                                        <div class="card-body">
-                                            <h6><i class="fas fa-users text-danger me-2"></i>Teams</h6>
-                                            <p class="small mb-0">Browse team information and performance data</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <h6 class="mt-4"><i class="fas fa-star text-info me-2"></i>Advanced Pages & Features</h6>
-                            <div class="row">
-                                <div class="col-md-5">
-                                    <div class="card border-info">
-                                        <div class="card-body">
-                                            <h6 class="card-title"><i class="fas fa-chart-bar text-primary me-2"></i>Analytics & Graphs</h6>
-                                            <ul class="small mb-0">
-                                                <li><strong>Team Comparisons:</strong> Side-by-side performance analysis</li>
-                                                <li><strong>Event Trends:</strong> Performance over time tracking</li>
-                                                <li><strong>Custom Metrics:</strong> Create your own analysis views</li>
-                                                <li><strong>Export Options:</strong> Share graphs with your team</li>
-                                                <li><strong>Real-time Updates:</strong> Data refreshes automatically</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-7">
-                                    <div class="card border-warning">
-                                        <div class="card-body">
-                                            <h6 class="card-title"><i class="fas fa-handshake text-warning me-2"></i>Alliance Selection</h6>
-                                            <ul class="small mb-0">
-                                                <li><strong>Pick Lists:</strong> Organize teams by priority</li>
-                                                <li><strong>Recommendations:</strong> AI-powered alliance suggestions</li>
-                                                <li><strong>Strategy Notes:</strong> Team-specific insights</li>
-                                                <li><strong>Live Updates:</strong> Real-time alliance tracking</li>
-                                                <li><strong>Data Export:</strong> Print pick lists for competition</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6 mt-3">
-                                    <div class="card border-success">
-                                        <div class="card-body">
-                                            <h6 class="card-title"><i class="fas fa-trophy text-success me-2"></i>Team Rankings & Sharing</h6>
-                                            <ul class="small mb-0">
-                                                <li><strong>Smart Rankings:</strong> Multi-metric team scoring</li>
-                                                <li><strong>Custom Weights:</strong> Adjust importance of different stats</li>
-                                                <li><strong>Share Links:</strong> Send rankings to team members</li>
-                                                <li><strong>Export Data:</strong> Download for strategy meetings</li>
-                                                <li><strong>Historical Tracking:</strong> See team improvement over time</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6 mt-3">
-                                    <div class="card border-danger">
-                                        <div class="card-body">
-                                            <h6 class="card-title"><i class="fas fa-robot text-danger me-2"></i>Assistant & AI</h6>
-                                            <ul class="small mb-0">
-                                                <li><strong>Smart Search:</strong> Ask questions about your data</li>
-                                                <li><strong>Strategy Insights:</strong> AI-generated recommendations</li>
-                                                <li><strong>Data Analysis:</strong> Automated pattern detection</li>
-                                                <li><strong>Predictions:</strong> Match outcome forecasting</li>
-                                                <li><strong>Help Integration:</strong> Context-aware assistance</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6 mt-3">
-                                    <div class="card border-info">
-                                        <div class="card-body">
-                                            <h6 class="card-title"><i class="fas fa-database text-info me-2"></i>Data Management</h6>
-                                            <ul class="small mb-0">
-                                                <li><strong>Import/Export:</strong> CSV and Excel file handling</li>
-                                                <li><strong>Data Validation:</strong> Automatic error checking</li>
-                                                <li><strong>Backup & Restore:</strong> Protect your scouting data</li>
-                                                <li><strong>Event Syncing:</strong> Connect to FRC API for schedules</li>
-                                                <li><strong>Team Management:</strong> Organize participating teams</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6 mt-3">
-                                    <div class="card border-secondary">
-                                        <div class="card-body">
-                                            <h6 class="card-title"><i class="fas fa-palette text-secondary me-2"></i>Themes & Customization</h6>
-                                            <ul class="small mb-0">
-                                                <li><strong>Theme Editor:</strong> Create custom color schemes</li>
-                                                <li><strong>Dark/Light Modes:</strong> Optimize for different lighting</li>
-                                                <li><strong>Team Branding:</strong> Match your team's colors</li>
-                                                <li><strong>Layout Options:</strong> Customize interface density</li>
-                                                <li><strong>Accessibility:</strong> Font size and contrast controls</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="alert alert-success mt-3">
-                                <i class="fas fa-lightbulb me-2"></i>
-                                <strong>Pro Tip:</strong> Each advanced feature has detailed help documentation. Visit the specific pages to explore tooltips, guides, and interactive help!
-                            </div>
-
-                            <!-- Live Demo: Navigation -->
-                            <div class="card mt-4 border-info">
-                                <div class="card-header d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <i class="fas fa-person-walking-dashed-line-arrow-right text-info me-2"></i>
-                                        Try Navigation Live
-                                    </div>
-                                    <div class="small text-muted">This is a live, interactive view of the app</div>
-                                </div>
-                                <div class="card-body">
-                                    <!-- Hints and Instructions -->
-                                    <div class="alert alert-light border-info mb-3">
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-lightbulb text-warning me-2 fa-lg"></i>
-                                            <div>
-                                                <strong> Try This:</strong> Click the buttons below to explore different sections of ObsidianScout.
-                                                Start with <span class="highlight-hint">Dashboard</span> to see the main overview!
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div id="navDemoButtons" class="btn-group flex-wrap mb-3" role="group" aria-label="Navigation demo">
-                                        <button type="button" class="btn btn-outline-primary btn-sm me-1 demo-highlight" data-url="{{ url_for('main.index') }}" 
-                                                data-hint="Start here! The Dashboard shows your team's overview and recent activity.">Dashboard</button>
-                                        <button type="button" class="btn btn-outline-success btn-sm me-1" data-url="{{ url_for('scouting.index') }}"
-                                                data-hint="Your scouting command center - see assignments and recent matches.">Scouting Dashboard</button>
-                                        <button type="button" class="btn btn-outline-success btn-sm me-1" data-url="{{ url_for('scouting.scouting_form') }}"
-                                                data-hint="The main form for recording match data during competitions.">Match Scouting</button>
-                                        <button type="button" class="btn btn-outline-primary btn-sm me-1" data-url="{{ url_for('pit_scouting.index') }}"
-                                                data-hint="Record team information and robot capabilities in the pits.">Pit Scouting</button>
-                                        <button type="button" class="btn btn-outline-warning btn-sm me-1" data-url="{{ url_for('graphs.index') }}"
-                                                data-hint="Visualize team performance with interactive charts and graphs.">Graphs</button>
-                                        <button type="button" class="btn btn-outline-purple btn-sm me-1" data-url="{{ url_for('teams.ranks') }}"
-                                                data-hint="See which teams are performing best based on your scouting data.">Team Rankings</button>
-                                        <button type="button" class="btn btn-outline-info btn-sm me-1" data-url="{{ url_for('alliances.index') }}"
-                                                data-hint="Plan your alliance selection strategy for playoffs.">Alliances</button>
-                                        <button type="button" class="btn btn-outline-danger btn-sm me-1" data-url="{{ url_for('matches.index') }}"
-                                                data-hint="View match schedules, results, and predictions.">Matches</button>
-                                        <button type="button" class="btn btn-outline-secondary btn-sm" data-url="{{ url_for('data.index') }}"
-                                                data-hint="Import, export, and manage your scouting data.">Data</button>
-                                    </div>
-                                    
-                                    <!-- Dynamic Hint Display -->
-                                    <div id="navHintDisplay" class="alert alert-info mb-3 d-none">
-                                        <i class="fas fa-info-circle me-2"></i>
-                                        <span id="navHintText">Hover over buttons to see what each section does!</span>
-                                    </div>
-                                    
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <div class="small text-muted">
-                                            <i class="fas fa-mouse-pointer me-1"></i>
-                                            Navigate the actual app below ↓
-                                        </div>
-                                        <a id="navOpenBtn" class="btn btn-sm btn-outline-secondary" href="#" target="_blank" rel="noopener">
-                                            <i class="fas fa-up-right-from-square me-1"></i>Open in new tab
-                                        </a>
-                                    </div>
-                                    <div class="border rounded bg-body-secondary demo-frame demo-frame-large">
-                                        <iframe id="navDemoFrame" class="rounded" src="about:blank" title="Navigation Live Demo"></iframe>
-                                    </div>
-                                    <div class="form-text mt-2">
-                                        <strong> Next Step:</strong> Try clicking the navigation menu in the iframe above to explore different sections.
+                                <div class="col-lg-5">
+                                    <div id="basicScoutingPreview" class="border rounded bg-body-secondary p-3 demo-preview" role="region" aria-label="Scouting preview">
+                                        <div class="preview-placeholder text-muted small text-center">Click <strong>Practice Now</strong> to open the sample form here.</div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Step: Practice -->
+                <div class="tutorial-step d-none" id="step-3">
+                    <div class="card shadow">
+                        <div class="card-header bg-info text-white"><h5 class="mb-0"><span class="badge bg-light text-info me-2">3</span>Practice</h5></div>
+                        <div class="card-body p-4">
+                            <h6>Small practice challenge</h6>
+                            <p class="small">Complete the sample form and click <strong>Save Sample</strong>.</p>
+                            <div class="d-flex justify-content-center mt-3">
+                                <button id="practice-complete" class="btn btn-success btn-sm">I finished the practice</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step: Analytics -->
+                <div class="tutorial-step d-none" id="step-4">
+                    <div class="card shadow">
+                        <div class="card-header bg-warning text-white"><h5 class="mb-0"><span class="badge bg-light text-warning me-2">4</span>Advanced: Analytics</h5></div>
+                        <div class="card-body p-4">
+                            <div class="row g-3">
+                                <div class="col-lg-7">
+                                    <h6>Visualize trends</h6>
+                                    <p class="small">Use the sample chart preview to understand filtering and team comparisons. Open the full analytics page to use real filters.</p>
+                                    <div class="mt-3">
+                                        <button id="analyticsOpenBtn" class="btn btn-outline-secondary btn-sm me-2" type="button" onclick="window.open('{{ url_for('graphs.index') }}','_blank','noopener')"><i class="fas fa-up-right-from-square me-1"></i>Open full Analytics</button>
+                                        <button id="analyticsSample" class="btn btn-warning btn-sm">Show Sample Chart</button>
+                                    </div>
+                                </div>
+                                <div class="col-lg-5">
+                                    <div id="analyticsPreview" class="border rounded bg-body-secondary p-3 demo-preview" role="region" aria-label="Analytics preview">
+                                        <div class="preview-placeholder text-muted small text-center">Click <strong>Show Sample Chart</strong> to display an example.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step: Config -->
+                <div class="tutorial-step d-none" id="step-5">
+                    <div class="card shadow">
+                        <div class="card-header bg-info text-white"><h5 class="mb-0"><span class="badge bg-light text-info me-2">5</span>Advanced: Configuration</h5></div>
+                        <div class="card-body p-4">
+                            <div class="row g-3">
+                                <div class="col-lg-7">
+                                    <h6>Customize your setup</h6>
+                                    <p class="small">Preview simple configuration toggles and learn where to make changes in the full page.</p>
+                                    <div class="mt-3">
+                                        <button id="configOpenBtn" class="btn btn-outline-secondary btn-sm me-2" type="button" onclick="window.open('{{ url_for('main.config') }}','_blank','noopener')"><i class="fas fa-up-right-from-square me-1"></i>Open full Configuration</button>
+                                        <button id="configSample" class="btn btn-info btn-sm">Show Config Preview</button>
+                                    </div>
+                                </div>
+                                <div class="col-lg-5">
+                                    <div id="configPreview" class="border rounded bg-body-secondary p-3 demo-preview" role="region" aria-label="Configuration preview">
+                                        <div class="preview-placeholder text-muted small text-center">Click <strong>Show Config Preview</strong> to try simple toggles.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step: Wrap Up -->
+                <div class="tutorial-step d-none" id="step-6">
+                    <div class="card shadow">
+                        <div class="card-header bg-dark text-white"><h5 class="mb-0"><span class="badge bg-light text-dark me-2">6</span>You're Ready!</h5></div>
+                        <div class="card-body p-4">
+                            <h6>Next Steps</h6>
+                            <p class="small">You're all set. Use the links below to jump to real pages and keep practicing with the tutorial whenever you need a refresher.</p>
+                            <div class="d-flex gap-2 mt-3">
+                                <a href="{{ url_for('scouting.scouting_form') }}" class="btn btn-success btn-sm">Start Scouting</a>
+                                <a href="{{ url_for('graphs.index') }}" class="btn btn-warning btn-sm">Explore Analytics</a>
+                                <a href="{{ url_for('main.config') }}" class="btn btn-info btn-sm">Open Configuration</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
                 <!-- Step 3: Scouting -->
                 <div class="tutorial-step d-none" id="step-3">
@@ -404,10 +334,14 @@
                                             </div>
                                             
                                             <div class="border rounded bg-body-secondary demo-frame demo-frame-large">
-                                                <iframe id="scoutDemoFrame" class="rounded" src="about:blank" title="Scouting Live Demo"></iframe>
+                                                <div id="scoutDemoPreview" class="demo-preview p-3">
+                                                    <div class="preview-placeholder text-center text-muted">
+                                                        Try filling a small sample scouting form here. Use the buttons above to pick the area to preview, or open the full form in a new tab.
+                                                    </div>
+                                                </div>
                                             </div>
                                             <div class="form-text mt-2">
-                                                <strong> Pro Tip:</strong> Data you enter here will appear in the analytics section in the next step!
+                                                <strong> Pro Tip:</strong> Use the sample form to practice; full data entry is available on the real scouting pages.
                                             </div>
                                         </div>
                                     </div>
@@ -500,10 +434,12 @@
                                             </div>
                                             
                                             <div class="border rounded bg-body-secondary demo-frame demo-frame-large">
-                                                <iframe id="analyticsDemoFrame" class="rounded" src="about:blank" title="Analytics Live Demo"></iframe>
+                                                <div id="analyticsDemoPreview" class="demo-preview p-3">
+                                                    <div class="preview-placeholder text-center text-muted">Preview charts and filters will appear here when you select a demo option.</div>
+                                                </div>
                                             </div>
                                             <div class="form-text mt-2">
-                                                <strong> Try This:</strong> Look for filter controls and team selectors on the analytics pages.
+                                                <strong> Try This:</strong> Use the preview to see example charts. Open the full analytics page to interact with filters and team selectors.
                                             </div>
                                         </div>
                                     </div>
@@ -597,10 +533,12 @@
                                             </div>
                                             
                                             <div class="border rounded bg-body-secondary demo-frame demo-frame-large">
-                                                <iframe id="configDemoFrame" class="rounded" src="about:blank" title="Configuration Live Demo"></iframe>
+                                                <div id="configDemoPreview" class="demo-preview p-3">
+                                                    <div class="preview-placeholder text-center text-muted">Configuration previews will appear here. Use the buttons to explore settings topics or open the full page to make changes.</div>
+                                                </div>
                                             </div>
                                             <div class="form-text mt-2">
-                                                <strong>️ Note:</strong> Some configuration options require admin permissions for your team.
+                                                <strong>️ Note:</strong> Some configuration options require admin permissions for your team. Open the full configuration page to make changes.
                                             </div>
                                         </div>
                                     </div>
@@ -758,33 +696,25 @@
 
             <!-- Tutorial Controls -->
             <div class="card mt-4">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <button id="prev-btn" class="btn btn-secondary" onclick="previousStep()" disabled>
-                                <i class="fas fa-arrow-left me-2"></i>Previous
-                            </button>
-                        </div>
-                        
-                        <div class="text-center">
-                            <span id="step-indicator" class="text-muted">Step 1 of 7</span>
-                        </div>
-                        
-                        <div>
-                            <button id="next-btn" class="btn btn-primary" onclick="nextStep()">
-                                Next<i class="fas fa-arrow-right ms-2"></i>
-                            </button>
-                            <a href="{{ url_for('main.index') }}" id="finish-btn" class="btn btn-success" style="display: none;">
-                                <i class="fas fa-check me-2"></i>Start Scouting
-                            </a>
-                        </div>
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <button id="t-prev-btn" class="btn btn-secondary" onclick="previousTStep()" disabled>
+                            <i class="fas fa-arrow-left me-2"></i>Previous
+                        </button>
                     </div>
-                    
-                    <!-- Progress Bar -->
-                    <div class="mt-3">
-                        <div class="progress">
-                            <div id="progress-bar" class="progress-bar bg-success" style="width: 14.29%"></div>
-                        </div>
+
+                    <div class="text-center">
+                        <span id="t-step-indicator" class="text-muted">Step 1</span>
+                    </div>
+
+                    <div>
+                        <button id="t-next-btn" class="btn btn-primary" onclick="nextTStep()">Next<i class="fas fa-arrow-right ms-2"></i></button>
+                        <a href="{{ url_for('main.index') }}" id="t-finish-btn" class="btn btn-success" style="display:none;"><i class="fas fa-check me-2"></i>Finish</a>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="progress">
+                        <div id="t-progress-bar" class="progress-bar bg-success" style="width: 16.66%"></div>
                     </div>
                 </div>
             </div>
@@ -814,236 +744,612 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Chart.js (used for analytics preview) -->
+<script src="{{ url_for('static', filename='js/vendor/chart.umd.min.js') }}"></script>
 <script>
-let currentStep = 1;
-const totalSteps = 7;
+// Data provided from server
+const DEFAULT_TUTORIAL_CONFIG = {{ default_config|tojson|safe }};
+const TEAM_TUTORIAL_CONFIG = {{ team_config|tojson|safe }};
+const SAMPLE_CHART = {{ sample_chart|tojson|safe }};
 
-function showStep(step) {
-    // Hide all steps
-    document.querySelectorAll('.tutorial-step').forEach(el => {
-        el.classList.add('d-none');
-        el.classList.remove('active-step');
-    });
-    
-    // Show current step
-    const stepEl = document.getElementById(`step-${step}`);
-    if (stepEl) { stepEl.classList.remove('d-none'); stepEl.classList.add('active-step'); }
-    
-    // Update controls
-    document.getElementById('prev-btn').disabled = (step === 1);
-    document.getElementById('next-btn').style.display = (step === totalSteps) ? 'none' : 'inline-block';
-    document.getElementById('finish-btn').style.display = (step === totalSteps) ? 'inline-block' : 'none';
-    
-    // Update step indicator
-    document.getElementById('step-indicator').textContent = `Step ${step} of ${totalSteps}`;
-    
-    // Update progress bar
-    const progressPercent = (step / totalSteps) * 100;
-    document.getElementById('progress-bar').style.width = progressPercent + '%';
-}
+// Guided/Compact tutorial controller
+let tutorialMode = 'guided'; // 'guided' or 'compact'
+let currentTStep = 1;
+let steps = ['intro','basic','practice','analytics','config','wrap'];
 
-function nextStep() {
-    if (currentStep < totalSteps) {
-        currentStep++;
-        showStep(currentStep);
+function setMode(mode) {
+    tutorialMode = mode;
+    document.getElementById('mode-guided').classList.toggle('active', mode === 'guided');
+    document.getElementById('mode-compact').classList.toggle('active', mode === 'compact');
+    document.getElementById('mode-guided').setAttribute('aria-pressed', mode === 'guided');
+    document.getElementById('mode-compact').setAttribute('aria-pressed', mode === 'compact');
+
+    if (mode === 'compact') {
+        steps = ['intro','basic','analytics','wrap'];
+    } else {
+        steps = ['intro','basic','practice','analytics','config','wrap'];
     }
+    currentTStep = 1;
+    showTStep(currentTStep);
 }
 
-function previousStep() {
-    if (currentStep > 1) {
-        currentStep--;
-        showStep(currentStep);
+function showTStep(index) {
+    // hide all existing step cards
+    document.querySelectorAll('.tutorial-step').forEach(el => el.classList.add('d-none'));
+
+    // map our step names to card ids
+    const stepName = steps[index-1];
+    const mapping = {
+        'intro': 'step-1',
+        'basic': 'step-2',
+        'practice': 'step-3',
+        'analytics': 'step-4',
+        'config': 'step-5',
+        'wrap': 'step-6'
+    };
+    const el = document.getElementById(mapping[stepName]);
+    if (el) {
+        el.classList.remove('d-none');
+        el.classList.add('active-step');
     }
+
+    // update controls
+    document.getElementById('t-prev-btn').disabled = (index === 1);
+    document.getElementById('t-next-btn').style.display = (index === steps.length) ? 'none' : 'inline-block';
+    document.getElementById('t-finish-btn').style.display = (index === steps.length) ? 'inline-block' : 'none';
+
+    // indicator
+    document.getElementById('t-step-indicator').textContent = `Step ${index} of ${steps.length}`;
+
+    // progress
+    document.getElementById('t-progress-bar').style.width = ((index / steps.length) * 100) + '%';
 }
 
-// Simple helper to wire a button group to an iframe
-function initLiveDemo(frameId, defaultUrl, buttonsSelector, openBtnId) {
-    const frame = document.getElementById(frameId);
-    const buttons = document.querySelectorAll(buttonsSelector);
-    const openBtn = document.getElementById(openBtnId);
-    
-    // Get hint display elements
-    const hintDisplayId = frameId.replace('Frame', 'HintDisplay');
-    const hintTextId = frameId.replace('Frame', 'HintText');
-    const hintDisplay = document.getElementById(hintDisplayId);
-    const hintText = document.getElementById(hintTextId);
+function nextTStep() {
+    if (currentTStep < steps.length) { currentTStep++; showTStep(currentTStep); }
+}
+function previousTStep() { if (currentTStep > 1) { currentTStep--; showTStep(currentTStep); } }
 
-    function setSrc(url, btn) {
-        if (!frame) return;
-        frame.src = url;
-        if (openBtn) {
-            openBtn.href = url;
+// Simple helper to show previews in lightweight panels (no iframes)
+function initPreview(id, defaultUrl, sampleBtnId) {
+    const container = document.getElementById(id);
+    const sampleBtn = document.getElementById(sampleBtnId);
+
+    function renderPreview(type) {
+        if (!container) return;
+        if (type === 'scouting') {
+            // Build a sample form based on TEAM_TUTORIAL_CONFIG (if present)
+            let html = '<h6 class="mb-2"><i class="fas fa-clipboard-list text-success me-2"></i>Scouting Sample</h6>';
+            html += '<form class="preview-sample" aria-label="Scouting sample form">';
+            html += '<input class="form-control form-control-sm mb-2" placeholder="Team #" aria-label="Team number">';
+            html += '<input class="form-control form-control-sm mb-2" placeholder="Match #" aria-label="Match number">';
+
+            function addElementInput(el) {
+                // Normalize id/name and ensure it's a valid id attribute
+                const rawId = (el.id || el.name || 'field').toString();
+                const id = rawId.replace(/[^a-zA-Z0-9_\-]/g, '_');
+                const label = el.label || el.name || rawId;
+                const type = (el.type || 'number');
+                const inputId = `preview_${id}`;
+
+                if (type === 'bool' || type === 'checkbox') {
+                    return `<div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="${inputId}" name="${inputId}"> <label class="form-check-label small" for="${inputId}">${label}</label></div>`;
+                }
+
+                // Render counters like the real scouting form when numeric or explicit counter
+                const numericTypes = ['number','counter','int','float','numeric','count','counts','score','quantity'];
+                const isNumeric = numericTypes.includes(String(type).toLowerCase()) || (el.default !== undefined && typeof el.default === 'number');
+                if (isNumeric) {
+                    const step = (el.step !== undefined) ? el.step : (String(type).toLowerCase() === 'float' ? 0.1 : 1);
+                    const minAttr = (el.min !== undefined) ? `min="${el.min}"` : 'min="0"';
+                    const value = (el.default !== undefined) ? el.default : 0;
+                    return `<div class="mb-2"><label for="${inputId}" class="form-label fw-medium">${label}</label>` +
+                           `${ el.description ? `<small class="text-muted d-block mb-2">${el.description}</small>` : '' }` +
+                           `<div class="counter-container" role="group" aria-label="${label} counter">` +
+                           `<button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="${inputId}" data-step="${step}" aria-label="Decrease ${label}"><i class="fas fa-minus" aria-hidden="true"></i></button>` +
+                           `<input id="${inputId}" name="${inputId}" class="form-control counter-input text-center" value="${value}" type="number" step="${step}" ${minAttr}>` +
+                           `<button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="${inputId}" data-step="${step}" aria-label="Increase ${label}"><i class="fas fa-plus" aria-hidden="true"></i></button>` +
+                           `</div></div>`;
+                }
+
+                return `<div class="mb-2"><label class="small d-block mb-1" for="${inputId}">${label}</label><input id="${inputId}" name="${inputId}" class="form-control form-control-sm" placeholder="${label}" data-field="${id}" tabindex="0"></div>`;
+            }
+
+            // prefer auto/teleop/endgame periods if available
+            const cfg = (typeof TEAM_TUTORIAL_CONFIG !== 'undefined' && TEAM_TUTORIAL_CONFIG) ? TEAM_TUTORIAL_CONFIG : DEFAULT_TUTORIAL_CONFIG;
+            if (cfg && (cfg.auto_period || cfg.teleop_period || cfg.endgame_period)) {
+                ['auto_period','teleop_period','endgame_period'].forEach(period => {
+                    const p = cfg[period];
+                    if (p && Array.isArray(p.scoring_elements)) {
+                        html += `<div class="mb-2"><strong class="small text-muted">${period.replace('_',' ')}:</strong></div>`;
+                        p.scoring_elements.forEach(el => { html += addElementInput(el); });
+                    }
+                });
+            } else if (cfg && Array.isArray(cfg.scoring_elements)) {
+                cfg.scoring_elements.forEach(el => { html += addElementInput(el); });
+            } else {
+                // fallback simple notes field
+                html += '<textarea class="form-control form-control-sm mb-2" rows="3" placeholder="Notes"></textarea>';
+            }
+
+            html += '<div class="d-flex justify-content-between"><button type="button" class="btn btn-sm btn-success" id="preview-scout-save">Save Sample</button><small class="text-muted align-self-center">Preview only — not saved</small></div>';
+            html += '<div id="preview-scout-feedback" class="mt-2" aria-live="polite"></div>';
+            html += '</form>';
+            container.innerHTML = html;
+            // Retheme any newly-inserted controls (selects, inputs, charts)
+            setTimeout(() => { try { if (window.updateSelect2DarkMode) window.updateSelect2DarkMode(); if (window.updateChartJsTheme) window.updateChartJsTheme(); } catch(e) { } }, 20);
+        } else if (type === 'analytics') {
+            container.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0"><i class="fas fa-chart-bar text-warning me-2"></i>Analytics Sample</h6>
+                    <div class="d-flex gap-2 align-items-center">
+                        <label class="small mb-0">Chart type</label>
+                        <select id="chartTypeSelect" class="form-select form-select-sm" style="width:130px;">
+                            <option value="line">Line</option>
+                            <option value="bar">Bar</option>
+                            <option value="radar">Radar</option>
+                        </select>
+                    </div>
+                </div>
+                <canvas id="analyticsChart" aria-label="Sample analytics chart"></canvas>
+                <div class="mt-2 small text-muted">Open the full page to interact with filters and team selectors.</div>`;
+
+            // instantiate chart after insertion
+            setTimeout(() => {
+                try {
+                    const ctx = document.getElementById('analyticsChart').getContext('2d');
+                    // Clean up any existing chart on this canvas
+                    if (window._tutorialChart) {
+                        window._tutorialChart.destroy();
+                    }
+                    const cfg = {
+                        type: document.getElementById('chartTypeSelect').value || 'line',
+                        data: SAMPLE_CHART,
+                        options: { responsive: true, maintainAspectRatio: true }
+                    };
+                    // ensure canvas has a constrained height so it doesn't push the page indefinitely
+                    try { document.getElementById('analyticsChart').style.height = '180px'; document.getElementById('analyticsChart').style.maxHeight = '360px'; } catch(e) {}
+                    window._tutorialChart = new Chart(ctx, cfg);
+                    // Apply theme immediately (in case dark mode is already active)
+                    try { if (window.updateChartJsTheme) window.updateChartJsTheme(); } catch(e) { console.warn('Immediate chart theme update failed', e); }
+
+                    document.getElementById('chartTypeSelect').addEventListener('change', (e) => {
+                        const newType = e.target.value;
+                        if (window._tutorialChart) {
+                            window._tutorialChart.config.type = newType;
+                            window._tutorialChart.update();
+                        }
+                    });
+                } catch (e) {
+                    console.warn('Chart init failed', e);
+                }
+            }, 20);
+
+        } else if (type === 'config') {
+            const defaultJson = (typeof DEFAULT_TUTORIAL_CONFIG !== 'undefined') ? JSON.stringify(DEFAULT_TUTORIAL_CONFIG, null, 2) : '{}';
+            container.innerHTML = `
+                <h6 class="mb-2"><i class="fas fa-cogs text-info me-2"></i>Configuration Sample</h6>
+                <div class="mb-2 d-flex gap-2">
+                    <button id="preview-load-default" class="btn btn-sm btn-outline-primary">Load Team Config</button>
+                    <button id="preview-show-form" class="btn btn-sm btn-outline-secondary">Show Form</button>
+                    <button id="preview-config-save" class="btn btn-sm btn-info">Save Sample</button>
+                    <button id="preview-config-reset" class="btn btn-sm btn-outline-warning">Reset</button>
+                </div>
+                <div id="configFormPreview" class="mb-2"></div>
+                <textarea id="configJsonPreview" class="form-control" rows="8" style="max-height:260px;overflow:auto;">${defaultJson}</textarea>
+                <div class="mt-2 small text-muted">Use <strong>Show Form</strong> to view interactive fields generated from the JSON (preview-only).</div>
+                <div id="preview-config-feedback" class="mt-2" aria-live="polite"></div>`;
+
+            // Auto-load the team/default config into the preview when the panel is rendered
+            (async function autoLoadConfig(){
+                const ta = document.getElementById('configJsonPreview');
+                const fb = document.getElementById('preview-config-feedback');
+                try {
+                    // Prefer injected team config if present
+                    if (typeof TEAM_TUTORIAL_CONFIG !== 'undefined' && TEAM_TUTORIAL_CONFIG && Object.keys(TEAM_TUTORIAL_CONFIG).length) {
+                        if (ta) ta.value = JSON.stringify(TEAM_TUTORIAL_CONFIG, null, 2);
+                        renderFormFromJson(TEAM_TUTORIAL_CONFIG);
+                        if (fb) fb.innerHTML = '<div class="alert alert-success py-1 px-2">Team config loaded (preview)</div>';
+                        setTimeout(()=>{ if (fb) fb.innerHTML=''; }, 1500);
+                        return;
+                    }
+
+                    // Fallback: fetch from server endpoint
+                    const resp = await fetch('{{ url_for('setup.tutorial_team_config') }}', { credentials: 'same-origin' });
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        if (ta) ta.value = JSON.stringify(data || {}, null, 2);
+                        renderFormFromJson(data || {});
+                        if (fb) fb.innerHTML = '<div class="alert alert-success py-1 px-2">Team config loaded (preview)</div>';
+                        setTimeout(()=>{ if (fb) fb.innerHTML=''; }, 1500);
+                    } else {
+                        // use default config as last resort
+                        if (ta) ta.value = defaultJson;
+                    }
+                } catch (e) {
+                    console.warn('Auto-load config failed for tutorial preview', e);
+                    if (ta) ta.value = defaultJson;
+                }
+            })();
+
+            // Move focus to the JSON editor to make it obvious content loaded
+            setTimeout(()=>{ try { document.getElementById('configJsonPreview')?.focus(); } catch(e){} }, 50);
+
+            // Retheme newly-added preview controls in case dark mode is active
+            setTimeout(() => { try { if (window.updateSelect2DarkMode) window.updateSelect2DarkMode(); if (window.updateChartJsTheme) window.updateChartJsTheme(); } catch(e) { } }, 20);
+
+            function createFieldInput(el) {
+                const rawId = (el.id || el.name || 'field').toString();
+                const fid = rawId.replace(/[^a-zA-Z0-9_\-]/g, '_');
+                const label = el.label || el.name || rawId;
+                const type = (el.type || el.input_type || el.datatype || 'number');
+
+                if (Array.isArray(el.options) && el.options.length) {
+                    let optionsHtml = '';
+                    el.options.forEach(opt => {
+                        const val = (typeof opt === 'object') ? (opt.value ?? opt) : opt;
+                        const lab = (typeof opt === 'object') ? (opt.label ?? opt.value ?? opt) : opt;
+                        const selected = (el.default !== undefined && String(el.default) === String(val)) ? ' selected' : '';
+                        optionsHtml += `<option value="${String(val)}"${selected}>${String(lab)}</option>`;
+                    });
+                    return `<div class="mb-2"><label class="small d-block mb-1">${label}</label><select id="cfg_${fid}" class="form-select form-select-sm">${optionsHtml}</select></div>`;
+                }
+
+                // Treat numeric types as counters by default (better UX)
+                const isNumericType = ['number','int','float','numeric'].includes(String(type).toLowerCase()) || (typeof el.default === 'number');
+                if (type === 'counter' || fid.toLowerCase().includes('count') || fid.toLowerCase().includes('counter') || isNumericType) {
+                    const step = (el.step !== undefined) ? el.step : (type === 'float' ? 0.1 : 1);
+                    const minAttr = (el.min !== undefined) ? `min="${el.min}"` : '';
+                    const maxAttr = (el.max !== undefined) ? `max="${el.max}"` : '';
+                    const defaultVal = (el.default !== undefined) ? el.default : 0;
+                    return `<div class="mb-2"><label class="small d-block mb-1">${label}</label><div class="input-group input-group-sm"><button type="button" class="btn btn-sm btn-outline-secondary cfg-decr" data-step="${step}" data-target="cfg_${fid}">-</button><input id="cfg_${fid}" class="form-control form-control-sm text-center" value="${defaultVal}" type="number" step="${step}" ${minAttr} ${maxAttr}><button type="button" class="btn btn-sm btn-outline-secondary cfg-incr" data-step="${step}" data-target="cfg_${fid}">+</button></div></div>`;
+                }
+
+                if (type === 'bool' || type === 'checkbox' || type === 'switch') {
+                    const checked = el.default ? 'checked' : '';
+                    return `<div class="form-check form-switch mb-2"><input id="cfg_${fid}" class="form-check-input" type="checkbox" ${checked}><label class="form-check-label small" for="cfg_${fid}">${label}</label></div>`;
+                }
+
+                // fallback: text/number
+                const inputType = (type === 'number' || type === 'int' || type === 'float') ? 'number' : 'text';
+                const defaultVal = el.default ?? '';
+                return `<div class="mb-2"><label class="small d-block mb-1">${label}</label><input id="cfg_${fid}" class="form-control form-control-sm" value="${String(defaultVal)}" type="${inputType}"></div>`;
+            }
+
+            function renderFormFromJson(jsonObj) {
+                const target = document.getElementById('configFormPreview');
+                if (!target) return;
+                target.innerHTML = '';
+                // find scoring elements in common places
+                let elems = [];
+                ['auto_period','teleop_period','endgame_period'].forEach(p => {
+                    if (jsonObj && jsonObj[p] && Array.isArray(jsonObj[p].scoring_elements)) {
+                        elems = elems.concat(jsonObj[p].scoring_elements);
+                    }
+                });
+                if (elems.length === 0 && Array.isArray(jsonObj.scoring_elements)) elems = jsonObj.scoring_elements;
+
+                if (elems.length === 0) {
+                    // Try additional common locations for fields
+                    if (jsonObj.scouting_form && Array.isArray(jsonObj.scouting_form.sections)) {
+                        jsonObj.scouting_form.sections.forEach(s => { if (Array.isArray(s.elements)) elems = elems.concat(s.elements); });
+                    }
+                    if (jsonObj.form && Array.isArray(jsonObj.form.scoring_elements)) elems = elems.concat(jsonObj.form.scoring_elements);
+                    if (jsonObj.pit_scouting && Array.isArray(jsonObj.pit_scouting.sections)) {
+                        jsonObj.pit_scouting.sections.forEach(s => { if (Array.isArray(s.elements)) elems = elems.concat(s.elements); });
+                    }
+                }
+
+                if (elems.length === 0) {
+                    // As a fallback, render simple inputs for top-level primitive keys so users can see something
+                    const fb = document.getElementById('preview-config-feedback');
+                    let fallbackHtml = '<div class="small text-muted">No configurable scoring elements found. Showing top-level keys below for preview:</div>';
+                    fallbackHtml += '<div class="mt-2">';
+                    Object.keys(jsonObj || {}).forEach(k => {
+                        const v = jsonObj[k];
+                        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+                            const inpType = (typeof v === 'number') ? 'number' : 'text';
+                            fallbackHtml += `<div class="mb-2"><label class="small d-block mb-1">${k}</label><input class="form-control form-control-sm" value="${String(v)}" type="${inpType}"></div>`;
+                        }
+                    });
+                    fallbackHtml += '</div>';
+                    target.innerHTML = fallbackHtml;
+                    if (fb) fb.innerHTML = '<div class="alert alert-info py-1 px-2">Config loaded (preview) — no scoring elements found, showing top-level keys.</div>';
+                    setTimeout(()=>{ if (fb) fb.innerHTML=''; }, 3000);
+                    return;
+                }
+
+                elems.forEach(el => {
+                    const html = createFieldInput(el);
+                    target.insertAdjacentHTML('beforeend', html);
+                });
+
+                // Add handlers for +/- buttons
+                target.querySelectorAll('.cfg-incr').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const tid = btn.getAttribute('data-target');
+                        const step = parseFloat(btn.getAttribute('data-step') || '1');
+                        const inp = document.getElementById(tid);
+                        if (inp) {
+                            const cur = inp.value === '' ? 0 : Number(inp.value);
+                            const next = ((Math.round((cur + step) / step) * step) + 0) ;
+                            inp.value = Number((cur + step).toFixed( (String(step).includes('.') ? step.toString().split('.')[1].length : 0)));
+                            updateJsonFromForm();
+                        }
+                    });
+                });
+                target.querySelectorAll('.cfg-decr').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const tid = btn.getAttribute('data-target');
+                        const step = parseFloat(btn.getAttribute('data-step') || '1');
+                        const inp = document.getElementById(tid);
+                        if (inp) {
+                            const cur = inp.value === '' ? 0 : Number(inp.value);
+                            const next = cur - step;
+                            inp.value = Number(Math.max((inp.min ? Number(inp.min) : -Infinity), next).toFixed( (String(step).includes('.') ? step.toString().split('.')[1].length : 0)));
+                            updateJsonFromForm();
+                        }
+                    });
+                });
+
+                // Sync changes back to JSON textarea
+                target.querySelectorAll('input,textarea,select').forEach(el => {
+                    el.addEventListener('change', updateJsonFromForm);
+                    el.addEventListener('input', updateJsonFromForm);
+                });
+            }
+
+            function updateJsonFromForm() {
+                const ta = document.getElementById('configJsonPreview');
+                const target = document.getElementById('configFormPreview');
+                if (!ta || !target) return;
+                const values = {};
+                target.querySelectorAll('input,select,textarea').forEach(el => {
+                    const key = el.id ? el.id.replace(/^cfg_/, '') : (el.dataset.field || el.name || el.placeholder || 'field');
+                    let val;
+                    if (el.type === 'checkbox') val = el.checked;
+                    else if (el.type === 'number') val = (el.value === '' ? null : Number(el.value));
+                    else val = el.value;
+                    values[key] = val;
+                });
+                // For demo purposes, we just show a mapping of values
+                ta.value = JSON.stringify({ preview_values: values }, null, 2);
+            }
+
+            // load team default into the preview when requested
+            setTimeout(() => {
+                const loadBtn = document.getElementById('preview-load-default');
+                const showFormBtn = document.getElementById('preview-show-form');
+                const resetBtn = document.getElementById('preview-config-reset');
+                if (loadBtn) {
+                    loadBtn.addEventListener('click', async () => {
+                        const ta = document.getElementById('configJsonPreview');
+                        // If we already have a team config in JS, use it first
+                        if (typeof TEAM_TUTORIAL_CONFIG !== 'undefined' && TEAM_TUTORIAL_CONFIG && Object.keys(TEAM_TUTORIAL_CONFIG).length) {
+                            if (ta) ta.value = JSON.stringify(TEAM_TUTORIAL_CONFIG, null, 2);
+                            renderFormFromJson(TEAM_TUTORIAL_CONFIG);
+                            const fb = document.getElementById('preview-config-feedback'); if (fb) fb.innerHTML = '<div class="alert alert-success py-1 px-2">Team config loaded (preview)</div>'; setTimeout(()=>{ if (fb) fb.innerHTML=''; }, 1800);
+                            return;
+                        }
+
+                        // Otherwise fetch from server endpoint
+                        try {
+                            const resp = await fetch('{{ url_for('setup.tutorial_team_config') }}', { credentials: 'same-origin' });
+                            if (!resp.ok) throw new Error('Network response not ok');
+                            const data = await resp.json();
+                            if (ta) ta.value = JSON.stringify(data || {}, null, 2);
+                            renderFormFromJson(data || {});
+                            const fb = document.getElementById('preview-config-feedback'); if (fb) fb.innerHTML = '<div class="alert alert-success py-1 px-2">Team config loaded (preview)</div>'; setTimeout(()=>{ if (fb) fb.innerHTML=''; }, 1800);
+                        } catch (e) {
+                            console.warn('Failed to fetch team config for tutorial:', e);
+                            if (ta) ta.value = defaultJson;
+                            // show a gentle user-visible message
+                            const fb = document.getElementById('preview-config-feedback');
+                            if (fb) fb.innerHTML = '<div class="alert alert-warning py-1 px-2">Unable to load team config (preview). Using default.</div>';
+                            setTimeout(()=>{ if (fb) fb.innerHTML = ''; }, 2500);
+                        }
+                    });
+                }
+                if (showFormBtn) {
+                    showFormBtn.addEventListener('click', () => {
+                        const ta = document.getElementById('configJsonPreview');
+                        try {
+                            const data = JSON.parse(ta.value || '{}');
+                            renderFormFromJson(data);
+                            // Scroll to and highlight the rendered form
+                            const target = document.getElementById('configFormPreview');
+                            if (target) { try { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) { target.scrollIntoView(); } target.classList.add('tutorial-highlight'); setTimeout(()=>target.classList.remove('tutorial-highlight'), 2200); }
+                        } catch (e) {
+                            const fb = document.getElementById('preview-config-feedback');
+                            if (fb) fb.innerHTML = '<div class="alert alert-danger py-1 px-2">Invalid JSON - cannot render form</div>';
+                            setTimeout(()=>{ if (fb) fb.innerHTML = ''; }, 2500);
+                        }
+                    });
+                }
+                if (resetBtn) {
+                    resetBtn.addEventListener('click', () => { document.getElementById('configJsonPreview').value = defaultJson; document.getElementById('configFormPreview').innerHTML = ''; });
+                }
+            }, 10);
         }
-        // active button state
-        buttons.forEach(b => {
-            b.classList.remove('active');
-            b.classList.remove('demo-highlight');
-        });
+    }
+
+    if (sampleBtn) sampleBtn.addEventListener('click', () => {
+        const key = id.indexOf('basic') !== -1 ? 'scouting' : id.indexOf('analytics') !== -1 ? 'analytics' : 'config';
+        renderPreview(key);
+    });
+}
+
+// Small interactions for preview save buttons
+document.addEventListener('click', function(e) {
+    if (e.target && e.target.id === 'preview-scout-save') {
+        const fb = document.getElementById('preview-scout-feedback');
+        // collect values from the form surrounding the button
+        const form = e.target.closest('form');
+        if (form) {
+            const data = {};
+            form.querySelectorAll('input, textarea, select').forEach(el => {
+                const key = el.name || el.id || el.dataset.field || el.placeholder || 'field';
+                if (el.type === 'checkbox') data[key] = el.checked;
+                else if (el.type === 'number') data[key] = (el.value === '' ? null : Number(el.value));
+                else data[key] = el.value;
+            });
+            if (fb) { fb.innerHTML = '<div class="small"><strong>Preview values:</strong><pre class="mb-0">'+JSON.stringify(data, null, 2)+'</pre></div>'; setTimeout(()=>{ if (fb) fb.innerHTML=''; }, 4000); }
+        } else {
+            if (fb) { fb.innerHTML = '<div class="alert alert-success py-1 px-2">Sample saved (preview)</div>'; setTimeout(()=>fb.innerHTML='','1600'); }
+        }
+    }
+
+    // Handle increment/decrement buttons in scouting preview and config form
+    if (e.target && (e.target.closest('.btn-increment') || e.target.closest('.btn-decrement'))) {
+        const btn = e.target.closest('.btn-increment') || e.target.closest('.btn-decrement');
         if (btn) {
-            btn.classList.add('active');
-            btn.classList.add('demo-highlight');
+            const targetId = btn.getAttribute('data-target');
+            const step = parseFloat(btn.getAttribute('data-step') || '1');
+            const inp = document.getElementById(targetId);
+            if (inp) {
+                const cur = inp.value === '' ? 0 : Number(inp.value);
+                if (btn.classList.contains('btn-increment')) {
+                    inp.value = Number((cur + step).toFixed((String(step).includes('.') ? step.toString().split('.')[1].length : 0)));
+                } else {
+                    const next = cur - step;
+                    inp.value = Number(Math.max((inp.min ? Number(inp.min) : -Infinity), next).toFixed((String(step).includes('.') ? step.toString().split('.')[1].length : 0)));
+                }
+                // trigger input event
+                inp.dispatchEvent(new Event('input', { bubbles: true }));
+            }
         }
     }
 
-    // bind clicks
-    buttons.forEach(btn => {
-        btn.addEventListener('click', () => setSrc(btn.getAttribute('data-url'), btn));
-        
-        // Add hover hints
-        btn.addEventListener('mouseenter', () => {
-            const hint = btn.getAttribute('data-hint');
-            if (hint && hintDisplay && hintText) {
-                hintText.textContent = hint;
-                hintDisplay.classList.remove('d-none');
+    // Quick navigation in the tutorial: 'Show' buttons scroll to and briefly highlight the step
+    if (e.target && (e.target.classList.contains('tutorial-nav-show') || e.target.closest('.tutorial-nav-show'))) {
+        const btn = e.target.classList.contains('tutorial-nav-show') ? e.target : e.target.closest('.tutorial-nav-show');
+        const stepSel = btn.getAttribute('data-step');
+        if (stepSel) {
+            const stepEl = document.querySelector(stepSel);
+            if (stepEl) {
+                try { stepEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) { stepEl.scrollIntoView(); }
+                stepEl.classList.add('tutorial-highlight');
+                setTimeout(()=>{ try { stepEl.classList.remove('tutorial-highlight'); } catch(e) {} }, 2500);
             }
-        });
-        
-        btn.addEventListener('mouseleave', () => {
-            if (hintDisplay) {
-                hintDisplay.classList.add('d-none');
-            }
-        });
-    });
-
-    // initialize
-    setSrc(defaultUrl, buttons[0]);
-}
+        }
+    }
+    if (e.target && e.target.id === 'preview-config-save') {
+        // validate JSON in editor; do not save to server
+        const ta = document.getElementById('configJsonPreview');
+        const fb = document.getElementById('preview-config-feedback');
+        try {
+            const parsed = JSON.parse(ta.value);
+            if (fb) { fb.innerHTML = '<div class="alert alert-success py-1 px-2">Sample config validated (preview only)</div>'; setTimeout(()=>fb.innerHTML='','1800'); }
+        } catch (err) {
+            if (fb) { fb.innerHTML = '<div class="alert alert-danger py-1 px-2">Invalid JSON: ' + (err.message || '') + '</div>'; }
+        }
+    }
+    if (e.target && e.target.id === 'practice-complete') {
+        e.target.classList.add('btn-outline-success'); e.target.textContent = 'Completed'; setTimeout(()=>{ e.target.classList.remove('btn-outline-success'); }, 1200);
+    }
+});
 
 // Keyboard navigation
 document.addEventListener('keydown', function(e) {
     if (e.key === 'ArrowRight' || e.key === ' ') {
-        // Space prevents page scroll when focused outside inputs
-        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-            e.preventDefault();
-            nextStep();
-        }
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') { e.preventDefault(); nextTStep(); }
     } else if (e.key === 'ArrowLeft') {
-        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-            e.preventDefault();
-            previousStep();
-        }
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') { e.preventDefault(); previousTStep(); }
     }
 });
 
-// Initialize
+// Initialize UI and preview bindings
 document.addEventListener('DOMContentLoaded', function() {
-    showStep(1);
-    
-    // Wire up live demos with sensible defaults
-    initLiveDemo('navDemoFrame', '{{ url_for("main.index") }}', '#navDemoButtons button', 'navOpenBtn');
-    initLiveDemo('scoutDemoFrame', '{{ url_for("scouting.scouting_form") }}', '#scoutDemoButtons button', 'scoutOpenBtn');
-    initLiveDemo('analyticsDemoFrame', '{{ url_for("graphs.index") }}', '#analyticsDemoButtons button', 'analyticsOpenBtn');
-    initLiveDemo('configDemoFrame', '{{ url_for("main.config") }}', '#configDemoButtons button', 'configOpenBtn');
+    // set default mode
+    setMode('guided');
+
+    // Bind mode buttons
+    document.getElementById('mode-guided').addEventListener('click', () => setMode('guided'));
+    document.getElementById('mode-compact').addEventListener('click', () => setMode('compact'));
+
+    // Bind preview helpers
+    initPreview('basicScoutingPreview', '{{ url_for("scouting.scouting_form") }}', 'basicJump');
+    initPreview('analyticsPreview', '{{ url_for("graphs.index") }}', 'analyticsSample');
+    initPreview('configPreview', '{{ url_for("main.config") }}', 'configSample');
+
+    // small convenience
+    document.getElementById('basicJump').addEventListener('click', function() { document.getElementById('basicScoutingPreview').querySelector('input')?.focus(); });
+    document.getElementById('analyticsSample').addEventListener('click', function() { document.getElementById('analyticsPreview').querySelector('.sample-chart')?.scrollIntoView({behavior:'smooth'}); });
+    document.getElementById('configSample').addEventListener('click', function() { document.getElementById('configPreview').querySelector('.form-check')?.scrollIntoView({behavior:'smooth'}); });
+
+    // Show initial step
+    showTStep(1);
 });
 </script>
 
 <style>
-.bg-purple { background-color: #6f42c1 !important; }
-.text-purple { color: #6f42c1 !important; }
-.border-purple { border-color: #6f42c1 !important; }
-.btn-outline-purple { color: #6f42c1; border-color: #6f42c1; }
-.btn-outline-purple:hover { color: #fff; background-color: #6f42c1; border-color: #6f42c1; }
+/* Tutorial v2 styles */
+.tutorial-v2 .demo-preview { min-height: 160px; display:flex; align-items:center; justify-content:center; padding:1rem; }
+.tutorial-v2 .preview-sample { width:100%; }
+.tutorial-v2 .sample-chart { height:180px; background:linear-gradient(180deg,#fff,#f8f9fa); border:1px dashed #ced4da; display:flex; align-items:center; justify-content:center; }
+#analyticsChart { width:100% !important; height:220px !important; }
+#analyticsChart + .chartjs-render-monitor { width:100% !important; }
+.tutorial-v2 .card-header { font-weight:700; }
+.tutorial-v2 .btn.active { box-shadow:0 0 0 0.15rem rgba(13,110,253,0.15); }
+@media (max-width:768px) { .tutorial-v2 .demo-preview { min-height: 140px; } }
 
-/* Tutorial Enhancement Styles */
-.highlight-hint {
-    background: linear-gradient(120deg, #fff3cd 0%, #fff3cd 100%);
-    background-size: 100% 0.2em;
-    background-repeat: no-repeat;
-    background-position: 0 88%;
-    padding: 0 4px;
-    border-radius: 3px;
-    font-weight: 600;
-    color: #856404;
-}
+/* Dark mode preview styling */
+body.dark-mode .tutorial-v2 .demo-preview { background: rgba(255,255,255,0.02); color: #e6e6e6; border-color: rgba(255,255,255,0.06); }
+body.dark-mode .tutorial-v2 .preview-placeholder, body.dark-mode .tutorial-v2 .preview-sample { color: #e6e6e6; }
+body.dark-mode #configJsonPreview { background:#0f1112; color:#e6e6e6; border-color:#222; }
+body.dark-mode .sample-chart { border-color: rgba(255,255,255,0.06); background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.00)); }
 
-.demo-highlight {
-    position: relative;
-    animation: pulse-highlight 2s infinite;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
-}
-
-@keyframes pulse-highlight {
-    0% {
-        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
-    }
-    50% {
-        box-shadow: 0 0 0 0.4rem rgba(13, 110, 253, 0.15);
-    }
-    100% {
-        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
-    }
+/* Ensure inputs/selects are readable in dark mode */
+body.dark-mode .tutorial-v2 .demo-preview input,
+body.dark-mode .tutorial-v2 .demo-preview textarea,
+body.dark-mode .tutorial-v2 .demo-preview select,
+body.dark-mode .tutorial-v2 .demo-preview .form-control,
+body.dark-mode .tutorial-v2 .demo-preview .form-select {
+    background: #121213 !important;
+    color: #e6e6e6 !important;
+    border-color: #2b2b2b !important;
 }
 
-.demo-frame {
-    border: 2px solid #dee2e6;
-    transition: border-color 0.3s ease;
+/* Buttons and outlines */
+body.dark-mode .tutorial-v2 .demo-preview .btn,
+body.dark-mode .tutorial-v2 .demo-preview .btn-outline-secondary,
+body.dark-mode .tutorial-v2 .demo-preview .btn-outline-info,
+body.dark-mode .tutorial-v2 .demo-preview .btn-outline-primary {
+    color: #e6e6e6 !important;
+    border-color: rgba(255,255,255,0.08) !important;
+    background-color: transparent !important;
 }
 
-.demo-frame:hover {
-    border-color: #0d6efd;
+/* Make sure focused inputs have visible outline in dark mode */
+body.dark-mode .tutorial-v2 .demo-preview input:focus,
+body.dark-mode .tutorial-v2 .demo-preview textarea:focus,
+body.dark-mode .tutorial-v2 .demo-preview select:focus,
+body.dark-mode .tutorial-v2 .demo-preview .btn:focus {
+    outline: 2px solid rgba(13,110,253,0.25);
+    outline-offset: 2px;
 }
 
-.nav-demo-icon {
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: rgba(0, 123, 255, 0.1);
+/* Select2 dropdowns inside preview */
+body.dark-mode .tutorial-v2 .demo-preview .select2-container--bootstrap-5 .select2-selection,
+body.dark-mode .tutorial-v2 .demo-preview .select2-container--bootstrap-5 .select2-results__option {
+    background: #121213 !important; color: #e6e6e6 !important; border-color:#2b2b2b !important;
 }
 
-/* Tutorial Progress Indicator */
-.tutorial-step {
-    opacity: 0;
-    transform: translateX(20px);
-    transition: all 0.3s ease-in-out;
+body.dark-mode .tutorial-v2 .demo-preview .form-check-input {
+    filter: none; /* keep switch visible */
 }
 
-.tutorial-step.active-step {
-    opacity: 1;
-    transform: translateX(0);
-}
+/* Reduce contrast in sample chart background for dark mode */
+body.dark-mode .tutorial-v2 .sample-chart { border-color: rgba(255,255,255,0.06); background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.00)); }
 
-/* Interactive Elements */
-.alert-light {
-    background-color: #f8f9fa;
-    border-left: 4px solid #0d6efd;
-}
+/* Ensure legends and tooltips are readable (Chart.js defaults will also be applied in JS)
+   but add a fallback in CSS */
+body.dark-mode .tutorial-v2 canvas { background: transparent; }
+body.dark-mode .tutorial-v2 .chartjs-tooltip { background: rgba(17,17,18,0.95); color: #e6e6e6; }
 
-.card-header {
-    font-weight: 600;
-}
+/* Keep dark-mode buttons readable generally */
+body.dark-mode .tutorial-v2 .btn { color: #e6e6e6; }
 
-/* Mobile Responsiveness */
-@media (max-width: 768px) {
-    .btn-group .btn {
-        margin-bottom: 0.25rem;
-    }
-    
-    .demo-highlight {
-        animation: none;
-        box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.25);
-    }
-    
-    .nav-demo-icon {
-        width: 35px;
-        height: 35px;
-    }
-}
 
-/* Larger demo frame for scouting step to show form more clearly */
-.demo-frame-large {
-    padding: 0.5rem;
-    height: 520px; /* taller to better show the scouting form */
-    overflow: hidden;
-    display: flex;
-}
-.demo-frame-large iframe {
-    flex: 1 1 auto;
-    width: 100%;
-    height: 100%;
-    border: 0;
-}
 </style>
 {% endblock %}

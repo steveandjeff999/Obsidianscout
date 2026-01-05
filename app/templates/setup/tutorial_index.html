@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block title %}Tutorial Hub{% endblock %}
+
+{% block heading %}Tutorial Hub{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+      <div class="text-center mb-4">
+        <h2><i class="fas fa-graduation-cap me-2"></i>Tutorial Hub</h2>
+        <p class="lead text-muted">Choose the tutorial that best matches your role.</p>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="card shadow">
+            <div class="card-body text-center">
+              <h5>Scout Tutorial</h5>
+              <p class="small text-muted">Focused walkthrough for match & pit scouting, tips for quick entry.</p>
+              <a href="{{ url_for('setup.tutorial_scout') }}" class="btn btn-success btn-sm">Open Scout Tutorial</a>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card shadow">
+            <div class="card-body text-center">
+              <h5>Analytics & Admin Tutorial</h5>
+              <p class="small text-muted">Charts, filters, and configuration guidance for analysts and admins.</p>
+              <a href="{{ url_for('setup.tutorial_analytics') }}" class="btn btn-warning btn-sm">Open Analytics Tutorial</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 text-center small text-muted">You can return to this hub anytime from the Setup menu.</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

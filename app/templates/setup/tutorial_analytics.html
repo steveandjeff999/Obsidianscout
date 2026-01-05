@@ -1,0 +1,873 @@
+{% extends 'base.html' %}
+
+{% block title %}Analytics Tutorial{% endblock %}
+
+{% block heading %}Analytics & Admin Tutorial{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="row justify-content-center">
+    <div class="col-md-10">
+      <div class="text-center mb-4">
+        <h2><i class="fas fa-chart-line me-2"></i>Analytics & Admin Tutorial</h2>
+        <p class="lead text-muted">Focused guidance for analytics and admin users — charts, filters, and game configuration. <strong>Analytics & Configuration</strong></p>
+        <div class="mt-2 text-start">
+          <strong>What you'll learn</strong>
+          <ul class="small mb-0 text-muted">
+            <li>How to read and customize charts for team comparisons.</li>
+            <li>How to apply filters to focus on specific matches or teams.</li>
+            <li>How to use the config editor and Scouting Preview to test changes safely.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Steps: Intro, Navigation, Charts, Filters, Configuration, Wrap -->
+      <div id="tutorial-container">
+        <div class="tutorial-step d-block active-step" id="a-step-1">
+          <div class="card shadow"><div class="card-header bg-primary text-white"><h5 class="mb-0"><span class="badge bg-light text-primary me-2">1</span>Welcome</h5></div><div class="card-body p-4"><h6>Welcome</h6><p class="small">This tutorial helps analytics users explore charts, filters, and game configuration points.</p></div></div>
+        </div>
+
+        <div class="tutorial-step d-none" id="a-step-2">
+          <div class="card shadow"><div class="card-header bg-secondary text-white"><h5 class="mb-0"><span class="badge bg-light text-secondary me-2">2</span>Navigation</h5></div><div class="card-body p-4"><h6>Where to find analytics</h6><p class="small">Open the Analytics page, team comparisons, and exports from the navigation.</p><div class="mt-2 d-flex gap-2"><button class="btn btn-sm btn-outline-warning" onclick="window.open('{{ url_for('graphs.index') }}','_blank','noopener')">Open Analytics</button><button class="btn btn-sm btn-outline-primary" onclick="window.open('{{ url_for('teams.index') }}','_blank','noopener')">Teams</button></div></div></div>
+        </div>
+
+        <div class="tutorial-step d-none" id="a-step-3">
+          <div class="card shadow"><div class="card-header bg-success text-white"><h5 class="mb-0"><span class="badge bg-light text-success me-2">3</span>Charts</h5></div><div class="card-body p-4"><h6>Sample charts</h6><p class="small">Use the sample chart preview to practice picking chart types, reading tooltips, and comparing teams visually.</p>
+            <div class="row g-3">
+              <div class="col-lg-7">
+                <div class="small text-muted">Try these exercises to learn the charts:</div>
+                <ol class="small mb-0">
+                  <li>Click <strong>Show Sample Chart</strong> to load example data.</li>
+                  <li>Switch chart types (Line / Bar / Radar) and notice the differences in how trends are presented.</li>
+                  <li>Hover points to read tooltips and learn what each dataset represents.</li>
+                  <li>Proceed to the <strong>Filters</strong> step to limit visible teams and see the impact.</li>
+                </ol>
+                <div class="mt-2 small text-muted">Read more: <a href="{{ url_for('main.help_page') }}?file=GRAPHING_AND_ANALYSIS.md">Graphing &amp; Analysis</a></div>
+              </div>
+              <div class="col-lg-5">
+                <div id="analyticsPreview" class="border rounded bg-body-secondary p-3 demo-preview" role="region" aria-label="Analytics preview"><div class="preview-placeholder text-muted small text-center">Click "Show Sample Chart" to display an example.</div></div>
+              </div>
+            </div>
+            <div class="mt-3"><button id="showAnalytics" class="btn btn-warning btn-sm">Show Sample Chart</button></div>
+          </div></div>
+        </div>
+
+        <div class="tutorial-step d-none" id="a-step-4">
+          <div class="card shadow"><div class="card-header bg-info text-white"><h5 class="mb-0"><span class="badge bg-light text-info me-2">4</span>Filters</h5></div>
+            <div class="card-body p-4">
+              <h6>Interactive Filters</h6>
+              <p class="small">Try selecting which teams to show and restrict the range of matches. Click <strong>Apply Filters</strong> to update the sample chart.</p>
+              <div class="small text-muted mt-2 mb-2">Exercises:</div>
+              <ul class="small text-muted">
+                <li>Select two teams and click <strong>Apply Filters</strong> to compare their match-by-match series.</li>
+                <li>Switch <strong>Display mode</strong> to <em>Averages</em> to compare per-team averages instead of per-match time series.</li>
+                <li>Change the <strong>Chart type</strong> to see which visualization best highlights differences.</li>
+              </ul>
+              <div class="mt-2 small text-muted">Tip: Use the Reset button to quickly return to the full dataset.</div>
+
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <div id="filterControls" class="small text-muted">
+                    <!-- populated by JS -->
+                    <div class="mb-2">Loading filter controls…</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="small text-muted">
+                    <strong>Preview</strong>
+                    <div id="filterPreviewNote" class="mt-2">Apply filters to see live sample charts below. Use different modes to compare.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row mt-3 g-3" id="filterCharts">
+                <div class="col-12">
+                  <div class="card p-2">
+                    <div class="small fw-medium mb-1">Preview Chart</div>
+                    <canvas id="filterChart_main" class="sample-chart" style="height:220px;max-height:420px;width:100%;"></canvas>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <div class="tutorial-step d-none" id="a-step-5">
+          <div class="card shadow"><div class="card-header bg-warning text-white"><h5 class="mb-0"><span class="badge bg-light text-warning me-2">5</span>Configuration</h5></div><div class="card-body p-4"><h6>Game config basics</h6><p class="small">View and preview the game configuration used to generate scouting elements and scoring. You can safely experiment in the preview editor without altering live settings.</p>
+            <div class="mt-2 small text-muted">Practice steps:</div>
+            <ol class="small mb-2">
+              <li>Click <strong>Show Config Preview</strong> to open the editor.</li>
+              <li>Use <strong>Load Team Config</strong> to load a safe sample, edit a field (such as an element label), then click <strong>Scouting Preview</strong> to see how the form changes.</li>
+              <li>If you want to persist changes, use the real Config editor from the Setup menu — otherwise use preview only.</li>
+            </ol>
+            <div class="mt-2"><button id="showConfig" class="btn btn-info btn-sm">Show Config Preview</button></div><div id="configPreview" class="mt-3"></div><div id="preview-config-feedback" class="mt-2" aria-live="polite"></div></div></div>
+        </div>
+
+        <div class="tutorial-step d-none" id="a-step-6">
+          <div class="card shadow"><div class="card-header bg-dark text-white"><h5 class="mb-0"><span class="badge bg-light text-dark me-2">6</span>Wrap Up</h5></div><div class="card-body p-4"><h6>All set</h6><p class="small">Open the analytics page to begin exploring real data.</p><div class="mt-3"><button class="btn btn-warning btn-sm" onclick="window.open('{{ url_for('graphs.index') }}','_blank','noopener')">Open Analytics</button></div></div></div>
+        </div>
+
+        <!-- Wizard controls -->
+        <div class="d-flex justify-content-between align-items-center mt-3">
+          <div><button id="a-prev-btn" class="btn btn-outline-secondary btn-sm">Previous</button></div>
+          <div class="text-center"><small id="a-step-indicator" class="text-muted">Step 1 of 6</small></div>
+          <div><button id="a-next-btn" class="btn btn-primary btn-sm">Next</button></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Data provided from server for this tutorial
+const DEFAULT_TUTORIAL_CONFIG = {{ default_config|tojson|safe }};
+const TEAM_TUTORIAL_CONFIG = {{ team_config|tojson|safe }};
+const SAMPLE_CHART = {{ sample_chart|tojson|safe }};
+
+// Analytics tutorial stepper
+let aCurrent=1; const aSteps=6;
+function showAStep(idx){
+  aCurrent = Math.max(1,Math.min(aSteps,idx));
+  for(let i=1;i<=aSteps;i++){ document.getElementById('a-step-'+i).classList.toggle('d-none', i!==aCurrent); }
+  document.getElementById('a-step-indicator').textContent = `Step ${aCurrent} of ${aSteps}`;
+  document.getElementById('a-prev-btn').disabled = aCurrent===1;
+  document.getElementById('a-next-btn').textContent = aCurrent===aSteps ? 'Finish' : 'Next';
+
+  // When entering Filters step or Configuration step, ensure controls are rendered
+  try {
+    if (aCurrent === 4) {
+      // if not yet rendered, attempt to render controls (will handle missing SAMPLE_CHART gracefully)
+      if (!window._filtersRendered) {
+        try { renderFilterControls(); window._filtersRendered = true; } catch (e) { console.warn('renderFilterControls pre-render failed', e); }
+      }
+    }
+    if (aCurrent === 5) {
+      // create config editor UI on first entry so users can practice safely with a copy of the team config
+      if (!window._configEditorCreated) {
+        try { createConfigEditorUI(); window._configEditorCreated = true; } catch (e) { console.warn('createConfigEditorUI failed', e); }
+      }
+    }
+  } catch (e) { console.warn('showAStep helper caught', e); }
+}
+document.getElementById('a-next-btn').addEventListener('click', ()=>{ if(aCurrent<aSteps) showAStep(aCurrent+1); else { window.location = "{{ url_for('setup.tutorial') }}"; } });
+document.getElementById('a-prev-btn').addEventListener('click', ()=>{ if(aCurrent>1) showAStep(aCurrent-1); });
+
+// Chart preview loader
+function renderChartInAnalyticsPreview(typeOverride){
+  const container = document.getElementById('analyticsPreview');
+  container.innerHTML = `
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="mb-0"><i class="fas fa-chart-bar text-warning me-2"></i>Analytics Sample</h6>
+      <div class="d-flex gap-2 align-items-center"><label class="small mb-0">Chart type</label><select id="chartTypeSelect" class="form-select form-select-sm" style="width:130px;"><option value="line">Line</option><option value="bar">Bar</option><option value="radar">Radar</option></select></div>
+    </div>
+    <canvas id="analyticsChart" style="height:160px;max-height:320px;"></canvas>
+  `;
+
+  setTimeout(()=>{
+    try{
+      const ctx = document.getElementById('analyticsChart').getContext('2d');
+      if(window._tutorialChart) window._tutorialChart.destroy();
+      const chartType = typeOverride || document.getElementById('chartTypeSelect').value || 'line';
+      // Deep clone to avoid mutating SAMPLE_CHART
+      const dataCopy = JSON.parse(JSON.stringify(SAMPLE_CHART || {}));
+      window._tutorialChart = new Chart(ctx, { type: chartType, data: dataCopy, options:{responsive:true,maintainAspectRatio:true}});
+      try { document.getElementById('analyticsChart').style.maxHeight = '320px'; document.getElementById('analyticsChart').style.height = '160px'; } catch(e) {}
+
+      document.getElementById('chartTypeSelect').addEventListener('change',(e)=>{ if(window._tutorialChart){ window._tutorialChart.config.type = e.target.value; window._tutorialChart.update(); } try { const f = document.getElementById('filter_chart_type'); if (f) { f.value = e.target.value; f.dispatchEvent(new Event('change', { bubbles: true })); } } catch(err) { /* ignore */ } });
+
+      // Once chart exists, render filter controls for step 4
+      try { renderFilterControls(); } catch(e) { console.warn('renderFilterControls failed', e); }
+    }catch(e){ console.warn('chart init failed',e);} 
+  },20);
+}
+
+document.getElementById('showAnalytics').addEventListener('click', function(){ renderChartInAnalyticsPreview(); });
+
+// Helper: render filter controls for step 4 and wire to the chart
+function renderFilterControls(){
+  const container = document.getElementById('filterControls');
+  if (!container) return;
+  try {
+    // Clear and show a friendly initial UI
+    container.innerHTML = '<div class="mb-2">Preparing filter controls…</div>';
+    const fb = document.getElementById('filterPreviewNote');
+
+    // Validate SAMPLE_CHART
+    if (!SAMPLE_CHART || !Array.isArray(SAMPLE_CHART.datasets) || !Array.isArray(SAMPLE_CHART.labels)) {
+      container.innerHTML = '<div class="small text-muted">No sample chart data available to build filters.</div>';
+      return;
+    }
+
+    // Teams checkboxes
+    const ds = SAMPLE_CHART.datasets;
+    const labels = SAMPLE_CHART.labels;
+    let html = '<div class="mb-2"><label class="small fw-medium d-block mb-1">Teams</label>';
+    ds.forEach((d, i) => {
+      html += `<div class="form-check form-check-inline"><input class="form-check-input filter-team" type="checkbox" id="filter_team_${i}" data-idx="${i}" checked><label class="form-check-label small" for="filter_team_${i}">${escapeHtml(String(d.label || 'Team '+(i+1)))}</label></div>`;
+    });
+    html += '</div>';
+
+    // Display mode selector (match-by-match or averages)
+    html += '<div class="mb-2"><label class="small fw-medium d-block mb-1">Display mode</label>' +
+            `<select id="filter_display_mode" class="form-select form-select-sm" style="width:160px;"><option value="match">Match-by-Match</option><option value="averages">Averages</option></select></div>`;
+    // Chart type selector (like on graphs page) — user chooses how to view the main chart
+    html += '<div class="mb-2"><label class="small fw-medium d-block mb-1">Chart type</label>' +
+            `<select id="filter_chart_type" class="form-select form-select-sm" style="width:160px;"><option value="line">Line</option><option value="bar">Bar</option><option value="radar">Radar</option></select></div>`;
+
+    // Buttons
+    html += `<div class="d-flex gap-2"><button id="applyFilters" class="btn btn-sm btn-primary">Apply Filters</button><button id="resetFilters" class="btn btn-sm btn-outline-secondary">Reset</button></div>`;
+
+    container.innerHTML = html;
+
+    // Initialize the main preview chart with full data
+    try {
+      const fullLabels = SAMPLE_CHART.labels || [];
+      const fullDatasets = SAMPLE_CHART.datasets.map(d => ({ label: d.label, backgroundColor: d.backgroundColor, borderColor: d.borderColor, data: d.data.slice() }));
+      if (!window._filterChartsInitialized) initFilterCharts();
+      const chartType = (document.getElementById('filter_chart_type') && document.getElementById('filter_chart_type').value) ? document.getElementById('filter_chart_type').value : 'line';
+      const mode = (document.getElementById('filter_display_mode') && document.getElementById('filter_display_mode').value) ? document.getElementById('filter_display_mode').value : 'match';
+      updateFilterCharts(fullLabels, fullDatasets, chartType, mode);
+    } catch(e) { console.warn('Failed to initialize filter charts with default data', e); }
+
+    // Attach handlers
+    document.getElementById('applyFilters').addEventListener('click', () => {
+      try {
+        const selected = Array.from(document.querySelectorAll('.filter-team')).filter(ch => ch.checked).map(ch => Number(ch.getAttribute('data-idx')));
+        const chartType = (document.getElementById('filter_chart_type') && document.getElementById('filter_chart_type').value) ? document.getElementById('filter_chart_type').value : 'line';
+        if (selected.length === 0) {
+          if (fb) fb.textContent = 'Please select at least one team to preview.';
+          return;
+        }
+        if (fb) fb.textContent = 'Applying filters…';
+
+        // Build filtered chart data using the full match series (match-range removed)
+        const mode = (document.getElementById('filter_display_mode') && document.getElementById('filter_display_mode').value) ? document.getElementById('filter_display_mode').value : 'match';
+        const newLabels = labels.slice();
+        const newDatasets = SAMPLE_CHART.datasets.filter((d, idx) => selected.includes(idx)).map(d => ({ label: d.label, backgroundColor: d.backgroundColor, borderColor: d.borderColor, data: d.data.slice() }));
+
+        // Update main chart with chosen chart type and mode
+        try {
+          if (!window._filterChartsInitialized) { initFilterCharts(); }
+          updateFilterCharts(newLabels, newDatasets, chartType, mode);
+          if (fb) { fb.textContent = 'Filters applied.'; setTimeout(()=>{ if (fb) fb.textContent = 'Preview'; }, 1200); }
+        } catch(e) { console.warn('Failed to apply filters', e); if (fb) fb.textContent = 'Failed to apply filters.'; }
+      } catch (e) { console.warn('applyFilters handler failed', e); if (fb) fb.textContent = 'Error applying filters.'; }
+    });
+
+    // Chart type selector should apply immediately as well
+    const chartTypeSelect = document.getElementById('filter_chart_type');
+    if (chartTypeSelect) {
+      chartTypeSelect.addEventListener('change', () => {
+        try {
+          const chartType = chartTypeSelect.value;
+          const selected = Array.from(document.querySelectorAll('.filter-team')).filter(ch => ch.checked).map(ch => Number(ch.getAttribute('data-idx')));
+          if (selected.length === 0) return; // nothing to update
+          const newLabels = labels.slice();
+          const newDatasets = SAMPLE_CHART.datasets.filter((d, idx) => selected.includes(idx)).map(d => ({ label: d.label, backgroundColor: d.backgroundColor, borderColor: d.borderColor, data: d.data.slice() }));
+          const mode = (document.getElementById('filter_display_mode') && document.getElementById('filter_display_mode').value) ? document.getElementById('filter_display_mode').value : 'match';
+          if (!window._filterChartsInitialized) initFilterCharts();
+          updateFilterCharts(newLabels, newDatasets, chartType, mode);
+          // Also sync analytics preview chartType selector (if present)
+          try { const aSel = document.getElementById('chartTypeSelect'); if (aSel) { aSel.value = chartType; aSel.dispatchEvent(new Event('change', { bubbles: true })); } } catch(err) {}
+        } catch(e) { console.warn('chartType change handler failed', e); }
+      });
+    }
+
+    document.getElementById('resetFilters').addEventListener('click', () => {
+      try {
+        // re-check all teams and reset range
+        document.querySelectorAll('.filter-team').forEach(ch => ch.checked = true);
+        document.getElementById('filter_match_start').value = 1;
+        document.getElementById('filter_match_end').value = Math.max(1, labels.length);
+        // reset chart to original
+        if (window._tutorialChart) { const original = JSON.parse(JSON.stringify(SAMPLE_CHART)); window._tutorialChart.data = original; window._tutorialChart.update(); }
+        if (fb) fb.textContent = 'Filters reset.'; setTimeout(()=>{ if (fb) fb.textContent = 'Preview'; }, 900);
+      } catch(e) { console.warn('reset failed', e); if (fb) fb.textContent = 'Error resetting filters.'; }
+    });
+
+  } catch (e) {
+    console.warn('renderFilterControls failed', e);
+    container.innerHTML = '<div class="small text-danger">Unable to load filter controls.</div>';
+  }
+  // mark as rendered to avoid duplicate initialization
+  try { window._filtersRendered = true; } catch(e) {}
+}
+
+function applyFiltersToChart(newLabels, newDatasets){
+  if (!window._tutorialChart) return;
+  window._tutorialChart.data.labels = newLabels;
+  window._tutorialChart.data.datasets = newDatasets;
+  window._tutorialChart.update();
+}
+
+// Initialize small filter-specific charts in Step 4
+function initFilterCharts(){
+  try {
+    const mainCtx = document.getElementById('filterChart_main').getContext('2d');
+    // Default empty main chart
+    window._filterChart_main = new Chart(mainCtx, { type: 'line', data: { labels: [], datasets: [] }, options:{responsive:true,maintainAspectRatio:true}});
+    window._filterChartsInitialized = true;
+  } catch(e) { console.warn('initFilterCharts failed', e); }
+}
+
+function computeAverages(datasets){
+  return datasets.map(d => {
+    const nums = (d.data || []).map(x => Number(x) || 0);
+    const sum = nums.reduce((s,v)=>s+v,0);
+    return nums.length ? (sum / nums.length) : 0;
+  });
+}
+
+function updateFilterCharts(newLabels, newDatasets, chartType = 'line', mode = 'match'){
+  try {
+    if (!window._filterChartsInitialized) initFilterCharts();
+    // mode: 'match' => show match-by-match series; 'averages' => show per-team averages
+    if (mode === 'averages') {
+      // compute averages and show a single dataset of averages
+      const avgs = computeAverages(newDatasets);
+      const labels = newDatasets.map(d => d.label);
+      const avgDataset = [{ label: 'Average', data: avgs, backgroundColor: 'rgba(13,110,253,0.6)', borderColor: 'rgba(13,110,253,1)' }];
+      if (window._filterChart_main) {
+        try { window._filterChart_main.config.type = chartType || 'bar'; } catch(e) {}
+        window._filterChart_main.data.labels = labels;
+        window._filterChart_main.data.datasets = avgDataset;
+        window._filterChart_main.update();
+      }
+      return;
+    }
+
+    // default 'match' behavior
+    if (window._filterChart_main) {
+      try { window._filterChart_main.config.type = chartType; } catch(e) { console.warn('unable to change main chart type', e); }
+      window._filterChart_main.data.labels = newLabels;
+      window._filterChart_main.data.datasets = newDatasets.map(d => ({ label: d.label, data: d.data, borderColor: d.borderColor, backgroundColor: d.backgroundColor }));
+      window._filterChart_main.update();
+    }
+  } catch(e) { console.warn('updateFilterCharts failed', e); }
+}
+
+// Small helper to escape text for use in injected HTML
+function escapeHtml(unsafe) { return String(unsafe).replace(/[&<"'`=\/]/g, function (s) { return ({'&':'&amp;','<':'&lt;','"':'&quot;',"'":'&#39;','/':'\/','`':'&#96;','=':'&#61;'})[s]; }); }
+
+// Config preview editor for analytics tutorial (interactive, preview-only)
+function createConfigEditorUI() {
+  const container = document.getElementById('configPreview');
+  if (!container) return;
+  container.innerHTML = `
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <div class="btn-group btn-group-sm" role="tab" aria-label="Config view toggle">
+        <button id="cfg_view_editor" class="btn btn-sm btn-outline-primary active" aria-pressed="true">Editor</button>
+        <button id="cfg_view_preview" class="btn btn-sm btn-outline-secondary">Scouting Preview</button>
+      </div>
+      <div class="d-flex gap-2">
+        <button id="analytics_preview_load_default" class="btn btn-sm btn-outline-primary">Load Team Config</button>
+        <button id="analytics_preview_save" class="btn btn-sm btn-info">Save Sample</button>
+        <button id="analytics_preview_reset" class="btn btn-sm btn-outline-warning">Reset</button>
+      </div>
+    </div>
+    <div id="configEditorArea">
+      <div class="row">
+        <div class="col-md-6">
+          <div id="simpleConfigEditor">
+            <h6 class="mb-2">Simple Editor</h6>
+            <div class="mb-2">
+              <label class="small d-block mb-1">Game Name</label>
+              <input id="simple_game_name" class="form-control form-control-sm" value="${(DEFAULT_TUTORIAL_CONFIG && DEFAULT_TUTORIAL_CONFIG.game_name) ? escapeHtml(DEFAULT_TUTORIAL_CONFIG.game_name) : ''}">
+            </div>
+            <div class="mb-2 row">
+              <div class="col-6"><label class="small d-block mb-1">Season</label><input id="simple_season" class="form-control form-control-sm" value="${(DEFAULT_TUTORIAL_CONFIG && DEFAULT_TUTORIAL_CONFIG.season) ? DEFAULT_TUTORIAL_CONFIG.season : 2024}" type="number"></div>
+              <div class="col-6"><label class="small d-block mb-1">Version</label><input id="simple_version" class="form-control form-control-sm" value="${(DEFAULT_TUTORIAL_CONFIG && DEFAULT_TUTORIAL_CONFIG.version) ? escapeHtml(DEFAULT_TUTORIAL_CONFIG.version) : '1.0.0'}"></div>
+            </div>
+            <div class="mb-2 row">
+              <div class="col-6"><label class="small d-block mb-1">Alliance Size</label><input id="simple_alliance_size" class="form-control form-control-sm" value="${(DEFAULT_TUTORIAL_CONFIG && DEFAULT_TUTORIAL_CONFIG.alliance_size) ? DEFAULT_TUTORIAL_CONFIG.alliance_size : 3}" type="number"></div>
+              <div class="col-6"><label class="small d-block mb-1">Scouting Stations</label><input id="simple_scouting_stations" class="form-control form-control-sm" value="${(DEFAULT_TUTORIAL_CONFIG && DEFAULT_TUTORIAL_CONFIG.scouting_stations) ? DEFAULT_TUTORIAL_CONFIG.scouting_stations : 6}" type="number"></div>
+            </div>
+            <hr>
+            <div>
+              <h6 class="mb-2">Scoring Elements (Auto)</h6>
+              <div id="simple_auto_elements" class="mb-2">
+                <!-- elements rendered here -->
+              </div>
+              <button id="simple_add_auto" class="btn btn-sm btn-success">Add Element</button>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <textarea id="configJsonPreview" class="form-control" rows="12" style="max-height:320px;overflow:auto;">${JSON.stringify(DEFAULT_TUTORIAL_CONFIG || {}, null, 2)}</textarea>
+          <div class="mt-2 small text-muted">Edit the raw game configuration JSON here. Use <strong>Scouting Preview</strong> to see how the config generates the scouting form.</div>
+        </div>
+      </div>
+    </div>
+    <div id="scoutingPreviewArea" class="d-none mt-3"></div>
+    <div id="analytics-preview-config-feedback" class="mt-2" aria-live="polite"></div>
+  `;
+
+  // Hook buttons
+  const loadBtn = document.getElementById('analytics_preview_load_default');
+  const resetBtn = document.getElementById('analytics_preview_reset');
+  const saveBtn = document.getElementById('analytics_preview_save');
+  // Note: 'Show Form' removed — use the 'Scouting Preview' tab to view the rendered scouting form from JSON.
+
+  if (loadBtn) {
+    loadBtn.addEventListener('click', async () => {
+      const ta = document.getElementById('configJsonPreview');
+      const fb = document.getElementById('analytics-preview-config-feedback');
+      try {
+        if (typeof TEAM_TUTORIAL_CONFIG !== 'undefined' && TEAM_TUTORIAL_CONFIG && Object.keys(TEAM_TUTORIAL_CONFIG).length) {
+          if (ta) { ta.value = JSON.stringify(TEAM_TUTORIAL_CONFIG, null, 2); }
+          // sync the simple editor immediately after replacing the textarea
+          try { syncJsonToSimple(); } catch(e){}
+          setConfigEditorView('editor');
+          if (fb) fb.innerHTML = '<div class="alert alert-success py-1 px-2">Team config loaded (preview)</div>';
+          setTimeout(()=>{ if (fb) fb.innerHTML=''; }, 1500);
+          return;
+        }
+        const resp = await fetch('{{ url_for('setup.tutorial_team_config') }}', { credentials: 'same-origin' });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (ta) { ta.value = JSON.stringify(data || {}, null, 2); }
+          // ensure simple editor matches freshly-loaded JSON
+          try { syncJsonToSimple(); } catch(e){}
+          setConfigEditorView('editor');
+          if (fb) fb.innerHTML = '<div class="alert alert-success py-1 px-2">Team config loaded (preview)</div>';
+          setTimeout(()=>{ if (fb) fb.innerHTML=''; }, 1500);
+        } else {
+          if (ta) { ta.value = JSON.stringify(DEFAULT_TUTORIAL_CONFIG || {}, null, 2); }
+          try { syncJsonToSimple(); } catch(e){}
+          if (fb) fb.innerHTML = '<div class="alert alert-warning py-1 px-2">Using default config (preview)</div>';
+          setTimeout(()=>{ if (fb) fb.innerHTML=''; }, 1500);
+        }
+      } catch (e) {
+        console.warn('Analytics config load failed', e);
+        if (ta) ta.value = JSON.stringify(DEFAULT_TUTORIAL_CONFIG || {}, null, 2);
+        if (fb) fb.innerHTML = '<div class="alert alert-warning py-1 px-2">Unable to load config (preview)</div>';
+        setTimeout(()=>{ if (fb) fb.innerHTML=''; }, 1500);
+      }
+    });
+  }
+
+
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => { 
+      document.getElementById('configJsonPreview').value = JSON.stringify(DEFAULT_TUTORIAL_CONFIG || {}, null, 2);
+      // sync simple editor after reset
+      try { syncJsonToSimple(); } catch(e) {}
+      const scoutArea = document.getElementById('scoutingPreviewArea'); if (scoutArea) scoutArea.innerHTML = '';
+      const fb = document.getElementById('analytics-preview-config-feedback'); if (fb) { fb.innerHTML = '<div class="alert alert-secondary py-1 px-2">Reset to default (preview only)</div>'; setTimeout(()=>{ fb.innerHTML=''; }, 1200); }
+    });
+  }
+
+  // Ensure there is a dedicated scouting preview area (realistic scouting form) below the config editor
+  const scoutArea = document.getElementById('scoutingPreviewArea');
+  if (!scoutArea) {
+    const parent = document.getElementById('configPreview');
+    if (parent) parent.insertAdjacentHTML('beforeend', '<div id="scoutingPreviewArea" class="mt-3"></div>');
+  }
+  if (saveBtn) {
+    saveBtn.addEventListener('click', () => {
+      const ta = document.getElementById('configJsonPreview');
+      const fb = document.getElementById('analytics-preview-config-feedback');
+      try {
+        const parsed = JSON.parse(ta.value || '{}');
+        if (fb) { fb.innerHTML = '<div class="alert alert-success py-1 px-2">Sample config validated (preview only)</div>'; setTimeout(()=>{ if (fb) fb.innerHTML=''; }, 1800); }
+      } catch (err) {
+        if (fb) fb.innerHTML = '<div class="alert alert-danger py-1 px-2">Invalid JSON: ' + (err.message || '') + '</div>';
+      }
+    });
+  }
+
+  // Helper to switch between editor and preview modes for the config editor
+  function setConfigEditorView(mode){
+    const editorBtn = document.getElementById('cfg_view_editor');
+    const previewBtn = document.getElementById('cfg_view_preview');
+    const editorArea = document.getElementById('configEditorArea');
+    const previewArea = document.getElementById('scoutingPreviewArea');
+    if (!editorBtn || !previewBtn || !editorArea || !previewArea) return;
+    if (mode === 'preview'){
+      editorBtn.classList.remove('active'); editorBtn.setAttribute('aria-pressed','false');
+      previewBtn.classList.add('active'); previewBtn.setAttribute('aria-pressed','true');
+      editorArea.classList.add('d-none'); previewArea.classList.remove('d-none');
+      // ensure scouting preview exists (render from JSON textarea)
+      try { const ta = document.getElementById('configJsonPreview'); if (ta) { const data = JSON.parse(ta.value || '{}'); renderScoutingFormFromJson(data); } } catch(e) { console.warn('setConfigEditorView preview render failed', e); }
+    } else {
+      previewBtn.classList.remove('active'); previewBtn.setAttribute('aria-pressed','false');
+      editorBtn.classList.add('active'); editorBtn.setAttribute('aria-pressed','true');
+      previewArea.classList.add('d-none'); editorArea.classList.remove('d-none');
+    }
+  }
+
+  // Wire view toggle buttons
+  try {
+    const eBtn = document.getElementById('cfg_view_editor');
+    const pBtn = document.getElementById('cfg_view_preview');
+    if (eBtn && pBtn){
+      eBtn.addEventListener('click', ()=> setConfigEditorView('editor'));
+      pBtn.addEventListener('click', ()=> setConfigEditorView('preview'));
+    }
+  } catch(e) { console.warn('view toggle hook failed', e); }
+
+  // Auto-load team config for practice
+  setTimeout(()=>{ try { document.getElementById('analytics_preview_load_default').click(); } catch(e){} }, 60);
+
+  // --- Simple Editor: sync form-based simple config alongside JSON ---
+  function renderSimpleElementsFromJson(json) {
+    try {
+      const list = document.getElementById('simple_auto_elements');
+      if (!list) return;
+      list.innerHTML = '';
+      const elems = (json && json.auto_period && Array.isArray(json.auto_period.scoring_elements)) ? json.auto_period.scoring_elements.slice(0,10) : (Array.isArray(json.scoring_elements) ? json.scoring_elements.slice(0,10) : []);
+      if (!elems || elems.length === 0) {
+        list.innerHTML = '<div class="small text-muted">No auto scoring elements found. Add one to practice.</div>';
+        return;
+      }
+      elems.forEach((el, idx) => {
+        const name = el.name || '';
+        const points = (el.points !== undefined) ? el.points : 0;
+        const type = el.type || 'counter';
+        const item = document.createElement('div');
+        item.className = 'mb-2 input-group input-group-sm';
+        item.innerHTML = `<input class="form-control form-control-sm simple_elem_name" data-idx="${idx}" value="${escapeHtml(String(name))}" placeholder="Element name"><select class="form-select form-select-sm ms-2 simple_elem_type" data-idx="${idx}"><option value="counter"${type==='counter'?' selected':''}>Counter</option><option value="boolean"${type==='boolean'?' selected':''}>Yes/No</option><option value="rating"${type==='rating'?' selected':''}>Rating</option><option value="multiple_choice"${type==='multiple_choice'?' selected':''}>Multiple Choice</option></select><input class="form-control form-control-sm simple_elem_points ms-2" data-idx="${idx}" value="${String(points)}" type="number" step="0.1" style="max-width:110px;"> <button type="button" class="btn btn-sm btn-outline-danger ms-2 simple_elem_remove" data-idx="${idx}">Remove</button>`;
+        list.appendChild(item);
+      });
+      // attach handlers
+      list.querySelectorAll('.simple_elem_name, .simple_elem_type, .simple_elem_points').forEach(el => {
+        el.addEventListener('input', updateJsonFromSimple);
+        el.addEventListener('change', updateJsonFromSimple);
+      });
+      list.querySelectorAll('.simple_elem_remove').forEach(btn => btn.addEventListener('click', (e)=>{ const i = Number(btn.getAttribute('data-idx')); removeSimpleElement(i); }));
+    } catch(e) { console.warn('renderSimpleElementsFromJson failed', e); }
+  }
+
+  function updateJsonFromSimple() {
+    try {
+      const ta = document.getElementById('configJsonPreview');
+      if (!ta) return;
+      let obj;
+      try { obj = JSON.parse(ta.value || '{}'); } catch(e) { obj = {}; }
+      obj.game_name = document.getElementById('simple_game_name').value || obj.game_name;
+      obj.season = Number(document.getElementById('simple_season').value) || obj.season;
+      obj.version = document.getElementById('simple_version').value || obj.version;
+      obj.alliance_size = Number(document.getElementById('simple_alliance_size').value) || obj.alliance_size;
+      obj.scouting_stations = Number(document.getElementById('simple_scouting_stations').value) || obj.scouting_stations;
+      // elements
+      const list = document.getElementById('simple_auto_elements');
+      const els = [];
+      if (list) {
+        list.querySelectorAll('.simple_elem_name').forEach(inp => {
+          const idx = inp.getAttribute('data-idx');
+          const name = inp.value || '';
+          const type = (list.querySelector(`.simple_elem_type[data-idx="${idx}"]`) || {}).value || 'counter';
+          const points = Number((list.querySelector(`.simple_elem_points[data-idx="${idx}"]`) || {}).value) || 0;
+          if (name) els.push({ name: name, type: type, points: points });
+        });
+      }
+      if (!obj.auto_period) obj.auto_period = {};
+      obj.auto_period.scoring_elements = els;
+      ta.value = JSON.stringify(obj, null, 2);
+      // also update scouting preview if visible
+      try { const fb = document.getElementById('analytics-preview-config-feedback'); if (fb) { fb.textContent = 'Config synced (preview only)'; setTimeout(()=>{ fb.textContent=''; }, 900); } } catch(e){}
+    } catch(e) { console.warn('updateJsonFromSimple failed', e); }
+  }
+
+  function syncJsonToSimple() {
+    try {
+      const ta = document.getElementById('configJsonPreview');
+      if (!ta) return;
+      let obj;
+      try { obj = JSON.parse(ta.value || '{}'); } catch(e) { obj = {}; }
+      document.getElementById('simple_game_name').value = obj.game_name || '';
+      document.getElementById('simple_season').value = obj.season || '';
+      document.getElementById('simple_version').value = obj.version || '';
+      document.getElementById('simple_alliance_size').value = obj.alliance_size || '';
+      document.getElementById('simple_scouting_stations').value = obj.scouting_stations || '';
+      renderSimpleElementsFromJson(obj);
+    } catch(e) { console.warn('syncJsonToSimple failed', e); }
+  }
+
+  function addSimpleElement(defaults = {name:'New Element', type:'counter', points:0}) {
+    try {
+      const ta = document.getElementById('configJsonPreview');
+      let obj;
+      try { obj = JSON.parse(ta.value || '{}'); } catch(e) { obj = {}; }
+      if (!obj.auto_period) obj.auto_period = {};
+      if (!Array.isArray(obj.auto_period.scoring_elements)) obj.auto_period.scoring_elements = [];
+      obj.auto_period.scoring_elements.push(defaults);
+      ta.value = JSON.stringify(obj, null, 2);
+      syncJsonToSimple();
+    } catch(e) { console.warn('addSimpleElement failed', e); }
+  }
+
+  function removeSimpleElement(idx) {
+    try {
+      const ta = document.getElementById('configJsonPreview');
+      let obj;
+      try { obj = JSON.parse(ta.value || '{}'); } catch(e) { obj = {}; }
+      if (obj.auto_period && Array.isArray(obj.auto_period.scoring_elements)) {
+        obj.auto_period.scoring_elements.splice(idx,1);
+        ta.value = JSON.stringify(obj, null, 2);
+        syncJsonToSimple();
+      }
+    } catch(e) { console.warn('removeSimpleElement failed', e); }
+  }
+
+  // wire simple editor inputs
+  try {
+    const sname = document.getElementById('simple_game_name');
+    if (sname) sname.addEventListener('input', updateJsonFromSimple);
+    document.getElementById('simple_season')?.addEventListener('input', updateJsonFromSimple);
+    document.getElementById('simple_version')?.addEventListener('input', updateJsonFromSimple);
+    document.getElementById('simple_alliance_size')?.addEventListener('input', updateJsonFromSimple);
+    document.getElementById('simple_scouting_stations')?.addEventListener('input', updateJsonFromSimple);
+    document.getElementById('simple_add_auto')?.addEventListener('click', ()=> addSimpleElement());
+    document.getElementById('configJsonPreview')?.addEventListener('input', ()=> { try { syncJsonToSimple(); } catch(e){} });
+    // initial render
+    syncJsonToSimple();
+  } catch(e){ console.warn('wiring simple editor failed', e); }
+}
+// Helpers to render form from JSON and sync back to JSON textarea (adapted for analytics tutorial)
+function createFieldInputAnalytics(el) {
+    const rawId = (el.id || el.name || 'field').toString();
+    const id = rawId.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const label = el.label || el.name || rawId;
+    const type = (el.type || el.input_type || el.datatype || 'number');
+
+    if (Array.isArray(el.options) && el.options.length) {
+        let optionsHtml = '';
+        el.options.forEach(opt => {
+            const val = (typeof opt === 'object') ? (opt.value ?? opt) : opt;
+            const lab = (typeof opt === 'object') ? (opt.label ?? opt.value ?? opt) : opt;
+            const selected = (el.default !== undefined && String(el.default) === String(val)) ? ' selected' : '';
+            optionsHtml += `<option value="${String(val)}"${selected}>${String(lab)}</option>`;
+        });
+        return `<div class="mb-2"><label class="small d-block mb-1">${label}</label><select id="cfg_${id}" class="form-select form-select-sm">${optionsHtml}</select></div>`;
+    }
+
+    // numeric/counter
+    const isNumericType = ['number','int','float','numeric','counter'].includes(String(type).toLowerCase()) || (typeof el.default === 'number');
+    if (type === 'counter' || id.toLowerCase().includes('count') || id.toLowerCase().includes('counter') || isNumericType) {
+        const step = (el.step !== undefined) ? el.step : (type === 'float' ? 0.1 : 1);
+        const minAttr = (el.min !== undefined) ? `min="${el.min}"` : '';
+        const maxAttr = (el.max !== undefined) ? `max="${el.max}"` : '';
+        const defaultVal = (el.default !== undefined) ? el.default : 0;
+        return `<div class="mb-2"><label class="small d-block mb-1">${label}</label><div class="input-group input-group-sm"><button type="button" class="btn btn-sm btn-outline-secondary cfg-decr" data-step="${step}" data-target="cfg_${id}">-</button><input id="cfg_${id}" class="form-control form-control-sm text-center" value="${defaultVal}" type="number" step="${step}" ${minAttr} ${maxAttr}><button type="button" class="btn btn-sm btn-outline-secondary cfg-incr" data-step="${step}" data-target="cfg_${id}">+</button></div></div>`;
+    }
+
+    if (type === 'bool' || type === 'checkbox' || type === 'switch') {
+        const checked = el.default ? 'checked' : '';
+        return `<div class="form-check form-switch mb-2"><input id="cfg_${id}" class="form-check-input" type="checkbox" ${checked}><label class="form-check-label small" for="cfg_${id}">${label}</label></div>`;
+    }
+
+    const inputType = (type === 'number' || type === 'int' || type === 'float') ? 'number' : 'text';
+    const defaultVal = el.default ?? '';
+    return `<div class="mb-2"><label class="small d-block mb-1">${label}</label><input id="cfg_${id}" class="form-control form-control-sm" value="${String(defaultVal)}" type="${inputType}"></div>`;
+}
+
+function renderFormFromJsonAnalytics(jsonObj) {
+    const target = document.getElementById('configFormPreview');
+    if (!target) return;
+    target.innerHTML = '';
+    let elems = [];
+    ['auto_period','teleop_period','endgame_period'].forEach(p => {
+        if (jsonObj && jsonObj[p] && Array.isArray(jsonObj[p].scoring_elements)) {
+            elems = elems.concat(jsonObj[p].scoring_elements);
+        }
+    });
+    if (elems.length === 0 && Array.isArray(jsonObj.scoring_elements)) elems = jsonObj.scoring_elements;
+
+    if (elems.length === 0) {
+        if (jsonObj.scouting_form && Array.isArray(jsonObj.scouting_form.sections)) {
+            jsonObj.scouting_form.sections.forEach(s => { if (Array.isArray(s.elements)) elems = elems.concat(s.elements); });
+        }
+        if (jsonObj.form && Array.isArray(jsonObj.form.scoring_elements)) elems = elems.concat(jsonObj.form.scoring_elements);
+        if (jsonObj.pit_scouting && Array.isArray(jsonObj.pit_scouting.sections)) {
+            jsonObj.pit_scouting.sections.forEach(s => { if (Array.isArray(s.elements)) elems = elems.concat(s.elements); });
+        }
+    }
+
+    if (elems.length === 0) {
+        const fb = document.getElementById('analytics-preview-config-feedback');
+        let fallbackHtml = '<div class="small text-muted">No configurable scoring elements found. Showing top-level keys below for preview:</div>';
+        fallbackHtml += '<div class="mt-2">';
+        Object.keys(jsonObj || {}).forEach(k => {
+            const v = jsonObj[k];
+            if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+                const inpType = (typeof v === 'number') ? 'number' : 'text';
+                fallbackHtml += `<div class="mb-2"><label class="small d-block mb-1">${k}</label><input class="form-control form-control-sm" value="${String(v)}" type="${inpType}"></div>`;
+            }
+        });
+        fallbackHtml += '</div>';
+        target.innerHTML = fallbackHtml;
+        if (fb) fb.innerHTML = '<div class="alert alert-info py-1 px-2">Config loaded (preview) — no scoring elements found, showing top-level keys.</div>';
+        setTimeout(()=>{ if (fb) fb.innerHTML=''; }, 3000);
+        return;
+    }
+
+    elems.forEach(el => {
+        const html = createFieldInputAnalytics(el);
+        target.insertAdjacentHTML('beforeend', html);
+    });
+
+    // Add handlers for +/- buttons
+    target.querySelectorAll('.cfg-incr').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tid = btn.getAttribute('data-target');
+            const step = parseFloat(btn.getAttribute('data-step') || '1');
+            const inp = document.getElementById(tid);
+            if (inp) { const cur = inp.value === '' ? 0 : Number(inp.value); inp.value = Number((cur + step).toFixed((String(step).includes('.') ? step.toString().split('.')[1].length : 0))); updateJsonFromFormAnalytics(); }
+        });
+    });
+
+    target.querySelectorAll('.cfg-decr').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tid = btn.getAttribute('data-target');
+            const step = parseFloat(btn.getAttribute('data-step') || '1');
+            const inp = document.getElementById(tid);
+            if (inp) { const cur = inp.value === '' ? 0 : Number(inp.value); const next = cur - step; inp.value = Number(Math.max((inp.min ? Number(inp.min) : -Infinity), next).toFixed((String(step).includes('.') ? step.toString().split('.')[1].length : 0))); updateJsonFromFormAnalytics(); }
+        });
+    });
+
+    // Sync changes back to JSON textarea
+    target.querySelectorAll('input,textarea,select').forEach(el => {
+        el.addEventListener('change', updateJsonFromFormAnalytics);
+        el.addEventListener('input', updateJsonFromFormAnalytics);
+    });
+}
+
+function updateJsonFromFormAnalytics() {
+    const ta = document.getElementById('configJsonPreview');
+    const target = document.getElementById('configFormPreview');
+    if (!ta || !target) return;
+    const values = {};
+    target.querySelectorAll('input,select,textarea').forEach(el => {
+        const key = el.id ? el.id.replace(/^cfg_/, '') : (el.dataset.field || el.name || el.placeholder || 'field');
+        let val;
+        if (el.type === 'checkbox') val = el.checked;
+        else if (el.type === 'number') val = (el.value === '' ? null : Number(el.value));
+        else val = el.value;
+        values[key] = val;
+    });
+    // For demo purposes, we just show a mapping of values
+    ta.value = JSON.stringify({ preview_values: values }, null, 2);
+}
+
+// Render a realistic scouting form preview (counters, team/match, Save Sample) from a config JSON
+function renderScoutingFormFromJson(jsonObj) {
+    const container = document.getElementById('scoutingPreviewArea') || document.getElementById('scoutingPreview') || document.getElementById('configFormPreview');
+    if (!container) return;
+
+    let html = '<h6 class="mb-2"><i class="fas fa-clipboard-list text-success me-2"></i>Scouting Sample</h6>';
+    html += '<form class="preview-scout" aria-label="Scouting sample form">';
+    html += '<input class="form-control form-control-sm mb-2" placeholder="Team #" aria-label="Team number">';
+    html += '<input class="form-control form-control-sm mb-2" placeholder="Match #" aria-label="Match number">';
+
+    function addElementInput(el) {
+        const rawId = (el.id || el.name || 'field').toString();
+        const id = rawId.replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const label = el.label || el.name || rawId;
+        const type = (el.type || 'number');
+        const inputId = `preview_${id}`;
+
+        if (type === 'bool' || type === 'checkbox') {
+            return `<div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="${inputId}" name="${inputId}"> <label class="form-check-label small" for="${inputId}">${label}</label></div>`;
+        }
+
+        const numericTypes = ['number','counter','int','float','numeric','count','counts','score','quantity'];
+        const isNumeric = numericTypes.includes(String(type).toLowerCase()) || (el.default !== undefined && typeof el.default === 'number');
+        if (isNumeric) {
+            const step = (el.step !== undefined) ? el.step : (String(type).toLowerCase() === 'float' ? 0.1 : 1);
+            const minAttr = (el.min !== undefined) ? `min="${el.min}"` : 'min="0"';
+            const value = (el.default !== undefined) ? el.default : 0;
+            return `<div class="mb-2"><label for="${inputId}" class="form-label fw-medium">${label}</label>` +
+                   `${ el.description ? `<small class="text-muted d-block mb-2">${el.description}</small>` : '' }` +
+                   `<div class="counter-container" role="group" aria-label="${label} counter">` +
+                   `<button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="${inputId}" data-step="${step}" aria-label="Decrease ${label}"><i class="fas fa-minus" aria-hidden="true"></i></button>` +
+                   `<input id="${inputId}" name="${inputId}" class="form-control counter-input text-center" value="${value}" type="number" step="${step}" ${minAttr}>` +
+                   `<button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="${inputId}" data-step="${step}" aria-label="Increase ${label}"><i class="fas fa-plus" aria-hidden="true"></i></button>` +
+                   `</div></div>`;
+        }
+
+        return `<div class="mb-2"><label class="small d-block mb-1" for="${inputId}">${label}</label><input id="${inputId}" name="${inputId}" class="form-control form-control-sm" placeholder="${label}" data-field="${id}" tabindex="0"></div>`;
+    }
+
+    // Collect elements from typical config locations
+    let elems = [];
+    ['auto_period','teleop_period','endgame_period'].forEach(p => {
+        if (jsonObj && jsonObj[p] && Array.isArray(jsonObj[p].scoring_elements)) {
+            elems = elems.concat(jsonObj[p].scoring_elements);
+        }
+    });
+    if (elems.length === 0 && Array.isArray(jsonObj.scoring_elements)) elems = jsonObj.scoring_elements;
+    if (elems.length === 0) {
+        if (jsonObj.scouting_form && Array.isArray(jsonObj.scouting_form.sections)) {
+            jsonObj.scouting_form.sections.forEach(s => { if (Array.isArray(s.elements)) elems = elems.concat(s.elements); });
+        }
+        if (jsonObj.form && Array.isArray(jsonObj.form.scoring_elements)) elems = elems.concat(jsonObj.form.scoring_elements);
+        if (jsonObj.pit_scouting && Array.isArray(jsonObj.pit_scouting.sections)) {
+            jsonObj.pit_scouting.sections.forEach(s => { if (Array.isArray(s.elements)) elems = elems.concat(s.elements); });
+        }
+    }
+
+    if (elems.length === 0) {
+        html += '<textarea class="form-control form-control-sm mb-2" rows="3" placeholder="Notes"></textarea>';
+    } else {
+        elems.forEach(el => { html += addElementInput(el); });
+    }
+
+    html += '<div class="d-flex justify-content-between"><button type="button" class="btn btn-sm btn-success" id="preview-scout-save">Save Sample</button><small class="text-muted align-self-center">Preview only — not saved</small></div>';
+    html += '<div id="preview-scout-feedback" class="mt-2" aria-live="polite"></div>';
+    html += '</form>';
+
+    container.innerHTML = html;
+
+    // Ensure the preview container accepts pointer events and inputs are enabled (fixes non-editable behavior)
+    try { container.style.pointerEvents = 'auto'; } catch(e) {}
+    try { container.querySelectorAll('input,select,textarea,button').forEach(el => { el.disabled = false; try{ el.readOnly = false; }catch(e){} if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex','0'); }); } catch(e) {}
+
+    // Assign the preview form the real form id so it benefits from the same global handlers and calculations (only if not already present elsewhere)
+    try {
+        const f = container.querySelector('form');
+        if (f) {
+            // avoid clobbering an existing main scouting form on the page
+            if (!document.getElementById('scouting-form')) {
+                f.id = 'scouting-form';
+            } else {
+                f.id = 'scouting-form-preview';
+            }
+        }
+    } catch(e) { console.warn('assign preview form id failed', e); }
+
+    // Initialize site-wide helper behaviors so preview matches the real editor
+    try { if (window.initializeCounters) window.initializeCounters(); } catch(e) { console.warn('initializeCounters failed', e); }
+    try { if (window.initializePointsCalculation) window.initializePointsCalculation(); } catch(e) { console.warn('initializePointsCalculation failed', e); }
+    try { if (window.updatePointsCalculation) window.updatePointsCalculation(); } catch(e) { }
+    // Hook save sample to show the same feedback as the small scout tutorial
+    const saveBtn = document.getElementById('preview-scout-save');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            const fb = document.getElementById('preview-scout-feedback');
+            if (fb) { fb.innerHTML = '<div class="alert alert-success py-1 px-2">Sample saved (preview only)</div>'; setTimeout(()=>{ if (fb) fb.innerHTML = ''; }, 1500); }
+        });
+    }
+
+    // Retheme newly-inserted controls for dark mode and chart themes
+    setTimeout(() => { try { if (window.updateSelect2DarkMode) window.updateSelect2DarkMode(); if (window.updateChartJsTheme) window.updateChartJsTheme(); } catch(e) { } }, 20);
+}
+// mark to create UI on demand when user reaches step 5
+if (!window._configEditorCreated) {
+  try { window._configEditorCreated = false; } catch(e) {}
+}
+// Allow the 'Show Config Preview' button to create or reveal the interactive editor
+try {
+  const scb = document.getElementById('showConfig');
+  if (scb) {
+    scb.addEventListener('click', (e) => { if (!window._configEditorCreated) { try { createConfigEditorUI(); window._configEditorCreated = true; } catch(err){ console.warn('createConfigEditorUI on click failed', err); } } try { document.getElementById('configPreview').scrollIntoView({behavior:'smooth', block:'center'}); } catch(e){} });
+  }
+} catch(e) { console.warn('showConfig hook failed', e); }
+
+</script>
+{% endblock %}
