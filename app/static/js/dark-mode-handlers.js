@@ -49,6 +49,8 @@ function initDarkModeHandlers() {
                 mutation.target === document.body) {
                 // Update Select2 theme when dark mode changes
                 updateSelect2DarkMode();
+                // Update demo preview helper class so scoped CSS works on dynamically rendered content
+                try { applyDemoPreviewDarkMode(); } catch(e) { }
             }
         });
     });
@@ -61,6 +63,15 @@ function initDarkModeHandlers() {
     
     // Initial application of dark mode styles
     updateSelect2DarkMode();
+    // Ensure demo previews get a dark-mode helper class so scoped CSS can apply
+    function applyDemoPreviewDarkMode() {
+        const isDark = document.body.classList.contains('dark-mode');
+        document.querySelectorAll('.demo-preview, .demo-frame').forEach(el => {
+            try { if (isDark) el.classList.add('dark-mode'); else el.classList.remove('dark-mode'); } catch(e) {}
+        });
+    }
+    try { applyDemoPreviewDarkMode(); } catch(e) {}
+
     // Retheme any already-rendered Plotly charts to match initial theme
     try { if (window.rethemePlotlyCharts) window.rethemePlotlyCharts(); } catch(e) { console.warn('Initial Plotly retheme failed', e); }
 }

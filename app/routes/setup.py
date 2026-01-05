@@ -8,7 +8,7 @@ from flask_login import login_required, current_user
 from app import db
 from app.models import User, Role, Team, Event
 from app.utils.database_init import initialize_database, check_database_health
-from app.utils.config_manager import get_current_game_config, get_current_pit_config
+from app.utils.config_manager import get_current_game_config, get_current_pit_config, get_available_default_configs, load_default_config, get_effective_game_config
 from app.utils.theme_manager import ThemeManager
 import os
 import json
@@ -68,8 +68,96 @@ def index():
 @bp.route('/tutorial')
 @login_required
 def tutorial():
-    """Interactive tutorial for new users (requires login)"""
-    return render_template('setup/tutorial.html', **get_theme_context())
+    """Tutorial hub - let users pick the focused tutorial for their role."""
+    return render_template('setup/tutorial_index.html', **get_theme_context())
+
+
+@bp.route('/tutorial/scout')
+@login_required
+def tutorial_scout():
+    """Tutorial focused for scouting users (match scouting, pit, basic navigation)."""
+    default_config = None
+    try:
+        defaults = get_available_default_configs()
+        game_defaults = [d for d in defaults if d.get('type') == 'game']
+        if game_defaults:
+            filename = game_defaults[0]['filename']
+            try:
+                default_config = load_default_config(filename)
+            except Exception:
+                default_config = None
+    except Exception:
+        default_config = None
+
+    # Minimal sample chart not used heavily in scout tutorial but included for small analytics mentions
+    sample_chart = {
+        'labels': ['Auto', 'Teleop', 'Endgame'],
+        'datasets': [
+            {'label': 'Example Team', 'data': [1,2,1], 'backgroundColor': 'rgba(13,110,253,0.6)', 'borderColor': 'rgba(13,110,253,1)'}
+        ]
+    }
+
+    try:
+        team_config = get_effective_game_config() or {}
+    except Exception:
+        team_config = {}
+
+    return render_template('setup/tutorial_scout.html',
+                           team_config=team_config,
+                           default_config=(default_config or {}),
+                           sample_chart=sample_chart,
+                           **get_theme_context())
+
+
+@bp.route('/tutorial/analytics')
+@login_required
+def tutorial_analytics():
+    """Tutorial focused for analytics users (charts, filters, configuration administration)."""
+    default_config = None
+    try:
+        defaults = get_available_default_configs()
+        game_defaults = [d for d in defaults if d.get('type') == 'game']
+        if game_defaults:
+            filename = game_defaults[0]['filename']
+            try:
+                default_config = load_default_config(filename)
+            except Exception:
+                default_config = None
+    except Exception:
+        default_config = None
+
+    # richer sample chart for analytics tutorial
+    sample_chart = {
+        'labels': ['Matches 1','Match 2','Match 3','Match 4'],
+        'datasets': [
+            {'label': 'Team A', 'data': [3,5,4,6], 'backgroundColor': 'rgba(13,110,253,0.6)', 'borderColor': 'rgba(13,110,253,1)'},
+            {'label': 'Team B', 'data': [2,4,3,5], 'backgroundColor': 'rgba(220,53,69,0.6)', 'borderColor': 'rgba(220,53,69,1)'}
+        ]
+    }
+
+    try:
+        team_config = get_effective_game_config() or {}
+    except Exception:
+        team_config = {}
+
+    return render_template('setup/tutorial_analytics.html',
+                           team_config=team_config,
+                           default_config=(default_config or {}),
+                           sample_chart=sample_chart,
+                           **get_theme_context())
+
+
+# Note: routes were consolidated: use /tutorial/scout and /tutorial/analytics
+
+@bp.route('/tutorial/team-config')
+@login_required
+def tutorial_team_config():
+    """Return the effective game config for the current team as JSON (used by tutorial preview)."""
+    try:
+        cfg = get_effective_game_config() or {}
+    except Exception:
+        cfg = {}
+    return jsonify(cfg)
 
 @bp.route('/first-run', methods=['GET', 'POST'])
 def first_run():

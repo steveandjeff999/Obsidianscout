@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block title %}Scouting Tutorial{% endblock %}
+
+{% block heading %}Scouting Tutorial{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="row justify-content-center">
+    <div class="col-md-10">
+      <div class="card shadow">
+        <div class="card-header bg-success text-white">
+          <h5 class="mb-0"><span class="badge bg-light text-success me-2">Scouts</span> Scouting Tutorial</h5>
+        </div>
+        <div class="card-body p-4">
+          <h6>Quick start for Scouts</h6>
+          <p class="small text-muted">This guide focuses on the match scouting workflow, form controls, counters, and how to navigate to the pages you'll use during events.</p>
+
+          <div class="row g-3">
+            <div class="col-lg-7">
+              <div class="mb-3">
+                <strong>Where to go</strong>
+                <ul class="small">
+                  <li><strong>Start Scouting</strong> — use the match scouting form to record observations and use counters like in the sample below.</li>
+                  <li><strong>Scouting Dashboard</strong> — view assignments and recent submissions.</li>
+                  <li><strong>Pit Scouting</strong> — collect robot specs and interview notes.</li>
+                </ul>
+                <div class="mt-3">
+                  <a href="{{ url_for('scouting.scouting_form') }}" class="btn btn-success btn-sm me-2">Open Scouting Form</a>
+                  <a href="{{ url_for('scouting.index') }}" class="btn btn-outline-secondary btn-sm">Open Scouting Dashboard</a>
+                </div>
+              </div>
+
+              <div>
+                <h6>Tips</h6>
+                <ul class="small text-muted">
+                  <li>Use <strong>counters</strong> for numeric values (± buttons).</li>
+                  <li>Check team number and match number before saving.</li>
+                  <li>Answers in the preview are not saved — practice safely.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="col-lg-5">
+              <div class="border rounded bg-body-secondary p-3 demo-preview" id="basicScoutingPreviewPanel" role="region" aria-label="Scouting preview">
+                <div class="preview-placeholder text-muted small text-center">Practice entering match observations here. Counters and controls match the real form.</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="mt-3 d-flex gap-2">
+        <a href="{{ url_for('setup.tutorial') }}" class="btn btn-outline-secondary btn-sm">Back to Tutorial Hub</a>
+        <a href="{{ url_for('setup.tutorial_analytics') }}" class="btn btn-outline-primary btn-sm">Open Analytics Tutorial</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Initialize scouting preview using the existing helper
+setTimeout(()=>{ try { initPreview('basicScoutingPreviewPanel', '{{ url_for("scouting.scouting_form") }}', 'basicJump'); } catch(e) { console.warn('Init scouting preview failed', e); } }, 40);
+</script>
+{% endblock %}

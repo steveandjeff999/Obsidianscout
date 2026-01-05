@@ -1846,6 +1846,37 @@ Authorization: Bearer <token>
 }
 ```
 
+### Trigger a Server Sync (Admin only)
+
+Trigger a combined teams + matches sync (same behavior as the web/admin sync).
+
+**Endpoint:** `POST /api/mobile/sync/trigger`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Permissions:** Requires the mobile token's user to have `admin` or `analytics` role.
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "results": {
+    "teams_sync": {"success": true, "message": "Teams sync attempted.", "flashes": []},
+    "matches_sync": {"success": true, "message": "Matches sync attempted.", "flashes": []},
+    "alliance_sync": {"triggered": false}
+  }
+}
+```
+
+**Errors:**
+- `401` — invalid or missing token
+- `403` — insufficient permissions
+- `500` — server-side sync error
+
+
 ---
 
 ## Health Check

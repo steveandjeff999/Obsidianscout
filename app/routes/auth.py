@@ -754,9 +754,102 @@ def send_notification_as_email(notif_id):
     return redirect(url_for('auth.manage_site_notifications'))
 
 
-@bp.route('/users')
+@bp.route('/users', methods=['GET', 'POST'])
 @admin_required
 def manage_users():
+    """List users (GET) and create users via AJAX/JSON (POST).
+
+    Web UI: GET renders the management page. POST accepts JSON or form data and
+    enforces team scoping: non-superadmin creators are restricted to their own
+    scouting team; superadmins may set any target team.
+    """
+    # Handle creation via POST (support JSON for AJAX clients and form data for tests)
+    if request.method == 'POST':
+        # For non-JSON (form) requests, validate CSRF token
+        if not request.is_json and not validate_csrf_token():
+            flash('CSRF validation failed. Please try again.', 'error')
+            return redirect(url_for('auth.manage_users'))
+
+        data = request.get_json() if request.is_json else request.form
+        username = data.get('username')
+        password = data.get('password')
+        email = data.get('email')
+        team_raw = data.get('scouting_team_number')
+        roles_list = data.getlist('roles') if not request.is_json else (data.get('roles') or [])
+
+        if not username or not password:
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'username and password required', 'error_code': 'MISSING_FIELDS'}), 400
+            flash('Username and password are required', 'error')
+            return redirect(url_for('auth.manage_users'))
+
+        # Scoping: admins are limited to their own team; superadmins may set team
+        if not current_user.has_role('superadmin'):
+            target_team = current_user.scouting_team_number
+        else:
+            try:
+                target_team = safe_int_team_number(team_raw) if team_raw not in (None, '') else None
+            except Exception:
+                target_team = team_raw
+
+        # Check username uniqueness per team
+        if User.query.filter_by(username=username, scouting_team_number=target_team).first():
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'Username already exists for that team', 'error_code': 'USERNAME_EXISTS'}), 409
+            flash('Username already exists for the target team', 'error')
+            return redirect(url_for('auth.manage_users'))
+
+        if email == '':
+            email = None
+        if email and User.query.filter_by(email=email).first():
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'Email already exists', 'error_code': 'EMAIL_EXISTS'}), 409
+            flash('Email already exists', 'error')
+            return redirect(url_for('auth.manage_users'))
+
+        user = User(username=username, email=email, scouting_team_number=target_team)
+        user.set_password(password)
+
+        # Assign roles (form gives list of ids; JSON may pass list of names or ids)
+        for r in roles_list:
+            role_obj = None
+            try:
+                role_obj = Role.query.filter_by(name=str(r)).first()
+            except Exception:
+                pass
+            if not role_obj:
+                try:
+                    role_obj = Role.query.get(int(r))
+                except Exception:
+                    role_obj = None
+            if role_obj:
+                if role_obj.name == 'superadmin' and not current_user.has_role('superadmin'):
+                    if request.is_json:
+                        return jsonify({'success': False, 'error': 'Only superadmins can assign superadmin role', 'error_code': 'PERMISSION_DENIED'}), 403
+                    flash('Only superadmins can create other superadmins', 'error')
+                    return redirect(url_for('auth.manage_users'))
+                user.roles.append(role_obj)
+
+        db.session.add(user)
+        db.session.flush()
+        try:
+            DatabaseChange.log_change(
+                table_name='user',
+                record_id=user.id,
+                operation='insert',
+                new_data={'id': user.id, 'username': user.username, 'email': user.email, 'scouting_team_number': user.scouting_team_number, 'is_active': user.is_active},
+                server_id='local'
+            )
+        except Exception:
+            current_app.logger.exception('Failed to log DB change for user creation')
+        db.session.commit()
+
+        if request.is_json:
+            return jsonify({'success': True, 'user': {'id': user.id, 'username': user.username, 'team_number': user.scouting_team_number}}), 201
+        flash(f'User {username} created successfully', 'success')
+        return redirect(url_for('auth.manage_users'))
+
+    # GET handling preserved below
     query = User.query
     search = request.args.get('search')
     if search:

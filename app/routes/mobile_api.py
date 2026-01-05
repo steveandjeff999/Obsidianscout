@@ -2,7 +2,7 @@
 Mobile App API
 Comprehensive REST API for mobile applications with authentication, data access, and offline sync
 """
-from flask import Blueprint, request, jsonify, current_app, g, url_for, send_file
+from flask import Blueprint, request, jsonify, current_app, g, url_for, send_file, get_flashed_messages
 from flask_login import login_user, logout_user, current_user
 from datetime import datetime, timezone, timedelta
 import os
@@ -4837,6 +4837,121 @@ def get_sync_status():
             'error': 'Failed to retrieve sync status',
             'error_code': 'SYNC_STATUS_ERROR'
         }), 500
+
+
+# ============================================================================
+# MOBILE TRIGGERED SYNC ENDPOINT
+# ============================================================================
+@mobile_api.route('/sync/trigger', methods=['POST'])
+@token_required
+def mobile_trigger_sync():
+    """
+    Trigger a combined teams + matches sync (same behavior as admin `/api/sync-event`).
+
+    Security: Only users with `admin` or `analytics` roles may trigger this via mobile token.
+
+    Response JSON mirrors the admin endpoint:
+    {
+      "success": true|false,
+      "results": {
+         "teams_sync": {"success": bool, "message": str, "flashes": [ {"category": str, "message": str} ] },
+         "matches_sync": { ... },
+         "alliance_sync": {"triggered": bool, ... }
+      }
+    }
+    """
+    # Require admin or analytics role on the mobile user
+    user = getattr(request, 'mobile_user', None)
+    if not user or not (user.has_role('admin') or user.has_role('analytics')):
+        return jsonify({'success': False, 'error': 'Insufficient permissions', 'error_code': 'INSUFFICIENT_PERMISSIONS'}), 403
+
+    results = {
+        'teams_sync': {'success': False, 'message': '', 'flashes': []},
+        'matches_sync': {'success': False, 'message': '', 'flashes': []},
+        'alliance_sync': {'success': False, 'message': '', 'triggered': False}
+    }
+
+    try:
+        # If alliance mode active, run alliance sync for the active alliance (safe to call)
+        from app.utils.alliance_data import get_active_alliance_id
+        alliance_id = get_active_alliance_id()
+        if alliance_id:
+            try:
+                from app.routes.scouting_alliances import perform_alliance_api_sync_for_alliance
+                sync_result = perform_alliance_api_sync_for_alliance(alliance_id)
+                results['alliance_sync']['triggered'] = True
+                results['alliance_sync']['success'] = sync_result.get('success', False)
+                results['alliance_sync']['message'] = sync_result.get('message', 'Alliance sync attempted')
+                results['alliance_sync']['teams_added'] = sync_result.get('teams_added', 0)
+                results['alliance_sync']['teams_updated'] = sync_result.get('teams_updated', 0)
+                results['alliance_sync']['matches_added'] = sync_result.get('matches_added', 0)
+                results['alliance_sync']['matches_updated'] = sync_result.get('matches_updated', 0)
+            except Exception as e:
+                current_app.logger.exception('Alliance sync failed')
+                results['alliance_sync']['triggered'] = True
+                results['alliance_sync']['success'] = False
+                results['alliance_sync']['message'] = str(e)
+
+        # Teams sync
+        from app.routes import teams as teams_bp
+        try:
+            try:
+                _ = get_flashed_messages(with_categories=True)
+            except Exception:
+                pass
+
+            teams_resp = teams_bp.sync_from_config()
+            try:
+                flashes = get_flashed_messages(with_categories=True)
+            except Exception:
+                flashes = []
+
+            results['teams_sync']['success'] = True
+            results['teams_sync']['message'] = 'Teams sync attempted.'
+            results['teams_sync']['flashes'] = [{'category': c, 'message': m} for c, m in flashes]
+        except Exception as e:
+            current_app.logger.exception('Teams sync failed')
+            results['teams_sync']['success'] = False
+            results['teams_sync']['message'] = str(e)
+            try:
+                flashes = get_flashed_messages(with_categories=True)
+            except Exception:
+                flashes = []
+            results['teams_sync']['flashes'] = [{'category': c, 'message': m} for c, m in flashes]
+
+        # Matches sync
+        from app.routes import matches as matches_bp
+        try:
+            try:
+                _ = get_flashed_messages(with_categories=True)
+            except Exception:
+                pass
+
+            matches_resp = matches_bp.sync_from_config()
+            try:
+                flashes = get_flashed_messages(with_categories=True)
+            except Exception:
+                flashes = []
+
+            results['matches_sync']['success'] = True
+            results['matches_sync']['message'] = 'Matches sync attempted.'
+            results['matches_sync']['flashes'] = [{'category': c, 'message': m} for c, m in flashes]
+        except Exception as e:
+            current_app.logger.exception('Matches sync failed')
+            results['matches_sync']['success'] = False
+            results['matches_sync']['message'] = str(e)
+            try:
+                flashes = get_flashed_messages(with_categories=True)
+            except Exception:
+                flashes = []
+            results['matches_sync']['flashes'] = [{'category': c, 'message': m} for c, m in flashes]
+
+        overall_success = results['teams_sync']['success'] or results['matches_sync']['success'] or results['alliance_sync'].get('success', False)
+        return jsonify({'success': overall_success, 'results': results})
+
+    except Exception as e:
+        current_app.logger.exception('Mobile-triggered sync failed')
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @mobile_api.route('/notifications/scheduled', methods=['GET'])

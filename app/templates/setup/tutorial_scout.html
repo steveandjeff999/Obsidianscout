@@ -1,0 +1,323 @@
+{% extends 'base.html' %}
+
+{% block title %}Scouting Tutorial{% endblock %}
+
+{% block heading %}Scouting Tutorial{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="row justify-content-center">
+    <div class="col-md-10">
+      <div class="text-center mb-4">
+        <h2><i class="fas fa-user-friends me-2"></i>Scouting Tutorial</h2>
+        <p class="lead text-muted">A focused walkthrough for scouts — learn the scouting form, pit scouting, and navigation.</p>
+      </div>
+
+      <!-- Multi-step wizard (6 steps): Intro, Navigation, Scouting Form, Practice, Pit, Wrap -->
+      <div id="tutorial-container">
+        <div class="tutorial-step d-block active-step" id="s-step-1">
+          <div class="card shadow">
+            <div class="card-header bg-primary text-white"><h5 class="mb-0"><span class="badge bg-light text-primary me-2">1</span>Welcome</h5></div>
+            <div class="card-body p-4">
+              <h6>Getting started</h6>
+              <p class="small">This short tutorial focuses on the scouting tasks most scouts will perform during a match event.</p>
+              <div class="mt-2">
+                <strong>What you'll learn</strong>
+                <ul class="small mb-0">
+                  <li>How to use the match scouting form and counters.</li>
+                  <li>How to practice safely (preview mode) and validate entries.</li>
+                  <li>How to collect pit scouting data and verify saved samples.</li>
+                </ul>
+              </div>
+              <div class="mt-2 small text-muted">Read more: <a href="{{ url_for('main.help_page') }}?file=SCOUTING_GUIDE.md">Scouting Guide</a></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tutorial-step d-none" id="s-step-2">
+          <div class="card shadow">
+            <div class="card-header bg-secondary text-white"><h5 class="mb-0"><span class="badge bg-light text-secondary me-2">2</span>Navigation</h5></div>
+            <div class="card-body p-4">
+              <h6>Where to find things</h6>
+              <p class="small">Open the Scouting Dashboard, Start Scouting, or access Team & Match lists using the buttons to the right.</p>
+              <div class="mt-3 d-flex gap-2 align-items-center">
+                <button class="btn btn-sm btn-outline-success" onclick="window.open('{{ url_for('scouting.scouting_form') }}','_blank','noopener')">Open Scouting</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="window.open('{{ url_for('scouting.index') }}','_blank','noopener')">Dashboard</button>
+                <button class="btn btn-sm btn-outline-primary" onclick="window.open('{{ url_for('teams.index') }}','_blank','noopener')">Teams</button>
+              </div>
+            </div> The preview is interactive but will not save data to the server unless you open the real form.</p>
+              <div class="row g-3">
+                <div class="col-lg-7">
+                  <div class="small text-muted">Follow these steps to practice:</div>
+                  <ol class="small mb-2">
+                    <li>Click <strong>Show Scouting</strong> to display the sample form.</li>
+                    <li>Enter <strong>Team #</strong> and <strong>Match #</strong>, then use counters for scoring elements.</li>
+                    <li>Click <strong>Save Sample</strong> — this validates inputs and shows a success message (preview only).</li>
+                    <li>To see saved submissions for real data, open the <a href="{{ url_for('scouting.index') }}">Scouting Dashboard</a> and look for recent entries.</li>
+                  </ol>
+                  <div class="small text-muted"><strong>Tip:</strong> Always double-check Team # and Match # before saving to avoid misattributed data
+        <div class="tutorial-step d-none" id="s-step-3">
+          <div class="card shadow">
+            <div class="card-header bg-success text-white"><h5 class="mb-0"><span class="badge bg-light text-success me-2">3</span>Scouting Form</h5></div>
+            <div class="card-body p-4">
+              <h6>Practice the match form</h6>
+              <p class="small">Use the sample form to practice entering a team number, match number, and counters.</p>
+              <div class="row g-3">
+                <div class="col-lg-7">
+                  <div class="small text-muted">Try using the counters and Save Sample to see values collected.</div>
+                </div>
+                <div class="col-lg-5">
+                  <div id="basicScoutingPreview" class="border rounded bg-body-secondary p-3 demo-preview" role="region" aria-label="Scouting preview">
+                    <div class="preview-placeholder text-muted small text-center">Click "Show Scouting" to load the sample form.</div>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-3"><button id="showScouting" class="btn btn-primary btn-sm">Show Scouting</button></div>
+            </div>
+          </div>, drivetrain type, weight, and short interview notes.</p>
+              <div class="mt-2 d-flex gap-2 mb-3">
+                <button class="btn btn-sm btn-outline-primary" onclick="window.open('{{ url_for('pit_scouting.index') }}','_blank','noopener')">Open Pit Scouting</button>
+                <button id="showPitPreview" class="btn btn-sm btn-outline-secondary">Show Pit Preview</button>
+              </div>
+              <div class="small text-muted mb-2">Practice steps:</div>
+              <ul class="small text-muted">
+                <li>Click <strong>Show Pit Preview</strong> and fill in Team #, weight, drivetrain, and notes.</li>
+                <li>Click <strong>Save Pit Sample</strong> (preview only) to validate inputs and auto-advance the tutorial.</li>
+                <li>Open the <a href="{{ url_for('teams.index') }}">Teams</a> page to search for a team and review collected pit notes.</li>
+              </ul"tutorial-step d-none" id="s-step-4">
+          <div class="card shadow">
+            <div class="card-header bg-warning text-white"><h5 class="mb-0"><span class="badge bg-light text-warning me-2">4</span>Pit Scouting</h5></div>
+            <div class="card-body p-4">
+              <h6>Pit scouting basics</h6>
+              <p class="small">Learn where to record robot specs and notes about teams.</p>
+              <div class="mt-2 d-flex gap-2 mb-3">
+                <button class="btn btn-sm btn-outline-primary" onclick="window.open('{{ url_for('pit_scouting.index') }}','_blank','noopener')">Open Pit Scouting</button>
+                <button id="showPitPreview" class="btn btn-sm btn-outline-secondary">Show Pit Preview</button>
+              </div>
+              <div id="pitScoutingPreview" class="border rounded bg-body-secondary p-3 demo-preview" role="region" aria-label="Pit scouting preview">
+                <div class="preview-placeholder text-muted small text-center">Click "Show Pit Preview" to display a sample pit scouting form.</div>
+              </div>
+            </div>
+          </div>2 small text-muted">Quick checklist:</div>
+              <ul class="small text-muted">
+                <li>Practice saved a sample successfully.</li>
+                <li>You can find practice submissions on the Scouting Dashboard.</li>
+                <li>You can collect pit data and view it on the Teams page.</li>
+              </ul>
+              <div class="mt-
+        </div>
+
+        <div class="tutorial-step d-none" id="s-step-5">
+          <div class="card shadow">
+            <div class="card-header bg-dark text-white"><h5 class="mb-0"><span class="badge bg-light text-dark me-2">5</span>Wrap Up</h5></div>
+            <div class="card-body p-4">
+              <h6>You're ready</h6>
+              <p class="small">Open the full scouting page when you're ready to record live matches.</p>
+              <div class="mt-3"><a href="{{ url_for('scouting.scouting_form') }}" class="btn btn-success btn-sm">Start Scouting</a></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Wizard controls -->
+        <div class="d-flex justify-content-between align-items-center mt-3">
+          <div><button id="s-prev-btn" class="btn btn-outline-secondary btn-sm">Previous</button></div>
+          <div class="text-center"><small id="s-step-indicator" class="text-muted">Step 1 of 5</small></div>
+          <div><button id="s-next-btn" class="btn btn-primary btn-sm">Next</button></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Small helper for the scout tutorial multi-step flow
+let sCurrent = 1; const sSteps = 5;
+function showSStep(idx){
+  sCurrent = Math.max(1, Math.min(sSteps, idx));
+  for(let i=1;i<=sSteps;i++){ document.getElementById('s-step-'+i).classList.toggle('d-none', i!==sCurrent); }
+  document.getElementById('s-step-indicator').textContent = `Step ${sCurrent} of ${sSteps}`;
+  document.getElementById('s-prev-btn').disabled = sCurrent===1;
+  document.getElementById('s-next-btn').textContent = sCurrent===sSteps ? 'Finish' : 'Next';
+}
+document.getElementById('s-next-btn').addEventListener('click', ()=>{ if(sCurrent<sSteps) showSStep(sCurrent+1); else { window.location = "{{ url_for('setup.tutorial') }}"; } });
+document.getElementById('s-prev-btn').addEventListener('click', ()=>{ if(sCurrent>1) showSStep(sCurrent-1); });
+
+// Configs for scouting preview (from server)
+const DEFAULT_TUTORIAL_CONFIG = {{ default_config|tojson|safe }};
+const TEAM_TUTORIAL_CONFIG = {{ team_config|tojson|safe }};
+
+// Interactive scouting preview (renders a realistic preview form & wires practice completion)
+(function(){
+  // practice is now implicitly completed by saving a sample — we auto-advance when saved
+
+  document.getElementById('showScouting').addEventListener('click', function(){
+    const container = document.getElementById('basicScoutingPreview');
+    // prefer team config, then default, then minimal sample
+    const cfg = (typeof TEAM_TUTORIAL_CONFIG !== 'undefined' && TEAM_TUTORIAL_CONFIG && Object.keys(TEAM_TUTORIAL_CONFIG).length) ? TEAM_TUTORIAL_CONFIG : (DEFAULT_TUTORIAL_CONFIG || {});
+    renderScoutingFormFromJson(cfg, container);
+    try { container.scrollIntoView({behavior:'smooth', block:'center'}); } catch(e) {}
+  });
+
+  // Pit scouting preview: interactive sample form and save handler
+  try {
+    const showPitBtn = document.getElementById('showPitPreview');
+    if (showPitBtn) {
+      showPitBtn.addEventListener('click', function(){
+        const container = document.getElementById('pitScoutingPreview');
+        const cfg = (typeof TEAM_TUTORIAL_CONFIG !== 'undefined' && TEAM_TUTORIAL_CONFIG && Object.keys(TEAM_TUTORIAL_CONFIG).length) ? TEAM_TUTORIAL_CONFIG : (DEFAULT_TUTORIAL_CONFIG || {});
+        renderPitFormFromJson(cfg, container);
+        try { container.scrollIntoView({behavior:'smooth', block:'center'}); } catch(e) {}
+      });
+    }
+
+    function renderPitFormFromJson(jsonObj, container) {
+      if (!container) container = document.getElementById('pitScoutingPreview');
+      if (!container) return;
+
+      const teamVal = '';
+      const weight = '';
+      const drive = '';
+      const notes = '';
+
+      let html = '<form class="preview-pit" aria-label="Pit scouting sample form">';
+      html += '<input class="form-control form-control-sm mb-2" id="pit_preview_team" placeholder="Team #" aria-label="Team number">';
+      html += '<div class="row g-2"><div class="col-md-6"><label class="small d-block mb-1">Robot Weight (kg)</label><input id="pit_preview_weight" class="form-control form-control-sm" type="number" step="0.1" min="0"></div>';
+      html += '<div class="col-md-6"><label class="small d-block mb-1">Drivetrain</label><select id="pit_preview_drive" class="form-select form-select-sm"><option value="">-- Select --</option><option value="tank">Tank</option><option value="swerve">Swerve</option><option value="swerve-lite">Swerve Lite</option><option value="mecanum">Mecanum</option><option value="other">Other</option></select></div></div>';
+      html += '<div class="mb-2 mt-2"><label class="small d-block mb-1">Notes</label><textarea id="pit_preview_notes" class="form-control form-control-sm" rows="3" placeholder="Short notes about the robot"></textarea></div>';
+      html += '<div class="d-flex justify-content-between"><button type="button" class="btn btn-sm btn-success" id="preview-pit-save">Save Pit Sample</button><small class="text-muted align-self-center">Preview only — not saved</small></div>';
+      html += '<div id="preview-pit-feedback" class="mt-2" aria-live="polite"></div>';
+      html += '</form>';
+
+      container.innerHTML = html;
+      try { container.style.pointerEvents = 'auto'; } catch(e) {}
+      try { container.querySelectorAll('input,select,textarea,button').forEach(el => { el.disabled = false; try{ el.readOnly = false; }catch(e){} if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex','0'); }); } catch(e) {}
+
+      const saveBtn = document.getElementById('preview-pit-save');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+          const fb = document.getElementById('preview-pit-feedback');
+          const team = document.getElementById('pit_preview_team');
+          const weightInput = document.getElementById('pit_preview_weight');
+          const driveSel = document.getElementById('pit_preview_drive');
+          if (team && team.value.trim() === '') { if (fb) fb.innerHTML = '<div class="alert alert-danger py-1 px-2">Please enter a Team #</div>'; return; }
+          if (weightInput && weightInput.value !== '' && Number(weightInput.value) < 0) { if (fb) fb.innerHTML = '<div class="alert alert-danger py-1 px-2">Weight must be non-negative</div>'; return; }
+          if (fb) { fb.innerHTML = '<div class="alert alert-success py-1 px-2">Pit sample saved (preview only)</div>'; setTimeout(()=>{ if (fb) fb.innerHTML = ''; }, 1500); }
+          // Auto-advance to Wrap Up if we're on Pit Scouting step
+          try { if (typeof sCurrent !== 'undefined' && sCurrent === 4) { showSStep(5); const fb2 = document.getElementById('preview-pit-feedback'); if (fb2) fb2.innerHTML = '<div class="alert alert-success py-1 px-2">Pit sample saved — good job!</div>'; setTimeout(()=>{ if (fb2) fb2.innerHTML=''; }, 1500); } } catch(e) {}
+        });
+      }
+    }
+  } catch(e) { console.warn('Pit preview init failed', e); }
+
+  
+
+  // Render a realistic scouting form preview (copied/adapted from analytics tutorial)
+  function renderScoutingFormFromJson(jsonObj, container) {
+    if (!container) container = document.getElementById('basicScoutingPreview');
+    if (!container) return;
+
+    let html = '<form class="preview-scout" aria-label="Scouting sample form">';
+    html += '<input class="form-control form-control-sm mb-2" id="preview_team_num" placeholder="Team #" aria-label="Team number">';
+    html += '<input class="form-control form-control-sm mb-2" id="preview_match_num" placeholder="Match #" aria-label="Match number">';
+
+    function addElementInput(el) {
+      const rawId = (el.id || el.name || 'field').toString();
+      const id = rawId.replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const label = el.label || el.name || rawId;
+      const type = (el.type || 'number');
+      const inputId = `preview_${id}`;
+
+      if (type === 'bool' || type === 'checkbox') {
+          return `<div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="${inputId}" name="${inputId}"> <label class="form-check-label small" for="${inputId}">${label}</label></div>`;
+      }
+
+      const numericTypes = ['number','counter','int','float','numeric','count','counts','score','quantity'];
+      const isNumeric = numericTypes.includes(String(type).toLowerCase()) || (el.default !== undefined && typeof el.default === 'number');
+      if (isNumeric) {
+          const step = (el.step !== undefined) ? el.step : (String(type).toLowerCase() === 'float' ? 0.1 : 1);
+          const minAttr = (el.min !== undefined) ? `min="${el.min}"` : 'min="0"';
+          const value = (el.default !== undefined) ? el.default : 0;
+          return `<div class="mb-2"><label for="${inputId}" class="form-label fw-medium">${label}</label>` +
+                 `${ el.description ? `<small class="text-muted d-block mb-2">${el.description}</small>` : '' }` +
+                 `<div class="counter-container" role="group" aria-label="${label} counter">` +
+                 `<button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="${inputId}" data-step="${step}" aria-label="Decrease ${label}"><i class="fas fa-minus" aria-hidden="true"></i></button>` +
+                 `<input id="${inputId}" name="${inputId}" class="form-control counter-input text-center" value="${value}" type="number" step="${step}" ${minAttr}>` +
+                 `<button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="${inputId}" data-step="${step}" aria-label="Increase ${label}"><i class="fas fa-plus" aria-hidden="true"></i></button>` +
+                 `</div></div>`;
+      }
+
+      return `<div class="mb-2"><label class="small d-block mb-1" for="${inputId}">${label}</label><input id="${inputId}" name="${inputId}" class="form-control form-control-sm" placeholder="${label}" data-field="${id}" tabindex="0"></div>`;
+    }
+
+    // Collect elements from typical config locations
+    let elems = [];
+    ['auto_period','teleop_period','endgame_period'].forEach(p => {
+        if (jsonObj && jsonObj[p] && Array.isArray(jsonObj[p].scoring_elements)) {
+            elems = elems.concat(jsonObj[p].scoring_elements);
+        }
+    });
+    if (elems.length === 0 && Array.isArray(jsonObj.scoring_elements)) elems = jsonObj.scoring_elements;
+    if (elems.length === 0) {
+        if (jsonObj.scouting_form && Array.isArray(jsonObj.scouting_form.sections)) {
+            jsonObj.scouting_form.sections.forEach(s => { if (Array.isArray(s.elements)) elems = elems.concat(s.elements); });
+        }
+        if (jsonObj.form && Array.isArray(jsonObj.form.scoring_elements)) elems = elems.concat(jsonObj.form.scoring_elements);
+        if (jsonObj.pit_scouting && Array.isArray(jsonObj.pit_scouting.sections)) {
+            jsonObj.pit_scouting.sections.forEach(s => { if (Array.isArray(s.elements)) elems = elems.concat(s.elements); });
+        }
+    }
+
+    if (elems.length === 0) {
+        // fallback simple sample
+        html += '<div class="mb-2"><label class="small d-block mb-1">Use this sample counter</label><div class="counter-container"><button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="pv_sample">-</button><input id="pv_sample" class="form-control counter-input text-center" value="0" type="number" step="1" min="0"><button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="pv_sample">+</button></div></div>';
+    } else {
+        elems.forEach(el => { html += addElementInput(el); });
+    }
+
+    html += '<div class="d-flex justify-content-between"><button type="button" class="btn btn-sm btn-success" id="preview-scout-save">Save Sample</button><small class="text-muted align-self-center">Preview only — not saved</small></div>';
+    html += '<div id="preview-scout-feedback" class="mt-2" aria-live="polite"></div>';
+    html += '</form>';
+
+    container.innerHTML = html;
+
+    // Ensure preview inputs usable
+    try { container.style.pointerEvents = 'auto'; } catch(e) {}
+    try { container.querySelectorAll('input,select,textarea,button').forEach(el => { el.disabled = false; try{ el.readOnly = false; }catch(e){} if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex','0'); }); } catch(e) {}
+
+    // Hook save sample
+    const saveBtn = document.getElementById('preview-scout-save');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', () => {
+        const fb = document.getElementById('preview-scout-feedback');
+        // basic validation: team and match numbers
+        const team = document.getElementById('preview_team_num');
+        const match = document.getElementById('preview_match_num');
+        if (team && team.value.trim() === '') { if (fb) fb.innerHTML = '<div class="alert alert-danger py-1 px-2">Please enter a Team #</div>'; return; }
+        if (match && match.value.trim() === '') { if (fb) fb.innerHTML = '<div class="alert alert-danger py-1 px-2">Please enter a Match #</div>'; return; }
+        if (fb) { fb.innerHTML = '<div class="alert alert-success py-1 px-2">Sample saved (preview only)</div>'; setTimeout(()=>{ if (fb) fb.innerHTML = ''; }, 1500); }
+        // Auto-advance to next step (Pit Scouting) for smoother flow
+        try { if (typeof sCurrent !== 'undefined' && sCurrent === 3) { showSStep(4); const fb2 = document.getElementById('preview-scout-feedback'); if (fb2) fb2.innerHTML = '<div class="alert alert-success py-1 px-2">Practice completed — great job!</div>'; setTimeout(()=>{ if (fb2) fb2.innerHTML=''; }, 1800); } } catch(e) {}
+      });
+    }
+
+    // Retheme and wire counters
+    setTimeout(() => { try { if (window.initializeCounters) window.initializeCounters(); if (window.updateSelect2DarkMode) window.updateSelect2DarkMode(); } catch(e) {} }, 20);
+  }
+})();
+
+// Wire small increment behavior (works for any page)
+document.addEventListener('click', function(e){
+  if (e.target && (e.target.closest('.btn-increment') || e.target.closest('.btn-decrement') || e.target.closest('.btn-counter') )) {
+    const btn = e.target.closest('[data-target]');
+    if (!btn) return;
+    const id = btn.getAttribute('data-target');
+    const step = parseFloat(btn.getAttribute('data-step') || '1');
+    const inp = document.getElementById(id);
+    if (inp) { const cur = inp.value===''?0:Number(inp.value); if (btn.classList.contains('btn-decrement')) inp.value = Math.max((inp.min?Number(inp.min):-Infinity),(cur-step)); else inp.value = (cur+step); inp.dispatchEvent(new Event('input',{bubbles:true})); }
+  }
+});
+</script>
+{% endblock %}
