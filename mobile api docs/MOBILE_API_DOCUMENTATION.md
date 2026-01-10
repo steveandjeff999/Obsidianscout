@@ -1722,7 +1722,12 @@ If you'd like, I can also produce a small matrix table (CSV or markdown) enumera
   - `default` (any, optional): default value
   - `options` (array, optional): for select/radio/checkbox types — list of {"value","label"}
   - `min`, `max` (number, optional): numeric limits for counters/sliders
+  - `step` (number, optional): primary increment/decrement step for counters (default: 1)
+  - `alt_step` (number, optional): secondary step amount to enable an additional ± control (e.g., 5 or 10)
+  - `alt_step_enabled` (boolean, optional): whether the secondary ± controls should be shown
   - `validation` (object, optional): regex or custom rules
+
+  See the examples for counter increments: `INCREMENT_EXAMPLES.md`
 
 Supported element types and recommended mobile UI mapping
 - `counter` — integer counter, map to a stepper or numeric input (use `min`/`max`)

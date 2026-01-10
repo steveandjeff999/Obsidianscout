@@ -272,7 +272,7 @@ const TEAM_TUTORIAL_CONFIG = {{ team_config|tojson|safe }};
 
     if (elems.length === 0) {
         // fallback simple sample
-        html += '<div class="mb-2"><label class="small d-block mb-1">Use this sample counter</label><div class="counter-container"><button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="pv_sample">-</button><input id="pv_sample" class="form-control counter-input text-center" value="0" type="number" step="1" min="0"><button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="pv_sample">+</button></div></div>';
+        html += '<div class="mb-2"><label class="small d-block mb-1">Use this sample counter</label><div class="counter-container"><button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="pv_sample" data-step="1">-1</button><input id="pv_sample" class="form-control counter-input text-center" value="0" type="number" step="1" min="0"><button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="pv_sample" data-step="1">+1</button></div></div>';
     } else {
         elems.forEach(el => { html += addElementInput(el); });
     }

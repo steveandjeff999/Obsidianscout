@@ -187,14 +187,28 @@
                                 <small class="text-muted d-block mb-2">{{ element.description }}</small>
                                 {% endif %}
                                 <div class="counter-container" role="group" aria-label="{{ element.name }} counter">
-                                    <button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}" aria-label="Decrease {{ element.name }}">
-                                        <i class="fas fa-minus" aria-hidden="true"></i>
-                                    </button>
-                                    <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" 
-                                            value="{{ form_data.get(element.id, element.default) }}" min="0" aria-label="{{ element.name }} value">
-                                    <button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}" aria-label="Increase {{ element.name }}">
-                                        <i class="fas fa-plus" aria-hidden="true"></i>
-                                    </button>
+                                    <div class="d-flex align-items-center">
+                                        <div class="btn-group me-2" role="group" aria-label="{{ element.name }} controls">
+                                            <button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}" aria-label="Decrease {{ element.name }}">
+                                                <span class="counter-step-label">-{{ element.step|default(1) }}</span>
+                                            </button>
+                                        </div>
+                                        {% if element.alt_step and element.alt_step_enabled %}
+                                        <button type="button" class="btn btn-outline-danger btn-counter btn-decrement btn-alt ms-2" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Decrease {{ element.name }} by {{ element.alt_step }}">-{{ element.alt_step }}</button>
+                                        {% endif %}
+
+                                        <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" 
+                                                value="{{ form_data.get(element.id, element.default) }}" min="0" aria-label="{{ element.name }} value" data-alt-step="{{ element.alt_step if element.alt_step is defined else '' }}" data-alt-enabled="{{ '1' if element.alt_step and element.alt_step_enabled else '' }}">
+
+                                        {% if element.alt_step and element.alt_step_enabled %}
+                                        <button type="button" class="btn btn-outline-success btn-counter btn-increment btn-alt me-2" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Increase {{ element.name }} by {{ element.alt_step }}">+{{ element.alt_step }}</button>
+                                        {% endif %}
+                                        <div class="btn-group ms-2" role="group" aria-label="{{ element.name }} secondary controls">
+                                            <button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}" aria-label="Increase {{ element.name }}">
+                                                <span class="counter-step-label">+{{ element.step|default(1) }}</span>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             {% elif element.type == 'select' or element.type == 'multiple_choice' %}
                                 <label for="{{ element.id }}" class="form-label fw-medium">{{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}</label>
@@ -264,13 +278,19 @@
                                 <small class="text-muted d-block mb-2">{{ element.description }}</small>
                                 {% endif %}
                                 <div class="counter-container">
-                                    <button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}">
-                                        <i class="fas fa-minus"></i>
+                                    <button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}">
+                                        <span class="counter-step-label">-{{ element.step|default(1) }}</span>
                                     </button>
-                                    <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" 
+                                    {% if element.alt_step and element.alt_step_enabled %}
+                                    <button type="button" class="btn btn-outline-danger btn-counter btn-decrement btn-alt ms-2" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Decrease {{ element.name }} by {{ element.alt_step }}">-{{ element.alt_step }}</button>
+                                    {% endif %}
+                                    <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" data-alt-step="{{ element.alt_step if element.alt_step is defined else '' }}" data-alt-enabled="{{ '1' if element.alt_step and element.alt_step_enabled else '' }}" 
                                             value="{{ form_data.get(element.id, element.default) }}" min="0">
-                                    <button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}">
-                                        <i class="fas fa-plus"></i>
+                                    {% if element.alt_step and element.alt_step_enabled %}
+                                    <button type="button" class="btn btn-outline-success btn-counter btn-increment btn-alt me-2" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Increase {{ element.name }} by {{ element.alt_step }}">+{{ element.alt_step }}</button>
+                                    {% endif %}
+                                    <button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}">
+                                        <span class="counter-step-label">+{{ element.step|default(1) }}</span>
                                     </button>
                                 </div>
                             {% elif element.type == 'select' or element.type == 'multiple_choice' %}
@@ -341,13 +361,19 @@
                                 <small class="text-muted d-block mb-2">{{ element.description }}</small>
                                 {% endif %}
                                 <div class="counter-container">
-                                    <button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}">
-                                        <i class="fas fa-minus"></i>
+                                    <button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}">
+                                        <span class="counter-step-label">-{{ element.step|default(1) }}</span>
                                     </button>
-                                    <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" 
+                                    {% if element.alt_step and element.alt_step_enabled %}
+                                    <button type="button" class="btn btn-outline-danger btn-counter btn-decrement btn-alt ms-2" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Decrease {{ element.name }} by {{ element.alt_step }}">-{{ element.alt_step }}</button>
+                                    {% endif %}
+                                    <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" data-alt-step="{{ element.alt_step if element.alt_step is defined else '' }}" data-alt-enabled="{{ '1' if element.alt_step and element.alt_step_enabled else '' }}" 
                                             value="{{ form_data.get(element.id, element.default) }}" min="0">
-                                    <button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}">
-                                        <i class="fas fa-plus"></i>
+                                    {% if element.alt_step and element.alt_step_enabled %}
+                                    <button type="button" class="btn btn-outline-success btn-counter btn-increment btn-alt me-2" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Increase {{ element.name }} by {{ element.alt_step }}">+{{ element.alt_step }}</button>
+                                    {% endif %}
+                                    <button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}">
+                                        <span class="counter-step-label">+{{ element.step|default(1) }}</span>
                                     </button>
                                 </div>
                             {% elif element.type == 'select' or element.type == 'multiple_choice' %}

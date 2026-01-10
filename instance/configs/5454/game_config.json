@@ -1,7 +1,7 @@
 {
   "game_name": "REBUILT\u2122\u202fpresented by Haas",
-  "season": 2025,
-  "version": "1.0.5",
+  "season": 2026,
+  "version": "1.0.0",
   "alliance_size": 3,
   "scouting_stations": 6,
   "current_event_code": "OKOK",
@@ -10,89 +10,31 @@
     "Qualification",
     "Playoff"
   ],
-  "preferred_api_source": "tba",
+  "preferred_api_source": "first",
   "auto_period": {
-    "duration_seconds": 15,
+    "duration_seconds": 20,
     "scoring_elements": [
+      {
+        "id": "elem_auto_0",
+        "perm_id": "elem_auto_0",
+        "name": "Active Fuel",
+        "type": "counter",
+        "default": 0,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": true,
+        "points": 1.0,
+        "alt_step": 10,
+        "alt_step_enabled": true
+      },
       {
         "id": "elem_auto_1",
         "perm_id": "elem_auto_1",
-        "name": "Leave Strating Lines",
+        "name": "Climb L1 Auto",
         "type": "boolean",
         "default": false,
-        "display_in_predictions": false,
+        "display_in_predictions": true,
         "gamepiece_scoreible": false,
-        "points": 3.0
-      },
-      {
-        "id": "elem_auto_2",
-        "perm_id": "elem_auto_2",
-        "name": "CORAL (L1)",
-        "type": "counter",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 3.0
-      },
-      {
-        "id": "elem_auto_3",
-        "perm_id": "elem_auto_3",
-        "name": "CORAL (L2)",
-        "type": "counter",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 4.0
-      },
-      {
-        "id": "elem_auto_4",
-        "perm_id": "elem_auto_4",
-        "name": "CORAL (L3)",
-        "type": "counter",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 6.0
-      },
-      {
-        "id": "elem_auto_5",
-        "perm_id": "elem_auto_5",
-        "name": "CORAL (L4)",
-        "type": "counter",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 7.0
-      },
-      {
-        "id": "elem_auto_6",
-        "perm_id": "elem_auto_6",
-        "name": "ALGAE in Net",
-        "type": "counter",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 4.0
-      },
-      {
-        "id": "elem_auto_7",
-        "perm_id": "elem_auto_7",
-        "name": "ALGAE Processer",
-        "type": "counter",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 6.0
-      },
-      {
-        "id": "auto_06d68825",
-        "perm_id": "auto_06d68825",
-        "name": "New Element",
-        "type": "counter",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 1.0
+        "points": 15.0
       }
     ]
   },
@@ -100,94 +42,16 @@
     "duration_seconds": 135,
     "scoring_elements": [
       {
-        "id": "elem_teleop_6",
-        "perm_id": "elem_teleop_6",
-        "name": "CORAL (L1)",
+        "id": "elem_teleop_0",
+        "perm_id": "elem_teleop_0",
+        "name": "Active Fuel",
         "type": "counter",
         "default": 0,
         "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 2.0
-      },
-      {
-        "id": "elem_teleop_1",
-        "perm_id": "elem_teleop_1",
-        "name": "CORAL (L2)",
-        "type": "counter",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 3.0
-      },
-      {
-        "id": "elem_teleop_2",
-        "perm_id": "elem_teleop_2",
-        "name": "CORAL (L3)",
-        "type": "counter",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 4.0
-      },
-      {
-        "id": "elem_teleop_3",
-        "perm_id": "elem_teleop_3",
-        "name": "CORAL (L4)",
-        "type": "counter",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 5.0
-      },
-      {
-        "id": "elem_teleop_4",
-        "perm_id": "elem_teleop_4",
-        "name": "ALGAE in Processor",
-        "type": "counter",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 7.0
-      },
-      {
-        "id": "elem_teleop_5",
-        "perm_id": "elem_teleop_5",
-        "name": "ALGAE in Net",
-        "type": "counter",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 4.0
-      },
-      {
-        "id": "elem_teleop_6",
-        "perm_id": "elem_teleop_6",
-        "name": "Defense Played",
-        "type": "counter",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 0.0
-      },
-      {
-        "id": "teleop_b1da7319",
-        "perm_id": "teleop_b1da7319",
-        "name": "New Element",
-        "type": "counter",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 1.0
-      },
-      {
-        "id": "elem_teleop_9",
-        "perm_id": "elem_teleop_9",
-        "name": "5568",
-        "type": "counter",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 0.0
+        "gamepiece_scoreible": true,
+        "points": 1.0,
+        "alt_step": 10,
+        "alt_step_enabled": true
       }
     ]
   },
@@ -195,45 +59,31 @@
     "duration_seconds": 30,
     "scoring_elements": [
       {
-        "id": "elem_endgame_2",
-        "perm_id": "elem_endgame_2",
+        "id": "elem_endgame_0",
+        "perm_id": "elem_endgame_0",
         "name": "Climb",
         "type": "multiple_choice",
-        "default": "Park",
+        "default": "None",
         "display_in_predictions": true,
         "gamepiece_scoreible": false,
         "options": [
-          {
-            "name": "Park",
-            "points": 2.0
-          },
-          {
-            "name": "Shallow",
-            "points": 6.0
-          },
-          {
-            "name": "Deep",
-            "points": 12.0
-          },
           {
             "name": "None",
             "points": 0.0
           },
           {
-            "name": "Option 5",
-            "points": 0.0
+            "name": "L1",
+            "points": 10.0
+          },
+          {
+            "name": "L2",
+            "points": 20.0
+          },
+          {
+            "name": "L3",
+            "points": 30.0
           }
         ]
-      },
-      {
-        "id": "endgame_f265b8fb",
-        "perm_id": "endgame_f265b8fb",
-        "name": "New Element",
-        "type": "rating",
-        "default": 0,
-        "display_in_predictions": false,
-        "gamepiece_scoreible": false,
-        "points": 1.0
       }
     ]
   },
@@ -259,13 +109,13 @@
     ]
   },
   "api_settings": {
-    "username": "jeffstumps",
+    "username": "",
     "auth_token": "[REDACTED_auth_token]",
     "base_url": "https://frc-api.firstinspires.org",
     "auto_sync_enabled": true
   },
   "tba_api_settings": {
-    "auth_key": "hae7pfixkaYpROTHhMx6XQ5qLkjT5v7jX7IymIp3sFadVOTsboxkSVJlYu4yoq9a",
+    "auth_key": "",
     "base_url": "https://www.thebluealliance.com/api/v3"
   },
   "data_analysis": {

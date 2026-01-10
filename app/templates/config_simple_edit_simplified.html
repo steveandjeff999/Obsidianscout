@@ -23,46 +23,7 @@
                         <i class="fas fa-undo me-1"></i> Reset to Default {{ help.help_icon('Replace your configuration with a default template; use for clean starts or testing.', 'Reset to default') }}
                     </button>
                 </div>
-            <!-- Reset to Default Modal (simple editor) -->
-            <div class="modal fade z-high" id="resetModal" tabindex="-1" aria-labelledby="resetModalLabel" aria-hidden="true">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="resetModalLabel"><i class="fas fa-undo me-2"></i>Reset Configuration to Default</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <form action="{{ url_for('main.reset_config') }}" method="POST">
-                            <div class="modal-body">
-                                <div class="alert alert-warning">
-                                    <i class="fas fa-exclamation-triangle me-2"></i>
-                                    <strong>Warning:</strong> This will completely replace your current configuration with the selected default. This action cannot be undone!
-                                </div>
-                                <div class="mb-3">
-                                    <label for="default_config" class="form-label">Select Default Configuration:</label>
-                                    <select name="default_config" id="default_config" class="form-select" required>
-                                        <option value="">-- Select a default configuration --</option>
-                                        {% if default_configs %}
-                                            {% for config in default_configs %}
-                                                {% if config.type == 'game' %}
-                                                    <option value="{{ config.filename }}">{{ config.display_name }} ({{ config.basename or config.filename }})</option>
-                                                {% endif %}
-                                            {% endfor %}
-                                        {% else %}
-                                            <option value="" disabled>No default configurations found</option>
-                                        {% endif %}
-                                    </select>
-                                    <small class="form-text text-muted">Choose from pre-configured game setups for different seasons.</small>
-                                </div>
-                                <input type="hidden" name="config_type" value="game">
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                <button type="submit" class="btn btn-warning"><i class="fas fa-undo me-1"></i>Reset Configuration</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
+            <!-- Reset modal moved to bottom of page to avoid positioning issues -->
             </div>
             <div class="card-body">
                 {% if not game_config.game_name %}
@@ -260,6 +221,23 @@
                                                                        {% if element.gamepiece_scoreible %}checked{% endif %}>
                                                                 <label class="form-check-label">Is scored gamepiece</label>
                                                             </div>
+                                                            <div class="counter-options mt-2" style="display: {{ 'block' if element.type == 'counter' else 'none' }};">
+                                                                <div class="row g-2 align-items-center">
+                                                                    <div class="col-auto primary-step-col">
+                                                                        <label class="form-label small mb-0">Step</label>
+                                                                        <input type="number" class="form-control form-control-sm primary-step-input" name="auto_element_step_{{ loop.index0 }}" value="{{ element.step|default(1) }}" min="1" step="1">
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <div class="form-check">
+                                                                            <input class="form-check-input alt-step-enabled" type="checkbox" name="auto_element_alt_step_enabled_{{ loop.index0 }}" value="1" {% if element.alt_step_enabled %}checked{% endif %}>
+                                                                            <label class="form-check-label">Show alt increments</label>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <input type="number" class="form-control form-control-sm alt-step-input" name="auto_element_alt_step_{{ loop.index0 }}" value="{{ element.alt_step if element.alt_step is defined else '' }}" placeholder="Alt increment (e.g., 5)" min="1" step="1">
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                             {% if element.type == 'multiple_choice' %}
                                                             <div class="multiple-choice-options mt-2 d-block">
                                                                 <small class="text-muted">Multiple Choice Options:</small>
@@ -362,6 +340,23 @@
                                                                        name="teleop_element_gamepiece_scoreible_{{ loop.index0 }}" value="1"
                                                                        {% if element.gamepiece_scoreible %}checked{% endif %}>
                                                                 <label class="form-check-label">Is scored gamepiece</label>
+                                                            </div>
+                                                            <div class="counter-options mt-2" style="display: {{ 'block' if element.type == 'counter' else 'none' }};">
+                                                                <div class="row g-2 align-items-center">
+                                                                    <div class="col-auto primary-step-col">
+                                                                        <label class="form-label small mb-0">Step</label>
+                                                                        <input type="number" class="form-control form-control-sm primary-step-input" name="teleop_element_step_{{ loop.index0 }}" value="{{ element.step|default(1) }}" min="1" step="1">
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <div class="form-check">
+                                                                            <input class="form-check-input alt-step-enabled" type="checkbox" name="teleop_element_alt_step_enabled_{{ loop.index0 }}" value="1" {% if element.alt_step_enabled %}checked{% endif %}>
+                                                                            <label class="form-check-label">Show alt increments</label>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <input type="number" class="form-control form-control-sm alt-step-input" name="teleop_element_alt_step_{{ loop.index0 }}" value="{{ element.alt_step if element.alt_step is defined else '' }}" placeholder="Alt increment (e.g., 5)" min="1" step="1">
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                             {% if element.type == 'multiple_choice' %}
                                                             <div class="multiple-choice-options mt-2 d-block">
@@ -466,6 +461,23 @@
                                                                        {% if element.gamepiece_scoreible %}checked{% endif %}>
                                                                 <label class="form-check-label">Is scored gamepiece</label>
                                                             </div>
+                                                            <div class="counter-options mt-2" style="display: {{ 'block' if element.type == 'counter' else 'none' }};">
+                                                                <div class="row g-2 align-items-center">
+                                                                    <div class="col-auto primary-step-col">
+                                                                        <label class="form-label small mb-0">Step</label>
+                                                                        <input type="number" class="form-control form-control-sm primary-step-input" name="endgame_element_step_{{ loop.index0 }}" value="{{ element.step|default(1) }}" min="1" step="1">
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <div class="form-check">
+                                                                            <input class="form-check-input alt-step-enabled" type="checkbox" name="endgame_element_alt_step_enabled_{{ loop.index0 }}" value="1" {% if element.alt_step_enabled %}checked{% endif %}>
+                                                                            <label class="form-check-label">Show alt increments</label>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-auto">
+                                                                        <input type="number" class="form-control form-control-sm alt-step-input" name="endgame_element_alt_step_{{ loop.index0 }}" value="{{ element.alt_step if element.alt_step is defined else '' }}" placeholder="Alt increment (e.g., 5)" min="1" step="1">
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                             {% if element.type == 'multiple_choice' %}
                                                             <div class="multiple-choice-options mt-2" style="display: block;">
                                                                 <small class="text-muted">Multiple Choice Options:</small>
@@ -559,6 +571,7 @@
                                                             <label class="form-check-label">Is scored gamepiece</label>
                                                         </div>
                                                         <input type="hidden" name="game_piece_id_{{ loop.index0 }}" value="{{ piece.id }}">
+                                                        <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-game-piece">Remove</button>
                                                     </div>
                                                 </div>
                                                 {% endfor %}
@@ -766,17 +779,69 @@
     </div>
 </div>
 
-<!-- second reset modal removed to avoid duplicate IDs -->
+<!-- Reset to Default Modal (moved outside main container to prevent positioning issues) -->
+<div class="modal fade z-high" id="resetModal" tabindex="-1" aria-labelledby="resetModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="resetModalLabel">
+                    <i class="fas fa-undo me-2"></i>Reset Configuration to Default
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('main.reset_config') }}" method="POST">
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> This will completely replace your current configuration with the selected default. This action cannot be undone!
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="default_config" class="form-label">Select Default Configuration:</label>
+                        <select name="default_config" id="default_config" class="form-select" required>
+                            <option value="">-- Select a default configuration --</option>
+                            {% if default_configs %}
+                                {% for config in default_configs %}
+                                <option value="{{ config.filename }}">{{ config.display_name }}</option>
+                                {% endfor %}
+                            {% else %}
+                                <option value="" disabled>No default configurations found</option>
+                            {% endif %}
+                        </select>
+                        <small class="form-text text-muted">
+                            Choose from pre-configured game setups for different seasons.
+                        </small>
+                    </div>
+
+                    <input type="hidden" name="config_type" value="game">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>Cancel
+                    </button>
+                    <button type="submit" class="btn btn-warning"><i class="fas fa-undo me-1"></i>Reset Configuration</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <script>
-// Toggle multiple choice options visibility
+// Toggle type-specific options visibility (multiple choice and counter alt-step)
 function toggleMultipleChoiceOptions(selectElement) {
     const container = selectElement.closest('.element-item');
     const optionsDiv = container.querySelector('.multiple-choice-options');
+    const counterOptions = container.querySelector('.counter-options');
     if (selectElement.value === 'multiple_choice') {
-        optionsDiv.style.display = 'block';
+        if (optionsDiv) optionsDiv.style.display = 'block';
     } else {
-        optionsDiv.style.display = 'none';
+        if (optionsDiv) optionsDiv.style.display = 'none';
+    }
+    // Show counter-specific controls only when element is a counter
+    if (selectElement.value === 'counter') {
+        if (counterOptions) counterOptions.style.display = 'block';
+    } else {
+        if (counterOptions) counterOptions.style.display = 'none';
     }
 }
 
@@ -856,6 +921,23 @@ document.addEventListener('DOMContentLoaded', function() {
                             <i class="fas fa-plus me-1"></i>Add Option
                         </button>
                     </div>
+                    <div class="counter-options mt-2" style="display: none;">
+                        <div class="row g-2 align-items-center">
+                            <div class="col-auto primary-step-col">
+                                <label class="form-label small mb-0">Step</label>
+                                <input type="number" class="form-control form-control-sm primary-step-input" name="${period}_element_step_${index}" value="1" min="1" step="1">
+                            </div>
+                            <div class="col-auto">
+                                <div class="form-check">
+                                    <input class="form-check-input alt-step-enabled" type="checkbox" name="${period}_element_alt_step_enabled_${index}" value="1">
+                                    <label class="form-check-label">Show alt increments</label>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <input type="number" class="form-control form-control-sm alt-step-input" name="${period}_element_alt_step_${index}" value="" placeholder="Alt increment (e.g., 5)" min="1" step="1">
+                            </div>
+                        </div>
+                    </div>
                     <div class="form-check form-check-inline mt-2">
                         <input class="form-check-input" type="checkbox" name="${period}_element_display_predictions_${index}" value="1">
                         <label class="form-check-label">Show in Predictions</label>
@@ -869,6 +951,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             `;
             container.insertAdjacentHTML('beforeend', elementHtml);
+            // Ensure newly added element shows correct type-specific controls immediately
+            const newItem = container.querySelector(`.element-item[data-index="${index}"]`);
+            if (newItem) {
+                const sel = newItem.querySelector('.element-type-selector');
+                if (sel) {
+                    sel.dispatchEvent(new Event('change'));
+                    setTimeout(() => {
+                        if (sel.value === 'counter') {
+                            const counterOpts = newItem.querySelector('.counter-options');
+                            if (counterOpts) counterOpts.style.display = 'block';
+                        }
+                    }, 0);
+                }
+            }
         });
     });
     
@@ -880,6 +976,10 @@ document.addEventListener('DOMContentLoaded', function() {
             e.target.closest('.rating-item').remove();
         } else if (e.target.classList.contains('remove-text')) {
             e.target.closest('.text-item').remove();
+        } else if (e.target.classList.contains('remove-game-piece')) {
+            // Remove the entire game piece column
+            const col = e.target.closest('.col-md-4');
+            if (col) col.remove();
         } else if (e.target.classList.contains('remove-option')) {
             e.target.closest('.multiple-choice-option').remove();
         } else if (e.target.classList.contains('move-up')) {
@@ -928,6 +1028,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <label class="form-check-label">Is scored gamepiece</label>
                     </div>
                     <input type="hidden" name="game_piece_id_${index}" value="piece_${index}">
+                    <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-game-piece">Remove</button>
                 </div>
             </div>
         `;
@@ -1041,6 +1142,26 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Scored flag (renamed to gamepiece_scoreible)
                     const scoredCheckbox = item.querySelector(`input[name^="${period}_element_gamepiece_scoreible_"]`);
                     element.gamepiece_scoreible = scoredCheckbox ? !!scoredCheckbox.checked : false;
+
+                    // Counter-specific settings: primary step and optional alt-step
+                    if (typeSelect && typeSelect.value === 'counter') {
+                        const stepInput = item.querySelector(`input[name^="${period}_element_step_"]`);
+                        const altEnabled = item.querySelector(`input[name^="${period}_element_alt_step_enabled_"]`);
+                        const altStepInput = item.querySelector(`input[type="number"][name^="${period}_element_alt_step_"]`);
+
+                        element.step = stepInput ? parseInt(stepInput.value) || 1 : 1;
+                        element.alt_step_enabled = altEnabled ? !!altEnabled.checked : false;
+
+                        if (element.alt_step_enabled) {
+                            if (altStepInput && altStepInput.value !== '') {
+                                const parsedAlt = parseInt(altStepInput.value);
+                                if (!isNaN(parsedAlt) && parsedAlt > 0) element.alt_step = parsedAlt; else element.alt_step = element.step;
+                            } else {
+                                // If enabled but left blank, default to primary step
+                                element.alt_step = element.step;
+                            }
+                        }
+                    }
                     
                     // Handle multiple choice options with individual point values
                     if (typeSelect && typeSelect.value === 'multiple_choice') {
@@ -1131,6 +1252,58 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Error preparing configuration data. Please check your inputs.');
         }
     });
+
+    // Cleanup duplicate counter step inputs if present (defensive)
+    // In some edge cases a duplicate Step input with the same name may be rendered; remove extra copies to avoid confusion
+    (() => {
+        const stepInputs = Array.from(document.querySelectorAll('input[name]')).filter(i => /_element_step_/.test(i.name));
+        const grouped = {};
+        stepInputs.forEach(i => {
+            grouped[i.name] = grouped[i.name] || [];
+            grouped[i.name].push(i);
+        });
+        Object.keys(grouped).forEach(name => {
+            const els = grouped[name];
+            if (els.length > 1) {
+                // Keep first, remove the rest (remove the surrounding col wrapper if possible)
+                els.slice(1).forEach(el => {
+                    const wrapper = el.closest('.col-auto') || el;
+                    wrapper.remove();
+                });
+            }
+        });
+    })();
+
+    // When alt-step is enabled, hide/disable the primary step input so only the alt increment remains visible/submitted
+    function updateAltVisibilityForItem(item) {
+        if (!item) return;
+        const altCheckbox = item.querySelector('.alt-step-enabled');
+        const primaryCol = item.querySelector('.primary-step-col');
+        const primaryInput = item.querySelector('.primary-step-input');
+        if (altCheckbox && altCheckbox.checked) {
+            if (primaryCol) primaryCol.style.display = 'none';
+            if (primaryInput) {
+                primaryInput.disabled = true;
+                // Optionally clear the value to avoid confusing legacy form parsing
+                // primaryInput.value = '';
+            }
+        } else {
+            if (primaryCol) primaryCol.style.display = '';
+            if (primaryInput) primaryInput.disabled = false;
+        }
+    }
+
+    // Initialize alt visibility for existing elements
+    document.querySelectorAll('.element-item').forEach(item => updateAltVisibilityForItem(item));
+
+    // Delegate change events for alt-step checkbox toggles
+    document.addEventListener('change', function(e) {
+        if (e.target && e.target.classList && e.target.classList.contains('alt-step-enabled')) {
+            const item = e.target.closest('.element-item');
+            updateAltVisibilityForItem(item);
+        }
+    });
+
 });
 </script>
 
