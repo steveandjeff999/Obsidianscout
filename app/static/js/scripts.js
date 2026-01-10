@@ -519,74 +519,87 @@ function initializeCounters() {
     // Create a set to track which buttons we've already attached listeners to
     const processedButtons = new Set();
     
-    // First handle buttons inside counter-container elements
+    // First handle buttons inside counter-container elements (supports configurable step and optional alternate +/- buttons)
     const counters = document.querySelectorAll('.counter-container');
     
     counters.forEach(counter => {
-        const decrementBtn = counter.querySelector('.btn-decrement');
-        const incrementBtn = counter.querySelector('.btn-increment');
+        const buttons = counter.querySelectorAll('.btn-counter');
         const countInput = counter.querySelector('input[type="number"]');
-        
-        if (!decrementBtn || !incrementBtn || !countInput) return;
-        
-        // Add these buttons to our processed set
-        if (decrementBtn) processedButtons.add(decrementBtn);
-        if (incrementBtn) processedButtons.add(incrementBtn);
-        
-        // Function to update counter value with animation
-        const updateCounter = (newValue) => {
+        if (!buttons.length || !countInput) return;
+
+        // Add processed buttons
+        buttons.forEach(b => processedButtons.add(b));
+
+        const clamp = (val, min, max) => {
+            if (!isNaN(min) && val < min) val = min;
+            if (!isNaN(max) && max !== null && val > max) val = max;
+            return val;
+        };
+
+        const updateCounter = (delta) => {
+            let current = parseInt(countInput.value || 0);
+            const min = parseInt(countInput.min || 0);
+            const max = (countInput.max !== undefined && countInput.max !== '') ? parseInt(countInput.max) : null;
+            let newValue = clamp(current + delta, min, max);
+
             // Add a pulse animation
             countInput.classList.add('counter-pulse');
             setTimeout(() => {
                 countInput.classList.remove('counter-pulse');
             }, 300);
-            
+
             countInput.value = newValue;
             countInput.dispatchEvent(new Event('change'));
-            
-            // Update disable state based on min/max
-            if (countInput.min) {
-                decrementBtn.disabled = parseInt(newValue) <= parseInt(countInput.min);
-            }
-            if (countInput.max) {
-                incrementBtn.disabled = parseInt(newValue) >= parseInt(countInput.max);
-            }
+            updatePointsCalculation();
+
+            // Update disable state for all buttons in this container
+            buttons.forEach(b => {
+                if (b.classList.contains('btn-decrement')) {
+                    b.disabled = parseInt(countInput.value) <= min;
+                }
+                if (b.classList.contains('btn-increment') && max !== null) {
+                    b.disabled = parseInt(countInput.value) >= max;
+                }
+            });
         };
-        
-        // Decrement button
-        decrementBtn.addEventListener('click', () => {
-            if (parseInt(countInput.value) > parseInt(countInput.min || 0)) {
-                updateCounter(parseInt(countInput.value) - 1);
-            }
+
+        // Attach click handlers to any .btn-counter in the container
+        buttons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Determine step: prefer data-step attribute, otherwise parse integer from text content
+                let step = 1;
+                if (typeof btn.dataset.step !== 'undefined' && btn.dataset.step !== '') {
+                    step = Math.abs(parseInt(btn.dataset.step)) || 1;
+                } else {
+                    const txt = (btn.textContent || '').trim();
+                    const m = txt.match(/-?\d+/);
+                    if (m) step = Math.abs(parseInt(m[0])) || 1;
+                }
+                const sign = btn.classList.contains('btn-decrement') ? -1 : 1;
+                updateCounter(sign * step);
+
+                // Add visual feedback
+                btn.classList.add('btn-pulse');
+                setTimeout(() => btn.classList.remove('btn-pulse'), 300);
+            });
         });
-        
-        // Increment button
-        incrementBtn.addEventListener('click', () => {
-            if (!countInput.max || parseInt(countInput.value) < parseInt(countInput.max)) {
-                updateCounter(parseInt(countInput.value) + 1);
-            }
+
+        // Set initial button disabled state
+        const minVal = parseInt(countInput.min || 0);
+        const maxVal = (countInput.max !== undefined && countInput.max !== '') ? parseInt(countInput.max) : null;
+        buttons.forEach(b => {
+            if (b.classList.contains('btn-decrement')) b.disabled = parseInt(countInput.value) <= minVal;
+            if (b.classList.contains('btn-increment') && maxVal !== null) b.disabled = parseInt(countInput.value) >= maxVal;
         });
-        
-        // Set initial button state
-        if (countInput.min) {
-            decrementBtn.disabled = parseInt(countInput.value) <= parseInt(countInput.min);
-        }
-        if (countInput.max) {
-            incrementBtn.disabled = parseInt(countInput.value) >= parseInt(countInput.max);
-        }
-        
-        // Allow keyboard shortcuts for incrementing/decrementing
+
+        // Keyboard shortcuts - use single-step arrows
         countInput.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowUp') {
                 e.preventDefault();
-                if (!countInput.max || parseInt(countInput.value) < parseInt(countInput.max)) {
-                    updateCounter(parseInt(countInput.value) + 1);
-                }
+                updateCounter(1);
             } else if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                if (parseInt(countInput.value) > parseInt(countInput.min || 0)) {
-                    updateCounter(parseInt(countInput.value) - 1);
-                }
+                updateCounter(-1);
             }
         });
     });
@@ -603,22 +616,66 @@ function initializeCounters() {
             const targetId = btn.dataset.target;
             const input = document.getElementById(targetId);
             if (!input) return;
-            
-            let newValue = parseInt(input.value || 0);
-            if (btn.classList.contains('btn-decrement') && newValue > 0) {
-                newValue -= 1;
-            } else if (btn.classList.contains('btn-increment')) {
-                newValue += 1;
+
+            // Prefer data-step attribute; fallback to parsing from button text
+            let step = 1;
+            if (typeof btn.dataset.step !== 'undefined' && btn.dataset.step !== '') {
+                step = Math.abs(parseInt(btn.dataset.step)) || 1;
+            } else {
+                const txt = (btn.textContent || '').trim();
+                const m = txt.match(/-?\d+/);
+                if (m) step = Math.abs(parseInt(m[0])) || 1;
             }
-            
+
+            let newValue = parseInt(input.value || 0);
+            const min = parseInt(input.min || 0);
+            const max = (input.max !== undefined && input.max !== '') ? parseInt(input.max) : null;
+
+            if (btn.classList.contains('btn-decrement')) {
+                newValue = Math.max(min, newValue - step);
+            } else if (btn.classList.contains('btn-increment')) {
+                newValue = newValue + step;
+                if (max !== null) newValue = Math.min(max, newValue);
+            }
+
             input.value = newValue;
+            input.dispatchEvent(new Event('change'));
             updatePointsCalculation();
-            
+
             // Add visual feedback
             btn.classList.add('btn-pulse');
             setTimeout(() => btn.classList.remove('btn-pulse'), 300);
         });
     });
+
+    // Move any alt buttons out to sit adjacent to the input for clarity (handles multiple templates)
+    try {
+        document.querySelectorAll('.counter-container').forEach(container => {
+            const input = container.querySelector('input[type="number"]');
+            if (!input) return;
+            // Move decrement alt before input
+            const decAlt = container.querySelector('.btn-decrement.btn-alt');
+            if (decAlt) {
+                // place immediately after primary decrement
+                const primaryDec = container.querySelector('.btn-decrement:not(.btn-alt)');
+                if (primaryDec && primaryDec.parentNode) {
+                    primaryDec.parentNode.insertAdjacentElement('afterend', decAlt);
+                    decAlt.style.display = 'inline-block';
+                }
+            }
+            // Move increment alt after input
+            const incAlt = container.querySelector('.btn-increment.btn-alt');
+            if (incAlt) {
+                const primaryInc = container.querySelector('.btn-increment:not(.btn-alt)');
+                if (primaryInc && primaryInc.parentNode) {
+                    primaryInc.parentNode.insertAdjacentElement('beforebegin', incAlt);
+                    incAlt.style.display = 'inline-block';
+                }
+            }
+        });
+    } catch (err) {
+        console.warn('moveAltButtons error', err);
+    }
 }
 
 /**

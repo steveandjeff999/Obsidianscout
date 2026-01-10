@@ -41600,3 +41600,3964 @@ Parsed endgame scoring_elements:
   }
 ]
 
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Leave Strating Lines",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 3.0
+  },
+  {
+    "id": "elem_auto_2",
+    "perm_id": "elem_auto_2",
+    "name": "CORAL (L1)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 3.0
+  },
+  {
+    "id": "elem_auto_3",
+    "perm_id": "elem_auto_3",
+    "name": "CORAL (L2)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_auto_4",
+    "perm_id": "elem_auto_4",
+    "name": "CORAL (L3)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 6.0
+  },
+  {
+    "id": "elem_auto_5",
+    "perm_id": "elem_auto_5",
+    "name": "CORAL (L4)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 7.0
+  },
+  {
+    "id": "elem_auto_6",
+    "perm_id": "elem_auto_6",
+    "name": "ALGAE in Net",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_auto_7",
+    "perm_id": "elem_auto_7",
+    "name": "ALGAE Processer",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 6.0
+  },
+  {
+    "id": "auto_06d68825",
+    "perm_id": "auto_06d68825",
+    "name": "New Element",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 1.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Leave Strating Lines",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 3.0
+  },
+  {
+    "id": "elem_auto_2",
+    "perm_id": "elem_auto_2",
+    "name": "CORAL (L1)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 3.0
+  },
+  {
+    "id": "elem_auto_3",
+    "perm_id": "elem_auto_3",
+    "name": "CORAL (L2)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_auto_4",
+    "perm_id": "elem_auto_4",
+    "name": "CORAL (L3)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 6.0
+  },
+  {
+    "id": "elem_auto_5",
+    "perm_id": "elem_auto_5",
+    "name": "CORAL (L4)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 7.0
+  },
+  {
+    "id": "elem_auto_6",
+    "perm_id": "elem_auto_6",
+    "name": "ALGAE in Net",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_auto_7",
+    "perm_id": "elem_auto_7",
+    "name": "ALGAE Processer",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 6.0
+  },
+  {
+    "id": "auto_06d68825",
+    "perm_id": "auto_06d68825",
+    "name": "New Element",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 1.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_6",
+    "perm_id": "elem_teleop_6",
+    "name": "CORAL (L1)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 2.0
+  },
+  {
+    "id": "elem_teleop_1",
+    "perm_id": "elem_teleop_1",
+    "name": "CORAL (L2)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 3.0
+  },
+  {
+    "id": "elem_teleop_2",
+    "perm_id": "elem_teleop_2",
+    "name": "CORAL (L3)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_teleop_3",
+    "perm_id": "elem_teleop_3",
+    "name": "CORAL (L4)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 5.0
+  },
+  {
+    "id": "elem_teleop_4",
+    "perm_id": "elem_teleop_4",
+    "name": "ALGAE in Processor",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 7.0
+  },
+  {
+    "id": "elem_teleop_5",
+    "perm_id": "elem_teleop_5",
+    "name": "ALGAE in Net",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_teleop_6",
+    "perm_id": "elem_teleop_6",
+    "name": "Defense Played",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 0.0
+  },
+  {
+    "id": "teleop_b1da7319",
+    "perm_id": "teleop_b1da7319",
+    "name": "New Element",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 1.0
+  },
+  {
+    "id": "elem_teleop_9",
+    "perm_id": "elem_teleop_9",
+    "name": "5568",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 0.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_6",
+    "perm_id": "elem_teleop_6",
+    "name": "CORAL (L1)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 2.0
+  },
+  {
+    "id": "elem_teleop_1",
+    "perm_id": "elem_teleop_1",
+    "name": "CORAL (L2)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 3.0
+  },
+  {
+    "id": "elem_teleop_2",
+    "perm_id": "elem_teleop_2",
+    "name": "CORAL (L3)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_teleop_3",
+    "perm_id": "elem_teleop_3",
+    "name": "CORAL (L4)",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 5.0
+  },
+  {
+    "id": "elem_teleop_4",
+    "perm_id": "elem_teleop_4",
+    "name": "ALGAE in Processor",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 7.0
+  },
+  {
+    "id": "elem_teleop_5",
+    "perm_id": "elem_teleop_5",
+    "name": "ALGAE in Net",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 4.0
+  },
+  {
+    "id": "elem_teleop_6",
+    "perm_id": "elem_teleop_6",
+    "name": "Defense Played",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 0.0
+  },
+  {
+    "id": "teleop_b1da7319",
+    "perm_id": "teleop_b1da7319",
+    "name": "New Element",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 1.0
+  },
+  {
+    "id": "elem_teleop_9",
+    "perm_id": "elem_teleop_9",
+    "name": "5568",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 0.0
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_2",
+    "perm_id": "elem_endgame_2",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "Park",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "Park",
+        "points": 2.0
+      },
+      {
+        "name": "Shallow",
+        "points": 6.0
+      },
+      {
+        "name": "Deep",
+        "points": 12.0
+      },
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "Option 5",
+        "points": 0.0
+      }
+    ]
+  },
+  {
+    "id": "endgame_f265b8fb",
+    "perm_id": "endgame_f265b8fb",
+    "name": "New Element",
+    "type": "rating",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 1.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_2",
+    "perm_id": "elem_endgame_2",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "Park",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "Park",
+        "points": 2.0
+      },
+      {
+        "name": "Shallow",
+        "points": 6.0
+      },
+      {
+        "name": "Deep",
+        "points": 12.0
+      },
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "Option 5",
+        "points": 0.0
+      }
+    ]
+  },
+  {
+    "id": "endgame_f265b8fb",
+    "perm_id": "endgame_f265b8fb",
+    "name": "New Element",
+    "type": "rating",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 1.0
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_2",
+    "perm_id": "elem_endgame_2",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "Park",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "Park",
+        "points": 2.0
+      },
+      {
+        "name": "Shallow",
+        "points": 6.0
+      },
+      {
+        "name": "Deep",
+        "points": 12.0
+      },
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "Option 5",
+        "points": 0.0
+      }
+    ]
+  },
+  {
+    "id": "endgame_f265b8fb",
+    "perm_id": "endgame_f265b8fb",
+    "name": "New Element",
+    "type": "rating",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 1.0
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[]
+Merged parsed elements:
+[]
+---
+Previous teleop_period scoring_elements:
+[]
+Merged parsed elements:
+[]
+---
+Previous endgame_period scoring_elements:
+[]
+Merged parsed elements:
+[]
+---
+Parsed endgame scoring_elements:
+[]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "test",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 0.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[]
+Merged parsed elements:
+[]
+---
+Previous endgame_period scoring_elements:
+[]
+Merged parsed elements:
+[]
+---
+Parsed endgame scoring_elements:
+[]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "test",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": false,
+    "points": 0.0
+  }
+]
+Merged parsed elements:
+[]
+---
+Previous teleop_period scoring_elements:
+[]
+Merged parsed elements:
+[]
+---
+Previous endgame_period scoring_elements:
+[]
+Merged parsed elements:
+[]
+---
+Parsed endgame scoring_elements:
+[]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "L1",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "L1",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "L1",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "auto_speaker_notes",
+    "perm_id": "auto_speaker_notes",
+    "name": "Speaker Notes Scored",
+    "type": "counter",
+    "default": 0,
+    "points": 5
+  }
+]
+Merged parsed elements:
+[]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "teleop_speaker_notes",
+    "perm_id": "teleop_speaker_notes",
+    "name": "Speaker Notes Scored",
+    "type": "counter",
+    "default": 0,
+    "points": 2
+  },
+  {
+    "id": "teleop_amp_notes",
+    "perm_id": "teleop_amp_notes",
+    "name": "Amp Notes Scored",
+    "type": "counter",
+    "default": 0,
+    "points": 1
+  }
+]
+Merged parsed elements:
+[]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "endgame_climb",
+    "perm_id": "endgame_climb",
+    "name": "Climb Success",
+    "type": "boolean",
+    "default": false,
+    "points": 3
+  }
+]
+Merged parsed elements:
+[]
+---
+Parsed endgame scoring_elements:
+[]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0,
+    "alt_step": 1,
+    "alt_step_enabled": false
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0,
+    "alt_step": 1,
+    "alt_step_enabled": false
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+Previous auto_period scoring_elements:
+[
+  {
+    "alt_step": 10,
+    "alt_step_enabled": true,
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "id": "elem_auto_0",
+    "name": "Active Fuel",
+    "perm_id": "elem_auto_0",
+    "points": 1,
+    "type": "counter"
+  },
+  {
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "perm_id": "elem_auto_1",
+    "points": 15,
+    "type": "boolean"
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "alt_step": 1,
+    "alt_step_enabled": true,
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "perm_id": "elem_teleop_0",
+    "points": 1,
+    "type": "counter"
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "id": "elem_endgame_0",
+    "name": "Climb",
+    "options": [
+      {
+        "name": "None",
+        "points": 0
+      },
+      {
+        "name": "L1",
+        "points": 10
+      },
+      {
+        "name": "L2",
+        "points": 20
+      },
+      {
+        "name": "L3",
+        "points": 30
+      }
+    ],
+    "perm_id": "elem_endgame_0",
+    "type": "multiple_choice"
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+simple_payload_json:
+{
+  "game_name": "REBUILT\u2122\u202fpresented by Haas",
+  "season": 2026,
+  "version": "1.0.0",
+  "alliance_size": 3,
+  "scouting_stations": 6,
+  "current_event_code": "OKOK",
+  "api_settings": {
+    "auto_sync_enabled": true
+  },
+  "match_types": [
+    "Practice",
+    "Qualification",
+    "Playoff"
+  ],
+  "auto": [
+    {
+      "id": "elem_auto_0",
+      "perm_id": "elem_auto_0",
+      "name": "Active Fuel",
+      "type": "counter",
+      "default": 0,
+      "points": 1,
+      "display_in_predictions": false,
+      "gamepiece_scoreible": true,
+      "step": 10,
+      "alt_step_enabled": true,
+      "alt_step": 1
+    },
+    {
+      "id": "elem_auto_1",
+      "perm_id": "elem_auto_1",
+      "name": "Climb L1 Auto",
+      "type": "boolean",
+      "default": false,
+      "points": 15,
+      "display_in_predictions": true,
+      "gamepiece_scoreible": false
+    }
+  ],
+  "teleop": [
+    {
+      "id": "elem_teleop_0",
+      "perm_id": "elem_teleop_0",
+      "name": "Active Fuel",
+      "type": "counter",
+      "default": 0,
+      "points": 1,
+      "display_in_predictions": false,
+      "gamepiece_scoreible": true,
+      "step": 10,
+      "alt_step_enabled": true,
+      "alt_step": 1
+    }
+  ],
+  "endgame": [
+    {
+      "id": "elem_endgame_0",
+      "perm_id": "elem_endgame_0",
+      "name": "Climb",
+      "type": "multiple_choice",
+      "default": "None",
+      "points": 0,
+      "display_in_predictions": true,
+      "gamepiece_scoreible": false,
+      "options": [
+        {
+          "name": "None",
+          "points": 0
+        },
+        {
+          "name": "L1",
+          "points": 10
+        },
+        {
+          "name": "L2",
+          "points": 20
+        },
+        {
+          "name": "L3",
+          "points": 30
+        }
+      ]
+    }
+  ]
+}
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+simple_payload_json:
+{
+  "game_name": "REBUILT\u2122\u202fpresented by Haas",
+  "season": 2026,
+  "version": "1.0.0",
+  "alliance_size": 3,
+  "scouting_stations": 6,
+  "current_event_code": "OKOK",
+  "api_settings": {
+    "auto_sync_enabled": true
+  },
+  "match_types": [
+    "Practice",
+    "Qualification",
+    "Playoff"
+  ],
+  "auto": [
+    {
+      "id": "elem_auto_0",
+      "perm_id": "elem_auto_0",
+      "name": "Active Fuel",
+      "type": "counter",
+      "default": 0,
+      "points": 1,
+      "display_in_predictions": false,
+      "gamepiece_scoreible": true,
+      "step": 10,
+      "alt_step_enabled": true,
+      "alt_step": 1
+    },
+    {
+      "id": "elem_auto_1",
+      "perm_id": "elem_auto_1",
+      "name": "Climb L1 Auto",
+      "type": "boolean",
+      "default": false,
+      "points": 15,
+      "display_in_predictions": true,
+      "gamepiece_scoreible": false
+    }
+  ],
+  "teleop": [
+    {
+      "id": "elem_teleop_0",
+      "perm_id": "elem_teleop_0",
+      "name": "Active Fuel",
+      "type": "counter",
+      "default": 0,
+      "points": 1,
+      "display_in_predictions": false,
+      "gamepiece_scoreible": true,
+      "step": 1,
+      "alt_step_enabled": true,
+      "alt_step": 10
+    }
+  ],
+  "endgame": [
+    {
+      "id": "elem_endgame_0",
+      "perm_id": "elem_endgame_0",
+      "name": "Climb",
+      "type": "multiple_choice",
+      "default": "None",
+      "points": 0,
+      "display_in_predictions": true,
+      "gamepiece_scoreible": false,
+      "options": [
+        {
+          "name": "None",
+          "points": 0
+        },
+        {
+          "name": "L1",
+          "points": 10
+        },
+        {
+          "name": "L2",
+          "points": 20
+        },
+        {
+          "name": "L3",
+          "points": 30
+        }
+      ]
+    }
+  ]
+}
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+simple_payload_json:
+{
+  "game_name": "REBUILT\u2122\u202fpresented by Haas",
+  "season": 2026,
+  "version": "1.0.0",
+  "alliance_size": 3,
+  "scouting_stations": 6,
+  "current_event_code": "OKOK",
+  "api_settings": {
+    "auto_sync_enabled": true
+  },
+  "match_types": [
+    "Practice",
+    "Qualification",
+    "Playoff"
+  ],
+  "auto": [
+    {
+      "id": "elem_auto_0",
+      "perm_id": "elem_auto_0",
+      "name": "Active Fuel",
+      "type": "counter",
+      "default": 0,
+      "points": 1,
+      "display_in_predictions": false,
+      "gamepiece_scoreible": true,
+      "step": 1,
+      "alt_step_enabled": true,
+      "alt_step": 10
+    },
+    {
+      "id": "elem_auto_1",
+      "perm_id": "elem_auto_1",
+      "name": "Climb L1 Auto",
+      "type": "boolean",
+      "default": false,
+      "points": 15,
+      "display_in_predictions": true,
+      "gamepiece_scoreible": false
+    }
+  ],
+  "teleop": [
+    {
+      "id": "elem_teleop_0",
+      "perm_id": "elem_teleop_0",
+      "name": "Active Fuel",
+      "type": "counter",
+      "default": 0,
+      "points": 1,
+      "display_in_predictions": false,
+      "gamepiece_scoreible": true,
+      "step": 1,
+      "alt_step_enabled": true,
+      "alt_step": 10
+    }
+  ],
+  "endgame": [
+    {
+      "id": "elem_endgame_0",
+      "perm_id": "elem_endgame_0",
+      "name": "Climb",
+      "type": "multiple_choice",
+      "default": "None",
+      "points": 0,
+      "display_in_predictions": true,
+      "gamepiece_scoreible": false,
+      "options": [
+        {
+          "name": "None",
+          "points": 0
+        },
+        {
+          "name": "L1",
+          "points": 10
+        },
+        {
+          "name": "L2",
+          "points": 20
+        },
+        {
+          "name": "L3",
+          "points": 30
+        }
+      ]
+    }
+  ]
+}
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 1,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+simple_payload_json:
+{
+  "game_name": "REBUILT\u2122\u202fpresented by Haas",
+  "season": 2026,
+  "version": "1.0.0",
+  "alliance_size": 3,
+  "scouting_stations": 6,
+  "current_event_code": "OKOK",
+  "api_settings": {
+    "auto_sync_enabled": true
+  },
+  "match_types": [
+    "Practice",
+    "Qualification",
+    "Playoff"
+  ],
+  "auto": [
+    {
+      "id": "elem_auto_0",
+      "perm_id": "elem_auto_0",
+      "name": "Active Fuel",
+      "type": "counter",
+      "default": 0,
+      "points": 1,
+      "display_in_predictions": false,
+      "gamepiece_scoreible": true,
+      "step": 1,
+      "alt_step_enabled": true,
+      "alt_step": 10
+    },
+    {
+      "id": "elem_auto_1",
+      "perm_id": "elem_auto_1",
+      "name": "Climb L1 Auto",
+      "type": "boolean",
+      "default": false,
+      "points": 15,
+      "display_in_predictions": true,
+      "gamepiece_scoreible": false
+    }
+  ],
+  "teleop": [
+    {
+      "id": "elem_teleop_0",
+      "perm_id": "elem_teleop_0",
+      "name": "Active Fuel",
+      "type": "counter",
+      "default": 0,
+      "points": 1,
+      "display_in_predictions": false,
+      "gamepiece_scoreible": true,
+      "step": 1,
+      "alt_step_enabled": true,
+      "alt_step": 10
+    }
+  ],
+  "endgame": [
+    {
+      "id": "elem_endgame_0",
+      "perm_id": "elem_endgame_0",
+      "name": "Climb",
+      "type": "multiple_choice",
+      "default": "None",
+      "points": 0,
+      "display_in_predictions": true,
+      "gamepiece_scoreible": false,
+      "options": [
+        {
+          "name": "None",
+          "points": 0
+        },
+        {
+          "name": "L1",
+          "points": 10
+        },
+        {
+          "name": "L2",
+          "points": 20
+        },
+        {
+          "name": "L3",
+          "points": 30
+        }
+      ]
+    }
+  ]
+}
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+simple_payload_json:
+{
+  "game_name": "REBUILT\u2122\u202fpresented by Haas",
+  "season": 2026,
+  "version": "1.0.0",
+  "alliance_size": 3,
+  "scouting_stations": 6,
+  "current_event_code": "OKOK",
+  "api_settings": {
+    "auto_sync_enabled": true
+  },
+  "match_types": [
+    "Practice",
+    "Qualification",
+    "Playoff"
+  ],
+  "auto": [
+    {
+      "id": "elem_auto_0",
+      "perm_id": "elem_auto_0",
+      "name": "Active Fuel",
+      "type": "counter",
+      "default": 0,
+      "points": 1,
+      "display_in_predictions": false,
+      "gamepiece_scoreible": true,
+      "step": 1,
+      "alt_step_enabled": true,
+      "alt_step": 10
+    },
+    {
+      "id": "elem_auto_1",
+      "perm_id": "elem_auto_1",
+      "name": "Climb L1 Auto",
+      "type": "boolean",
+      "default": false,
+      "points": 15,
+      "display_in_predictions": true,
+      "gamepiece_scoreible": false
+    }
+  ],
+  "teleop": [
+    {
+      "id": "elem_teleop_0",
+      "perm_id": "elem_teleop_0",
+      "name": "Active Fuel",
+      "type": "counter",
+      "default": 0,
+      "points": 1,
+      "display_in_predictions": false,
+      "gamepiece_scoreible": true,
+      "step": 1,
+      "alt_step_enabled": true,
+      "alt_step": 10
+    }
+  ],
+  "endgame": [
+    {
+      "id": "elem_endgame_0",
+      "perm_id": "elem_endgame_0",
+      "name": "Climb",
+      "type": "multiple_choice",
+      "default": "None",
+      "points": 0,
+      "display_in_predictions": true,
+      "gamepiece_scoreible": false,
+      "options": [
+        {
+          "name": "None",
+          "points": 0
+        },
+        {
+          "name": "L1",
+          "points": 10
+        },
+        {
+          "name": "L2",
+          "points": 20
+        },
+        {
+          "name": "L3",
+          "points": 30
+        }
+      ]
+    }
+  ]
+}
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+
+simple_payload_present: True
+simple_payload_keys: ['game_name', 'season', 'version', 'alliance_size', 'scouting_stations', 'current_event_code', 'api_settings', 'match_types', 'auto', 'teleop', 'endgame']
+simple_payload_json:
+{
+  "game_name": "REBUILT\u2122\u202fpresented by Haas",
+  "season": 2026,
+  "version": "1.0.0",
+  "alliance_size": 3,
+  "scouting_stations": 6,
+  "current_event_code": "OKOK",
+  "api_settings": {
+    "auto_sync_enabled": true
+  },
+  "match_types": [
+    "Practice",
+    "Qualification",
+    "Playoff"
+  ],
+  "auto": [
+    {
+      "id": "elem_auto_0",
+      "perm_id": "elem_auto_0",
+      "name": "Active Fuel",
+      "type": "counter",
+      "default": 0,
+      "points": 1,
+      "display_in_predictions": false,
+      "gamepiece_scoreible": true,
+      "step": 1,
+      "alt_step_enabled": true,
+      "alt_step": 10
+    },
+    {
+      "id": "elem_auto_1",
+      "perm_id": "elem_auto_1",
+      "name": "Climb L1 Auto",
+      "type": "boolean",
+      "default": false,
+      "points": 15,
+      "display_in_predictions": true,
+      "gamepiece_scoreible": false
+    }
+  ],
+  "teleop": [
+    {
+      "id": "elem_teleop_0",
+      "perm_id": "elem_teleop_0",
+      "name": "Active Fuel",
+      "type": "counter",
+      "default": 0,
+      "points": 1,
+      "display_in_predictions": false,
+      "gamepiece_scoreible": true,
+      "step": 1,
+      "alt_step_enabled": true,
+      "alt_step": 10
+    }
+  ],
+  "endgame": [
+    {
+      "id": "elem_endgame_0",
+      "perm_id": "elem_endgame_0",
+      "name": "Climb",
+      "type": "multiple_choice",
+      "default": "None",
+      "points": 0,
+      "display_in_predictions": true,
+      "gamepiece_scoreible": false,
+      "options": [
+        {
+          "name": "None",
+          "points": 0
+        },
+        {
+          "name": "L1",
+          "points": 10
+        },
+        {
+          "name": "L2",
+          "points": 20
+        },
+        {
+          "name": "L3",
+          "points": 30
+        }
+      ]
+    }
+  ]
+}
+Previous auto_period scoring_elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_auto_0",
+    "perm_id": "elem_auto_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  },
+  {
+    "id": "elem_auto_1",
+    "perm_id": "elem_auto_1",
+    "name": "Climb L1 Auto",
+    "type": "boolean",
+    "default": false,
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "points": 15.0
+  }
+]
+---
+Previous teleop_period scoring_elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_teleop_0",
+    "perm_id": "elem_teleop_0",
+    "name": "Active Fuel",
+    "type": "counter",
+    "default": 0,
+    "display_in_predictions": false,
+    "gamepiece_scoreible": true,
+    "points": 1.0,
+    "alt_step": 10,
+    "alt_step_enabled": true
+  }
+]
+---
+Previous endgame_period scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+Merged parsed elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+---
+Parsed endgame scoring_elements:
+[
+  {
+    "id": "elem_endgame_0",
+    "perm_id": "elem_endgame_0",
+    "name": "Climb",
+    "type": "multiple_choice",
+    "default": "None",
+    "display_in_predictions": true,
+    "gamepiece_scoreible": false,
+    "options": [
+      {
+        "name": "None",
+        "points": 0.0
+      },
+      {
+        "name": "L1",
+        "points": 10.0
+      },
+      {
+        "name": "L2",
+        "points": 20.0
+      },
+      {
+        "name": "L3",
+        "points": 30.0
+      }
+    ]
+  }
+]
+

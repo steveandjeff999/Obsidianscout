@@ -210,6 +210,27 @@
                                                                        {% if element.gamepiece_scoreible %}checked{% endif %}>
                                                                 <label class="form-check-label">Is scored gamepiece</label>
                                                             </div>
+
+                                                            <!-- Counter-specific settings -->
+                                                            <div class="counter-settings mt-2" {% if element.type != 'counter' %}style="display: none;"{% endif %}>
+                                                                <div class="row g-2">
+                                                                    <div class="col-4">
+                                                                        <label class="form-label small">Step</label>
+                                                                        <input type="number" class="form-control form-control-sm" name="auto_element_step_{{ loop.index0 }}" value="{{ element.step|default(1) }}" min="1" step="1">
+                                                                    </div>
+                                                                    <div class="col-4">
+                                                                        <label class="form-label small">Alt step</label>
+                                                                        <input type="number" class="form-control form-control-sm" name="auto_element_alt_step_{{ loop.index0 }}" value="{{ element.alt_step if element.alt_step is defined else '' }}" min="1" step="1">
+                                                                    </div>
+                                                                    <div class="col-4 d-flex align-items-center">
+                                                                        <div class="form-check mt-3">
+                                                                            <input class="form-check-input" type="checkbox" name="auto_element_alt_step_enabled_{{ loop.index0 }}" value="1" {% if element.alt_step_enabled %}checked{% endif %}>
+                                                                            <label class="form-check-label">Show alt ±</label>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
                                                             {% if element.type == 'multiple_choice' %}
                                                             <div class="multiple-choice-options mt-2" style="display: block;">
                                                                 <small class="text-muted">Multiple Choice Options:</small>
@@ -735,7 +756,9 @@
                             <option value="">-- Select a default configuration --</option>
                             {% if default_configs %}
                                 {% for config in default_configs %}
-                                <option value="{{ config.filename }}">{{ config.display_name }}</option>
+                                    {% if config.type == 'game' %}
+                                        <option value="{{ config.filename }}">{{ config.display_name }} ({{ config.basename or config.filename }})</option>
+                                    {% endif %}
                                 {% endfor %}
                             {% endif %}
                         </select>
@@ -752,14 +775,18 @@
 </div>
 
 <script>
-// Toggle multiple choice options visibility
+// Toggle multiple choice options visibility and counter settings
 function toggleMultipleChoiceOptions(selectElement) {
     const container = selectElement.closest('.element-item');
     const optionsDiv = container.querySelector('.multiple-choice-options');
+    const counterDiv = container.querySelector('.counter-settings');
     if (selectElement.value === 'multiple_choice') {
         optionsDiv.style.display = 'block';
     } else {
         optionsDiv.style.display = 'none';
+    }
+    if (counterDiv) {
+        if (selectElement.value === 'counter') counterDiv.style.display = 'block'; else counterDiv.style.display = 'none';
     }
 }
 
@@ -839,6 +866,27 @@ document.addEventListener('DOMContentLoaded', function() {
                             <i class="fas fa-plus me-1"></i>Add Option
                         </button>
                     </div>
+
+                    <!-- Counter-specific settings -->
+                    <div class="counter-settings mt-2" style="display: none;">
+                        <div class="row g-2">
+                            <div class="col-4">
+                                <label class="form-label small">Step</label>
+                                <input type="number" class="form-control form-control-sm" name="${period}_element_step_${index}" value="1" min="1" step="1">
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small">Alt step</label>
+                                <input type="number" class="form-control form-control-sm" name="${period}_element_alt_step_${index}" value="" min="1" step="1">
+                            </div>
+                            <div class="col-4 d-flex align-items-center">
+                                <div class="form-check mt-3">
+                                    <input class="form-check-input" type="checkbox" name="${period}_element_alt_step_enabled_${index}" value="1">
+                                    <label class="form-check-label">Show alt ±</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="form-check form-check-inline mt-2">
                         <input class="form-check-input" type="checkbox" name="${period}_element_display_predictions_${index}" value="1">
                         <label class="form-check-label">Show in Predictions</label>
@@ -852,6 +900,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             `;
             container.insertAdjacentHTML('beforeend', elementHtml);
+            const newItem = container.querySelector(`.element-item[data-index="${index}"]`);
+            if (newItem) {
+                const sel = newItem.querySelector('.element-type-selector');
+                if (sel) {
+                    // Trigger the change handler and ensure counter-settings show for default counter type
+                    sel.dispatchEvent(new Event('change'));
+                    setTimeout(() => {
+                        if (sel.value === 'counter') {
+                            const counterDiv = newItem.querySelector('.counter-settings');
+                            if (counterDiv) counterDiv.style.display = 'block';
+                        }
+                    }, 0);
+                }
+            }
         });
     });
     
@@ -1045,6 +1107,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         
                         element.default = element.options.length > 0 ? element.options[0].name : '';
+                    } else if (typeSelect && typeSelect.value === 'counter') {
+                        // Counter-specific settings
+                        const stepInput = item.querySelector(`input[name^="${period}_element_step_"]`);
+                        const altInput = item.querySelector(`input[type="number"][name^="${period}_element_alt_step_"]`);
+                        const altEnabled = item.querySelector(`input[name^="${period}_element_alt_step_enabled_"]`);
+
+                        element.step = stepInput ? parseInt(stepInput.value) || 1 : 1;
+                        if (altInput && altInput.value) element.alt_step = parseInt(altInput.value) || undefined;
+                        element.alt_step_enabled = !!(altEnabled && altEnabled.checked);
                     }
                     
                     payload[period].push(element);

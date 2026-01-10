@@ -380,7 +380,11 @@ def preview_config_migration():
 
 def ensure_complete_config_structure(config):
     """Ensures the configuration has all required sections with proper defaults"""
-    
+
+    # Defensive: treat None or a non-dict config as an empty config
+    if config is None or not isinstance(config, dict):
+        config = {}
+
     # Check if this is a completely empty/new config
     is_new_config = not config.get('game_name') and not any(
         config.get(period, {}).get('scoring_elements', []) 
@@ -696,6 +700,12 @@ def save_simple_config():
                 dbg.write(f"simple_payload_present: {bool(simple_payload)}\n")
                 if simple_payload:
                     dbg.write(f"simple_payload_keys: {list(simple_payload.keys())}\n")
+                    try:
+                        dbg.write("simple_payload_json:\n")
+                        dbg.write(json.dumps(simple_payload, indent=2))
+                        dbg.write("\n")
+                    except Exception:
+                        dbg.write("Failed to dump simple_payload JSON\n")
         except Exception:
             pass
         
@@ -757,6 +767,17 @@ def save_simple_config():
                                 element['points'] = float(el.get('points'))
                             except Exception:
                                 element['points'] = 0
+                        # Preserve alt-step configuration for counters when present in the payload
+                        try:
+                            if element.get('type') == 'counter':
+                                if 'alt_step' in el and el.get('alt_step') is not None:
+                                    try:
+                                        element['alt_step'] = int(el.get('alt_step'))
+                                    except Exception:
+                                        pass
+                                element['alt_step_enabled'] = bool(el.get('alt_step_enabled', False))
+                        except Exception:
+                            pass
                         if el.get('game_piece_id'):
                             element['game_piece_id'] = el.get('game_piece_id')
                         if element['type'] == 'select':
@@ -833,6 +854,34 @@ def save_simple_config():
                         game_piece_id = request.form.get(f'{period}_element_game_piece_{index}')
                         if game_piece_id:
                             element['game_piece_id'] = game_piece_id
+
+                        # Read counter-specific fields (legacy flat form inputs)
+                        try:
+                            if element_type == 'counter':
+                                # Primary step (default to 1)
+                                try:
+                                    step_val = request.form.get(f'{period}_element_step_{index}')
+                                    if step_val:
+                                        element['step'] = max(1, int(step_val))
+                                    else:
+                                        element['step'] = 1
+                                except Exception:
+                                    element['step'] = 1
+
+                                # Alt-step and enabled flag
+                                alt_enabled = request.form.get(f'{period}_element_alt_step_enabled_{index}')
+                                if alt_enabled:
+                                    element['alt_step_enabled'] = True
+                                    alt_step_val = request.form.get(f'{period}_element_alt_step_{index}')
+                                    if alt_step_val:
+                                        try:
+                                            element['alt_step'] = int(alt_step_val)
+                                        except Exception:
+                                            pass
+                                else:
+                                    element['alt_step_enabled'] = False
+                        except Exception:
+                            pass
 
                         # Handle select options with per-option points
                         if element_type == 'select':
@@ -951,6 +1000,13 @@ def save_simple_config():
                             if 'points' not in merged_el or not merged_el.get('points'):
                                 if match.get('points'):
                                     merged_el['points'] = match.get('points')
+                        # Preserve counter alt-step settings if missing
+                        if merged_el.get('type') == 'counter':
+                            if 'alt_step' not in merged_el or merged_el.get('alt_step') is None:
+                                if match.get('alt_step') is not None:
+                                    merged_el['alt_step'] = match.get('alt_step')
+                            if 'alt_step_enabled' not in merged_el or merged_el.get('alt_step_enabled') is None:
+                                merged_el['alt_step_enabled'] = bool(match.get('alt_step_enabled', False))
                         # Preserve scored flag if missing from merged element (renamed to gamepiece_scoreible)
                         if 'gamepiece_scoreible' not in merged_el or merged_el.get('gamepiece_scoreible') is None:
                             if match.get('gamepiece_scoreible') is not None:

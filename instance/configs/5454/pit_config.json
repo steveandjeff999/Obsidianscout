@@ -1,7 +1,7 @@
 {
   "pit_scouting": {
     "title": "REBUILT 2026 Pit Scouting",
-    "description": "Collect detailed information about teams and their robots for REEFSCAPE 2025",
+    "description": "Collect detailed information about teams and their robots for the 2026 REBUILT game.",
     "sections": [
       {
         "id": "team_info",
@@ -12,68 +12,26 @@
             "perm_id": "drive_team_experience",
             "name": "Drive Team Experience",
             "type": "select",
-            "required": false,
             "options": [
               {
                 "value": "yr1",
-                "label": "1 yr"
+                "label": "1 Year"
               },
               {
-                "value": "yr2",
-                "label": "2yr"
-              },
-              {
-                "value": "yr3",
-                "label": "3+yrs "
+                "value": "java",
+                "label": "Java"
               }
-            ]
+            ],
+            "points": {
+              "yr1": 0.0,
+              "java": 0.0
+            }
           },
           {
             "id": "programming_language",
             "perm_id": "programming_language",
             "name": "Programming Language",
-            "type": "select",
-            "required": false,
-            "options": [
-              {
-                "value": "java",
-                "label": "Java"
-              },
-              {
-                "value": "cpp",
-                "label": "C++"
-              },
-              {
-                "value": "python",
-                "label": "Python"
-              },
-              {
-                "value": "labview",
-                "label": "LabVIEW"
-              },
-              {
-                "value": "other",
-                "label": "Other"
-              }
-            ]
-          },
-          {
-            "id": "team_number",
-            "perm_id": "team_number",
-            "name": "Team Number",
-            "type": "number",
-            "required": true,
-            "validation": {
-              "min": 1,
-              "max": 99999
-            }
-          },
-          {
-            "id": "team_name",
-            "perm_id": "team_name",
-            "name": "Team Name",
-            "type": "text",
-            "required": false
+            "type": "select"
           }
         ]
       },
@@ -85,33 +43,13 @@
             "id": "drivetrain_type",
             "perm_id": "drivetrain_type",
             "name": "Drivetrain Type",
-            "type": "select",
-            "required": false,
-            "options": [
-              {
-                "value": "tank",
-                "label": "Tank Drive"
-              },
-              {
-                "value": "mecanum",
-                "label": "Mecanum"
-              },
-              {
-                "value": "swerve",
-                "label": "Swerve"
-              },
-              {
-                "value": "other",
-                "label": "Other"
-              }
-            ]
+            "type": "select"
           },
           {
             "id": "drivetrain_motors",
             "perm_id": "drivetrain_motors",
             "name": "Number of Drive Motors",
             "type": "number",
-            "required": false,
             "validation": {
               "min": 1,
               "max": 12
@@ -121,41 +59,13 @@
             "id": "motor_type",
             "perm_id": "motor_type",
             "name": "Drive Motor Type",
-            "type": "select",
-            "required": false,
-            "options": [
-              {
-                "value": "neo",
-                "label": "NEO"
-              },
-              {
-                "value": "cim",
-                "label": "CIM"
-              },
-              {
-                "value": "falcon500",
-                "label": "Falcon 500"
-              },
-              {
-                "value": "Krakenx60",
-                "label": "Kraken x60"
-              },
-              {
-                "value": "Krakenx44",
-                "label": "Kraken x44"
-              },
-              {
-                "value": "other",
-                "label": "Other"
-              }
-            ]
+            "type": "select"
           },
           {
             "id": "robot_weight",
             "perm_id": "robot_weight",
             "name": "Robot Weight (lbs)",
             "type": "number",
-            "required": false,
             "validation": {
               "min": 0,
               "max": 150
@@ -166,7 +76,6 @@
             "perm_id": "robot_height",
             "name": "Robot Height (inches)",
             "type": "number",
-            "required": false,
             "validation": {
               "min": 0,
               "max": 840
@@ -177,10 +86,9 @@
             "perm_id": "max_speed",
             "name": "Estimated Max Speed (ft/s)",
             "type": "number",
-            "required": false,
             "validation": {
               "min": 0,
-              "max": 30
+              "max": 48
             }
           }
         ]
@@ -190,68 +98,16 @@
         "name": "Autonomous Capabilities",
         "elements": [
           {
-            "id": "autonomous_leave_zone",
-            "perm_id": "autonomous_leave_zone",
-            "name": "Can Leave Starting Zone in Auto",
-            "type": "boolean",
-            "required": false
-          },
-          {
             "id": "autonomous_starting_position",
             "perm_id": "autonomous_starting_position",
-            "name": "Preferred Starting Position",
-            "type": "select",
-            "required": false,
-            "options": [
-              {
-                "value": "left",
-                "label": "Left"
-              },
-              {
-                "value": "center",
-                "label": "Center"
-              },
-              {
-                "value": "right",
-                "label": "Right"
-              },
-              {
-                "value": "flexible",
-                "label": "Flexible"
-              }
-            ]
-          },
-          {
-            "id": "autonomous_points_estimate",
-            "perm_id": "autonomous_points_estimate",
-            "name": "Estimated Auto Points",
-            "type": "number",
-            "required": false,
-            "validation": {
-              "min": 0,
-              "max": 50
-            }
+            "name": "Preferred Auto Starting Position",
+            "type": "select"
           },
           {
             "id": "autonomous_score_coral",
             "perm_id": "autonomous_score_coral",
-            "name": "Can Score CORAL in Auto",
-            "type": "boolean",
-            "required": false
-          },
-          {
-            "id": "autonomous_score_algae",
-            "perm_id": "autonomous_score_algae",
-            "name": "Can Score ALGAE in Auto",
-            "type": "boolean",
-            "required": false
-          },
-          {
-            "id": "autonomous_collect_pieces",
-            "perm_id": "autonomous_collect_pieces",
-            "name": "Can Collect Game Pieces in Auto",
-            "type": "boolean",
-            "required": false
+            "name": "Scores CORAL in Auto",
+            "type": "boolean"
           }
         ]
       },
@@ -263,46 +119,35 @@
             "id": "can_climb",
             "perm_id": "can_climb",
             "name": "Can Climb",
-            "type": "boolean",
-            "required": false
+            "type": "boolean"
           },
           {
             "id": "climb_levels",
             "perm_id": "climb_levels",
             "name": "Climb Levels Achieved",
-            "type": "multiselect",
-            "required": false,
-            "options": [
-              {
-                "value": "none",
-                "label": "none"
-              },
-              {
-                "value": "park",
-                "label": "park"
-              },
-              {
-                "value": "shallow",
-                "label": "Shallow Climb"
-              },
-              {
-                "value": "deep",
-                "label": "Deep Climb"
-              }
-            ]
+            "type": "multiselect"
           },
           {
             "id": "climb_time",
             "perm_id": "climb_time",
             "name": "Climb Time (seconds)",
             "type": "number",
-            "required": false,
             "validation": {
               "min": 0,
               "max": 60
             }
           }
         ]
+      },
+      {
+        "id": "coral_capabilities",
+        "name": "CORAL Capabilities",
+        "elements": []
+      },
+      {
+        "id": "algae_capabilities",
+        "name": "ALGAE Capabilities",
+        "elements": []
       },
       {
         "id": "strategy_notes",
@@ -312,206 +157,31 @@
             "id": "robot_strengths",
             "perm_id": "robot_strengths",
             "name": "Robot Strengths",
-            "type": "textarea",
-            "required": false,
-            "placeholder": "What are this robot's main strengths and capabilities?"
+            "type": "textarea"
           },
           {
             "id": "robot_weaknesses",
             "perm_id": "robot_weaknesses",
             "name": "Areas for Improvement",
-            "type": "textarea",
-            "required": false,
-            "placeholder": "What areas could this robot improve on?"
+            "type": "textarea"
           },
           {
             "id": "reliability_concerns",
             "perm_id": "reliability_concerns",
             "name": "Reliability Concerns",
-            "type": "textarea",
-            "required": false,
-            "placeholder": "Any known reliability issues or concerns?"
+            "type": "textarea"
           },
           {
             "id": "additional_notes",
             "perm_id": "additional_notes",
             "name": "Additional Notes",
-            "type": "textarea",
-            "required": false,
-            "placeholder": "Any other observations or notes about this team"
-          },
-          {
-            "id": "alliance_strategy",
-            "perm_id": "alliance_strategy",
-            "name": "Alliance Strategy Notes",
-            "type": "textarea",
-            "required": false,
-            "placeholder": "How would this robot fit into alliance strategy?"
+            "type": "textarea"
           },
           {
             "id": "driver_skill_level",
             "perm_id": "driver_skill_level",
             "name": "Driver Skill Level",
-            "type": "select",
-            "required": false,
-            "options": [
-              {
-                "value": "novice",
-                "label": "Novice"
-              },
-              {
-                "value": "intermediate",
-                "label": "Intermediate"
-              },
-              {
-                "value": "advanced",
-                "label": "Advanced"
-              },
-              {
-                "value": "expert",
-                "label": "Expert"
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "id": "coral_capabilities",
-        "name": "CORAL Capabilities",
-        "elements": [
-          {
-            "id": "can_score_coral",
-            "perm_id": "can_score_coral",
-            "name": "Can Score CORAL",
-            "type": "boolean",
-            "required": false
-          },
-          {
-            "id": "coral_intake_method",
-            "perm_id": "coral_intake_method",
-            "name": "CORAL Intake Method",
-            "type": "select",
-            "required": false,
-            "options": [
-              {
-                "value": "none",
-                "label": "Cannot Intake"
-              },
-              {
-                "value": "ground",
-                "label": "Ground Pickup"
-              },
-              {
-                "value": "station",
-                "label": "Human Player Station"
-              },
-              {
-                "value": "both",
-                "label": "Both Ground and Station"
-              }
-            ]
-          },
-          {
-            "id": "coral_levels",
-            "perm_id": "coral_levels",
-            "name": "CORAL Levels Robot Can Score",
-            "type": "multiselect",
-            "required": false,
-            "options": [
-              {
-                "value": "l1",
-                "label": "Level 1"
-              },
-              {
-                "value": "l2",
-                "label": "Level 2"
-              },
-              {
-                "value": "l3",
-                "label": "Level 3"
-              },
-              {
-                "value": "l4",
-                "label": "Level 4"
-              }
-            ]
-          },
-          {
-            "id": "coral_cycle_time",
-            "perm_id": "coral_cycle_time",
-            "name": "CORAL Cycle Time (seconds)",
-            "type": "number",
-            "required": false,
-            "validation": {
-              "min": 0,
-              "max": 150
-            }
-          }
-        ]
-      },
-      {
-        "id": "algae_capabilities",
-        "name": "ALGAE Capabilities",
-        "elements": [
-          {
-            "id": "can_score_algae",
-            "perm_id": "can_score_algae",
-            "name": "Can Score ALGAE",
-            "type": "boolean",
-            "required": false
-          },
-          {
-            "id": "algae_intake_method",
-            "perm_id": "algae_intake_method",
-            "name": "ALGAE Intake Method",
-            "type": "select",
-            "required": false,
-            "options": [
-              {
-                "value": "none",
-                "label": "Cannot Intake"
-              },
-              {
-                "value": "ground",
-                "label": "Ground Pickup"
-              },
-              {
-                "value": "station",
-                "label": "Human Player Station"
-              },
-              {
-                "value": "both",
-                "label": "Both Ground and Station"
-              }
-            ]
-          },
-          {
-            "id": "algae_locations",
-            "perm_id": "algae_locations",
-            "name": "ALGAE Scoring Locations",
-            "type": "multiselect",
-            "required": false,
-            "options": [
-              {
-                "value": "processor",
-                "label": "Processor"
-              },
-              {
-                "value": "net",
-                "label": "Net"
-              }
-            ]
-          },
-          {
-            "id": "algae_cycle_time",
-            "perm_id": "algae_cycle_time",
-            "name": "ALGAE Cycle Time (seconds)",
-            "type": "number",
-            "required": false,
-            "validation": {
-              "min": 0,
-              "max": 150
-            }
+            "type": "select"
           }
         ]
       }

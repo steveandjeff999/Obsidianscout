@@ -28,6 +28,14 @@
 .btn-counter i{pointer-events:none}
 .counter-input{max-width:96px;text-align:center;padding:.6rem .5rem}
 
+/* Alt increment buttons: slightly smaller and aligned with primary controls */
+.counter-container .btn-counter.btn-alt{min-width:40px;height:40px;padding:0;border-radius:8px;font-size:.95rem}
+.counter-container .btn-counter.btn-alt span{line-height:1}
+/* Allow the input to flex so alt buttons and primary buttons have space */
+.counter-container .counter-input{flex:1 1 auto;min-width:64px;max-width:140px}
+/* Reduce gap between small alt buttons and input slightly */
+.counter-container .btn-alt{margin-left:.35rem;margin-right:.35rem}
+
 .rating-star{color:#e9ecef;cursor:pointer;font-size:1.25rem;transition:transform .08s ease, color .12s ease}
 .rating-star:hover{transform:translateY(-2px)}
 .rating-star.active{color:var(--scout-unknown);text-shadow:0 1px 0 rgba(0,0,0,.12)}

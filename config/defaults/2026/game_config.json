@@ -1,47 +1,124 @@
 {
-  "season": 2025,
-  "game_name": "FRC 2025 Game",
+  "game_name": "REBUILT\u2122\u202fpresented by Haas",
+  "season": 2026,
+  "version": "1.0.0",
   "alliance_size": 3,
+  "scouting_stations": 6,
+  "current_event_code": "OKOK",
   "match_types": [
     "Practice",
     "Qualification",
     "Playoff"
   ],
-  "scouting_stations": 6,
   "preferred_api_source": "first",
+  "auto_period": {
+    "duration_seconds": 20,
+    "scoring_elements": [
+      {
+        "id": "elem_auto_0",
+        "perm_id": "elem_auto_0",
+        "name": "Active Fuel",
+        "type": "counter",
+        "default": 0,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": true,
+        "points": 1.0,
+        "alt_step": 10,
+        "alt_step_enabled": true
+      },
+      {
+        "id": "elem_auto_1",
+        "perm_id": "elem_auto_1",
+        "name": "Climb L1 Auto",
+        "type": "boolean",
+        "default": false,
+        "display_in_predictions": true,
+        "gamepiece_scoreible": false,
+        "points": 15.0
+      }
+    ]
+  },
+  "teleop_period": {
+    "duration_seconds": 135,
+    "scoring_elements": [
+      {
+        "id": "elem_teleop_0",
+        "perm_id": "elem_teleop_0",
+        "name": "Active Fuel",
+        "type": "counter",
+        "default": 0,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": true,
+        "points": 1.0,
+        "alt_step": 10,
+        "alt_step_enabled": true
+      }
+    ]
+  },
+  "endgame_period": {
+    "duration_seconds": 30,
+    "scoring_elements": [
+      {
+        "id": "elem_endgame_0",
+        "perm_id": "elem_endgame_0",
+        "name": "Climb",
+        "type": "multiple_choice",
+        "default": "None",
+        "display_in_predictions": true,
+        "gamepiece_scoreible": false,
+        "options": [
+          {
+            "name": "None",
+            "points": 0.0
+          },
+          {
+            "name": "L1",
+            "points": 10.0
+          },
+          {
+            "name": "L2",
+            "points": 20.0
+          },
+          {
+            "name": "L3",
+            "points": 30.0
+          }
+        ]
+      }
+    ]
+  },
+  "game_pieces": [],
+  "post_match": {
+    "rating_elements": [
+      {
+        "id": "defense_rating",
+        "name": "Defense Rating",
+        "type": "rating",
+        "min": 1,
+        "max": 5,
+        "default": 3
+      }
+    ],
+    "text_elements": [
+      {
+        "id": "general_comments",
+        "name": "General Comments",
+        "type": "text",
+        "multiline": true
+      }
+    ]
+  },
   "api_settings": {
     "username": "",
     "auth_token": "[REDACTED_auth_token]",
-    "base_url": "https://frc-api.firstinspires.org"
+    "base_url": "https://frc-api.firstinspires.org",
+    "auto_sync_enabled": true
   },
   "tba_api_settings": {
     "auth_key": "",
     "base_url": "https://www.thebluealliance.com/api/v3"
   },
-  "scoring_elements": [
-    {
-      "id": "auto_mobility",
-      "perm_id": "auto_mobility",
-      "name": "Auto Mobility",
-      "type": "boolean",
-      "phase": "autonomous",
-      "points": 3
-    },
-    {
-      "id": "teleop_speaker",
-      "perm_id": "teleop_speaker",
-      "name": "Teleop Speaker",
-      "type": "number",
-      "phase": "teleop",
-      "points": 2
-    },
-    {
-      "id": "endgame_climb",
-      "perm_id": "endgame_climb",
-      "name": "Endgame Climb",
-      "type": "boolean",
-      "phase": "endgame",
-      "points": 4
-    }
-  ]
+  "data_analysis": {
+    "key_metrics": []
+  }
 }

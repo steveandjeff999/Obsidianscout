@@ -608,9 +608,30 @@ def get_available_default_configs():
     return default_configs
 
 def load_default_config(filename):
-    """Load a specific default configuration file"""
-    # Prefer config/defaults/<year>/file
+    """Load a specific default configuration file
+
+    Supports both the newer `config/defaults/<year>/<file>` layout and the
+    legacy `instance/defaultconfigs/years/<filename>` layout. Raises
+    FileNotFoundError or ValueError on error so callers can handle it gracefully.
+    """
     base_defaults_dir = os.path.join(os.getcwd(), 'config', 'defaults')
+
+    # If filename is a path like '2025/game_config.json', prefer the defaults tree
+    if '/' in filename or os.path.sep in filename:
+        filepath = os.path.join(base_defaults_dir, *filename.replace('\\', '/').split('/'))
+    else:
+        # Legacy format - look in the older instance/defaultconfigs/years location
+        legacy_dir = os.path.join(os.getcwd(), 'instance', 'defaultconfigs', 'years')
+        filepath = os.path.join(legacy_dir, filename)
+
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Default config file not found: {filename}")
+
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in config file {filename}: {e}")
 
 
 def get_config_load_issues():
@@ -646,22 +667,6 @@ def get_config_raw_contents(team_number=None):
     except Exception:
         pass
     return result
-
-    if '/' in filename or os.path.sep in filename:
-        filepath = os.path.join(base_defaults_dir, *filename.replace('\\', '/').split('/'))
-    else:
-        # Legacy format - look in the older instance/defaultconfigs/years location
-        legacy_dir = os.path.join(os.getcwd(), 'instance', 'defaultconfigs', 'years')
-        filepath = os.path.join(legacy_dir, filename)
-
-    if not os.path.exists(filepath):
-        raise FileNotFoundError(f"Default config file not found: {filename}")
-
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in config file {filename}: {e}")
 
 def reset_config_to_default(filename, config_type='game'):
     """Reset current configuration to a default configuration"""
