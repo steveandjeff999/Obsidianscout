@@ -645,6 +645,24 @@
     color: #ffffff !important;
 }
 
+/* Light-mode override: keep bg-dark utilities bright on dashboards */
+body:not(.dark-mode) .card.bg-dark,
+html:not(.dark-mode) .card.bg-dark,
+body:not(.dark-mode) .bg-dark,
+html:not(.dark-mode) .bg-dark,
+body:not(.dark-mode) .card-header.bg-dark,
+html:not(.dark-mode) .card-header.bg-dark,
+body:not(.dark-mode) .dashboard-card.bg-dark,
+html:not(.dark-mode) .dashboard-card.bg-dark,
+body:not(.dark-mode) .stat-card.bg-dark,
+html:not(.dark-mode) .stat-card.bg-dark,
+body:not(.dark-mode) .data-card.bg-dark,
+html:not(.dark-mode) .data-card.bg-dark {
+    background-color: #ffffff !important;
+    color: #0f1724 !important;
+    border-color: rgba(15,23,42,0.08) !important;
+}
+
 /* Badge overrides for bg-light */
 .badge.bg-light {
     background-color: var(--light, #f8f9fa) !important;

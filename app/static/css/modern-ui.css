@@ -651,4 +651,124 @@ option[value=""] { color: var(--ui-muted); }
     .form-select, select { padding-right: 3.2rem !important; }
 }
 
+/* Light-mode surface fixes: remove hazy glass and restore crisp contrast */
+body:not(.dark-mode) {
+    --ui-bg: #f5f7fb;
+    --ui-card-bg: #ffffff;
+    --ui-foreground: #0f1724;
+    --ui-muted: #6b7280;
+    --ui-border: rgba(15,23,42,0.08);
+    --card-bg: #ffffff;
+    --glass-bg: #ffffff;
+    --glass-border: rgba(15,23,42,0.06);
+}
+
+body:not(.dark-mode) .modern-layout {
+    background: radial-gradient(circle at 10% 20%, #f8fbff 0, #f5f7fb 32%, #f1f4f9 70%);
+}
+
+body:not(.dark-mode),
+html:not(.dark-mode) {
+    background: #f5f7fb !important;
+    color: #0f1724 !important;
+}
+
+body:not(.dark-mode) .modern-layout .sidebar,
+body:not(.dark-mode) .modern-layout .topbar {
+    background: #ffffff !important;
+    border: 1px solid var(--ui-border) !important;
+    box-shadow: 0 14px 36px rgba(15,23,42,0.08) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    color: var(--ui-foreground) !important;
+}
+
+body:not(.dark-mode) .modern-layout .card,
+body:not(.dark-mode) .modern-layout .dashboard-card,
+body:not(.dark-mode) .modern-layout .stat-card,
+body:not(.dark-mode) .modern-layout .modal-content,
+body:not(.dark-mode) .modern-layout .dropdown-menu {
+    background: #ffffff !important;
+    border: 1px solid var(--ui-border) !important;
+    box-shadow: 0 12px 32px rgba(15,23,42,0.08) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    color: var(--ui-foreground) !important;
+}
+
+/* Global light-mode enforcement: keep every card/panel white even if a bg-dark class is present */
+body:not(.dark-mode) .card,
+body:not(.dark-mode) .dashboard-card,
+body:not(.dark-mode) .stat-card,
+body:not(.dark-mode) .data-card {
+    background: #ffffff !important;
+    color: #0f1724 !important;
+    border: 1px solid var(--ui-border) !important;
+    box-shadow: 0 10px 28px rgba(15,23,42,0.06) !important;
+}
+
+body:not(.dark-mode) .card .card-header,
+body:not(.dark-mode) .card .card-body,
+body:not(.dark-mode) .dashboard-card .card-body,
+body:not(.dark-mode) .stat-card .card-body {
+    background: #ffffff !important;
+    color: #0f1724 !important;
+    border-color: var(--ui-border) !important;
+}
+
+/* Nuke accidental dark tiles in light mode (stat cards, dashboards, bg-dark utilities) */
+body:not(.dark-mode) .bg-dark,
+body:not(.dark-mode) .card.bg-dark,
+body:not(.dark-mode) .card.bg-black,
+body:not(.dark-mode) .dashboard-card.bg-dark,
+body:not(.dark-mode) .stat-card.bg-dark,
+body:not(.dark-mode) .data-card.bg-dark,
+body:not(.dark-mode) .card-header.bg-dark {
+    background: #ffffff !important;
+    color: #0f1724 !important;
+    border-color: var(--ui-border) !important;
+    box-shadow: 0 10px 28px rgba(15,23,42,0.06) !important;
+}
+
+/* Catch any cards rendered outside modern-layout to keep light mode bright */
+body:not(.dark-mode) .card,
+body:not(.dark-mode) .stat-card,
+body:not(.dark-mode) .dashboard-card {
+    background: #ffffff !important;
+    color: #0f1724 !important;
+    border-color: var(--ui-border) !important;
+    box-shadow: 0 10px 28px rgba(15,23,42,0.06) !important;
+}
+
+body:not(.dark-mode) .modern-layout .card .card-header,
+body:not(.dark-mode) .modern-layout .card .card-body {
+    background: #ffffff !important;
+    color: var(--ui-foreground) !important;
+    border-color: var(--ui-border) !important;
+}
+
+body:not(.dark-mode) .modern-layout .stat-value,
+body:not(.dark-mode) .modern-layout .dashboard-card .stat-value { color: #0f1724 !important; }
+body:not(.dark-mode) .modern-layout .stat-card .text-muted { color: var(--ui-muted) !important; }
+
+body:not(.dark-mode) .modern-layout input.form-control,
+body:not(.dark-mode) .modern-layout .form-control,
+body:not(.dark-mode) .modern-layout .form-select {
+    background: #f8fafc !important;
+    border: 1px solid var(--ui-border) !important;
+    box-shadow: inset 0 1px 2px rgba(15,23,42,0.04) !important;
+    color: var(--ui-foreground) !important;
+}
+
+body:not(.dark-mode) .modern-layout .nav-link { color: var(--ui-foreground) !important; }
+body:not(.dark-mode) .modern-layout .nav-link .badge { background: rgba(var(--ui-accent-rgb),0.08); color: var(--ui-foreground); }
+
+body:not(.dark-mode) .modern-layout .topbar .btn,
+body:not(.dark-mode) .modern-layout .sidebar .btn {
+    background: #f7f9fc;
+    border: 1px solid var(--ui-border) !important;
+    box-shadow: 0 6px 16px rgba(15,23,42,0.06);
+    color: var(--ui-foreground);
+}
+
 

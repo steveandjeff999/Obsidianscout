@@ -26,7 +26,7 @@
 .counter-container{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;width:100%;justify-content:center;padding:0.5rem}
 .btn-counter{min-width:56px;height:56px;padding:0;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;font-size:1rem}
 .btn-counter i{pointer-events:none}
-.counter-input{width:72px;min-width:64px;text-align:center;padding:.55rem .5rem;flex:0 0 auto;margin:0}
+.counter-input{width:95px;min-width:85px;text-align:center;padding:.55rem .75rem;flex:0 0 auto;margin:0}
 
 /* Counters: allow wrapping and keep cards compact. No scale-driven min-widths applied. */
 .counter-container.counter-wrapped{justify-content:center;gap:.75rem}
@@ -48,30 +48,32 @@
 .counter-container .btn-counter.btn-alt{min-width:44px;height:44px;padding:0;border-radius:10px;font-size:.95rem;font-weight:600}
 .counter-container .btn-counter.btn-alt span{line-height:1}
 /* Ensure fixed input size when not wrapping; keep compact max width */
-.counter-container .counter-input{flex:0 0 auto;min-width:64px;max-width:88px}
+.counter-container .counter-input{flex:0 0 auto;min-width:85px;max-width:110px}
 /* Remove explicit margins: use gap for spacing so alignment is consistent */
 .counter-container .btn-alt{margin-left:0;margin-right:0}
 
 /* Grid layout for counters when alt (extra) buttons are present */
 .counter-container.counter-grid{
     display:grid;
-    grid-template-columns: repeat(3, auto);
+    grid-template-columns: auto auto minmax(90px, 100px);
     grid-auto-rows: minmax(44px, auto);
-    gap:.6rem;
+    gap:.85rem;
     align-items:center;
     justify-content:center;
+    justify-items:center;
 }
 
-.counter-container.counter-grid .btn-decrement:not(.btn-alt){ grid-column:1; grid-row:1; justify-self:center }
-.counter-container.counter-grid .btn-decrement.btn-alt{ grid-column:2; grid-row:1; justify-self:center }
-.counter-container.counter-grid .counter-input{ grid-column:3; grid-row:1; justify-self:center; width:72px; height:56px }
-.counter-container.counter-grid .btn-increment.btn-alt{ grid-column:1; grid-row:2; justify-self:center }
-.counter-container.counter-grid .btn-increment:not(.btn-alt){ grid-column:3; grid-row:2; justify-self:center }
+.counter-container.counter-grid .btn-decrement:not(.btn-alt){ grid-column:1; grid-row:1; }
+.counter-container.counter-grid .btn-decrement.btn-alt{ grid-column:2; grid-row:1; }
+.counter-container.counter-grid .counter-input{ grid-column:3; grid-row:1; width:90px; min-width:90px; max-width:100px; height:56px; font-size:1.15rem; padding:0.4rem 0.65rem; box-sizing:border-box; overflow:hidden; text-overflow:clip; }
+.counter-container.counter-grid .btn-increment.btn-alt{ grid-column:1; grid-row:2; }
+.counter-container.counter-grid .btn-increment:not(.btn-alt){ grid-column:3; grid-row:2; }
 
 /* Keep a small visual gap on small screens */
 @media (max-width:480px){
-    .counter-container.counter-grid{ gap:.45rem }
-    .counter-container.counter-grid .counter-input{ width:64px; }
+    .counter-container.counter-grid{ gap:.45rem; grid-template-columns: auto auto minmax(70px, 80px); }
+    .counter-container.counter-grid .counter-input{ min-width:70px; max-width:80px; font-size:1rem; }
+    .counter-input{max-width:80px}
 }
 .rating-star{color:#e9ecef;cursor:pointer;font-size:1.25rem;transition:transform .08s ease, color .12s ease}
 .rating-star:hover{transform:translateY(-2px)}
@@ -409,7 +411,9 @@ body.scout-page-bg { background: radial-gradient(circle at 20% 20%, #eff6ff, #f8
 .btn-counter.btn-decrement { color: #b91c1c; border-color: rgba(239,68,68,0.3); }
 .btn-counter.btn-increment { color: #0f766e; border-color: rgba(15,118,110,0.35); }
 .btn-counter.btn-alt { height: 44px; min-width: 44px; border-radius: 10px; }
-.counter-input { width: 82px; text-align: center; border-radius: 12px; }
+.counter-input { width: 95px; min-width: 85px; max-width: 95px; flex: 0 0 95px; text-align: center; border-radius: 12px; padding: 0.5rem 0.75rem; overflow: hidden; text-overflow: clip; }
+.input-group.counter-control { gap: 0.875rem; flex-wrap: nowrap; }
+.input-group.counter-control .counter-input { flex-shrink: 0; }
 .counter-container.counter-grid { display: grid; grid-template-columns: repeat(3, auto); grid-auto-rows: minmax(44px, auto); gap: 0.5rem; justify-content: center; }
 .counter-container.counter-grid .counter-input { width: 72px; height: 52px; }
 
@@ -426,6 +430,18 @@ body.scout-page-bg { background: radial-gradient(circle at 20% 20%, #eff6ff, #f8
 .empty-icon { width: 72px; height: 72px; border-radius: 50%; background: rgba(15,118,110,0.1); color: #0f766e; display: grid; place-items: center; margin: 0 auto; font-size: 1.6rem; }
 
 .toast-container { z-index: 2000; }
+
+/* Multi-column layout fixes for tablets and laptops */
+@media (min-width: 768px) and (max-width: 1400px) {
+    .input-group.counter-control { gap: 1rem; }
+    .counter-input { width: 100px; min-width: 90px; max-width: 100px; flex: 0 0 100px; padding: 0.5rem 0.85rem; font-size: 1.1rem; }
+    .btn.counter-btn { min-width: 54px; height: 50px; }
+}
+
+@media (min-width: 1400px) {
+    .input-group.counter-control { gap: 1.125rem; }
+    .counter-input { width: 105px; min-width: 95px; max-width: 105px; flex: 0 0 105px; }
+}
 
 @media (max-width: 768px) {
     .tab-strip { flex-direction: column; }
