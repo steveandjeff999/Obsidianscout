@@ -1,5 +1,8 @@
 // Scale UI widget: adjusts --ui-scale and html font-size via data attribute
 (function(){
+    // Scale UI widget DISABLED: removed per user request
+    if (true) { if (window.__scaleUiDebug) console.debug('scale-ui: disabled by request'); return; }
+
     const STORAGE_KEY = 'obsidian_ui_scale_v1';
     const MIN = 0.8;
     const MAX = 1.6;
@@ -83,33 +86,57 @@
                 // Ensure we have original measurements for counter
                 ensureOriginalSize(counter);
 
-                // Freeze layout width so transform doesn't change flow (prevents card expansion)
+                // Let counters be flexible and wrap naturally based on actual content size.
+                // Don't lock width - the CSS flex-wrap will handle wrapping automatically.
                 try {
-                    const origW = Number(counter.dataset.origWidth || 0);
-                    if (origW > 0) {
-                        // Keep the counter as a flex container so children (buttons + input)
-                        // remain side-by-side. Previously we set inline-block which broke
-                        // the flex layout and caused vertical stacking when scaled.
-                        counter.style.boxSizing = 'border-box';
-                        try {
-                            const cs = window.getComputedStyle(counter);
-                            if (!counter.style.display) counter.style.display = cs.display || 'flex';
-                        } catch (e) {
-                            // fallback to flex if computed style fails
-                            if (!counter.style.display) counter.style.display = 'flex';
-                        }
-                        counter.style.width = origW + 'px';
-                        counter.style.maxWidth = origW + 'px';
-                        // Ensure children don't wrap into multiple lines when space is tight
-                        counter.style.flexWrap = 'nowrap';
-                    }
+                    counter.style.boxSizing = 'border-box';
+                    counter.style.display = 'flex';
+                    counter.style.flexWrap = 'wrap';
+                    counter.style.width = '100%';
+                    counter.style.maxWidth = '100%';
                 } catch (e) { /* ignore */ }
 
                 // Apply transform to the counter (visual only)
-                counter.style.transformOrigin = counter.style.transformOrigin || 'left top';
+                counter.style.transformOrigin = 'left center';
                 counter.style.willChange = 'transform';
                 counter.style.transition = 'transform 120ms ease, margin 120ms ease';
                 counter.style.transform = `scale(${scale})`;
+
+                // Measure actual overflow after transform and expand card to fit
+                window.requestAnimationFrame(() => {
+                    try {
+                        const counterRect = counter.getBoundingClientRect();
+                        const cardBody = card ? card.querySelector('.card-body') : counter.parentElement;
+                        
+                        if (cardBody) {
+                            const cardBodyRect = cardBody.getBoundingClientRect();
+                            
+                            // Calculate how much the counter overflows on the right
+                            const rightOverflow = (counterRect.right - cardBodyRect.right);
+                            
+                            // Store original min-width if not stored
+                            if (!cardBody.dataset.origMinWidth) {
+                                const cs = window.getComputedStyle(cardBody);
+                                cardBody.dataset.origMinWidth = cs.minWidth || 'auto';
+                            }
+                            
+                            // Only expand if there's significant overflow (more than 5px)
+                            if (rightOverflow > 5) {
+                                // Add only the overflow amount plus small buffer
+                                const currentWidth = cardBodyRect.width;
+                                const neededWidth = currentWidth + rightOverflow + 12; // 12px buffer
+                                cardBody.style.minWidth = neededWidth + 'px';
+                                if (card) card.style.minWidth = neededWidth + 'px';
+                            } else if (scale <= 1.05) {
+                                // Reset when scale is back to ~1 or less
+                                cardBody.style.minWidth = cardBody.dataset.origMinWidth || '';
+                                if (card) card.style.minWidth = '';
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Card resize calculation failed', e);
+                    }
+                });
 
                 // After transform is applied, compute height delta and add padding-bottom to header to keep things from overlapping.
                 try {
@@ -117,6 +144,18 @@
                     window.requestAnimationFrame(() => {
                         const newRect = counter.getBoundingClientRect();
                         const deltaH = newRect.height - origH;
+
+                        // Detect if the counter wrapped by checking child top positions
+                        try {
+                            const children = Array.from(counter.children).filter(c => c.offsetParent !== null);
+                            if (children.length > 0) {
+                                const tops = children.map(c => Math.round(c.getBoundingClientRect().top));
+                                const uniqueTops = Array.from(new Set(tops));
+                                const actuallyWrapped = uniqueTops.length > 1;
+                                counter.classList.toggle('counter-wrapped', actuallyWrapped);
+                                if (card) card.classList.toggle('card-counter-wrapped', actuallyWrapped);
+                            }
+                        } catch (err) { /* ignore wrap detection errors */ }
 
                         if (header) {
                             // store original padding-bottom if not stored
@@ -357,6 +396,7 @@
                 card.style.transform = '';
                 card.style.marginBottom = '';
                 card.style.marginRight = '';
+                card.style.minWidth = '';
                 card.removeAttribute('data-ui-scale');
 
                 const counter = card.querySelector('.counter-container');
@@ -368,11 +408,17 @@
                     counter.style.display = '';
                     counter.style.boxSizing = '';
                     counter.style.flexWrap = '';
+                    counter.classList.remove('counter-wrapped');
+                    card.classList.remove('card-counter-wrapped');
                 }
 
-                const header = card.querySelector('.card-header');
-                if (header) {
-                    header.style.paddingBottom = header.dataset.origPaddingBottom || '';
+                const cardBody = card.querySelector('.card-body');
+                if (cardBody) {
+                    cardBody.style.minWidth = cardBody.dataset.origMinWidth || '';
+                    const header = card.querySelector('.card-header');
+                    if (header) {
+                        header.style.paddingBottom = header.dataset.origPaddingBottom || '';
+                    }
                 }
             });
             // Also clear stored value so next session is default
@@ -404,6 +450,27 @@
                         }
                     } else {
                         if (deltaH > 2) counter.style.marginBottom = (deltaH + 8) + 'px'; else counter.style.marginBottom = '';
+                    }
+                    
+                    // Also recheck card width for overflow
+                    const cardBody = card.querySelector('.card-body');
+                    if (cardBody) {
+                        const counterRect = counter.getBoundingClientRect();
+                        const cardBodyRect = cardBody.getBoundingClientRect();
+                        const rightOverflow = (counterRect.right - cardBodyRect.right);
+                        
+                        if (rightOverflow > 5) {
+                            const currentWidth = cardBodyRect.width;
+                            const neededWidth = currentWidth + rightOverflow + 12;
+                            cardBody.style.minWidth = neededWidth + 'px';
+                            card.style.minWidth = neededWidth + 'px';
+                        } else {
+                            // Reset to original if no overflow
+                            if (cardBody.dataset.origMinWidth && __currentScale <= 1.05) {
+                                cardBody.style.minWidth = cardBody.dataset.origMinWidth || '';
+                                card.style.minWidth = '';
+                            }
+                        }
                     }
                 } catch (e) {}
             });

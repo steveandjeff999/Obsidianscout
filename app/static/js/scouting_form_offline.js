@@ -66,6 +66,21 @@
         } catch (e) {
             // ignore attach errors
         }
+        // Ensure server status and save button visibility reflect current connectivity on initial load
+        try {
+            // Do an immediate server check and schedule periodic checks
+            refreshServerStatus();
+            if (!window._scoutingServerPingInterval) {
+                window._scoutingServerPingInterval = setInterval(refreshServerStatus, 15000); // every 15s
+                // Expose helpers for other modules to reuse
+                try { window.refreshServerStatus = refreshServerStatus; window.updateSaveButtonVisibility = updateSaveButtonVisibility; window.checkServerReachable = checkServerReachable; } catch (e) { /* ignore */ }
+                // Clear interval on unload to avoid background pings
+                const cleanup = () => {
+                    try { clearInterval(window._scoutingServerPingInterval); window._scoutingServerPingInterval = null; } catch (e) {}
+                };
+                window.addEventListener('beforeunload', cleanup, { once: true });
+            }
+        } catch (e) { /* ignore */ }
     }
 
     /**
@@ -133,6 +148,20 @@
             localStorage.setItem(CACHE_KEYS.CACHE_TIMESTAMP, Date.now().toString());
             
             console.log('[Offline Manager] All data cached successfully');
+
+            // Proactively cache a universal form template if we are online and none is stored yet
+            if (navigator.onLine) {
+                try {
+                    const hasTemplate = !!localStorage.getItem(CACHE_KEYS.FORM_HTML_TEMPLATE);
+                    const teams = JSON.parse(localStorage.getItem(CACHE_KEYS.TEAMS) || '[]');
+                    const matches = JSON.parse(localStorage.getItem(CACHE_KEYS.MATCHES) || '[]');
+                    if (!hasTemplate && teams.length && matches.length) {
+                        cacheFormHTMLTemplate(teams[0].id, matches[0].id);
+                    }
+                } catch (e) {
+                    console.warn('[Offline Manager] Could not auto-cache template:', e);
+                }
+            }
         } catch (e) {
             console.error('[Offline Manager] Error caching data:', e);
         }
@@ -278,6 +307,9 @@
         // Try to sync any offline forms
         syncOfflineForms();
         
+        // Recheck server reachability and update UI
+        try { refreshServerStatus(); } catch (e) { /* ignore */ }
+        
         // Check if pre-cache is stale and refresh if needed
         const preCacheTimestamp = localStorage.getItem('scouting_precache_timestamp');
         if (!preCacheTimestamp || (Date.now() - parseInt(preCacheTimestamp)) > CACHE_DURATION) {
@@ -294,6 +326,101 @@
     function handleOffline() {
         console.log('[Offline Manager] Connection lost');
         showNotification('You are now offline. Form will work from cached data.', 'warning');
+        // Update UI to reflect offline state
+        try { updateSaveButtonVisibility(); } catch (e) { /* ignore */ }
+    }
+
+    /**
+     * Check whether the server is reachable by pinging a lightweight health endpoint with timeout
+     * Returns a Promise<boolean>
+     */
+    function checkServerReachable(timeoutMs = 2500) {
+        const url = '/health';
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            return fetch(url + '?_=' + Date.now(), {
+                method: 'GET',
+                cache: 'no-store',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'Pragma': 'no-cache' },
+                signal: controller.signal
+            }).then(async resp => {
+                clearTimeout(timer);
+                if (!resp || !resp.ok) return false;
+                // Ensure we received the expected JSON health response (not cached HTML fallback)
+                const ct = resp.headers.get('content-type') || '';
+                if (!ct.toLowerCase().includes('application/json')) return false;
+                try {
+                    const body = await resp.json();
+                    // Accept either {status:'healthy'} or {status:'ok'} (case-insensitive)
+                    if (body && body.status && String(body.status).toLowerCase().includes('heal')) return true;
+                    if (body && body.status && String(body.status).toLowerCase().includes('ok')) return true;
+                    // If health endpoint returns other successful JSON, consider it reachable
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            }).catch(err => {
+                clearTimeout(timer);
+                return false;
+            });
+        } catch (e) {
+            return Promise.resolve(false);
+        }
+    }
+
+    /**
+     * Refresh stored server status and update UI
+     */
+    function refreshServerStatus() {
+        // Debounce multiple calls by honoring an in-flight check
+        if (refreshServerStatus._inFlight) return refreshServerStatus._inFlight;
+        const p = checkServerReachable().then(online => {
+            window.scoutingServerOnline = !!online;
+            console.log('[Offline Manager] server reachable:', window.scoutingServerOnline);
+            try { updateSaveButtonVisibility(); } catch (e) { /* ignore */ }
+            return online;
+        }).finally(() => { refreshServerStatus._inFlight = null; });
+        refreshServerStatus._inFlight = p;
+        return p;
+    }
+
+    /**
+     * Update visibility of save controls based on server reachability (preferred) or fallback to navigator.onLine
+     */
+    function updateSaveButtonVisibility() {
+        try {
+            const saveButton = document.getElementById('save-button');
+            const saveLocalBtn = document.getElementById('save-local-button');
+            if (!saveButton) return;
+
+            // Prefer explicit server status if known
+            if (typeof window.scoutingServerOnline === 'boolean') {
+                if (window.scoutingServerOnline) {
+                    saveButton.classList.remove('d-none');
+                    saveButton.disabled = false;
+                    if (saveLocalBtn) saveLocalBtn.classList.remove('d-none');
+                } else {
+                    saveButton.classList.add('d-none');
+                    if (saveLocalBtn) saveLocalBtn.classList.remove('d-none');
+                }
+                return;
+            }
+
+            // Fallback behaviour: if browser is offline, hide; if online but server unknown, optimistically show and validate in background
+            if (!navigator.onLine) {
+                saveButton.classList.add('d-none');
+                if (saveLocalBtn) saveLocalBtn.classList.remove('d-none');
+            } else {
+                // Show while we verify the server in the background
+                saveButton.classList.remove('d-none');
+                if (saveLocalBtn) saveLocalBtn.classList.remove('d-none');
+                // Kick off a background validation that will correct UI if server unreachable
+                try { refreshServerStatus(); } catch (e) { /* ignore */ }
+            }
+        } catch (e) {
+            console.warn('[Offline Manager] updateSaveButtonVisibility error', e);
+        }
     }
 
     /**
@@ -611,6 +738,7 @@
         getCachedTeams: getCachedTeams,
         getCachedMatches: getCachedMatches,
         getCachedGameConfig: getCachedGameConfig,
+        getCachedFormHTMLTemplate: getCachedFormHTMLTemplate,
         // Helpers for matching/filtering
         parseAllianceTeams: parseAllianceTeams,
         filterTeamsByMatchId: filterTeamsByMatchId,

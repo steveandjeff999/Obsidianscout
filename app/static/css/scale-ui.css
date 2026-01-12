@@ -93,24 +93,18 @@ html[data-ui-scale] {
     transform-origin: left top;
 }
 
-/* Elements targeted for scaling (closest .card to .counter-container) */
-.scale-target-card {
-    /* Keep transforms isolated to avoid reflow; use translateZ for GPU accel */
-    transform-origin: left top;
-    will-change: transform;
-    /* Ensure scaled card doesn't clip shadows/children */
-    overflow: visible !important;
-}
+/* scale-target-card styles removed - scaling feature disabled */
+.scale-target-card { /* no-op placeholder to avoid unexpected selectors */ }
 
-/* Ensure counter controls keep their inline layout when visually scaled */
+/* Counter controls: allow natural wrapping and normal layout (scale removed) */
 .counter-container {
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    align-items: center !important;
+    display: flex; /* keep flex layout */
+    flex-wrap: wrap; /* allow wrapping instead of forcing nowrap */
+    align-items: center;
 }
 
 .counter-container .btn-counter, .counter-container .counter-input {
-    transform-origin: left center !important;
+    transform-origin: left center;
 }
 
 /* When a scaled card is larger, add small padding so it doesn't overlap neighbors */

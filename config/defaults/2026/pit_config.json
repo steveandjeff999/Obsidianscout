@@ -16,15 +16,10 @@
               {
                 "value": "yr1",
                 "label": "1 Year"
-              },
-              {
-                "value": "java",
-                "label": "Java"
               }
             ],
             "points": {
-              "yr1": 0.0,
-              "java": 0.0
+              "yr1": 0.0
             }
           },
           {
@@ -138,16 +133,6 @@
             }
           }
         ]
-      },
-      {
-        "id": "coral_capabilities",
-        "name": "CORAL Capabilities",
-        "elements": []
-      },
-      {
-        "id": "algae_capabilities",
-        "name": "ALGAE Capabilities",
-        "elements": []
       },
       {
         "id": "strategy_notes",

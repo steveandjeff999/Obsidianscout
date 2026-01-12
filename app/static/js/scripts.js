@@ -286,6 +286,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     }, 300);
                 }
             }
+
+            // Set global network banner flag and re-evaluate server reachability/UI
+            try {
+                window.scoutingNetworkOffline = !!show;
+                if (typeof window.refreshServerStatus === 'function') {
+                    // Let offline manager decide which button to show based on server availability
+                    window.refreshServerStatus();
+                } else if (typeof window.updateSaveButtonVisibility === 'function') {
+                    window.updateSaveButtonVisibility();
+                }
+            } catch (e) { /* ignore */ }
+
         } catch (e) {
             console.warn('showOfflineBanner error', e);
         }
@@ -602,6 +614,13 @@ function initializeCounters() {
                 updateCounter(-1);
             }
         });
+
+        // If alt buttons exist, arrange controls into a compact grid (matches visual spec)
+        try {
+            const hasAlt = counter.querySelector('.btn-alt');
+            if (hasAlt) counter.classList.add('counter-grid'); else counter.classList.remove('counter-grid');
+        } catch (e) { /* ignore */ }
+
     });
 
     // Now handle buttons with data-target attributes that weren't already processed
@@ -656,10 +675,10 @@ function initializeCounters() {
             // Move decrement alt before input
             const decAlt = container.querySelector('.btn-decrement.btn-alt');
             if (decAlt) {
-                // place immediately after primary decrement
+                // place immediately after primary decrement (insert after the primary element itself to avoid moving outside container)
                 const primaryDec = container.querySelector('.btn-decrement:not(.btn-alt)');
-                if (primaryDec && primaryDec.parentNode) {
-                    primaryDec.parentNode.insertAdjacentElement('afterend', decAlt);
+                if (primaryDec) {
+                    primaryDec.insertAdjacentElement('afterend', decAlt);
                     decAlt.style.display = 'inline-block';
                 }
             }
@@ -667,14 +686,33 @@ function initializeCounters() {
             const incAlt = container.querySelector('.btn-increment.btn-alt');
             if (incAlt) {
                 const primaryInc = container.querySelector('.btn-increment:not(.btn-alt)');
-                if (primaryInc && primaryInc.parentNode) {
-                    primaryInc.parentNode.insertAdjacentElement('beforebegin', incAlt);
+                if (primaryInc) {
+                    primaryInc.insertAdjacentElement('beforebegin', incAlt);
                     incAlt.style.display = 'inline-block';
                 }
             }
         });
     } catch (err) {
         console.warn('moveAltButtons error', err);
+    }
+
+    // Detect counters that wrapped onto multiple lines and add a class so CSS
+    // can adjust layout (and trigger a resize so spacing recalculates).
+    try {
+        document.querySelectorAll('.counter-container').forEach(container => {
+            const children = Array.from(container.children).filter(c => c.offsetParent !== null);
+            if (!children.length) return;
+            const tops = children.map(c => Math.round(c.getBoundingClientRect().top));
+            const uniqueTops = Array.from(new Set(tops));
+            const wrapped = uniqueTops.length > 1;
+            container.classList.toggle('counter-wrapped', wrapped);
+            const card = container.closest('.card');
+            if (card) card.classList.toggle('card-counter-wrapped', wrapped);
+        });
+        // Let other layout handlers (scale-ui) recompute spacing
+        setTimeout(() => window.dispatchEvent(new Event('resize')), 60);
+    } catch (err) {
+        console.warn('counter wrap detection error', err);
     }
 }
 
@@ -3485,17 +3523,39 @@ function initScoutingForm() {
     initializePointsCalculation();
     
     // Handle save button click
-    saveButton.addEventListener('click', function(e) {
+    saveButton.addEventListener('click', async function(e) {
         // Prevent default form submission
         e.preventDefault();
         
-        // Check if we're online
-        if (navigator.onLine) {
-            // Online mode - submit the form directly
-            submitScoutingForm();
-        } else {
-            // Offline mode - fall back to QR code generation
-            showToast('You are currently offline. Generating QR code instead.', 'warning');
+        // Decide based on server reachability if possible
+        try {
+            if (typeof window.scoutingServerOnline === 'boolean') {
+                if (window.scoutingServerOnline) {
+                    submitScoutingForm();
+                } else {
+                    showToast('Server unreachable. Generating QR code / saving locally instead.', 'warning');
+                    generateQRCode();
+                }
+                return;
+            }
+
+            // If unknown, recheck server and act accordingly (show loading state while checking)
+            const originalText = saveButton.innerHTML;
+            saveButton.disabled = true;
+            saveButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Checking server...';
+            const ok = (typeof refreshServerStatus === 'function') ? await refreshServerStatus() : await (navigator.onLine ? Promise.resolve(true) : Promise.resolve(false));
+            saveButton.disabled = false;
+            saveButton.innerHTML = originalText;
+
+            if (ok) {
+                submitScoutingForm();
+            } else {
+                showToast('Server unreachable. Generating QR code instead.', 'warning');
+                generateQRCode();
+            }
+        } catch (e) {
+            console.warn('Error checking server reachability', e);
+            showToast('Could not verify server. Generating QR code instead.', 'warning');
             generateQRCode();
         }
     });
@@ -3529,13 +3589,6 @@ function initScoutingForm() {
             // Handle response
             if (data.success) {
                 showToast('Scouting data saved successfully!', 'success');
-                
-                // Optional: Reset form or redirect
-                if (data.redirect_url) {
-                    setTimeout(() => {
-                        window.location.href = data.redirect_url;
-                    }, 1000);
-                }
             } else {
                 showToast(`Error: ${data.message || 'Failed to save data'}`, 'danger');
             }
