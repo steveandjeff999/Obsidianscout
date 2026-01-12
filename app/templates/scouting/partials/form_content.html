@@ -1,544 +1,439 @@
-<!-- Alliance Indicator Bar -->
 {% import '_help_icon.html' as help %}
-<div class="alliance-indicator {% if alliance == 'red' %}bg-danger{% elif alliance == 'blue' %}bg-primary{% else %}bg-warning alliance-unknown{% endif %} mb-4 py-3 px-4 rounded-4 shadow-sm">
-    <div class="d-flex align-items-center">
-        <div class="alliance-icon me-3">
-            <i class="fas {% if alliance == 'red' %}fa-fire{% else %}fa-tint{% endif %} fa-2x {% if alliance == 'red' or alliance == 'blue' %}text-white{% else %}text-dark{% endif %}"></i>
+
+<style>
+.scouting-shell {background: radial-gradient(circle at 16% 20%, rgba(255,255,255,0.08), transparent 35%), radial-gradient(circle at 82% 12%, rgba(0,123,255,0.12), transparent 32%), #0f1115; border-radius: 18px; padding: 20px; box-shadow: 0 16px 48px rgba(0,0,0,0.25);}
+.glass-card {background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 16px;}
+.meta-pill {border-radius: 999px; padding: 10px 16px; display: inline-flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.09);}
+.meta-pill .label {opacity: 0.7; font-size: 0.9rem;}
+.meta-pill .value {font-weight: 700;}
+.pill-tabs {display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;}
+.pill-tab {padding: 14px; border-radius: 14px; background: rgba(255,255,255,0.06); color: #e7ecf5; border: 1px solid transparent; text-align: center; cursor: pointer; transition: all 0.2s ease; font-weight: 600;}
+.pill-tab.active {background: linear-gradient(135deg, #2563eb, #1e3a8a); border-color: rgba(255,255,255,0.18); box-shadow: 0 10px 24px rgba(37,99,235,0.35);}
+.pill-tab .subtitle {display: block; font-size: 0.8rem; opacity: 0.7;}
+.section-head {display: flex; align-items: center; gap: 12px; padding: 8px 0 4px;}
+.section-head .badge {letter-spacing: 0.04em;}
+.mini-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;}
+.counter-shell {display: grid; grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)); gap: 8px; align-items: center; grid-auto-rows: minmax(44px, auto);} /* auto-fit prevents overflow and lets buttons shrink */
+.counter-shell .counter-input {text-align: center; font-weight: 700; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #e8edf7; min-width: 0; width: 100%; padding: 0.55rem 0.45rem; font-size: clamp(0.95rem, 2.6vw, 1.05rem);}
+.counter-shell .btn-counter {min-width: 0; width: 100%; height: clamp(42px, 6vw, 56px); border-radius: 12px; font-weight: 700; font-size: clamp(0.9rem, 2.4vw, 1rem); padding: 0.55rem 0.35rem;}
+.counter-shell .btn-counter.btn-alt {font-size: clamp(0.86rem, 2.2vw, 0.95rem);} /* keep alt buttons from overflowing */
+@media (max-width: 480px) {
+    .counter-shell {grid-template-columns: repeat(auto-fit, minmax(56px, 1fr)); gap: 6px;}
+    .counter-shell .btn-counter {height: 42px; font-size: 0.9rem;}
+    .counter-shell .counter-input {font-size: 0.95rem; padding: 0.5rem 0.4rem;}
+}
+@media (max-width: 640px) {
+    /* Wrap into two columns with the input on its own row */
+    .counter-shell {grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "dec dec-alt" "input input" "inc inc-alt";}
+    .counter-shell .btn-decrement:not(.btn-alt) {grid-area: dec;}
+    .counter-shell .btn-decrement.btn-alt {grid-area: dec-alt;}
+    .counter-shell .counter-input {grid-area: input; width: 100%;}
+    .counter-shell .btn-increment:not(.btn-alt) {grid-area: inc;}
+    .counter-shell .btn-increment.btn-alt {grid-area: inc-alt;}
+}
+.metric-card {border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03);}
+.metric-card .points-value {font-size: 2.5rem;}
+.rating-star {color: #6b7280; cursor: pointer; transition: transform 0.12s ease, color 0.12s ease;}
+.rating-star.active {color: #f59e0b;}
+.rating-star:hover {transform: translateY(-2px); color: #fbbf24;}
+.action-bar {gap: 10px;}
+.action-bar .btn {border-radius: 14px;}
+.floating-banner {position: sticky; top: 0; z-index: 30; border-radius: 14px; box-shadow: 0 10px 22px rgba(0,0,0,0.28);}
+.ally-chip {padding: 10px 14px; border-radius: 14px; font-weight: 700; display: inline-flex; align-items: center; gap: 10px; text-transform: uppercase;}
+.ally-red {background: linear-gradient(120deg, #b91c1c, #ef4444); color: #fff;}
+.ally-blue {background: linear-gradient(120deg, #1e3a8a, #2563eb); color: #fff;}
+.ally-unknown {background: linear-gradient(120deg, #f59e0b, #facc15); color: #1f2937;}
+.badge-soft {background: rgba(255,255,255,0.08); color: #e5e7eb; border-radius: 10px; padding: 6px 10px; font-weight: 600;}
+.inputs-panel label {color: #c9d2e5; font-weight: 600;}
+.inputs-panel .form-control, .inputs-panel .form-select {background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #e9eef8;}
+.inputs-panel .form-text {color: #9ca3af;}
+.tab-divider {height: 1px; background: rgba(255,255,255,0.07); margin: 14px 0;}
+</style>
+
+<div class="scouting-shell">
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+        <div class="ally-chip {% if alliance == 'red' %}ally-red{% elif alliance == 'blue' %}ally-blue{% else %}ally-unknown{% endif %}">
+            <i class="fas {% if alliance == 'red' %}fa-fire{% elif alliance == 'blue' %}fa-tint{% else %}fa-flag{% endif %}"></i>
+            {{ alliance|capitalize }}
         </div>
-        <div class="alliance-details">
-            <h4 class="mb-0 {% if alliance == 'red' or alliance == 'blue' %}text-white{% else %}text-dark{% endif %}">{{ alliance|capitalize }} Alliance</h4>
-            <div class="{% if alliance == 'red' or alliance == 'blue' %}text-white-50{% else %}text-muted{% endif %}">Team <span class="team-number" data-team-num="{{ team.team_number }}">{{ team.team_number }}</span> - {{ team.team_name }}</div>
-        </div>
-        <div class="ms-auto match-details">
-            <span class="badge {% if match.match_type == 'Qualification' %}bg-primary{% elif match.match_type == 'Playoff' %}bg-danger{% elif match.match_type == 'Practice' %}bg-success{% else %}bg-secondary{% endif %} fs-5">
-                {{ match.match_type }} {{ match.match_number }}
-            </span>
+        <span class="meta-pill">
+            <span class="label">Team</span>
+            <span class="value">{{ team.team_number }}</span>
+            <span class="label">{{ team.team_name }}</span>
+        </span>
+        <span class="meta-pill">
+            <span class="label">Match</span>
+            <span class="value">{{ match.match_type }} {{ match.match_number }}</span>
+        </span>
+        <span class="meta-pill">
+            <span class="label">Scout</span>
+            <span class="value">{{ current_user.username }}</span>
+        </span>
+        <div class="ms-auto d-flex align-items-center gap-2">
+            <span class="badge-soft"><i class="fas fa-stopwatch me-1"></i>{{ game_config.auto_period.duration_seconds }}s Auto</span>
+            <span class="badge-soft"><i class="fas fa-gamepad me-1"></i>{{ game_config.teleop_period.duration_seconds }}s Teleop</span>
         </div>
     </div>
+
+    <form id="scouting-form" class="scouting-form" action="{{ url_for('scouting.scouting_form') }}" method="post" onsubmit="return false;">
+        <input type="hidden" name="team_id" value="{{ team.id }}">
+        <input type="hidden" name="team_number" value="{{ team.team_number }}">
+        <input type="hidden" name="match_id" value="{{ match.id }}">
+        <input type="hidden" name="match_number" value="{{ match.match_number }}">
+        <input type="hidden" name="alliance" value="{{ alliance }}">
+
+        <div class="glass-card p-3 mb-3 inputs-panel">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-5">
+                    <label for="scout_name" class="form-label">Display Name (optional)</label>
+                    <div class="input-group mb-1">
+                        <span class="input-group-text"><i class="fas fa-user"></i></span>
+                        <input type="text" class="form-control" id="scout_name" name="scout_name" value="{{ form_data.get('scout_name', '') }}" placeholder="{{ current_user.username }}">
+                    </div>
+                    <div class="form-text">Blank uses your account name while keeping your account ID linked.</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Your Prediction</label>
+                    <div class="d-flex gap-2 flex-wrap" role="group" aria-label="Predicted winner">
+                        <input type="radio" class="btn-check" name="predicted_winner" id="pred_red_top" value="red" autocomplete="off" {% if form_data.get('predicted_winner') == 'red' %}checked{% endif %}>
+                        <label class="btn btn-outline-danger flex-grow-1" for="pred_red_top">Red</label>
+                        <input type="radio" class="btn-check" name="predicted_winner" id="pred_blue_top" value="blue" autocomplete="off" {% if form_data.get('predicted_winner') == 'blue' %}checked{% endif %}>
+                        <label class="btn btn-outline-primary flex-grow-1" for="pred_blue_top">Blue</label>
+                        <input type="radio" class="btn-check" name="predicted_winner" id="pred_tie_top" value="tie" autocomplete="off" {% if form_data.get('predicted_winner') == 'tie' %}checked{% endif %}>
+                        <label class="btn btn-outline-secondary flex-grow-1" for="pred_tie_top">Tie</label>
+                        <input type="radio" class="btn-check" name="predicted_winner" id="pred_none_top" value="" autocomplete="off" {% if not form_data.get('predicted_winner') %}checked{% endif %}>
+                        <label class="btn btn-outline-secondary flex-grow-1" for="pred_none_top">None</label>
+                    </div>
+                    <div class="form-text">Used for prediction accuracy; optional.</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Auto Period Timer</label>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="auto_period_timer_enabled" role="switch">
+                        <label class="form-check-label" for="auto_period_timer_enabled"><i class="fas fa-bell me-1"></i>Remind when auto ends</label>
+                    </div>
+                    <div class="form-text">Shows a banner {{ game_config.auto_period.duration_seconds }}s after your first auto action.</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="auto-period-reminder-banner" class="alert alert-warning alert-dismissible fade d-none floating-banner" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
+                <div class="flex-grow-1">
+                    <h5 class="alert-heading mb-1"><strong>Auto Period Complete!</strong></h5>
+                    <p class="mb-0">Jump to Teleop to keep scouting.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="mini-grid mb-3">
+            <div class="metric-card p-3 points-display" data-formula="auto_generated" data-metric-id="auto_points">
+                <div class="d-flex justify-content-between align-items-center mb-2"><span class="badge-soft">Auto</span><i class="fas fa-rocket text-danger"></i></div>
+                <div class="points-value text-danger fw-bold">0</div>
+            </div>
+            <div class="metric-card p-3 points-display" data-formula="auto_generated" data-metric-id="teleop_points">
+                <div class="d-flex justify-content-between align-items-center mb-2"><span class="badge-soft">Teleop</span><i class="fas fa-gamepad text-primary"></i></div>
+                <div class="points-value text-primary fw-bold">0</div>
+            </div>
+            <div class="metric-card p-3 points-display" data-formula="auto_generated" data-metric-id="endgame_points">
+                <div class="d-flex justify-content-between align-items-center mb-2"><span class="badge-soft">Endgame</span><i class="fas fa-flag-checkered text-success"></i></div>
+                <div class="points-value text-success fw-bold">0</div>
+            </div>
+            <div class="metric-card p-3 points-display" id="total-points" data-formula="auto_generated" data-metric-id="total_points">
+                <div class="d-flex justify-content-between align-items-center mb-2"><span class="badge-soft">Total</span><i class="fas fa-sigma text-info"></i></div>
+                <div class="points-value text-info fw-bold">0</div>
+            </div>
+        </div>
+
+        <div class="pill-tabs mb-3" role="tablist" aria-label="Match periods">
+            <div class="pill-tab active match-period-tab auto-tab" data-target="auto-section" role="tab" tabindex="0" aria-selected="true">
+                <div><i class="fas fa-rocket me-2"></i>Auto Period</div><span class="subtitle">{{ game_config.auto_period.duration_seconds }}s window</span>
+            </div>
+            <div class="pill-tab match-period-tab teleop-tab" data-target="teleop-section" role="tab" tabindex="0" aria-selected="false">
+                <div><i class="fas fa-gamepad me-2"></i>Teleop</div><span class="subtitle">Driver control</span>
+            </div>
+            <div class="pill-tab match-period-tab endgame-tab" data-target="endgame-section" role="tab" tabindex="0" aria-selected="false">
+                <div><i class="fas fa-flag-checkered me-2"></i>Endgame</div><span class="subtitle">Finish strong</span>
+            </div>
+            <div class="pill-tab match-period-tab" data-target="post-match-section" role="tab" tabindex="0" aria-selected="false">
+                <div><i class="fas fa-clipboard-check me-2"></i>Post-Match</div><span class="subtitle">Notes & ratings</span>
+            </div>
+        </div>
+
+        <div class="tab-divider"></div>
+
+        <div class="form-section match-period-section" id="auto-section" data-auto-duration="{{ game_config.auto_period.duration_seconds }}">
+            <div class="section-head mb-2">
+                <span class="badge bg-danger">AUTO</span>
+                <h5 class="mb-0 text-white">Auto Period</h5>
+                <span class="text-muted">{{ game_config.auto_period.duration_seconds }} seconds</span>
+            </div>
+            <div class="row g-3">
+                {% for element in game_config.auto_period.scoring_elements %}
+                <div class="col-xl-4 col-lg-6">
+                    <div class="glass-card p-3 h-100 element-size-{{ element.size|default('md') }}">
+                        {% if element.type == 'boolean' %}
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="{{ element.id }}" name="{{ element.id }}" role="switch" {% if form_data.get(element.id, element.default) %}checked{% endif %}>
+                                <label class="form-check-label fs-6 text-white" for="{{ element.id }}">{{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}</label>
+                            </div>
+                            {% if element.description %}<small class="text-muted d-block mt-1">{{ element.description }}</small>{% endif %}
+                        {% elif element.type == 'counter' %}
+                            <label for="{{ element.id }}" class="form-label fw-semibold text-white">{{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}</label>
+                            {% if element.description %}<small class="text-muted d-block mb-2">{{ element.description }}</small>{% endif %}
+                            <div class="counter-shell" role="group" aria-label="{{ element.name }} counter">
+                                <button type="button" class="btn btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}" aria-label="Decrease {{ element.name }}">-{{ element.step|default(1) }}</button>
+                                {% if element.alt_step and element.alt_step_enabled %}
+                                <button type="button" class="btn btn-outline-danger btn-counter btn-decrement btn-alt" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Decrease {{ element.name }} by {{ element.alt_step }}">-{{ element.alt_step }}</button>
+                                {% endif %}
+                                <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" value="{{ form_data.get(element.id, element.default) }}" min="0" aria-label="{{ element.name }} value" data-alt-step="{{ element.alt_step if element.alt_step is defined else '' }}" data-alt-enabled="{{ '1' if element.alt_step and element.alt_step_enabled else '' }}">
+                                {% if element.alt_step and element.alt_step_enabled %}
+                                <button type="button" class="btn btn-outline-success btn-counter btn-increment btn-alt" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Increase {{ element.name }} by {{ element.alt_step }}">+{{ element.alt_step }}</button>
+                                {% endif %}
+                                <button type="button" class="btn btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}" aria-label="Increase {{ element.name }}">+{{ element.step|default(1) }}</button>
+                            </div>
+                        {% elif element.type == 'select' or element.type == 'multiple_choice' %}
+                            <label for="{{ element.id }}" class="form-label fw-semibold text-white">{{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}</label>
+                            {% if element.description %}<small class="text-muted d-block mb-2">{{ element.description }}</small>{% endif %}
+                            <select class="form-select form-select-lg" id="{{ element.id }}" name="{{ element.id }}">
+                                {% if element.type == 'multiple_choice' %}
+                                    <option value="">-- Select --</option>
+                                    {% for option in element.options %}
+                                        {% if option is mapping %}
+                                            {% set option_value = option.name %}
+                                            {% set current_value = form_data.get(element.id, element.default) %}
+                                            <option value="{{ option_value }}" {% if current_value == option_value %}selected{% endif %}>{{ option.name }}</option>
+                                        {% else %}
+                                            {% set current_value = form_data.get(element.id, element.default) %}
+                                            <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>{{ option }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    {% for option in element.options %}
+                                        {% if option is string %}
+                                            <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
+                                        {% else %}
+                                            <option value="{{ option.value }}" {% if form_data.get(element.id) == option.value %}selected{% endif %}>{{ option.label if option.label else option.value }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                            </select>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="form-section match-period-section d-none" id="teleop-section">
+            <div class="section-head mb-2">
+                <span class="badge bg-primary">TELEOP</span>
+                <h5 class="mb-0 text-white">Teleop Period</h5>
+                <span class="text-muted">{{ game_config.teleop_period.duration_seconds }} seconds</span>
+            </div>
+            <div class="row g-3">
+                {% for element in game_config.teleop_period.scoring_elements %}
+                <div class="col-xl-4 col-lg-6">
+                    <div class="glass-card p-3 h-100 element-size-{{ element.size|default('md') }}">
+                        {% if element.type == 'boolean' %}
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="{{ element.id }}" name="{{ element.id }}" role="switch" {% if form_data.get(element.id, element.default) %}checked{% endif %}>
+                                <label class="form-check-label fs-6 text-white" for="{{ element.id }}">{{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}</label>
+                            </div>
+                            {% if element.description %}<small class="text-muted d-block mt-1">{{ element.description }}</small>{% endif %}
+                        {% elif element.type == 'counter' %}
+                            <label for="{{ element.id }}" class="form-label fw-semibold text-white">{{ element.name }}</label>
+                            {% if element.description %}<small class="text-muted d-block mb-2">{{ element.description }}</small>{% endif %}
+                            <div class="counter-shell" role="group" aria-label="{{ element.name }} counter">
+                                <button type="button" class="btn btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}" aria-label="Decrease {{ element.name }}">-{{ element.step|default(1) }}</button>
+                                {% if element.alt_step and element.alt_step_enabled %}
+                                <button type="button" class="btn btn-outline-danger btn-counter btn-decrement btn-alt" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Decrease {{ element.name }} by {{ element.alt_step }}">-{{ element.alt_step }}</button>
+                                {% endif %}
+                                <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" data-alt-step="{{ element.alt_step if element.alt_step is defined else '' }}" data-alt-enabled="{{ '1' if element.alt_step and element.alt_step_enabled else '' }}" value="{{ form_data.get(element.id, element.default) }}" min="0" aria-label="{{ element.name }} value">
+                                {% if element.alt_step and element.alt_step_enabled %}
+                                <button type="button" class="btn btn-outline-success btn-counter btn-increment btn-alt" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Increase {{ element.name }} by {{ element.alt_step }}">+{{ element.alt_step }}</button>
+                                {% endif %}
+                                <button type="button" class="btn btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}" aria-label="Increase {{ element.name }}">+{{ element.step|default(1) }}</button>
+                            </div>
+                        {% elif element.type == 'select' or element.type == 'multiple_choice' %}
+                            <label for="{{ element.id }}" class="form-label fw-semibold text-white">{{ element.name }}</label>
+                            {% if element.description %}<small class="text-muted d-block mb-2">{{ element.description }}</small>{% endif %}
+                            <select class="form-select form-select-lg" id="{{ element.id }}" name="{{ element.id }}">
+                                {% if element.type == 'multiple_choice' %}
+                                    <option value="">-- Select --</option>
+                                    {% for option in element.options %}
+                                        {% if option is mapping %}
+                                            {% set option_value = option.name %}
+                                            {% set current_value = form_data.get(element.id, element.default) %}
+                                            <option value="{{ option_value }}" {% if current_value == option_value %}selected{% endif %}>{{ option.name }}</option>
+                                        {% else %}
+                                            {% set current_value = form_data.get(element.id, element.default) %}
+                                            <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>{{ option }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    {% for option in element.options %}
+                                        {% if option is string %}
+                                            <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
+                                        {% else %}
+                                            <option value="{{ option.value }}" {% if form_data.get(element.id) == option.value %}selected{% endif %}>{{ option.label if option.label else option.value }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                            </select>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="form-section match-period-section d-none" id="endgame-section">
+            <div class="section-head mb-2">
+                <span class="badge bg-success">ENDGAME</span>
+                <h5 class="mb-0 text-white">Endgame Period</h5>
+                <span class="text-muted">{{ game_config.endgame_period.duration_seconds }} seconds</span>
+            </div>
+            <div class="row g-3">
+                {% for element in game_config.endgame_period.scoring_elements %}
+                <div class="col-xl-4 col-lg-6">
+                    <div class="glass-card p-3 h-100 element-size-{{ element.size|default('md') }}">
+                        {% if element.type == 'boolean' %}
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="{{ element.id }}" name="{{ element.id }}" role="switch" {% if form_data.get(element.id, element.default) %}checked{% endif %}>
+                                <label class="form-check-label fs-6 text-white" for="{{ element.id }}">{{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}</label>
+                            </div>
+                            {% if element.description %}<small class="text-muted d-block mt-1">{{ element.description }}</small>{% endif %}
+                        {% elif element.type == 'counter' %}
+                            <label for="{{ element.id }}" class="form-label fw-semibold text-white">{{ element.name }}</label>
+                            {% if element.description %}<small class="text-muted d-block mb-2">{{ element.description }}</small>{% endif %}
+                            <div class="counter-shell">
+                                <button type="button" class="btn btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}">-{{ element.step|default(1) }}</button>
+                                {% if element.alt_step and element.alt_step_enabled %}
+                                <button type="button" class="btn btn-outline-danger btn-counter btn-decrement btn-alt" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Decrease {{ element.name }} by {{ element.alt_step }}">-{{ element.alt_step }}</button>
+                                {% endif %}
+                                <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" data-alt-step="{{ element.alt_step if element.alt_step is defined else '' }}" data-alt-enabled="{{ '1' if element.alt_step and element.alt_step_enabled else '' }}" value="{{ form_data.get(element.id, element.default) }}" min="0">
+                                {% if element.alt_step and element.alt_step_enabled %}
+                                <button type="button" class="btn btn-outline-success btn-counter btn-increment btn-alt" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Increase {{ element.name }} by {{ element.alt_step }}">+{{ element.alt_step }}</button>
+                                {% endif %}
+                                <button type="button" class="btn btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}">+{{ element.step|default(1) }}</button>
+                            </div>
+                        {% elif element.type == 'select' or element.type == 'multiple_choice' %}
+                            <label for="{{ element.id }}" class="form-label fw-semibold text-white">{{ element.name }}</label>
+                            {% if element.description %}<small class="text-muted d-block mb-2">{{ element.description }}</small>{% endif %}
+                            <select class="form-select form-select-lg" id="{{ element.id }}" name="{{ element.id }}">
+                                {% if element.type == 'multiple_choice' %}
+                                    <option value="">-- Select --</option>
+                                    {% for option in element.options %}
+                                        {% if option is mapping %}
+                                            {% set option_value = option.name %}
+                                            {% set current_value = form_data.get(element.id, element.default) %}
+                                            <option value="{{ option_value }}" {% if current_value == option_value %}selected{% endif %}>{{ option.name }}</option>
+                                        {% else %}
+                                            {% set current_value = form_data.get(element.id, element.default) %}
+                                            <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>{{ option }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    {% for option in element.options %}
+                                        {% if option is string %}
+                                            <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
+                                        {% else %}
+                                            <option value="{{ option.value }}" {% if form_data.get(element.id) == option.value %}selected{% endif %}>{{ option.label if option.label else option.value }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                            </select>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="form-section match-period-section d-none" id="post-match-section">
+            <div class="section-head mb-2">
+                <span class="badge bg-secondary">POST</span>
+                <h5 class="mb-0 text-white">Post-Match</h5>
+                <span class="text-muted">Ratings and narrative</span>
+            </div>
+            <div class="glass-card p-3 mb-3">
+                <h6 class="text-white mb-2"><i class="fas fa-clipboard-check me-2"></i>Result Prediction</h6>
+                <div class="d-flex gap-2 flex-wrap" role="group" aria-label="Predicted winner">
+                    <input type="radio" class="btn-check" name="predicted_winner" id="pred_red_post" value="red" autocomplete="off" {% if form_data.get('predicted_winner') == 'red' %}checked{% endif %}>
+                    <label class="btn btn-outline-danger" for="pred_red_post">Red</label>
+                    <input type="radio" class="btn-check" name="predicted_winner" id="pred_blue_post" value="blue" autocomplete="off" {% if form_data.get('predicted_winner') == 'blue' %}checked{% endif %}>
+                    <label class="btn btn-outline-primary" for="pred_blue_post">Blue</label>
+                    <input type="radio" class="btn-check" name="predicted_winner" id="pred_tie_post" value="tie" autocomplete="off" {% if form_data.get('predicted_winner') == 'tie' %}checked{% endif %}>
+                    <label class="btn btn-outline-secondary" for="pred_tie_post">Tie</label>
+                    <input type="radio" class="btn-check" name="predicted_winner" id="pred_none_post" value="" autocomplete="off" {% if not form_data.get('predicted_winner') %}checked{% endif %}>
+                    <label class="btn btn-outline-secondary" for="pred_none_post">None</label>
+                </div>
+                <small class="text-muted">Changing here will overwrite the pre-match pick.</small>
+            </div>
+
+            <div class="row g-3 mb-3">
+                {% for element in game_config.post_match.rating_elements %}
+                <div class="col-lg-4 col-md-6">
+                    <div class="glass-card p-3 h-100">
+                        <label class="form-label fw-semibold text-white">{{ element.name }}</label>
+                        <div class="rating-container mb-2">
+                            {% for i in range(1, element.max + 1) %}
+                            <i class="rating-star fas fa-star {% if (form_data.get(element.id, element.default)|int) >= i %}active{% endif %}" data-value="{{ i }}" data-rating-id="{{ element.id }}" role="button" tabindex="0" aria-label="Rate {{ i }}"></i>
+                            {% endfor %}
+                        </div>
+                        <input type="hidden" name="{{ element.id }}" id="{{ element.id }}" value="{{ form_data.get(element.id, element.default) }}">
+                        <small class="text-muted">{{ element.description }}</small>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="glass-card p-3">
+                <h6 class="text-white mb-3"><i class="fas fa-comment-alt me-2"></i>Comments & Notes</h6>
+                <div class="row g-3">
+                    {% for element in game_config.post_match.text_elements %}
+                    <div class="col-md-6">
+                        <label for="{{ element.id }}" class="form-label fw-semibold text-white">{{ element.name }}</label>
+                        {% if element.description %}<small class="text-muted d-block mb-2">{{ element.description }}</small>{% endif %}
+                        {% if element.multiline %}
+                            <textarea class="form-control" id="{{ element.id }}" name="{{ element.id }}" rows="4" placeholder="Enter your comments here...">{{ form_data.get(element.id, '') }}</textarea>
+                        {% else %}
+                            <input type="text" class="form-control" id="{{ element.id }}" name="{{ element.id }}" value="{{ form_data.get(element.id, '') }}" placeholder="Enter your response...">
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section mt-4">
+            <div class="d-flex flex-wrap justify-content-between action-bar">
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" id="reset-form" class="btn btn-outline-light"><i class="fas fa-redo me-2"></i>Reset</button>
+                    <button type="button" id="save-local-button" class="btn btn-outline-secondary"><i class="fas fa-hdd me-2"></i>Save Local</button>
+                    <button type="button" id="export-json-button" class="btn btn-outline-info"><i class="fas fa-file-export me-2"></i>Export JSON</button>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" id="generateQR" class="btn btn-outline-primary"><i class="fas fa-qrcode me-2"></i>QR</button>
+                    <button type="button" id="save-button" class="btn btn-success"><i class="fas fa-save me-2"></i>Save Data</button>
+                </div>
+            </div>
+        </div>
+    </form>
 </div>
 
-<!-- Scouting Form Card -->
-<form id="scouting-form" class="scouting-form" action="{{ url_for('scouting.scouting_form') }}" method="post" onsubmit="return false;">
-    <input type="hidden" name="team_id" value="{{ team.id }}">
-    <input type="hidden" name="team_number" value="{{ team.team_number }}">
-    <input type="hidden" name="match_id" value="{{ match.id }}">
-    <input type="hidden" name="match_number" value="{{ match.match_number }}">
-    <input type="hidden" name="alliance" value="{{ alliance }}">
-    
-    <!-- Scout Information -->
-    <div class="form-section mb-4">
-        <div class="form-section-header">
-            <h5 class="form-section-title">Scout Information</h5>
-        </div>
-        
-        <div class="row">
-            <div class="col-md-6">
-                <label for="scout_name" class="form-label">Display Name (optional)</label>
-                <div class="input-group mb-1">
-                    <span class="input-group-text"><i class="fas fa-user"></i></span>
-                    <!-- Show user's account username as placeholder; leave input optional -->
-                    <input type="text" class="form-control" id="scout_name" name="scout_name" 
-                            value="{{ form_data.get('scout_name', '') }}" placeholder="{{ current_user.username }}">
-                </div>
-                <div class="form-text">If left blank the system will display your account name ({{ current_user.username }}) while keeping your account ID with the entry.</div>
-                        <!-- Predicted Winner (scout prediction) - visible in Scout Information for quick access -->
-                        <div class="mt-3">
-                            <label class="form-label fw-medium">Your Prediction</label>
-                            <div class="btn-group d-flex" role="group" aria-label="Predicted winner">
-                                <input type="radio" class="btn-check" name="predicted_winner" id="pred_red" value="red" autocomplete="off" {% if form_data.get('predicted_winner') == 'red' %}checked{% endif %}>
-                                <label class="btn btn-outline-danger flex-grow-1 text-center" for="pred_red">Red</label>
-
-                                <input type="radio" class="btn-check" name="predicted_winner" id="pred_blue" value="blue" autocomplete="off" {% if form_data.get('predicted_winner') == 'blue' %}checked{% endif %}>
-                                <label class="btn btn-outline-primary flex-grow-1 text-center" for="pred_blue">Blue</label>
-
-                                <input type="radio" class="btn-check" name="predicted_winner" id="pred_tie" value="tie" autocomplete="off" {% if form_data.get('predicted_winner') == 'tie' %}checked{% endif %}>
-                                <label class="btn btn-outline-secondary flex-grow-1 text-center" for="pred_tie">Tie</label>
-
-                                <input type="radio" class="btn-check" name="predicted_winner" id="pred_none" value="" autocomplete="off" {% if not form_data.get('predicted_winner') %}checked{% endif %}>
-                                <label class="btn btn-outline-secondary flex-grow-1 text-center" for="pred_none">No prediction</label>
-                            </div>
-                            <small class="text-muted d-block mt-1">Optional: make a quick prediction for the match winner. This will be used for leaderboard accuracy.</small>
-                        </div>
-            </div>
-            <div class="col-md-6">
-                <label class="form-label">Auto Period Timer</label>
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="auto_period_timer_enabled" role="switch">
-                    <label class="form-check-label" for="auto_period_timer_enabled">
-                        <i class="fas fa-stopwatch me-1"></i> Enable Auto → Teleop Reminder
-                    </label>
-                </div>
-                <div class="form-text">When enabled, a reminder will appear after {{ game_config.auto_period.duration_seconds }} seconds once you make your first auto entry.</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Auto Period Timer Reminder Banner (initially hidden) -->
-    <div id="auto-period-reminder-banner" class="alert alert-warning alert-dismissible fade d-none" role="alert"
-        style="position: fixed; top: 0; left: 0; right: 0; z-index: 1040; box-shadow: 0 6px 18px rgba(0,0,0,0.18); margin: 0;
-                background: #FFD400 !important;
-                color: rgba(18,18,18,0.95) !important;
-                -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
-                border-bottom: 1px solid #E6B800 !important;">
-        <div class="d-flex align-items-center">
-            <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
-            <div class="flex-grow-1">
-                <h5 class="alert-heading mb-1"><strong>Auto Period Complete!</strong></h5>
-                <p class="mb-0">Remember to switch to the <strong>Teleop</strong> tab to continue scouting.</p>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Points Summary Card -->
-    <div class="form-section mb-4">
-        <div class="form-section-header">
-            <h5 class="form-section-title">Points Summary</h5>
-        </div>
-        
-        <div class="row g-3">
-            <div class="col-md-3 col-6">
-                <div class="points-display" data-formula="auto_generated" data-metric-id="auto_points">
-                    <div class="card h-100 phase-auto">
-                        <div class="card-body text-center">
-                            <div class="fs-6 mb-2">Auto Points</div>
-                            <div class="fs-1 fw-bold text-danger points-value">0</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 col-6">
-                <div class="points-display" data-formula="auto_generated" data-metric-id="teleop_points">
-                    <div class="card h-100 phase-teleop">
-                        <div class="card-body text-center">
-                            <div class="fs-6 mb-2">Teleop Points</div>
-                            <div class="fs-1 fw-bold text-primary points-value">0</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 col-6">
-                <div class="points-display" data-formula="auto_generated" data-metric-id="endgame_points">
-                    <div class="card h-100 phase-endgame">
-                        <div class="card-body text-center">
-                            <div class="fs-6 mb-2">Endgame Points</div>
-                            <div class="fs-1 fw-bold text-success points-value">0</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 col-6">
-                <div class="points-display" id="total-points" data-formula="auto_generated" data-metric-id="total_points">
-                    <div class="card h-100 bg-dark text-white">
-                        <div class="card-body text-center">
-                            <div class="fs-6 mb-2">Total Points</div>
-                            <div class="fs-1 fw-bold points-value">0</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Match Period Navigation -->
-    <div class="match-period-tabs mb-4" role="tablist" aria-label="Match periods">
-        <div class="tab match-period-tab auto-tab active" data-target="auto-section" role="tab" tabindex="0" aria-selected="true">
-            <i class="fas fa-rocket me-2" aria-hidden="true"></i> <span>Auto Period</span>
-        </div>
-        <div class="tab match-period-tab teleop-tab" data-target="teleop-section" role="tab" tabindex="0" aria-selected="false">
-            <i class="fas fa-gamepad me-2" aria-hidden="true"></i> <span>Teleop</span>
-        </div>
-        <div class="tab match-period-tab endgame-tab" data-target="endgame-section" role="tab" tabindex="0" aria-selected="false">
-            <i class="fas fa-flag-checkered me-2" aria-hidden="true"></i> <span>Endgame</span>
-        </div>
-        <div class="tab match-period-tab" data-target="post-match-section" role="tab" tabindex="0" aria-selected="false">
-            <i class="fas fa-clipboard-check me-2" aria-hidden="true"></i> <span>Post-Match</span>
-        </div>
-    </div>
-    
-    <!-- Auto Period -->
-    <div class="form-section match-period-section" id="auto-section" data-auto-duration="{{ game_config.auto_period.duration_seconds }}">
-        <div class="form-section-header d-flex align-items-center">
-            <div class="me-3">
-                <span class="badge bg-danger fs-5">AUTO</span>
-            </div>
-            <h5 class="form-section-title mb-0">Auto Period</h5>
-            <span class="ms-2 text-muted">({{ game_config.auto_period.duration_seconds }} seconds)</span>
-        </div>
-        
-        <div class="row g-4 mt-1">
-            {% for element in game_config.auto_period.scoring_elements %}
-                <div class="col-lg-4 col-md-6">
-                    <div class="card h-100 border-0 shadow-sm">
-                        <div class="card-body">
-                            {% if element.type == 'boolean' %}
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="{{ element.id }}" name="{{ element.id }}" role="switch"
-                                            {% if form_data.get(element.id, element.default) %}checked{% endif %}>
-                                    <label class="form-check-label fs-5" for="{{ element.id }}">
-                                        {{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}
-                                    </label>
-                                </div>
-                                {% if element.description %}
-                                <small class="text-muted d-block mt-1">{{ element.description }}</small>
-                                {% endif %}
-                            {% elif element.type == 'counter' %}
-                                <label for="{{ element.id }}" class="form-label fw-medium">{{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}</label>
-                                {% if element.description %}
-                                <small class="text-muted d-block mb-2">{{ element.description }}</small>
-                                {% endif %}
-                                <div class="counter-container" role="group" aria-label="{{ element.name }} counter">
-                                    <div class="d-flex align-items-center">
-                                        <div class="btn-group me-2" role="group" aria-label="{{ element.name }} controls">
-                                            <button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}" aria-label="Decrease {{ element.name }}">
-                                                <span class="counter-step-label">-{{ element.step|default(1) }}</span>
-                                            </button>
-                                        </div>
-                                        {% if element.alt_step and element.alt_step_enabled %}
-                                        <button type="button" class="btn btn-outline-danger btn-counter btn-decrement btn-alt ms-2" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Decrease {{ element.name }} by {{ element.alt_step }}">-{{ element.alt_step }}</button>
-                                        {% endif %}
-
-                                        <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" 
-                                                value="{{ form_data.get(element.id, element.default) }}" min="0" aria-label="{{ element.name }} value" data-alt-step="{{ element.alt_step if element.alt_step is defined else '' }}" data-alt-enabled="{{ '1' if element.alt_step and element.alt_step_enabled else '' }}">
-
-                                        {% if element.alt_step and element.alt_step_enabled %}
-                                        <button type="button" class="btn btn-outline-success btn-counter btn-increment btn-alt me-2" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Increase {{ element.name }} by {{ element.alt_step }}">+{{ element.alt_step }}</button>
-                                        {% endif %}
-                                        <div class="btn-group ms-2" role="group" aria-label="{{ element.name }} secondary controls">
-                                            <button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}" aria-label="Increase {{ element.name }}">
-                                                <span class="counter-step-label">+{{ element.step|default(1) }}</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            {% elif element.type == 'select' or element.type == 'multiple_choice' %}
-                                <label for="{{ element.id }}" class="form-label fw-medium">{{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}</label>
-                                {% if element.description %}
-                                <small class="text-muted d-block mb-2">{{ element.description }}</small>
-                                {% endif %}
-                                <select class="form-select form-select-lg" id="{{ element.id }}" name="{{ element.id }}">
-                                    {% if element.type == 'multiple_choice' %}
-                                        <option value="">-- Select --</option>
-                                        {% for option in element.options %}
-                                            {% if option is mapping %}
-                                                {% set option_value = option.name %}
-                                                {% set current_value = form_data.get(element.id, element.default) %}
-                                                <option value="{{ option_value }}" {% if current_value == option_value %}selected{% endif %}>{{ option.name }}</option>
-                                            {% else %}
-                                                {% set current_value = form_data.get(element.id, element.default) %}
-                                                <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>{{ option }}</option>
-                                            {% endif %}
-                                        {% endfor %}
-                                    {% else %}
-                                        {% for option in element.options %}
-                                            {% if option is string %}
-                                                <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
-                                            {% else %}
-                                                <option value="{{ option.value }}" {% if form_data.get(element.id) == option.value %}selected{% endif %}>{{ option.label if option.label else option.value }}</option>
-                                            {% endif %}
-                                        {% endfor %}
-                                    {% endif %}
-                                </select>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            {% endfor %}
-        </div>
-    </div>
-    
-    <!-- Teleop Period -->
-    <div class="form-section match-period-section d-none" id="teleop-section">
-        <div class="form-section-header d-flex align-items-center">
-            <div class="me-3">
-                <span class="badge bg-primary fs-5">TELEOP</span>
-            </div>
-            <h5 class="form-section-title mb-0">Teleop Period</h5>
-            <span class="ms-2 text-muted">({{ game_config.teleop_period.duration_seconds }} seconds)</span>
-        </div>
-        
-        <div class="row g-4 mt-1">
-            {% for element in game_config.teleop_period.scoring_elements %}
-                <div class="col-lg-4 col-md-6">
-                    <div class="card h-100 border-0 shadow-sm">
-                        <div class="card-body">
-                            {% if element.type == 'boolean' %}
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="{{ element.id }}" name="{{ element.id }}" role="switch"
-                                            {% if form_data.get(element.id, element.default) %}checked{% endif %}>
-                                    <label class="form-check-label fs-5" for="{{ element.id }}">
-                                        {{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}
-                                    </label>
-                                </div>
-                                {% if element.description %}
-                                <small class="text-muted d-block mt-1">{{ element.description }}</small>
-                                {% endif %}
-                            {% elif element.type == 'counter' %}
-                                <label for="{{ element.id }}" class="form-label fw-medium">{{ element.name }}</label>
-                                {% if element.description %}
-                                <small class="text-muted d-block mb-2">{{ element.description }}</small>
-                                {% endif %}
-                                <div class="counter-container">
-                                    <button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}">
-                                        <span class="counter-step-label">-{{ element.step|default(1) }}</span>
-                                    </button>
-                                    {% if element.alt_step and element.alt_step_enabled %}
-                                    <button type="button" class="btn btn-outline-danger btn-counter btn-decrement btn-alt ms-2" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Decrease {{ element.name }} by {{ element.alt_step }}">-{{ element.alt_step }}</button>
-                                    {% endif %}
-                                    <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" data-alt-step="{{ element.alt_step if element.alt_step is defined else '' }}" data-alt-enabled="{{ '1' if element.alt_step and element.alt_step_enabled else '' }}" 
-                                            value="{{ form_data.get(element.id, element.default) }}" min="0">
-                                    {% if element.alt_step and element.alt_step_enabled %}
-                                    <button type="button" class="btn btn-outline-success btn-counter btn-increment btn-alt me-2" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Increase {{ element.name }} by {{ element.alt_step }}">+{{ element.alt_step }}</button>
-                                    {% endif %}
-                                    <button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}">
-                                        <span class="counter-step-label">+{{ element.step|default(1) }}</span>
-                                    </button>
-                                </div>
-                            {% elif element.type == 'select' or element.type == 'multiple_choice' %}
-                                <label for="{{ element.id }}" class="form-label fw-medium">{{ element.name }}</label>
-                                {% if element.description %}
-                                <small class="text-muted d-block mb-2">{{ element.description }}</small>
-                                {% endif %}
-                                <select class="form-select form-select-lg" id="{{ element.id }}" name="{{ element.id }}">
-                                    {% if element.type == 'multiple_choice' %}
-                                        <option value="">-- Select --</option>
-                                        {% for option in element.options %}
-                                            {% if option is mapping %}
-                                                {% set option_value = option.name %}
-                                                {% set current_value = form_data.get(element.id, element.default) %}
-                                                <option value="{{ option_value }}" {% if current_value == option_value %}selected{% endif %}>{{ option.name }}</option>
-                                            {% else %}
-                                                {% set current_value = form_data.get(element.id, element.default) %}
-                                                <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>{{ option }}</option>
-                                            {% endif %}
-                                        {% endfor %}
-                                    {% else %}
-                                        {% for option in element.options %}
-                                            {% if option is string %}
-                                                <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
-                                            {% else %}
-                                                <option value="{{ option.value }}" {% if form_data.get(element.id) == option.value %}selected{% endif %}>{{ option.label if option.label else option.value }}</option>
-                                            {% endif %}
-                                        {% endfor %}
-                                    {% endif %}
-                                </select>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            {% endfor %}
-        </div>
-    </div>
-    
-    <!-- Endgame Period -->
-    <div class="form-section match-period-section d-none" id="endgame-section">
-        <div class="form-section-header d-flex align-items-center">
-            <div class="me-3">
-                <span class="badge bg-success fs-5">ENDGAME</span>
-            </div>
-            <h5 class="form-section-title mb-0">Endgame Period</h5>
-            <span class="ms-2 text-muted">({{ game_config.endgame_period.duration_seconds }} seconds)</span>
-        </div>
-        
-        <div class="row g-4 mt-1">
-            {% for element in game_config.endgame_period.scoring_elements %}
-                <div class="col-lg-4 col-md-6">
-                    <div class="card h-100 border-0 shadow-sm">
-                        <div class="card-body">
-                            {% if element.type == 'boolean' %}
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="{{ element.id }}" name="{{ element.id }}" role="switch"
-                                            {% if form_data.get(element.id, element.default) %}checked{% endif %}>
-                                    <label class="form-check-label fs-5" for="{{ element.id }}">
-                                        {{ element.name }} {% if element.help %}{{ help.help_icon(element.help, '') }}{% elif element.description and element.description|length <= 140 %}{{ help.help_icon(element.description, '') }}{% endif %}
-                                    </label>
-                                </div>
-                                {% if element.description %}
-                                <small class="text-muted d-block mt-1">{{ element.description }}</small>
-                                {% endif %}
-                            {% elif element.type == 'counter' %}
-                                <label for="{{ element.id }}" class="form-label fw-medium">{{ element.name }}</label>
-                                {% if element.description %}
-                                <small class="text-muted d-block mb-2">{{ element.description }}</small>
-                                {% endif %}
-                                <div class="counter-container">
-                                    <button type="button" class="btn btn-lg btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}">
-                                        <span class="counter-step-label">-{{ element.step|default(1) }}</span>
-                                    </button>
-                                    {% if element.alt_step and element.alt_step_enabled %}
-                                    <button type="button" class="btn btn-outline-danger btn-counter btn-decrement btn-alt ms-2" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Decrease {{ element.name }} by {{ element.alt_step }}">-{{ element.alt_step }}</button>
-                                    {% endif %}
-                                    <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" data-alt-step="{{ element.alt_step if element.alt_step is defined else '' }}" data-alt-enabled="{{ '1' if element.alt_step and element.alt_step_enabled else '' }}" 
-                                            value="{{ form_data.get(element.id, element.default) }}" min="0">
-                                    {% if element.alt_step and element.alt_step_enabled %}
-                                    <button type="button" class="btn btn-outline-success btn-counter btn-increment btn-alt me-2" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Increase {{ element.name }} by {{ element.alt_step }}">+{{ element.alt_step }}</button>
-                                    {% endif %}
-                                    <button type="button" class="btn btn-lg btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}">
-                                        <span class="counter-step-label">+{{ element.step|default(1) }}</span>
-                                    </button>
-                                </div>
-                            {% elif element.type == 'select' or element.type == 'multiple_choice' %}
-                                <label for="{{ element.id }}" class="form-label fw-medium">{{ element.name }}</label>
-                                {% if element.description %}
-                                <small class="text-muted d-block mb-2">{{ element.description }}</small>
-                                {% endif %}
-                                <select class="form-select form-select-lg" id="{{ element.id }}" name="{{ element.id }}">
-                                    {% if element.type == 'multiple_choice' %}
-                                        <option value="">-- Select --</option>
-                                        {% for option in element.options %}
-                                            {% if option is mapping %}
-                                                {% set option_value = option.name %}
-                                                {% set current_value = form_data.get(element.id, element.default) %}
-                                                <option value="{{ option_value }}" {% if current_value == option_value %}selected{% endif %}>{{ option.name }}</option>
-                                            {% else %}
-                                                {% set current_value = form_data.get(element.id, element.default) %}
-                                                <option value="{{ option }}" {% if current_value == option %}selected{% endif %}>{{ option }}</option>
-                                            {% endif %}
-                                        {% endfor %}
-                                    {% else %}
-                                        {% for option in element.options %}
-                                            {% if option is string %}
-                                                <option value="{{ option }}" {% if form_data.get(element.id) == option %}selected{% endif %}>{{ option }}</option>
-                                            {% else %}
-                                                <option value="{{ option.value }}" {% if form_data.get(element.id) == option.value %}selected{% endif %}>{{ option.label if option.label else option.value }}</option>
-                                            {% endif %}
-                                        {% endfor %}
-                                    {% endif %}
-                                </select>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            {% endfor %}
-        </div>
-    </div>
-    
-    <!-- Post-Match Evaluation -->
-    <div class="form-section match-period-section d-none" id="post-match-section">
-        <div class="form-section-header">
-            <h5 class="form-section-title">Post-Match Evaluation</h5>
-        </div>
-
-        <!-- Predicted Winner (scout prediction) -->
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-light">
-                <h5 class="mb-0"><i class="fas fa-bullseye text-secondary me-2"></i> Predicted Winner</h5>
-            </div>
-            <div class="card-body">
-                <div class="d-flex align-items-center gap-2">
-                    <div class="btn-group" role="group" aria-label="Predicted winner">
-                        <input type="radio" class="btn-check" name="predicted_winner" id="pred_red" value="red" autocomplete="off" {% if form_data.get('predicted_winner') == 'red' %}checked{% endif %}>
-                        <label class="btn btn-outline-danger" for="pred_red">Red</label>
-
-                        <input type="radio" class="btn-check" name="predicted_winner" id="pred_blue" value="blue" autocomplete="off" {% if form_data.get('predicted_winner') == 'blue' %}checked{% endif %}>
-                        <label class="btn btn-outline-primary" for="pred_blue">Blue</label>
-
-                        <input type="radio" class="btn-check" name="predicted_winner" id="pred_tie" value="tie" autocomplete="off" {% if form_data.get('predicted_winner') == 'tie' %}checked{% endif %}>
-                        <label class="btn btn-outline-secondary" for="pred_tie">Tie/Draw</label>
-
-                        <input type="radio" class="btn-check" name="predicted_winner" id="pred_none" value="" autocomplete="off" {% if not form_data.get('predicted_winner') %}checked{% endif %}>
-                        <label class="btn btn-outline-secondary" for="pred_none">No prediction</label>
-                    </div>
-                </div>
-                <small class="text-muted d-block mt-2">Optional: choose which alliance you expect to win. This will be used to compute leaderboard accuracy after match scores are recorded.</small>
-            </div>
-        </div>
-        
-        <!-- Ratings -->
-        <div class="row g-4">
-            <div class="col-12">
-                <div class="card border-0 shadow-sm mb-4">
-                    <div class="card-header bg-light">
-                        <h5 class="mb-0"><i class="fas fa-star text-warning me-2"></i> Performance Ratings</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-4">
-                            {% for element in game_config.post_match.rating_elements %}
-                                <div class="col-lg-4 col-md-6">
-                                    <div class="rating-block mb-3">
-                                        <label class="form-label fw-medium">{{ element.name }}</label>
-                                        <div class="rating-container mb-2">
-                                            {% for i in range(1, element.max + 1) %}
-                                                <i class="rating-star fas fa-star {% if (form_data.get(element.id, element.default)|int) >= i %}active{% endif %}" 
-                                                    data-value="{{ i }}" data-rating-id="{{ element.id }}" role="button" tabindex="0" aria-label="Rate {{ i }}"></i>
-                                            {% endfor %}
-                                        </div>
-                                        <input type="hidden" name="{{ element.id }}" id="{{ element.id }}" value="{{ form_data.get(element.id, element.default) }}">
-                                        <small class="text-muted">{{ element.description }}</small>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        
-            <!-- Comments -->
-            <div class="col-12">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-light">
-                        <h5 class="mb-0"><i class="fas fa-comment-alt text-primary me-2"></i> Comments & Notes</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-3">
-                            {% for element in game_config.post_match.text_elements %}
-                                <div class="col-md-6 mb-3">
-                                    <label for="{{ element.id }}" class="form-label fw-medium">{{ element.name }}</label>
-                                    {% if element.description %}
-                                    <small class="text-muted d-block mb-2">{{ element.description }}</small>
-                                    {% endif %}
-                                    {% if element.multiline %}
-                                        <textarea class="form-control" id="{{ element.id }}" name="{{ element.id }}" rows="4"
-                                                    placeholder="Enter your comments here...">{{ form_data.get(element.id, '') }}</textarea>
-                                    {% else %}
-                                        <input type="text" class="form-control" id="{{ element.id }}" name="{{ element.id }}" 
-                                                value="{{ form_data.get(element.id, '') }}" placeholder="Enter your response...">
-                                    {% endif %}
-                                </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Action Buttons -->
-    <div class="form-section mt-4">
-        <div class="d-grid gap-3 d-md-flex justify-content-md-between">
-            <button type="button" id="reset-form" class="btn btn-lg btn-outline-secondary px-4">
-                <i class="fas fa-redo me-2"></i> Reset Form
-            </button>
-            <div>
-                <button type="button" id="generateQR" class="btn btn-lg btn-outline-primary px-4 me-2">
-                    <i class="fas fa-qrcode me-2"></i> Generate QR
-                </button>
-                <button type="button" id="save-local-button" class="btn btn-lg btn-outline-secondary px-4 me-2">
-                    <i class="fas fa-hdd me-2"></i> Save Locally
-                </button>
-                <button type="button" id="export-json-button" class="btn btn-lg btn-outline-info px-4 me-2">
-                    <i class="fas fa-file-export me-2"></i> Export JSON
-                </button>
-                <button type="button" id="save-button" class="btn btn-lg btn-success px-4">
-                    <i class="fas fa-save me-2"></i> Save Data
-                </button>
-            </div>
-        </div>
-    </div>
-</form>
-
 <script>
-// Auto-fill the display name with the account username if the field is empty
 (function(){
     try {
         const input = document.getElementById('scout_name');
         if (!input) return;
-        // Only set value when the input is empty so user-entered values are preserved
         if (!input.value || input.value.trim() === '') {
             input.value = "{{ current_user.username }}";
         }
     } catch (e) {
-        // fail silently
-        console && console.error && console.error('scout_name autofill error', e);
+        if (console && console.error) console.error('scout_name autofill error', e);
     }
 })();
 </script>
