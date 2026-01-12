@@ -13,23 +13,57 @@
 .section-head {display: flex; align-items: center; gap: 12px; padding: 8px 0 4px;}
 .section-head .badge {letter-spacing: 0.04em;}
 .mini-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;}
-.counter-shell {display: grid; grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)); gap: 8px; align-items: center; grid-auto-rows: minmax(44px, auto);} /* auto-fit prevents overflow and lets buttons shrink */
-.counter-shell .counter-input {text-align: center; font-weight: 700; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #e8edf7; min-width: 0; width: 100%; padding: 0.55rem 0.45rem; font-size: clamp(0.95rem, 2.6vw, 1.05rem);}
-.counter-shell .btn-counter {min-width: 0; width: 100%; height: clamp(42px, 6vw, 56px); border-radius: 12px; font-weight: 700; font-size: clamp(0.9rem, 2.4vw, 1rem); padding: 0.55rem 0.35rem;}
-.counter-shell .btn-counter.btn-alt {font-size: clamp(0.86rem, 2.2vw, 0.95rem);} /* keep alt buttons from overflowing */
-@media (max-width: 480px) {
-    .counter-shell {grid-template-columns: repeat(auto-fit, minmax(56px, 1fr)); gap: 6px;}
-    .counter-shell .btn-counter {height: 42px; font-size: 0.9rem;}
-    .counter-shell .counter-input {font-size: 0.95rem; padding: 0.5rem 0.4rem;}
+.counter-shell {display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; align-items: stretch; justify-items: stretch;} /* explicit 5 columns to prevent overflow */
+.counter-shell > * {box-sizing: border-box; min-width: 0; min-height: 0;} /* ensure all children respect grid boundaries */
+    .counter-shell .counter-input {text-align: center; font-weight: 700; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #e8edf7; width: 100%; padding: 0.58rem 0.4rem; font-size: clamp(0.85rem, 2.2vw, 1rem); box-sizing: border-box;} 
+    /* Remove native browser number-input spin buttons */
+    .counter-shell .counter-input::-webkit-outer-spin-button,
+    .counter-shell .counter-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    .counter-shell .counter-input {
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+.counter-shell .btn-counter {width: 100%; height: clamp(42px, 6vw, 54px); border-radius: 10px; font-weight: 700; font-size: clamp(0.8rem, 2vw, 0.95rem); padding: 0.5rem 0.2rem; box-sizing: border-box; white-space: nowrap; overflow: hidden;} 
+.counter-shell .btn-counter.btn-alt {font-size: clamp(0.75rem, 1.8vw, 0.9rem);} /* keep alt buttons from overflowing */
+@media (min-width: 1200px) {
+    /* Extra large screens can have more comfortable spacing */
+    .counter-shell {gap: 8px;}
+    .counter-shell .counter-input {padding: 0.6rem 0.6rem; font-size: 1rem;}
+    .counter-shell .btn-counter {font-size: 0.95rem; padding: 0.5rem 0.35rem; border-radius: 12px;}
+    .counter-shell .btn-counter.btn-alt {font-size: 0.9rem;}
 }
-@media (max-width: 640px) {
-    /* Wrap into two columns with the input on its own row */
-    .counter-shell {grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "dec dec-alt" "input input" "inc inc-alt";}
+@media (min-width: 992px) and (max-width: 1199.98px) {
+    /* Large screens - standard desktop in multi-column mode */
+    .counter-shell {gap: 6px;}
+    .counter-shell .counter-input {padding: 0.58rem 0.45rem; font-size: clamp(0.9rem, 2.2vw, 1rem);}
+    .counter-shell .btn-counter {font-size: clamp(0.85rem, 2vw, 0.95rem); padding: 0.5rem 0.25rem;}
+}
+@media (min-width: 768px) and (max-width: 991.98px) {
+    /* Medium screens (two-column layouts) need tighter spacing */
+    .counter-shell {gap: 5px;}
+    .counter-shell .counter-input {padding: 0.55rem 0.3rem; font-size: clamp(0.85rem, 2.2vw, 0.95rem);}
+    .counter-shell .btn-counter {font-size: clamp(0.8rem, 2vw, 0.9rem); padding: 0.5rem 0.2rem;}
+    .counter-shell .btn-counter.btn-alt {font-size: clamp(0.75rem, 1.8vw, 0.85rem);}
+}
+@media (min-width: 640px) and (max-width: 767.98px) {
+    /* Tablet screens */
+    .counter-shell {gap: 4px;}
+    .counter-shell .counter-input {padding: 0.52rem 0.25rem; font-size: 0.9rem;}
+    .counter-shell .btn-counter {font-size: 0.85rem; padding: 0.48rem 0.15rem;}
+    .counter-shell .btn-counter.btn-alt {font-size: 0.8rem;}
+}
+@media (max-width: 639.98px) {
+    /* Small screens and mobile - stack into 2x3 grid layout */
+    .counter-shell {grid-template-columns: repeat(2, 1fr); gap: 6px; grid-template-areas: "dec dec-alt" "input input" "inc inc-alt";}
     .counter-shell .btn-decrement:not(.btn-alt) {grid-area: dec;}
     .counter-shell .btn-decrement.btn-alt {grid-area: dec-alt;}
-    .counter-shell .counter-input {grid-area: input; width: 100%;}
+    .counter-shell .counter-input {grid-area: input; padding: 0.5rem 0.4rem; font-size: 1rem;}
     .counter-shell .btn-increment:not(.btn-alt) {grid-area: inc;}
     .counter-shell .btn-increment.btn-alt {grid-area: inc-alt;}
+    .counter-shell .btn-counter {font-size: 0.9rem; height: 44px; padding: 0.5rem 0.3rem;}
 }
 .metric-card {border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03);}
 .metric-card .points-value {font-size: 2.5rem;}
@@ -48,6 +82,30 @@
 .inputs-panel .form-control, .inputs-panel .form-select {background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #e9eef8;}
 .inputs-panel .form-text {color: #9ca3af;}
 .tab-divider {height: 1px; background: rgba(255,255,255,0.07); margin: 14px 0;}
+
+/* Light mode cleanup for scouting form */
+body:not(.dark-mode) .scouting-shell {background: #f5f7fb; box-shadow: 0 14px 32px rgba(15,23,42,0.08); border: 1px solid rgba(15,23,42,0.06); color: #0f1724;}
+body:not(.dark-mode) .glass-card {background: #ffffff; border: 1px solid rgba(15,23,42,0.08); color: #0f1724; box-shadow: 0 10px 24px rgba(15,23,42,0.06);} 
+body:not(.dark-mode) .meta-pill {background: #eef2ff; border: 1px solid rgba(15,23,42,0.08); color: #0f1724;}
+body:not(.dark-mode) .pill-tab {background: #f2f5fb; color: #0f1724; border-color: rgba(15,23,42,0.06);} 
+body:not(.dark-mode) .pill-tab .subtitle {color: #475569; opacity: 1;}
+body:not(.dark-mode) .pill-tab.active {background: linear-gradient(135deg, #2563eb, #1e3a8a); color: #fff; border-color: rgba(0,0,0,0.08); box-shadow: 0 10px 24px rgba(37,99,235,0.22);} 
+body:not(.dark-mode) .section-head .badge {background: #e0e7ff; color: #1f2937;}
+body:not(.dark-mode) .section-head h5 {color: #0f1724;}
+body:not(.dark-mode) .section-head .text-muted {color: #475569 !important;}
+body:not(.dark-mode) .badge-soft {background: #eef2ff; color: #0f1724;}
+body:not(.dark-mode) .inputs-panel label {color: #0f1724;}
+body:not(.dark-mode) .inputs-panel .form-control,
+body:not(.dark-mode) .inputs-panel .form-select {background: #f8fafc; border: 1px solid rgba(15,23,42,0.12); color: #0f1724;}
+body:not(.dark-mode) .inputs-panel .form-text {color: #475569;}
+body:not(.dark-mode) .counter-shell .counter-input {background: #f8fafc; border: 1px solid rgba(15,23,42,0.12); color: #0f1724;}
+body:not(.dark-mode) .glass-card .form-label,
+body:not(.dark-mode) .glass-card .text-white,
+body:not(.dark-mode) .glass-card .text-muted {color: #0f1724 !important;}
+body:not(.dark-mode) .rating-star {color: #9ca3af;}
+body:not(.dark-mode) .rating-star.active {color: #f59e0b;}
+body:not(.dark-mode) .tab-divider {background: rgba(15,23,42,0.08);}
+body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border: 1px solid rgba(15,23,42,0.08);} 
 </style>
 
 <div class="scouting-shell">
