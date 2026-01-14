@@ -30,6 +30,8 @@
         <button id="preset-blue" class="btn btn-sm ms-1 preset-color" title="Preset Blue" aria-label="Preset Blue" style="background:#0000ff;border:1px solid #00008b"></button>
         <label id="text-tool" class="ms-3 btn btn-outline-secondary btn-sm mb-0" role="button" title="Text Tool">Text</label>
         <label id="select-tool" class="ms-1 btn btn-outline-secondary btn-sm mb-0" role="button" title="Select Tool">Select</label>
+        <label id="eraser-tool" class="ms-1 btn btn-outline-secondary btn-sm mb-0" role="button" title="Eraser">Eraser</label>
+        <input id="eraser-size" type="range" min="6" max="60" value="20" class="ms-2" title="Eraser size" style="vertical-align:middle">
         <label for="bg-upload" class="ms-2 btn btn-outline-secondary btn-sm mb-0">Upload Background</label>
         <input type="file" id="bg-upload" accept="image/*" class="d-none">
     </div>
@@ -42,6 +44,8 @@
 </div>
 <div class="mt-3 text-center">
     <button id="clear-canvas" class="btn btn-warning">Clear Drawing</button>
+    <button id="undo-drawing" class="btn btn-secondary ms-2">Undo</button>
+    <button id="redo-drawing" class="btn btn-secondary ms-1">Redo</button>
     <button id="save-drawing" class="btn btn-primary ms-2">Save Drawing</button>
     <span id="save-status" class="ms-3 text-muted">Drawings are synced in real time and can be saved for later.</span>
 </div>
@@ -105,9 +109,14 @@ let currentColor = colorPicker.value;
 let currentMatchId = matchSelect.value;
 let socket = io();
 let drawingData = [];
+// Undo/Redo stacks: store snapshots of drawingData before each user action
+let undoStack = [];
+let redoStack = [];
+const UNDO_LIMIT = 30;
 let drawingLastUpdated = null; // ISO timestamp of the drawing on server (used to detect updates) 
 let defaultFieldImage = "{{ url_for('static', filename='Feild-2025.png') }}";
 let hoveredTextId = null;
+let eraserSize = parseInt(document.getElementById('eraser-size')?.value || 20, 10);
 
 function resizeCanvas() {
     // Size the canvas to match the displayed image size
@@ -126,14 +135,19 @@ function redraw() {
     // Use the displayed size (bounding rect) so drawing matches pointer coordinates
     const rect = canvas.getBoundingClientRect();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw normal items first (strokes and text). Collect erasers to apply after.
+    const eraseItems = [];
     for (const item of drawingData) {
+        if (!item) continue;
+        if (item.type === 'erase') { eraseItems.push(item); continue; }
         if (item && item.type === 'text') {
             ctx.fillStyle = item.color || '#000';
             ctx.textBaseline = 'middle';
             const baseFont = item.fontSize || 24;
             const fontSize = Math.max(10, Math.round(baseFont * rect.width / 900));
             ctx.font = `${fontSize}px sans-serif`;
-            
+
             // Draw highlight if this text is hovered
             if (hoveredTextId === item.id) {
                 ctx.save();
@@ -147,7 +161,7 @@ function redraw() {
                 ctx.restore();
                 ctx.fillStyle = item.color || '#000';
             }
-            
+
             // Simple single-line text rendering for now
             ctx.fillText(item.text, item.x * rect.width, item.y * rect.height);
         } else if (item && item.points && item.points.length) {
@@ -161,18 +175,59 @@ function redraw() {
             ctx.stroke();
         }
     }
+
+    // Apply erase strokes using destination-out so they remove previously-drawn pixels
+    if (eraseItems.length) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        for (const eItem of eraseItems) {
+            if (!eItem.points || !eItem.points.length) continue;
+            ctx.lineWidth = eItem.size || 20;
+            ctx.beginPath();
+            ctx.moveTo(eItem.points[0].x * rect.width, eItem.points[0].y * rect.height);
+            for (let i = 1; i < eItem.points.length; i++) {
+                ctx.lineTo(eItem.points[i].x * rect.width, eItem.points[i].y * rect.height);
+            }
+            ctx.stroke();
+            // also draw small circles at points to ensure gaps are erased
+            for (const p of eItem.points) {
+                ctx.beginPath();
+                ctx.arc(p.x * rect.width, p.y * rect.height, (eItem.size || 20) / 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        ctx.restore();
+    }
+}
+
+function pushUndoSnapshot() {
+    try {
+        const snap = JSON.parse(JSON.stringify(drawingData || []));
+        undoStack.push(snap);
+        if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+        // New user action invalidates the redo history
+        redoStack = [];
+    } catch (e) { /* ignore snapshot failures */ }
 }
 
 function startDraw(e) {
-    // Only draw when in draw mode
-    if (toolMode && toolMode !== 'draw') return;
+    // Only draw when in draw or eraser mode
+    if (toolMode && toolMode !== 'draw' && toolMode !== 'eraser') return;
     // prevent touch from scrolling while drawing
     if (e.type && e.type.startsWith('touch')) e.preventDefault();
     drawing = true;
     const {x, y} = getPos(e);
     lastX = x;
     lastY = y;
-    drawingData.push({color: currentColor, points: [{x, y}]});
+    // Snapshot before starting a new stroke (for undo)
+    pushUndoSnapshot();
+    if (toolMode === 'eraser') {
+        drawingData.push({type: 'erase', size: eraserSize, points: [{x, y}]});
+    } else {
+        drawingData.push({color: currentColor, points: [{x, y}]});
+    }
 }
 
 function draw(e) {
@@ -180,7 +235,7 @@ function draw(e) {
     if (e.type && e.type.startsWith('touch')) e.preventDefault();
     const {x, y} = getPos(e);
     const line = drawingData[drawingData.length - 1];
-    line.points.push({x, y});
+    if (line && line.points) line.points.push({x, y});
     redraw();
     lastX = x;
     lastY = y;
@@ -238,7 +293,13 @@ function loadDrawing(matchId) {
         .then(data => {
             // Update only if there's new content (or on first load)
             if (String(data.last_updated) !== String(drawingLastUpdated)) {
-                drawingData = data.data || [];
+                const incoming = data.data || [];
+                if (JSON.stringify(incoming) !== JSON.stringify(drawingData)) {
+                    drawingData = incoming;
+                    // Reset local undo/redo history when remote state replaces local
+                    undoStack = [];
+                    redoStack = [];
+                }
                 drawingLastUpdated = data.last_updated || null;
                 redraw();
             }
@@ -287,6 +348,8 @@ if (textTool) {
             toolMode = 'text';
             // deactivate select tool if active
             if (selectTool) { selectTool.classList.remove('btn-primary'); selectTool.classList.add('btn-outline-secondary'); }
+                // deactivate eraser if active
+                const et = document.getElementById('eraser-tool'); if (et) { et.classList.remove('btn-primary'); et.classList.add('btn-outline-secondary'); }
             textTool.classList.remove('btn-outline-secondary');
             textTool.classList.add('btn-primary');
         }
@@ -303,6 +366,8 @@ if (selectTool) {
             toolMode = 'select';
             // deactivate text tool if active
             if (textTool) { textTool.classList.remove('btn-primary'); textTool.classList.add('btn-outline-secondary'); }
+            // deactivate eraser if active
+            const et2 = document.getElementById('eraser-tool'); if (et2) { et2.classList.remove('btn-primary'); et2.classList.add('btn-outline-secondary'); }
             selectTool.classList.remove('btn-outline-secondary');
             selectTool.classList.add('btn-primary');
         }
@@ -336,6 +401,8 @@ function commitText() {
     if (!pendingTextPos || !textInput) return hideTextInput();
     const val = textInput.value.trim();
     if (val) {
+        // Snapshot before mutating for undo
+        pushUndoSnapshot();
         // Check if we're editing existing text
         if (pendingTextPos.editingId) {
             // Update existing text
@@ -434,6 +501,8 @@ if (textInput) {
         else if ((e.key === 'Delete' || e.key === 'Backspace') && textInput.value === '' && pendingTextPos && pendingTextPos.editingId) {
             // Delete the text item if input is empty and we're editing
             e.preventDefault();
+            // snapshot for undo
+            pushUndoSnapshot();
             drawingData = drawingData.filter(item => item.id !== pendingTextPos.editingId);
             redraw();
             sendDrawingUpdate();
@@ -461,6 +530,7 @@ if (deleteBtn) {
         e.preventDefault();
         e.stopPropagation();
         if (pendingTextPos && pendingTextPos.editingId) {
+            pushUndoSnapshot();
             drawingData = drawingData.filter(item => item.id !== pendingTextPos.editingId);
             redraw();
             sendDrawingUpdate();
@@ -599,9 +669,19 @@ fieldImage.addEventListener('dragstart', e => e.preventDefault());
 socket.on('drawing_data', data => {
     if (data.match_id == currentMatchId) {
         // Some emits may send null/empty - handle gracefully
-        drawingData = data.data || [];
-        drawingLastUpdated = data.last_updated || null;
-        redraw();
+        const incoming = data.data || [];
+        // Only update if content actually changed; avoid clearing undo/redo when this is our own broadcast
+        if (JSON.stringify(incoming) !== JSON.stringify(drawingData)) {
+            drawingData = incoming;
+            // Remote load replaces local state; clear undo/redo history to avoid incompatibility
+            undoStack = [];
+            redoStack = [];
+            drawingLastUpdated = data.last_updated || null;
+            redraw();
+        } else {
+            // Update timestamp even if content same
+            drawingLastUpdated = data.last_updated || null;
+        }
     }
 });
 
@@ -615,14 +695,19 @@ function startStrategyPolling() {
         fetch(`/matches/api/strategy_drawing/${currentMatchId}`)
             .then(res => res.json())
             .then(data => {
-                if (!data) return;
-                if (String(data.last_updated) !== String(drawingLastUpdated)) {
-                    drawingData = data.data || [];
-                    drawingLastUpdated = data.last_updated || null;
-                    redraw();
-                    if (saveStatus) saveStatus.textContent = 'Updated by sync';
-                    setTimeout(() => { if (saveStatus && saveStatus.textContent === 'Updated by sync') saveStatus.textContent = 'Drawings are synced in real time and can be saved for later.'; }, 1500);
-                }
+                    if (!data) return;
+                    if (String(data.last_updated) !== String(drawingLastUpdated)) {
+                        const incoming = data.data || [];
+                        // Only replace state if content actually differs to avoid wiping local undo/redo
+                        if (JSON.stringify(incoming) !== JSON.stringify(drawingData)) {
+                            drawingData = incoming;
+                            // Remote load replaces local state; clear undo/redo history to avoid incompatibility
+                            undoStack = [];
+                            redoStack = [];
+                        }
+                        drawingLastUpdated = data.last_updated || null;
+                        redraw();
+                    }
             }).catch(() => { /* ignore errors */ });
     }, 3000);
 }
@@ -681,10 +766,68 @@ if (fieldImage.complete && fieldImage.naturalWidth !== 0) {
 }
 
 clearBtn.addEventListener('click', () => {
+    // Snapshot before clearing so user can undo
+    pushUndoSnapshot();
     drawingData = [];
     redraw();
     sendDrawingUpdate();
 });
+
+// Eraser tool and size handling
+const eraserToolBtn = document.getElementById('eraser-tool');
+const eraserSizeInput = document.getElementById('eraser-size');
+if (eraserToolBtn) {
+    eraserToolBtn.addEventListener('click', (e) => {
+        if (toolMode === 'eraser') {
+            toolMode = 'draw';
+            eraserToolBtn.classList.remove('btn-primary');
+            eraserToolBtn.classList.add('btn-outline-secondary');
+        } else {
+            toolMode = 'eraser';
+            // deactivate other tools
+            if (textTool) { textTool.classList.remove('btn-primary'); textTool.classList.add('btn-outline-secondary'); }
+            if (selectTool) { selectTool.classList.remove('btn-primary'); selectTool.classList.add('btn-outline-secondary'); }
+            eraserToolBtn.classList.remove('btn-outline-secondary');
+            eraserToolBtn.classList.add('btn-primary');
+        }
+    });
+}
+if (eraserSizeInput) {
+    eraserSizeInput.addEventListener('input', (e) => {
+        eraserSize = parseInt(e.target.value || 20, 10);
+    });
+}
+
+// Undo button
+const undoBtn = document.getElementById('undo-drawing');
+if (undoBtn) {
+    undoBtn.addEventListener('click', (e) => {
+        if (undoStack.length === 0) return;
+        // Push current state to redo stack before undoing
+        try { redoStack.push(JSON.parse(JSON.stringify(drawingData || []))); if (redoStack.length > UNDO_LIMIT) redoStack.shift(); } catch (e) {}
+        const prev = undoStack.pop();
+        if (prev) {
+            drawingData = prev;
+            redraw();
+            sendDrawingUpdate();
+        }
+    });
+}
+// Redo button handling
+const redoBtnEl = document.getElementById('redo-drawing');
+if (redoBtnEl) {
+    redoBtnEl.addEventListener('click', (e) => {
+        if (redoStack.length === 0) return;
+        // Push current state to undo stack so redo can be undone
+        try { undoStack.push(JSON.parse(JSON.stringify(drawingData || []))); if (undoStack.length > UNDO_LIMIT) undoStack.shift(); } catch (e) {}
+        const next = redoStack.pop();
+        if (next) {
+            drawingData = next;
+            redraw();
+            sendDrawingUpdate();
+        }
+    });
+}
 
 // Keep currentColor in sync with the color picker
 colorPicker.addEventListener('input', (e) => {
