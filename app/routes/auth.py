@@ -895,8 +895,9 @@ def manage_users():
     if current_user.has_role('superadmin') and not search:
         # Get distinct team numbers across users
         team_numbers = [t[0] for t in User.query.with_entities(User.scouting_team_number).distinct().all()]
-        # Sort with None at the end
-        team_numbers = sorted(set(team_numbers), key=lambda x: (x is None, x))
+        # Sort with None at the end (use robust sort for mixed types)
+        from app.utils.team_utils import team_sort_key
+        team_numbers = sorted(set(team_numbers), key=team_sort_key)
         total_teams = len(team_numbers)
         import math
         total_team_pages = max(1, math.ceil(total_teams / PAGE_SIZE))

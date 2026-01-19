@@ -362,7 +362,8 @@ if __name__ == '__main__':
                             team_numbers.add(None)
 
                         # Iterate each scouting team and run sync scoped to that team
-                        for scouting_team_number in sorted(team_numbers, key=lambda x: (x is None, x)):
+                        from app.utils.team_utils import team_sort_key
+                        for scouting_team_number in sorted(team_numbers, key=team_sort_key):
                             try:
                                 if scouting_team_number is None:
                                     print("Running API sync for unassigned/default scope")
