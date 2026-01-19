@@ -622,7 +622,8 @@ def update_all_active_events_schedule():
         pass
     
     # For each scouting team, check their configured event
-    for team_number in sorted(team_numbers):
+    from app.utils.team_utils import team_sort_key
+    for team_number in sorted(team_numbers, key=team_sort_key):
         try:
             game_config = load_game_config(team_number=team_number)
             event_code = game_config.get('current_event_code')
