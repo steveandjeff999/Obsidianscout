@@ -18,6 +18,13 @@
                         <div class="site-error-title">Something went wrong</div>
                         <div class="site-error-desc">We're experiencing an internal server error. Please try again later or contact support if the problem persists.</div>
 
+                        {% if error %}
+                        <div class="alert alert-danger mt-3"><strong>Error:</strong> {{ error }}</div>
+                        {% endif %}
+                        {% if stacktrace %}
+                        <details class="mt-2"><summary>Show stack trace</summary><pre class="mt-2 small text-start">{{ stacktrace }}</pre></details>
+                        {% endif %}
+
                         <div class="site-error-actions">
                             <button class="btn btn-outline-secondary" onclick="history.back()"><i class="fas fa-arrow-left me-2"></i>Go back</button>
                             <a href="{{ url_for('main.index') }}" class="btn btn-primary"><i class="fas fa-home me-2"></i>Home</a>

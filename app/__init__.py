@@ -2,13 +2,14 @@ from flask import Flask, render_template, flash, send_from_directory, jsonify, r
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_socketio import SocketIO, join_room
-from flask_login import LoginManager
+from flask_login import LoginManager, current_user
 import os
 import json
 from datetime import datetime, timezone
 from app.utils.config_manager import ConfigManager, get_current_game_config, load_game_config
 import threading
 import re
+import traceback
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -1246,7 +1247,21 @@ def create_app(test_config=None):
     
     @app.errorhandler(500)
     def internal_server_error(e):
-        return render_template('errors/500.html'), 500
+        error_msg = str(e) or 'Internal Server Error'
+        stack = None
+        try:
+            # Show stacktrace if app.debug is True
+            if app.debug:
+                stack = traceback.format_exc()
+            # Always show stacktrace to authenticated superadmins
+            elif current_user.is_authenticated and current_user.has_role('superadmin'):
+                stack = traceback.format_exc()
+        except Exception:
+            # If there's no request context or current_user isn't available, fall back to debug-only behavior
+            if app.debug:
+                stack = traceback.format_exc()
+        app.logger.error('Internal server error: %s', error_msg, exc_info=True)
+        return render_template('errors/500.html', error=error_msg, stacktrace=stack), 500
     
     # Add a context processor to make integrity status available in templates
     @app.context_processor

@@ -242,7 +242,22 @@ def sponsors():
 # Developer helper: show the 500 error page at /500 for visual testing (returns status 500)
 @bp.route('/500')
 def show_500():
-    """Render the 500 error template for testing and return HTTP 500."""
+    """Render the 500 error template for testing. For developers and superadmins, catch a forced
+    exception and render the site's styled 500 template with the error and stacktrace so the page
+    looks consistent with the rest of the site (avoids Werkzeug's interactive debugger).
+    """
+    # For devs or superadmins, simulate an error but catch it and render our template with stacktrace
+    if current_app.debug or (getattr(current_user, 'is_authenticated', False) and current_user.has_role('superadmin')):
+        try:
+            raise Exception('Developer test: forced exception to trigger 500')
+        except Exception as e:
+            import traceback as _tb
+            error_msg = str(e) or 'Internal Server Error'
+            stack = _tb.format_exc()
+            current_app.logger.error('Developer test exception at /500: %s', error_msg, exc_info=True)
+            return render_template('errors/500.html', error=error_msg, stacktrace=stack, **get_theme_context()), 500
+
+    # Fallback: render static 500 page for non-dev visitors
     return render_template('errors/500.html', **get_theme_context()), 500
 
 @bp.route('/config')

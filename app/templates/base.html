@@ -241,6 +241,10 @@
     <link href="{{ url_for('static', filename='css/vendor/select2-bootstrap-5-theme.min.css') }}" rel="stylesheet">
     
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <script>
+        // Apply the current theme as an early-class to avoid visual flash (class added server-side variable)
+        (function(){ try { document.documentElement.classList.add('theme-' + '{{ current_theme_id|default('light') }}'); } catch(e) {} })();
+    </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-overrides.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modal-fix.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/navbar-improvements.css') }}">
@@ -252,6 +256,10 @@
     <!-- Modern dark theme additions (more refined surfaces, softened shadows, updated accents) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-theme-modern.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/glass-theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/new-glass-theme.css') }}">
+    {% if current_theme_id in ['gloss-light', 'gloss-dark'] %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/gloss-theme.css') }}">
+    {% endif %}
     <!-- Button shape customization removed: ui-rounded styles no longer included -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-fixes.css') }}">
     <!-- Use UMD build of Chart.js for compatibility with non-module script loading -->
