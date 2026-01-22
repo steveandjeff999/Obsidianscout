@@ -1713,9 +1713,9 @@ def export_excel():
         except Exception:
             pd.DataFrame([]).to_excel(writer, index=False, sheet_name='Teams')
 
-        # 3) Matches
+        # 3) Matches (scoped to current scouting team / alliance membership)
         try:
-            matches = Match.query.order_by(Match.match_type, Match.match_number).all()
+            matches = filter_matches_by_scouting_team().order_by(Match.match_type, Match.match_number).all()
             match_rows = []
             for m in matches:
                 # parse alliances into individual team slots
@@ -1839,20 +1839,20 @@ def export_excel():
         except Exception:
             pd.DataFrame([]).to_excel(writer, index=False, sheet_name='Pit Scouting')
 
-        # 5b) Team-Event associations (explicit)
+        # 5b) Team-Event associations (explicit) - use scoped teams
         try:
             te_rows = []
-            for t in Team.query.order_by(Team.team_number).all():
+            for t in filter_teams_by_scouting_team().order_by(Team.team_number).all():
                 for ev in t.events:
                     te_rows.append({'team_id': t.id, 'event_id': ev.id})
             pd.DataFrame(te_rows).to_excel(writer, index=False, sheet_name='team_event')
         except Exception:
             pd.DataFrame([]).to_excel(writer, index=False, sheet_name='team_event')
 
-        # 6) Alliance Selections
+        # 6) Alliance Selections (scoped to current scouting team)
         try:
             alliance_rows = []
-            for a in AllianceSelection.query.order_by(AllianceSelection.event_id).all():
+            for a in AllianceSelection.query.filter_by(scouting_team_number=current_user.scouting_team_number).order_by(AllianceSelection.event_id).all():
                 alliance_rows.append({
                     'id': a.id,
                     'event_id': a.event_id,
@@ -1868,10 +1868,10 @@ def export_excel():
         except Exception:
             pd.DataFrame([]).to_excel(writer, index=False, sheet_name='Alliances')
 
-        # 7) Do Not Pick / Avoid lists
+        # 7) Do Not Pick / Avoid lists (scoped to current scouting team)
         try:
             dnp_rows = []
-            for entry in DoNotPickEntry.query.order_by(DoNotPickEntry.timestamp.desc()).all():
+            for entry in DoNotPickEntry.query.filter_by(scouting_team_number=current_user.scouting_team_number).order_by(DoNotPickEntry.timestamp.desc()).all():
                 dnp_rows.append({
                     'id': entry.id,
                     'team_id': entry.team_id,
@@ -1882,7 +1882,7 @@ def export_excel():
                     'scouting_team_number': entry.scouting_team_number
                 })
             avoid_rows = []
-            for entry in AvoidEntry.query.order_by(AvoidEntry.timestamp.desc()).all():
+            for entry in AvoidEntry.query.filter_by(scouting_team_number=current_user.scouting_team_number).order_by(AvoidEntry.timestamp.desc()).all():
                 avoid_rows.append({
                     'id': entry.id,
                     'team_id': entry.team_id,
@@ -1898,10 +1898,10 @@ def export_excel():
             pd.DataFrame([]).to_excel(writer, index=False, sheet_name='DoNotPick')
             pd.DataFrame([]).to_excel(writer, index=False, sheet_name='Avoid')
 
-        # 8) Strategy Drawings
+        # 8) Strategy Drawings (scoped to current scouting team)
         try:
             sdg_rows = []
-            for s in StrategyDrawing.query.order_by(StrategyDrawing.last_updated.desc()).all():
+            for s in StrategyDrawing.query.filter_by(scouting_team_number=current_user.scouting_team_number).order_by(StrategyDrawing.last_updated.desc()).all():
                 sdg_rows.append({
                     'id': s.id,
                     'match_id': s.match_id,
@@ -1951,12 +1951,24 @@ def export_excel():
 
 @bp.route('/export/portable')
 def export_portable():
-    """Export a portable ZIP containing JSON dumps of key tables so it can be imported on another server."""
+    """Export a portable ZIP containing JSON dumps of key tables so it can be imported on another server.
+
+    This export is now scoped to the CURRENT user's scouting team (when available) so
+    it only includes rows that belong to that scouting_team_number.
+    """
     try:
         export_data = {}
 
-        # Events (use alliance-aware combined/deduped list)
-        events = get_combined_dropdown_events()
+        # Scope export to current user's scouting team when possible
+        scouting_team_num = getattr(current_user, 'scouting_team_number', None) if getattr(current_user, 'is_authenticated', False) else None
+        export_data['scoped_to_scouting_team'] = scouting_team_num
+
+        # Events (use alliance-aware combined/deduped list when not scoped)
+        if scouting_team_num:
+            events = Event.query.filter_by(scouting_team_number=scouting_team_num).order_by(Event.start_date.desc()).all()
+        else:
+            events = get_combined_dropdown_events()
+
         export_data['events'] = []
         for e in events:
             # Some dropdown events may be synthetic alliance entries (SimpleNamespace) and
@@ -1975,7 +1987,11 @@ def export_portable():
             })
 
         # Teams
-        teams = Team.query.order_by(Team.team_number).all()
+        if scouting_team_num:
+            teams = Team.query.filter_by(scouting_team_number=scouting_team_num).order_by(Team.team_number).all()
+        else:
+            teams = Team.query.order_by(Team.team_number).all()
+
         export_data['teams'] = []
         for t in teams:
             export_data['teams'].append({
@@ -1995,7 +2011,11 @@ def export_portable():
                 export_data['team_event'].append({'team_id': t.id, 'event_id': ev.id})
 
         # Matches
-        matches = Match.query.order_by(Match.match_type, Match.match_number).all()
+        if scouting_team_num:
+            matches = Match.query.filter_by(scouting_team_number=scouting_team_num).order_by(Match.match_type, Match.match_number).all()
+        else:
+            matches = Match.query.order_by(Match.match_type, Match.match_number).all()
+
         export_data['matches'] = []
         for m in matches:
             export_data['matches'].append({
@@ -2013,7 +2033,11 @@ def export_portable():
             })
 
         # Scouting Data
-        sds = ScoutingData.query.order_by(ScoutingData.timestamp).all()
+        if scouting_team_num:
+            sds = ScoutingData.query.filter_by(scouting_team_number=scouting_team_num).order_by(ScoutingData.timestamp).all()
+        else:
+            sds = ScoutingData.query.order_by(ScoutingData.timestamp).all()
+
         export_data['scouting_data'] = []
         for sd in sds:
             export_data['scouting_data'].append({
@@ -2030,11 +2054,18 @@ def export_portable():
             })
 
         # Pit Scouting
-        pits = PitScoutingData.query.order_by(PitScoutingData.timestamp).all()
+        if scouting_team_num:
+            pits = PitScoutingData.query.filter_by(scouting_team_number=scouting_team_num).order_by(PitScoutingData.timestamp).all()
+        else:
+            pits = PitScoutingData.query.order_by(PitScoutingData.timestamp).all()
         export_data['pit_scouting'] = [p.to_dict() for p in pits]
 
         # Strategy drawings
-        sdraws = StrategyDrawing.query.order_by(StrategyDrawing.last_updated).all()
+        if scouting_team_num:
+            sdraws = StrategyDrawing.query.filter_by(scouting_team_number=scouting_team_num).order_by(StrategyDrawing.last_updated).all()
+        else:
+            sdraws = StrategyDrawing.query.order_by(StrategyDrawing.last_updated).all()
+
         export_data['strategy_drawings'] = []
         for s in sdraws:
             export_data['strategy_drawings'].append({
@@ -2047,45 +2078,91 @@ def export_portable():
                 'data_json': s.data_json
             })
 
-        # Alliances, lists, shared graphs/ranks
-        export_data['alliances'] = [
-            {
-                'id': a.id,
-                'alliance_number': a.alliance_number,
-                'captain': a.captain,
-                'first_pick': a.first_pick,
-                'second_pick': a.second_pick,
-                'third_pick': a.third_pick,
-                'event_id': a.event_id,
-                'timestamp': a.timestamp.isoformat() if a.timestamp else None,
-                'scouting_team_number': a.scouting_team_number
-            } for a in AllianceSelection.query.all()
-        ]
+        # Alliances, lists, shared graphs/ranks (scope by scouting team when possible)
+        if scouting_team_num:
+            export_data['alliances'] = [
+                {
+                    'id': a.id,
+                    'alliance_number': a.alliance_number,
+                    'captain': a.captain,
+                    'first_pick': a.first_pick,
+                    'second_pick': a.second_pick,
+                    'third_pick': a.third_pick,
+                    'event_id': a.event_id,
+                    'timestamp': a.timestamp.isoformat() if a.timestamp else None,
+                    'scouting_team_number': a.scouting_team_number
+                } for a in AllianceSelection.query.filter_by(scouting_team_number=scouting_team_num).all()
+            ]
 
-        export_data['do_not_pick'] = [
-            {
-                'id': e.id,
-                'team_id': e.team_id,
-                'event_id': e.event_id,
-                'reason': e.reason,
-                'timestamp': e.timestamp.isoformat() if e.timestamp else None,
-                'scouting_team_number': e.scouting_team_number
-            } for e in DoNotPickEntry.query.all()
-        ]
+            export_data['do_not_pick'] = [
+                {
+                    'id': e.id,
+                    'team_id': e.team_id,
+                    'event_id': e.event_id,
+                    'reason': e.reason,
+                    'timestamp': e.timestamp.isoformat() if e.timestamp else None,
+                    'scouting_team_number': e.scouting_team_number
+                } for e in DoNotPickEntry.query.filter_by(scouting_team_number=scouting_team_num).all()
+            ]
 
-        export_data['avoid'] = [
-            {
-                'id': e.id,
-                'team_id': e.team_id,
-                'event_id': e.event_id,
-                'reason': e.reason,
-                'timestamp': e.timestamp.isoformat() if e.timestamp else None,
-                'scouting_team_number': e.scouting_team_number
-            } for e in AvoidEntry.query.all()
-        ]
+            export_data['avoid'] = [
+                {
+                    'id': e.id,
+                    'team_id': e.team_id,
+                    'event_id': e.event_id,
+                    'reason': e.reason,
+                    'timestamp': e.timestamp.isoformat() if e.timestamp else None,
+                    'scouting_team_number': e.scouting_team_number
+                } for e in AvoidEntry.query.filter_by(scouting_team_number=scouting_team_num).all()
+            ]
 
-        export_data['shared_graphs'] = [g.to_dict() for g in SharedGraph.query.all()]
-        export_data['shared_team_ranks'] = [r.to_dict() for r in SharedTeamRanks.query.all()]
+            # Limit shared graphs/ranks to ones created by teams that belong to this scouting team
+            team_numbers = [t.team_number for t in teams] or []
+            if team_numbers:
+                export_data['shared_graphs'] = [g.to_dict() for g in SharedGraph.query.filter(SharedGraph.created_by_team.in_(team_numbers)).all()]
+                export_data['shared_team_ranks'] = [r.to_dict() for r in SharedTeamRanks.query.filter(SharedTeamRanks.created_by_team.in_(team_numbers)).all()]
+            else:
+                export_data['shared_graphs'] = []
+                export_data['shared_team_ranks'] = []
+        else:
+            export_data['alliances'] = [
+                {
+                    'id': a.id,
+                    'alliance_number': a.alliance_number,
+                    'captain': a.captain,
+                    'first_pick': a.first_pick,
+                    'second_pick': a.second_pick,
+                    'third_pick': a.third_pick,
+                    'event_id': a.event_id,
+                    'timestamp': a.timestamp.isoformat() if a.timestamp else None,
+                    'scouting_team_number': a.scouting_team_number
+                } for a in AllianceSelection.query.all()
+            ]
+
+            export_data['do_not_pick'] = [
+                {
+                    'id': e.id,
+                    'team_id': e.team_id,
+                    'event_id': e.event_id,
+                    'reason': e.reason,
+                    'timestamp': e.timestamp.isoformat() if e.timestamp else None,
+                    'scouting_team_number': e.scouting_team_number
+                } for e in DoNotPickEntry.query.all()
+            ]
+
+            export_data['avoid'] = [
+                {
+                    'id': e.id,
+                    'team_id': e.team_id,
+                    'event_id': e.event_id,
+                    'reason': e.reason,
+                    'timestamp': e.timestamp.isoformat() if e.timestamp else None,
+                    'scouting_team_number': e.scouting_team_number
+                } for e in AvoidEntry.query.all()
+            ]
+
+            export_data['shared_graphs'] = [g.to_dict() for g in SharedGraph.query.all()]
+            export_data['shared_team_ranks'] = [r.to_dict() for r in SharedTeamRanks.query.all()]
 
         # Write JSON files into ZIP
         buf = BytesIO()

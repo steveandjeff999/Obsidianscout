@@ -425,14 +425,49 @@
   left: 345px;
 }
 
-/* Dark mode friendly styles */
-@media (prefers-color-scheme: dark) {
-  #canvas {
-    background: #2b3035 !important;
-    border-color: #495057 !important;
+/* Drag ghost & placeholder styles for touch dragging */
+.drag-ghost {
+  position: fixed;
+  width: 220px;
+  max-width: 60vw;
+  pointer-events: none;
+  z-index: 99999;
+  transform: translate(-50%, -50%);
+  background: var(--bs-card-bg, #fff);
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  padding: 0.25rem;
+}
+
+.drag-placeholder {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.75rem;
+  border: 1px dashed rgba(0,0,0,0.12);
+  background: rgba(0,0,0,0.02);
+}
+
+#canvas.drop-target-active {
+  box-shadow: inset 0 0 0 3px rgba(13,110,253,0.08);
+  background-color: rgba(13,110,253,0.02);
+}
+    z-index: 12000;
+    max-width: 300px;
+    border-radius: 0.25rem;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+    background: var(--bs-card-bg, #fff);
+    padding: 0.25rem;
+    border: 1px solid var(--bs-border-color, #dee2e6);
   }
-  
-  #canvasCard.fullscreen #canvas {
+
+  .drag-placeholder {
+    border: 2px dashed rgba(0,0,0,0.12);
+    background: rgba(0,0,0,0.02);
+    margin: 0 0 1rem 0;
+    box-sizing: border-box;
+  }
+
     background: #1a1d20 !important;
   }
   
@@ -649,6 +684,108 @@ document.addEventListener('DOMContentLoaded', function() {
       draggedToolType = item.dataset.widgetType;
       e.dataTransfer.setData('text/plain', draggedToolType);
     });
+
+    // On touch devices or small screens, allow tap-to-add because drag/drop is unreliable
+    item.addEventListener('click', function(e){
+      try {
+        // Per-item suppression: ignore clicks immediately after a drag originating from this item
+        if (item._suppressClickUntil && Date.now() < item._suppressClickUntil) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        // Backwards-compatible global suppression
+        if (window._lastToolboxDragAt && Date.now() - window._lastToolboxDragAt < 700) {
+          e.preventDefault();
+          e.stopPropagation();
+          window._lastToolboxDragAt = 0;
+          return;
+        }
+        if ((('ontouchstart' in window) || window.matchMedia('(max-width: 768px)').matches)) {
+          e.preventDefault();
+          addWidgetToCanvas(item.dataset.widgetType);
+        }
+      } catch(err) { /* ignore */ }
+    });
+
+    // Pointer-based drag-from-toolbox: create a ghost that follows pointer/touch and drop into canvas
+    item.addEventListener('pointerdown', function(e){
+      // only primary pointer
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      // small screens or touch devices
+      if (!(('ontouchstart' in window) || window.matchMedia('(max-width: 1024px)').matches)) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      // hide toolbox while dragging on narrow screens
+      hideToolboxForDrag();
+
+      let ghost = document.createElement('div');
+      ghost.className = 'drag-ghost';
+      ghost.innerHTML = item.querySelector('.list-group-item') ? item.querySelector('.list-group-item').outerHTML : item.outerHTML;
+      document.body.appendChild(ghost);
+
+      // initial position
+      const moveGhost = (clientX, clientY) => {
+        ghost.style.left = clientX + 'px';
+        ghost.style.top = clientY + 'px';
+      };
+
+      const onPointerMove = (ev) => {
+        ev.preventDefault();
+        const clientX = ev.clientX !== undefined ? ev.clientX : (ev.touches && ev.touches[0] && ev.touches[0].clientX) || 0;
+        const clientY = ev.clientY !== undefined ? ev.clientY : (ev.touches && ev.touches[0] && ev.touches[0].clientY) || 0;
+        moveGhost(clientX, clientY);
+        // visual hint when over canvas
+        const el = document.elementFromPoint(clientX, clientY);
+        if (el && canvas.contains(el)) {
+          canvas.classList.add('drop-target-active');
+        } else {
+          canvas.classList.remove('drop-target-active');
+        }
+        try { autoScrollDuringDrag(ev); } catch(err) {}
+      };
+
+      const finishDrag = (ev) => {
+        const clientX = ev.clientX !== undefined ? ev.clientX : (ev.changedTouches && ev.changedTouches[0] && ev.changedTouches[0].clientX) || 0;
+        const clientY = ev.clientY !== undefined ? ev.clientY : (ev.changedTouches && ev.changedTouches[0] && ev.changedTouches[0].clientY) || 0;
+        const el = document.elementFromPoint(clientX, clientY);
+        canvas.classList.remove('drop-target-active');
+        if (el && canvas.contains(el)) {
+          const rect = canvas.getBoundingClientRect();
+          const x = clientX - rect.left + canvas.scrollLeft;
+          const y = clientY - rect.top + canvas.scrollTop;
+          addWidgetToCanvas(item.dataset.widgetType, null, x, y);
+          // suppress click on this item for a short period to avoid duplicate creation
+          try { item._suppressClickUntil = Date.now() + 900; } catch(z) { window._lastToolboxDragAt = Date.now(); }
+          window._lastToolboxDragAt = Date.now();
+          // suppress native drop handler for a short interval to avoid double-add from native events
+          window._suppressNativeDropAt = Date.now();
+        }
+        // cleanup
+        // restore toolbox visibility
+        restoreToolboxAfterDrag();
+        ghost.remove();
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', finishDrag);
+        window.removeEventListener('touchmove', onPointerMove);
+        window.removeEventListener('touchend', finishDrag);
+        document.body.style.userSelect = '';
+        document.body.style.touchAction = '';
+      };
+
+      document.body.style.userSelect = 'none';
+      document.body.style.touchAction = 'none';
+      moveGhost(e.clientX, e.clientY);
+
+      if (window.PointerEvent) {
+        window.addEventListener('pointermove', onPointerMove, { passive: false });
+        window.addEventListener('pointerup', finishDrag);
+      } else {
+        window.addEventListener('touchmove', onPointerMove, { passive: false });
+        window.addEventListener('touchend', finishDrag);
+      }
+    }, { passive: false });
   });
 
   // Make canvas accept drops
@@ -659,6 +796,12 @@ document.addEventListener('DOMContentLoaded', function() {
   canvas.addEventListener('drop', (e) => {
     e.preventDefault();
     e.stopPropagation();
+    // Suppress native drop handler if we just added via pointer-based drag (ghost)
+    if (window._suppressNativeDropAt && (Date.now() - window._suppressNativeDropAt) < 1200) {
+      // clear it and ignore this native drop
+      window._suppressNativeDropAt = 0;
+      return;
+    }
     const type = e.dataTransfer.getData('text/plain') || draggedToolType;
     if (!type || type === 'widget') return; // Ignore widget reordering drops
     
@@ -671,14 +814,14 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // Allow reordering of widgets inside canvas using native drag on widget cards
-  // Only for relatively positioned widgets (not absolutely positioned ones)
+  // Add pointer/touch fallback so mobile users can drag to reorder without native HTML5 drag
   function enableWidgetDnD(widgetEl){
     // Skip drag-and-drop reordering for absolutely positioned widgets
     if (widgetEl.style.position === 'absolute') {
       widgetEl.setAttribute('draggable','false');
       return;
     }
-    
+
     widgetEl.setAttribute('draggable','true');
     widgetEl.addEventListener('dragstart', (e)=>{ 
       // Only allow dragging if not absolutely positioned
@@ -710,9 +853,124 @@ document.addEventListener('DOMContentLoaded', function() {
         e.stopPropagation();
       }
     });
+
+    // Pointer-based reorder for touch devices
+    let ptrDragging = false;
+    let placeholder = null;
+    let startY = 0;
+
+    function onPointerDown(e){
+      if (e.target && e.target.closest('.btn-remove-widget')) return;
+      if (widgetEl.style.position === 'absolute') return;
+      // only handle primary pointer
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      ptrDragging = true;
+      draggedWidget = widgetEl;
+      widgetEl.classList.add('dragging');
+
+      // create placeholder
+      placeholder = document.createElement('div');
+      placeholder.className = 'drag-placeholder';
+      const computed = window.getComputedStyle(widgetEl);
+      placeholder.style.height = computed.height;
+      placeholder.style.width = computed.width;
+
+      widgetEl.parentNode.insertBefore(placeholder, widgetEl.nextSibling);
+
+      startY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] && e.touches[0].clientY) || 0;
+      // hide toolbox while dragging on narrow screens
+      hideToolboxForDrag();
+      document.body.style.userSelect = 'none';
+      document.body.style.touchAction = 'none';
+
+      function onPointerMove(e){
+        if (!ptrDragging) return;
+        const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] && e.touches[0].clientY) || 0;
+        // Find first non-dragging widget that the pointer is above/below
+        const candidates = Array.from(canvas.querySelectorAll('.widget-card')).filter(w => w !== widgetEl && w !== placeholder);
+        let inserted = false;
+        for (const cand of candidates) {
+          const rect = cand.getBoundingClientRect();
+          const middle = rect.top + rect.height / 2;
+          if (clientY < middle) {
+            cand.parentNode.insertBefore(placeholder, cand);
+            inserted = true;
+            break;
+          }
+        }
+        if (!inserted) {
+          canvas.appendChild(placeholder);
+        }
+        try { autoScrollDuringDrag(e); } catch(err) {}
+      }
+
+      function onPointerUp(e){
+        if (!ptrDragging) return;
+        ptrDragging = false;
+        document.body.style.userSelect = '';
+        document.body.style.touchAction = '';
+        // restore toolbox visibility after drag
+        restoreToolboxAfterDrag();
+
+        // place the dragged element where placeholder is
+        if (placeholder && placeholder.parentNode) {
+          placeholder.parentNode.insertBefore(widgetEl, placeholder);
+          placeholder.remove();
+        }
+        placeholder = null;
+        draggedWidget = null;
+        widgetEl.classList.remove('dragging');
+
+        if (window.PointerEvent) {
+          window.removeEventListener('pointermove', onPointerMove);
+          window.removeEventListener('pointerup', onPointerUp);
+        } else {
+          window.removeEventListener('touchmove', onPointerMove);
+          window.removeEventListener('touchend', onPointerUp);
+        }
+      }
+
+      if (window.PointerEvent) {
+        window.addEventListener('pointermove', onPointerMove, { passive: false });
+        window.addEventListener('pointerup', onPointerUp);
+      } else {
+        window.addEventListener('touchmove', onPointerMove, { passive: false });
+        window.addEventListener('touchend', onPointerUp);
+      }
+    }
+
+    // Attach pointer down to allow drag reordering on touch
+    widgetEl.addEventListener('pointerdown', onPointerDown, { passive: false });
+    widgetEl.addEventListener('touchstart', onPointerDown, { passive: false });
   }
 
   function addWidgetToCanvas(type, initial, dropX, dropY){
+    // Global duplicate-suppression: if the same widget type was added very recently near the same position,
+    // ignore this call. This prevents ghost-based pointer drops + native drop/click from resulting in two widgets.
+    try {
+      const last = window._lastWidgetAdd || {};
+      const now = Date.now();
+      const timeThreshold = 900; // ms
+      const distThreshold = 40; // px
+      const recent = last.time && (now - last.time < timeThreshold);
+      const sameType = last.type === type;
+      let near = false;
+      if (dropX !== undefined && dropY !== undefined && last.x !== undefined && last.y !== undefined) {
+        near = (Math.abs(dropX - last.x) <= distThreshold && Math.abs(dropY - last.y) <= distThreshold);
+      } else if (dropX === undefined && dropY === undefined && last.x === undefined && sameType) {
+        // both are non-positioned adds (taps) and same type recently added
+        near = true;
+      }
+      if (recent && sameType && near) {
+        console.debug('Suppressed duplicate addWidgetToCanvas', type);
+        return;
+      }
+    } catch (e) { /* ignore */ }
+
     if (canvasEmpty) canvasEmpty.style.display = 'none';
     const id = 'w_' + Date.now() + '_' + Math.floor(Math.random()*1000);
     const wrapper = document.createElement('div');
@@ -787,6 +1045,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Add to canvas AFTER setting all styles
     canvas.appendChild(wrapper);
+    // Record last widget add to prevent immediate duplicates (used by suppression guard)
+    try { window._lastWidgetAdd = { type: type, x: (wrapper.style.position === 'absolute' ? (parseInt(wrapper.style.left) || 0) : undefined), y: (wrapper.style.position === 'absolute' ? (parseInt(wrapper.style.top) || 0) : undefined), time: Date.now() }; } catch(e) { window._lastWidgetAdd = { type: type, time: Date.now() }; }
     
     attachWidgetControls(wrapper);
     attachResizeHandlers(wrapper);
@@ -1682,47 +1942,68 @@ document.addEventListener('DOMContentLoaded', function() {
     
     header.style.cursor = 'move';
 
-    function onMouseDown(e){
+    // Pointer/touch-aware dragging for absolutely-positioned widgets
+    function onPointerDown(e){
       // Don't drag if clicking on the remove button
-      if (e.target.closest('.btn-remove-widget')) return;
+      if (e.target && e.target.closest('.btn-remove-widget')) return;
       // Only for absolutely positioned widgets
       if (wrapper.style.position !== 'absolute') return;
-      
+
       e.preventDefault();
       e.stopPropagation();
+      // hide toolbox on narrow screens to give more canvas space
+      hideToolboxForDrag();
       dragging = true;
       header.style.cursor = 'grabbing';
       document.body.style.userSelect = 'none';
-      
-      startX = e.clientX;
-      startY = e.clientY;
+
+      startX = (e.clientX !== undefined) ? e.clientX : (e.touches && e.touches[0] && e.touches[0].clientX) || 0;
+      startY = (e.clientY !== undefined) ? e.clientY : (e.touches && e.touches[0] && e.touches[0].clientY) || 0;
       initialLeft = parseInt(wrapper.style.left) || 0;
       initialTop = parseInt(wrapper.style.top) || 0;
-      
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', onMouseUp);
+
+      if (window.PointerEvent) {
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+      } else {
+        window.addEventListener('mousemove', onPointerMove);
+        window.addEventListener('mouseup', onPointerUp);
+        window.addEventListener('touchmove', onPointerMove, { passive: false });
+        window.addEventListener('touchend', onPointerUp);
+      }
     }
 
-    function onMouseMove(e){
+    function onPointerMove(e){
       if (!dragging) return;
       e.preventDefault();
-      
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      
+      const clientX = (e.clientX !== undefined) ? e.clientX : (e.touches && e.touches[0] && e.touches[0].clientX) || 0;
+      const clientY = (e.clientY !== undefined) ? e.clientY : (e.touches && e.touches[0] && e.touches[0].clientY) || 0;
+      const dx = clientX - startX;
+      const dy = clientY - startY;
       wrapper.style.left = (initialLeft + dx) + 'px';
       wrapper.style.top = (initialTop + dy) + 'px';
     }
 
-    function onMouseUp(){
+    function onPointerUp(){
       dragging = false;
       header.style.cursor = 'move';
       document.body.style.userSelect = '';
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
+      // restore toolbox after moving widget on small screens
+      restoreToolboxAfterDrag();
+      if (window.PointerEvent) {
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+      } else {
+        window.removeEventListener('mousemove', onPointerMove);
+        window.removeEventListener('mouseup', onPointerUp);
+        window.removeEventListener('touchmove', onPointerMove);
+        window.removeEventListener('touchend', onPointerUp);
+      }
     }
 
-    header.addEventListener('mousedown', onMouseDown);
+    header.addEventListener('pointerdown', onPointerDown, { passive: false });
+    header.addEventListener('mousedown', onPointerDown);
+    header.addEventListener('touchstart', onPointerDown, { passive: false });
   }
 
   // Auto-scroll canvas when dragging a widget near the edges
@@ -2056,6 +2337,125 @@ toggleFullscreenBtn.addEventListener('click', function(){
 });
 
 // Create floating toolbox for fullscreen mode
+let toolboxHiddenForDrag = null;
+
+function hideToolboxForDrag(){
+  try{
+    // Only collapse/hide on small viewports
+    if (!window.matchMedia('(max-width: 768px)').matches) return;
+    const f = document.getElementById('floatingToolbox');
+    if (f) {
+      // If it's open, collapse it and remember state
+      const wasCollapsed = f.classList.contains('collapsed');
+      if (!wasCollapsed) f.classList.add('collapsed');
+      toolboxHiddenForDrag = { floating: true, wasCollapsed: wasCollapsed };
+      return;
+    }
+    // Otherwise hide the original toolbox card (left column)
+    const allCards = document.querySelectorAll('.card');
+    let originalToolbox = null;
+    allCards.forEach(card => {
+      const header = card.querySelector('.card-header');
+      if (header && header.textContent.includes('Toolbox')) {
+        originalToolbox = card;
+      }
+    });
+    if (originalToolbox) {
+      const wasHidden = originalToolbox.style.display === 'none';
+      if (!wasHidden) originalToolbox.style.display = 'none';
+      toolboxHiddenForDrag = { floating: false, wasHidden: wasHidden, orig: originalToolbox };
+    }
+  }catch(err){/* ignore */}
+}
+
+function restoreToolboxAfterDrag(){
+  try{
+    if (!toolboxHiddenForDrag) return;
+    if (toolboxHiddenForDrag.floating) {
+      const f = document.getElementById('floatingToolbox');
+      if (f && toolboxHiddenForDrag.wasCollapsed === false) f.classList.remove('collapsed');
+    } else {
+      const orig = toolboxHiddenForDrag.orig;
+      if (orig && toolboxHiddenForDrag.wasHidden === false) orig.style.display = '';
+    }
+    toolboxHiddenForDrag = null;
+  }catch(err){/* ignore */}
+}
+
+function startToolboxDrag(e, item){
+  try{
+    e.preventDefault();
+    e.stopPropagation();
+    hideToolboxForDrag();
+
+    let ghost = document.createElement('div');
+    ghost.className = 'drag-ghost';
+    ghost.innerHTML = item.querySelector('.list-group-item') ? item.querySelector('.list-group-item').outerHTML : item.outerHTML;
+    document.body.appendChild(ghost);
+
+    const startX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] && e.touches[0].clientX) || 0;
+    const startY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] && e.touches[0].clientY) || 0;
+    let moved = false;
+
+    const moveGhost = (clientX, clientY) => {
+      ghost.style.left = clientX + 'px';
+      ghost.style.top = clientY + 'px';
+    };
+
+    const onPointerMove = (ev) => {
+      ev.preventDefault();
+      const clientX = ev.clientX !== undefined ? ev.clientX : (ev.touches && ev.touches[0] && ev.touches[0].clientX) || 0;
+      const clientY = ev.clientY !== undefined ? ev.clientY : (ev.touches && ev.touches[0] && ev.touches[0].clientY) || 0;
+      if (!moved && Math.hypot(clientX - startX, clientY - startY) > 8) moved = true;
+      moveGhost(clientX, clientY);
+      const el = document.elementFromPoint(clientX, clientY);
+      if (el && canvas.contains(el)) {
+        canvas.classList.add('drop-target-active');
+      } else {
+        canvas.classList.remove('drop-target-active');
+      }
+      try { autoScrollDuringDrag(ev); } catch(err) {}
+    };
+
+    const finishDrag = (ev) => {
+      const clientX = ev.clientX !== undefined ? ev.clientX : (ev.changedTouches && ev.changedTouches[0] && ev.changedTouches[0].clientX) || 0;
+      const clientY = ev.clientY !== undefined ? ev.clientY : (ev.changedTouches && ev.changedTouches[0] && ev.changedTouches[0].clientY) || 0;
+      const el = document.elementFromPoint(clientX, clientY);
+      canvas.classList.remove('drop-target-active');
+      if (el && canvas.contains(el) && moved) {
+        const rect = canvas.getBoundingClientRect();
+        const x = clientX - rect.left + canvas.scrollLeft;
+        const y = clientY - rect.top + canvas.scrollTop;
+        addWidgetToCanvas(item.dataset.widgetType, null, x, y);
+        try { item._suppressClickUntil = Date.now() + 900; } catch(z) { window._lastToolboxDragAt = Date.now(); }
+        window._lastToolboxDragAt = Date.now();
+        // suppress native drop handler
+        window._suppressNativeDropAt = Date.now();
+      }
+      restoreToolboxAfterDrag();
+      ghost.remove();
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', finishDrag);
+      window.removeEventListener('touchmove', onPointerMove);
+      window.removeEventListener('touchend', finishDrag);
+      document.body.style.userSelect = '';
+      document.body.style.touchAction = '';
+    };
+
+    document.body.style.userSelect = 'none';
+    document.body.style.touchAction = 'none';
+    moveGhost(e.clientX, e.clientY);
+
+    if (window.PointerEvent) {
+      window.addEventListener('pointermove', onPointerMove, { passive: false });
+      window.addEventListener('pointerup', finishDrag);
+    } else {
+      window.addEventListener('touchmove', onPointerMove, { passive: false });
+      window.addEventListener('touchend', finishDrag);
+    }
+  } catch(err) { console.warn('startToolboxDrag error', err); }
+}
+
 function createFloatingToolbox() {
   // Remove existing if any
   removeFloatingToolbox();
@@ -2110,10 +2510,49 @@ function createFloatingToolbox() {
       draggedToolType = item.dataset.widgetType;
       e.dataTransfer.setData('text/plain', draggedToolType);
     });
-    // Double-click support
+    // Double-click support for desktop
     item.addEventListener('dblclick', () => addWidgetToCanvas(item.dataset.widgetType));
+    // Single-tap support on mobile / small screens
+    item.addEventListener('click', function(e){
+      try{
+        // Per-item suppression
+        if (item._suppressClickUntil && Date.now() < item._suppressClickUntil) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        if (window._lastToolboxDragAt && Date.now() - window._lastToolboxDragAt < 700) {
+          e.preventDefault();
+          e.stopPropagation();
+          window._lastToolboxDragAt = 0;
+          return;
+        }
+        if ((('ontouchstart' in window) || window.matchMedia('(max-width: 768px)').matches)) {
+          e.preventDefault();
+          addWidgetToCanvas(item.dataset.widgetType);
+        }
+      } catch(err){}
+    });
+    // Pointer-based drag-to-add for touch devices
+    item.addEventListener('pointerdown', function(e){
+      if (!(('ontouchstart' in window) || window.matchMedia('(max-width: 768px)').matches)) return;
+      e.preventDefault();
+      startToolboxDrag(e, item);
+    }, { passive:false });
+    item.addEventListener('touchstart', function(e){
+      if (!(('ontouchstart' in window) || window.matchMedia('(max-width: 768px)').matches)) return;
+      e.preventDefault();
+      startToolboxDrag(e, item);
+    }, { passive:false });
   });
   
+  // If narrow screens, collapse toolbox by default in fullscreen to maximize canvas
+  try{
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      floatingToolbox.classList.add('collapsed');
+    }
+  } catch(err){}
+
   // Toggle functionality
   const closeBtn = document.getElementById('closeToolboxBtn');
   if (closeBtn) {

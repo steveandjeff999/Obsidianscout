@@ -70,13 +70,27 @@
                     <table class="table table-hover">
                         <thead class="table-dark">
                             <tr>
-                                <th>Username</th>
-                                <th>Team</th>
+                                <th class="sortable" data-col-index="0" role="button" tabindex="0">Username <i class="fas fa-sort ms-1"></i></th>
+                                <th class="sortable" data-col-index="1" role="button" tabindex="0">Team <i class="fas fa-sort ms-1"></i></th>
                                 <th>Roles</th>
-                                <th>Last Used</th>
+                                <th class="sortable text-nowrap" data-col-index="3" role="button" tabindex="0">Last Used <i class="fas fa-sort ms-1"></i></th>
                                 <th>New Password</th>
                                 <th>Status</th>
                                 <th>Actions</th>
+                            </tr>
+                            <tr class="table-secondary">
+                                <th style="width:18%;"><input type="text" id="filter-username" class="form-control form-control-sm" placeholder="Filter username"></th>
+                                <th style="width:8%;"><input type="text" id="filter-team" class="form-control form-control-sm" placeholder="Filter team"></th>
+                                <th style="width:20%;"><input type="text" id="filter-roles" class="form-control form-control-sm" placeholder="Filter roles"></th>
+                                <th style="width:18%;"><input type="text" id="filter-last" class="form-control form-control-sm" placeholder="Filter last used (date/time)"></th>
+                                <th></th>
+                                <th>
+                                    <div class="d-flex align-items-center">
+                                        <button class="btn btn-sm btn-outline-secondary me-2" id="clear-filters">Clear</button>
+                                        <small class="text-muted">Filters</small>
+                                    </div>
+                                </th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -218,6 +232,7 @@
 {% block scripts %}
 <script>
 // Auto-submit form when toggle switch changes and add visual feedback
+// Also add client-side per-column filtering (spreadsheet-like)
 document.addEventListener('DOMContentLoaded', function() {
     const toggleSwitches = document.querySelectorAll('input[name="is_active"]');
     
@@ -267,6 +282,115 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             new bootstrap.Modal(document.getElementById('deleteUserModal')).show();
+        });
+    });
+
+    // --- Spreadsheet-like filtering ---
+    const filterInputs = {
+        username: document.getElementById('filter-username'),
+        team: document.getElementById('filter-team'),
+        roles: document.getElementById('filter-roles'),
+        last: document.getElementById('filter-last')
+    };
+    const clearBtn = document.getElementById('clear-filters');
+
+    function debounce(fn, delay=160){
+        let t;
+        return function(...args){ clearTimeout(t); t = setTimeout(()=>fn.apply(this,args), delay); };
+    }
+
+    function getCellText(row, index){
+        const td = row.children[index];
+        if(!td) return '';
+        const input = td.querySelector('input, select, textarea');
+        return (input ? input.value : td.textContent).trim().toLowerCase();
+    }
+
+    function filterRows(){
+        const usernameVal = filterInputs.username ? filterInputs.username.value.trim().toLowerCase() : '';
+        const teamVal = filterInputs.team ? filterInputs.team.value.trim().toLowerCase() : '';
+        const rolesVal = filterInputs.roles ? filterInputs.roles.value.trim().toLowerCase() : '';
+        const lastVal = filterInputs.last ? filterInputs.last.value.trim().toLowerCase() : '';
+        const tbody = document.querySelector('table.table tbody');
+        if(!tbody) return;
+        Array.from(tbody.rows).forEach(function(row){
+            const username = getCellText(row,0);
+            const team = getCellText(row,1);
+            const roles = row.children[2] ? row.children[2].textContent.trim().toLowerCase() : '';
+            const last = row.children[3] ? row.children[3].textContent.trim().toLowerCase() : '';
+            const match = (!usernameVal || username.includes(usernameVal)) &&
+                          (!teamVal || team.includes(teamVal)) &&
+                          (!rolesVal || roles.includes(rolesVal)) &&
+                          (!lastVal || last.includes(lastVal));
+            row.style.display = match ? '' : 'none';
+        });
+    }
+
+    const debouncedFilter = debounce(filterRows, 150);
+    Object.values(filterInputs).forEach(function(inp){ if(inp) inp.addEventListener('input', debouncedFilter); });
+    if(clearBtn) clearBtn.addEventListener('click', function(e){ e.preventDefault(); Object.values(filterInputs).forEach(i=>{ if(i) i.value=''; }); filterRows(); });
+
+    // Run filter once on load to apply search param state
+    filterRows();
+
+    // --- Sorting support ---
+    const sortableHeaders = document.querySelectorAll('th.sortable');
+    function setSortIcon(th, order) {
+        const icon = th.querySelector('i.fas');
+        if (!icon) return;
+        icon.classList.remove('fa-sort', 'fa-sort-up', 'fa-sort-down');
+        if (order === 'asc') icon.classList.add('fa-sort-up');
+        else if (order === 'desc') icon.classList.add('fa-sort-down');
+        else icon.classList.add('fa-sort');
+    }
+    function parseDateForSort(s) {
+        if (!s) return -Infinity;
+        s = s.trim().toLowerCase();
+        if (s === 'never' || s === '') return -Infinity;
+        // Accept format 'YYYY-MM-DD HH:MM:SS' -> replace space with T for parse
+        let t = Date.parse(s.replace(' ', 'T'));
+        if (isNaN(t)) {
+            // fallback: try Date.parse as-is
+            t = Date.parse(s);
+        }
+        return isNaN(t) ? -Infinity : t;
+    }
+    function sortTableByColumn(index, type, order) {
+        const tbody = document.querySelector('table.table tbody');
+        if (!tbody) return;
+        const rows = Array.from(tbody.rows);
+        rows.sort(function(a, b) {
+            let va = getCellText(a, index);
+            let vb = getCellText(b, index);
+            if (type === 'date') {
+                va = parseDateForSort(va);
+                vb = parseDateForSort(vb);
+            } else {
+                va = va || '';
+                vb = vb || '';
+            }
+            if (va < vb) return order === 'asc' ? -1 : 1;
+            if (va > vb) return order === 'asc' ? 1 : -1;
+            return 0;
+        });
+        // Reattach rows in sorted order
+        rows.forEach(r => tbody.appendChild(r));
+    }
+    sortableHeaders.forEach(function(th){
+        th.addEventListener('click', function(){
+            const idx = parseInt(th.getAttribute('data-col-index'));
+            const current = th.getAttribute('data-order') || 'none';
+            // reset other headers
+            sortableHeaders.forEach(h => { if (h !== th) { h.removeAttribute('data-order'); setSortIcon(h, null); }});
+            const next = current === 'asc' ? 'desc' : 'asc';
+            th.setAttribute('data-order', next);
+            setSortIcon(th, next);
+            const type = idx === 3 ? 'date' : 'string'; // last used (3) is date
+            sortTableByColumn(idx, type, next);
+        });
+        // keyboard support
+        th.addEventListener('keydown', function(e){
+            if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); th.click(); }
         });
     });
 });
