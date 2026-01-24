@@ -1019,10 +1019,13 @@ def create_app(test_config=None):
             if current_user and current_user.is_authenticated:
                 from app.models import ScoutingTeamSettings
                 team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
-                return {'liquid_glass_buttons_enabled': bool(team_settings and getattr(team_settings, 'liquid_glass_buttons', False))}
+                return {
+                    'liquid_glass_buttons_enabled': bool(team_settings and getattr(team_settings, 'liquid_glass_buttons', False)),
+                    'spinning_counters_enabled': bool(team_settings and getattr(team_settings, 'spinning_counters_enabled', False))
+                }
         except Exception:
             pass
-        return {'liquid_glass_buttons_enabled': False}
+        return {'liquid_glass_buttons_enabled': False, 'spinning_counters_enabled': False}
 
     # Register chat history routes
     register_chat_history_routes(app)

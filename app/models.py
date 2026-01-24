@@ -144,6 +144,8 @@ class ScoutingTeamSettings(db.Model):
     account_creation_locked = db.Column(db.Boolean, default=False, nullable=False)
     # If true, apply a modern 'liquid glass' frosted/tinted look to buttons
     liquid_glass_buttons = db.Column(db.Boolean, default=False, nullable=False)
+    # If true, allow spinning/rotating counters on the scouting form (admin-controlled)
+    spinning_counters_enabled = db.Column(db.Boolean, default=False, nullable=False)
     locked_by_user_id = db.Column(db.Integer, nullable=True)
     locked_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

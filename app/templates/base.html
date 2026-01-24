@@ -1032,7 +1032,7 @@
     When true we omit the sidebar/topbar helper classes so related JS/CSS
     won't add overlays or offsets on mobile which can cause tap/click
     coordinate mismatches. #}
-<body class="d-flex flex-column h-100 modern-layout {% if not no_chrome %}with-sidebar topbar-fixed{% endif %} {% if liquid_glass_buttons_enabled %}liquid-glass-buttons{% endif %}">
+<body class="d-flex flex-column h-100 modern-layout {% if not no_chrome %}with-sidebar topbar-fixed{% endif %} {% if liquid_glass_buttons_enabled %}liquid-glass-buttons{% endif %} {% if spinning_counters_enabled %}spinning-counters{% endif %}">
     <!-- Global Top Bar (search + user) -->
     <div class="topbar glass navbar-glass d-flex align-items-center gap-2 px-3 py-2 shadow-sm" role="banner">
         <div class="d-flex align-items-center gap-2 flex-shrink-0">

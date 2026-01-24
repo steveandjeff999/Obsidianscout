@@ -44,6 +44,11 @@
                     <label class="form-check-label" for="countupEnabledToggle">Enable numeric count-up animations {{ help.help_icon('When enabled, numbers animate from 0 to their final values on certain dashboards for a visual effect. Disable for performance or accessibility.', 'Count-up animations') }}</label>
                 </div>
 
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="spinningCountersToggle">
+                    <label class="form-check-label" for="spinningCountersToggle">Enable spinning counters (per-device) {{ help.help_icon('Enable the spinning counter UI on this device. Each 0.125 rotation (45°) increments the count by one. This preference is stored locally and does not require admin approval.', 'Spinning counters (per-device)') }}</label>
+                </div>
+
                 <hr />
                 <h5 class="card-title mt-3">Appearance &amp; Layout</h5>
                 <p class="text-muted">Additional per-user preferences stored locally in your browser.</p>
@@ -141,6 +146,13 @@
         // Countup toggle
         var toggle = document.getElementById('countupEnabledToggle');
         try{ if(toggle) toggle.checked = readBool('countup_enabled', true); }catch(e){}
+
+        // Spinning counters toggle (client-level preference; server must also allow)
+        var spinToggle = document.getElementById('spinningCountersToggle');
+        try{ if(spinToggle) spinToggle.checked = readBool('spinning_counters_enabled', true); }catch(e){}
+        if(spinToggle){
+            spinToggle.addEventListener('change', function(evt){ try{ writeBool('spinning_counters_enabled', evt.target.checked); showStatus('Spinning counter preference updated locally.','success'); }catch(e){} });
+        }
 
         // Appearance / layout controls
         var darkToggle = document.getElementById('darkModeToggle');
@@ -323,6 +335,7 @@
 
             // Reset newly added settings to defaults
             try{ localStorage.removeItem('countup_enabled'); if (toggle) toggle.checked = true; } catch(e) {}
+            try{ localStorage.removeItem('spinning_counters_enabled'); if (spinToggle) spinToggle.checked = true; } catch(e) {}
             try{ localStorage.removeItem('show_help_icons'); if(showHelpToggle) { showHelpToggle.checked = true; document.documentElement.classList.remove('hide-help-icons'); document.body.classList.remove('hide-help-icons'); } }catch(e){}
             try{ localStorage.removeItem('darkMode'); if(darkToggle) darkToggle.checked = false; document.documentElement.classList.remove('dark-mode'); document.body.classList.remove('dark-mode'); }catch(e){}
             try{ localStorage.removeItem('obsidian_theme'); if(themeSelect) themeSelect.value = ''; }catch(e){}

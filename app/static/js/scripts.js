@@ -714,6 +714,185 @@ function initializeCounters() {
     } catch (err) {
         console.warn('counter wrap detection error', err);
     }
+
+    // Initialize spinning counters (if admin enabled for team)
+    function initializeSpinningCounters() {
+        console.debug('spinning counters: initialize called');
+        // Previously required server-side approval; now run per-user based on local preference
+        if (!document.body.classList.contains('spinning-counters')) { console.debug('spinning counters: server-side not enabled (ignored) — running per-user preference'); }
+        // Respect reduced-motion preference
+        if (document.documentElement.classList.contains('reduced-motion')) { console.debug('spinning counters: reduced-motion enabled; abort'); return; }
+        // Respect client-side preference (stored in localStorage 'spinning_counters_enabled')
+        try { const localPref = localStorage.getItem('spinning_counters_enabled'); if (localPref === 'false' || localPref === '0') { console.debug('spinning counters: disabled by local pref'); return; } } catch (e) { /* ignore */ }
+
+        // Support multiple counter container types used in templates
+        const containerSelector = '.counter-container, .counter-control, .counter-shell, .input-group.counter-control, .counter-container-inline';
+        let anyAdded = false;
+        document.querySelectorAll(containerSelector).forEach(container => {
+            // Normalise container element (some templates use nested structures)
+            if (!container) return;
+            // Don't add if already present (support legacy knob and new display)
+            if (container.querySelector('.spin-knob, .spin-display')) return;
+            // Prefer explicit counter inputs, fall back to any number input inside
+            const input = container.querySelector('input.counter-input[type="number"]') || container.querySelector('input[type="number"]');
+            if (!input) return;
+
+            // Create a full-size spinning display that shows the value centered
+            const display = document.createElement('div');
+            display.className = 'spin-display';
+            display.setAttribute('role','spinbutton');
+            display.setAttribute('aria-label','Spinning counter');
+            display.tabIndex = 0;
+
+            const ring = document.createElement('div');
+            ring.className = 'spin-ring';
+            const valueEl = document.createElement('div');
+            valueEl.className = 'spin-value';
+            valueEl.textContent = input.value || '0';
+
+            display.appendChild(ring);
+            display.appendChild(valueEl);
+
+            // Insert display and hide the original input (keep it in DOM for form submission)
+            input.insertAdjacentElement('afterend', display);
+            input.style.display = 'none';
+            // Hide any button counters inside this container (we are replacing them)
+            try { container.querySelectorAll('.btn-counter').forEach(b => { b.style.display = 'none'; }); } catch (e) {}
+            anyAdded = true;
+
+            // Pointer-based rotation handling applied to the display; ring rotates visually while value stays upright
+            let pressing = false;
+            let lastAngle = null;
+            let accumulated = 0; // degrees
+            let startValue = 0;
+
+            function angleFromEvent(e) {
+                const rect = display.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                return Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI;
+            }
+
+            display.addEventListener('pointerdown', (e) => {
+                try { display.setPointerCapture(e.pointerId); } catch (ex) {}
+                pressing = true;
+                lastAngle = null;
+                accumulated = 0;
+                startValue = parseInt(input.value || 0);
+                e.preventDefault();
+            });
+
+            display.addEventListener('pointermove', (e) => {
+                if (!pressing) return;
+                const angle = angleFromEvent(e);
+                if (lastAngle === null) {
+                    lastAngle = angle;
+                    return;
+                }
+                let delta = angle - lastAngle;
+                if (delta > 180) delta -= 360;
+                if (delta < -180) delta += 360;
+                accumulated += delta;
+                lastAngle = angle;
+
+                // Each 0.125 rotation (45deg) increments by one
+                const steps = Math.floor(accumulated / 45);
+                if (steps !== 0) {
+                    let newVal = startValue + steps;
+                    const min = parseInt(input.min || 0);
+                    const max = (input.max !== undefined && input.max !== '') ? parseInt(input.max) : null;
+                    if (!isNaN(min)) newVal = Math.max(min, newVal);
+                    if (max !== null && !isNaN(max)) newVal = Math.min(max, newVal);
+                    input.value = newVal;
+                    valueEl.textContent = newVal;
+                    input.dispatchEvent(new Event('change'));
+                }
+
+                // Visual rotation feedback: rotate the ring only so the number stays upright
+                ring.style.transform = `rotate(${accumulated}deg)`;
+                e.preventDefault();
+            });
+
+            display.addEventListener('pointerup', (e) => {
+                try { display.releasePointerCapture(e.pointerId); } catch (ex) {}
+                pressing = false;
+                accumulated = 0;
+                ring.style.transform = '';
+            });
+
+            // Keyboard accessibility: left/right to change by 1
+            display.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+                    e.preventDefault(); const v = parseInt(input.value || 0) + 1; input.value = v; valueEl.textContent = v; input.dispatchEvent(new Event('change'));
+                } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+                    e.preventDefault(); const v = Math.max(parseInt(input.min || 0), parseInt(input.value || 0) - 1); input.value = v; valueEl.textContent = v; input.dispatchEvent(new Event('change'));
+                }
+            });
+
+            // Update display when input changes (keeps sync if changed programmatically)
+            input.addEventListener('change', () => { try { valueEl.textContent = input.value || '0'; } catch(e){} });
+
+            // Prevent touch-based scrolling while rotating
+            display.style.touchAction = 'none';
+        });
+        // If we added ANY knobs, mark the UI as active so CSS can hide buttons globally
+        try { if (anyAdded) document.body.classList.add('spinning-counters-active'); } catch(e) {}
+    }
+
+    // Call during initialization
+    try { initializeSpinningCounters(); } catch (err) { console.warn('initializeSpinningCounters error', err); }
+
+    // Observe mutations and initialize spinning knobs when dynamic counters are added
+    try {
+        const observer = new MutationObserver((mutations) => {
+            let added = false;
+            const containerSelector = '.counter-container, .counter-control, .counter-shell, .input-group.counter-control, .counter-container-inline';
+            for (const m of mutations) {
+                for (const n of m.addedNodes) {
+                    if (n.nodeType !== 1) continue;
+                    try {
+                        if ((n.matches && n.matches(containerSelector)) || (n.querySelector && n.querySelector(containerSelector))) { added = true; break; }
+                    } catch (err) { /* ignore malformed selectors on non-elements */ }
+                }
+                if (added) break;
+            }
+            if (added) {
+                try { initializeSpinningCounters(); } catch (e) { console.warn('initializeSpinningCounters (observer) error', e); }
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        // Teardown: remove knobs and restore buttons
+        function teardownSpinningCounters() {
+            try {
+                // Remove knobs and displays
+                document.querySelectorAll('.spin-knob, .spin-display').forEach(k => k.remove());
+                // Restore visible buttons and inputs
+                const containerSelector = '.counter-container, .counter-control, .counter-shell, .input-group.counter-control, .counter-container-inline';
+                document.querySelectorAll(containerSelector).forEach(container => {
+                    try { container.querySelectorAll('.btn-counter').forEach(b => { b.style.display = ''; }); } catch (e) {}
+                    try { const input = container.querySelector('input[type="number"]'); if (input) input.style.display = ''; } catch(e) {}
+                });
+                // Clear active class
+                try { document.body.classList.remove('spinning-counters-active'); } catch(e) {}
+            } catch (err) {
+                console.warn('teardownSpinningCounters error', err);
+            }
+        }
+
+        // Re-init or teardown when local preference changes in another tab
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'spinning_counters_enabled') {
+                try {
+                    if (e.newValue === 'false' || e.newValue === '0') {
+                        teardownSpinningCounters();
+                    } else {
+                        initializeSpinningCounters();
+                    }
+                } catch (err) { console.warn('initialize/teardown (storage) error', err); }
+            }
+        });
+    } catch (err) { console.warn('spinning counter observer setup failed', err); }
 }
 
 /**
