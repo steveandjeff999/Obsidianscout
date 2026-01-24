@@ -1605,6 +1605,42 @@ def liquid_glass_status():
     enabled = team_settings.liquid_glass_buttons if team_settings else False
     return jsonify({'enabled': bool(enabled)})
 
+@bp.route('/admin/toggle-spinning-counters', methods=['POST'])
+@admin_required
+def toggle_spinning_counters():
+    """Toggle spinning counters setting for the admin's team"""
+    if not validate_csrf_token():
+        return redirect(url_for('auth.admin_settings'))
+    from app.models import ScoutingTeamSettings
+    
+    # Get or create team settings
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    if not team_settings:
+        team_settings = ScoutingTeamSettings(scouting_team_number=current_user.scouting_team_number)
+        db.session.add(team_settings)
+    
+    # Toggle the setting
+    team_settings.spinning_counters_enabled = not team_settings.spinning_counters_enabled
+    team_settings.updated_at = datetime.now(timezone.utc)
+    
+    db.session.commit()
+    
+    status = "enabled" if team_settings.spinning_counters_enabled else "disabled"
+    flash(f'Spinning counters have been {status} for your team.', 'success')
+    
+    return redirect(url_for('auth.admin_settings'))
+
+@bp.route('/admin/spinning-counter-status', methods=['GET'])
+def spinning_counter_status():
+    """Return JSON with current spinning-counter status for the user's team"""
+    if not current_user.is_authenticated:
+        return jsonify({'enabled': False})
+        
+    from app.models import ScoutingTeamSettings
+    team_settings = ScoutingTeamSettings.query.filter_by(scouting_team_number=current_user.scouting_team_number).first()
+    enabled = team_settings.spinning_counters_enabled if team_settings else False
+    return jsonify({'enabled': bool(enabled)})
+
 @bp.route('/admin/toggle-account-lock', methods=['POST'])
 @admin_required
 def toggle_account_lock():

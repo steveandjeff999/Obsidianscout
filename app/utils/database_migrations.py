@@ -80,6 +80,7 @@ MIGRATIONS = [
     # UI preference for modern 'liquid glass' button styling. Added as a safe migration
     # so older databases can be upgraded automatically on startup if needed.
     ('scouting_team_settings', 'liquid_glass_buttons', 'BOOLEAN DEFAULT 0', None),
+    ('scouting_team_settings', 'spinning_counters_enabled', 'BOOLEAN DEFAULT 0', None),
     ('scouting_team_settings', 'locked_by_user_id', 'INTEGER', None),
     ('scouting_team_settings', 'locked_at', 'DATETIME', None),
     ('scouting_team_settings', 'created_at', 'DATETIME', None),

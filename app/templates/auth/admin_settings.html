@@ -101,6 +101,10 @@
             </div>
         </div>
 
+
+            </div>
+        </div>
+
         <div class="col-md-4">
             <div class="card">
                 <div class="card-header">
@@ -375,6 +379,46 @@ document.addEventListener('DOMContentLoaded', function() {
 
     refreshGlassStatus();
     setInterval(refreshGlassStatus, 10000);
+
+    // Poll and refresh spinning-counter UI
+    async function refreshSpinningCounterStatus() {
+        try {
+            const resp = await fetch("{{ url_for('auth.spinning_counter_status') }}", {headers: {'X-Requested-With':'XMLHttpRequest'}});
+            const data = await resp.json();
+            const enabled = !!data.enabled;
+            const btn = document.getElementById('spinningCounterBtn');
+            const icon = document.getElementById('spinningCounterIcon');
+            const text = document.getElementById('spinningCounterText');
+            const statusEl = document.getElementById('spinningCounterStatus');
+            if (enabled) {
+                btn.className = 'btn btn-success';
+                icon.className = 'fas fa-toggle-on';
+                text.textContent = 'Disable Spinning Counters';
+                statusEl.className = 'mt-2 small text-success';
+                statusEl.textContent = 'Spinning counters are ENABLED for your team';
+            } else {
+                btn.className = 'btn btn-secondary';
+                icon.className = 'fas fa-toggle-off';
+                text.textContent = 'Enable Spinning Counters';
+                statusEl.className = 'mt-2 small text-muted';
+                statusEl.textContent = 'Spinning counters are DISABLED for your team';
+            }
+        } catch (e) {
+            const statusEl = document.getElementById('spinningCounterStatus');
+            const btn = document.getElementById('spinningCounterBtn');
+            const icon = document.getElementById('spinningCounterIcon');
+            const text = document.getElementById('spinningCounterText');
+            statusEl.className = 'mt-2 small text-muted';
+            statusEl.textContent = 'Could not fetch server status';
+            btn.className = 'btn btn-secondary';
+            icon.className = 'fas fa-exclamation-triangle';
+            text.textContent = 'Retry';
+        }
+    }
+
+    refreshSpinningCounterStatus();
+    setInterval(refreshSpinningCounterStatus, 10000);
+
 });
 </script>
 <script>

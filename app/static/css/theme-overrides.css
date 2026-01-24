@@ -3,10 +3,10 @@
 /* Glass / semitransparent design variables and utility */
 :root {
     /* default glass colors - can be overridden by theming system or dark-mode */
-    --glass-bg: rgba(255,255,255,0.78);
-    --glass-border: rgba(0,0,0,0.06);
-    --glass-backdrop: rgba(255,255,255,0.35);
-    --glass-blur: 8px;
+    --glass-bg: rgba(255,255,255,0.55); /* more transparent for clearer glass */
+    --glass-border: rgba(255,255,255,0.06); /* subtle light border */
+    --glass-backdrop: rgba(255,255,255,0.22);
+    --glass-blur: 14px; /* stronger blur for frosted look */
 }
 
 .glass {
@@ -35,7 +35,13 @@
 }
 
 /* Prefer explicit .glass application so callers can opt-in; provide sensible default fallbacks */
-.topbar.glass, .topbar.navbar-glass { background: var(--glass-bg) !important; border-bottom: 1px solid var(--glass-border) !important; box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
+.topbar.glass, .topbar.navbar-glass {
+    background: var(--glass-bg) !important;
+    border-bottom: 1px solid var(--glass-border) !important;
+    -webkit-backdrop-filter: saturate(110%) blur(var(--glass-blur));
+    backdrop-filter: saturate(110%) blur(var(--glass-blur));
+    box-shadow: 0 10px 30px rgba(2,6,23,0.08), inset 0 1px 0 rgba(255,255,255,0.02);
+}
 .card.glass, .dashboard-card.glass, .stat-card.glass { background: var(--glass-bg) !important; border-color: var(--glass-border) !important; }
 .modal-content.glass { background: var(--glass-bg) !important; border-color: var(--glass-border) !important; }
 .dropdown-menu.glass { background: var(--glass-bg) !important; border-color: var(--glass-border) !important; }

@@ -532,7 +532,23 @@ function displayAllianceStrategy(allianceData, color) {
 
     console.log(`displayAllianceStrategy(${color}) teams count before: ${(allianceData && allianceData.teams) ? allianceData.teams.length : 0}, after dedupe: ${teamsList.length}`);
 
+    // Compute alliance period totals (auto, teleop, endgame) and total points
+    const autoSum = (teamsList || []).reduce((acc, td) => acc + (Number(td.metrics && (td.metrics.apt ?? td.metrics.auto_points) || 0) || 0), 0);
+    const teleopSum = (teamsList || []).reduce((acc, td) => acc + (Number(td.metrics && (td.metrics.tpt ?? td.metrics.teleop_points) || 0) || 0), 0);
+    const endgameSum = (teamsList || []).reduce((acc, td) => acc + (Number(td.metrics && (td.metrics.ept ?? td.metrics.endgame_points) || 0) || 0), 0);
+    const totalSum = (teamsList || []).reduce((acc, td) => acc + (Number(td.metrics && (td.metrics.tot ?? td.metrics.total_points) || 0) || 0), 0);
+
     container.innerHTML = `
+        <div class="mb-3">
+            <h6>Period Breakdown:</h6>
+            <div class="d-flex flex-wrap gap-3">
+                <div><strong>Auto:</strong> ${Math.round(autoSum)} pts</div>
+                <div><strong>Teleop:</strong> ${Math.round(teleopSum)} pts</div>
+                <div><strong>Endgame:</strong> ${Math.round(endgameSum)} pts</div>
+                <div><strong>Total:</strong> ${Math.round(totalSum)} pts</div>
+            </div>
+        </div>
+
         <div class="mb-4">
             <h6>Team Composition:</h6>
             <div class="row">
