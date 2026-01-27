@@ -95,6 +95,8 @@ The system automatically handles the conversion between formats.
 ### Game Configuration (game_config.json)
 ```json
 {
+  "season": 2026,
+  "current_event_code": "OKTU",
   "preferred_api_source": "tba",
   "api_settings": {
     "username": "your_username",
@@ -108,6 +110,8 @@ The system automatically handles the conversion between formats.
 }
 ```
 
+> **Important:** The `season` field determines the year prefix for event codes in the database (e.g., `2026OKTU`). The `current_event_code` should be the raw FRC event code without the year prefix. See `docs/YEAR_PREFIXED_EVENT_CODES.md` for details.
+
 ### Environment Variables (Optional)
 ```bash
 FRC_API_KEY=your_first_api_token
@@ -120,7 +124,7 @@ TBA_API_KEY=your_tba_api_key
 ```python
 from app.utils.api_utils import get_teams_dual_api
 
-# Get teams for an event using dual API
+# Get teams for an event using dual API (use raw event code)
 teams = get_teams_dual_api('CALA')  # Automatically handles both APIs
 ```
 

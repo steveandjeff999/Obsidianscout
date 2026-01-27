@@ -1,0 +1,384 @@
+/* iOS 26.2 inspired liquid-glass UI rewrite */
+:root {
+  color-scheme: light;
+  --bg: #f3f6fb;
+  --bg-gradient: radial-gradient(1200px 800px at 10% -10%, rgba(120, 180, 255, 0.25), transparent 60%),
+                 radial-gradient(1200px 800px at 110% 10%, rgba(180, 140, 255, 0.18), transparent 60%),
+                 linear-gradient(180deg, #f8fbff 0%, #eef2f8 100%);
+  --text: #10121a;
+  --muted: #5b6473;
+  --accent: #3b82f6;
+  --accent-strong: #1d4ed8;
+  --glass: rgba(255, 255, 255, 0.55);
+  --glass-strong: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.45);
+  --shadow: 0 12px 30px rgba(10, 20, 40, 0.12);
+  --shadow-soft: 0 6px 18px rgba(10, 20, 40, 0.08);
+  --ring: 0 0 0 3px rgba(59, 130, 246, 0.25);
+  --radius: var(--border-radius, 1.25rem);
+  --radius-sm: max(calc(var(--radius) - 0.5rem), 0.6rem);
+  --radius-lg: calc(var(--radius) + 0.5rem);
+  --blur: 18px;
+  --blur-strong: 26px;
+  --stroke: 1px solid var(--glass-border);
+  --surface: rgba(255, 255, 255, 0.7);
+  --surface-solid: #ffffff;
+  --table-row: rgba(255, 255, 255, 0.4);
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #38bdf8;
+}
+
+html.dark-mode,
+body.dark-mode,
+html.dark-mode :root {
+  color-scheme: dark;
+  --bg: #0b0d14;
+  --bg-gradient: radial-gradient(1200px 800px at 0% -10%, rgba(92, 153, 255, 0.18), transparent 55%),
+                 radial-gradient(1200px 800px at 100% 0%, rgba(163, 98, 255, 0.16), transparent 60%),
+                 linear-gradient(180deg, #0a0c12 0%, #0f1320 100%);
+  --text: #e6ebf5;
+  --muted: #a1acbd;
+  --accent: #60a5fa;
+  --accent-strong: #3b82f6;
+  --glass: rgba(18, 22, 35, 0.62);
+  --glass-strong: rgba(18, 22, 35, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+  --shadow-soft: 0 8px 20px rgba(0, 0, 0, 0.3);
+  --surface: rgba(20, 24, 36, 0.72);
+  --surface-solid: #151a28;
+  --table-row: rgba(30, 36, 54, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background: var(--bg);
+  background-image: var(--bg-gradient);
+  color: var(--text);
+  font-family: "Inter", "Poppins", system-ui, -apple-system, Segoe UI, sans-serif;
+  letter-spacing: 0.01em;
+}
+
+body {
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--accent-strong);
+}
+
+::selection {
+  background: rgba(59, 130, 246, 0.28);
+  color: #fff;
+}
+
+/* Layout shells */
+.navbar,
+.topbar,
+.sidebar,
+.side-bar,
+#sidebar,
+.navbar-modern,
+.navbar-container {
+  background: var(--surface);
+  border: var(--stroke);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border-radius: var(--radius);
+}
+
+.sidebar,
+#sidebar,
+.side-bar {
+  padding: 1rem 0.75rem;
+}
+
+.navbar .nav-link,
+.topbar a,
+.sidebar a,
+.side-bar a {
+  color: var(--text);
+  opacity: 0.9;
+}
+
+.navbar .nav-link:hover,
+.topbar a:hover,
+.sidebar a:hover,
+.side-bar a:hover {
+  color: var(--accent);
+}
+
+/* Cards and panels */
+.card,
+.panel,
+.dashboard-card,
+.widget,
+.stat-card,
+.content-card,
+.modal-content,
+.dropdown-menu,
+.toast,
+.alert,
+.list-group,
+.list-group-item,
+.table,
+.table-responsive,
+.data-card,
+.tile,
+.notification-panel,
+.chat-panel,
+.settings-panel {
+  background: var(--surface);
+  border: var(--stroke);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+}
+
+.card-header,
+.card-footer,
+.modal-header,
+.modal-footer,
+.dropdown-header {
+  background: transparent;
+  border-color: var(--glass-border);
+}
+
+/* Glass highlight */
+.card::before,
+.panel::before,
+.modal-content::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.28), transparent 55%);
+  opacity: 0.6;
+}
+
+.card,
+.panel,
+.modal-content {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Tables */
+.table {
+  color: var(--text);
+}
+
+.table thead th {
+  border-color: var(--glass-border);
+  background: var(--glass-strong);
+}
+
+.table tbody tr {
+  background: var(--table-row);
+  border-color: var(--glass-border);
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+html.dark-mode .table-striped tbody tr:nth-of-type(odd) {
+  background: rgba(20, 26, 40, 0.6);
+}
+
+/* Buttons */
+.btn,
+button,
+input[type="button"],
+input[type="submit"] {
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: var(--glass-strong);
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.btn:hover,
+button:hover,
+input[type="button"]:hover,
+input[type="submit"]:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+
+.btn:focus,
+button:focus,
+input[type="button"]:focus,
+input[type="submit"]:focus,
+.form-control:focus,
+.form-select:focus {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.btn-primary,
+.btn-success,
+.btn-danger,
+.btn-warning,
+.btn-info {
+  color: #fff;
+  border-color: transparent;
+}
+
+.btn-primary { background: linear-gradient(135deg, #4f8df7, #2563eb); }
+.btn-success { background: linear-gradient(135deg, #34d399, #16a34a); }
+.btn-danger { background: linear-gradient(135deg, #f87171, #dc2626); }
+.btn-warning { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
+.btn-info { background: linear-gradient(135deg, #38bdf8, #0ea5e9); }
+
+.liquid-glass-buttons .btn,
+.liquid-glass-buttons button {
+  background: linear-gradient(135deg, rgba(255,255,255,0.65), rgba(255,255,255,0.35));
+  border: 1px solid rgba(255,255,255,0.5);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 8px 18px rgba(10,20,40,0.12);
+}
+
+html.dark-mode .liquid-glass-buttons .btn,
+html.dark-mode .liquid-glass-buttons button {
+  background: linear-gradient(135deg, rgba(28,34,52,0.7), rgba(20,24,36,0.5));
+  border-color: rgba(255,255,255,0.08);
+}
+
+/* Inputs */
+.form-control,
+.form-select,
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="search"],
+textarea,
+select {
+  background: var(--glass-strong);
+  border: var(--stroke);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.form-control::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+}
+
+.input-group-text {
+  background: var(--glass);
+  border: var(--stroke);
+}
+
+/* Modals */
+.modal-backdrop.show {
+  background: rgba(10, 12, 22, 0.55);
+}
+
+/* Badges & pills */
+.badge,
+.pill,
+.status-pill {
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  background: var(--glass-strong);
+  border: var(--stroke);
+}
+
+.badge.bg-success { background: rgba(34, 197, 94, 0.2); color: var(--success); }
+.badge.bg-warning { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+.badge.bg-danger { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+.badge.bg-info { background: rgba(56, 189, 248, 0.2); color: var(--info); }
+
+/* Dropdowns */
+.dropdown-menu {
+  padding: 0.75rem;
+}
+
+.dropdown-item {
+  border-radius: var(--radius-sm);
+  color: var(--text);
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+/* Tables and lists */
+.list-group-item {
+  background: transparent;
+  border-color: var(--glass-border);
+}
+
+/* Toasts */
+.toast {
+  border-radius: var(--radius);
+}
+
+/* Scrollbars */
+*::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+html.dark-mode *::-webkit-scrollbar-track {
+  background: rgba(10, 14, 24, 0.6);
+}
+
+html.dark-mode *::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+}
+
+/* Glass-off mode: remove blur for performance */
+.glass-off .card,
+.glass-off .panel,
+.glass-off .modal-content,
+.glass-off .dropdown-menu,
+.glass-off .navbar,
+.glass-off .sidebar,
+.glass-off .topbar {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: var(--surface-solid) !important;
+}
+
+/* Utility spacing for content blocks */
+.section,
+.section-block,
+.content-section {
+  padding: 1.25rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: var(--stroke);
+}

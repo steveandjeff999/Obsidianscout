@@ -209,6 +209,8 @@ As an administrator, you have full access to all system features and data. Your 
    - Which matches appear in strategy tools
    - Default filters for graphs/analytics
 
+> **Year-Prefixed Event Codes:** Events are stored in the database with a year prefix (e.g., `2026OKTU` instead of `OKTU`). The `current_event_code` in your config should be the raw code (e.g., `OKTU`), and the `season` field determines the year prefix. This allows the same event to be tracked across multiple seasons. See `docs/YEAR_PREFIXED_EVENT_CODES.md` for details.
+
 ## Data Management
 
 ### Database Backups

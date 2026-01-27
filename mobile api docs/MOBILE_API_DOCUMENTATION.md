@@ -16,6 +16,49 @@ The OBSIDIAN Scout Mobile API provides a comprehensive REST API for building mob
 -  **Team Isolation** - Data automatically scoped to user's scouting team
 -  **Real-time Data** - Access to live match and team data
 -  **Comprehensive Coverage** - All scouting features available via API
+-  **Year-Prefixed Event Codes** - Automatic resolution of event codes across seasons
+
+---
+
+## Event Code Resolution (Year-Prefix System)
+
+Starting in 2026, OBSIDIAN Scout stores event codes with a year prefix to differentiate the same event across different seasons. For example:
+- `2025OKTU` - Oklahoma Regional 2025
+- `2026OKTU` - Oklahoma Regional 2026
+
+### How It Works
+
+The mobile API **automatically resolves raw event codes** to the correct year-prefixed version based on your team's configured season in `game_config.json`.
+
+**Example:** If your team's `game_config.json` has `"season": 2026` and you request data for event code `OKTU`:
+- The API will automatically look up `2026OKTU` in the database
+- Falls back to raw `OKTU` for backwards compatibility with older data
+
+### Supported Formats
+
+When passing `event_id` parameters, you can use:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| Numeric ID | `4` | Database event ID (always works) |
+| Year-prefixed code | `2026OKTU` | Explicit year + event code |
+| Raw code | `OKTU` | Auto-resolved using team's season config |
+
+### Endpoints with Auto-Resolution
+
+The following endpoints automatically resolve raw event codes:
+- `GET /api/mobile/teams?event_id=OKTU`
+- `GET /api/mobile/matches?event_id=OKTU`
+- `GET /api/mobile/scouting/all?event_id=OKTU`
+- `POST /api/mobile/graphs/generate-graph` (event_id in payload)
+- `POST /api/mobile/graphs/graph-series` (event_id in payload)
+- `POST /api/mobile/graphs/visualize` (event_id in payload)
+
+### Best Practices
+
+1. **Use numeric IDs when possible** - Most reliable, obtained from `/api/mobile/events`
+2. **Use year-prefixed codes for explicit control** - e.g., `2026OKTU`
+3. **Raw codes work fine** - The API uses your team's season to resolve them
 
 ---
 
@@ -846,16 +889,19 @@ Authorization: Bearer <token>
     {
       "id": 1,
       "name": "Greater Kansas City Regional",
-      "code": "2024moks",
+      "code": "2026MOKS",
       "location": "Kansas City, MO",
-      "start_date": "2024-03-14T00:00:00Z",
-      "end_date": "2024-03-16T23:59:59Z",
+      "start_date": "2026-03-14T00:00:00Z",
+      "end_date": "2026-03-16T23:59:59Z",
       "timezone": "America/Chicago",
+      "year": 2026,
       "team_count": 45
     }
   ]
 }
 ```
+
+> **Note:** Event codes are stored with a year prefix (e.g., `2026MOKS` instead of `MOKS`). This allows the same event code to be tracked separately across different seasons. When filtering by event, you can use the numeric `id`, the full year-prefixed `code`, or just the raw code (e.g., `MOKS`) which will be auto-resolved to the current season.
 
 ---
 
@@ -873,9 +919,11 @@ Authorization: Bearer <token>
 ```
 
 **Query Parameters:**
-- `event_id` (required) - Event ID
+- `event_id` (required) - Event ID, year-prefixed code (e.g., `2026OKTU`), or raw code (e.g., `OKTU`)
 - `match_type` (optional) - Filter by match type (e.g., "Qualification")
 - `team_number` (optional) - Filter by team number
+
+> **Event Resolution:** If you pass a raw event code like `OKTU`, the API automatically resolves it to the year-prefixed version (e.g., `2026OKTU`) based on your team's configured season.
 
 **Success Response (200):**
 ```json

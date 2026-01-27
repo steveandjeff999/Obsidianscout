@@ -387,14 +387,16 @@ def sync_from_config():
     try:
         # Get event code from config
         game_config = get_effective_game_config()
-        event_code = game_config.get('current_event_code')
+        raw_event_code = game_config.get('current_event_code')
         
-        if not event_code:
+        if not raw_event_code:
             flash("No event code found in configuration. Please add 'current_event_code' to your game_config.json file.", 'danger')
             return redirect(url_for('matches.index'))
         
         # Find or create the event in our database (filtered by scouting team)
+        # Use year-prefixed event code so each year is treated as a different event (e.g., 2026ARLI)
         current_year = game_config.get('season', 2026)
+        event_code = f"{current_year}{raw_event_code}"
         event = get_event_by_code(event_code)
 
         # If `get_event_by_code` returned a synthetic alliance entry (id like 'alliance_<CODE>'),
@@ -416,14 +418,16 @@ def sync_from_config():
 
                 if not real_event:
                     # Attempt to fetch details from API and create the event record
+                    # Use raw_event_code for external API calls
                     try:
-                        event_details = get_event_details_dual_api(event.code)
+                        event_details = get_event_details_dual_api(raw_event_code)
                     except Exception:
                         event_details = None
 
+                    # Store with year-prefixed event_code to differentiate years
                     real_event = get_or_create_event(
-                        name=event_details.get('name', f"Event {event.code}") if event_details else f"Event {event.code}",
-                        code=event.code,
+                        name=event_details.get('name', f"Event {raw_event_code}") if event_details else f"Event {raw_event_code}",
+                        code=event_code,
                         year=event_details.get('year', current_year) if event_details else current_year,
                         location=event_details.get('location') if event_details else None,
                         start_date=event_details.get('start_date') if event_details else None,
@@ -448,12 +452,14 @@ def sync_from_config():
             from app.routes.data import get_or_create_event
             from app.utils.team_isolation import get_current_scouting_team_number
             current_scouting_team = get_current_scouting_team_number()
-            event_details = get_event_details_dual_api(event_code)
+            # Use raw_event_code for external API calls
+            event_details = get_event_details_dual_api(raw_event_code)
             
             if event_details:
                 # Use get_or_create_event to properly handle race conditions
+                # Store with year-prefixed event_code to differentiate years
                 event = get_or_create_event(
-                    name=event_details.get('name', f"Event {event_code}"),
+                    name=event_details.get('name', f"Event {raw_event_code}"),
                     code=event_code,
                     year=event_details.get('year', current_year),
                     location=event_details.get('location'),
@@ -467,16 +473,17 @@ def sync_from_config():
                     db.session.add(event)
             else:
                 # Fallback to placeholder using get_or_create_event
+                # Store with year-prefixed event_code to differentiate years
                 event = get_or_create_event(
-                    name=f"Event {event_code}",
+                    name=f"Event {raw_event_code}",
                     code=event_code,
                     year=current_year,
                     scouting_team_number=current_scouting_team
                 )
             db.session.flush()  # Get the ID without committing yet
         
-        # Fetch matches from the dual API using the event code
-        match_data_list = get_matches_dual_api(event_code)
+        # Fetch matches from the dual API using raw event code (external APIs don't use year-prefixed codes)
+        match_data_list = get_matches_dual_api(raw_event_code)
         
         # Track metrics for user feedback
         matches_added = 0
@@ -567,7 +574,12 @@ def sync_from_config():
         flash(f"Matches sync complete! Added {matches_added} new matches and updated {matches_updated} existing matches.", 'success')
         
     except ApiError as e:
-        flash(f"API Error: {str(e)}", 'danger')
+        msg = str(e)
+        msg_lower = msg.lower()
+        if '401' in msg_lower or '404' in msg_lower or 'not found' in msg_lower:
+            flash("Event not found from API.", 'danger')
+        else:
+            flash(f"API Error: {msg}", 'danger')
     except Exception as e:
         db.session.rollback()
         flash(f"Error syncing matches: {str(e)}", 'danger')
@@ -581,11 +593,15 @@ def update_times():
     try:
         # Get event code from config
         game_config = get_effective_game_config()
-        event_code = game_config.get('current_event_code')
+        raw_event_code = game_config.get('current_event_code')
         
-        if not event_code:
+        if not raw_event_code:
             flash("No event code found in configuration.", 'danger')
             return redirect(url_for('matches.index'))
+        
+        # Construct year-prefixed code for database lookup
+        current_year = game_config.get('season', 2026)
+        event_code = f"{current_year}{raw_event_code}"
         
         # Update match times
         from app.utils.match_time_fetcher import update_match_times

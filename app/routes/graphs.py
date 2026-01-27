@@ -587,13 +587,20 @@ def index():
 def scout_leaderboard():
     """Leaderboard of scouts: counts of scouted matches and prediction accuracy.
 
-    Accuracy is computed only for scouting entries where:
-      - the related Match has completed scores (red_score and blue_score present), and
-      - the scouting entry contains a prediction value we can interpret (several keys checked).
+    Accuracy is computed by comparing predictions against actual match winners.
+    Uses two methods to evaluate scout accuracy:
+    
+    1. Explicit predictions: If the scout entered a predicted_winner field
+    2. Scouted points: Uses scouted total_points to predict winners
+    
+    For scouted points predictions, we sum average total points for each team
+    in the alliance based on scouted data and compare alliances.
 
     The leaderboard groups by scout_id when available, otherwise by scout_name.
     """
-    from app.models import ScoutingData, Match, User
+    from app.models import ScoutingData, Match, User, Team
+    from app.utils.config_manager import get_current_game_config
+    from collections import defaultdict
 
     # Respect team isolation (use current user's scouting_team_number)
     scouting_team_number = getattr(current_user, 'scouting_team_number', None)
@@ -615,6 +622,121 @@ def scout_leaderboard():
 
     # Aggregate per-scout
     leaders = {}
+    
+    # Cache for team average scores and match predictions
+    team_avg_scores = {}
+    match_predictions_cache = {}
+    
+    def get_team_avg_score(team_id, total_metric_id):
+        """Get cached average total score for a team based on scouted data."""
+        cache_key = (team_id, total_metric_id)
+        if cache_key in team_avg_scores:
+            return team_avg_scores[cache_key]
+        
+        try:
+            team_scouting = ScoutingData.query.filter_by(team_id=team_id).all()
+            if not team_scouting:
+                team_avg_scores[cache_key] = None
+                return None
+            
+            scores = []
+            for sd in team_scouting:
+                try:
+                    data = sd.data or {}
+                    # Look for total points in various field names
+                    score = None
+                    for key in [total_metric_id, 'tot', 'total_points', 'total', 'points']:
+                        if key in data and data[key] is not None:
+                            try:
+                                score = float(data[key])
+                                break
+                            except (ValueError, TypeError):
+                                continue
+                    
+                    # Try calculating metric if not found directly
+                    if score is None:
+                        try:
+                            score = sd.calculate_metric(total_metric_id)
+                            if score is not None:
+                                score = float(score)
+                        except Exception:
+                            pass
+                    
+                    if score is not None and score >= 0:
+                        scores.append(score)
+                except Exception:
+                    continue
+            
+            if scores:
+                avg = sum(scores) / len(scores)
+                team_avg_scores[cache_key] = avg
+                return avg
+            
+            team_avg_scores[cache_key] = None
+            return None
+        except Exception:
+            team_avg_scores[cache_key] = None
+            return None
+    
+    def predict_match_from_scouted(match, total_metric_id):
+        """Predict match winner based on scouted total points."""
+        if match.id in match_predictions_cache:
+            return match_predictions_cache[match.id]
+        
+        try:
+            red_teams = match.red_teams if hasattr(match, 'red_teams') else []
+            blue_teams = match.blue_teams if hasattr(match, 'blue_teams') else []
+            
+            if not red_teams and not blue_teams:
+                match_predictions_cache[match.id] = None
+                return None
+            
+            # Calculate alliance totals
+            red_total = 0.0
+            red_count = 0
+            for team_num in red_teams:
+                team = Team.query.filter_by(team_number=team_num).first()
+                if team:
+                    avg = get_team_avg_score(team.id, total_metric_id)
+                    if avg is not None:
+                        red_total += avg
+                        red_count += 1
+            
+            blue_total = 0.0
+            blue_count = 0
+            for team_num in blue_teams:
+                team = Team.query.filter_by(team_number=team_num).first()
+                if team:
+                    avg = get_team_avg_score(team.id, total_metric_id)
+                    if avg is not None:
+                        blue_total += avg
+                        blue_count += 1
+            
+            # Need at least some data to make a prediction
+            if red_count == 0 and blue_count == 0:
+                match_predictions_cache[match.id] = None
+                return None
+            
+            # Determine predicted winner
+            if red_total > blue_total:
+                predicted = 'red'
+            elif blue_total > red_total:
+                predicted = 'blue'
+            else:
+                predicted = 'tie'
+            
+            result = {
+                'predicted_winner': predicted,
+                'red_score': red_total,
+                'blue_score': blue_total,
+                'red_teams_with_data': red_count,
+                'blue_teams_with_data': blue_count
+            }
+            match_predictions_cache[match.id] = result
+            return result
+        except Exception as e:
+            match_predictions_cache[match.id] = None
+            return None
 
     def normalize_pred(pred, match):
         """Normalize a prediction value to 'red'|'blue'|'tie' or None."""
@@ -644,6 +766,40 @@ def scout_leaderboard():
             return None
         except Exception:
             return None
+    
+    def get_actual_winner(match):
+        """Get actual match winner from database scores."""
+        try:
+            red = match.red_score
+            blue = match.blue_score
+            
+            if red is None or blue is None:
+                return None
+            if red < 0 or blue < 0:
+                return None
+                
+            if red > blue:
+                return 'red'
+            elif blue > red:
+                return 'blue'
+            else:
+                return 'tie'
+        except Exception:
+            return None
+    
+    # Get total metric ID from game config
+    game_config = get_current_game_config() or {}
+    total_metric_id = 'tot'  # Default
+    
+    if 'data_analysis' in game_config and 'key_metrics' in game_config['data_analysis']:
+        for metric in game_config['data_analysis']['key_metrics']:
+            metric_id = metric.get('id', '')
+            if 'total' in metric_id.lower() or metric_id.lower() == 'tot':
+                total_metric_id = metric_id
+                break
+    
+    # Track evaluated matches per scout to avoid double-counting
+    scout_evaluated_matches = defaultdict(set)
 
     for e in entries:
         key = e.scout_id if e.scout_id else (e.scout_name or 'Unknown')
@@ -671,41 +827,61 @@ def scout_leaderboard():
         if not rec['last_scouted'] or (e.timestamp and e.timestamp > rec['last_scouted']):
             rec['last_scouted'] = e.timestamp
 
-        # Only evaluate accuracy when match has completed scores
+        # Get the match
         match = None
         try:
             match = e.match
         except Exception:
             match = None
 
-        if match and match.red_score is not None and match.red_score >= 0 and match.blue_score is not None and match.blue_score >= 0:
-            # Attempt to find prediction value in the scouting data
+        if not match:
+            continue
+        
+        # Get actual winner (needs completed match)
+        actual_winner = get_actual_winner(match)
+        if actual_winner is None:
+            continue
+        
+        # Skip if already evaluated this match for this scout
+        if match.id in scout_evaluated_matches[key]:
+            continue
+
+        # METHOD 1: Check explicit prediction in scouting data
+        data = {}
+        try:
+            data = e.data or {}
+        except Exception:
             data = {}
-            try:
-                data = e.data or {}
-            except Exception:
-                data = {}
 
-            pred_candidates = [
-                data.get('predicted_winner'),
-                data.get('prediction'),
-                data.get('predicted'),
-                data.get('winner_prediction'),
-                data.get('predicted_winner_choice'),
-                data.get('predicted_winner_team'),
-            ]
+        pred_candidates = [
+            data.get('predicted_winner'),
+            data.get('prediction'),
+            data.get('predicted'),
+            data.get('winner_prediction'),
+            data.get('predicted_winner_choice'),
+            data.get('predicted_winner_team'),
+        ]
 
-            pred_val = None
-            for p in pred_candidates:
-                if p is not None:
-                    pred_val = p
-                    break
+        pred_val = None
+        for p in pred_candidates:
+            if p is not None:
+                pred_val = p
+                break
 
-            norm = normalize_pred(pred_val, match)
-            if norm is not None:
+        norm = normalize_pred(pred_val, match)
+        if norm is not None:
+            # Explicit prediction found
+            scout_evaluated_matches[key].add(match.id)
+            rec['evaluated'] += 1
+            if norm == actual_winner:
+                rec['correct'] += 1
+        else:
+            # METHOD 2: Use scouted points-based prediction
+            prediction = predict_match_from_scouted(match, total_metric_id)
+            if prediction and prediction.get('predicted_winner'):
+                scout_evaluated_matches[key].add(match.id)
                 rec['evaluated'] += 1
-                actual = 'red' if match.red_score > match.blue_score else 'blue' if match.blue_score > match.red_score else 'tie'
-                if norm == actual:
+                if prediction['predicted_winner'] == actual_winner:
                     rec['correct'] += 1
 
     # Determine sort mode from query parameter. Supported: 'total' (matches scouted) or 'accuracy'

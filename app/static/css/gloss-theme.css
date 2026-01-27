@@ -1,0 +1,32 @@
+/* Final polish layer for liquid-glass UI */
+:root {
+  --gloss-sheen: linear-gradient(120deg, rgba(255,255,255,0.45), rgba(255,255,255,0.05), transparent 70%);
+}
+
+.card:hover,
+.panel:hover,
+.modal-content:hover,
+.widget:hover {
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+}
+
+.card::after,
+.panel::after,
+.modal-content::after {
+  content: "";
+  position: absolute;
+  inset: -40% 40% auto auto;
+  width: 180px;
+  height: 180px;
+  background: var(--gloss-sheen);
+  opacity: 0.55;
+  pointer-events: none;
+  transform: rotate(18deg);
+}
+
+html.dark-mode .card:hover,
+html.dark-mode .panel:hover,
+html.dark-mode .modal-content:hover,
+html.dark-mode .widget:hover {
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.45);
+}

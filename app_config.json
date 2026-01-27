@@ -4,9 +4,9 @@
   "repository_url": "https://github.com/steveandjeff999/Obsidianscout.git",
   "branch": "main",
   "backup_enabled": true,
-  "JWT_SECRET_KEY": "fkAIPH8FmHwomxRFEhcJxk0JX3yhnGKpY0b05bpwWhExiuIGb2uVXOHHkSgMI0kV",
-  "JWT_GENERATE_NEW": false,
-  "VAPID_PRIVATE_KEY": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgz7ZefuxYutq0rjNOPOhJu-w5drkLyXWdZfQIBy0NsY2hRANCAARWzNr_IkRsefnIEYetp0wSjJT62qtn3kUu1zfH3bceim_qjRLa3aC6sRVNjT_i6TLybdNO64xK0Q5_n7Ape1Yj",
-  "VAPID_PUBLIC_KEY": "BFbM2v8iRGx5-cgRh62nTBKMlPraq2feRS7XN8fdtx6Kb-qNEtrdoLqxFU2NP-LpMvJt007rjErRDn-fsCl7ViM",
-  "VAPID_GENERATE_NEW": false
+  "JWT_SECRET_KEY": "[REDACTED_JWT_SECRET_KEY]",
+  "JWT_GENERATE_NEW": true,
+  "VAPID_PRIVATE_KEY": "[REDACTED_VAPID_PRIVATE_KEY]",
+  "VAPID_PUBLIC_KEY": "[REDACTED_VAPID_PUBLIC_KEY]",
+  "VAPID_GENERATE_NEW": true
 }

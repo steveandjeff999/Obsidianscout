@@ -216,21 +216,23 @@ def sync_from_config():
     try:
         # Get event code from effective config (respects alliance mode)
         game_config = get_effective_game_config()
-        event_code = game_config.get('current_event_code')
+        raw_event_code = game_config.get('current_event_code')
         
-        if not event_code:
+        if not raw_event_code:
             flash("No event code found in configuration. Please add 'current_event_code' to your game_config.json file.", 'danger')
             return redirect(url_for('teams.index'))
         
         # Find or create the event in our database (filtered by current scouting team)
+        # Use year-prefixed event code so each year is treated as a different event (e.g., 2026ARLI)
         current_year = game_config.get('season', 2026)
+        event_code = f"{current_year}{raw_event_code}"
         event = get_event_by_code(event_code)
         
         if not event:
             try:
-                # Try to get event details from dual API
+                # Try to get event details from dual API (use raw code for external API)
                 from app.routes.data import get_or_create_event
-                event_details = get_event_details_dual_api(event_code)
+                event_details = get_event_details_dual_api(raw_event_code)
                 
                 # Convert date strings to datetime.date objects
                 start_date_str = event_details.get('dateStart')
@@ -258,8 +260,9 @@ def sync_from_config():
                 current_scouting_team = get_current_scouting_team_number()
                 
                 # Use get_or_create_event to properly handle race conditions
+                # Store with year-prefixed event_code to differentiate years
                 event = get_or_create_event(
-                    name=event_details.get('name', f"Event {event_code}"),
+                    name=event_details.get('name', f"Event {raw_event_code}"),
                     code=event_code,
                     year=event_details.get('year', current_year),
                     location=event_details.get('location', ''),
@@ -273,7 +276,7 @@ def sync_from_config():
                 from app.utils.team_isolation import get_current_scouting_team_number
                 current_scouting_team = get_current_scouting_team_number()
                 event = get_or_create_event(
-                    name=f"Event {event_code}",
+                    name=f"Event {raw_event_code}",
                     code=event_code,
                     year=current_year,
                     scouting_team_number=current_scouting_team
@@ -281,8 +284,8 @@ def sync_from_config():
             
             db.session.commit()  # Commit to get the ID
 
-        # Fetch teams from the dual API using the event code
-        team_data_list = get_teams_dual_api(event_code)
+        # Fetch teams from the dual API using raw event code (external APIs don't use year-prefixed codes)
+        team_data_list = get_teams_dual_api(raw_event_code)
         
         # Track metrics for user feedback
         teams_added = 0
@@ -374,7 +377,12 @@ def sync_from_config():
         flash(f"Teams sync complete! Added {teams_added} new teams and updated {teams_updated} existing teams.", 'success')
         
     except ApiError as e:
-        flash(f"API Error: {str(e)}", 'danger')
+        msg = str(e)
+        msg_lower = msg.lower()
+        if '401' in msg_lower or '404' in msg_lower or 'not found' in msg_lower:
+            flash("Event not found from API.", 'danger')
+        else:
+            flash(f"API Error: {msg}", 'danger')
     except Exception as e:
         db.session.rollback()
         flash(f"Error syncing teams: {str(e)}", 'danger')
