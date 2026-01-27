@@ -48,7 +48,7 @@
                     <select id="event-filter-select" class="form-select w-auto">
                         <option value="all" selected>All Events</option>
                         {% for event in events|dedupe_events %}
-                        <option value="{{ event.id }}" data-event-id="{{ event.id }}">{{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}{% if event.code %} - {{ event.code }}{% endif %}</option>
+                        <option value="{{ event.id }}" data-event-id="{{ event.id }}">{{ event.name }} ({{ event.year }}){% if event.is_alliance %} (Alliance){% endif %}</option>
                         {% endfor %}
                     </select>
                 </div>

@@ -19,6 +19,12 @@ A comprehensive REST API has been added to OBSIDIAN Scout specifically designed 
 - **Team isolation** - Data automatically scoped to user's team
 - **Pagination support** - Efficient data loading
 
+###  Year-Prefixed Event Codes
+- **Automatic resolution** - Raw event codes (e.g., `OKTU`) auto-resolve to year-prefixed (e.g., `2026OKTU`)
+- **Season-aware** - Uses team's configured season from `game_config.json`
+- **Multi-year support** - Same event tracked separately across seasons (2025OKTU vs 2026OKTU)
+- **Backwards compatible** - Falls back to raw codes for legacy data
+
 ###  Offline Sync Support
 - **Bulk submission endpoint** - Upload multiple entries at once
 - **Offline ID tracking** - Match server IDs to local data
@@ -47,6 +53,7 @@ The main API implementation with all endpoints:
 - Configuration endpoints
 - Sync status endpoints
 - Health check
+- **Event code resolution helper** (`resolve_event_code_to_id`)
 
 ### 2. `MOBILE_API_DOCUMENTATION.md`
 Complete API documentation including:

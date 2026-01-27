@@ -1339,8 +1339,12 @@ def create_app(test_config=None):
             # If game config references a current_event_code but the event doesn't exist, warn
             if not issue:
                 try:
-                    event_code = cfg.get('current_event_code') if isinstance(cfg, dict) else None
-                    if event_code:
+                    raw_event_code = cfg.get('current_event_code') if isinstance(cfg, dict) else None
+                    if raw_event_code:
+                        # Prepend year to event code to match new storage format (e.g., 2026OKTU)
+                        event_year = cfg.get('season') or cfg.get('year') or datetime.now().year
+                        event_code = f"{event_year}{raw_event_code}"
+                        
                         # Use the team-isolation helper which handles case-insensitive
                         # lookup, alliance synthetic entries, and cross-team fallbacks.
                         try:
@@ -1351,7 +1355,7 @@ def create_app(test_config=None):
                             ev = Event.query.filter_by(code=event_code).first()
 
                         if not ev:
-                            issue = f"Event code '{event_code}' in configuration was not found. Run Teams → Sync from config to create event and teams."
+                            issue = f"Event code '{raw_event_code}' in configuration was not found. Run Teams → Sync from config to create event and teams."
                 except Exception:
                     # ignore
                     pass

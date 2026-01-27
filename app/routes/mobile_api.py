@@ -80,6 +80,67 @@ EXEMPT_PATHS = [
 ]
 
 
+def resolve_event_code_to_id(event_code_param, team_number):
+    """Resolve an event code string to an event ID, using year prefix from team's config.
+    
+    When multiple events exist with the same raw code but different year prefixes
+    (e.g., 2025OKTU and 2026OKTU), this uses the team's configured season to pick
+    the correct one.
+    
+    Args:
+        event_code_param: Raw event code (e.g., "OKTU") or year-prefixed code (e.g., "2026OKTU")
+        team_number: The scouting team number to scope the lookup and get season config
+        
+    Returns:
+        Event ID if found, None otherwise
+    """
+    if not event_code_param:
+        return None
+        
+    event_code = str(event_code_param).strip().upper()
+    
+    # Check if code already has year prefix (4 digits at start)
+    if len(event_code) >= 4 and event_code[:4].isdigit():
+        # Already year-prefixed, try exact match first
+        evt = Event.query.filter_by(code=event_code, scouting_team_number=team_number).first()
+        if not evt:
+            evt = Event.query.filter_by(code=event_code).first()
+        if evt:
+            return evt.id
+        return None
+    
+    # Raw code without year prefix - construct year-prefixed version from team's config
+    try:
+        from app.utils.config_manager import load_game_config
+        game_config = load_game_config(team_number=team_number)
+        season = game_config.get('season', 2026) if isinstance(game_config, dict) else 2026
+    except Exception:
+        season = 2026
+    
+    year_prefixed_code = f"{season}{event_code}"
+    
+    # Try year-prefixed code first (preferred)
+    evt = Event.query.filter_by(code=year_prefixed_code, scouting_team_number=team_number).first()
+    if not evt:
+        evt = Event.query.filter_by(code=year_prefixed_code).first()
+    
+    if evt:
+        current_app.logger.debug(f"Resolved event code '{event_code_param}' to year-prefixed '{year_prefixed_code}' (id={evt.id})")
+        return evt.id
+    
+    # Fall back to raw code for backwards compatibility with old data
+    evt = Event.query.filter_by(code=event_code, scouting_team_number=team_number).first()
+    if not evt:
+        evt = Event.query.filter_by(code=event_code).first()
+    
+    if evt:
+        current_app.logger.debug(f"Resolved event code '{event_code_param}' to raw code '{event_code}' (id={evt.id})")
+        return evt.id
+    
+    current_app.logger.debug(f"Could not resolve event code '{event_code_param}' to an Event record")
+    return None
+
+
 @mobile_api.before_request
 def enforce_mobile_auth():
     """Require a valid JWT for all mobile API requests except exempt paths.
@@ -1858,6 +1919,7 @@ def get_teams():
         # event_id may be provided as an integer id OR as an event code (string).
         # Accept either form for backwards compatibility with clients that
         # pass the event code (e.g. 'arsea'). Resolve codes to numeric ids.
+        # Uses team's configured season to pick correct year when multiple events exist.
         event_param = request.args.get('event_id')
         event_id = None
         if event_param is not None:
@@ -1865,19 +1927,8 @@ def get_teams():
                 # try integer first
                 event_id = int(event_param)
             except Exception:
-                # Not an integer — attempt to resolve by event.code scoped to
-                # the scouting team first, then globally as a fallback.
-                try:
-                    evt = Event.query.filter_by(code=str(event_param), scouting_team_number=team_number).first()
-                    if not evt:
-                        evt = Event.query.filter_by(code=str(event_param)).first()
-                    if evt:
-                        event_id = evt.id
-                        current_app.logger.debug(f"Resolved event code '{event_param}' to id {event_id}")
-                    else:
-                        current_app.logger.debug(f"Could not resolve event code '{event_param}' to an Event record")
-                except Exception:
-                    current_app.logger.debug(f"Error while resolving event code '{event_param}'\n{traceback.format_exc()}")
+                # Not an integer — resolve by event code using team's season config
+                event_id = resolve_event_code_to_id(event_param, team_number)
         if event_id:
             # Build teams list from matches for the event to avoid relying on
             # Team.events association which may be incomplete.
@@ -1963,9 +2014,18 @@ def get_teams():
 
             # Resolve Event: prefer configured current_event_code, otherwise
             # pick the most recent Event for this scouting team.
+            # Construct year-prefixed event code if needed (database stores codes like '2026OKTU')
             event = None
             if event_code:
-                event = Event.query.filter_by(code=event_code, scouting_team_number=team_number).first()
+                # Try year-prefixed code first
+                year_prefixed_code = event_code
+                if not (len(str(event_code)) >= 4 and str(event_code)[:4].isdigit()):
+                    season = game_config.get('season', 2026) if isinstance(game_config, dict) else 2026
+                    year_prefixed_code = f"{season}{event_code}"
+                event = Event.query.filter_by(code=year_prefixed_code, scouting_team_number=team_number).first()
+                # Fall back to raw code if year-prefixed not found
+                if not event and year_prefixed_code != event_code:
+                    event = Event.query.filter_by(code=event_code, scouting_team_number=team_number).first()
             if not event:
                 event = Event.query.filter_by(scouting_team_number=team_number).order_by(Event.start_date.desc().nullslast(), Event.id.desc()).first()
 
@@ -2316,22 +2376,15 @@ def get_matches():
     try:
         team_number = request.mobile_team_number
         # Accept event_id as integer or event code string
+        # Uses team's configured season to pick correct year when multiple events exist.
         event_param = request.args.get('event_id')
         event_id = None
         if event_param is not None:
             try:
                 event_id = int(event_param)
             except Exception:
-                # Try to resolve by event code using scoped lookup
-                try:
-                    evt = Event.query.filter_by(code=str(event_param), scouting_team_number=team_number).first()
-                    if not evt:
-                        evt = Event.query.filter_by(code=str(event_param)).first()
-                    if evt:
-                        event_id = evt.id
-                        current_app.logger.debug(f"Resolved event code '{event_param}' to id {event_id}")
-                except Exception:
-                    current_app.logger.debug(f"Could not resolve event code '{event_param}' to an Event record")
+                # Not an integer — resolve by event code using team's season config
+                event_id = resolve_event_code_to_id(event_param, team_number)
 
         # Determine alliance status for requesting team
         alliance = None
@@ -2380,9 +2433,18 @@ def get_matches():
                 event_code = event_code_team
 
             # Resolve Event: prefer configured current_event_code, otherwise pick the most recent Event for the team.
+            # Construct year-prefixed event code if needed (database stores codes like '2026OKTU')
             event = None
             if event_code:
-                event = Event.query.filter_by(code=event_code, scouting_team_number=team_number).first()
+                # Try year-prefixed code first
+                year_prefixed_code = event_code
+                if not (len(str(event_code)) >= 4 and str(event_code)[:4].isdigit()):
+                    season = game_config.get('season', 2026) if isinstance(game_config, dict) else 2026
+                    year_prefixed_code = f"{season}{event_code}"
+                event = Event.query.filter_by(code=year_prefixed_code, scouting_team_number=team_number).first()
+                # Fall back to raw code if year-prefixed not found
+                if not event and year_prefixed_code != event_code:
+                    event = Event.query.filter_by(code=event_code, scouting_team_number=team_number).first()
             if not event:
                 event = Event.query.filter_by(scouting_team_number=team_number).order_by(Event.start_date.desc().nullslast(), Event.id.desc()).first()
             if not event:
@@ -2768,21 +2830,15 @@ def get_all_scouting_data():
         match_id = request.args.get('match_id', type=int)
 
         # event_id may be an integer id or an event code string (e.g. 'arsea')
+        # Uses team's configured season to pick correct year when multiple events exist.
         event_param = request.args.get('event_id')
         event_id = None
         if event_param is not None:
             try:
                 event_id = int(event_param)
             except Exception:
-                try:
-                    evt = Event.query.filter_by(code=str(event_param), scouting_team_number=team_number).first()
-                    if not evt:
-                        evt = Event.query.filter_by(code=str(event_param)).first()
-                    if evt:
-                        event_id = evt.id
-                        current_app.logger.debug(f"Resolved event code '{event_param}' to id {event_id} in scouting/all")
-                except Exception:
-                    current_app.logger.debug(f"Error resolving event code '{event_param}' in scouting/all\n{traceback.format_exc()}")
+                # Not an integer — resolve by event code using team's season config
+                event_id = resolve_event_code_to_id(event_param, team_number)
 
         limit = min(request.args.get('limit', 200, type=int), 2000)
         offset = request.args.get('offset', 0, type=int)
@@ -3861,7 +3917,17 @@ def mobile_graphs_compare():
                 if not event_obj:
                     event_obj = Event.query.get(resolved_event_id)
             if event_obj is None and isinstance(event_identifier, str):
-                event_obj = Event.query.filter_by(code=event_identifier, scouting_team_number=token_team_number).first()
+                # Try year-prefixed code first (database stores codes like '2026OKTU')
+                from app.utils.config_manager import load_game_config
+                _cfg = load_game_config(team_number=token_team_number)
+                _season = _cfg.get('season', 2026) if isinstance(_cfg, dict) else 2026
+                year_prefixed_code = event_identifier
+                if not (len(event_identifier) >= 4 and event_identifier[:4].isdigit()):
+                    year_prefixed_code = f"{_season}{event_identifier.upper()}"
+                event_obj = Event.query.filter_by(code=year_prefixed_code, scouting_team_number=token_team_number).first()
+                # Fall back to raw code if year-prefixed not found
+                if not event_obj and year_prefixed_code != event_identifier.upper():
+                    event_obj = Event.query.filter_by(code=event_identifier.upper(), scouting_team_number=token_team_number).first()
                 if event_obj:
                     resolved_event_id = event_obj.id
 
@@ -4282,7 +4348,17 @@ def mobile_graphs_image():
                 if not event_obj:
                     event_obj = Event.query.get(resolved_event_id)
             if event_obj is None and isinstance(event_identifier, str):
-                event_obj = Event.query.filter_by(code=event_identifier, scouting_team_number=token_team_number).first()
+                # Try year-prefixed code first (database stores codes like '2026OKTU')
+                from app.utils.config_manager import load_game_config
+                _cfg = load_game_config(team_number=token_team_number)
+                _season = _cfg.get('season', 2026) if isinstance(_cfg, dict) else 2026
+                year_prefixed_code = event_identifier
+                if not (len(event_identifier) >= 4 and event_identifier[:4].isdigit()):
+                    year_prefixed_code = f"{_season}{event_identifier.upper()}"
+                event_obj = Event.query.filter_by(code=year_prefixed_code, scouting_team_number=token_team_number).first()
+                # Fall back to raw code if year-prefixed not found
+                if not event_obj and year_prefixed_code != event_identifier.upper():
+                    event_obj = Event.query.filter_by(code=event_identifier.upper(), scouting_team_number=token_team_number).first()
                 if event_obj:
                     resolved_event_id = event_obj.id
 
@@ -4626,7 +4702,15 @@ def mobile_graphs_visualize():
                 pass
         
         if not event and event_code:
-            event = Event.query.filter_by(code=event_code, scouting_team_number=token_team_number).first()
+            # Try year-prefixed code first (database stores codes like '2026OKTU')
+            year_prefixed_code = event_code
+            if not (len(str(event_code)) >= 4 and str(event_code)[:4].isdigit()):
+                season = game_config.get('season', 2026) if isinstance(game_config, dict) else 2026
+                year_prefixed_code = f"{season}{event_code}"
+            event = Event.query.filter_by(code=year_prefixed_code, scouting_team_number=token_team_number).first()
+            # Fall back to raw code if year-prefixed not found
+            if not event and year_prefixed_code != event_code:
+                event = Event.query.filter_by(code=event_code, scouting_team_number=token_team_number).first()
         
         if not event:
             event = Event.query.filter_by(scouting_team_number=token_team_number).order_by(Event.start_date.desc().nullslast(), Event.id.desc()).first()

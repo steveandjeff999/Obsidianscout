@@ -396,6 +396,8 @@ def fetch_from_endpoint(api_url, headers, timeout=15):
             except:
                 error_msg = f"HTTP {response.status_code}"
             print(f"Endpoint failed: {error_msg}")
+            if response.status_code in (401, 404):
+                raise ApiError("Event not found from API.")
             if response.status_code == 401:
                 print("Authentication failed (401)")
                 print(f"Authorization header present: {'Authorization' in headers}")
@@ -833,17 +835,32 @@ def get_event_details(event_code):
         raise ApiError(f"Error getting event details: {str(e)}")
 
 # Dual API Support Functions
+
+def strip_year_prefix(event_code):
+    """Strip year prefix from event code if present (e.g., 2026ARLI -> ARLI).
+    
+    Event codes stored in the database may have a 4-digit year prefix to 
+    differentiate the same event across different years. External APIs 
+    (FIRST, TBA) don't use this prefix, so we strip it before making API calls.
+    """
+    if event_code and len(event_code) > 4 and event_code[:4].isdigit():
+        return event_code[4:]
+    return event_code
+
 def get_teams_dual_api(event_code):
     """Get teams from either FIRST API or TBA API based on configuration"""
     preferred_source = get_preferred_api_source()
     
+    # Strip year prefix if present (e.g., 2026ARLI -> ARLI) for external API calls
+    raw_event_code = strip_year_prefix(event_code)
+    
     try:
         if preferred_source == 'tba':
-            print(f"Using TBA API for teams at event {event_code}")
+            print(f"Using TBA API for teams at event {raw_event_code}")
             # Convert event code to TBA format
             game_config = get_current_game_config()
             season = game_config.get('season', 2026)
-            tba_event_key = construct_tba_event_key(event_code, season)
+            tba_event_key = construct_tba_event_key(raw_event_code, season)
             
             # Get teams from TBA
             tba_teams = get_tba_teams_at_event(tba_event_key)
@@ -857,9 +874,9 @@ def get_teams_dual_api(event_code):
             
             return teams_db_format
         else:
-            print(f"Using FIRST API for teams at event {event_code}")
+            print(f"Using FIRST API for teams at event {raw_event_code}")
             # Use existing FIRST API function
-            api_teams = get_teams(event_code)
+            api_teams = get_teams(raw_event_code)
             
             # Convert to database format
             teams_db_format = []
@@ -881,7 +898,7 @@ def get_teams_dual_api(event_code):
             if fallback_source == 'tba':
                 game_config = get_current_game_config()
                 season = game_config.get('season', 2026)
-                tba_event_key = construct_tba_event_key(event_code, season)
+                tba_event_key = construct_tba_event_key(raw_event_code, season)
 
                 tba_teams = get_tba_teams_at_event(tba_event_key)
 
@@ -893,7 +910,7 @@ def get_teams_dual_api(event_code):
 
                 return teams_db_format
             else:
-                api_teams = get_teams(event_code)
+                api_teams = get_teams(raw_event_code)
 
                 teams_db_format = []
                 for api_team in api_teams:
@@ -912,13 +929,16 @@ def get_matches_dual_api(event_code):
     """Get matches from either FIRST API or TBA API based on configuration"""
     preferred_source = get_preferred_api_source()
     
+    # Strip year prefix if present (e.g., 2026ARLI -> ARLI) for external API calls
+    raw_event_code = strip_year_prefix(event_code)
+    
     try:
         if preferred_source == 'tba':
-            print(f"Using TBA API for matches at event {event_code}")
+            print(f"Using TBA API for matches at event {raw_event_code}")
             # Convert event code to TBA format
             game_config = get_current_game_config()
             season = game_config.get('season', 2026)
-            tba_event_key = construct_tba_event_key(event_code, season)
+            tba_event_key = construct_tba_event_key(raw_event_code, season)
             
             # Get matches from TBA
             tba_matches = get_tba_event_matches(tba_event_key)
@@ -932,9 +952,9 @@ def get_matches_dual_api(event_code):
             
             return matches_db_format
         else:
-            print(f"Using FIRST API for matches at event {event_code}")
+            print(f"Using FIRST API for matches at event {raw_event_code}")
             # Use existing FIRST API function
-            api_matches = get_matches(event_code)
+            api_matches = get_matches(raw_event_code)
 
             # If FIRST returned nothing, try TBA fallback immediately (don't wait for exception)
             if not api_matches:
@@ -942,7 +962,7 @@ def get_matches_dual_api(event_code):
                     print("FIRST API returned no matches; attempting TBA fallback")
                     game_config = get_current_game_config()
                     season = game_config.get('season', 2026)
-                    tba_event_key = construct_tba_event_key(event_code, season)
+                    tba_event_key = construct_tba_event_key(raw_event_code, season)
 
                     tba_matches = get_tba_event_matches(tba_event_key)
                     matches_db_format = []
@@ -975,7 +995,7 @@ def get_matches_dual_api(event_code):
             if fallback_source == 'tba':
                 game_config = get_current_game_config()
                 season = game_config.get('season', 2026)
-                tba_event_key = construct_tba_event_key(event_code, season)
+                tba_event_key = construct_tba_event_key(raw_event_code, season)
 
                 tba_matches = get_tba_event_matches(tba_event_key)
 
@@ -987,7 +1007,7 @@ def get_matches_dual_api(event_code):
 
                 return matches_db_format
             else:
-                api_matches = get_matches(event_code)
+                api_matches = get_matches(raw_event_code)
 
                 matches_db_format = []
                 for api_match in api_matches:
@@ -1005,13 +1025,16 @@ def get_event_details_dual_api(event_code):
     """Get event details from either FIRST API or TBA API based on configuration"""
     preferred_source = get_preferred_api_source()
     
+    # Strip year prefix if present (e.g., 2026ARLI -> ARLI) for external API calls
+    raw_event_code = strip_year_prefix(event_code)
+    
     try:
         if preferred_source == 'tba':
-            print(f"Using TBA API for event details: {event_code}")
+            print(f"Using TBA API for event details: {raw_event_code}")
             # Convert event code to TBA format
             game_config = get_current_game_config()
             season = game_config.get('season', 2026)
-            tba_event_key = construct_tba_event_key(event_code, season)
+            tba_event_key = construct_tba_event_key(raw_event_code, season)
             
             # Get event details from TBA
             tba_event = get_tba_event_details(tba_event_key)
@@ -1022,9 +1045,9 @@ def get_event_details_dual_api(event_code):
             else:
                 return None
         else:
-            print(f"Using FIRST API for event details: {event_code}")
+            print(f"Using FIRST API for event details: {raw_event_code}")
             # Use existing FIRST API function
-            return get_event_details(event_code)
+            return get_event_details(raw_event_code)
     
     except (ApiError, TBAApiError) as e:
         print(f"Primary API ({preferred_source}) failed: {str(e)}")
@@ -1037,7 +1060,7 @@ def get_event_details_dual_api(event_code):
             if fallback_source == 'tba':
                 game_config = get_current_game_config()
                 season = game_config.get('season', 2026)
-                tba_event_key = construct_tba_event_key(event_code, season)
+                tba_event_key = construct_tba_event_key(raw_event_code, season)
 
                 tba_event = get_tba_event_details(tba_event_key)
 
@@ -1046,7 +1069,7 @@ def get_event_details_dual_api(event_code):
                 else:
                     return None
             else:
-                return get_event_details(event_code)
+                return get_event_details(raw_event_code)
         except (ApiError, TBAApiError) as fallback_error:
             print(f"Fallback API ({fallback_source}) also failed: {str(fallback_error)}")
             diag = inspect_api_key_locations()

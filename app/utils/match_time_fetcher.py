@@ -188,7 +188,7 @@ def update_match_times(event_code, scouting_team_number=None):
     Times are fetched from APIs in event local timezone and converted to UTC for storage
     
     Args:
-        event_code: Event code to update
+        event_code: Event code to update (may be year-prefixed like 2026ARLI)
         scouting_team_number: Optional team number to scope update
         
     Returns:
@@ -206,6 +206,12 @@ def update_match_times(event_code, scouting_team_number=None):
         print(f" Event {event_code} not found in database")
         return 0
     
+    # Extract raw event code for API calls (strip year prefix if present, e.g., 2026ARLI -> ARLI)
+    # Year prefix is 4 digits at the start of the code
+    raw_event_code = event_code
+    if event_code and len(event_code) > 4 and event_code[:4].isdigit():
+        raw_event_code = event_code[4:]
+    
     # Get event timezone for proper conversion
     event_timezone = event.timezone
     if event_timezone:
@@ -216,22 +222,22 @@ def update_match_times(event_code, scouting_team_number=None):
     # Get preferred API source
     preferred_api = get_preferred_api_source()
     
-    # Fetch times from APIs (passing timezone for proper parsing)
+    # Fetch times from APIs using raw event code (external APIs don't use year-prefixed codes)
     first_times = {}
     tba_times = {}
     
     if preferred_api == 'first':
-        first_times = fetch_match_times_from_first(event_code, event_timezone)
+        first_times = fetch_match_times_from_first(raw_event_code, event_timezone)
         if not first_times:
             # Fallback to TBA
             print("️  No times from FIRST API, trying TBA...")
-            tba_times = fetch_match_times_from_tba(event_code, event_timezone)
+            tba_times = fetch_match_times_from_tba(raw_event_code, event_timezone)
     else:
-        tba_times = fetch_match_times_from_tba(event_code, event_timezone)
+        tba_times = fetch_match_times_from_tba(raw_event_code, event_timezone)
         if not tba_times:
             # Fallback to FIRST
             print("️  No times from TBA, trying FIRST API...")
-            first_times = fetch_match_times_from_first(event_code, event_timezone)
+            first_times = fetch_match_times_from_first(raw_event_code, event_timezone)
     
     # Get all matches for this event
     matches = Match.query.filter_by(event_id=event.id).all()
@@ -441,10 +447,18 @@ def update_all_active_event_times():
         try:
             game_config = load_game_config(team_number=team_number)
             event_code = game_config.get('current_event_code')
+            season = game_config.get('season', 2026)
             
             if event_code:
-                print(f"\n Processing team {team_number}, event {event_code}")
-                updated = update_match_times(event_code, team_number)
+                # Construct year-prefixed code for database lookup
+                # (database stores codes like "2026OKTU", config has raw "OKTU")
+                if not (event_code[:4].isdigit() if len(event_code) > 4 else False):
+                    event_code_db = f"{season}{event_code}"
+                else:
+                    event_code_db = event_code
+                
+                print(f"\n Processing team {team_number}, event {event_code_db}")
+                updated = update_match_times(event_code_db, team_number)
                 total_updated += updated
         except Exception as e:
             print(f" Error updating times for team {team_number}: {e}")

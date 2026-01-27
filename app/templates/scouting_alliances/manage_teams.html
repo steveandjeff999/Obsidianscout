@@ -215,7 +215,7 @@
                             <option value="">-- No Event --</option>
                             {% for event in events %}
                             <option value="{{ event.id }}" {% if selected_event and selected_event.id == event.id %}selected{% endif %}>
-                                {{ event.name }}
+                                {{ event.name }} ({{ event.year }})
                             </option>
                             {% endfor %}
                         </select>

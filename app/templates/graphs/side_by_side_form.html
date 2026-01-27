@@ -63,7 +63,7 @@
                                             <option value="">All Events</option>
                                             {% for event in events|dedupe_events %}
                                             <option value="{{ event.id }}" data-event-code="{{ event.code|upper if event.code else '' }}">
-                                                {{ event.name }}{% if event.is_alliance %} (Alliance){% endif %}
+                                                {{ event.name }} ({{ event.year }}){% if event.is_alliance %} (Alliance){% endif %}
                                             </option>
                                             {% endfor %}
                                         </select>

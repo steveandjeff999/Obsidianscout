@@ -11,7 +11,7 @@ from app.utils.team_isolation import (
     filter_teams_by_scouting_team, filter_events_by_scouting_team,
     filter_alliance_selections_by_scouting_team, filter_do_not_pick_by_scouting_team,
     filter_avoid_entries_by_scouting_team, assign_scouting_team_to_model,
-    get_current_scouting_team_number
+    get_current_scouting_team_number, get_event_by_code
 )
 from app.utils.team_isolation import filter_declined_entries_by_scouting_team, get_combined_dropdown_events
 
@@ -64,7 +64,8 @@ def index():
     current_event_code = game_config.get('current_event_code')
     
     if current_event_code:
-        current_event = filter_events_by_scouting_team().filter(Event.code == current_event_code).first()
+        # Use get_event_by_code which handles year-prefixed codes
+        current_event = get_event_by_code(current_event_code)
     else:
         # Prefer a real Event object (with numeric id) as the fallback current event
         current_event = None

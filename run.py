@@ -389,7 +389,10 @@ if __name__ == '__main__':
                                 # Use cached event info when recently checked; otherwise compute fresh values
                                 cached = get_event_cache(scouting_team_number)
                                 now_utc = datetime.now(timezone.utc)
-                                event_code = game_config.get('current_event_code')
+                                raw_event_code = game_config.get('current_event_code')
+                                # Prepend year to event code so each year is treated as a different event (e.g., 2026ARLI)
+                                event_year = game_config.get('season') or game_config.get('year') or now_utc.year
+                                event_code = f"{event_year}{raw_event_code}" if raw_event_code else None
                                 use_cached_event = cached and (now_utc - cached.get('checked_at')).total_seconds() < CHECK_EVENT_INTERVAL and cached.get('event_code') == event_code
 
                                 # If we have a recent cached event decision, ensure the cached desired_interval
@@ -450,14 +453,16 @@ if __name__ == '__main__':
                                     print(f"  Event {event_code} not found for team {scouting_team_number}, fetching from API...")
                                     try:
                                         # Try to get full event details from API including timezone
+                                        # Use raw_event_code for API calls since external APIs don't use year-prefixed codes
                                         from app.utils.api_utils import get_event_details_dual_api
                                         from app.routes.data import get_or_create_event
-                                        event_details = get_event_details_dual_api(event_code)
+                                        event_details = get_event_details_dual_api(raw_event_code)
 
                                         if event_details:
                                             # Use get_or_create_event to properly handle race conditions
+                                            # Store with year-prefixed event_code to differentiate years
                                             event = get_or_create_event(
-                                                name=event_details.get('name', event_code),
+                                                name=event_details.get('name', raw_event_code),
                                                 code=event_code,
                                                 year=event_details.get('year', game_config.get('season', None) or game_config.get('year', 0)),
                                                 location=event_details.get('location'),
@@ -473,8 +478,9 @@ if __name__ == '__main__':
                                                 print(f"  Event timezone: {event.timezone}")
                                         else:
                                             # Use get_or_create_event for fallback as well
+                                            # Store with year-prefixed event_code to differentiate years
                                             event = get_or_create_event(
-                                                name=event_code,
+                                                name=raw_event_code,
                                                 code=event_code,
                                                 year=game_config.get('season', None) or game_config.get('year', 0),
                                                 scouting_team_number=scouting_team_number
@@ -564,7 +570,8 @@ if __name__ == '__main__':
 
                                 # --- Perform the actual sync for this team ---
                                 try:
-                                    team_data_list = get_teams_dual_api(event_code)
+                                    # Use raw_event_code for API calls (external APIs don't use year-prefixed codes)
+                                    team_data_list = get_teams_dual_api(raw_event_code)
                                     teams_added = 0
                                     teams_updated = 0
 
@@ -598,7 +605,8 @@ if __name__ == '__main__':
                                     print(f"  Error syncing teams for {scouting_team_number}: {str(e)}")
 
                                 try:
-                                    match_data_list = get_matches_dual_api(event_code)
+                                    # Use raw_event_code for API calls (external APIs don't use year-prefixed codes)
+                                    match_data_list = get_matches_dual_api(raw_event_code)
                                     matches_added = 0
                                     matches_updated = 0
 

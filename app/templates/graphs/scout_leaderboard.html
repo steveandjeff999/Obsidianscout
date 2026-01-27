@@ -4,8 +4,8 @@
 {% block content %}
 <div class="container">
   {% import '_help_icon.html' as help %}
-  <h1>Scout Leaderboard {{ help.help_icon('Rank and compare scouts by matches scouted or prediction accuracy. Use sorting controls to change the ranking.', 'Scout leaderboard') }}</h1>
-  <p class="text-muted">Ranks scouts by prediction accuracy (when available) or by total matches scouted. Use the controls to change sorting.</p>
+  <h1>Scout Leaderboard {{ help.help_icon('Rank and compare scouts by matches scouted or prediction accuracy. Accuracy is calculated by comparing scouted data predictions against actual match results.', 'Scout leaderboard') }}</h1>
+  <p class="text-muted">Ranks scouts by prediction accuracy or by total matches scouted. Predictions are based on scouted points data compared to actual match winners.</p>
 
   <div class="mb-3">
     <div class="btn-group" role="group" aria-label="Sort leaderboard">
@@ -21,6 +21,8 @@
           <th>Rank</th>
           <th>Scout</th>
           <th class="text-end">Total Scouted</th>
+          <th class="text-end">Predictions</th>
+          <th class="text-end">Correct</th>
           <th class="text-end">Accuracy</th>
           <th>Last Scouted</th>
         </tr>
@@ -31,12 +33,37 @@
           <td><span class="badge bg-{{ 'warning' if s.rank <= 3 else 'secondary' }}">{{ s.rank }}</span></td>
           <td>{{ s.scout_name }}{% if s.scout_id %} <small class="text-muted">(#{{ s.scout_id }})</small>{% endif %}</td>
           <td class="text-end">{{ s.total }}</td>
-          <td class="text-end">{% if s.accuracy is not none %}{{ s.accuracy }}%{% else %}-{% endif %}</td>
+          <td class="text-end">{{ s.evaluated if s.evaluated else '-' }}</td>
+          <td class="text-end">{{ s.correct if s.correct else '-' }}</td>
+          <td class="text-end">
+            {% if s.accuracy is not none %}
+              <span class="badge bg-{{ 'success' if s.accuracy >= 70 else 'warning' if s.accuracy >= 50 else 'secondary' }}">{{ s.accuracy }}%</span>
+            {% else %}
+              -
+            {% endif %}
+          </td>
           <td>{% if s.last_scouted %}{{ s.last_scouted.strftime('%Y-%m-%d %H:%M') }}{% else %}-{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="text-center text-muted">No scouting data available</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+  
+  {% if leaders %}
+  <div class="card mt-3">
+    <div class="card-body">
+      <small class="text-muted">
+        <i class="fas fa-info-circle"></i> 
+        Prediction accuracy is calculated by comparing predicted match winners to actual results. 
+        Predictions are generated from scouted total points data for each team in a match.
+        Only completed matches with score data are included in accuracy calculations.
+      </small>
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

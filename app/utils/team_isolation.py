@@ -513,6 +513,10 @@ def get_event_by_code(event_code):
     Uses case-insensitive comparison to handle event codes consistently
     regardless of how they were originally stored.
 
+    Supports year-prefixed event codes (e.g., "2026OKTU") and raw codes (e.g., "OKTU").
+    If a raw code is passed, it will try year-prefixed version first using the season
+    from game_config.
+
     In alliance mode, prefer a synthetic alliance entry when the code is part
     of the active alliance's shared events (this ensures pages show the
     '(Alliance)' choice instead of the local team copy when appropriate).
@@ -523,8 +527,29 @@ def get_event_by_code(event_code):
     # Normalize to uppercase and strip whitespace for comparison
     event_code_upper = str(event_code).strip().upper()
 
-    # First try to find in current user's events (scoped by scouting team)
-    event = filter_events_by_scouting_team().filter(func.upper(Event.code) == event_code_upper).first()
+    # Try to construct year-prefixed code if the code appears to be raw (no year prefix)
+    # Year-prefixed codes start with 4 digits (e.g., "2026OKTU")
+    year_prefixed_code = event_code_upper
+    if not (len(event_code_upper) >= 4 and event_code_upper[:4].isdigit()):
+        # Code doesn't start with year, try to add year prefix from game_config
+        try:
+            import json
+            import os
+            config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config', 'game_config.json')
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    game_config = json.load(f)
+                season = game_config.get('season', 2026)
+                year_prefixed_code = f"{season}{event_code_upper}"
+        except Exception:
+            pass
+
+    # First try to find with year-prefixed code in current user's events (scoped by scouting team)
+    event = filter_events_by_scouting_team().filter(func.upper(Event.code) == year_prefixed_code).first()
+    
+    # If not found with year prefix, try with the original code
+    if not event and year_prefixed_code != event_code_upper:
+        event = filter_events_by_scouting_team().filter(func.upper(Event.code) == event_code_upper).first()
 
     # Determine if we are in an active alliance that shares this code
     current_team = get_current_scouting_team_number()
@@ -540,23 +565,31 @@ def get_event_by_code(event_code):
         is_shared_by_alliance = False
         if active_alliance:
             shared_codes = [c.strip().upper() for c in (active_alliance.get_shared_events() or []) if c]
-            if event_code_upper in shared_codes:
+            # Check both raw code and year-prefixed code
+            if event_code_upper in shared_codes or year_prefixed_code in shared_codes:
                 is_shared_by_alliance = True
-        # Also check ScoutingAllianceEvent table for an active mapping
+        # Also check ScoutingAllianceEvent table for an active mapping (try both codes)
         sae_exists = False
         try:
-            sae_exists = ScoutingAllianceEvent.query.filter(func.upper(ScoutingAllianceEvent.event_code) == event_code_upper, ScoutingAllianceEvent.is_active == True).first() is not None
+            sae_exists = ScoutingAllianceEvent.query.filter(
+                or_(func.upper(ScoutingAllianceEvent.event_code) == event_code_upper,
+                    func.upper(ScoutingAllianceEvent.event_code) == year_prefixed_code),
+                ScoutingAllianceEvent.is_active == True
+            ).first() is not None
         except Exception:
             sae_exists = False
 
         if (is_shared_by_alliance or (active_alliance and sae_exists)):
             # Find a local event copy to borrow display attributes if available (any member's event)
-            local = Event.query.filter(func.upper(Event.code) == event_code_upper).first()
+            # Try year-prefixed code first
+            local = Event.query.filter(func.upper(Event.code) == year_prefixed_code).first()
+            if not local and year_prefixed_code != event_code_upper:
+                local = Event.query.filter(func.upper(Event.code) == event_code_upper).first()
             from types import SimpleNamespace
             obj = SimpleNamespace()
-            obj.id = f'alliance_{event_code_upper}'
-            obj.name = getattr(local, 'name', None) or event_code_upper
-            obj.code = event_code_upper
+            obj.id = f'alliance_{year_prefixed_code}'
+            obj.name = getattr(local, 'name', None) or year_prefixed_code
+            obj.code = year_prefixed_code
             obj.location = getattr(local, 'location', None) if local else None
             obj.year = getattr(local, 'year', None) if local else None
             obj.scouting_team_number = None
@@ -573,17 +606,28 @@ def get_event_by_code(event_code):
     # Otherwise, if alliance mode is active, search alliance member events
     alliance_team_numbers = get_alliance_team_numbers()
     if alliance_team_numbers:
+        # Try year-prefixed code first
         event = Event.query.filter(
-            func.upper(Event.code) == event_code_upper,
+            func.upper(Event.code) == year_prefixed_code,
             Event.scouting_team_number.in_(alliance_team_numbers)
         ).first()
+        # If not found, try original code
+        if not event and year_prefixed_code != event_code_upper:
+            event = Event.query.filter(
+                func.upper(Event.code) == event_code_upper,
+                Event.scouting_team_number.in_(alliance_team_numbers)
+            ).first()
         if event:
             return event
 
     # Final fallback: find any event with this code (case-insensitive) regardless of scouting_team_number.
     # This helps cases where the configured current_event_code refers to an event imported by another team.
     try:
-        fallback_event = Event.query.filter(func.upper(Event.code) == event_code_upper).first()
+        # Try year-prefixed code first
+        fallback_event = Event.query.filter(func.upper(Event.code) == year_prefixed_code).first()
+        # If not found, try original code
+        if not fallback_event and year_prefixed_code != event_code_upper:
+            fallback_event = Event.query.filter(func.upper(Event.code) == event_code_upper).first()
         if fallback_event:
             return fallback_event
     except Exception:

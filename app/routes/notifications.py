@@ -623,10 +623,14 @@ def refresh_schedule():
         from app.models_misc import NotificationQueue
         
         game_config = get_effective_game_config()
-        event_code = game_config.get('current_event_code')
+        raw_event_code = game_config.get('current_event_code')
         
-        if not event_code:
+        if not raw_event_code:
             return jsonify({'error': 'No current event configured'}), 400
+        
+        # Construct year-prefixed code for database lookup
+        current_year = game_config.get('season', 2026)
+        event_code = f"{current_year}{raw_event_code}"
         
         # Update match times from FRC APIs (FIRST or TBA)
         updated_count = update_match_times(event_code, current_user.scouting_team_number)
@@ -957,7 +961,15 @@ def mobile_schedule_ui():
     matches = []
     current_event = None
     if event_code:
-        current_event = Event.query.filter_by(code=event_code, scouting_team_number=current_user.scouting_team_number).first()
+        # Try year-prefixed code first (database stores codes like '2026OKTU')
+        year_prefixed_code = event_code
+        if not (len(str(event_code)) >= 4 and str(event_code)[:4].isdigit()):
+            season = game_config.get('season', 2026)
+            year_prefixed_code = f"{season}{event_code}"
+        current_event = Event.query.filter_by(code=year_prefixed_code, scouting_team_number=current_user.scouting_team_number).first()
+        # Fall back to raw code if year-prefixed not found
+        if not current_event and year_prefixed_code != event_code:
+            current_event = Event.query.filter_by(code=event_code, scouting_team_number=current_user.scouting_team_number).first()
         if current_event:
             matches = Match.query.filter_by(event_id=current_event.id, scouting_team_number=current_user.scouting_team_number).order_by(Match.match_number).all()
 

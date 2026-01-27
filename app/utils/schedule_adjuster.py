@@ -627,13 +627,21 @@ def update_all_active_events_schedule():
         try:
             game_config = load_game_config(team_number=team_number)
             event_code = game_config.get('current_event_code')
+            season = game_config.get('season', 2026)
             
             if event_code:
+                # Construct year-prefixed code for database lookup
+                # (database stores codes like "2026OKTU", config has raw "OKTU")
+                if not (event_code[:4].isdigit() if len(event_code) > 4 else False):
+                    event_code_db = f"{season}{event_code}"
+                else:
+                    event_code_db = event_code
+                
                 print(f"\n{'='*60}")
-                print(f" Processing team {team_number}, event {event_code}")
+                print(f" Processing team {team_number}, event {event_code_db}")
                 print(f"{'='*60}")
                 
-                result = update_event_schedule(event_code, team_number)
+                result = update_event_schedule(event_code_db, team_number)
                 results.append(result)
         except Exception as e:
             print(f" Error updating schedule for team {team_number}: {e}")
