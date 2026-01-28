@@ -3705,36 +3705,23 @@ function initScoutingForm() {
     saveButton.addEventListener('click', async function(e) {
         // Prevent default form submission
         e.preventDefault();
-        
-        // Decide based on server reachability if possible
+
+        // If the browser is offline, skip network attempts and fall back immediately
+        if (!navigator.onLine) {
+            showToast('You appear to be offline. Generating QR code / saving locally instead.', 'warning');
+            generateQRCode();
+            return;
+        }
+
+        // If online, always attempt to submit to the server first. This avoids cases where
+        // the ping-based status incorrectly hides the server save option when the server
+        // is actually reachable.
         try {
-            if (typeof window.scoutingServerOnline === 'boolean') {
-                if (window.scoutingServerOnline) {
-                    submitScoutingForm();
-                } else {
-                    showToast('Server unreachable. Generating QR code / saving locally instead.', 'warning');
-                    generateQRCode();
-                }
-                return;
-            }
-
-            // If unknown, recheck server and act accordingly (show loading state while checking)
-            const originalText = saveButton.innerHTML;
-            saveButton.disabled = true;
-            saveButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Checking server...';
-            const ok = (typeof refreshServerStatus === 'function') ? await refreshServerStatus() : await (navigator.onLine ? Promise.resolve(true) : Promise.resolve(false));
-            saveButton.disabled = false;
-            saveButton.innerHTML = originalText;
-
-            if (ok) {
-                submitScoutingForm();
-            } else {
-                showToast('Server unreachable. Generating QR code instead.', 'warning');
-                generateQRCode();
-            }
+            try { if (typeof refreshServerStatus === 'function') refreshServerStatus(); } catch (e) { /* ignore */ }
+            submitScoutingForm();
         } catch (e) {
-            console.warn('Error checking server reachability', e);
-            showToast('Could not verify server. Generating QR code instead.', 'warning');
+            console.warn('Error attempting to submit scouting form:', e);
+            showToast('Unable to save directly. Generating QR code instead.', 'warning');
             generateQRCode();
         }
     });
@@ -3744,46 +3731,67 @@ function initScoutingForm() {
         try { setupSaveLocally(); } catch (e) { /* ignore */ }
     }
     
-    // Submit the form data directly to the server
+    // Submit the form data directly to the server (with one quick retry on transient failures)
     function submitScoutingForm() {
         // Show loading state on button
         const originalText = saveButton.innerHTML;
         saveButton.disabled = true;
         saveButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
-        
+
         // Get form data
         const formData = new FormData(form);
-        
-        // Submit the form data
-        fetch('/scouting/api/save', {
-            method: 'POST',
-            body: formData
+
+        const doFetch = () => fetch('/scouting/api/save', { method: 'POST', body: formData });
+
+        // Attempt save, then retry once on failure if still online
+        doFetch()
+        .then(async response => {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            return response.json();
         })
-        .then(response => response.json())
         .then(data => {
             // Reset button state
             saveButton.disabled = false;
             saveButton.innerHTML = originalText;
-            
+
             // Handle response
-            if (data.success) {
+            if (data && data.success) {
                 showToast('Scouting data saved successfully!', 'success');
             } else {
-                showToast(`Error: ${data.message || 'Failed to save data'}`, 'danger');
+                showToast(`Error: ${data && data.message ? data.message : 'Failed to save data'}`, 'danger');
             }
         })
-        .catch(error => {
-            console.error('Error saving scouting data:', error);
-            
-            // Reset button state
+        .catch(async error => {
+            console.warn('Error saving scouting data (first attempt):', error);
+
+            // If we're still online, try one quick retry after refreshing server status
+            if (navigator.onLine) {
+                try {
+                    await new Promise(r => setTimeout(r, 800));
+                    if (typeof refreshServerStatus === 'function') await refreshServerStatus();
+                    const retryResp = await doFetch();
+                    if (retryResp.ok) {
+                        const retryData = await retryResp.json();
+                        saveButton.disabled = false;
+                        saveButton.innerHTML = originalText;
+                        if (retryData && retryData.success) {
+                            showToast('Scouting data saved successfully (on retry)!', 'success');
+                            return;
+                        } else {
+                            showToast(`Error: ${retryData && retryData.message ? retryData.message : 'Failed to save data'}`, 'danger');
+                            return;
+                        }
+                    }
+                } catch (e2) {
+                    console.warn('Retry failed:', e2);
+                }
+            }
+
+            // Reset button state and fallback to QR/local save
             saveButton.disabled = false;
             saveButton.innerHTML = originalText;
-            
-            // Show error and fall back to QR code if it looks like a network issue
             showToast('Unable to save data directly. Falling back to QR code.', 'warning');
-            setTimeout(() => {
-                generateQRCode();
-            }, 1000);
+            setTimeout(() => { generateQRCode(); }, 1000);
         });
     }
 }

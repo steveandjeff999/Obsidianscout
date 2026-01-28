@@ -1,0 +1,967 @@
+{% extends 'base.html' %}
+
+{% import '_help_icon.html' as help %}
+
+{% block title %}Configuration Editor{% endblock %}
+
+{% block heading %}Game Configuration Editor{{ help.help_icon('Modern form-based editor for game configuration. Features auto-save drafts and live validation.', 'Configuration editor') }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Top Action Bar -->
+    <div class="card mb-3 shadow-sm">
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="badge bg-success me-2" id="status-indicator">Ready</span>
+                    <small class="text-muted" id="last-saved">Never saved</small>
+                </div>
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('main.config') }}" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-eye"></i> View JSON
+                    </a>
+                    <a href="{{ url_for('main.edit_config') }}" class="btn btn-sm btn-outline-warning">
+                        <i class="fas fa-code"></i> Advanced Editor
+                    </a>
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#resetModal">
+                        <i class="fas fa-undo"></i> Reset
+                    </button>
+                    <button type="button" class="btn btn-sm btn-primary" id="save-btn">
+                        <i class="fas fa-save"></i> Save Configuration
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Configuration Form -->
+    <form id="config-form" novalidate>
+        <input type="hidden" name="simple_edit" value="true">
+        <input type="hidden" name="simple_payload" id="simple_payload">
+        <input type="hidden" name="skip_migration" id="skip_migration" value="">
+        <input type="hidden" name="mapping_confirmed" id="mapping_confirmed" value="">
+        <input type="hidden" name="mapping_suggestions" id="mapping_suggestions" value="">
+
+        <!-- Tabs Navigation -->
+        <ul class="nav nav-pills mb-3" id="config-tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="basic-tab" data-bs-toggle="pill" data-bs-target="#basic" type="button" role="tab">
+                    <i class="fas fa-info-circle"></i> Basic Info
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="periods-tab" data-bs-toggle="pill" data-bs-target="#periods" type="button" role="tab">
+                    <i class="fas fa-clock"></i> Game Periods
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="scoring-tab" data-bs-toggle="pill" data-bs-target="#scoring" type="button" role="tab">
+                    <i class="fas fa-calculator"></i> Scoring Elements
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="postmatch-tab" data-bs-toggle="pill" data-bs-target="#postmatch" type="button" role="tab">
+                    <i class="fas fa-comments"></i> Post-Match
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="api-tab" data-bs-toggle="pill" data-bs-target="#api" type="button" role="tab">
+                    <i class="fas fa-plug"></i> API Settings
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="config-tab-content">
+            
+            <!-- Basic Info Tab -->
+            <div class="tab-pane fade show active" id="basic" role="tabpanel">
+                <div class="row">
+                    <div class="col-lg-6">
+                        <div class="card shadow-sm mb-3">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-gamepad me-2"></i>Game Information</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="game_name" class="form-label">Game Name <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="game_name" name="game_name" 
+                                           value="{{ game_config.game_name or '' }}" required>
+                                    <div class="invalid-feedback">Game name is required</div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="season" class="form-label">Season <span class="text-danger">*</span></label>
+                                        <input type="number" class="form-control" id="season" name="season" 
+                                               value="{{ game_config.season or 2026 }}" min="2020" max="2030" required>
+                                        <div class="invalid-feedback">Valid season required</div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="version" class="form-label">Version</label>
+                                        <input type="text" class="form-control" id="version" name="version" 
+                                               value="{{ game_config.version or '1.0.0' }}" placeholder="1.0.0">
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="current_event_code" class="form-label">Current Event Code {{ help.help_icon('Event code for API sync (e.g., ARLI, CALA)', 'Event code') }}</label>
+                                    <input type="text" class="form-control text-uppercase" id="current_event_code" name="current_event_code" 
+                                           value="{{ game_config.current_event_code or '' }}" placeholder="ARLI">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-lg-6">
+                        <div class="card shadow-sm mb-3">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-users me-2"></i>Match Configuration</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="alliance_size" class="form-label">Alliance Size <span class="text-danger">*</span></label>
+                                        <input type="number" class="form-control" id="alliance_size" name="alliance_size" 
+                                               value="{{ game_config.alliance_size or 3 }}" min="1" max="6" required>
+                                        <small class="form-text text-muted">Teams per alliance (typically 3)</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="scouting_stations" class="form-label">Scouting Stations</label>
+                                        <input type="number" class="form-control" id="scouting_stations" name="scouting_stations" 
+                                               value="{{ game_config.scouting_stations or 6 }}" min="1" max="12">
+                                    </div>
+                                </div>
+                                
+                                <label class="form-label">Match Types <span class="text-danger">*</span></label>
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="match_type_practice" 
+                                               name="match_type_practice" value="1"
+                                               {{ 'checked' if game_config.match_types and 'Practice' in game_config.match_types }}>
+                                        <label class="form-check-label" for="match_type_practice">Practice Matches</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="match_type_qualification" 
+                                               name="match_type_qualification" value="1"
+                                               {{ 'checked' if not game_config.match_types or 'Qualification' in game_config.match_types else 'checked' }}>
+                                        <label class="form-check-label" for="match_type_qualification">Qualification Matches</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="match_type_playoff" 
+                                               name="match_type_playoff" value="1"
+                                               {{ 'checked' if game_config.match_types and 'Playoff' in game_config.match_types }}>
+                                        <label class="form-check-label" for="match_type_playoff">Playoff Matches</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Game Periods Tab -->
+            <div class="tab-pane fade" id="periods" role="tabpanel">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-stopwatch me-2"></i>Period Durations (seconds)</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="auto_duration" class="form-label">
+                                    <span class="badge bg-info">Auto</span> Autonomous Period
+                                </label>
+                                <input type="number" class="form-control" id="auto_duration" name="auto_duration" 
+                                       value="{{ (game_config.auto_period.duration_seconds if game_config.auto_period else 15) }}" 
+                                       min="0" max="60" required>
+                                <small class="form-text text-muted">Typically 15 seconds</small>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="teleop_duration" class="form-label">
+                                    <span class="badge bg-primary">Teleop</span> Teleoperated Period
+                                </label>
+                                <input type="number" class="form-control" id="teleop_duration" name="teleop_duration" 
+                                       value="{{ (game_config.teleop_period.duration_seconds if game_config.teleop_period else 135) }}" 
+                                       min="60" max="180" required>
+                                <small class="form-text text-muted">Typically 135 seconds</small>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="endgame_duration" class="form-label">
+                                    <span class="badge bg-warning text-dark">Endgame</span> Endgame Period
+                                </label>
+                                <input type="number" class="form-control" id="endgame_duration" name="endgame_duration" 
+                                       value="{{ (game_config.endgame_period.duration_seconds if game_config.endgame_period else 30) }}" 
+                                       min="0" max="60" required>
+                                <small class="form-text text-muted">Typically 20-30 seconds</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scoring Elements Tab -->
+            <div class="tab-pane fade" id="scoring" role="tabpanel">
+                <div class="row">
+                    {% for period, badge_color in [('auto', 'info'), ('teleop', 'primary'), ('endgame', 'warning')] %}
+                    <div class="col-lg-4 mb-3">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-header bg-{{ badge_color }} text-white">
+                                <h6 class="mb-0">{{ period.title() }} Elements</h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="{{ period }}-elements" class="elements-container">
+                                    {% if game_config[period + '_period'] and game_config[period + '_period'].scoring_elements %}
+                                    {% for element in game_config[period + '_period'].scoring_elements %}
+                                    <div class="element-card mb-2 p-2 border rounded" data-period="{{ period }}" data-id="{{ element.id }}">
+                                        <div class="element-header d-flex justify-content-between align-items-start mb-2">
+                                            <input type="text" class="form-control form-control-sm element-name" 
+                                                   placeholder="Element name" value="{{ element.name }}" required>
+                                            <button type="button" class="btn btn-sm btn-outline-danger ms-2 remove-element" title="Remove">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                        <div class="row g-2 mb-2">
+                                            <div class="col-6">
+                                                <select class="form-select form-select-sm element-type">
+                                                    <option value="counter" {{ 'selected' if element.type == 'counter' }}>Counter</option>
+                                                    <option value="boolean" {{ 'selected' if element.type == 'boolean' }}>Yes/No</option>
+                                                    <option value="rating" {{ 'selected' if element.type == 'rating' }}>Rating (1-5)</option>
+                                                    <option value="multiple_choice" {{ 'selected' if element.type == 'multiple_choice' }}>Multiple Choice</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-6">
+                                                <input type="number" class="form-control form-control-sm element-points" 
+                                                       placeholder="Points" value="{{ element.points if element.points is number else 0 }}" step="0.1">
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Counter Options -->
+                                        <div class="counter-options" style="display: {{ 'block' if element.type == 'counter' else 'none' }};">
+                                            <div class="row g-2">
+                                                <div class="col-auto">
+                                                    <input type="number" class="form-control form-control-sm counter-step" 
+                                                           placeholder="Step" value="{{ element.step|default(1) }}" min="1">
+                                                </div>
+                                                <div class="col-auto">
+                                                    <input type="number" class="form-control form-control-sm counter-alt-step" 
+                                                           placeholder="Alt step" value="{{ element.alt_step if element.alt_step is defined else '' }}">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Multiple Choice Options -->
+                                        <div class="mc-options" style="display: {{ 'block' if element.type == 'multiple_choice' else 'none' }};">
+                                            <div class="mc-options-list">
+                                                {% if element.options %}
+                                                {% for option in element.options %}
+                                                <div class="row g-2 mb-1 mc-option">
+                                                    <div class="col-7">
+                                                        <input type="text" class="form-control form-control-sm option-name" 
+                                                               value="{{ option.name if option is mapping else option }}" placeholder="Option">
+                                                    </div>
+                                                    <div class="col-4">
+                                                        <input type="number" class="form-control form-control-sm option-points" 
+                                                               value="{{ option.points if option is mapping else 0 }}" placeholder="Pts" step="0.1">
+                                                    </div>
+                                                    <div class="col-1 p-0">
+                                                        <button type="button" class="btn btn-sm btn-outline-danger remove-mc-option" title="Remove">×</button>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                                {% endif %}
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-outline-success add-mc-option mt-1">
+                                                <i class="fas fa-plus"></i> Add Option
+                                            </button>
+                                        </div>
+                                        
+                                        <!-- Flags -->
+                                        <div class="mt-2">
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input element-predictions" type="checkbox" 
+                                                       {{ 'checked' if element.display_in_predictions }}>
+                                                <label class="form-check-label small">Show in predictions</label>
+                                            </div>
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input element-gamepiece" type="checkbox" 
+                                                       {{ 'checked' if element.gamepiece_scoreible }}>
+                                                <label class="form-check-label small">Scored gamepiece</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                    {% else %}
+                                    <p class="text-muted text-center mb-3">No elements yet</p>
+                                    {% endif %}
+                                </div>
+                                <button type="button" class="btn btn-sm btn-success w-100 add-element" data-period="{{ period }}">
+                                    <i class="fas fa-plus"></i> Add Element
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Post-Match Tab -->
+            <div class="tab-pane fade" id="postmatch" role="tabpanel">
+                <div class="row">
+                    <div class="col-lg-6 mb-3">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-star me-2"></i>Rating Questions</h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="rating-elements">
+                                    {% if game_config.post_match and game_config.post_match.rating_elements %}
+                                    {% for element in game_config.post_match.rating_elements %}
+                                    <div class="rating-card mb-2 p-2 border rounded" data-id="{{ element.id }}">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <input type="text" class="form-control form-control-sm rating-name" 
+                                                   value="{{ element.name }}" placeholder="Question">
+                                            <button type="button" class="btn btn-sm btn-outline-danger ms-2 remove-rating">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                        <div class="row g-2">
+                                            <div class="col-4">
+                                                <input type="number" class="form-control form-control-sm rating-min" 
+                                                       value="{{ element.min }}" placeholder="Min">
+                                            </div>
+                                            <div class="col-4">
+                                                <input type="number" class="form-control form-control-sm rating-max" 
+                                                       value="{{ element.max }}" placeholder="Max">
+                                            </div>
+                                            <div class="col-4">
+                                                <input type="number" class="form-control form-control-sm rating-default" 
+                                                       value="{{ element.default }}" placeholder="Default">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                    {% endif %}
+                                </div>
+                                <button type="button" class="btn btn-sm btn-success w-100" id="add-rating">
+                                    <i class="fas fa-plus"></i> Add Rating
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-lg-6 mb-3">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-comment me-2"></i>Comment Fields</h6>
+                            </div>
+                            <div class="card-body">
+                                <div id="text-elements">
+                                    {% if game_config.post_match and game_config.post_match.text_elements %}
+                                    {% for element in game_config.post_match.text_elements %}
+                                    <div class="text-card mb-2 p-2 border rounded" data-id="{{ element.id }}">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <input type="text" class="form-control form-control-sm text-name" 
+                                                   value="{{ element.name }}" placeholder="Field name">
+                                            <button type="button" class="btn btn-sm btn-outline-danger ms-2 remove-text">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input text-multiline" type="checkbox" 
+                                                   {{ 'checked' if element.multiline }}>
+                                            <label class="form-check-label small">Allow multiple lines</label>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                    {% endif %}
+                                </div>
+                                <button type="button" class="btn btn-sm btn-success w-100" id="add-text">
+                                    <i class="fas fa-plus"></i> Add Comment Field
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- API Settings Tab -->
+            <div class="tab-pane fade" id="api" role="tabpanel">
+                <div class="row">
+                    <div class="col-lg-6 mb-3">
+                        <div class="card shadow-sm">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-globe me-2"></i>API Configuration</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label for="preferred_api_source" class="form-label">Preferred API Source</label>
+                                    <select class="form-select" id="preferred_api_source" name="preferred_api_source">
+                                        <option value="first" {{ 'selected' if not game_config.preferred_api_source or game_config.preferred_api_source == 'first' }}>FIRST API (Official)</option>
+                                        <option value="tba" {{ 'selected' if game_config.preferred_api_source == 'tba' }}>The Blue Alliance</option>
+                                    </select>
+                                    <small class="form-text text-muted">System automatically falls back to alternate API if primary fails</small>
+                                </div>
+                                
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="auto_sync_enabled" name="auto_sync_enabled" value="1"
+                                           {{ 'checked' if not game_config.api_settings or game_config.api_settings.auto_sync_enabled is undefined or game_config.api_settings.auto_sync_enabled }}>
+                                    <label class="form-check-label" for="auto_sync_enabled">Enable automatic API sync</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-lg-6 mb-3">
+                        <div class="card shadow-sm">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-key me-2"></i>API Credentials</h6>
+                            </div>
+                            <div class="card-body">
+                                <ul class="nav nav-tabs mb-3" role="tablist">
+                                    <li class="nav-item">
+                                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tba-api" type="button">TBA API</button>
+                                    </li>
+                                    <li class="nav-item">
+                                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#first-api" type="button">FIRST API</button>
+                                    </li>
+                                </ul>
+                                
+                                <div class="tab-content">
+                                    <div class="tab-pane fade show active" id="tba-api">
+                                        <div class="mb-3">
+                                            <label for="tba_auth_key" class="form-label">TBA API Key</label>
+                                            <input type="text" class="form-control" id="tba_auth_key" name="tba_auth_key" 
+                                                   value="{{ (game_config.tba_api_settings.auth_key if game_config.tba_api_settings else '') }}" 
+                                                   placeholder="Your TBA API key">
+                                            <small class="form-text text-muted">
+                                                <a href="https://www.thebluealliance.com/account" target="_blank">Get API key</a>
+                                            </small>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="tab-pane fade" id="first-api">
+                                        <div class="mb-3">
+                                            <label for="api_username" class="form-label">Username</label>
+                                            <input type="text" class="form-control" id="api_username" name="api_username" 
+                                                   value="{{ (game_config.api_settings.username if game_config.api_settings else '') }}">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="api_auth_token" class="form-label">Auth Token</label>
+                                            <input type="text" class="form-control" id="api_auth_token" name="api_auth_token" 
+                                                   value="{{ (game_config.api_settings.auth_token if game_config.api_settings else '') }}">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Reset Modal -->
+<div class="modal fade" id="resetModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-undo me-2"></i>Reset Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('main.reset_config') }}" method="POST">
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        This will replace your current configuration. This cannot be undone!
+                    </div>
+                    <div class="mb-3">
+                        <label for="default_config" class="form-label">Select Default:</label>
+                        <select name="default_config" id="default_config" class="form-select" required>
+                            <option value="">-- Choose configuration --</option>
+                            {% if default_configs %}
+                            {% for config in default_configs %}
+                            <option value="{{ config.filename }}">{{ config.display_name }}</option>
+                            {% endfor %}
+                            {% endif %}
+                        </select>
+                    </div>
+                    <input type="hidden" name="config_type" value="game">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Reset Configuration</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Migration Modal -->
+<div class="modal fade" id="migrationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Remap Scoring Elements?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                We detected changes in scoring elements. Would you like to remap existing scouting data?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="migration-skip">No, Skip Migration</button>
+                <button type="button" class="btn btn-primary" id="migration-proceed">Yes, Show Migration Options</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.element-card, .rating-card, .text-card {
+    background: #f8f9fa;
+    transition: all 0.2s;
+}
+
+.element-card:hover, .rating-card:hover, .text-card:hover {
+    background: #e9ecef;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.elements-container {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+#status-indicator {
+    font-size: 0.75rem;
+}
+
+.nav-pills .nav-link {
+    color: #6c757d;
+}
+
+.nav-pills .nav-link.active {
+    background-color: #0d6efd;
+}
+
+.mc-option .btn {
+    padding: 0.125rem 0.375rem;
+}
+</style>
+
+<script>
+class ConfigEditor {
+    constructor() {
+        this.originalConfig = {{ game_config | tojson | safe }};
+        this.elementCounter = Date.now();
+        this.isDirty = false;
+        this.init();
+    }
+
+    init() {
+        this.bindEvents();
+        this.updateStatus('Ready', 'success');
+    }
+
+    bindEvents() {
+        // Save button
+        document.getElementById('save-btn').addEventListener('click', () => this.save());
+
+        // Add element buttons
+        document.querySelectorAll('.add-element').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const period = e.target.dataset.period;
+                this.addElement(period);
+            });
+        });
+
+        // Element type change
+        document.addEventListener('change', (e) => {
+            if (e.target.classList.contains('element-type')) {
+                this.updateElementOptions(e.target);
+            }
+        });
+
+        // Remove buttons
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove-element') || e.target.closest('.remove-element')) {
+                e.target.closest('.element-card').remove();
+                this.markDirty();
+            } else if (e.target.classList.contains('remove-rating') || e.target.closest('.remove-rating')) {
+                e.target.closest('.rating-card').remove();
+                this.markDirty();
+            } else if (e.target.classList.contains('remove-text') || e.target.closest('.remove-text')) {
+                e.target.closest('.text-card').remove();
+                this.markDirty();
+            } else if (e.target.classList.contains('remove-mc-option') || e.target.closest('.remove-mc-option')) {
+                e.target.closest('.mc-option').remove();
+                this.markDirty();
+            } else if (e.target.classList.contains('add-mc-option') || e.target.closest('.add-mc-option')) {
+                const list = e.target.closest('.mc-options').querySelector('.mc-options-list');
+                this.addMCOption(list);
+            }
+        });
+
+        // Add rating/text
+        document.getElementById('add-rating').addEventListener('click', () => this.addRating());
+        document.getElementById('add-text').addEventListener('click', () => this.addText());
+
+        // Mark dirty on any input
+        document.querySelectorAll('input, select, textarea').forEach(el => {
+            el.addEventListener('input', () => this.markDirty());
+        });
+    }
+
+    addElement(period) {
+        const container = document.getElementById(`${period}-elements`);
+        const id = `elem_${period}_${this.elementCounter++}`;
+        
+        const html = `
+            <div class="element-card mb-2 p-2 border rounded" data-period="${period}" data-id="${id}">
+                <div class="element-header d-flex justify-content-between align-items-start mb-2">
+                    <input type="text" class="form-control form-control-sm element-name" 
+                           placeholder="Element name" required>
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-2 remove-element" title="Remove">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <select class="form-select form-select-sm element-type">
+                            <option value="counter" selected>Counter</option>
+                            <option value="boolean">Yes/No</option>
+                            <option value="rating">Rating (1-5)</option>
+                            <option value="multiple_choice">Multiple Choice</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <input type="number" class="form-control form-control-sm element-points" 
+                               placeholder="Points" value="0" step="0.1">
+                    </div>
+                </div>
+                
+                <div class="counter-options" style="display: block;">
+                    <div class="row g-2">
+                        <div class="col-auto">
+                            <input type="number" class="form-control form-control-sm counter-step" 
+                                   placeholder="Step" value="1" min="1">
+                        </div>
+                        <div class="col-auto">
+                            <input type="number" class="form-control form-control-sm counter-alt-step" 
+                                   placeholder="Alt step">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mc-options" style="display: none;">
+                    <div class="mc-options-list"></div>
+                    <button type="button" class="btn btn-sm btn-outline-success add-mc-option mt-1">
+                        <i class="fas fa-plus"></i> Add Option
+                    </button>
+                </div>
+                
+                <div class="mt-2">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input element-predictions" type="checkbox">
+                        <label class="form-check-label small">Show in predictions</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input element-gamepiece" type="checkbox">
+                        <label class="form-check-label small">Scored gamepiece</label>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', html);
+        this.markDirty();
+    }
+
+    addMCOption(list) {
+        const html = `
+            <div class="row g-2 mb-1 mc-option">
+                <div class="col-7">
+                    <input type="text" class="form-control form-control-sm option-name" placeholder="Option">
+                </div>
+                <div class="col-4">
+                    <input type="number" class="form-control form-control-sm option-points" 
+                           value="0" placeholder="Pts" step="0.1">
+                </div>
+                <div class="col-1 p-0">
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-mc-option" title="Remove">×</button>
+                </div>
+            </div>
+        `;
+        list.insertAdjacentHTML('beforeend', html);
+        this.markDirty();
+    }
+
+    addRating() {
+        const container = document.getElementById('rating-elements');
+        const id = `rating_${this.elementCounter++}`;
+        
+        const html = `
+            <div class="rating-card mb-2 p-2 border rounded" data-id="${id}">
+                <div class="d-flex justify-content-between mb-2">
+                    <input type="text" class="form-control form-control-sm rating-name" 
+                           placeholder="Question">
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-2 remove-rating">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                <div class="row g-2">
+                    <div class="col-4">
+                        <input type="number" class="form-control form-control-sm rating-min" 
+                               value="1" placeholder="Min">
+                    </div>
+                    <div class="col-4">
+                        <input type="number" class="form-control form-control-sm rating-max" 
+                               value="5" placeholder="Max">
+                    </div>
+                    <div class="col-4">
+                        <input type="number" class="form-control form-control-sm rating-default" 
+                               value="3" placeholder="Default">
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', html);
+        this.markDirty();
+    }
+
+    addText() {
+        const container = document.getElementById('text-elements');
+        const id = `text_${this.elementCounter++}`;
+        
+        const html = `
+            <div class="text-card mb-2 p-2 border rounded" data-id="${id}">
+                <div class="d-flex justify-content-between mb-2">
+                    <input type="text" class="form-control form-control-sm text-name" 
+                           placeholder="Field name">
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-2 remove-text">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input text-multiline" type="checkbox">
+                    <label class="form-check-label small">Allow multiple lines</label>
+                </div>
+            </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', html);
+        this.markDirty();
+    }
+
+    updateElementOptions(selectEl) {
+        const card = selectEl.closest('.element-card');
+        const type = selectEl.value;
+        const counterOpts = card.querySelector('.counter-options');
+        const mcOpts = card.querySelector('.mc-options');
+        
+        counterOpts.style.display = type === 'counter' ? 'block' : 'none';
+        mcOpts.style.display = type === 'multiple_choice' ? 'block' : 'none';
+        
+        this.markDirty();
+    }
+
+    buildPayload() {
+        const payload = {
+            game_name: document.getElementById('game_name').value,
+            season: parseInt(document.getElementById('season').value) || 2026,
+            version: document.getElementById('version').value,
+            alliance_size: parseInt(document.getElementById('alliance_size').value) || 3,
+            scouting_stations: parseInt(document.getElementById('scouting_stations').value) || 6,
+            current_event_code: document.getElementById('current_event_code').value,
+            match_types: [],
+            auto: [],
+            teleop: [],
+            endgame: [],
+            api_settings: {
+                auto_sync_enabled: document.getElementById('auto_sync_enabled').checked
+            }
+        };
+
+        // Match types
+        ['practice', 'qualification', 'playoff'].forEach(t => {
+            if (document.getElementById(`match_type_${t}`).checked) {
+                payload.match_types.push(t.charAt(0).toUpperCase() + t.slice(1));
+            }
+        });
+
+        // Periods
+        ['auto', 'teleop', 'endgame'].forEach(period => {
+            const container = document.getElementById(`${period}-elements`);
+            container.querySelectorAll('.element-card').forEach(card => {
+                const name = card.querySelector('.element-name').value.trim();
+                if (!name) return;
+
+                const element = {
+                    id: card.dataset.id,
+                    perm_id: card.dataset.id,
+                    name: name,
+                    type: card.querySelector('.element-type').value,
+                    points: parseFloat(card.querySelector('.element-points').value) || 0,
+                    default: 0,
+                    display_in_predictions: card.querySelector('.element-predictions').checked,
+                    gamepiece_scoreible: card.querySelector('.element-gamepiece').checked
+                };
+
+                if (element.type === 'counter') {
+                    element.step = parseInt(card.querySelector('.counter-step').value) || 1;
+                    const altStep = card.querySelector('.counter-alt-step').value;
+                    if (altStep) {
+                        element.alt_step = parseInt(altStep);
+                        element.alt_step_enabled = true;
+                    }
+                } else if (element.type === 'multiple_choice') {
+                    element.options = [];
+                    card.querySelectorAll('.mc-option').forEach(opt => {
+                        const optName = opt.querySelector('.option-name').value.trim();
+                        if (optName) {
+                            element.options.push({
+                                name: optName,
+                                points: parseFloat(opt.querySelector('.option-points').value) || 0
+                            });
+                        }
+                    });
+                    element.default = element.options[0]?.name || '';
+                } else if (element.type === 'boolean') {
+                    element.default = false;
+                }
+
+                payload[period].push(element);
+            });
+        });
+
+        return payload;
+    }
+
+    async save() {
+        if (!this.validate()) {
+            this.updateStatus('Validation failed', 'danger');
+            return;
+        }
+
+        this.updateStatus('Saving...', 'warning');
+
+        try {
+            const payload = this.buildPayload();
+            document.getElementById('simple_payload').value = JSON.stringify(payload);
+
+            // Check migration
+            const response = await fetch('{{ url_for("main.check_mapping") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    new_config: payload,
+                    original_config: this.originalConfig
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.mapping_needed) {
+                await this.showMigrationModal(data.mapping_suggestions);
+            } else {
+                await this.submitForm();
+            }
+        } catch (err) {
+            console.error('Save error:', err);
+            this.updateStatus('Save failed', 'danger');
+        }
+    }
+
+    validate() {
+        const form = document.getElementById('config-form');
+        let isValid = true;
+
+        // Check required fields
+        const gameName = document.getElementById('game_name').value.trim();
+        if (!gameName) {
+            document.getElementById('game_name').classList.add('is-invalid');
+            isValid = false;
+        } else {
+            document.getElementById('game_name').classList.remove('is-invalid');
+        }
+
+        // Check at least one match type
+        const hasMatchType = ['practice', 'qualification', 'playoff'].some(t => 
+            document.getElementById(`match_type_${t}`).checked
+        );
+        if (!hasMatchType) {
+            alert('Please select at least one match type');
+            isValid = false;
+        }
+
+        return isValid;
+    }
+
+    showMigrationModal(suggestions) {
+        return new Promise((resolve) => {
+            const modal = new bootstrap.Modal(document.getElementById('migrationModal'));
+            modal.show();
+
+            document.getElementById('mapping_suggestions').value = JSON.stringify(suggestions || {});
+
+            document.getElementById('migration-skip').onclick = () => {
+                document.getElementById('skip_migration').value = 'true';
+                modal.hide();
+                this.submitForm().then(resolve);
+            };
+
+            document.getElementById('migration-proceed').onclick = () => {
+                document.getElementById('mapping_confirmed').value = 'true';
+                modal.hide();
+                this.submitForm().then(resolve);
+            };
+        });
+    }
+
+    async submitForm() {
+        const form = document.getElementById('config-form');
+        const formData = new FormData(form);
+
+        try {
+            const response = await fetch('{{ url_for("main.save_config") }}', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                this.updateStatus('Saved successfully', 'success');
+                this.isDirty = false;
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                this.updateStatus('Save failed', 'danger');
+            }
+        } catch (err) {
+            console.error('Submit error:', err);
+            this.updateStatus('Save failed', 'danger');
+        }
+    }
+
+    updateStatus(text, variant) {
+        const indicator = document.getElementById('status-indicator');
+        indicator.textContent = text;
+        indicator.className = `badge bg-${variant} me-2`;
+        
+        if (variant === 'success') {
+            document.getElementById('last-saved').textContent = 
+                `Last saved: ${new Date().toLocaleTimeString()}`;
+        }
+    }
+
+    markDirty() {
+        this.isDirty = true;
+        this.updateStatus('Unsaved changes', 'warning');
+    }
+}
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    window.configEditor = new ConfigEditor();
+});
+</script>
+
+{% endblock %}

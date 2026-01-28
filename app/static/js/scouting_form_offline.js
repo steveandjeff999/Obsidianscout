@@ -394,30 +394,14 @@
             const saveLocalBtn = document.getElementById('save-local-button');
             if (!saveButton) return;
 
-            // Prefer explicit server status if known
-            if (typeof window.scoutingServerOnline === 'boolean') {
-                if (window.scoutingServerOnline) {
-                    saveButton.classList.remove('d-none');
-                    saveButton.disabled = false;
-                    if (saveLocalBtn) saveLocalBtn.classList.remove('d-none');
-                } else {
-                    saveButton.classList.add('d-none');
-                    if (saveLocalBtn) saveLocalBtn.classList.remove('d-none');
-                }
-                return;
-            }
+            // Always show the server "Save" button so users can attempt to save even when
+            // the server ping indicates unreachable (some networks/proxies misreport reachability).
+            saveButton.classList.remove('d-none');
+            saveButton.disabled = false;
+            if (saveLocalBtn) saveLocalBtn.classList.remove('d-none');
 
-            // Fallback behaviour: if browser is offline, hide; if online but server unknown, optimistically show and validate in background
-            if (!navigator.onLine) {
-                saveButton.classList.add('d-none');
-                if (saveLocalBtn) saveLocalBtn.classList.remove('d-none');
-            } else {
-                // Show while we verify the server in the background
-                saveButton.classList.remove('d-none');
-                if (saveLocalBtn) saveLocalBtn.classList.remove('d-none');
-                // Kick off a background validation that will correct UI if server unreachable
-                try { refreshServerStatus(); } catch (e) { /* ignore */ }
-            }
+            // Kick off a background validation to keep the cached server status updated (best-effort)
+            try { refreshServerStatus(); } catch (e) { /* ignore */ }
         } catch (e) {
             console.warn('[Offline Manager] updateSaveButtonVisibility error', e);
         }

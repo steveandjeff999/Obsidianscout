@@ -1216,141 +1216,186 @@ def config_simple_edit():
 @login_required
 def config_simple_save():
     """Save pit configuration from simple editor"""
+    # Only admins can save
     if not current_user.has_role('admin'):
         flash('You must be an admin to save pit scouting configuration', 'error')
         return redirect(url_for('pit_scouting.index'))
-    
+
     try:
-        # Debug: Print form data
-        print("Form data received:")
-        for key, value in request.form.items():
-            print(f"  {key}: {value}")
-        
         # Always save to the current user's scouting team instance config
-        # Editors should operate on the current user's team only.
         save_team = getattr(current_user, 'scouting_team_number', None)
 
-        # Build updated config
-        updated_config = {
-            "pit_scouting": {
-                "title": request.form.get('title', 'Pit Scouting'),
-                "description": request.form.get('description', ''),
-                "sections": []
-            }
-        }
-        
-        # Process sections
-        section_indices = set()
-        for key in request.form.keys():
-            if key.startswith('section_id_'):
-                index = key.split('_')[-1]
-                section_indices.add(int(index))
-        
-        print(f"Section indices found: {section_indices}")
-        
-        for section_index in sorted(section_indices):
-            section_id = request.form.get(f'section_id_{section_index}')
-            section_name = request.form.get(f'section_name_{section_index}')
-            
-            print(f"Processing section {section_index}: {section_id} - {section_name}")
-            
-            if section_id and section_name:
-                section = {
-                    "id": section_id,
-                    "name": section_name,
-                    "elements": []
+        # Prefer JSON payload if provided (from modern editors)
+        simple_payload = None
+        if 'simple_payload' in request.form:
+            try:
+                simple_payload = json.loads(request.form.get('simple_payload'))
+            except Exception as e:
+                print(f"Failed to parse simple_payload: {e}")
+                simple_payload = None
+
+        if simple_payload and isinstance(simple_payload, dict):
+            # Validate minimal structure
+            if 'title' in simple_payload or 'pit_scouting' in simple_payload:
+                # Accept both flat and nested (for future-proofing)
+                if 'pit_scouting' in simple_payload:
+                    updated_config = simple_payload
+                else:
+                    updated_config = {"pit_scouting": simple_payload}
+                print(f"Saving pit config from simple_payload: {json.dumps(updated_config, indent=2)}")
+                if save_pit_config(updated_config, team_number=save_team):
+                    flash('Pit scouting configuration updated successfully!', 'success')
+                else:
+                    flash('Error saving pit scouting configuration.', 'danger')
+                return redirect(url_for('pit_scouting.config'))
+            else:
+                flash('Invalid configuration data submitted.', 'danger')
+                return redirect(url_for('pit_scouting.config'))
+
+        # Fallback: legacy form parsing (old UI)
+        try:
+            # Debug: Print form data
+            print("Form data received:")
+            for key, value in request.form.items():
+                print(f"  {key}: {value}")
+
+            # Build updated config using legacy flat form naming
+            updated_config = {
+                "pit_scouting": {
+                    "title": request.form.get('title', 'Pit Scouting'),
+                    "description": request.form.get('description', ''),
+                    "sections": []
                 }
-                
-                # Process elements for this section
-                element_indices = set()
-                for key in request.form.keys():
-                    if key.startswith(f'element_id_{section_index}_'):
-                        index = key.split('_')[-1]
-                        element_indices.add(int(index))
-                
-                print(f"  Element indices for section {section_index}: {element_indices}")
-                
-                for element_index in sorted(element_indices):
-                    element_id = request.form.get(f'element_id_{section_index}_{element_index}')
-                    element_name = request.form.get(f'element_name_{section_index}_{element_index}')
-                    element_type = request.form.get(f'element_type_{section_index}_{element_index}')
-                    
-                    print(f"    Processing element {element_index}: {element_id} - {element_name} ({element_type})")
-                    
-                    if element_id and element_name and element_type:
-                        element = {
-                            "id": element_id,
-                            "perm_id": element_id,
-                            "name": element_name,
-                            "type": element_type
-                        }
-                        
-                        # Add required field
-                        if request.form.get(f'element_required_{section_index}_{element_index}'):
-                            element["required"] = True
-                        
-                        # Add default value if provided
-                        default_value = request.form.get(f'element_default_{section_index}_{element_index}')
-                        if default_value:
-                            element["default"] = parse_default_value(default_value, element_type)
-                        
-                        # Add placeholder if provided
-                        placeholder = request.form.get(f'element_placeholder_{section_index}_{element_index}')
-                        if placeholder:
-                            element["placeholder"] = placeholder
-                        
-                        # Handle validation for number fields
-                        if element_type == 'number':
-                            validation = {}
-                            min_val = request.form.get(f'element_min_{section_index}_{element_index}')
-                            max_val = request.form.get(f'element_max_{section_index}_{element_index}')
-                            if min_val:
-                                validation["min"] = int(min_val)
-                            if max_val:
-                                validation["max"] = int(max_val)
-                            if validation:
-                                element["validation"] = validation
-                        
-                        # Handle options for select/multiselect fields with per-option points
-                        if element_type in ['select', 'multiselect']:
-                            options = []
-                            points_dict = {}
-                            option_idx = 0
-                            while True:
-                                opt_val = request.form.get(f'element_option_value_{section_index}_{element_index}_{option_idx}')
-                                opt_label = request.form.get(f'element_option_label_{section_index}_{element_index}_{option_idx}')
-                                opt_points = request.form.get(f'element_option_points_{section_index}_{element_index}_{option_idx}')
-                                if opt_val is None:
-                                    break
-                                options.append({"value": opt_val, "label": opt_label if opt_label else opt_val})
+            }
+
+            # Process sections
+            section_indices = set()
+            for key in request.form.keys():
+                if key.startswith('section_id_'):
+                    try:
+                        index = int(key.split('_')[-1])
+                        section_indices.add(index)
+                    except Exception:
+                        pass
+
+            print(f"Section indices found: {section_indices}")
+            for section_index in sorted(section_indices):
+                section_id = request.form.get(f'section_id_{section_index}')
+                section_name = request.form.get(f'section_name_{section_index}')
+
+                print(f"Processing section {section_index}: {section_id} - {section_name}")
+
+                if section_id and section_name:
+                    section = {
+                        "id": section_id,
+                        "name": section_name,
+                        "elements": []
+                    }
+
+                    # Process elements for this section
+                    element_indices = set()
+                    for key in request.form.keys():
+                        if key.startswith(f'element_id_{section_index}_'):
+                            try:
+                                idx = int(key.split('_')[-1])
+                                element_indices.add(idx)
+                            except Exception:
+                                pass
+
+                    print(f"  Element indices for section {section_index}: {element_indices}")
+
+                    for element_index in sorted(element_indices):
+                        element_id = request.form.get(f'element_id_{section_index}_{element_index}')
+                        element_name = request.form.get(f'element_name_{section_index}_{element_index}')
+                        element_type = request.form.get(f'element_type_{section_index}_{element_index}')
+
+                        print(f"    Processing element {element_index}: {element_id} - {element_name} ({element_type})")
+
+                        if element_id and element_name and element_type:
+                            element = {
+                                "id": element_id,
+                                "perm_id": element_id,
+                                "name": element_name,
+                                "type": element_type
+                            }
+
+                            # Required
+                            if request.form.get(f'element_required_{section_index}_{element_index}'):
+                                element["required"] = True
+
+                            # Default
+                            default_value = request.form.get(f'element_default_{section_index}_{element_index}')
+                            if default_value:
+                                element["default"] = parse_default_value(default_value, element_type)
+
+                            # Placeholder
+                            placeholder = request.form.get(f'element_placeholder_{section_index}_{element_index}')
+                            if placeholder:
+                                element["placeholder"] = placeholder
+
+                            # Number validation
+                            if element_type == 'number':
+                                validation = {}
+                                min_val = request.form.get(f'element_min_{section_index}_{element_index}')
+                                max_val = request.form.get(f'element_max_{section_index}_{element_index}')
                                 try:
-                                    points_dict[opt_val] = float(opt_points) if opt_points is not None else 0
-                                except ValueError:
-                                    points_dict[opt_val] = 0
-                                option_idx += 1
-                            if options:
-                                element["options"] = options
-                                element["points"] = points_dict
-                        
-                        section["elements"].append(element)
-                
-                updated_config["pit_scouting"]["sections"].append(section)
-        
-        print(f"Final config: {json.dumps(updated_config, indent=2)}")
-        
-        # Save the configuration to the current user's team
-        if save_pit_config(updated_config, team_number=save_team):
-            flash('Pit scouting configuration updated successfully!', 'success')
-        else:
-            flash('Error saving pit scouting configuration.', 'danger')
-        return redirect(url_for('pit_scouting.config'))
-        
+                                    if min_val is not None and min_val != '':
+                                        validation['min'] = int(min_val)
+                                except Exception:
+                                    pass
+                                try:
+                                    if max_val is not None and max_val != '':
+                                        validation['max'] = int(max_val)
+                                except Exception:
+                                    pass
+                                if validation:
+                                    element['validation'] = validation
+
+                            # Select/multiselect options
+                            if element_type in ['select', 'multiselect']:
+                                options = []
+                                points_dict = {}
+                                option_idx = 0
+                                while True:
+                                    opt_val = request.form.get(f'element_option_value_{section_index}_{element_index}_{option_idx}')
+                                    opt_label = request.form.get(f'element_option_label_{section_index}_{element_index}_{option_idx}')
+                                    opt_points = request.form.get(f'element_option_points_{section_index}_{element_index}_{option_idx}')
+                                    if opt_val is None:
+                                        break
+                                    if opt_val.strip():
+                                        options.append({"value": opt_val.strip(), "label": (opt_label.strip() if opt_label else opt_val.strip())})
+                                        try:
+                                            points_dict[opt_val.strip()] = float(opt_points) if opt_points is not None and opt_points != '' else 0.0
+                                        except Exception:
+                                            points_dict[opt_val.strip()] = 0.0
+                                    option_idx += 1
+                                if options:
+                                    element['options'] = options
+                                    element['points'] = points_dict
+
+                            section['elements'].append(element)
+
+                    updated_config['pit_scouting']['sections'].append(section)
+
+            print(f"Final config: {json.dumps(updated_config, indent=2)}")
+
+            if save_pit_config(updated_config, team_number=save_team):
+                flash('Pit scouting configuration updated successfully!', 'success')
+            else:
+                flash('Error saving pit scouting configuration.', 'danger')
+            return redirect(url_for('pit_scouting.config'))
+        except Exception as legacy_e:
+            print(f"Legacy form parsing failed: {legacy_e}")
+            import traceback
+            traceback.print_exc()
+            flash('Failed to parse legacy form data. Please use the modern editor.', 'danger')
+            return redirect(url_for('pit_scouting.config'))
     except Exception as e:
         print(f"Error in config_simple_save: {e}")
         import traceback
         traceback.print_exc()
-        flash(f'Error updating configuration: {str(e)}', 'error')
-        return redirect(url_for('pit_scouting.config_simple_edit'))
+        flash(f'Error saving pit scouting configuration: {e}', 'danger')
+        return redirect(url_for('pit_scouting.config'))
 
 def parse_default_value(value, element_type):
     """Parse default value based on element type"""

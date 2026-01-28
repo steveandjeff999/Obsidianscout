@@ -16,17 +16,51 @@
               {
                 "value": "yr1",
                 "label": "1 Year"
+              },
+              {
+                "value": "yr2",
+                "label": "2 Year"
+              },
+              {
+                "value": "yr3",
+                "label": "3+ Years"
               }
             ],
             "points": {
-              "yr1": 0.0
+              "yr1": 0,
+              "yr2": 0,
+              "yr3": 0
             }
           },
           {
             "id": "programming_language",
             "perm_id": "programming_language",
             "name": "Programming Language",
-            "type": "select"
+            "type": "select",
+            "options": [
+              {
+                "value": "java",
+                "label": "Java"
+              },
+              {
+                "value": "python",
+                "label": "Python"
+              },
+              {
+                "value": "cpp",
+                "label": "C++"
+              },
+              {
+                "value": "labview",
+                "label": "Labview"
+              }
+            ],
+            "points": {
+              "java": 0,
+              "python": 0,
+              "cpp": 0,
+              "labview": 0
+            }
           }
         ]
       },
@@ -38,7 +72,26 @@
             "id": "drivetrain_type",
             "perm_id": "drivetrain_type",
             "name": "Drivetrain Type",
-            "type": "select"
+            "type": "select",
+            "options": [
+              {
+                "value": "swerve",
+                "label": "Swerve"
+              },
+              {
+                "value": "tank",
+                "label": "Tank"
+              },
+              {
+                "value": "other",
+                "label": "other"
+              }
+            ],
+            "points": {
+              "swerve": 0,
+              "tank": 0,
+              "other": 0
+            }
           },
           {
             "id": "drivetrain_motors",
@@ -54,7 +107,31 @@
             "id": "motor_type",
             "perm_id": "motor_type",
             "name": "Drive Motor Type",
-            "type": "select"
+            "type": "select",
+            "options": [
+              {
+                "value": "kraken",
+                "label": "Kraken"
+              },
+              {
+                "value": "neo",
+                "label": "Neo"
+              },
+              {
+                "value": "cim",
+                "label": "cim"
+              },
+              {
+                "value": "other",
+                "label": "other"
+              }
+            ],
+            "points": {
+              "kraken": 0,
+              "neo": 0,
+              "cim": 0,
+              "other": 0
+            }
           },
           {
             "id": "robot_weight",
@@ -89,24 +166,6 @@
         ]
       },
       {
-        "id": "autonomous_capabilities",
-        "name": "Autonomous Capabilities",
-        "elements": [
-          {
-            "id": "autonomous_starting_position",
-            "perm_id": "autonomous_starting_position",
-            "name": "Preferred Auto Starting Position",
-            "type": "select"
-          },
-          {
-            "id": "autonomous_score_coral",
-            "perm_id": "autonomous_score_coral",
-            "name": "Scores CORAL in Auto",
-            "type": "boolean"
-          }
-        ]
-      },
-      {
         "id": "climb_capabilities",
         "name": "Climb & Endgame",
         "elements": [
@@ -120,7 +179,26 @@
             "id": "climb_levels",
             "perm_id": "climb_levels",
             "name": "Climb Levels Achieved",
-            "type": "multiselect"
+            "type": "multiselect",
+            "options": [
+              {
+                "value": "1",
+                "label": "L1"
+              },
+              {
+                "value": "2",
+                "label": "L2"
+              },
+              {
+                "value": "3",
+                "label": "L3"
+              }
+            ],
+            "points": {
+              "1": 0,
+              "2": 0,
+              "3": 0
+            }
           },
           {
             "id": "climb_time",
@@ -161,12 +239,6 @@
             "perm_id": "additional_notes",
             "name": "Additional Notes",
             "type": "textarea"
-          },
-          {
-            "id": "driver_skill_level",
-            "perm_id": "driver_skill_level",
-            "name": "Driver Skill Level",
-            "type": "select"
           }
         ]
       }

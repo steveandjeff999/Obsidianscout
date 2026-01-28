@@ -8,15 +8,15 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h2 class="card-title">
-                        <i class="fas fa-wrench"></i> Simple Pit Configuration Editor
+                    <h2 class="card-title mb-2 mb-md-0">
+                        <i class="fas fa-wrench"></i> <span class="d-none d-md-inline">Simple </span>Pit Config Editor
                     </h2>
-                    <div class="card-tools d-flex gap-2">
-                        <a href="{{ url_for('pit_scouting.config') }}" class="btn btn-secondary">
-                            <i class="fas fa-arrow-left"></i> Back to Config
+                    <div class="card-tools d-flex flex-column flex-md-row gap-2 mt-2 mt-md-0">
+                        <a href="{{ url_for('pit_scouting.config') }}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-arrow-left"></i> <span class="d-none d-sm-inline">Back</span>
                         </a>
-                        <button type="button" class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#resetModal">
-                            <i class="fas fa-undo me-1"></i> Reset to Default
+                        <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#resetModal">
+                            <i class="fas fa-undo me-1"></i> <span class="d-none d-sm-inline">Reset</span>
                         </button>
                     </div>
                 </div>
@@ -25,13 +25,33 @@
 
                     {% include '_alliance_mode_banner.html' %}
 
+                    <div class="alert alert-info">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h5 class="mb-0"><i class="fas fa-info-circle"></i> Requirements</h5>
+                            <button class="btn btn-sm btn-link d-md-none" type="button" data-bs-toggle="collapse" data-bs-target="#requirementsCollapse">
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                        </div>
+                        <div class="collapse show d-md-block" id="requirementsCollapse">
+                            <ul class="mb-0 mt-2 small">
+                                <li><strong>Title</strong> is required</li>
+                                <li>At least <strong>one section</strong> is required</li>
+                                <li>Each section must have a unique <strong>Section ID</strong> and <strong>Section Name</strong></li>
+                                <li>Each element must have a unique <strong>Element ID</strong>, <strong>Element Name</strong>, and <strong>Element Type</strong></li>
+                                <li><strong>Select</strong> and <strong>Multiselect</strong> elements must have at least one option</li>
+                                <li>Fields marked with <span class="text-danger">*</span> are required</li>
+                            </ul>
+                        </div>
+                    </div>
+
                     <form method="POST" action="{{ url_for('pit_scouting.config_simple_save') }}" id="pitConfigForm">
+                        <input type="hidden" name="simple_payload" id="simple_payload" value="">
                         <!-- Basic Settings -->
                         <div class="row mb-4">
                             <div class="col-md-12">
                                 <h3>Basic Settings</h3>
                                 <div class="form-group">
-                                    <label for="title">Title</label>
+                                    <label for="title">Title <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" id="title" name="title" 
                                            value="{{ pit_config.pit_scouting.title }}" required>
                                 </div>
@@ -50,24 +70,30 @@
                                 <div id="sectionsContainer">
                                     {% for section in pit_config.pit_scouting.sections %}
                                     <div class="section-item card mb-3" data-section-index="{{ loop.index0 }}">
-                                        <div class="card-header">
-                                            <h4>Section {{ loop.index }}</h4>
-                                            <button type="button" class="btn btn-sm btn-danger float-right remove-section">
-                                                <i class="fas fa-trash"></i> Remove Section
+                                        <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                                            <h4 class="mb-2 mb-md-0" style="font-size: 1.1rem;">
+                                                <button class="btn btn-sm btn-link p-0 me-2 text-decoration-none" type="button" data-bs-toggle="collapse" data-bs-target="#sectionCollapse{{ loop.index0 }}">
+                                                    <i class="fas fa-chevron-down"></i>
+                                                </button>
+                                                Section {{ loop.index }}
+                                            </h4>
+                                            <button type="button" class="btn btn-sm btn-danger remove-section">
+                                                <i class="fas fa-trash"></i> <span class="d-none d-sm-inline">Remove</span>
                                             </button>
                                         </div>
+                                        <div class="collapse show" id="sectionCollapse{{ loop.index0 }}">
                                         <div class="card-body">
                                             <div class="row">
                                                 <div class="col-md-6">
                                                     <div class="form-group">
-                                                        <label>Section ID</label>
-                                                        <input type="text" class="form-control" name="section_id_{{ loop.index0 }}" 
-                                                               value="{{ section.id }}" required>
+                                                        <label class="small">Section ID</label>
+                                                        <input type="hidden" name="section_id_{{ loop.index0 }}" value="{{ section.id }}" data-auto="true">
+                                                        <div class="form-control-plaintext small text-muted generated-section-id">{{ section.id }}</div>
                                                     </div>
                                                 </div>
                                                 <div class="col-md-6">
                                                     <div class="form-group">
-                                                        <label>Section Name</label>
+                                                        <label>Section Name <span class="text-danger">*</span></label>
                                                         <input type="text" class="form-control" name="section_name_{{ loop.index0 }}" 
                                                                value="{{ section.name }}" required>
                                                     </div>
@@ -80,37 +106,38 @@
                                                 {% set section_index = loop.index0 %}
                                                 {% for element in section.elements %}
                                                 {% set element_index = loop.index0 %}
-                                                <div class="element-item border p-3 mb-2" data-element-index="{{ loop.index0 }}">
+                                                <div class="element-item border p-2 p-md-3 mb-2" data-element-index="{{ loop.index0 }}">
                                                     <div class="row">
-                                                        <div class="col-md-12">
-                                                            <button type="button" class="btn btn-sm btn-danger float-right remove-element">
-                                                                <i class="fas fa-trash"></i> Remove Element
+                                                        <div class="col-12 d-flex justify-content-between align-items-center mb-2">
+                                                            <h6 class="mb-0" style="font-size: 0.95rem;">Element {{ loop.index }}</h6>
+                                                            <button type="button" class="btn btn-sm btn-danger remove-element">
+                                                                <i class="fas fa-trash"></i>
                                                             </button>
-                                                            <h6>Element {{ loop.index }}</h6>
                                                         </div>
                                                     </div>
                                                     <div class="row">
-                                                        <div class="col-md-4">
-                                                            <div class="form-group">
-                                                                <label>Element ID</label>
-                                                                <input type="text" class="form-control" 
+                                                        <div class="col-12 col-md-4 mb-2">
+                                                            <div class="form-group mb-0">
+                                                                <label class="small">Element ID</label>
+                                                                <input type="hidden" class="form-control form-control-sm" 
                                                                        name="element_id_{{ section_index }}_{{ element_index }}" 
-                                                                       value="{{ element.id }}" required>
+                                                                       value="{{ element.id }}" data-auto="true">
+                                                                <div class="form-control-plaintext small text-muted generated-element-id">{{ element.id }}</div>
                                                             </div>
                                                         </div>
-                                                        <div class="col-md-4">
-                                                            <div class="form-group">
-                                                                <label>Element Name</label>
-                                                                <input type="text" class="form-control" 
+                                                        <div class="col-12 col-md-4 mb-2">
+                                                            <div class="form-group mb-0">
+                                                                <label class="small">Element Name <span class="text-danger">*</span></label>
+                                                                <input type="text" class="form-control form-control-sm" 
                                                                        name="element_name_{{ section_index }}_{{ element_index }}" 
                                                                        value="{{ element.name }}" required>
                                                             </div>
                                                         </div>
-                                                        <div class="col-md-4">
-                                                            <div class="form-group">
-                                                                <label>Element Type</label>
-                                                                <select class="form-control element-type-select" 
-                                                                        name="element_type_{{ section_index }}_{{ element_index }}">
+                                                        <div class="col-12 col-md-4 mb-2">
+                                                            <div class="form-group mb-0">
+                                                                <label class="small">Element Type <span class="text-danger">*</span></label>
+                                                                <select class="form-control form-control-sm element-type-select" 
+                                                                        name="element_type_{{ section_index }}_{{ element_index }}" required>
                                                                     <option value="text" {% if element.type == 'text' %}selected{% endif %}>Text</option>
                                                                     <option value="textarea" {% if element.type == 'textarea' %}selected{% endif %}>Textarea</option>
                                                                     <option value="number" {% if element.type == 'number' %}selected{% endif %}>Number</option>
@@ -122,28 +149,28 @@
                                                         </div>
                                                     </div>
                                                     <div class="row">
-                                                        <div class="col-md-4">
-                                                            <div class="form-group">
-                                                                <label>Default Value</label>
-                                                                <input type="text" class="form-control" 
+                                                        <div class="col-12 col-md-4 mb-2">
+                                                            <div class="form-group mb-0">
+                                                                <label class="small">Default Value</label>
+                                                                <input type="text" class="form-control form-control-sm" 
                                                                        name="element_default_{{ section_index }}_{{ element_index }}" 
                                                                        value="{{ element.default or '' }}">
                                                             </div>
                                                         </div>
-                                                        <div class="col-md-4">
-                                                            <div class="form-group">
-                                                                <label>Placeholder</label>
-                                                                <input type="text" class="form-control" 
+                                                        <div class="col-12 col-md-4 mb-2">
+                                                            <div class="form-group mb-0">
+                                                                <label class="small">Placeholder</label>
+                                                                <input type="text" class="form-control form-control-sm" 
                                                                        name="element_placeholder_{{ section_index }}_{{ element_index }}" 
                                                                        value="{{ element.placeholder or '' }}">
                                                             </div>
                                                         </div>
-                                                        <div class="col-md-4">
-                                                            <div class="form-check pt-4">
+                                                        <div class="col-12 col-md-4 mb-2">
+                                                            <div class="form-check pt-3">
                                                                 <input type="checkbox" class="form-check-input" 
                                                                        name="element_required_{{ section_index }}_{{ element_index }}" 
                                                                        {% if element.required %}checked{% endif %}>
-                                                                <label class="form-check-label">Required</label>
+                                                                <label class="form-check-label small">Required</label>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -170,23 +197,32 @@
                                                     
                                                     <!-- Select/Multiselect options -->
                                                     <div class="select-options {% if element.type not in ['select', 'multiselect'] %}d-none{% endif %}">
-                                                        <div class="form-group">
-                                                            <label>Options and Points (value|label|points)</label>
-                                                            <table class="table table-bordered option-points-table">
+                                                        <div class="form-group mb-0">
+                                                            <label class="small">Options <span class="text-danger">*</span></label>
+                                                            <small class="form-text text-muted d-block mb-2">Add option names; values are auto-generated and points default to 0</small>
+                                                            <div class="table-responsive">
+                                                            <table class="table table-bordered table-sm option-points-table">
                                                                 <thead>
-                                                                    <tr><th>Option Value</th><th>Label</th><th>Points</th></tr>
+                                                                    <tr><th>Option Name</th><th></th></tr>
                                                                 </thead>
                                                                 <tbody>
                                                                 {% for opt in element.options %}
                                                                 <tr>
-                                                                    <td><input type="text" class="form-control" name="element_option_value_{{ section_index }}_{{ element_index }}_{{ loop.index0 }}" value="{{ opt.value }}" required></td>
-                                                                    <td><input type="text" class="form-control" name="element_option_label_{{ section_index }}_{{ element_index }}_{{ loop.index0 }}" value="{{ opt.label }}"></td>
-                                                                    <td><input type="number" class="form-control" name="element_option_points_{{ section_index }}_{{ element_index }}_{{ loop.index0 }}" value="{{ element.points[opt.value] if element.points and opt.value in element.points else 0 }}" step="0.1"></td>
+                                                                    <td><input type="text" class="form-control form-control-sm option-label" name="element_option_label_{{ section_index }}_{{ element_index }}_{{ loop.index0 }}" value="{{ opt.label if opt.label else opt.value }}" required></td>
+                                                                    <td style="display:none;">
+                                                                        <input type="hidden" name="element_option_value_{{ section_index }}_{{ element_index }}_{{ loop.index0 }}" value="{{ opt.value }}" data-auto="{{ 'true' if not opt.value else 'false' }}">
+                                                                        <input type="hidden" name="element_option_points_{{ section_index }}_{{ element_index }}_{{ loop.index0 }}" value="{{ element.points[opt.value] if element.points and opt.value in element.points else 0 }}">
+                                                                        <button type="button" class="btn btn-sm btn-outline-danger remove-option" style="display:none;"><i class="fas fa-trash"></i></button>
+                                                                    </td>
+                                                                    <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-option"><i class="fas fa-trash"></i></button></td>
                                                                 </tr>
                                                                 {% endfor %}
                                                                 </tbody>
                                                             </table>
-                                                            <button type="button" class="btn btn-sm btn-success add-option" data-section-index="{{ section_index }}" data-element-index="{{ element_index }}">Add Option</button>
+                                                            </div>
+                                                            <button type="button" class="btn btn-sm btn-success add-option" data-section-index="{{ section_index }}" data-element-index="{{ element_index }}">
+                                                                <i class="fas fa-plus"></i> Add Option
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -195,6 +231,7 @@
                                             <button type="button" class="btn btn-success add-element" data-section-index="{{ loop.index0 }}">
                                                 <i class="fas fa-plus"></i> Add Element
                                             </button>
+                                        </div>
                                         </div>
                                     </div>
                                     {% endfor %}
@@ -207,13 +244,15 @@
 
                         <!-- Save Button -->
                         <div class="row">
-                            <div class="col-md-12">
-                                <button type="submit" class="btn btn-primary btn-lg">
-                                    <i class="fas fa-save"></i> Save Configuration
-                                </button>
-                                <a href="{{ url_for('pit_scouting.config') }}" class="btn btn-secondary btn-lg">
-                                    <i class="fas fa-times"></i> Cancel
-                                </a>
+                            <div class="col-12">
+                                <div class="d-grid gap-2 d-md-flex">
+                                    <button type="submit" class="btn btn-primary btn-lg">
+                                        <i class="fas fa-save"></i> Save Configuration
+                                    </button>
+                                    <a href="{{ url_for('pit_scouting.config') }}" class="btn btn-secondary btn-lg">
+                                        <i class="fas fa-times"></i> Cancel
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </form>
@@ -232,6 +271,347 @@ document.addEventListener('DOMContentLoaded', function() {
     {% for section in pit_config.pit_scouting.sections %}
     elementIndexes[{{ loop.index0 }}] = {{ section.elements|length }};
     {% endfor %}
+
+    // Utility: slugify name -> id (lowercase, replace non-alnum -> underscore, collapse underscores, trim)
+    function slugifyName(name) {
+        if (!name) return '';
+        return name.toString().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/__+/g, '_').replace(/^_|_$/g, '');
+    }
+
+    function uniqueSectionId(base) {
+        base = slugifyName(base) || 'section';
+        let ids = Array.from(document.querySelectorAll('input[name^="section_id_"]')).map(i => i.value.trim()).filter(Boolean);
+        if (!ids.includes(base)) return base;
+        let i = 1;
+        while (ids.includes(`${base}_${i}`)) i++;
+        return `${base}_${i}`;
+    }
+
+    function uniqueElementId(sectionEl, base) {
+        base = slugifyName(base) || 'elem';
+        let ids = Array.from(sectionEl.querySelectorAll('input[name*="element_id_"]')).map(i => i.value.trim()).filter(Boolean);
+        if (!ids.includes(base)) return base;
+        let i = 1;
+        while (ids.includes(`${base}_${i}`)) i++;
+        return `${base}_${i}`;
+    }
+
+    // Auto-generate IDs when names change, but do not overwrite if user typed their own ID
+    document.addEventListener('input', function(e) {
+        // Section name -> section id
+        const secNameEl = e.target.closest && e.target.closest('input[name^="section_name_"]');
+        if (secNameEl) {
+            const section = secNameEl.closest('.section-item');
+            if (!section) return;
+            const idInput = section.querySelector('input[name^="section_id_"]');
+            if (!idInput) return;
+            if (idInput.dataset.auto === 'false') return; // user has edited id manually
+            const candidate = uniqueSectionId(secNameEl.value||secNameEl.placeholder||'section');
+            idInput.value = candidate;
+            idInput.dataset.auto = 'true';
+            const display = section.querySelector('.generated-section-id');
+            if (display) display.textContent = candidate;
+            return;
+        }
+
+        // Element name -> element id
+        const elemNameEl = e.target.closest && e.target.closest('input[name*="_name_"]');
+        if (elemNameEl) {
+            const element = elemNameEl.closest('.element-item');
+            if (!element) return;
+            const section = element.closest('.section-item');
+            if (!section) return;
+            const idInput = element.querySelector('input[name*="_id_"]');
+            if (!idInput) return;
+            if (idInput.dataset.auto === 'false') return;
+            const candidate = uniqueElementId(section, elemNameEl.value||elemNameEl.placeholder||'elem');
+            idInput.value = candidate;
+            idInput.dataset.auto = 'true';
+            const display = element.querySelector('.generated-element-id');
+            if (display) display.textContent = candidate;
+            return;
+        }
+
+        // If user manually edits an ID field, mark it as user-edited
+        const idField = e.target.closest && e.target.closest('input[name^="section_id_"]');
+        if (idField) {
+            idField.dataset.auto = 'false';
+            return;
+        }
+        const elemIdField = e.target.closest && e.target.closest('input[name*="_id_"]');
+        if (elemIdField) {
+            elemIdField.dataset.auto = 'false';
+            return;
+        }
+    });
+
+    // Initialize auto-id flags for existing fields (true = auto-managed, false = user-edited)
+    document.querySelectorAll('.section-item').forEach(section => {
+        const secName = section.querySelector('input[name^="section_name_"]');
+        const secId = section.querySelector('input[name^="section_id_"]');
+        const secDisplay = section.querySelector('.generated-section-id');
+        if (secId && secName) {
+            const expected = slugifyName(secName.value || secName.placeholder || 'section');
+            if (!secId.value || secId.value.trim() === expected) {
+                secId.dataset.auto = 'true';
+            } else {
+                secId.dataset.auto = 'false';
+            }
+            if (secDisplay) secDisplay.textContent = secId.value || '';
+        }
+
+        section.querySelectorAll('.element-item').forEach(element => {
+            const nameEl = element.querySelector('input[name*="_name_"]');
+            const idEl = element.querySelector('input[name*="_id_"]');
+            const elDisp = element.querySelector('.generated-element-id');
+            if (nameEl && idEl) {
+                const expectedElem = uniqueElementId(section, nameEl.value || nameEl.placeholder || 'elem');
+                if (!idEl.value || idEl.value.trim() === expectedElem) {
+                    idEl.dataset.auto = 'true';
+                } else {
+                    idEl.dataset.auto = 'false';
+                }
+                if (elDisp) elDisp.textContent = idEl.value || '';
+            }
+        });
+    });
+
+    // Helper: Build JSON payload from UI
+    function ensureAllIds() {
+        document.querySelectorAll('.section-item').forEach(section => {
+            const secIdInput = section.querySelector('input[name^="section_id_"]');
+            const secNameInput = section.querySelector('input[name^="section_name_"]');
+            const secDisplay = section.querySelector('.generated-section-id');
+            if (secIdInput && (!secIdInput.value || secIdInput.value.trim() === '')) {
+                const candidate = uniqueSectionId((secNameInput && secNameInput.value) ? secNameInput.value : 'section');
+                secIdInput.value = candidate;
+                if (secDisplay) secDisplay.textContent = candidate;
+            }
+
+            section.querySelectorAll('.element-item').forEach((el, elIdx) => {
+                const idEl = el.querySelector('input[name*="_id_"]');
+                const nameEl = el.querySelector('input[name*="_name_"]');
+                const disp = el.querySelector('.generated-element-id');
+                if (idEl && (!idEl.value || idEl.value.trim() === '')) {
+                    const candidate = uniqueElementId(section, (nameEl && nameEl.value) ? nameEl.value : 'elem');
+                    idEl.value = candidate;
+                    if (disp) disp.textContent = candidate;
+                }
+                // Reindex option rows for this element to ensure contiguous indices
+                try {
+                    const secIdx = section.dataset.sectionIndex;
+                    reindexOptionRows(secIdx, elIdx);
+                } catch (err) {
+                    // ignore
+                }
+            });
+        });
+    }
+
+    function buildSimplePitPayload() {
+        const payload = { pit_scouting: { title: '', description: '', sections: [] } };
+        payload.pit_scouting.title = document.getElementById('title').value.trim();
+        payload.pit_scouting.description = document.getElementById('description').value.trim();
+
+        const sections = document.querySelectorAll('.section-item');
+        sections.forEach((section) => {
+            const sid = section.querySelector('input[name^="section_id_"]')?.value.trim();
+            const sname = section.querySelector('input[name^="section_name_"]')?.value.trim();
+            if (!sid || !sname) return; // skip invalid
+            const sectionObj = { id: sid, name: sname, elements: [] };
+
+            const elements = section.querySelectorAll('.element-item');
+            elements.forEach((el) => {
+                const eid = el.querySelector('input[name*="_id_"]')?.value.trim();
+                const ename = el.querySelector('input[name*="_name_"]')?.value.trim();
+                const etype = el.querySelector('select[name*="_type_"]')?.value;
+                if (!eid || !ename || !etype) return;
+                const elem = { id: eid, perm_id: eid, name: ename, type: etype };
+
+                const def = el.querySelector(`input[name^="element_default_"]`);
+                if (def && def.value) elem.default = def.value;
+                const ph = el.querySelector(`input[name^="element_placeholder_"]`);
+                if (ph && ph.value) elem.placeholder = ph.value;
+                const req = el.querySelector(`input[name^="element_required_"]`);
+                if (req && req.checked) elem.required = true;
+
+                if (etype === 'number') {
+                    const min = el.querySelector(`input[name^="element_min_"]`);
+                    const max = el.querySelector(`input[name^="element_max_"]`);
+                    const v = {};
+                    if (min && min.value) v.min = parseFloat(min.value);
+                    if (max && max.value) v.max = parseFloat(max.value);
+                    if (Object.keys(v).length) elem.validation = v;
+                }
+
+                if (etype === 'select' || etype === 'multiselect') {
+                    // gather options from table rows
+                    const options = [];
+                    const points = {};
+                    const rows = el.querySelectorAll('.option-points-table tbody tr');
+                    rows.forEach((r) => {
+                        const val = r.querySelector('input[name*="element_option_value_"]')?.value.trim();
+                        const lab = r.querySelector('input[name*="element_option_label_"]')?.value.trim() || val;
+                        const ptsStr = r.querySelector('input[name*="element_option_points_"]')?.value;
+                        const pts = ptsStr ? parseFloat(ptsStr) : 0;
+                        if (val) {
+                            options.push({ value: val, label: lab });
+                            points[val] = pts;
+                        }
+                    });
+                    // fallback: textarea format
+                    if (options.length === 0) {
+                        const textarea = el.querySelector('textarea[name*="element_options_"]');
+                        if (textarea && textarea.value.trim()) {
+                            const lines = textarea.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                            lines.forEach((ln, idx) => {
+                                const parts = ln.split('|');
+                                const raw = parts[0].trim();
+                                const v = slugifyName(raw);
+                                const l = parts[1] ? parts[1].trim() : raw;
+                                if (v) {
+                                    options.push({ value: v, label: l });
+                                    points[v] = 0;
+                                }
+                            });
+                        }
+                    }
+                    if (options.length) {
+                        elem.options = options;
+                        elem.points = points;
+                    }
+                }
+
+                sectionObj.elements.push(elem);
+            });
+
+            payload.pit_scouting.sections.push(sectionObj);
+        });
+
+        return payload;
+    }
+
+    document.getElementById('pitConfigForm').addEventListener('submit', function(e) {
+        // Ensure all IDs are present/generate from names
+        ensureAllIds();
+        const errors = [];
+        
+        // Validate title
+        const title = document.getElementById('title').value.trim();
+        if (!title) {
+            errors.push('Title is required');
+        }
+        
+        // Validate sections
+        const sections = document.querySelectorAll('.section-item');
+        if (sections.length === 0) {
+            errors.push('At least one section is required');
+        }
+        
+        const sectionIds = new Set();
+        sections.forEach((section, secIdx) => {
+            const sectionId = section.querySelector('input[name^="section_id_"]');
+            const sectionName = section.querySelector('input[name^="section_name_"]');
+            
+            if (!sectionId || !sectionId.value.trim()) {
+                errors.push(`Section #${secIdx + 1}: Section ID is required`);
+            } else if (sectionIds.has(sectionId.value.trim())) {
+                errors.push(`Section #${secIdx + 1}: Duplicate section ID "${sectionId.value.trim()}"`);
+            } else {
+                sectionIds.add(sectionId.value.trim());
+            }
+            
+            if (!sectionName || !sectionName.value.trim()) {
+                errors.push(`Section #${secIdx + 1}: Section Name is required`);
+            }
+            
+            // Validate elements
+            const elements = section.querySelectorAll('.element-item');
+            const elementIds = new Set();
+            
+            elements.forEach((element, elemIdx) => {
+                const elemId = element.querySelector('input[name*="_id_"]');
+                const elemName = element.querySelector('input[name*="_name_"]');
+                const elemType = element.querySelector('select[name*="_type_"]');
+                
+                const secName = sectionName && sectionName.value.trim() ? sectionName.value.trim() : `Section #${secIdx + 1}`;
+                
+                if (!elemId || !elemId.value.trim()) {
+                    errors.push(`${secName}, Element #${elemIdx + 1}: Element ID is required`);
+                } else if (elementIds.has(elemId.value.trim())) {
+                    errors.push(`${secName}: Duplicate element ID "${elemId.value.trim()}"`);
+                } else {
+                    elementIds.add(elemId.value.trim());
+                }
+                
+                if (!elemName || !elemName.value.trim()) {
+                    errors.push(`${secName}, Element #${elemIdx + 1}: Element Name is required`);
+                }
+                
+                if (!elemType || !elemType.value) {
+                    errors.push(`${secName}, Element #${elemIdx + 1}: Element Type is required`);
+                }
+                
+                // Validate select/multiselect have options
+                if (elemType && (elemType.value === 'select' || elemType.value === 'multiselect')) {
+                    const optionInputs = element.querySelectorAll('input[name*="_option_value_"]');
+                    let hasValidOption = false;
+                    optionInputs.forEach(opt => {
+                        if (opt.value.trim()) {
+                            hasValidOption = true;
+                        }
+                    });
+                    
+                    // Check textarea fallback for new elements
+                    if (!hasValidOption) {
+                        const optionText = element.querySelector('textarea[name*="_options_"]');
+                        if (optionText && optionText.value.trim()) {
+                            hasValidOption = true;
+                        }
+                    }
+                    
+                    if (!hasValidOption) {
+                        const elemIdVal = elemId && elemId.value.trim() ? elemId.value.trim() : `Element #${elemIdx + 1}`;
+                        errors.push(`${secName}, ${elemIdVal}: Select/Multiselect must have at least one option`);
+                    }
+                }
+            });
+        });
+        
+        if (errors.length > 0) {
+            e.preventDefault();
+            let errorHtml = '<strong>Please fix the following errors:</strong><ul>';
+            errors.forEach(err => {
+                errorHtml += `<li>${err}</li>`;
+            });
+            errorHtml += '</ul>';
+            
+            // Show errors at top of form
+            let errorDiv = document.getElementById('validationErrors');
+            if (!errorDiv) {
+                errorDiv = document.createElement('div');
+                errorDiv.id = 'validationErrors';
+                errorDiv.className = 'alert alert-danger';
+                document.querySelector('.card-body form').prepend(errorDiv);
+            }
+            errorDiv.innerHTML = errorHtml;
+            errorDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            return false;
+        }
+
+        // No validation errors - build JSON payload and submit via simple_payload for robust backend handling
+        try {
+            const payload = buildSimplePitPayload();
+            document.getElementById('simple_payload').value = JSON.stringify(payload);
+            // Allow form to submit normally; backend will prefer simple_payload
+        } catch (err) {
+            e.preventDefault();
+            alert('Failed to prepare configuration payload. Please try again.');
+            console.error('Payload build error', err);
+            return false;
+        }
+    });
     
     // Add section functionality
     document.getElementById('addSection').addEventListener('click', function() {
@@ -239,6 +619,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const newSection = createSectionElement(sectionIndex);
         sectionsContainer.appendChild(newSection);
         elementIndexes[sectionIndex] = 0;
+        // Auto-generate section id immediately
+        const idInput = newSection.querySelector(`input[name^="section_id_"]`);
+        const nameInput = newSection.querySelector(`input[name^="section_name_"]`);
+        const display = newSection.querySelector('.generated-section-id');
+        if (idInput) {
+            const candidate = uniqueSectionId(nameInput && nameInput.value ? nameInput.value : `section_${sectionIndex}`);
+            idInput.value = candidate;
+            if (display) display.textContent = candidate;
+        }
         sectionIndex++;
     });
     
@@ -257,12 +646,22 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Add element functionality
     document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('add-element') || e.target.parentElement.classList.contains('add-element')) {
+        if (e.target.classList.contains('add-element') || (e.target.parentElement && e.target.parentElement.classList.contains('add-element'))) {
             const button = e.target.closest('.add-element');
             const sectionIdx = parseInt(button.dataset.sectionIndex);
             const elementsContainer = button.previousElementSibling;
             const newElement = createElementElement(sectionIdx, elementIndexes[sectionIdx]);
             elementsContainer.appendChild(newElement);
+            // Auto-generate element id immediately
+            const idInput = newElement.querySelector(`input[name*="_id_"]`);
+            const nameInput = newElement.querySelector(`input[name*="_name_"]`);
+            const display = newElement.querySelector('.generated-element-id');
+            const parentSection = newElement.closest('.section-item');
+            if (idInput && parentSection) {
+                const candidate = uniqueElementId(parentSection, (nameInput && nameInput.value) ? nameInput.value : `elem_${elementIndexes[sectionIdx]}`);
+                idInput.value = candidate;
+                if (display) display.textContent = candidate;
+            }
             elementIndexes[sectionIdx]++;
         }
     });
@@ -302,6 +701,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Helper: ensure option rows are reindexed to contiguous indices
+    function reindexOptionRows(sectionIndex, elementIndex) {
+        const container = document.querySelector(`.section-item[data-section-index="${sectionIndex}"] .element-item[data-element-index="${elementIndex}"] .option-points-table tbody`);
+        if (!container) return;
+        const rows = Array.from(container.querySelectorAll('tr'));
+        rows.forEach((row, idx) => {
+            const val = row.querySelector('input[name*="element_option_value_"]');
+            const lab = row.querySelector('input[name*="element_option_label_"]');
+            const pts = row.querySelector('input[name*="element_option_points_"]');
+            if (val) val.name = `element_option_value_${sectionIndex}_${elementIndex}_${idx}`;
+            if (lab) lab.name = `element_option_label_${sectionIndex}_${elementIndex}_${idx}`;
+            if (pts) pts.name = `element_option_points_${sectionIndex}_${elementIndex}_${idx}`;
+        });
+    }
+
     document.addEventListener('click', function(e) {
         const addOptionBtn = e.target.closest && e.target.closest('.add-option');
         if (addOptionBtn) {
@@ -315,15 +729,58 @@ document.addEventListener('DOMContentLoaded', function() {
             const newOptionIndex = container.querySelectorAll('tr').length;
             const template = createOptionTemplate(sectionIndex, elementIndex, newOptionIndex);
             container.insertAdjacentHTML('beforeend', template);
+            reindexOptionRows(sectionIndex, elementIndex);
         }
+
+        // Remove option row
+        const removeOpt = e.target.closest && e.target.closest('.remove-option');
+        if (removeOpt) {
+            const row = removeOpt.closest('tr');
+            if (row) {
+                const elem = row.closest('.element-item');
+                const sec = row.closest('.section-item');
+                row.remove();
+                if (elem && sec) {
+                    reindexOptionRows(sec.dataset.sectionIndex, elem.dataset.elementIndex);
+                }
+            }
+        }
+
+        // Initialize auto-values for existing option labels (set hidden value if data-auto)
+        document.querySelectorAll('.option-label').forEach(el => {
+            const row = el.closest('tr');
+            if (!row) return;
+            const val = row.querySelector('input[name*="element_option_value_"]');
+            const pts = row.querySelector('input[name*="element_option_points_"]');
+            if (val && val.dataset && val.dataset.auto === 'true') {
+                val.value = slugifyName(el.value || '');
+            }
+            if (pts && (pts.value === '' || pts.value === null)) pts.value = '0';
+        });
+
+        // Update hidden value when label changes; ensure points default to 0
+        document.addEventListener('input', function(e) {
+            if (e.target && e.target.classList && e.target.classList.contains('option-label')) {
+                const row = e.target.closest('tr');
+                if (!row) return;
+                const valInput = row.querySelector('input[name*="element_option_value_"]');
+                const ptsInput = row.querySelector('input[name*="element_option_points_"]');
+                const slug = slugifyName(e.target.value || '');
+                if (valInput && valInput.dataset.auto !== 'false') valInput.value = slug;
+                if (ptsInput && (ptsInput.value === '' || ptsInput.value === null)) ptsInput.value = '0';
+            }
+        });
     });
 });
 function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
     return `
         <tr>
-            <td><input type="text" class="form-control" name="element_option_value_${sectionIndex}_${elementIndex}_${optionIndex}" required></td>
-            <td><input type="text" class="form-control" name="element_option_label_${sectionIndex}_${elementIndex}_${optionIndex}"></td>
-            <td><input type="number" class="form-control" name="element_option_points_${sectionIndex}_${elementIndex}_${optionIndex}" value="0" step="0.1"></td>
+            <td><input type="text" class="form-control option-label" name="element_option_label_${sectionIndex}_${elementIndex}_${optionIndex}" required></td>
+            <td style="display:none;">
+                <input type="hidden" name="element_option_value_${sectionIndex}_${elementIndex}_${optionIndex}" value="" data-auto="true">
+                <input type="hidden" name="element_option_points_${sectionIndex}_${elementIndex}_${optionIndex}" value="0">
+            </td>
+            <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-option"><i class="fas fa-trash"></i></button></td>
         </tr>
     `;
 }
@@ -334,33 +791,46 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
         sectionDiv.dataset.sectionIndex = sectionIdx;
         
         sectionDiv.innerHTML = `
-            <div class="card-header">
-                <h4>Section ${sectionIdx + 1}</h4>
-                <button type="button" class="btn btn-sm btn-danger float-right remove-section">
-                    <i class="fas fa-trash"></i> Remove Section
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                <h4 class="mb-2 mb-md-0" style="font-size: 1.1rem;">
+                    <button class="btn btn-sm btn-link p-0 me-2 text-decoration-none" type="button" data-bs-toggle="collapse" data-bs-target="#sectionCollapse${sectionIdx}">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    Section ${sectionIdx + 1}
+                </h4>
+                <button type="button" class="btn btn-sm btn-danger remove-section">
+                    <i class="fas fa-trash"></i> <span class="d-none d-sm-inline">Remove</span>
                 </button>
             </div>
+            <div class="collapse show" id="sectionCollapse${sectionIdx}">
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Section ID</label>
-                            <input type="text" class="form-control" name="section_id_${sectionIdx}" required>
+                    <div class="col-12 col-md-6 mb-2">
+                        <div class="form-group mb-0">
+                            <label class="small">Section ID <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" name="section_id_${sectionIdx}" data-auto="true" required>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label>Section Name</label>
-                            <input type="text" class="form-control" name="section_name_${sectionIdx}" required>
+                    <div class="col-12 col-md-6 mb-2">
+                        <div class="form-group mb-0">
+                            <label class="small">Section Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" name="section_name_${sectionIdx}" required>
                         </div>
                     </div>
                 </div>
-                <h5>Elements</h5>
+                <div class="row mb-2">
+                    <div class="col-12">
+                        <small class="text-muted">Generated Section ID: <code class="generated-section-id"></code></small>
+                    </div>
+                </div>
+                </div>
+                <h5 class="mt-3 mb-2" style="font-size: 1rem;">Elements</h5>
                 <div class="elements-container" data-section-index="${sectionIdx}">
                 </div>
                 <button type="button" class="btn btn-success add-element" data-section-index="${sectionIdx}">
                     <i class="fas fa-plus"></i> Add Element
                 </button>
+            </div>
             </div>
         `;
         
@@ -369,35 +839,41 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
     
     function createElementElement(sectionIdx, elementIdx) {
         const elementDiv = document.createElement('div');
-        elementDiv.className = 'element-item border p-3 mb-2';
+        elementDiv.className = 'element-item border p-2 p-md-3 mb-2';
         elementDiv.dataset.elementIndex = elementIdx;
         
         elementDiv.innerHTML = `
             <div class="row">
-                <div class="col-md-12">
-                    <button type="button" class="btn btn-sm btn-danger float-right remove-element">
-                        <i class="fas fa-trash"></i> Remove Element
+                <div class="col-12 d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0" style="font-size: 0.95rem;">Element ${elementIdx + 1}</h6>
+                    <button type="button" class="btn btn-sm btn-danger remove-element">
+                        <i class="fas fa-trash"></i>
                     </button>
-                    <h6>Element ${elementIdx + 1}</h6>
                 </div>
             </div>
             <div class="row">
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label>Element ID</label>
-                        <input type="text" class="form-control" name="element_id_${sectionIdx}_${elementIdx}" required>
+                <div class="col-12 col-md-4 mb-2">
+                    <div class="form-group mb-0">
+                        <label class="small">Element Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm" name="element_name_${sectionIdx}_${elementIdx}" required>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label>Element Name</label>
-                        <input type="text" class="form-control" name="element_name_${sectionIdx}_${elementIdx}" required>
+                <div class="col-12 col-md-4 mb-2">
+                    <div class="form-group mb-0">
+                        <small class="text-muted">Generated Element ID: <code class="generated-element-id"></code></small>
+                        <input type="hidden" class="form-control form-control-sm" name="element_id_${sectionIdx}_${elementIdx}" data-auto="true" required>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label>Element Type</label>
-                        <select class="form-control element-type-select" name="element_type_${sectionIdx}_${elementIdx}">
+                <div class="col-12 col-md-4 mb-2">
+                    <div class="form-group mb-0">
+                        <label class="small">Element Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm" name="element_name_${sectionIdx}_${elementIdx}" required>
+                    </div>
+                </div>
+                <div class="col-12 col-md-4 mb-2">
+                    <div class="form-group mb-0">
+                        <label class="small">Element Type <span class="text-danger">*</span></label>
+                        <select class="form-control form-control-sm element-type-select" name="element_type_${sectionIdx}_${elementIdx}" required>
                             <option value="text">Text</option>
                             <option value="textarea">Textarea</option>
                             <option value="number">Number</option>
@@ -409,19 +885,19 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
                 </div>
             </div>
             <div class="row">
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label>Default Value</label>
-                        <input type="text" class="form-control" name="element_default_${sectionIdx}_${elementIdx}">
+                <div class="col-12 col-md-4 mb-2">
+                    <div class="form-group mb-0">
+                        <label class="small">Default Value</label>
+                        <input type="text" class="form-control form-control-sm" name="element_default_${sectionIdx}_${elementIdx}">
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label>Placeholder</label>
-                        <input type="text" class="form-control" name="element_placeholder_${sectionIdx}_${elementIdx}">
+                <div class="col-12 col-md-4 mb-2">
+                    <div class="form-group mb-0">
+                        <label class="small">Placeholder</label>
+                        <input type="text" class="form-control form-control-sm" name="element_placeholder_${sectionIdx}_${elementIdx}">
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-12 col-md-4 mb-2">
                     <div class="form-check pt-4">
                         <input type="checkbox" class="form-check-input" name="element_required_${sectionIdx}_${elementIdx}">
                         <label class="form-check-label">Required</label>
@@ -429,23 +905,35 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
                 </div>
             </div>
             <div class="number-validation row d-none">
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label>Min Value</label>
-                        <input type="number" class="form-control" name="element_min_${sectionIdx}_${elementIdx}">
+                <div class="col-12 col-md-6 mb-2">
+                    <div class="form-group mb-0">
+                        <label class="small">Min Value</label>
+                        <input type="number" class="form-control form-control-sm" name="element_min_${sectionIdx}_${elementIdx}">
                     </div>
                 </div>
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label>Max Value</label>
-                        <input type="number" class="form-control" name="element_max_${sectionIdx}_${elementIdx}">
+                <div class="col-12 col-md-6 mb-2">
+                    <div class="form-group mb-0">
+                        <label class="small">Max Value</label>
+                        <input type="number" class="form-control form-control-sm" name="element_max_${sectionIdx}_${elementIdx}">
                     </div>
                 </div>
             </div>
             <div class="select-options d-none">
-                <div class="form-group">
-                    <label>Options (one per line, format: value|label or just value)</label>
-                    <textarea class="form-control" rows="4" name="element_options_${sectionIdx}_${elementIdx}"></textarea>
+                <div class="form-group mb-0">
+                    <label class="small">Options and Points <span class="text-danger">*</span></label>
+                    <small class="form-text text-muted d-block mb-2">Add options below and set optional point values.</small>
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-sm option-points-table">
+                        <thead>
+                            <tr><th>Option Name</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                    </table>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-success add-option" data-section-index="${sectionIdx}" data-element-index="${elementIdx}">
+                        <i class="fas fa-plus"></i> Add Option
+                    </button>
                 </div>
             </div>
         `;
@@ -457,8 +945,29 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
         const sections = document.querySelectorAll('.section-item');
         sections.forEach((section, index) => {
             section.dataset.sectionIndex = index;
+            
+            // Update collapse IDs and targets for mobile compatibility
+            const collapseDiv = section.querySelector('.collapse');
+            const collapseButton = section.querySelector('[data-bs-toggle="collapse"]');
+            if (collapseDiv) {
+                collapseDiv.id = `sectionCollapse${index}`;
+            }
+            if (collapseButton) {
+                collapseButton.setAttribute('data-bs-target', `#sectionCollapse${index}`);
+            }
+            
+            // Update section header text - find the text node and update it
             const header = section.querySelector('h4');
-            header.textContent = `Section ${index + 1}`;
+            if (header) {
+                // Find the text node (skip the button element)
+                for (let i = 0; i < header.childNodes.length; i++) {
+                    const node = header.childNodes[i];
+                    if (node.nodeType === Node.TEXT_NODE && node.textContent.trim().startsWith('Section')) {
+                        node.textContent = `Section ${index + 1}`;
+                        break;
+                    }
+                }
+            }
             
             // Update form field names
             const sectionIdInput = section.querySelector('input[name^="section_id_"]');
@@ -467,32 +976,56 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
             if (sectionIdInput) sectionIdInput.name = `section_id_${index}`;
             if (sectionNameInput) sectionNameInput.name = `section_name_${index}`;
             
+            // Update elements container data attribute
+            const elementsContainer = section.querySelector('.elements-container');
+            if (elementsContainer) {
+                elementsContainer.dataset.sectionIndex = index;
+            }
+            
             // Update element names
             const elements = section.querySelectorAll('.element-item');
             elements.forEach((element, elementIndex) => {
                 element.dataset.elementIndex = elementIndex;
                 const elementHeader = element.querySelector('h6');
-                elementHeader.textContent = `Element ${elementIndex + 1}`;
+                if (elementHeader) {
+                    elementHeader.textContent = `Element ${elementIndex + 1}`;
+                }
                 
                 // Update all form field names for this element
                 const inputs = element.querySelectorAll('input, select, textarea');
                 inputs.forEach(input => {
-                    const namePattern = /^element_(\w+)_\d+_\d+$/;
-                    const match = input.name.match(namePattern);
-                    if (match) {
-                        const fieldType = match[1];
+                    // Handle option inputs: element_option_<type>_<sec>_<elem>_<opt>
+                    const optMatch = input.name.match(/^element_option_(value|label|points)_(\d+)_(\d+)_(\d+)$/);
+                    if (optMatch) {
+                        const optType = optMatch[1];
+                        const optIdx = optMatch[4];
+                        input.name = `element_option_${optType}_${index}_${elementIndex}_${optIdx}`;
+                        return;
+                    }
+
+                    // Generic element fields: element_<field>_<sec>_<elem>
+                    const fieldMatch = input.name.match(/^element_(\w+)_(\d+)_(\d+)$/);
+                    if (fieldMatch) {
+                        const fieldType = fieldMatch[1];
                         input.name = `element_${fieldType}_${index}_${elementIndex}`;
                     }
                 });
+
+                // Update add-option button dataset (if present)
+                const addOptionBtn = element.querySelector('.add-option');
+                if (addOptionBtn) {
+                    addOptionBtn.dataset.sectionIndex = index;
+                    addOptionBtn.dataset.elementIndex = elementIndex;
+                }
             });
             
             // Update add element button
             const addElementBtn = section.querySelector('.add-element');
             if (addElementBtn) {
-                    addElementBtn.dataset.sectionIndex = index;
-                }
-            });
-        }
+                addElementBtn.dataset.sectionIndex = index;
+            }
+        });
+    }
     </script>
     <!-- Reset to Default Modal for simple pit editor -->
     <div class="modal fade" id="resetModal" tabindex="-1" aria-labelledby="resetModalLabel" aria-hidden="true">
@@ -534,11 +1067,148 @@ function createOptionTemplate(sectionIndex, elementIndex, optionIndex) {
         </div>
     </div>
 <style>
-/* Small dark-mode and spacing improvements */
-body.dark-mode .card { background: var(--card-bg) !important; color: var(--bs-body-color) !important; }
-body.dark-mode .form-control, body.dark-mode .form-select { background: #0f0f11; border-color: rgba(255,255,255,0.05); color: var(--bs-body-color); }
-.section-item .card-header { display:flex; align-items:center; justify-content:space-between; }
-.element-item { background: transparent; }
-.option-points-table input { background: transparent; }
+/* Mobile-responsive improvements */
+@media (max-width: 767px) {
+    .card-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+    
+    .card-header .card-title {
+        font-size: 1.1rem;
+    }
+    
+    .card-tools {
+        width: 100%;
+    }
+    
+    .card-tools .btn {
+        flex: 1;
+    }
+    
+    .element-item {
+        font-size: 0.9rem;
+    }
+    
+    .form-control-sm {
+        font-size: 0.875rem;
+    }
+    
+    .section-item .card-header h4 {
+        font-size: 1rem !important;
+    }
+    
+    /* Make tables scrollable on mobile */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Larger touch targets for mobile */
+    .btn {
+        min-height: 44px;
+        padding: 0.5rem 0.75rem;
+    }
+    
+    .btn-sm {
+        min-height: 38px;
+        padding: 0.4rem 0.6rem;
+    }
+    
+    /* Better spacing on mobile */
+    .form-group {
+        margin-bottom: 0.75rem;
+    }
+    
+    .alert {
+        font-size: 0.9rem;
+    }
+    
+    /* Stack buttons full width */
+    .d-grid .btn {
+        width: 100%;
+    }
+}
+
+@media (min-width: 768px) {
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+}
+
+/* Dark mode improvements */
+body.dark-mode .card { 
+    background: var(--card-bg) !important; 
+    color: var(--bs-body-color) !important; 
+}
+
+body.dark-mode .form-control, 
+body.dark-mode .form-select,
+body.dark-mode .form-control-sm { 
+    background: #0f0f11; 
+    border-color: rgba(255,255,255,0.05); 
+    color: var(--bs-body-color); 
+}
+
+body.dark-mode .element-item {
+    background: transparent;
+    border-color: rgba(255,255,255,0.1);
+}
+
+.section-item .card-header { 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+}
+
+.element-item { 
+    background: transparent; 
+}
+
+.option-points-table input { 
+    background: transparent; 
+}
+
+/* Collapsible chevron rotation */
+.btn-link i.fa-chevron-down {
+    transition: transform 0.3s ease;
+}
+
+.btn-link[aria-expanded="false"] i.fa-chevron-down {
+    transform: rotate(-90deg);
+}
+
+/* Touch-friendly form controls */
+@media (hover: none) and (pointer: coarse) {
+    /* Mobile touch devices */
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea {
+        font-size: 16px !important; /* Prevent zoom on iOS */
+    }
+    
+    .form-control,
+    .form-select {
+        min-height: 44px;
+    }
+    
+    .form-control-sm {
+        min-height: 38px;
+    }
+}
+
+/* Better mobile modal */
+@media (max-width: 576px) {
+    .modal-dialog {
+        margin: 0.5rem;
+    }
+    
+    .modal-title {
+        font-size: 1rem;
+    }
+}
 </style>
 {% endblock %}

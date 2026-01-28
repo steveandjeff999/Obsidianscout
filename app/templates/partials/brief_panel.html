@@ -95,8 +95,8 @@
 
 /* Modern Now Brief styles (kept local to partial) */
 .now-brief { border-radius: 12px; overflow: visible; position: relative; z-index: 2; }
-.now-brief__header { background: linear-gradient(90deg, rgba(102,126,234,0.12), rgba(118,75,162,0.12)); border-bottom: 1px solid rgba(0,0,0,0.04); }
-.now-brief__logo { width:44px; height:44px; background: linear-gradient(135deg,#667eea,#764ba2); }
+.now-brief__header { background: none; background-color: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(0,0,0,0.04); }
+.now-brief__logo { width:44px; height:44px; background: none; background-color: rgba(102,126,234,0.06); border: 1px solid rgba(0,0,0,0.04); }
 .kpi { border: none; }
 .panel { border-radius: 10px; overflow: hidden; }
 .panel__header { background: transparent; border-bottom: 1px solid rgba(0,0,0,0.04); }
@@ -156,14 +156,22 @@ body.dark-mode .now-brief {
 
 [data-bs-theme="dark"] .now-brief__header,
 body.dark-mode .now-brief__header {
-  background: linear-gradient(90deg, rgba(102,126,234,0.10), rgba(118,75,162,0.10));
+  background: none;
+  background-color: rgba(255,255,255,0.02);
   color: #ffffff;
   border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+[data-bs-theme="dark"] .now-brief__logo,
+body.dark-mode .now-brief__logo {
+  background: none;
+  background-color: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.03);
 }
 
 [data-bs-theme="dark"] .kpi.card,
 body.dark-mode .kpi.card {
-  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  background: none;
+  background-color: rgba(255,255,255,0.01);
   border: 1px solid rgba(255,255,255,0.03);
   color: #e6eef3;
 }
@@ -244,6 +252,22 @@ body.dark-mode .now-brief .fw-medium {
 @media (max-width: 575.98px) {
   .now-brief__header { padding: 0.75rem; }
   .now-brief__logo { width:40px; height:40px; }
+}
+
+/* Remove glass highlight and gradient sheen specifically for the Now Brief panel */
+.now-brief::before,
+.now-brief .card::before,
+.now-brief .panel::before {
+  background: transparent !important;
+  opacity: 0 !important;
+}
+
+.now-brief,
+.now-brief .card,
+.now-brief .panel {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background: var(--card-bg, transparent) !important;
 }
 
 </style>
