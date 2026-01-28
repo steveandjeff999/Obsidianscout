@@ -276,14 +276,14 @@ def edit_config():
 
 @bp.route('/config/simple-edit')
 def simple_edit_config():
-    """Simple form-based configuration editor"""
+    """Modern form-based configuration editor - completely rewritten for better UX"""
     game_config = copy.deepcopy(get_current_game_config())
     
     # Ensure all required sections exist with proper defaults
     game_config = ensure_complete_config_structure(game_config)
     
     default_configs = get_available_default_configs()
-    return render_template('config_simple_edit_simplified.html', game_config=game_config, default_configs=default_configs, **get_theme_context())
+    return render_template('config_simple_edit_modern.html', game_config=game_config, default_configs=default_configs, **get_theme_context())
 
 
 @bp.route('/config/migrate/apply', methods=['POST'])
