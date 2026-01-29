@@ -1,0 +1,48 @@
+{
+  "season": 2025,
+  "game_name": "FRC 2025 Game",
+  "alliance_size": 3,
+  "match_types": [
+    "Practice",
+    "Qualification",
+    "Playoff"
+  ],
+  "scouting_stations": 6,
+  "preferred_api_source": "first",
+  "api_settings": {
+    "username": "",
+    "auth_token": "[REDACTED_auth_token]",
+    "base_url": "https://frc-api.firstinspires.org"
+  },
+  "tba_api_settings": {
+    "auth_key": "",
+    "base_url": "https://www.thebluealliance.com/api/v3"
+  },
+  "scoring_elements": [
+    {
+      "id": "auto_mobility",
+      "perm_id": "auto_mobility",
+      "name": "Auto Mobility",
+      "type": "boolean",
+      "phase": "autonomous",
+      "points": 3
+    },
+    {
+      "id": "teleop_speaker",
+      "perm_id": "teleop_speaker",
+      "name": "Teleop Speaker",
+      "type": "number",
+      "phase": "teleop",
+      "points": 2
+    },
+    {
+      "id": "endgame_climb",
+      "perm_id": "endgame_climb",
+      "name": "Endgame Climb",
+      "type": "boolean",
+      "phase": "endgame",
+      "points": 4
+    }
+  ],
+  "current_event_code": "NUM"
+}

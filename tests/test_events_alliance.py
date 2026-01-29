@@ -34,6 +34,10 @@ def test_event_is_alliance_and_deduplicated():
         db.session.add(member)
         db.session.commit()
 
+        # Activate alliance mode for this team so it appears in dropdowns
+        from app.models import TeamAllianceStatus
+        TeamAllianceStatus.activate_alliance_for_team(9999, alliance.id)
+
         # Create API key for team
         api_key_info = create_api_key(name='testkey', team_number=9999, created_by='test', permissions={'team_data_access': True})
         api_key = api_key_info['key']
@@ -50,21 +54,67 @@ def test_event_is_alliance_and_deduplicated():
         assert events[0].get('is_alliance') is True
 
         # Also check the HTML events page shows a single alliance badge for the deduplicated event
-        resp_html = client.get('/events')
+        resp_html = client.get('/events', follow_redirects=True)
         assert resp_html.status_code == 200
         html = resp_html.get_data(as_text=True)
         # Link text 'Alliance' should appear once for the TEST event
         assert html.count('Alliance') >= 1
 
 
-    def test_combined_dropdown_events_shows_both_alliance_and_non_alliance():
-        app = create_app()
-        with app.app_context():
-            from app.utils.team_isolation import get_combined_dropdown_events
-            # Reuse existing records from previous test setup
-            events = get_combined_dropdown_events()
-            # Find entries with code 'TEST' (case-insensitive)
-            test_events = [e for e in events if getattr(e, 'code', '') and str(e.code).upper() == 'TEST']
-            # There should be at least one alliance and one non-alliance entry
-            assert any(getattr(e, 'is_alliance', False) for e in test_events)
-            assert any(not getattr(e, 'is_alliance', False) for e in test_events)
+def test_combined_dropdown_events_shows_both_alliance_and_non_alliance():
+    app = create_app()
+    with app.app_context():
+        from app.utils.team_isolation import get_combined_dropdown_events
+        # Reuse existing records from previous test setup
+        events = get_combined_dropdown_events()
+        # Find entries with code 'TEST' (case-insensitive)
+        test_events = [e for e in events if getattr(e, 'code', '') and str(e.code).upper() == 'TEST']
+        # There should be at least one alliance and one non-alliance entry
+        assert any(getattr(e, 'is_alliance', False) for e in test_events)
+        assert any(not getattr(e, 'is_alliance', False) for e in test_events)
+
+
+def test_year_prefixed_event_code_matches_alliance():
+    app = create_app()
+    with app.app_context():
+        # create teams and an alliance
+        team_a = Team(team_number=7777, team_name='Team 7777', scouting_team_number=7777)
+        team_b = Team(team_number=7778, team_name='Team 7778', scouting_team_number=7778)
+        db.session.add_all([team_a, team_b])
+        db.session.commit()
+
+        # Create an event owned by an alliance member with a year-prefixed code
+        evt = Event(name='Year Prefixed Event', code='2026TEST', location='Loc', year=2026, scouting_team_number=7778)
+        db.session.add(evt)
+        db.session.commit()
+
+        # Associate event to member team
+        team_b.events.append(evt)
+        db.session.commit()
+
+        # Create an alliance and add a ScoutingAllianceEvent for 'TEST'
+        alliance = ScoutingAlliance(alliance_name='Year Alliance')
+        db.session.add(alliance)
+        db.session.flush()
+        sa_event = ScoutingAllianceEvent(alliance_id=alliance.id, event_code='TEST', event_name='Test Event 1', is_active=True)
+        db.session.add(sa_event)
+        # Add member entries for both teams and activate alliance for team_a
+        member_a = ScoutingAllianceMember(alliance_id=alliance.id, team_number=7777, team_name='Team 7777', role='admin', status='accepted')
+        member_b = ScoutingAllianceMember(alliance_id=alliance.id, team_number=7778, team_name='Team 7778', role='member', status='accepted')
+        db.session.add_all([member_a, member_b])
+        db.session.commit()
+
+        # Activate alliance for team_a so they see shared events
+        from app.models import TeamAllianceStatus
+        TeamAllianceStatus.activate_alliance_for_team(7777, alliance.id)
+
+        # Now call get_combined_dropdown_events and ensure the year-prefixed event is marked as alliance
+        from app.utils.team_isolation import get_combined_dropdown_events
+        events = get_combined_dropdown_events()
+
+        # Find the entry for the year-prefixed code
+        found = [e for e in events if getattr(e, 'code', '').upper() == '2026TEST']
+        assert len(found) == 1
+        assert getattr(found[0], 'is_alliance', False) is True
+
+

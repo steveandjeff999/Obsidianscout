@@ -1629,7 +1629,13 @@ def data_events():
                 if key.startswith('__id_'):
                     is_alliance = False
                 else:
-                    sae = ScoutingAllianceEvent.query.filter(func.upper(ScoutingAllianceEvent.event_code) == key, ScoutingAllianceEvent.is_active == True).first()
+                    # Also match when stored alliance event_code lacks a 4-digit year prefix
+                    from app.utils.api_utils import strip_year_prefix
+                    key_stripped = strip_year_prefix(key)
+                    sae = ScoutingAllianceEvent.query.filter(
+                        ScoutingAllianceEvent.is_active == True,
+                        func.upper(ScoutingAllianceEvent.event_code).in_([key.upper(), key_stripped.upper()])
+                    ).first()
                     is_alliance = sae is not None
             except Exception:
                 is_alliance = False
