@@ -2320,7 +2320,13 @@ def get_events():
             is_alliance = False
             try:
                 if not key.startswith('__id_'):
-                    sae = ScoutingAllianceEvent.query.filter(func.upper(ScoutingAllianceEvent.event_code) == key, ScoutingAllianceEvent.is_active == True).first()
+                    # Consider possible leading 4-digit year prefix on stored event codes
+                    from app.utils.api_utils import strip_year_prefix
+                    key_stripped = strip_year_prefix(key)
+                    sae = ScoutingAllianceEvent.query.filter(
+                        ScoutingAllianceEvent.is_active == True,
+                        func.upper(ScoutingAllianceEvent.event_code).in_([key.upper(), key_stripped.upper()])
+                    ).first()
                     is_alliance = sae is not None
             except Exception:
                 is_alliance = False

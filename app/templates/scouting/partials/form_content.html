@@ -225,6 +225,11 @@ body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border:
                         <label class="form-check-label" for="auto_period_timer_enabled"><i class="fas fa-bell me-1"></i>Remind when auto ends</label>
                     </div>
                     <div class="form-text">Shows a banner {{ game_config.auto_period.duration_seconds }}s after your first auto action.</div>
+
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="spinningCountersToggle" role="switch" aria-label="Enable spinning counters (per-device)">
+                        <label class="form-check-label" for="spinningCountersToggle">Enable spinning counters (per-device) {{ help.help_icon('Enable the spinning counter UI on this device. Each 0.125 rotation (45°) increments the count by one. This preference is stored locally and does not require admin approval.', 'Spinning counters (per-device)') }}</label>
+                    </div>
                 </div>
             </div>
         </div>

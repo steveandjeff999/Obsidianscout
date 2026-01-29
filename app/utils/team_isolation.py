@@ -765,7 +765,10 @@ def get_combined_dropdown_events():
                 is_alliance_event = True
             elif alliance:
                 # Check if event code is in alliance shared events
-                if code in alliance_event_codes_upper:
+                # Also consider if the code is year-prefixed (e.g., 2026TEST)
+                from app.utils.api_utils import strip_year_prefix
+                code_stripped = strip_year_prefix(code)
+                if code in alliance_event_codes_upper or code_stripped in alliance_event_codes_upper:
                     # Only mark as alliance if it's NOT owned by the current user's team
                     event_scouting_team = getattr(e, 'scouting_team_number', None)
                     if event_scouting_team != current_team:
@@ -778,11 +781,16 @@ def get_combined_dropdown_events():
             
             # Also check ScoutingAllianceEvent table but only if not owned by current team
             if not is_alliance_event and not code.startswith('__id_'):
-                event_scouting_team = getattr(e, 'scouting_team_number', None)
-                if event_scouting_team != current_team:
-                    sae = ScoutingAllianceEvent.query.filter(func.upper(ScoutingAllianceEvent.event_code) == code, ScoutingAllianceEvent.is_active == True).first()
-                    if sae is not None:
-                        is_alliance_event = True
+                    event_scouting_team = getattr(e, 'scouting_team_number', None)
+                    if event_scouting_team != current_team:
+                        from app.utils.api_utils import strip_year_prefix
+                        code_stripped = strip_year_prefix(code)
+                        sae = ScoutingAllianceEvent.query.filter(
+                            ScoutingAllianceEvent.is_active == True,
+                            func.upper(ScoutingAllianceEvent.event_code).in_([code.upper(), code_stripped.upper()])
+                        ).first()
+                        if sae is not None:
+                            is_alliance_event = True
         except Exception:
             is_alliance_event = False
         

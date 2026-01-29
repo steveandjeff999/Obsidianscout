@@ -171,6 +171,17 @@
                 // ignore
             }
 
+            // Preserve spinning counter toggle state as well (if present)
+            try {
+                const existingSpinToggle = document.getElementById('spinningCountersToggle');
+                if (existingSpinToggle) {
+                    localStorage.setItem('spinning_counters_enabled', existingSpinToggle.checked ? 'true' : 'false');
+                    console.log('[Offline Mode] Preserved existing spinning counter toggle state before injecting form HTML');
+                }
+            } catch (e) {
+                // ignore
+            }
+
             formContent.innerHTML = formHTML;
             
             // Determine alliance color from match schedule
@@ -209,6 +220,13 @@
                     setupAutoTimerTogglePersistence();
                 } catch (e) {
                     console.warn('Could not setup auto timer toggle persistence', e);
+                }
+
+                // Ensure spinning counters toggle is present and persists across loads
+                try {
+                    setupSpinningCountersTogglePersistence();
+                } catch (e) {
+                    console.warn('Could not setup spinning counters toggle persistence', e);
                 }
 
                 // Enable save button in offline mode
@@ -366,6 +384,36 @@
                 toggle._scoutingAutoTimerListenerAttached = true;
             }
         }
+
+        // Ensure spinning counters toggle state persists across form injections
+        function setupSpinningCountersTogglePersistence() {
+            const toggle = document.getElementById('spinningCountersToggle');
+            if (!toggle) return;
+
+            // Restore state from localStorage if present (use same key as settings.js)
+            const saved = localStorage.getItem('spinning_counters_enabled');
+            if (saved !== null) {
+                toggle.checked = (saved === 'true' || saved === '1');
+            }
+
+            // Attach listener to persist user changes and trigger init/teardown
+            if (!toggle._scoutingSpinListenerAttached) {
+                toggle.addEventListener('change', function() {
+                    try {
+                        localStorage.setItem('spinning_counters_enabled', toggle.checked ? 'true' : 'false');
+                        console.log('[Offline Mode] Spinning counters preference saved:', toggle.checked);
+                        if (toggle.checked) {
+                            try { initializeSpinningCounters(); } catch (e) { console.warn('Could not initialize spinning counters', e); }
+                        } else {
+                            try { teardownSpinningCounters(); } catch (e) { console.warn('Could not teardown spinning counters', e); }
+                        }
+                    } catch (e) {
+                        console.warn('Could not persist spinning counters preference', e);
+                    }
+                });
+                toggle._scoutingSpinListenerAttached = true;
+            }
+        }
         
         // Reset form to default values
         function resetFormToDefaults() {
@@ -399,6 +447,23 @@
             if (autoTimerToggle) {
                 autoTimerToggle.checked = savedAutoTimerState;
             }
+
+            // Restore spinning counters toggle state
+            try {
+                const savedSpinState = (localStorage.getItem('spinning_counters_enabled') === 'true');
+                const spinToggle = document.getElementById('spinningCountersToggle');
+                if (spinToggle) {
+                    spinToggle.checked = savedSpinState;
+                    // Initialize or teardown based on saved state
+                    if (savedSpinState) {
+                        try { initializeSpinningCounters(); } catch(e) { console.warn('Error initializing spinning counters on reset', e); }
+                    } else {
+                        try { teardownSpinningCounters(); } catch(e) { console.warn('Error tearing down spinning counters on reset', e); }
+                    }
+                }
+            } catch (e) {}
+
+
             
             // Update points displays to 0
             const pointsDisplays = form.querySelectorAll('.points-display .points-value');
@@ -1813,6 +1878,22 @@
         
         // Initialize existing form components if present on page load
         initializeFormComponents();
+
+        // Ensure spinning counters toggle is wired on normal page load
+        try {
+            setupSpinningCountersTogglePersistence();
+            const spinToggle = document.getElementById('spinningCountersToggle');
+            if (spinToggle) {
+                const saved = localStorage.getItem('spinning_counters_enabled');
+                const enabled = (saved === null) ? true : (saved === 'true' || saved === '1');
+                spinToggle.checked = enabled;
+                if (enabled) {
+                    try { initializeSpinningCounters(); } catch (e) { console.warn('Could not initialize spinning counters on load', e); }
+                } else {
+                    try { teardownSpinningCounters(); } catch (e) { console.warn('Could not teardown spinning counters on load', e); }
+                }
+            }
+        } catch (e) { console.warn('Spinning counters setup failed', e); }
         
         // ======== REAL-TIME CONFIG UPDATE LISTENERS ========
         
