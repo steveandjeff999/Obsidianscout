@@ -75,9 +75,13 @@ def index():
         # Determine if this event should be treated as an alliance event
         is_alliance_event = False
         try:
+            # Compute stripped code (remove leading 4-digit year if present)
+            from app.utils.api_utils import strip_year_prefix
+            code_stripped = strip_year_prefix(code)
+
             if alliance:
-                # Check if event code is in alliance shared events
-                if code in alliance_event_codes_upper:
+                # Check if event code (raw or stripped) is in alliance shared events
+                if code in alliance_event_codes_upper or code_stripped in alliance_event_codes_upper:
                     # Only mark as alliance if it's NOT owned by the current user's team
                     event_scouting_team = getattr(e, 'scouting_team_number', None)
                     if event_scouting_team != current_team:
@@ -92,13 +96,14 @@ def index():
             if not is_alliance_event and not code.startswith('__id_'):
                 event_scouting_team = getattr(e, 'scouting_team_number', None)
                 if event_scouting_team != current_team:
-                    sae = ScoutingAllianceEvent.query.filter(func.upper(ScoutingAllianceEvent.event_code) == code, ScoutingAllianceEvent.is_active == True).first()
+                    sae = ScoutingAllianceEvent.query.filter(
+                        func.upper(ScoutingAllianceEvent.event_code).in_([code, code_stripped]),
+                        ScoutingAllianceEvent.is_active == True
+                    ).first()
                     if sae is not None:
                         is_alliance_event = True
         except Exception:
             is_alliance_event = False
-        
-        # Set the is_alliance attribute
         try:
             setattr(e, 'is_alliance', is_alliance_event)
         except Exception:
