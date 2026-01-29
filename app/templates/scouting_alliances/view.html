@@ -372,21 +372,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-3">
-                            <div class="card border-info h-100">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-calendar-alt fa-3x text-info mb-3"></i>
-                                    <h6>Events</h6>
-                                    <p class="text-muted small">
-                                        Add and manage events for the alliance. Events determine which data is shared.
-                                    </p>
-                                    <a href="{{ url_for('scouting_alliances.manage_alliance_events', alliance_id=alliance.id) }}" 
-                                       class="btn btn-info btn-sm">
-                                        <i class="fas fa-calendar-plus"></i> Manage Events
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
+                        <!-- Events card hidden (managed automatically by backend) -->
                         <div class="col-md-3">
                             <div class="card border-success h-100">
                                 <div class="card-body text-center">
@@ -427,42 +413,7 @@
             </div>
             {% endif %}
 
-            <!-- Events Section -->
-            <div class="card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="fas fa-calendar"></i> Shared Events ({{ events|length }}) {{ help.help_icon('Events configured here determine which event and match data is shared across alliance members.', 'Shared events') }}
-                    </h5>
-                    {% if member.role == 'admin' %}
-                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addEventModal">
-                        <i class="fas fa-plus"></i> Add Event
-                    </button>
-                    {% endif %}
-                </div>
-                <div class="card-body">
-                    {% if events %}
-                    <div class="row">
-                        {% for event in events|dedupe_events %}
-                        <div class="col-md-4 mb-2">
-                            <div class="card">
-                                <div class="card-body">
-                                    <h6 class="card-title">{{ event.event_code }}</h6>
-                                    <p class="card-text">
-                                        <small class="text-muted">{{ event.event_name }}</small>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% else %}
-                    <div class="text-center text-muted">
-                        <i class="fas fa-calendar-plus fa-2x mb-3"></i>
-                        <p>No events configured yet. Add events to start sharing data.</p>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
+            <!-- Events Section removed from UI: events are managed automatically by the backend. (Hidden per request) -->
 
             <!-- Data Sync Section -->
             <div class="card mb-4">
