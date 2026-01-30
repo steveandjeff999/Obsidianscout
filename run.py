@@ -652,8 +652,13 @@ if __name__ == '__main__':
                                     db.session.commit()
                                     # Merge any duplicate events that may have been created
                                     try:
-                                        from app.routes.data import merge_duplicate_events
+                                        from app.routes.data import merge_duplicate_events, merge_duplicate_matches
                                         merge_duplicate_events(scouting_team_number)
+                                        # Also ensure duplicate matches (from prior runs) are merged
+                                        try:
+                                            merge_duplicate_matches(scouting_team_number=scouting_team_number)
+                                        except Exception as mm_err:
+                                            print(f"  Warning: Could not merge duplicate matches: {mm_err}")
                                     except Exception as merge_err:
                                         print(f"  Warning: Could not merge duplicate events: {merge_err}")
                                     # Update last sync timestamp on success (shared)

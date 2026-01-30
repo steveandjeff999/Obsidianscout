@@ -633,6 +633,23 @@ def api_to_db_match_conversion(api_match, event_id):
     """
     # Extract match details - handle different field name formats
     match_number = api_match.get('matchNumber') or api_match.get('match_number')
+    try:
+        raw_match_number = int(match_number) if match_number is not None else None
+    except Exception:
+        raw_match_number = None
+    
+    # Determine raw comp_level and set number when available for better merging
+    comp_level = None
+    for field in ['tournamentLevel', 'comp_level', 'tournament_level', 'type', 'matchType']:
+        if field in api_match and api_match.get(field):
+            comp_level = str(api_match.get(field)).lower()
+            break
+    # FIRST API sometimes uses 'setNumber' or 'set_number'
+    set_number = api_match.get('setNumber') or api_match.get('set_number') or 0
+    try:
+        set_number = int(set_number) if set_number is not None else 0
+    except Exception:
+        set_number = 0
     
     # Get the standardized match type from our helper function
     match_type = get_match_type(api_match)
@@ -724,8 +741,12 @@ def api_to_db_match_conversion(api_match, event_id):
     
     # Build match data dictionary
     match_data = {
-        'match_number': match_number,
+        'match_number': raw_match_number,
+        'display_match_number': str(match_number) if match_number is not None else None,
+        'raw_match_number': raw_match_number,
         'match_type': match_type,
+        'comp_level': comp_level,
+        'set_number': set_number,
         'event_id': event_id,
         'red_alliance': ','.join(red_alliance),
         'blue_alliance': ','.join(blue_alliance),
@@ -925,6 +946,73 @@ def get_teams_dual_api(event_code):
             diag = inspect_api_key_locations()
             raise ApiError(f"Both APIs failed. Primary ({preferred_source}): {str(e)}, Fallback ({fallback_source}): {str(fallback_error)}\n\n{diag}")
 
+def _merge_match_lists(primary_matches, fallback_matches):
+    """Merge two lists of match dicts into a deduplicated list.
+
+    Prefers non-empty values from either source and uses comp_level/set_number/raw_match_number
+    to canonicalize playoff matches so TBA and FIRST formats map to a single logical match.
+    """
+    merged_by_key = {}
+
+    def _key(m):
+        # Normalize match type
+        mt = (m.get('match_type') or '').lower()
+        comp = (m.get('comp_level') or '')
+        try:
+            setnum = int(m.get('set_number') or 0)
+        except Exception:
+            setnum = 0
+        try:
+            raw = int(m.get('raw_match_number') or m.get('match_number') or 0)
+        except Exception:
+            raw = 0
+
+        # If playoff-related, use comp_level/set/set_number to distinguish
+        if mt == 'playoff' or comp in ['ef', 'qf', 'sf', 'f', 'elimination', 'quarterfinal', 'semifinal', 'final']:
+            return ('playoff', comp or '', setnum, raw)
+        # Otherwise key by type and raw number
+        return (mt or '', raw)
+
+    def _merge(a, b):
+        # Merge two match dicts preferring truthy values in b over a where appropriate
+        out = dict(a) if a else {}
+        for k, v in (b or {}).items():
+            if v is None or v == '' or v == []:
+                continue
+            # Prefer existing non-empty values in out unless out[k] is empty
+            if not out.get(k):
+                out[k] = v
+        return out
+
+    # Start with primary matches
+    for m in primary_matches or []:
+        k = _key(m)
+        merged_by_key[k] = dict(m)
+
+    # Merge fallback matches
+    for m in fallback_matches or []:
+        k = _key(m)
+        if k in merged_by_key:
+            merged_by_key[k] = _merge(merged_by_key[k], m)
+        else:
+            merged_by_key[k] = dict(m)
+
+    # Ensure match_number is set to an integer raw_match_number for DB insertion
+    results = []
+    for m in merged_by_key.values():
+        # Prefer raw_match_number, but also handle legacy 'match_number' values
+        try:
+            m['match_number'] = int(m.get('raw_match_number') or m.get('match_number'))
+        except Exception:
+            # Fallback: if we cannot parse, remove the entry (invalid match)
+            continue
+        results.append(m)
+
+    # Sort results by match_number to keep a consistent order
+    results.sort(key=lambda x: (x.get('match_type') or '', x.get('match_number') or 0))
+    return results
+
+
 def get_matches_dual_api(event_code):
     """Get matches from either FIRST API or TBA API based on configuration"""
     preferred_source = get_preferred_api_source()
@@ -944,13 +1032,27 @@ def get_matches_dual_api(event_code):
             tba_matches = get_tba_event_matches(tba_event_key)
             
             # Convert to database format (we'll need event_id later)
-            matches_db_format = []
+            primary_matches = []
             for tba_match in tba_matches:
                 match_data = tba_match_to_db_format(tba_match, None, event_key=tba_event_key)  # event_id will be set later
                 if match_data:
-                    matches_db_format.append(match_data)
-            
-            return matches_db_format
+                    primary_matches.append(match_data)
+
+            # Try to also fetch FIRST matches to merge playoff data and avoid duplicates
+            fallback_matches = []
+            try:
+                api_matches = get_matches(raw_event_code)
+                for api_match in api_matches:
+                    md = api_to_db_match_conversion(api_match, None)
+                    if md:
+                        fallback_matches.append(md)
+            except Exception:
+                # ignore fallback errors
+                pass
+
+            # Merge primary and fallback lists (prefer non-empty fields)
+            merged = _merge_match_lists(primary_matches, fallback_matches)
+            return merged
         else:
             print(f"Using FIRST API for matches at event {raw_event_code}")
             # Use existing FIRST API function
@@ -965,24 +1067,53 @@ def get_matches_dual_api(event_code):
                     tba_event_key = construct_tba_event_key(raw_event_code, season)
 
                     tba_matches = get_tba_event_matches(tba_event_key)
-                    matches_db_format = []
+                    primary_matches = []
                     for tba_match in tba_matches:
                         match_data = tba_match_to_db_format(tba_match, None, event_key=tba_event_key)
                         if match_data:
-                            matches_db_format.append(match_data)
-                    return matches_db_format
+                            primary_matches.append(match_data)
+
+                    # Also try to fetch FIRST matches to merge and avoid duplicates when both exist
+                    fallback_matches = []
+                    try:
+                        for api_match in get_matches(raw_event_code):
+                            md = api_to_db_match_conversion(api_match, None)
+                            if md:
+                                fallback_matches.append(md)
+                    except Exception:
+                        pass
+
+                    merged = _merge_match_lists(primary_matches, fallback_matches)
+                    return merged
                 except Exception:
                     # Fall through to convert whatever FIRST returned (likely empty)
                     pass
 
-            # Convert to database format
-            matches_db_format = []
+            # Convert to database format for PRIMARY (FIRST) results
+            primary_matches = []
             for api_match in api_matches:
                 match_data = api_to_db_match_conversion(api_match, None)  # event_id will be set later
                 if match_data:
-                    matches_db_format.append(match_data)
+                    primary_matches.append(match_data)
 
-            return matches_db_format
+            # Try to also fetch TBA matches to merge playoff data and avoid duplicates
+            fallback_matches = []
+            try:
+                game_config = get_current_game_config()
+                season = game_config.get('season', 2026)
+                tba_event_key = construct_tba_event_key(raw_event_code, season)
+                tba_matches = get_tba_event_matches(tba_event_key)
+                for tba_match in tba_matches:
+                    md = tba_match_to_db_format(tba_match, None, event_key=tba_event_key)
+                    if md:
+                        fallback_matches.append(md)
+            except Exception:
+                # ignore fallback errors
+                pass
+
+            merged = _merge_match_lists(primary_matches, fallback_matches)
+
+            return merged
     
     except (ApiError, TBAApiError) as e:
         print(f"Primary API ({preferred_source}) failed: {str(e)}")
