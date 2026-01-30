@@ -334,6 +334,27 @@
                                                                        {% if element.gamepiece_scoreible %}checked{% endif %}>
                                                                 <label class="form-check-label">Is scored gamepiece</label>
                                                             </div>
+
+                                                            <!-- Counter-specific settings -->
+                                                            <div class="counter-settings mt-2" {% if element.type != 'counter' %}style="display: none;"{% endif %}>
+                                                                <div class="row g-2">
+                                                                    <div class="col-4">
+                                                                        <label class="form-label small">Step</label>
+                                                                        <input type="number" class="form-control form-control-sm" name="teleop_element_step_{{ loop.index0 }}" value="{{ element.step|default(1) }}" min="1" step="1">
+                                                                    </div>
+                                                                    <div class="col-4">
+                                                                        <label class="form-label small">Alt step</label>
+                                                                        <input type="number" class="form-control form-control-sm" name="teleop_element_alt_step_{{ loop.index0 }}" value="{{ element.alt_step if element.alt_step is defined else '' }}" min="1" step="1">
+                                                                    </div>
+                                                                    <div class="col-4 d-flex align-items-center">
+                                                                        <div class="form-check mt-3">
+                                                                            <input class="form-check-input" type="checkbox" name="teleop_element_alt_step_enabled_{{ loop.index0 }}" value="1" {% if element.alt_step_enabled %}checked{% endif %}>
+                                                                            <label class="form-check-label">Show alt ±</label>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
                                                             {% if element.type == 'multiple_choice' %}
                                                             <div class="multiple-choice-options mt-2" style="display: block;">
                                                                 <small class="text-muted">Multiple Choice Options:</small>

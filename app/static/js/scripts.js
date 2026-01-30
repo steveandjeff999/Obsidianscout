@@ -531,8 +531,8 @@ function initializeCounters() {
     // Create a set to track which buttons we've already attached listeners to
     const processedButtons = new Set();
     
-    // First handle buttons inside counter-container elements (supports configurable step and optional alternate +/- buttons)
-    const counters = document.querySelectorAll('.counter-container');
+    // First handle buttons inside counter-type container elements (supports configurable step and optional alternate +/- buttons)
+    const counters = document.querySelectorAll('.counter-container, .counter-shell, .counter-control, .input-group.counter-control, .counter-container-inline');
     
     counters.forEach(counter => {
         const buttons = counter.querySelectorAll('.btn-counter');
@@ -669,7 +669,7 @@ function initializeCounters() {
 
     // Move any alt buttons out to sit adjacent to the input for clarity (handles multiple templates)
     try {
-        document.querySelectorAll('.counter-container').forEach(container => {
+        document.querySelectorAll('.counter-container, .counter-shell, .counter-control, .input-group.counter-control, .counter-container-inline').forEach(container => {
             const input = container.querySelector('input[type="number"]');
             if (!input) return;
             // Move decrement alt before input
@@ -858,9 +858,43 @@ function initializeCounters() {
             }
             if (added) {
                 try { initializeSpinningCounters(); } catch (e) { console.warn('initializeSpinningCounters (observer) error', e); }
+                try { ensureSpinningToggleBehavior(); } catch (e) { console.warn('ensureSpinningToggleBehavior (observer) error', e); }
             }
         });
         observer.observe(document.body, { childList: true, subtree: true });
+
+        // Ensure the per-device toggle behaves like the Settings page and persists defaults
+        function ensureSpinningToggleBehavior() {
+            try {
+                const toggle = document.getElementById('spinningCountersToggle');
+                if (!toggle || toggle._spinningBehaviorAttached) return;
+
+                // Restore saved state (default to true to match Settings page)
+                let saved = null;
+                try { saved = localStorage.getItem('spinning_counters_enabled'); } catch(e) {}
+                if (saved === null) {
+                    toggle.checked = true;
+                } else {
+                    toggle.checked = (saved === 'true' || saved === '1');
+                }
+
+                // Apply right away
+                try { if (toggle.checked) initializeSpinningCounters(); else teardownSpinningCounters(); } catch(e) {}
+
+                // Attach change handler
+                toggle.addEventListener('change', function(evt) {
+                    try {
+                        try { localStorage.setItem('spinning_counters_enabled', evt.target.checked ? 'true' : 'false'); } catch(e) {}
+                        try { if (evt.target.checked) initializeSpinningCounters(); else teardownSpinningCounters(); } catch(e) {}
+                        if (typeof showStatus === 'function') showStatus('Spinning counter preference updated locally.','success');
+                    } catch(e) { console.warn('Spinning toggle handler error', e); }
+                });
+                toggle._spinningBehaviorAttached = true;
+            } catch(err) { console.warn('ensureSpinningToggleBehavior error', err); }
+        }
+
+        // Call at least once now in case the toggle is already present
+        try { ensureSpinningToggleBehavior(); } catch(e) {}
 
         // Teardown: remove knobs and restore buttons
         function teardownSpinningCounters() {

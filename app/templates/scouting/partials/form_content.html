@@ -230,9 +230,32 @@ body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border:
                         <input class="form-check-input" type="checkbox" id="spinningCountersToggle" role="switch" aria-label="Enable spinning counters (per-device)">
                         <label class="form-check-label" for="spinningCountersToggle">Enable spinning counters (per-device) {{ help.help_icon('Enable the spinning counter UI on this device. Each 0.125 rotation (45°) increments the count by one. This preference is stored locally and does not require admin approval.', 'Spinning counters (per-device)') }}</label>
                     </div>
-                </div>
-            </div>
+                    <script>
+                        (function(){
+                            try {
+                                const toggle = document.getElementById('spinningCountersToggle');
+                                if (!toggle) return;
+                                // Restore saved state
+                                try { const saved = localStorage.getItem('spinning_counters_enabled'); if (saved !== null) toggle.checked = (saved === 'true' || saved === '1'); } catch(e){}
+                                // Apply immediately to ensure UI matches preference
+                                try { if (toggle.checked) { initializeSpinningCounters(); } else { teardownSpinningCounters(); } } catch(e){}
+                                // Attach listener (idempotent)
+                                if (!toggle._scoutingLocalSpinListener) {
+                                    toggle.addEventListener('change', function(){
+                                        try {
+                                            localStorage.setItem('spinning_counters_enabled', this.checked ? 'true' : 'false');
+                                            try { if (this.checked) { initializeSpinningCounters(); } else { teardownSpinningCounters(); } } catch(e){}
+                                            if (typeof showStatus === 'function') showStatus('Spinning counter preference updated locally.','success');
+                                        } catch (e) { console.warn('Could not persist spinning counter preference', e); }
+                                    });
+                                    toggle._scoutingLocalSpinListener = true;
+                                }
+                            } catch (err) { console.warn('Spinning counter toggle init error', err); }
+                        })();
+                    </script>
+
         </div>
+    </div>
 
         <div id="auto-period-reminder-banner" class="alert alert-warning alert-dismissible fade d-none floating-banner" role="alert">
             <div class="d-flex align-items-center">
@@ -301,12 +324,14 @@ body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border:
                             {% if element.description %}<small class="text-muted d-block mb-2">{{ element.description }}</small>{% endif %}
                             <div class="counter-shell" role="group" aria-label="{{ element.name }} counter">
                                 <button type="button" class="btn btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}" aria-label="Decrease {{ element.name }}">-{{ element.step|default(1) }}</button>
-                                {% if element.alt_step and element.alt_step_enabled %}
-                                <button type="button" class="btn btn-outline-danger btn-counter btn-decrement btn-alt" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Decrease {{ element.name }} by {{ element.alt_step }}">-{{ element.alt_step }}</button>
+                                {% set alt_present = element.alt_step_enabled or (element.alt_step is defined and element.alt_step is not none and element.alt_step != '') %}
+                                {% if alt_present %}
+                                    {% set alt_step_value = element.alt_step if element.alt_step is defined and element.alt_step is not none and element.alt_step != '' else element.step|default(1) %}
+                                <button type="button" class="btn btn-outline-danger btn-counter btn-decrement btn-alt" data-target="{{ element.id }}" data-step="{{ alt_step_value }}" aria-label="Decrease {{ element.name }} by {{ alt_step_value }}">-{{ alt_step_value }}</button>
                                 {% endif %}
-                                <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" value="{{ form_data.get(element.id, element.default) }}" min="0" aria-label="{{ element.name }} value" data-alt-step="{{ element.alt_step if element.alt_step is defined else '' }}" data-alt-enabled="{{ '1' if element.alt_step and element.alt_step_enabled else '' }}">
-                                {% if element.alt_step and element.alt_step_enabled %}
-                                <button type="button" class="btn btn-outline-success btn-counter btn-increment btn-alt" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Increase {{ element.name }} by {{ element.alt_step }}">+{{ element.alt_step }}</button>
+                                <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" value="{{ form_data.get(element.id, element.default) }}" min="0" aria-label="{{ element.name }} value" data-alt-step="{{ element.alt_step if element.alt_step is defined and element.alt_step is not none and element.alt_step != '' else element.step|default(1) }}" data-alt-enabled="{{ '1' if alt_present else '' }}">
+                                {% if alt_present %}
+                                <button type="button" class="btn btn-outline-success btn-counter btn-increment btn-alt" data-target="{{ element.id }}" data-step="{{ alt_step_value }}" aria-label="Increase {{ element.name }} by {{ alt_step_value }}">+{{ alt_step_value }}</button>
                                 {% endif %}
                                 <button type="button" class="btn btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}" aria-label="Increase {{ element.name }}">+{{ element.step|default(1) }}</button>
                             </div>
@@ -364,12 +389,14 @@ body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border:
                             {% if element.description %}<small class="text-muted d-block mb-2">{{ element.description }}</small>{% endif %}
                             <div class="counter-shell" role="group" aria-label="{{ element.name }} counter">
                                 <button type="button" class="btn btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}" aria-label="Decrease {{ element.name }}">-{{ element.step|default(1) }}</button>
-                                {% if element.alt_step and element.alt_step_enabled %}
-                                <button type="button" class="btn btn-outline-danger btn-counter btn-decrement btn-alt" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Decrease {{ element.name }} by {{ element.alt_step }}">-{{ element.alt_step }}</button>
+                                {% set alt_present = element.alt_step_enabled or (element.alt_step is defined and element.alt_step is not none and element.alt_step != '') %}
+                                {% if alt_present %}
+                                    {% set alt_step_value = element.alt_step if element.alt_step is defined and element.alt_step is not none and element.alt_step != '' else element.step|default(1) %}
+                                <button type="button" class="btn btn-outline-danger btn-counter btn-decrement btn-alt" data-target="{{ element.id }}" data-step="{{ alt_step_value }}" aria-label="Decrease {{ element.name }} by {{ alt_step_value }}">-{{ alt_step_value }}</button>
                                 {% endif %}
-                                <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" data-alt-step="{{ element.alt_step if element.alt_step is defined else '' }}" data-alt-enabled="{{ '1' if element.alt_step and element.alt_step_enabled else '' }}" value="{{ form_data.get(element.id, element.default) }}" min="0" aria-label="{{ element.name }} value">
-                                {% if element.alt_step and element.alt_step_enabled %}
-                                <button type="button" class="btn btn-outline-success btn-counter btn-increment btn-alt" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Increase {{ element.name }} by {{ element.alt_step }}">+{{ element.alt_step }}</button>
+                                <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" data-alt-step="{{ element.alt_step if element.alt_step is defined and element.alt_step is not none and element.alt_step != '' else element.step|default(1) }}" data-alt-enabled="{{ '1' if alt_present else '' }}" value="{{ form_data.get(element.id, element.default) }}" min="0" aria-label="{{ element.name }} value">
+                                {% if alt_present %}
+                                <button type="button" class="btn btn-outline-success btn-counter btn-increment btn-alt" data-target="{{ element.id }}" data-step="{{ alt_step_value }}" aria-label="Increase {{ element.name }} by {{ alt_step_value }}">+{{ alt_step_value }}</button>
                                 {% endif %}
                                 <button type="button" class="btn btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}" aria-label="Increase {{ element.name }}">+{{ element.step|default(1) }}</button>
                             </div>
@@ -427,12 +454,13 @@ body:not(.dark-mode) .floating-banner {background: #fff; color: #0f1724; border:
                             {% if element.description %}<small class="text-muted d-block mb-2">{{ element.description }}</small>{% endif %}
                             <div class="counter-shell">
                                 <button type="button" class="btn btn-outline-danger btn-counter btn-decrement" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}">-{{ element.step|default(1) }}</button>
-                                {% if element.alt_step and element.alt_step_enabled %}
-                                <button type="button" class="btn btn-outline-danger btn-counter btn-decrement btn-alt" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Decrease {{ element.name }} by {{ element.alt_step }}">-{{ element.alt_step }}</button>
+                                {% if element.alt_step_enabled %}
+                                    {% set alt_step_value = element.alt_step if element.alt_step is defined and element.alt_step is not none else element.step|default(1) %}
+                                <button type="button" class="btn btn-outline-danger btn-counter btn-decrement btn-alt" data-target="{{ element.id }}" data-step="{{ alt_step_value }}" aria-label="Decrease {{ element.name }} by {{ alt_step_value }}">-{{ alt_step_value }}</button>
                                 {% endif %}
-                                <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" data-alt-step="{{ element.alt_step if element.alt_step is defined else '' }}" data-alt-enabled="{{ '1' if element.alt_step and element.alt_step_enabled else '' }}" value="{{ form_data.get(element.id, element.default) }}" min="0">
-                                {% if element.alt_step and element.alt_step_enabled %}
-                                <button type="button" class="btn btn-outline-success btn-counter btn-increment btn-alt" data-target="{{ element.id }}" data-step="{{ element.alt_step }}" aria-label="Increase {{ element.name }} by {{ element.alt_step }}">+{{ element.alt_step }}</button>
+                                <input type="number" class="form-control counter-input" id="{{ element.id }}" name="{{ element.id }}" data-alt-step="{{ element.alt_step if element.alt_step is defined and element.alt_step is not none else element.step|default(1) }}" data-alt-enabled="{{ '1' if element.alt_step_enabled else '' }}" value="{{ form_data.get(element.id, element.default) }}" min="0">
+                                {% if element.alt_step_enabled %}
+                                <button type="button" class="btn btn-outline-success btn-counter btn-increment btn-alt" data-target="{{ element.id }}" data-step="{{ alt_step_value }}" aria-label="Increase {{ element.name }} by {{ alt_step_value }}">+{{ alt_step_value }}</button>
                                 {% endif %}
                                 <button type="button" class="btn btn-outline-success btn-counter btn-increment" data-target="{{ element.id }}" data-step="{{ element.step|default(1) }}">+{{ element.step|default(1) }}</button>
                             </div>
