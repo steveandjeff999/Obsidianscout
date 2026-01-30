@@ -447,17 +447,20 @@ def tba_match_to_db_format(tba_match, event_id, event_key=None):
         if parts:
             event_key = parts[0]
     
-    # Convert TBA comp_level to our match_type
+    # Convert TBA comp_level to our match_type (normalize playoff types to generic 'Playoff')
     match_type_map = {
         'qm': 'Qualification',
-        'ef': 'Elimination',
-        'qf': 'Quarterfinals',
-        'sf': 'Semifinals',
-        'f': 'Finals',
+        'ef': 'Playoff',
+        'qf': 'Playoff',
+        'sf': 'Playoff',
+        'f': 'Playoff',
         'pr': 'Practice'
     }
     
     match_type = match_type_map.get(comp_level, 'Qualification')
+    
+    # Keep raw comp_level and set_number for canonical identification and merging
+    comp_level_raw = comp_level.lower() if isinstance(comp_level, str) else None
     
     # Extract alliance information
     red_alliance = []
@@ -499,16 +502,21 @@ def tba_match_to_db_format(tba_match, event_id, event_key=None):
             else:
                 winner = 'tie'
     
-    # For elimination matches, use set number in match number if available
+    # For elimination matches, build a human-friendly display and keep set/match info
     if comp_level in ['ef', 'qf', 'sf', 'f'] and set_number > 0:
         display_match_number = f"{set_number}-{match_number}"
     else:
         display_match_number = str(match_number)
     
+    # Return canonical fields plus extras used for merging
     return {
         'event_id': event_id,
-        'match_number': display_match_number,
+        'match_number': match_number,              # canonical numeric match number
+        'display_match_number': display_match_number,  # human-friendly (e.g., '1-1')
         'match_type': match_type,
+        'comp_level': comp_level_raw,
+        'set_number': set_number,
+        'raw_match_number': match_number,
         'red_alliance': ','.join(red_alliance) if red_alliance else '',
         'blue_alliance': ','.join(blue_alliance) if blue_alliance else '',
         'red_score': red_score,

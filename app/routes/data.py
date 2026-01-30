@@ -133,6 +133,13 @@ def merge_duplicate_events(scouting_team_number=None):
         if merged_count > 0:
             db.session.commit()
             print(f"  Merged {merged_count} duplicate events")
+            # After merging events, try to merge any duplicate matches created previously
+            try:
+                merged_matches = merge_duplicate_matches(scouting_team_number=scouting_team_number)
+                if merged_matches > 0:
+                    print(f"  Additionally merged {merged_matches} duplicate matches after event merge")
+            except Exception as mm_err:
+                print(f"  Warning: Could not merge duplicate matches: {mm_err}")
         
         return merged_count
         
@@ -235,6 +242,120 @@ def get_or_create_event(name=None, code=None, year=None, location=None, start_da
                 return evt
         # If still no event, re-raise to let caller decide
         raise
+
+def merge_duplicate_matches(scouting_team_number=None, event_id=None):
+    """Merge duplicate matches within events.
+
+    For each event (filtered by scouting_team_number or event_id), find duplicate
+    matches (same event_id, match_number, match_type), pick the most complete
+    match as keeper, merge complementary data from duplicates into keeper,
+    move any ScoutingData to the keeper, and delete the duplicates.
+
+    Returns the number of matches deleted (merged).
+    """
+    from sqlalchemy import func
+    total_deleted = 0
+
+    try:
+        # Query events limited by scouting team / specific event
+        if event_id is not None:
+            events = Event.query.filter_by(id=event_id).all()
+        else:
+            if scouting_team_number is not None:
+                events = Event.query.filter_by(scouting_team_number=scouting_team_number).all()
+            else:
+                events = Event.query.filter_by(scouting_team_number=None).all()
+
+        for evt in events:
+            # Find groups of potential duplicates: same event_id, match_number, match_type
+            dup_groups = db.session.query(
+                Match.match_number,
+                Match.match_type,
+                func.count(Match.id).label('count')
+            ).filter(Match.event_id == evt.id).group_by(
+                Match.match_number,
+                Match.match_type
+            ).having(func.count(Match.id) > 1).all()
+
+            for match_number, match_type, count in dup_groups:
+                # Fetch all matches in this duplicate group, oldest first
+                matches = Match.query.filter_by(event_id=evt.id, match_number=match_number, match_type=match_type).order_by(Match.id).all()
+                if len(matches) <= 1:
+                    continue
+
+                # Choose the most complete match to keep (prefer non-null scores and alliances)
+                def match_score(m):
+                    score = 0
+                    if m.red_alliance: score += 5
+                    if m.blue_alliance: score += 5
+                    if m.red_score is not None: score += 3
+                    if m.blue_score is not None: score += 3
+                    if m.winner: score += 1
+                    if m.scheduled_time: score += 2
+                    return score
+
+                matches.sort(key=match_score, reverse=True)
+                keep = matches[0]
+                duplicates = matches[1:]
+
+                for dup in duplicates:
+                    # Move scouting data to keeper
+                    try:
+                        ScoutingData.query.filter_by(match_id=dup.id).update({ScoutingData.match_id: keep.id})
+                    except Exception:
+                        # Fallback to manual reassignment
+                        for sd in ScoutingData.query.filter_by(match_id=dup.id).all():
+                            sd.match_id = keep.id
+
+                    # Merge alliances (union unique team numbers)
+                    def merge_alliance(a, b):
+                        if not a and not b:
+                            return ''
+                        set_a = set([x for x in str(a).split(',') if x.strip()])
+                        set_b = set([x for x in str(b).split(',') if x.strip()])
+                        merged = sorted(set_a.union(set_b), key=lambda x: int(x) if x.isdigit() else x)
+                        return ','.join(merged)
+
+                    keep.red_alliance = merge_alliance(keep.red_alliance, dup.red_alliance)
+                    keep.blue_alliance = merge_alliance(keep.blue_alliance, dup.blue_alliance)
+
+                    # Merge scores/winner: prefer non-null values (keep's values remain unless empty)
+                    if keep.red_score is None and dup.red_score is not None:
+                        keep.red_score = dup.red_score
+                    if keep.blue_score is None and dup.blue_score is not None:
+                        keep.blue_score = dup.blue_score
+                    if not keep.winner and dup.winner:
+                        keep.winner = dup.winner
+
+                    # Merge scheduled/predicted/actual times (prefer earliest non-null scheduled_time)
+                    if not keep.scheduled_time and dup.scheduled_time:
+                        keep.scheduled_time = dup.scheduled_time
+                    if not keep.predicted_time and dup.predicted_time:
+                        keep.predicted_time = dup.predicted_time
+                    if not keep.actual_time and dup.actual_time:
+                        keep.actual_time = dup.actual_time
+
+                    # Delete the duplicate match
+                    try:
+                        db.session.delete(dup)
+                        total_deleted += 1
+                    except Exception as e:
+                        current_app.logger.warning(f"Could not delete duplicate match {dup.id}: {e}")
+
+                # Ensure keeper is saved
+                db.session.add(keep)
+
+        if total_deleted > 0:
+            db.session.commit()
+            print(f"  Merged and deleted {total_deleted} duplicate matches")
+
+        return total_deleted
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"  Error merging duplicate matches: {e}")
+        return 0
+
 
 bp = Blueprint('data', __name__, url_prefix='/data')
 
