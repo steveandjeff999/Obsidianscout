@@ -245,6 +245,12 @@
                                                     <input type="number" class="form-control form-control-sm counter-alt-step" 
                                                            placeholder="Alt step" value="{{ element.alt_step if element.alt_step is defined else '' }}">
                                                 </div>
+                                                <div class="col-auto d-flex align-items-center">
+                                                    <div class="form-check form-check-inline mb-0">
+                                                        <input class="form-check-input counter-alt-enabled" type="checkbox" {% if element.alt_step_enabled %}checked{% endif %}>
+                                                        <label class="form-check-label small mb-0">Enable alt increments</label>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                         
@@ -526,6 +532,33 @@
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
+/* Dark mode: make element / rating / text cards blend with dark UI */
+body.dark-mode .element-card,
+body.dark-mode .rating-card,
+body.dark-mode .text-card {
+    background: rgba(255,255,255,0.02);
+    border-color: rgba(255,255,255,0.03);
+    color: var(--bs-body-color);
+    transition: all 0.18s;
+}
+
+body.dark-mode .element-card:hover,
+body.dark-mode .rating-card:hover,
+body.dark-mode .text-card:hover {
+    background: rgba(255,255,255,0.03);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+}
+
+/* Ensure inputs inside cards use dark-friendly backgrounds and borders */
+body.dark-mode .element-card .form-control,
+body.dark-mode .element-card .form-select,
+body.dark-mode .rating-card .form-control,
+body.dark-mode .text-card .form-control {
+    background: rgba(255,255,255,0.02);
+    border-color: rgba(255,255,255,0.03);
+    color: var(--bs-body-color);
+}
+
 .elements-container {
     max-height: 500px;
     overflow-y: auto;
@@ -648,6 +681,12 @@ class ConfigEditor {
                         <div class="col-auto">
                             <input type="number" class="form-control form-control-sm counter-alt-step" 
                                    placeholder="Alt step">
+                        </div>
+                        <div class="col-auto d-flex align-items-center">
+                            <div class="form-check form-check-inline mb-0">
+                                <input class="form-check-input counter-alt-enabled" type="checkbox">
+                                <label class="form-check-label small mb-0">Enable alt increments</label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -809,10 +848,19 @@ class ConfigEditor {
 
                 if (element.type === 'counter') {
                     element.step = parseInt(card.querySelector('.counter-step').value) || 1;
-                    const altStep = card.querySelector('.counter-alt-step').value;
-                    if (altStep) {
-                        element.alt_step = parseInt(altStep);
+                    const altStepVal = card.querySelector('.counter-alt-step').value;
+                    const altEnabledEl = card.querySelector('.counter-alt-enabled');
+                    const altEnabled = altEnabledEl ? altEnabledEl.checked : !!altStepVal;
+                    if (altEnabled) {
                         element.alt_step_enabled = true;
+                        if (altStepVal) {
+                            element.alt_step = parseInt(altStepVal);
+                        } else {
+                            // When enabled but blank, default alt to primary step (server/docs expect this behavior)
+                            element.alt_step = element.step;
+                        }
+                    } else {
+                        element.alt_step_enabled = false;
                     }
                 } else if (element.type === 'multiple_choice') {
                     element.options = [];

@@ -227,7 +227,73 @@ def sync_from_config():
         current_year = game_config.get('season', 2026)
         event_code = f"{current_year}{raw_event_code}"
         event = get_event_by_code(event_code)
-        
+
+        # If `get_event_by_code` returned a synthetic alliance entry or the event exists
+        # but is owned by a different scouting team, ensure we have a concrete local
+        # Event record under the current scouting team so dropdowns and counts include it.
+        try:
+            from sqlalchemy import func
+            from app.utils.team_isolation import get_current_scouting_team_number
+            from app.routes.data import get_or_create_event
+            from app.utils.api_utils import get_event_details_dual_api
+            current_scouting_team = get_current_scouting_team_number()
+
+            # Handle synthetic alliance entry (id like 'alliance_<CODE>') by creating a
+            # local event record under the current scouting team if needed.
+            if event and isinstance(getattr(event, 'id', None), str) and str(event.id).startswith('alliance_'):
+                real_event = Event.query.filter(
+                    func.upper(Event.code) == str(event.code).upper(),
+                    Event.scouting_team_number == current_scouting_team
+                ).first()
+
+                if not real_event:
+                    try:
+                        event_details = get_event_details_dual_api(raw_event_code)
+                    except Exception:
+                        event_details = None
+
+                    real_event = get_or_create_event(
+                        name=event_details.get('name', f"Event {raw_event_code}") if event_details else getattr(event, 'name', f"Event {raw_event_code}"),
+                        code=event_code,
+                        year=event_details.get('year', current_year) if event_details else getattr(event, 'year', current_year),
+                        location=event_details.get('location') if event_details else getattr(event, 'location', None),
+                        start_date=event_details.get('start_date') if event_details else getattr(event, 'start_date', None),
+                        end_date=event_details.get('end_date') if event_details else getattr(event, 'end_date', None),
+                        scouting_team_number=current_scouting_team
+                    )
+
+                    if event_details and event_details.get('timezone') and not getattr(real_event, 'timezone', None):
+                        real_event.timezone = event_details.get('timezone')
+                        db.session.add(real_event)
+                        db.session.commit()
+
+                event = real_event
+
+            # If the event exists but is owned by another scouting team, create/find a
+            # local copy under the current scouting team so UI filtering includes it.
+            elif event and getattr(event, 'scouting_team_number', None) != current_scouting_team:
+                local_event = Event.query.filter_by(code=event.code, scouting_team_number=current_scouting_team).first()
+                if not local_event:
+                    local_event = get_or_create_event(
+                        name=getattr(event, 'name', None),
+                        code=event_code,
+                        year=getattr(event, 'year', None),
+                        location=getattr(event, 'location', None),
+                        start_date=getattr(event, 'start_date', None),
+                        end_date=getattr(event, 'end_date', None),
+                        scouting_team_number=current_scouting_team
+                    )
+                    if getattr(event, 'timezone', None) and not getattr(local_event, 'timezone', None):
+                        local_event.timezone = event.timezone
+                        db.session.add(local_event)
+                        db.session.commit()
+                event = local_event
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
         if not event:
             try:
                 # Try to get event details from dual API (use raw code for external API)

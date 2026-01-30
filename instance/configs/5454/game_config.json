@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "alliance_size": 3,
   "scouting_stations": 6,
-  "current_event_code": "OKTU",
+  "current_event_code": "ARLI",
   "match_types": [
     "Practice",
     "Qualification",
@@ -89,33 +89,17 @@
   },
   "game_pieces": [],
   "post_match": {
-    "rating_elements": [
-      {
-        "id": "defense_rating",
-        "name": "Defense Rating",
-        "type": "rating",
-        "min": 1,
-        "max": 5,
-        "default": 3
-      }
-    ],
-    "text_elements": [
-      {
-        "id": "general_comments",
-        "name": "General Comments",
-        "type": "text",
-        "multiline": true
-      }
-    ]
+    "rating_elements": [],
+    "text_elements": []
   },
   "api_settings": {
-    "username": "",
+    "username": "jeffstumps",
     "auth_token": "[REDACTED_auth_token]",
     "base_url": "https://frc-api.firstinspires.org",
     "auto_sync_enabled": true
   },
   "tba_api_settings": {
-    "auth_key": "",
+    "auth_key": "hae7pfixkaYpROTHhMx6XQ5qLkjT5v7jX7IymIp3sFadVOTsboxkSVJlYu4yoq9a",
     "base_url": "https://www.thebluealliance.com/api/v3"
   },
   "data_analysis": {

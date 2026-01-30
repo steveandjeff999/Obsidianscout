@@ -1803,9 +1803,52 @@ def save_game_config(alliance_id):
                                     element['points'] = float(points)
                                 except ValueError:
                                     element['points'] = 0
-                            
+
+                            # Counter-specific fields (step, alt step, enabled flag)
+                            try:
+                                if element_type == 'counter':
+                                    # Primary step
+                                    try:
+                                        step_val = request.form.get(f'{period}_element_step_{index}')
+                                        if step_val:
+                                            element['step'] = max(1, int(step_val))
+                                        else:
+                                            element['step'] = 1
+                                    except Exception:
+                                        element['step'] = 1
+
+                                    # Alt-step and enabled flag
+                                    alt_enabled = request.form.get(f'{period}_element_alt_step_enabled_{index}')
+                                    alt_step_val = request.form.get(f'{period}_element_alt_step_{index}')
+                                    if alt_enabled:
+                                        element['alt_step_enabled'] = True
+                                        if alt_step_val:
+                                            try:
+                                                element['alt_step'] = int(alt_step_val)
+                                            except Exception:
+                                                pass
+                                        else:
+                                            # Default alt step to primary step when enabled but blank
+                                            try:
+                                                element['alt_step'] = int(element.get('step', 1))
+                                            except Exception:
+                                                element['alt_step'] = 1
+                                    else:
+                                        element['alt_step_enabled'] = False
+                            except Exception:
+                                pass
+
                             elements.append(element)
                     
+                    # Debug: log parsed elements for this period so we can verify alt-step parsing
+                    try:
+                        debug_path = os.path.join(current_app.instance_path, 'config_save_debug.log')
+                        with open(debug_path, 'a', encoding='utf-8') as dbg:
+                            dbg.write(f"Parsed {period_key} scoring_elements (alliance {alliance_id}):\n")
+                            dbg.write(json.dumps(elements, indent=2))
+                            dbg.write('\n---\n')
+                    except Exception:
+                        pass
                     config_data[period_key]['scoring_elements'] = elements
                 
                 # Update game pieces
