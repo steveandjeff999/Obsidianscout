@@ -267,6 +267,7 @@ class Match(ConcurrentModelMixin, db.Model):
     scheduled_time = db.Column(db.DateTime, nullable=True, index=True)  # Scheduled match start time from API (stored in UTC)
     predicted_time = db.Column(db.DateTime, nullable=True)  # Predicted start time from TBA (stored in UTC)
     actual_time = db.Column(db.DateTime, nullable=True)  # When the match actually started (UTC)
+    display_match_number = db.Column(db.String(20), nullable=True)  # Human-friendly display like '1-1' for playoffs
     scouting_team_number = db.Column(db.Integer, nullable=True)
     scouting_data = db.relationship('ScoutingData', backref='match', lazy=True, cascade='all, delete-orphan')
     

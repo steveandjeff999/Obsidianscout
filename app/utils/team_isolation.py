@@ -531,18 +531,30 @@ def get_event_by_code(event_code):
     # Year-prefixed codes start with 4 digits (e.g., "2026OKTU")
     year_prefixed_code = event_code_upper
     if not (len(event_code_upper) >= 4 and event_code_upper[:4].isdigit()):
-        # Code doesn't start with year, try to add year prefix from game_config
+        # Code doesn't start with year, try to add year prefix from the team's game_config
+        # Use the team-specific config (not global) to get the correct season
         try:
-            import json
-            import os
-            config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config', 'game_config.json')
-            if os.path.exists(config_path):
-                with open(config_path, 'r') as f:
-                    game_config = json.load(f)
-                season = game_config.get('season', 2026)
-                year_prefixed_code = f"{season}{event_code_upper}"
+            from app.utils.config_manager import get_effective_game_config
+            game_config = get_effective_game_config()
+            if isinstance(game_config, dict):
+                season = game_config.get('season')
+                if season:
+                    year_prefixed_code = f"{season}{event_code_upper}"
         except Exception:
-            pass
+            # Fallback: try to get season from current user's team config directly
+            try:
+                from app.utils.config_manager import load_game_config
+                from flask_login import current_user
+                team_number = None
+                if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
+                    team_number = getattr(current_user, 'scouting_team_number', None)
+                game_config = load_game_config(team_number=team_number)
+                if isinstance(game_config, dict):
+                    season = game_config.get('season')
+                    if season:
+                        year_prefixed_code = f"{season}{event_code_upper}"
+            except Exception:
+                pass
 
     # First try to find with year-prefixed code in current user's events (scoped by scouting team)
     event = filter_events_by_scouting_team().filter(func.upper(Event.code) == year_prefixed_code).first()

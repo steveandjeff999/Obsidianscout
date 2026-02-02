@@ -35,6 +35,16 @@
         "display_in_predictions": true,
         "gamepiece_scoreible": false,
         "points": 15.0
+      },
+      {
+        "id": "elem_auto_1769970946877",
+        "perm_id": "elem_auto_1769970946877",
+        "name": "test",
+        "type": "rating",
+        "default": 0,
+        "display_in_predictions": false,
+        "gamepiece_scoreible": false,
+        "points": 0.0
       }
     ]
   },

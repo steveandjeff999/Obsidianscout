@@ -124,7 +124,7 @@ def index():
     else:
         teams = []  # No teams if no current event is set
     
-    # Get matches filtered by the current event
+    # Get matches filtered by the current event (or all matches if no current event)
     # In alliance mode, get matches from alliance scouting data
     if current_event:
         if alliance_id:
@@ -143,7 +143,13 @@ def index():
         # Use proper match sorting (handles X-Y playoff format)
         matches = sorted(matches, key=match_sort_key)
     else:
-        matches = []  # No matches if no current event is set
+        # No current event set - show all matches for the scouting team
+        if alliance_id:
+            matches, _ = get_all_matches_for_alliance()
+        else:
+            matches = filter_matches_by_scouting_team().all()
+        # Use proper match sorting (handles X-Y playoff format)
+        matches = sorted(matches, key=match_sort_key)
     
     # Only show scouting entries associated with the current event
     if current_event:

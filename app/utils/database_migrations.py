@@ -58,6 +58,11 @@ MIGRATIONS = [
     ('team', 'scouting_team_number', 'INTEGER', None),
     
     # -------------------------------------------------------------------------
+    # Match table migrations (default bind)
+    # -------------------------------------------------------------------------
+    ('match', 'display_match_number', 'VARCHAR(20)', None),  # Human-friendly playoff match display like '1-1'
+    
+    # -------------------------------------------------------------------------
     # ScoutingData table migrations (default bind)
     # -------------------------------------------------------------------------
     ('scouting_data', 'scouting_team_number', 'INTEGER', None),

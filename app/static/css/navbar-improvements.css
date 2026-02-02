@@ -780,7 +780,11 @@ body.dark-mode .card.navbar-glass .custom-select-menu {
     backdrop-filter: blur(8px) saturate(120%);
     -webkit-backdrop-filter: blur(8px) saturate(120%);
     border: 1px solid rgba(255,255,255,0.06);
-    max-width: 440px;
+    /* Use viewport-aware width so modal can be nearly-fullwidth on very small screens
+       but never exceed the original design width. This prevents the QR from collapsing
+       to an unreadable tiny size on very narrow devices. */
+    width: min(440px, 92vw);
+    max-width: 100%;
     margin: 0 auto;
 }
 
@@ -794,11 +798,10 @@ body.dark-mode .card.navbar-glass .custom-select-menu {
 }
 
 .qr-container #qrcode canvas {
-    /* If the QR generator emits a canvas and an img, prefer the image for styling/printing.
-       Hide the canvas so only the single backed image is visible. JS download will still be able
-       to use the canvas if needed (we're only hiding it visually). */
-    display: none !important;
-}
+    /* Support canvas output from QR generator. Sizing rules are applied in the shared
+       selector below so this block is purposely minimal; the canvas will be sized via
+       the combined canvas/img rule to keep them visually identical. */
+} 
 
 .qr-container #qrcode::before {
     /* White backing plate for the QR image so it reads well in dark mode. It sits behind the
@@ -817,12 +820,17 @@ body.dark-mode .card.navbar-glass .custom-select-menu {
     pointer-events: none;
 }
 
+.qr-container #qrcode canvas,
 .qr-container #qrcode img {
+    /* Support either canvas or emitted <img>. Keep sizes responsive while enforcing a usable minimum
+       so the QR doesn't become too small on narrow screens. The QR remains square via aspect-ratio. */
     position: relative;
     z-index: 2;
     display: block;
-    width: 100%;
-    height: auto;
+    width: min(360px, 92vw) !important;
+    max-width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 1 / 1;
     border-radius: .375rem;
     /* Add a small inner white padding effect so the QR has breathing room from the backing plate */
     padding: .375rem;

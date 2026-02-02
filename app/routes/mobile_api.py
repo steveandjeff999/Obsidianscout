@@ -2117,6 +2117,199 @@ def get_teams():
         }), 500
 
 
+@mobile_api.route('/teams/current', methods=['GET'])
+@token_required
+def get_teams_current():
+    """
+    Get list of teams for the current event
+    
+    Query params:
+    - limit: Max results (default 100)
+    - offset: Pagination offset (default 0)
+            
+    Response:
+    {
+        "success": true,
+        "teams": [...],
+        "count": 10,
+        "total": 50,
+        "event": {
+            "id": 1,
+            "name": "Event Name",
+            "code": "2026CODE"
+        }
+    }
+    """
+    try:
+        team_number = request.mobile_team_number
+
+        # Determine if the requesting team is in alliance mode and get member teams
+        alliance = None
+        alliance_member_numbers = []
+        try:
+            alliance = TeamAllianceStatus.get_active_alliance_for_team(team_number)
+            if alliance:
+                alliance_member_numbers = alliance.get_all_team_numbers()
+        except Exception:
+            alliance = None
+
+        # Resolve current event from team config (respecting alliance shared config)
+        from app.utils.config_manager import load_game_config
+        game_config = load_game_config(team_number=team_number)
+        event_code_team = game_config.get('current_event_code') if isinstance(game_config, dict) else None
+        
+        # If in alliance mode, prefer the alliance's current event if configured
+        event_code = event_code_team
+        try:
+            if alliance and alliance_member_numbers:
+                alliance_event_code = None
+                try:
+                    if alliance.shared_game_config:
+                        acfg = json.loads(alliance.shared_game_config)
+                        alliance_event_code = acfg.get('current_event_code')
+                except Exception:
+                    alliance_event_code = None
+                if not alliance_event_code:
+                    try:
+                        aes = [ae for ae in alliance.events if getattr(ae, 'is_active', True)]
+                        if aes:
+                            alliance_event_code = aes[0].event_code
+                    except Exception:
+                        alliance_event_code = None
+                if not alliance_event_code and getattr(alliance, 'game_config_team', None):
+                    try:
+                        acfg = load_game_config(team_number=alliance.game_config_team)
+                        if isinstance(acfg, dict):
+                            alliance_event_code = acfg.get('current_event_code')
+                    except Exception:
+                        alliance_event_code = None
+                if alliance_event_code:
+                    event_code = alliance_event_code
+        except Exception:
+            event_code = event_code_team
+
+        # Resolve Event: prefer configured current_event_code, otherwise pick the most recent Event
+        event = None
+        if event_code:
+            # Try year-prefixed code first
+            year_prefixed_code = event_code
+            if not (len(str(event_code)) >= 4 and str(event_code)[:4].isdigit()):
+                season = game_config.get('season', 2026) if isinstance(game_config, dict) else 2026
+                year_prefixed_code = f"{season}{event_code}"
+            event = Event.query.filter_by(code=year_prefixed_code, scouting_team_number=team_number).first()
+            # Fall back to raw code if year-prefixed not found
+            if not event and year_prefixed_code != event_code:
+                event = Event.query.filter_by(code=event_code, scouting_team_number=team_number).first()
+        if not event:
+            event = Event.query.filter_by(scouting_team_number=team_number).order_by(Event.start_date.desc().nullslast(), Event.id.desc()).first()
+
+        if not event:
+            return jsonify({
+                'success': True,
+                'teams': [],
+                'count': 0,
+                'total': 0,
+                'event': None
+            }), 200
+
+        # Alliance mode - use alliance-aware function to get all teams for the event
+        if alliance and alliance_member_numbers:
+            teams_list, _ = get_all_teams_for_alliance(event_id=event.id)
+            # Return directly with pagination
+            limit = min(request.args.get('limit', 100, type=int), 500)
+            offset = request.args.get('offset', 0, type=int)
+            
+            total_count = len(teams_list)
+            teams = teams_list[offset:offset+limit]
+            
+            teams_data = [{
+                'id': team.id,
+                'team_number': team.team_number,
+                'team_name': team.team_name,
+                'location': team.location
+            } for team in teams]
+            
+            return jsonify({
+                'success': True,
+                'teams': teams_data,
+                'count': len(teams_data),
+                'total': total_count,
+                'event': {
+                    'id': event.id,
+                    'name': event.name,
+                    'code': event.code
+                }
+            }), 200
+
+        # Collect team numbers from matches for this event
+        matches = filter_matches_by_scouting_team().filter(Match.event_id == event.id).all()
+        if not matches:
+            matches = Match.query.filter(
+                Match.event_id == event.id,
+                db.or_(Match.scouting_team_number == team_number, Match.scouting_team_number.is_(None))
+            ).all()
+
+        team_nums = set()
+        for m in matches:
+            try:
+                team_nums.update(m.red_teams)
+                team_nums.update(m.blue_teams)
+            except Exception:
+                if m.red_alliance:
+                    team_nums.update([int(x) for x in m.red_alliance.split(',') if x])
+                if m.blue_alliance:
+                    team_nums.update([int(x) for x in m.blue_alliance.split(',') if x])
+
+        if not team_nums:
+            return jsonify({
+                'success': True,
+                'teams': [],
+                'count': 0,
+                'total': 0,
+                'event': {
+                    'id': event.id,
+                    'name': event.name,
+                    'code': event.code
+                }
+            }), 200
+
+        teams_query = Team.query.filter(Team.scouting_team_number == team_number, Team.team_number.in_(list(team_nums)))
+        
+        # Pagination
+        limit = min(request.args.get('limit', 100, type=int), 500)
+        offset = request.args.get('offset', 0, type=int)
+        
+        total_count = teams_query.count()
+        teams = teams_query.offset(offset).limit(limit).all()
+        
+        teams_data = [{
+            'id': team.id,
+            'team_number': team.team_number,
+            'team_name': team.team_name,
+            'location': team.location
+        } for team in teams]
+        
+        return jsonify({
+            'success': True,
+            'teams': teams_data,
+            'count': len(teams_data),
+            'total': total_count,
+            'event': {
+                'id': event.id,
+                'name': event.name,
+                'code': event.code
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Get teams current error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to retrieve current teams',
+            'error_code': 'TEAMS_CURRENT_ERROR'
+        }), 500
+
+
 @mobile_api.route('/teams/<int:team_id>', methods=['GET'])
 @token_required
 def get_team_details(team_id):
@@ -2573,6 +2766,151 @@ def get_matches():
             'success': False,
             'error': 'Failed to retrieve matches',
             'error_code': 'MATCHES_ERROR'
+        }), 500
+
+
+@mobile_api.route('/matches/current', methods=['GET'])
+@token_required
+def get_matches_current():
+    """
+    Get matches for the current event
+    
+    Query params:
+    - match_type: Filter by match type (optional)
+    - team_number: Filter by team (optional)
+    
+    Response:
+    {
+        "success": true,
+        "matches": [...],
+        "count": 10,
+        "event": {
+            "id": 1,
+            "name": "Event Name",
+            "code": "2026CODE"
+        }
+    }
+    """
+    try:
+        team_number = request.mobile_team_number
+        
+        # Determine alliance status for requesting team
+        alliance = None
+        alliance_member_numbers = []
+        try:
+            alliance = TeamAllianceStatus.get_active_alliance_for_team(team_number)
+            if alliance:
+                alliance_member_numbers = alliance.get_all_team_numbers()
+        except Exception:
+            alliance = None
+        
+        # Resolve current event from team config (respecting alliance shared config)
+        from app.utils.config_manager import load_game_config
+        game_config = load_game_config(team_number=team_number)
+        event_code_team = game_config.get('current_event_code') if isinstance(game_config, dict) else None
+        
+        # Determine alliance's preferred event if in alliance mode
+        event_code = event_code_team
+        try:
+            if alliance and alliance_member_numbers:
+                alliance_event_code = None
+                try:
+                    if alliance.shared_game_config:
+                        acfg = json.loads(alliance.shared_game_config)
+                        alliance_event_code = acfg.get('current_event_code')
+                except Exception:
+                    alliance_event_code = None
+                if not alliance_event_code:
+                    try:
+                        aes = [ae for ae in alliance.events if getattr(ae, 'is_active', True)]
+                        if aes:
+                            alliance_event_code = aes[0].event_code
+                    except Exception:
+                        alliance_event_code = None
+                if not alliance_event_code and getattr(alliance, 'game_config_team', None):
+                    try:
+                        acfg = load_game_config(team_number=alliance.game_config_team)
+                        if isinstance(acfg, dict):
+                            alliance_event_code = acfg.get('current_event_code')
+                    except Exception:
+                        alliance_event_code = None
+                if alliance_event_code:
+                    event_code = alliance_event_code
+        except Exception:
+            event_code = event_code_team
+
+        # Resolve Event: prefer configured current_event_code, otherwise pick the most recent Event
+        event = None
+        if event_code:
+            # Try year-prefixed code first
+            year_prefixed_code = event_code
+            if not (len(str(event_code)) >= 4 and str(event_code)[:4].isdigit()):
+                season = game_config.get('season', 2026) if isinstance(game_config, dict) else 2026
+                year_prefixed_code = f"{season}{event_code}"
+            event = Event.query.filter_by(code=year_prefixed_code, scouting_team_number=team_number).first()
+            # Fall back to raw code if year-prefixed not found
+            if not event and year_prefixed_code != event_code:
+                event = Event.query.filter_by(code=event_code, scouting_team_number=team_number).first()
+        if not event:
+            event = Event.query.filter_by(scouting_team_number=team_number).order_by(Event.start_date.desc().nullslast(), Event.id.desc()).first()
+        
+        if not event:
+            return jsonify({
+                'success': True,
+                'matches': [],
+                'count': 0,
+                'event': None
+            }), 200
+        
+        # Build the base query using the resolved event
+        if alliance and alliance_member_numbers:
+            # Alliance mode - use alliance-aware function to get all matches for the event
+            matches, _ = get_all_matches_for_alliance(event_id=event.id)
+        else:
+            matches_query = filter_matches_by_scouting_team().filter(Match.event_id == event.id)
+            matches = matches_query.order_by(Match.match_number).all()
+        
+        # Optional filters (apply after getting matches)
+        match_type = request.args.get('match_type')
+        if match_type:
+            matches = [m for m in matches if m.match_type == match_type]
+        
+        team_filter = request.args.get('team_number', type=int)
+        if team_filter:
+            team_str = str(team_filter)
+            matches = [m for m in matches if (m.red_alliance and team_str in m.red_alliance) or (m.blue_alliance and team_str in m.blue_alliance)]
+        
+        matches_data = [{
+            'id': match.id,
+            'match_number': match.match_number,
+            'match_type': match.match_type,
+            'red_alliance': match.red_alliance,
+            'blue_alliance': match.blue_alliance,
+            'red_score': match.red_score,
+            'blue_score': match.blue_score,
+            'winner': match.winner,
+            'scheduled_time': match.scheduled_time.isoformat() if hasattr(match, 'scheduled_time') and match.scheduled_time else None,
+            'predicted_time': match.predicted_time.isoformat() if hasattr(match, 'predicted_time') and match.predicted_time else None,
+            'actual_time': getattr(match, 'actual_time', None).isoformat() if getattr(match, 'actual_time', None) else None
+        } for match in matches]
+        
+        return jsonify({
+            'success': True,
+            'matches': matches_data,
+            'count': len(matches_data),
+            'event': {
+                'id': event.id,
+                'name': event.name,
+                'code': event.code
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Get matches current error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to retrieve current matches',
+            'error_code': 'MATCHES_CURRENT_ERROR'
         }), 500
 
 
@@ -3553,6 +3891,16 @@ def set_game_config():
         except Exception:
             alliance_id = None
 
+        # Capture old event code for comparison
+        old_event_code = None
+        try:
+            from app.utils.config_manager import load_game_config
+            old_config = load_game_config(team_number=team_number)
+            old_event_code = old_config.get('current_event_code') if old_config else None
+        except Exception:
+            pass
+        new_event_code = data.get('current_event_code')
+
         saved = False
         if alliance_id:
             # When in alliance mode, only alliance admins may edit the alliance config
@@ -3567,6 +3915,12 @@ def set_game_config():
                 db.session.add(alliance)
                 db.session.commit()
                 saved = True
+                # Clear event cache so background sync picks up the new event immediately
+                try:
+                    from app.utils.sync_status import clear_event_cache
+                    clear_event_cache(team_number)
+                except Exception:
+                    pass
             except Exception as e:
                 db.session.rollback()
                 current_app.logger.exception(f"Failed to update alliance shared_game_config: {e}")
@@ -3575,6 +3929,13 @@ def set_game_config():
             # No active alliance -> fall back to per-team save behavior
             try:
                 saved = save_game_config(data)
+                if saved:
+                    # Clear event cache so background sync picks up the new event immediately
+                    try:
+                        from app.utils.sync_status import clear_event_cache
+                        clear_event_cache(team_number)
+                    except Exception:
+                        pass
             except Exception as e:
                 current_app.logger.exception(f"Failed to save team game config: {e}")
                 saved = False
@@ -3585,6 +3946,20 @@ def set_game_config():
                 current_app.config['GAME_CONFIG'] = data
             except Exception:
                 pass
+            
+            # Broadcast event change via Socket.IO if event code changed
+            if old_event_code != new_event_code and new_event_code:
+                try:
+                    from app import socketio
+                    socketio.emit('event_changed', {
+                        'old_event_code': old_event_code,
+                        'new_event_code': new_event_code,
+                        'event_name': new_event_code,
+                        'scouting_team': team_number
+                    }, namespace='/')
+                except Exception:
+                    pass
+            
             return jsonify({'success': True}), 200
         else:
             return jsonify({'success': False, 'error': 'Failed to save configuration', 'error_code': 'SAVE_FAILED'}), 500
@@ -3627,6 +4002,13 @@ def set_game_config_team():
         if saved:
             try:
                 current_app.config['GAME_CONFIG'] = data
+            except Exception:
+                pass
+            # Clear event cache so background sync picks up the new event immediately
+            try:
+                from app.utils.sync_status import clear_event_cache
+                team_number = user.scouting_team_number if hasattr(user, 'scouting_team_number') else None
+                clear_event_cache(team_number)
             except Exception:
                 pass
             return jsonify({'success': True}), 200

@@ -1499,12 +1499,136 @@ def import_excel():
 def import_qr():
     """Import data from QR codes (manual entry or upload)"""
     if request.method == 'POST':
-        # Handle API request with JSON data
+        # Improve: Handle API request with JSON data (supports single item or list of items)
+        def process_single_qr(qr_text):
+            """Process a single QR payload string; returns dict {success: bool, message: str}."""
+            try:
+                scouting_data_json = json.loads(qr_text)
+            except json.JSONDecodeError:
+                return {'success': False, 'message': 'Invalid QR code data format. Expected JSON.'}
+
+            try:
+                # Detect the format and extract team/match/data similar to single-item flow
+                if 'offline_generated' in scouting_data_json:
+                    team_id = scouting_data_json.get('team_id')
+                    match_id = scouting_data_json.get('match_id')
+                    scout_name = scouting_data_json.get('scout_name', 'QR Import')
+                    alliance = scouting_data_json.get('alliance', 'unknown')
+                    team = Team.query.get(team_id)
+                    match = Match.query.get(match_id)
+                    if not team or not match:
+                        return {'success': False, 'message': 'Team or match not found in database'}
+                    data = {}
+                    for key, value in scouting_data_json.items():
+                        if key not in ['team_id', 'match_id', 'scout_name', 'alliance', 'generated_at', 'offline_generated']:
+                            data[key] = value
+                elif 't' in scouting_data_json and 'm' in scouting_data_json:
+                    team_number = scouting_data_json.get('t')
+                    match_number = scouting_data_json.get('m')
+                    scout_name = scouting_data_json.get('s', 'QR Import')
+                    alliance = scouting_data_json.get('a', 'unknown')
+                    match_type = scouting_data_json.get('mt', 'Qualification')
+                    team = Team.query.filter_by(team_number=team_number).first()
+                    if not team:
+                        team = Team(team_number=team_number, team_name=f'Team {team_number}')
+                        db.session.add(team)
+                        db.session.flush()
+                    match = Match.query.filter_by(match_number=match_number, match_type=match_type).first()
+                    if not match:
+                        game_config = get_effective_game_config()
+                        event_name = scouting_data_json.get('event_name', 'Unknown Event')
+                        event = get_or_create_event(name=event_name, year=game_config['season'])
+                        match = Match(
+                            match_number=match_number,
+                            match_type=match_type,
+                            event_id=event.id,
+                            red_alliance=str(team_number) if alliance == 'red' else '',
+                            blue_alliance=str(team_number) if alliance == 'blue' else ''
+                        )
+                        db.session.add(match)
+                        db.session.flush()
+                    data = scouting_data_json.get('d', {})
+                else:
+                    team_number = scouting_data_json.get('team_number')
+                    match_number = scouting_data_json.get('match_number')
+                    if not team_number or not match_number:
+                        return {'success': False, 'message': 'Invalid QR data: missing team or match number'}
+                    scout_name = scouting_data_json.get('scout_name', 'QR Import')
+                    alliance = scouting_data_json.get('alliance', 'unknown')
+                    match_type = scouting_data_json.get('match_type', 'Qualification')
+                    team = Team.query.filter_by(team_number=team_number).first()
+                    if not team:
+                        team = Team(team_number=team_number, team_name=f'Team {team_number}')
+                        db.session.add(team)
+                        db.session.flush()
+                    match = Match.query.filter_by(match_number=match_number, match_type=match_type).first()
+                    if not match:
+                        game_config = get_effective_game_config()
+                        event_name = scouting_data_json.get('event_name', 'Unknown Event')
+                        event = get_or_create_event(name=event_name, year=game_config['season'])
+                        match = Match(
+                            match_number=match_number,
+                            match_type=match_type,
+                            event_id=event.id,
+                            red_alliance=str(team_number) if alliance == 'red' else '',
+                            blue_alliance=str(team_number) if alliance == 'blue' else ''
+                        )
+                        db.session.add(match)
+                        db.session.flush()
+                    if 'scouting_data' in scouting_data_json:
+                        data = scouting_data_json.get('scouting_data', {})
+                    else:
+                        data = {}
+                        for key, value in scouting_data_json.items():
+                            if key not in ['match_number', 'team_number', 'scout_name', 'alliance', 'match_type', 'event_name', 'timestamp']:
+                                data[key] = value
+
+                # Insert or update record
+                existing_data = ScoutingData.query.filter_by(
+                    match_id=match.id,
+                    team_id=team.id,
+                    scouting_team_number=current_user.scouting_team_number
+                ).first()
+                if existing_data:
+                    existing_data.data = data
+                    existing_data.alliance = alliance
+                    existing_data.scout_name = scout_name
+                    db.session.commit()
+                    return {'success': True, 'message': f'Updated scouting data for Team {team.team_number} in Match {match.match_number}'}
+                else:
+                    new_scouting_data = ScoutingData(
+                        match_id=match.id,
+                        team_id=team.id,
+                        scout_name=scout_name,
+                        alliance=alliance,
+                        data_json=json.dumps(data),
+                        scouting_team_number=current_user.scouting_team_number
+                    )
+                    db.session.add(new_scouting_data)
+                    db.session.commit()
+                    return {'success': True, 'message': f'Added new scouting data for Team {team.team_number} in Match {match.match_number}'}
+            except Exception as e:
+                try:
+                    db.session.rollback()
+                except:
+                    pass
+                return {'success': False, 'message': f'Error processing QR data: {str(e)}'}
+
         if request.is_json:
             try:
-                qr_data = request.get_json().get('data')
+                payload = request.get_json()
+                qr_data = payload.get('data')
                 if not qr_data:
                     return {'success': False, 'message': 'No data provided'}
+                # If list of items, process each individually and return result list
+                if isinstance(qr_data, list):
+                    results = []
+                    for item in qr_data:
+                        results.append(process_single_qr(item))
+                    return {'success': True, 'results': results}
+                else:
+                    # Single item path - set qr_data and continue to existing single-item flow
+                    qr_data = qr_data
             except Exception as e:
                 return {'success': False, 'message': f'Invalid JSON: {str(e)}'}
         else:
@@ -1513,7 +1637,6 @@ def import_qr():
             if not qr_data:
                 flash('No QR code data received', 'error')
                 return redirect(request.url)
-                
         try:
             # Parse QR data (assuming it's JSON)
             scouting_data_json = json.loads(qr_data)
@@ -3115,7 +3238,10 @@ def delete_entry(entry_id):
 
 @bp.route('/wipe_database', methods=['POST'])
 def wipe_database():
-    """Wipe all data for the current scouting team from the database"""
+    """Wipe all data for the current scouting team from the database with automatic foreign key constraint handling"""
+    import traceback
+    from sqlalchemy import text
+    
     try:
         scouting_team_number = current_user.scouting_team_number
         
@@ -3138,121 +3264,180 @@ def wipe_database():
         event_ids = [e.id for e in events]
         event_count = len(event_ids)
 
-        # Delete in an order that respects foreign keys. Events are referenced by many
-        # tables (association table team_event, matches, team list entries, alliance selections, etc.).
-        if event_ids:
-            # 1) Remove association rows in team_event linking teams to these events
+        # Function to execute deletion with automatic foreign key constraint bypass
+        def safe_delete_with_fk_bypass():
+            """Delete data with foreign key constraint bypass if needed"""
             try:
-                db.session.execute(team_event.delete().where(team_event.c.event_id.in_(event_ids)))
-            except Exception:
-                # Some DB backends or SQLAlchemy versions may not support this; ignore non-fatal errors
-                pass
-
-            # 2) Delete objects that reference matches for these events (scoped by match.event_id)
-            StrategyShare.query.filter(StrategyShare.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
-            ScoutingData.query.filter(ScoutingData.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
-            StrategyDrawing.query.filter(StrategyDrawing.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
-            # AllianceSharedScoutingData references matches and must be deleted first to avoid FK errors
-            AllianceSharedScoutingData.query.filter(AllianceSharedScoutingData.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
-
-            # 3) Delete matches belonging to these events
-            Match.query.filter(Match.event_id.in_(event_ids)).delete(synchronize_session=False)
-
-            # 4) Delete event-scoped records
-            TeamListEntry.query.filter(TeamListEntry.event_id.in_(event_ids)).delete(synchronize_session=False)
-            AllianceSelection.query.filter(AllianceSelection.event_id.in_(event_ids)).delete(synchronize_session=False)
-            PitScoutingData.query.filter(PitScoutingData.event_id.in_(event_ids)).delete(synchronize_session=False)
-
-            # 5) Nullify references in shared objects rather than deleting other teams' shares
-            SharedGraph.query.filter(SharedGraph.event_id.in_(event_ids)).update({SharedGraph.event_id: None}, synchronize_session=False)
-            SharedTeamRanks.query.filter(SharedTeamRanks.event_id.in_(event_ids)).update({SharedTeamRanks.event_id: None}, synchronize_session=False)
-
-            # 6) Finally delete the events themselves
-            Event.query.filter(Event.id.in_(event_ids)).delete(synchronize_session=False)
-
-        # Delete per-team scoped objects (these are safe to delete by scouting_team_number)
-        ScoutingData.query.filter_by(scouting_team_number=scouting_team_number).delete()
-        PitScoutingData.query.filter_by(scouting_team_number=scouting_team_number).delete()
-        StrategyDrawing.query.filter_by(scouting_team_number=scouting_team_number).delete()
-        AllianceSelection.query.filter_by(scouting_team_number=scouting_team_number).delete()
-        DoNotPickEntry.query.filter_by(scouting_team_number=scouting_team_number).delete()
-        AvoidEntry.query.filter_by(scouting_team_number=scouting_team_number).delete()
-        # Remove alliance-shared scouting entries originally created by this team
-        AllianceSharedScoutingData.query.filter_by(source_scouting_team_number=scouting_team_number).delete()
-
-        # Delete teams owned by this scouting team
-        teams_to_delete = Team.query.filter_by(scouting_team_number=scouting_team_number).all()
-        team_ids = [t.id for t in teams_to_delete]
-
-        if team_ids:
-            # Remove association rows in team_event linking these teams to events
-            try:
-                db.session.execute(team_event.delete().where(team_event.c.team_id.in_(team_ids)))
-            except Exception:
-                pass
-
-            # Delete or nullify all records referencing these team ids to avoid FK constraint errors
-            ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids)).delete(synchronize_session=False)
-            PitScoutingData.query.filter(PitScoutingData.team_id.in_(team_ids)).delete(synchronize_session=False)
-            AllianceSharedScoutingData.query.filter(AllianceSharedScoutingData.team_id.in_(team_ids)).delete(synchronize_session=False)
-            AllianceSharedPitData.query.filter(AllianceSharedPitData.team_id.in_(team_ids)).delete(synchronize_session=False)
-            TeamListEntry.query.filter(TeamListEntry.team_id.in_(team_ids)).delete(synchronize_session=False)
-
-            # Nullify references to these teams in AllianceSelection (do not delete alliances)
-            AllianceSelection.query.filter(AllianceSelection.captain.in_(team_ids)).update({AllianceSelection.captain: None}, synchronize_session=False)
-            AllianceSelection.query.filter(AllianceSelection.first_pick.in_(team_ids)).update({AllianceSelection.first_pick: None}, synchronize_session=False)
-            AllianceSelection.query.filter(AllianceSelection.second_pick.in_(team_ids)).update({AllianceSelection.second_pick: None}, synchronize_session=False)
-            AllianceSelection.query.filter(AllianceSelection.third_pick.in_(team_ids)).update({AllianceSelection.third_pick: None}, synchronize_session=False)
-
-            # Finally delete the teams themselves
-            Team.query.filter(Team.id.in_(team_ids)).delete(synchronize_session=False)
-        else:
-            Team.query.filter_by(scouting_team_number=scouting_team_number).delete()
-
-        db.session.commit()
-        
-        # Delete custom strategy background images (these are shared across teams)
-        # Only delete if this is the last scouting team or if user specifically wants to
-        bg_folder = os.path.join('app', 'static', 'strategy_backgrounds')
-        if os.path.exists(bg_folder):
-            for f in os.listdir(bg_folder):
-                if f.endswith('.png') or f.endswith('.jpg') or f.endswith('.jpeg') or f.endswith('.gif'):
+                # Try normal deletion first
+                _perform_deletion_sequence()
+                db.session.commit()
+                return True, "Normal deletion successful"
+            except Exception as e:
+                db.session.rollback()
+                error_str = str(e)
+                
+                # Check if it's a foreign key constraint error
+                if 'FOREIGN KEY constraint failed' in error_str or 'foreign key constraint fails' in error_str:
                     try:
-                        os.remove(os.path.join(bg_folder, f))
+                        current_app.logger.warning(f"Foreign key constraint error encountered during database wipe for team {scouting_team_number}. Attempting recovery with constraint bypass.")
+                        
+                        # Disable foreign key constraints temporarily (SQLite specific)
+                        db.session.execute(text('PRAGMA foreign_keys = OFF'))
+                        
+                        # Perform deletion with constraints disabled
+                        _perform_deletion_sequence()
+                        
+                        # Re-enable foreign key constraints
+                        db.session.execute(text('PRAGMA foreign_keys = ON'))
+                        
+                        db.session.commit()
+                        return True, "Deletion successful with foreign key constraint bypass"
+                    except Exception as bypass_error:
+                        db.session.rollback()
+                        return False, f"Failed even with constraint bypass: {str(bypass_error)}"
+                else:
+                    return False, f"Deletion failed: {error_str}"
+        
+        def _perform_deletion_sequence():
+            """Perform the actual deletion sequence"""
+            # Delete in an order that respects foreign keys. Events are referenced by many
+            # tables (association table team_event, matches, team list entries, alliance selections, etc.).
+            if event_ids:
+                # 1) Remove association rows in team_event linking teams to these events
+                try:
+                    db.session.execute(team_event.delete().where(team_event.c.event_id.in_(event_ids)))
+                except Exception as e:
+                    # Some DB backends or SQLAlchemy versions may not support this; fallback to raw SQL
+                    try:
+                        placeholders = ','.join(['?' for _ in event_ids])
+                        db.session.execute(text(f'DELETE FROM team_event WHERE event_id IN ({placeholders})'), event_ids)
+                    except Exception:
+                        pass  # Ignore if table doesn't exist or other non-critical error
+
+                # 2) Delete objects that reference matches for these events (scoped by match.event_id)
+                StrategyShare.query.filter(StrategyShare.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
+                ScoutingData.query.filter(ScoutingData.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
+                StrategyDrawing.query.filter(StrategyDrawing.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
+                # AllianceSharedScoutingData references matches and must be deleted first to avoid FK errors
+                AllianceSharedScoutingData.query.filter(AllianceSharedScoutingData.match.has(Match.event_id.in_(event_ids))).delete(synchronize_session=False)
+
+                # 3) Delete matches belonging to these events
+                Match.query.filter(Match.event_id.in_(event_ids)).delete(synchronize_session=False)
+
+                # 4) Delete event-scoped records
+                TeamListEntry.query.filter(TeamListEntry.event_id.in_(event_ids)).delete(synchronize_session=False)
+                AllianceSelection.query.filter(AllianceSelection.event_id.in_(event_ids)).delete(synchronize_session=False)
+                PitScoutingData.query.filter(PitScoutingData.event_id.in_(event_ids)).delete(synchronize_session=False)
+                
+                # 5) Delete alliance shared pit data that references these events
+                AllianceSharedPitData.query.filter(AllianceSharedPitData.event_id.in_(event_ids)).delete(synchronize_session=False)
+
+                # 6) Nullify references in shared objects rather than deleting other teams' shares
+                SharedGraph.query.filter(SharedGraph.event_id.in_(event_ids)).update({SharedGraph.event_id: None}, synchronize_session=False)
+                SharedTeamRanks.query.filter(SharedTeamRanks.event_id.in_(event_ids)).update({SharedTeamRanks.event_id: None}, synchronize_session=False)
+
+                # 7) Finally delete the events themselves
+                Event.query.filter(Event.id.in_(event_ids)).delete(synchronize_session=False)
+
+            # Delete per-team scoped objects (these are safe to delete by scouting_team_number)
+            ScoutingData.query.filter_by(scouting_team_number=scouting_team_number).delete()
+            PitScoutingData.query.filter_by(scouting_team_number=scouting_team_number).delete()
+            StrategyDrawing.query.filter_by(scouting_team_number=scouting_team_number).delete()
+            AllianceSelection.query.filter_by(scouting_team_number=scouting_team_number).delete()
+            DoNotPickEntry.query.filter_by(scouting_team_number=scouting_team_number).delete()
+            AvoidEntry.query.filter_by(scouting_team_number=scouting_team_number).delete()
+            # Remove alliance-shared scouting entries originally created by this team
+            AllianceSharedScoutingData.query.filter_by(source_scouting_team_number=scouting_team_number).delete()
+
+            # Delete teams owned by this scouting team
+            teams_to_delete = Team.query.filter_by(scouting_team_number=scouting_team_number).all()
+            team_ids = [t.id for t in teams_to_delete]
+
+            if team_ids:
+                # Remove association rows in team_event linking these teams to events
+                try:
+                    db.session.execute(team_event.delete().where(team_event.c.team_id.in_(team_ids)))
+                except Exception:
+                    # Fallback to raw SQL
+                    try:
+                        placeholders = ','.join(['?' for _ in team_ids])
+                        db.session.execute(text(f'DELETE FROM team_event WHERE team_id IN ({placeholders})'), team_ids)
                     except Exception:
                         pass
-        
-        # Compute match count: matches that belonged to deleted events plus matches scoped to this scouting team
-        matches_from_events_count = Match.query.filter(Match.event_id.in_(event_ids)).count() if event_ids else 0
-        matches_scoped_count = Match.query.filter_by(scouting_team_number=scouting_team_number).count()
-        match_count = max(matches_from_events_count, matches_scoped_count)
 
-        # Build success message with deletion counts
-        deleted_items = []
-        if team_count > 0:
-            deleted_items.append(f"{team_count} teams")
-        if event_count > 0:
-            deleted_items.append(f"{event_count} events")
-        if match_count > 0:
-            deleted_items.append(f"{match_count} matches")
-        if scouting_data_count > 0:
-            deleted_items.append(f"{scouting_data_count} scouting entries")
-        if pit_data_count > 0:
-            deleted_items.append(f"{pit_data_count} pit scouting entries")
-        if alliance_count > 0:
-            deleted_items.append(f"{alliance_count} alliance selections")
-        if strategy_count > 0:
-            deleted_items.append(f"{strategy_count} strategy drawings")
+                # Delete or nullify all records referencing these team ids to avoid FK constraint errors
+                ScoutingData.query.filter(ScoutingData.team_id.in_(team_ids)).delete(synchronize_session=False)
+                PitScoutingData.query.filter(PitScoutingData.team_id.in_(team_ids)).delete(synchronize_session=False)
+                AllianceSharedScoutingData.query.filter(AllianceSharedScoutingData.team_id.in_(team_ids)).delete(synchronize_session=False)
+                AllianceSharedPitData.query.filter(AllianceSharedPitData.team_id.in_(team_ids)).delete(synchronize_session=False)
+                TeamListEntry.query.filter(TeamListEntry.team_id.in_(team_ids)).delete(synchronize_session=False)
+
+                # Nullify references to these teams in AllianceSelection (do not delete alliances)
+                AllianceSelection.query.filter(AllianceSelection.captain.in_(team_ids)).update({AllianceSelection.captain: None}, synchronize_session=False)
+                AllianceSelection.query.filter(AllianceSelection.first_pick.in_(team_ids)).update({AllianceSelection.first_pick: None}, synchronize_session=False)
+                AllianceSelection.query.filter(AllianceSelection.second_pick.in_(team_ids)).update({AllianceSelection.second_pick: None}, synchronize_session=False)
+                AllianceSelection.query.filter(AllianceSelection.third_pick.in_(team_ids)).update({AllianceSelection.third_pick: None}, synchronize_session=False)
+
+                # Finally delete the teams themselves
+                Team.query.filter(Team.id.in_(team_ids)).delete(synchronize_session=False)
+            else:
+                Team.query.filter_by(scouting_team_number=scouting_team_number).delete()
+
+        # Execute the deletion with automatic foreign key constraint handling
+        success, message = safe_delete_with_fk_bypass()
         
-        if deleted_items:
-            items_text = ", ".join(deleted_items)
-            flash(f"Database wiped successfully for scouting team {scouting_team_number}. Deleted: {items_text}.", "success")
+        if success:
+            # Delete custom strategy background images (these are shared across teams)
+            # Only delete if this is the last scouting team or if user specifically wants to
+            bg_folder = os.path.join('app', 'static', 'strategy_backgrounds')
+            if os.path.exists(bg_folder):
+                for f in os.listdir(bg_folder):
+                    if f.endswith('.png') or f.endswith('.jpg') or f.endswith('.jpeg') or f.endswith('.gif'):
+                        try:
+                            os.remove(os.path.join(bg_folder, f))
+                        except Exception:
+                            pass
+            
+            # Compute match count: matches that belonged to deleted events plus matches scoped to this scouting team
+            matches_from_events_count = 0  # Already deleted
+            matches_scoped_count = 0  # Already deleted
+            match_count = max(matches_from_events_count, matches_scoped_count)
+
+            # Build success message with deletion counts
+            deleted_items = []
+            if team_count > 0:
+                deleted_items.append(f"{team_count} teams")
+            if event_count > 0:
+                deleted_items.append(f"{event_count} events")
+            if match_count > 0:
+                deleted_items.append(f"{match_count} matches")
+            if scouting_data_count > 0:
+                deleted_items.append(f"{scouting_data_count} scouting entries")
+            if pit_data_count > 0:
+                deleted_items.append(f"{pit_data_count} pit scouting entries")
+            if alliance_count > 0:
+                deleted_items.append(f"{alliance_count} alliance selections")
+            if strategy_count > 0:
+                deleted_items.append(f"{strategy_count} strategy drawings")
+            
+            if deleted_items:
+                items_text = ", ".join(deleted_items)
+                success_msg = f"Database wiped successfully for scouting team {scouting_team_number}. Deleted: {items_text}."
+                if "constraint bypass" in message:
+                    success_msg += f" Note: {message}"
+                flash(success_msg, "success")
+            else:
+                flash(f"No data found to delete for scouting team {scouting_team_number}.", "info")
         else:
-            flash(f"No data found to delete for scouting team {scouting_team_number}.", "info")
+            current_app.logger.error(f"Database wipe failed for scouting team {scouting_team_number}: {message}")
+            flash(f"Error wiping database for scouting team {scouting_team_number}: {message}", "danger")
             
     except Exception as e:
         db.session.rollback()
+        error_details = traceback.format_exc()
+        current_app.logger.error(f"Unexpected error during database wipe for team {current_user.scouting_team_number}: {error_details}")
         flash(f"Error wiping database for scouting team {current_user.scouting_team_number}: {str(e)}", "danger")
+        
     return redirect(url_for('data.index'))
 
 @bp.route('/validate', methods=['GET'])
