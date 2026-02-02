@@ -1,0 +1,831 @@
+{% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
+
+{% block title %}Qualitative Scouting{% endblock %}
+
+{% block heading %}Qualitative Scouting{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h2 class="mb-0">Qualitative Scouting</h2>
+        </div>
+        <div>
+            <a href="{{ url_for('scouting.list_qualitative_data') }}" class="btn btn-info">
+                <i class="fas fa-list me-2"></i>View All Data
+            </a>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-star me-2"></i>Qualitative Match Scouting
+                        {{ help.help_icon('Scout entire alliances at once with rankings and notes for each team', 'Qualitative Scouting') }}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="qualitative-form">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="match-selector" class="form-label">Select Match</label>
+                                <select class="form-select" id="match-selector" required>
+                                    <option value="">-- Select a Match --</option>
+                                    {% for match in matches %}
+                                    <option value="{{ match.id }}" 
+                                            data-red="{{ match.red_alliance }}" 
+                                            data-blue="{{ match.blue_alliance }}">
+                                        {{ match.event.code if match.event else '' }} - 
+                                        {{ match.match_type }} {{ match.match_number }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Alliance to Scout</label>
+                                <div class="btn-group w-100" role="group">
+                                    <input type="radio" class="btn-check" name="alliance" id="alliance-red" value="red" autocomplete="off">
+                                    <label class="btn btn-outline-danger" for="alliance-red">
+                                        <i class="fas fa-square me-1"></i>Red Alliance
+                                    </label>
+                                    
+                                    <input type="radio" class="btn-check" name="alliance" id="alliance-blue" value="blue" autocomplete="off">
+                                    <label class="btn btn-outline-primary" for="alliance-blue">
+                                        <i class="fas fa-square me-1"></i>Blue Alliance
+                                    </label>
+                                    
+                                    <input type="radio" class="btn-check" name="alliance" id="alliance-both" value="both" autocomplete="off">
+                                    <label class="btn btn-outline-secondary" for="alliance-both">
+                                        <i class="fas fa-th me-1"></i>Both Alliances
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Red Alliance Teams -->
+                        <div id="red-teams-section" class="alliance-section mb-4" style="display: none;">
+                            <h5 class="text-danger mb-3">
+                                <i class="fas fa-square me-2"></i>Red Alliance Teams
+                            </h5>
+                            <div id="red-teams-container" class="row">
+                                <!-- Teams will be dynamically added here -->
+                            </div>
+                        </div>
+
+                        <!-- Blue Alliance Teams -->
+                        <div id="blue-teams-section" class="alliance-section mb-4" style="display: none;">
+                            <h5 class="text-primary mb-3">
+                                <i class="fas fa-square me-2"></i>Blue Alliance Teams
+                            </h5>
+                            <div id="blue-teams-container" class="row">
+                                <!-- Teams will be dynamically added here -->
+                            </div>
+                        </div>
+
+                        <div class="text-center mt-4">
+                            <button type="submit" class="btn btn-success btn-lg" id="save-btn" disabled>
+                                <i class="fas fa-save me-2"></i>Save Qualitative Scouting
+                            </button>
+                            <button type="button" class="btn btn-primary btn-lg" id="qr-btn" disabled>
+                                <i class="fas fa-qrcode me-2"></i>Generate QR Code
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Existing Qualitative Scouting Data -->
+            {% if existing_data %}
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history me-2"></i>Previous Qualitative Scouting
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Match</th>
+                                    <th>Alliance</th>
+                                    <th>Scout</th>
+                                    <th>Timestamp</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entry in existing_data %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ entry.match.event.code if entry.match.event else '' }}</span>
+                                        {{ entry.match.match_type }} {{ entry.match.match_number }}
+                                    </td>
+                                    <td>
+                                        <span class="badge {% if entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                            {{ entry.alliance_scouted|title }}
+                                        </span>
+                                    </td>
+                                    <td>{{ entry.scout_name }}</td>
+                                    <td>{{ entry.timestamp.strftime('%Y-%m-%d %H:%M') if entry.timestamp else '' }}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{{ url_for('scouting.view_qualitative_data', entry_id=entry.id) }}" class="btn btn-primary">
+                                                <i class="fas fa-eye"></i> View
+                                            </a>
+                                            <a href="{{ url_for('scouting.qualitative_qr_code', entry_id=entry.id) }}" class="btn btn-success">
+                                                <i class="fas fa-qrcode"></i> QR
+                                            </a>
+                                            <form action="{{ url_for('scouting.delete_qualitative_data', entry_id=entry.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this entry?');">
+                                                <button type="submit" class="btn btn-danger">
+                                                    <i class="fas fa-trash"></i> Delete
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+.team-card {
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    background: white;
+}
+
+.team-card h6 {
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.ranking-buttons {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.ranking-buttons .btn {
+    flex: 1;
+}
+
+.ranking-buttons .btn.active {
+    font-weight: bold;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+}
+
+/* Dark mode styles */
+.dark-mode .team-card {
+    background: #1a1a1a;
+    border-color: #444;
+    color: #e6e6e6;
+}
+
+.dark-mode .team-card h6 {
+    color: #e6e6e6;
+}
+
+.dark-mode .form-control {
+    background-color: #2a2a2a;
+    border-color: #444;
+    color: #e6e6e6;
+}
+
+.dark-mode .form-select {
+    background-color: #2a2a2a;
+    border-color: #444;
+    color: #e6e6e6;
+}
+
+/* Alliance button active states for dark mode */
+.dark-mode .btn-check:checked + .btn-outline-danger {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: white;
+    font-weight: bold;
+}
+
+.dark-mode .btn-check:checked + .btn-outline-primary {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: white;
+    font-weight: bold;
+}
+
+.dark-mode .btn-check:checked + .btn-outline-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+    font-weight: bold;
+}
+
+/* Ranking button active states for dark mode */
+.dark-mode .ranking-buttons .btn.active {
+    font-weight: bold;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+.dark-mode .ranking-buttons .btn-outline-success.active {
+    background-color: #198754;
+    border-color: #198754;
+    color: white;
+}
+
+.dark-mode .ranking-buttons .btn-outline-primary.active {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: white;
+}
+
+.dark-mode .ranking-buttons .btn-outline-warning.active {
+    background-color: #ffc107;
+    border-color: #ffc107;
+    color: black;
+}
+</style>
+
+<!-- QR Code Modal -->
+<div class="modal fade" id="qrModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-qrcode me-2"></i> Qualitative Scouting QR Code
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body qr-modal-body">
+                <div class="qr-container">
+                    <div id="qualitative-qrcode"></div>
+                    <!-- helper text removed per user request -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const matchSelector = document.getElementById('match-selector');
+    const allianceRadios = document.querySelectorAll('input[name="alliance"]');
+    const redSection = document.getElementById('red-teams-section');
+    const blueSection = document.getElementById('blue-teams-section');
+    const redContainer = document.getElementById('red-teams-container');
+    const blueContainer = document.getElementById('blue-teams-container');
+    const saveBtn = document.getElementById('save-btn');
+    const qrBtn = document.getElementById('qr-btn');
+    const form = document.getElementById('qualitative-form');
+    
+    let currentMatchData = null;
+    let currentEntryId = null;
+    let matchesCache = {};
+    
+    // Cache all matches data for offline use
+    function cacheMatchesData() {
+        try {
+            const matchOptions = matchSelector.querySelectorAll('option');
+            const cachedMatches = {};
+            
+            matchOptions.forEach(function(option) {
+                if (option.value) {
+                    const redTeams = option.getAttribute('data-red');
+                    const blueTeams = option.getAttribute('data-blue');
+                    
+                    cachedMatches[option.value] = {
+                        id: option.value,
+                        text: option.textContent.trim(),
+                        red_teams: redTeams ? redTeams.split(',').map(function(t) { return t.trim(); }) : [],
+                        blue_teams: blueTeams ? blueTeams.split(',').map(function(t) { return t.trim(); }) : []
+                    };
+                }
+            });
+            
+            matchesCache = cachedMatches;
+            localStorage.setItem('qualitative_matches_cache', JSON.stringify(cachedMatches));
+            console.log('Cached ' + Object.keys(cachedMatches).length + ' matches for offline use');
+        } catch (e) {
+            console.warn('Could not cache matches:', e);
+        }
+    }
+    
+    // Load cached matches if offline
+    function loadCachedMatches() {
+        try {
+            const cached = localStorage.getItem('qualitative_matches_cache');
+            if (cached) {
+                matchesCache = JSON.parse(cached);
+                console.log('Loaded ' + Object.keys(matchesCache).length + ' matches from cache');
+                return true;
+            }
+        } catch (e) {
+            console.warn('Could not load cached matches:', e);
+        }
+        return false;
+    }
+    
+    // Initialize offline cache
+    cacheMatchesData();
+    loadCachedMatches();
+    
+    // Handle match selection
+    matchSelector.addEventListener('change', function() {
+        const matchId = this.value;
+        if (!matchId) {
+            redSection.style.display = 'none';
+            blueSection.style.display = 'none';
+            saveBtn.disabled = true;
+            qrBtn.disabled = true;
+            return;
+        }
+        
+        // Try online fetch first, fallback to cache if offline
+        fetch('{{ url_for("scouting.get_match_teams", match_id=0) }}'.replace('0', matchId))
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                if (data.success) {
+                    currentMatchData = data;
+                    updateAllianceDisplay();
+                }
+            })
+            .catch(function(error) {
+                console.warn('Online fetch failed, using cached data:', error);
+                
+                // Fallback to cached data
+                if (matchesCache[matchId]) {
+                    const cachedMatch = matchesCache[matchId];
+                    currentMatchData = {
+                        success: true,
+                        match: {
+                            id: cachedMatch.id,
+                            match_number: extractMatchNumber(cachedMatch.text),
+                            match_type: extractMatchType(cachedMatch.text),
+                            event_code: extractEventCode(cachedMatch.text),
+                            red_teams: cachedMatch.red_teams,
+                            blue_teams: cachedMatch.blue_teams
+                        },
+                        existing_data: null
+                    };
+                    console.log('Using cached match data:', currentMatchData);
+                    updateAllianceDisplay();
+                } else {
+                    alert('Cannot load match data: offline and no cached data available');
+                }
+            });
+    });
+    
+    // Helper functions to extract match info from text
+    function extractMatchNumber(text) {
+        const match = text.match(/(\d+)$/);
+        return match ? parseInt(match[1]) : 0;
+    }
+    
+    function extractMatchType(text) {
+        if (text.includes('Qualification')) return 'Qualification';
+        if (text.includes('Quarterfinal')) return 'Quarterfinal';
+        if (text.includes('Semifinal')) return 'Semifinal';
+        if (text.includes('Final')) return 'Final';
+        return 'Qualification';
+    }
+    
+    function extractEventCode(text) {
+        const parts = text.split(' - ');
+        return parts[0] ? parts[0].trim() : '';
+    }
+    
+    // Handle alliance selection
+    allianceRadios.forEach(function(radio) {
+        radio.addEventListener('change', updateAllianceDisplay);
+    });
+    
+    function updateAllianceDisplay() {
+        if (!currentMatchData) return;
+        
+        const selectedAlliance = document.querySelector('input[name="alliance"]:checked');
+        if (!selectedAlliance) return;
+        
+        const allianceValue = selectedAlliance.value;
+        
+        // Clear containers
+        redContainer.innerHTML = '';
+        blueContainer.innerHTML = '';
+        
+        // Show/hide sections based on selection
+        if (allianceValue === 'red' || allianceValue === 'both') {
+            redSection.style.display = 'block';
+            createTeamCards(currentMatchData.match.red_teams, redContainer, 'red');
+        } else {
+            redSection.style.display = 'none';
+        }
+        
+        if (allianceValue === 'blue' || allianceValue === 'both') {
+            blueSection.style.display = 'block';
+            createTeamCards(currentMatchData.match.blue_teams, blueContainer, 'blue');
+        } else {
+            blueSection.style.display = 'none';
+        }
+        
+        // Load existing data if available
+        if (currentMatchData.existing_data) {
+            loadExistingData(currentMatchData.existing_data);
+            currentEntryId = currentMatchData.existing_data.id;
+        }
+        
+        // Enable buttons when alliance is selected
+        saveBtn.disabled = false;
+        qrBtn.disabled = false;
+    }
+    
+    function createTeamCards(teams, container, alliance) {
+        teams.forEach(function(teamNum) {
+            const col = document.createElement('div');
+            col.className = 'col-md-4';
+            
+            const card = document.createElement('div');
+            card.className = 'team-card';
+            
+            const colorClass = alliance === 'red' ? 'danger' : 'primary';
+            
+            card.innerHTML = '<h6 class="text-' + colorClass + '">Team ' + teamNum + '</h6>' +
+                '<div class="mb-2">' +
+                '<label class="form-label small">Ranking:</label>' +
+                '<div class="ranking-buttons">' +
+                '<button type="button" class="btn btn-sm btn-outline-success ranking-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-ranking="1">1</button>' +
+                '<button type="button" class="btn btn-sm btn-outline-primary ranking-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-ranking="2">2</button>' +
+                '<button type="button" class="btn btn-sm btn-outline-warning ranking-btn" data-team="' + teamNum + '" data-alliance="' + alliance + '" data-ranking="3">3</button>' +
+                '</div>' +
+                '</div>' +
+                '<div>' +
+                '<label class="form-label small">Notes:</label>' +
+                '<textarea class="form-control form-control-sm team-notes" data-team="' + teamNum + '" data-alliance="' + alliance + '" rows="3" placeholder="Add notes about this team..."></textarea>' +
+                '</div>';
+            
+            col.appendChild(card);
+            container.appendChild(col);
+        });
+        
+        // Add event listeners to ranking buttons
+        container.querySelectorAll('.ranking-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const team = this.dataset.team;
+                const alliance = this.dataset.alliance;
+                
+                // Remove active from siblings
+                const siblings = this.parentElement.querySelectorAll('.ranking-btn');
+                siblings.forEach(function(s) {
+                    s.classList.remove('active');
+                });
+                
+                // Add active to clicked button
+                this.classList.add('active');
+            });
+        });
+    }
+    
+    function loadExistingData(existingData) {
+        const data = existingData.data;
+        
+        // Load red alliance data
+        if (data.red) {
+            Object.keys(data.red).forEach(function(teamKey) {
+                const teamNum = teamKey.replace('team_', '');
+                const teamData = data.red[teamKey];
+                
+                // Set ranking
+                if (teamData.ranking) {
+                    const rankBtn = document.querySelector('.ranking-btn[data-team="' + teamNum + '"][data-alliance="red"][data-ranking="' + teamData.ranking + '"]');
+                    if (rankBtn) rankBtn.classList.add('active');
+                }
+                
+                // Set notes
+                if (teamData.notes) {
+                    const notesArea = document.querySelector('textarea[data-team="' + teamNum + '"][data-alliance="red"]');
+                    if (notesArea) notesArea.value = teamData.notes;
+                }
+            });
+        }
+        
+        // Load blue alliance data
+        if (data.blue) {
+            Object.keys(data.blue).forEach(function(teamKey) {
+                const teamNum = teamKey.replace('team_', '');
+                const teamData = data.blue[teamKey];
+                
+                // Set ranking
+                if (teamData.ranking) {
+                    const rankBtn = document.querySelector('.ranking-btn[data-team="' + teamNum + '"][data-alliance="blue"][data-ranking="' + teamData.ranking + '"]');
+                    if (rankBtn) rankBtn.classList.add('active');
+                }
+                
+                // Set notes
+                if (teamData.notes) {
+                    const notesArea = document.querySelector('textarea[data-team="' + teamNum + '"][data-alliance="blue"]');
+                    if (notesArea) notesArea.value = teamData.notes;
+                }
+            });
+        }
+    }
+    
+    // Function to collect form data for QR code or saving
+    function collectFormData() {
+        const matchId = matchSelector.value;
+        const selectedAlliance = document.querySelector('input[name="alliance"]:checked');
+        
+        if (!matchId || !selectedAlliance || !currentMatchData) {
+            return null;
+        }
+        
+        const allianceScouted = selectedAlliance.value;
+        const matchData = currentMatchData.match;
+        
+        // Collect team data
+        const teamData = { red: {}, blue: {} };
+        
+        // Collect red alliance data
+        document.querySelectorAll('textarea[data-alliance="red"]').forEach(function(textarea) {
+            const teamNum = textarea.dataset.team;
+            const notes = textarea.value.trim();
+            const rankBtn = document.querySelector('.ranking-btn[data-team="' + teamNum + '"][data-alliance="red"].active');
+            const ranking = rankBtn ? parseInt(rankBtn.dataset.ranking) : null;
+            
+            teamData.red['team_' + teamNum] = {
+                notes: notes,
+                ranking: ranking
+            };
+        });
+        
+        // Collect blue alliance data
+        document.querySelectorAll('textarea[data-alliance="blue"]').forEach(function(textarea) {
+            const teamNum = textarea.dataset.team;
+            const notes = textarea.value.trim();
+            const rankBtn = document.querySelector('.ranking-btn[data-team="' + teamNum + '"][data-alliance="blue"].active');
+            const ranking = rankBtn ? parseInt(rankBtn.dataset.ranking) : null;
+            
+            teamData.blue['team_' + teamNum] = {
+                notes: notes,
+                ranking: ranking
+            };
+        });
+        
+        // Get scout name from global variable or localStorage
+        let scoutName = 'Unknown';
+        try {
+            if (typeof currentUsername !== 'undefined' && currentUsername) {
+                scoutName = currentUsername;
+            } else if (localStorage.getItem('scout_name')) {
+                scoutName = localStorage.getItem('scout_name');
+            }
+        } catch (e) {
+            console.warn('Could not get scout name:', e);
+        }
+        
+        // Build complete data object for QR code
+        return {
+            qualitative: true,
+            match_id: parseInt(matchId),
+            match_number: matchData.match_number,
+            match_type: matchData.match_type,
+            event_code: matchData.event_code || '',
+            alliance_scouted: allianceScouted,
+            team_data: teamData,
+            scout_name: scoutName,
+            timestamp: new Date().toISOString(),
+            offline_generated: true
+        };
+    }
+    
+    // Handle form submission (save to database or offline storage)
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = collectFormData();
+        if (!formData) {
+            alert('Please select a match and alliance');
+            return;
+        }
+        
+        // Save data
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+        
+        fetch('{{ url_for("scouting.save_qualitative_scouting") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                match_id: formData.match_id,
+                alliance_scouted: formData.alliance_scouted,
+                team_data: formData.team_data
+            })
+        })
+        .then(function(response) {
+            return response.json();
+        })
+        .then(function(data) {
+            if (data.success) {
+                alert('Qualitative scouting data saved successfully!');
+                
+                // Store entry ID for future reference
+                if (data.entry_id) {
+                    currentEntryId = data.entry_id;
+                }
+                
+                // Optionally reload after a delay to show in the table below
+                setTimeout(function() {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                alert('Error: ' + data.message);
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Qualitative Scouting';
+            }
+        })
+        .catch(function(error) {
+            console.warn('Online save failed, saving locally:', error);
+            
+            // Save offline using localStorage
+            try {
+                const offlineData = localStorage.getItem('qualitative_offline_data');
+                const offlineEntries = offlineData ? JSON.parse(offlineData) : [];
+                
+                // Add timestamp and unique ID
+                formData.offline_id = 'offline_' + Date.now();
+                formData.saved_at = new Date().toISOString();
+                
+                offlineEntries.push(formData);
+                localStorage.setItem('qualitative_offline_data', JSON.stringify(offlineEntries));
+                
+                alert('Saved offline! Data will sync when connection is restored. You can also generate a QR code to transfer this data.');
+                
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Qualitative Scouting';
+                
+                console.log('Saved qualitative entry offline:', formData);
+            } catch (storageError) {
+                console.error('Error saving offline:', storageError);
+                alert('Error saving data offline: ' + storageError.message);
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save me-2"></i>Save Qualitative Scouting';
+            }
+        });
+    });
+    
+    // Handle QR code button click - generates QR from form data
+    qrBtn.addEventListener('click', function() {
+        const formData = collectFormData();
+        if (!formData) {
+            alert('Please select a match and alliance before generating QR code');
+            return;
+        }
+        
+        // Show modal
+        const qrModalElement = document.getElementById('qrModal');
+        const qrModal = new bootstrap.Modal(qrModalElement);
+        qrModal.show();
+        
+        // Generate QR code
+        generateQualitativeQRCode(formData);
+    });
+    
+    // Function to generate QR code from qualitative form data
+    function generateQualitativeQRCode(formData) {
+        const qrcodeContainer = document.getElementById('qualitative-qrcode');
+        
+        if (!qrcodeContainer) {
+            console.error('QR code container not found');
+            return;
+        }
+        
+        // Show loading animation
+        qrcodeContainer.innerHTML = '<div class="d-flex justify-content-center my-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+        
+        // Check if QRCode library is available
+        if (typeof QRCode === 'undefined') {
+            console.error('QRCode library not loaded');
+            qrcodeContainer.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i>Error: QR Code library not loaded.</div>';
+            return;
+        }
+        
+        setTimeout(function() {
+            try {
+                // Clear loading animation
+                qrcodeContainer.innerHTML = '';
+                
+                // Create JSON string
+                const jsonString = JSON.stringify(formData);
+                
+                // Log for debugging
+                const jsonSizeKB = (jsonString.length / 1024).toFixed(2);
+                console.log('qualitative QR data size: ' + jsonSizeKB + ' KB, ' + jsonString.length + ' characters');
+                console.log('QR data:', formData);
+                
+                // Calculate responsive QR code size - match the logic from scripts.js
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+                const modalPadding = 40;
+                
+                const availableWidth = Math.max(160, viewportWidth - modalPadding);
+                const availableHeight = Math.max(160, viewportHeight - (modalPadding + 120));
+                
+                let qrSize;
+                if (viewportWidth <= 640) {
+                    qrSize = Math.floor(Math.min(availableWidth * 0.92, availableHeight * 0.78));
+                } else if (viewportWidth <= 1200) {
+                    qrSize = Math.floor(Math.min(availableWidth * 0.9, 640));
+                } else {
+                    qrSize = Math.min(availableWidth, 520);
+                }
+                
+                // Enforce sensible bounds - max 520px to match the form
+                qrSize = Math.max(160, Math.min(qrSize, 520));
+                
+                console.log('Viewport: ' + viewportWidth + 'px, QR Size: ' + qrSize + 'px');
+                
+                // Clear any previous inline styles
+                qrcodeContainer.style.cssText = '';
+                
+                // Apply responsive container styles
+                qrcodeContainer.style.width = '100%';
+                qrcodeContainer.style.maxWidth = qrSize + 'px';
+                qrcodeContainer.style.margin = '0 auto';
+                qrcodeContainer.style.padding = '0';
+                qrcodeContainer.style.display = 'flex';
+                qrcodeContainer.style.alignItems = 'center';
+                qrcodeContainer.style.justifyContent = 'center';
+                qrcodeContainer.style.minHeight = 'auto';
+                
+                // Create wrapper div for better control
+                const qrWrapper = document.createElement('div');
+                qrWrapper.style.cssText = 'width: 100%; max-width: ' + qrSize + 'px; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; background: #ffffff; padding: 16px; box-sizing: border-box; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);';
+                qrcodeContainer.appendChild(qrWrapper);
+                
+                // Generate QR code inside wrapper
+                new QRCode(qrWrapper, {
+                    text: jsonString,
+                    width: qrSize - 32,
+                    height: qrSize - 32,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M,
+                    typeNumber: 0
+                });
+                
+                // Style the generated elements for maximum visibility - match scripts.js behavior
+                setTimeout(function() {
+                    const qrCanvas = qrWrapper.querySelector('canvas');
+                    const qrImg = qrWrapper.querySelector('img');
+                    
+                    // Detect Android
+                    const isAndroid = /Android/i.test(navigator.userAgent);
+                    console.log('Platform detected:', isAndroid ? 'Android' : 'iOS/Desktop');
+                    
+                    if (isAndroid) {
+                        // ANDROID-SPECIFIC: Use canvas directly
+                        if (qrImg && qrImg.parentNode) {
+                            qrImg.parentNode.removeChild(qrImg);
+                        }
+                        
+                        if (qrCanvas) {
+                            qrCanvas.style.cssText = 'width: 100% !important; height: auto !important; max-width: ' + (qrSize - 32) + 'px !important; display: block !important; margin: 0 auto !important; image-rendering: pixelated !important; -webkit-transform: translateZ(0) !important;';
+                            console.log('Android: Using canvas for QR display');
+                        }
+                    } else {
+                        // iOS/DESKTOP: Remove canvas, use image
+                        if (qrCanvas && qrCanvas.parentNode) {
+                            qrCanvas.parentNode.removeChild(qrCanvas);
+                        }
+                        
+                        if (qrImg) {
+                            qrImg.style.cssText = 'width: 100% !important; height: 100% !important; max-width: ' + (qrSize - 32) + 'px !important; max-height: ' + (qrSize - 32) + 'px !important; display: block !important; margin: 0 auto !important; object-fit: contain !important; image-rendering: -webkit-optimize-contrast !important; image-rendering: -moz-crisp-edges !important; image-rendering: crisp-edges !important; image-rendering: pixelated !important;';
+                            console.log('iOS/Desktop: Using image for QR display');
+                        }
+                    }
+                }, 150);
+                
+                // Show success message
+                console.log('qualitative QR code generated successfully');
+                
+            } catch (error) {
+                console.error('Error generating QR code:', error);
+                qrcodeContainer.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i>Error generating QR code: ' + error.message + '</div>';
+            }
+        }, 100);
+    }
+});
+</script>
+{% endblock %}
+

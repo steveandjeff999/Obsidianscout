@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+
+{% block title %}View Qualitative Scouting{% endblock %}
+
+{% block heading %}Qualitative Scouting Details{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card mb-4">
+                <div class="card-header {% if entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %} text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-star me-2"></i>
+                        {{ entry.match.event.code if entry.match.event else '' }} - 
+                        {{ entry.match.match_type }} {{ entry.match.match_number }}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">Match:</dt>
+                                <dd class="col-sm-8">
+                                    <span class="badge bg-secondary">{{ entry.match.event.code if entry.match.event else '' }}</span>
+                                    {{ entry.match.match_type }} {{ entry.match.match_number }}
+                                </dd>
+                                
+                                <dt class="col-sm-4">Alliance Scouted:</dt>
+                                <dd class="col-sm-8">
+                                    <span class="badge {% if entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                        {{ entry.alliance_scouted|title }}
+                                    </span>
+                                </dd>
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-4">Scout:</dt>
+                                <dd class="col-sm-8">{{ entry.scout_name }}</dd>
+                                
+                                <dt class="col-sm-4">Timestamp:</dt>
+                                <dd class="col-sm-8">{{ entry.timestamp.strftime('%Y-%m-%d %H:%M') if entry.timestamp else '' }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+
+                    {% set data = entry.data %}
+
+                    <!-- Red Alliance Data -->
+                    {% if data.red and (entry.alliance_scouted == 'red' or entry.alliance_scouted == 'both') %}
+                    <div class="mb-4">
+                        <h5 class="text-danger mb-3">
+                            <i class="fas fa-square me-2"></i>Red Alliance
+                        </h5>
+                        <div class="row">
+                            {% for team_key, team_data in data.red.items() %}
+                            {% set team_num = team_key.replace('team_', '') %}
+                            <div class="col-md-4 mb-3">
+                                <div class="card border-danger">
+                                    <div class="card-header bg-danger text-white">
+                                        <h6 class="mb-0">Team {{ team_num }}</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-2">
+                                            <strong>Ranking:</strong>
+                                            {% if team_data.ranking %}
+                                            <span class="badge {% if team_data.ranking == 1 %}bg-success{% elif team_data.ranking == 2 %}bg-primary{% else %}bg-warning{% endif %}">
+                                                {{ team_data.ranking }}
+                                            </span>
+                                            {% else %}
+                                            <span class="text-muted">Not ranked</span>
+                                            {% endif %}
+                                        </div>
+                                        <div>
+                                            <strong>Notes:</strong>
+                                            <p class="mb-0 mt-1">
+                                                {{ team_data.notes if team_data.notes else 'No notes' }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Blue Alliance Data -->
+                    {% if data.blue and (entry.alliance_scouted == 'blue' or entry.alliance_scouted == 'both') %}
+                    <div class="mb-4">
+                        <h5 class="text-primary mb-3">
+                            <i class="fas fa-square me-2"></i>Blue Alliance
+                        </h5>
+                        <div class="row">
+                            {% for team_key, team_data in data.blue.items() %}
+                            {% set team_num = team_key.replace('team_', '') %}
+                            <div class="col-md-4 mb-3">
+                                <div class="card border-primary">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="mb-0">Team {{ team_num }}</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-2">
+                                            <strong>Ranking:</strong>
+                                            {% if team_data.ranking %}
+                                            <span class="badge {% if team_data.ranking == 1 %}bg-success{% elif team_data.ranking == 2 %}bg-primary{% else %}bg-warning{% endif %}">
+                                                {{ team_data.ranking }}
+                                            </span>
+                                            {% else %}
+                                            <span class="text-muted">Not ranked</span>
+                                            {% endif %}
+                                        </div>
+                                        <div>
+                                            <strong>Notes:</strong>
+                                            <p class="mb-0 mt-1">
+                                                {{ team_data.notes if team_data.notes else 'No notes' }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="text-center mt-4">
+                        <a href="{{ url_for('scouting.qualitative_scouting') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Qualitative Scouting
+                        </a>
+                        <a href="{{ url_for('scouting.qualitative_qr_code', entry_id=entry.id) }}" class="btn btn-success">
+                            <i class="fas fa-qrcode me-2"></i>Generate QR Code
+                        </a>
+                        <a href="{{ url_for('matches.view', match_id=entry.match_id) }}" class="btn btn-primary">
+                            <i class="fas fa-eye me-2"></i>View Match
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

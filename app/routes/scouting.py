@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify
 from flask_login import login_required, current_user
-from app.models import Match, Team, ScoutingData, Event, AllianceSharedScoutingData
+from app.models import Match, Team, ScoutingData, Event, AllianceSharedScoutingData, QualitativeScoutingData
 from app import db, socketio
 import json
 from datetime import datetime, timezone
@@ -1484,4 +1484,219 @@ def view_text_elements():
                          events=events,
                          current_event=current_event,
                          game_config=game_config,
+                         **get_theme_context())
+
+
+@bp.route('/qualitative')
+@login_required
+def qualitative_scouting():
+    """Display qualitative scouting form"""
+    # Get all matches for dropdown, filtered by scouting team
+    matches = filter_matches_by_scouting_team().join(Event).order_by(
+        Event.start_date.desc(),
+        Match.match_type,
+        Match.match_number
+    ).all()
+    
+    # Get existing qualitative scouting data
+    existing_data = QualitativeScoutingData.query.filter_by(
+        scouting_team_number=current_user.scouting_team_number
+    ).order_by(QualitativeScoutingData.timestamp.desc()).all()
+    
+    return render_template('scouting/qualitative.html',
+                         matches=matches,
+                         existing_data=existing_data,
+                         **get_theme_context())
+
+
+@bp.route('/qualitative/match/<int:match_id>')
+@login_required
+def get_match_teams(match_id):
+    """API endpoint to get teams for a specific match"""
+    match = filter_matches_by_scouting_team().filter_by(id=match_id).first_or_404()
+    
+    # Get existing data for this match if any
+    existing = QualitativeScoutingData.query.filter_by(
+        match_id=match_id,
+        scouting_team_number=current_user.scouting_team_number
+    ).first()
+    
+    return jsonify({
+        'success': True,
+        'match': {
+            'id': match.id,
+            'match_number': match.match_number,
+            'match_type': match.match_type,
+            'event_code': match.event.code if match.event else '',
+            'red_teams': match.red_teams,
+            'blue_teams': match.blue_teams
+        },
+        'existing_data': existing.to_dict() if existing else None
+    })
+
+
+@bp.route('/qualitative/save', methods=['POST'])
+@login_required
+def save_qualitative_scouting():
+    """Save Qualitative scouting data"""
+    try:
+        data = request.get_json()
+        match_id = data.get('match_id')
+        alliance_scouted = data.get('alliance_scouted')
+        team_data = data.get('team_data', {})
+        
+        if not match_id or not alliance_scouted:
+            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+        
+        # Check if entry already exists
+        existing = QualitativeScoutingData.query.filter_by(
+            match_id=match_id,
+            scouting_team_number=current_user.scouting_team_number
+        ).first()
+        
+        if existing:
+            # Update existing entry
+            existing.alliance_scouted = alliance_scouted
+            existing.data = team_data
+            existing.timestamp = datetime.now(timezone.utc)
+            existing.scout_name = current_user.username
+            existing.scout_id = current_user.id
+        else:
+            # Create new entry
+            qualitative_data = QualitativeScoutingData(
+                match_id=match_id,
+                scouting_team_number=current_user.scouting_team_number,
+                scout_name=current_user.username,
+                scout_id=current_user.id,
+                alliance_scouted=alliance_scouted,
+                data_json=json.dumps(team_data)
+            )
+            db.session.add(qualitative_data)
+        
+        db.session.commit()
+        
+        # Get the entry ID (either existing or newly created)
+        entry_id = existing.id if existing else qualitative_data.id
+        
+        return jsonify({
+            'success': True,
+            'message': 'Qualitative scouting data saved successfully',
+            'entry_id': entry_id
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error saving Qualitative scouting data: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error saving data: {str(e)}'
+        }), 500
+
+
+@bp.route('/qualitative/view/<int:entry_id>')
+@login_required
+def view_qualitative_data(entry_id):
+    """View a specific Qualitative scouting entry"""
+    entry = QualitativeScoutingData.query.filter_by(
+        id=entry_id,
+        scouting_team_number=current_user.scouting_team_number
+    ).first_or_404()
+    
+    return render_template('scouting/qualitative_view.html',
+                         entry=entry,
+                         **get_theme_context())
+
+
+@bp.route('/qualitative/delete/<int:entry_id>', methods=['POST'])
+@login_required
+def delete_qualitative_data(entry_id):
+    """Delete a Qualitative scouting entry"""
+    try:
+        entry = QualitativeScoutingData.query.filter_by(
+            id=entry_id,
+            scouting_team_number=current_user.scouting_team_number
+        ).first_or_404()
+        
+        db.session.delete(entry)
+        db.session.commit()
+        
+        flash('Qualitative scouting data deleted successfully', 'success')
+        return redirect(url_for('scouting.qualitative_scouting'))
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting Qualitative scouting data: {str(e)}")
+        flash(f'Error deleting data: {str(e)}', 'danger')
+        return redirect(url_for('scouting.qualitative_scouting'))
+
+
+@bp.route('/qualitative/list')
+@login_required
+def list_qualitative_data():
+    """Display all Qualitative scouting data in a list view"""
+    # Get all Qualitative scouting data for the current team
+    entries = QualitativeScoutingData.query.filter_by(
+        scouting_team_number=current_user.scouting_team_number
+    ).join(Match).join(Event).order_by(
+        Event.start_date.desc(),
+        Match.match_type,
+        Match.match_number
+    ).all()
+    
+    # Group entries by event
+    from collections import defaultdict
+    entries_by_event = defaultdict(list)
+    for entry in entries:
+        event_code = entry.match.event.code if entry.match.event else 'Unknown'
+        entries_by_event[event_code].append(entry)
+    
+    return render_template('scouting/qualitative_list.html',
+                         entries_by_event=dict(entries_by_event),
+                         total_entries=len(entries),
+                         **get_theme_context())
+
+
+@bp.route('/qualitative/qr/<int:entry_id>')
+@login_required
+def qualitative_qr_code(entry_id):
+    """Generate QR code for Qualitative scouting data"""
+    entry = QualitativeScoutingData.query.filter_by(
+        id=entry_id,
+        scouting_team_number=current_user.scouting_team_number
+    ).first_or_404()
+    
+    # Create QR code data with qualitative flag
+    qr_data = {
+        'qualitative': True,  # Flag to identify this as Qualitative scouting
+        'match_id': entry.match_id,
+        'match_number': entry.match.match_number,
+        'match_type': entry.match.match_type,
+        'event_code': entry.match.event.code if entry.match.event else '',
+        'alliance_scouted': entry.alliance_scouted,
+        'scout_name': entry.scout_name,
+        'timestamp': entry.timestamp.isoformat() if entry.timestamp else None,
+        'team_data': entry.data
+    }
+    
+    # Convert to JSON
+    json_data = json.dumps(qr_data, separators=(',', ':'))
+    
+    # Generate QR code
+    import qrcode
+    from io import BytesIO
+    import base64
+    
+    qr = qrcode.QRCode(version=None, box_size=10, border=4)
+    qr.add_data(json_data)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    qr_img = base64.b64encode(buffered.getvalue()).decode()
+    
+    return render_template('scouting/qualitative_qr.html',
+                         entry=entry,
+                         qr_img=qr_img,
+                         qr_data=json.dumps(qr_data, indent=2),
                          **get_theme_context())

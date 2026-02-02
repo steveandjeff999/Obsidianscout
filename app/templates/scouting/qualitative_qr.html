@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+
+{% block title %}Qualitative Scouting QR Code{% endblock %}
+
+{% block heading %}Qualitative Scouting QR Code{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header {% if entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %} text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-star me-2"></i>
+                        {{ entry.match.event.code if entry.match.event else '' }} - 
+                        {{ entry.match.match_type }} Match {{ entry.match.match_number }}
+                    </h5>
+                </div>
+                <div class="card-body text-center">
+                    <p class="lead">Scan this QR code to import the qualitative scouting data to another device.</p>
+                    
+                    <div class="qr-container mb-4">
+                        <img src="data:image/png;base64,{{ qr_img }}" alt="QR Code" class="img-fluid" style="max-width: 400px;">
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Offline Transfer:</strong> Use this QR code to transfer qualitative scouting data between devices without internet.
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" onclick="window.print()">
+                            <i class="fas fa-print me-2"></i>Print QR Code
+                        </button>
+                        <a href="{{ url_for('scouting.view_qualitative_data', entry_id=entry.id) }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Entry
+                        </a>
+                        <a href="{{ url_for('scouting.list_qualitative_data') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-list me-2"></i>All Qualitative Data
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>Entry Details
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">Match:</dt>
+                        <dd class="col-sm-7">
+                            <span class="badge bg-secondary">{{ entry.match.event.code if entry.match.event else '' }}</span>
+                            {{ entry.match.match_type }} {{ entry.match.match_number }}
+                        </dd>
+                        
+                        <dt class="col-sm-5">Alliance:</dt>
+                        <dd class="col-sm-7">
+                            <span class="badge {% if entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                {{ entry.alliance_scouted|title }}
+                            </span>
+                        </dd>
+                        
+                        <dt class="col-sm-5">Scout:</dt>
+                        <dd class="col-sm-7">{{ entry.scout_name }}</dd>
+                        
+                        <dt class="col-sm-5">Timestamp:</dt>
+                        <dd class="col-sm-7">
+                            <small>{{ entry.timestamp.strftime('%Y-%m-%d %H:%M') if entry.timestamp else '' }}</small>
+                        </dd>
+                        
+                        <dt class="col-sm-5">Teams Scouted:</dt>
+                        <dd class="col-sm-7">
+                            {% set data = entry.data %}
+                            {% set team_count = 0 %}
+                            {% if entry.alliance_scouted == 'red' or entry.alliance_scouted == 'both' %}
+                                {% set team_count = team_count + (data.red.keys()|length) %}
+                            {% endif %}
+                            {% if entry.alliance_scouted == 'blue' or entry.alliance_scouted == 'both' %}
+                                {% set team_count = team_count + (data.blue.keys()|length) %}
+                            {% endif %}
+                            <span class="badge bg-info">{{ team_count }} teams</span>
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+            
+            <div class="card mt-3">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="mb-0">
+                        <i class="fas fa-code me-2"></i>QR Code Data (for debugging)
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <pre class="mb-0 small" style="max-height: 300px; overflow-y: auto;">{{ qr_data }}</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print {
+    /* Hide everything except the QR code when printing */
+    body * {
+        visibility: hidden;
+    }
+    .qr-container, .qr-container * {
+        visibility: visible;
+    }
+    .qr-container {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+    }
+}
+
+.dark-mode .card-header.bg-info {
+    color: white !important;
+}
+</style>
+{% endblock %}
+

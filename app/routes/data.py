@@ -1508,8 +1508,69 @@ def import_qr():
                 return {'success': False, 'message': 'Invalid QR code data format. Expected JSON.'}
 
             try:
-                # Detect the format and extract team/match/data similar to single-item flow
-                if 'offline_generated' in scouting_data_json:
+                # Check if this is qualitative scouting data
+                if scouting_data_json.get('qualitative') is True:
+                    from app.models import QualitativeScoutingData
+                    
+                    # Extract qualitative scouting data
+                    match_number = scouting_data_json.get('match_number')
+                    match_type = scouting_data_json.get('match_type', 'Qualification')
+                    alliance_scouted = scouting_data_json.get('alliance_scouted')
+                    scout_name = scouting_data_json.get('scout_name', 'QR Import')
+                    team_data = scouting_data_json.get('team_data', {})
+                    event_code = scouting_data_json.get('event_code', '')
+                    
+                    if not match_number or not alliance_scouted:
+                        return {'success': False, 'message': 'Invalid qualitative QR data: missing match or alliance'}
+                    
+                    # Find or create match
+                    match = Match.query.filter_by(match_number=match_number, match_type=match_type).first()
+                    if not match:
+                        # Find or create event
+                        game_config = get_effective_game_config()
+                        event = None
+                        if event_code:
+                            event = Event.query.filter_by(code=event_code).first()
+                        if not event:
+                            event = get_or_create_event(name=event_code or 'Unknown Event', year=game_config['season'], code=event_code)
+                        
+                        match = Match(
+                            match_number=match_number,
+                            match_type=match_type,
+                            event_id=event.id
+                        )
+                        db.session.add(match)
+                        db.session.flush()
+                    
+                    # Check if entry already exists
+                    existing = QualitativeScoutingData.query.filter_by(
+                        match_id=match.id,
+                        scouting_team_number=current_user.scouting_team_number
+                    ).first()
+                    
+                    if existing:
+                        # Update existing entry
+                        existing.alliance_scouted = alliance_scouted
+                        existing.data = team_data
+                        existing.scout_name = scout_name
+                        existing.timestamp = datetime.now(timezone.utc)
+                        db.session.commit()
+                        return {'success': True, 'message': f'Updated qualitative scouting for Match {match.match_number}'}
+                    else:
+                        # Create new entry
+                        new_entry = QualitativeScoutingData(
+                            match_id=match.id,
+                            scouting_team_number=current_user.scouting_team_number,
+                            scout_name=scout_name,
+                            alliance_scouted=alliance_scouted,
+                            data_json=json.dumps(team_data)
+                        )
+                        db.session.add(new_entry)
+                        db.session.commit()
+                        return {'success': True, 'message': f'Added qualitative scouting for Match {match.match_number}'}
+                
+                # Regular scouting data processing
+                elif 'offline_generated' in scouting_data_json:
                     team_id = scouting_data_json.get('team_id')
                     match_id = scouting_data_json.get('match_id')
                     scout_name = scouting_data_json.get('scout_name', 'QR Import')
@@ -3898,3 +3959,4 @@ def data_stats():
     except Exception as e:
         current_app.logger.error(f"Error in data_stats endpoint: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
+

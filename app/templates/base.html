@@ -1170,6 +1170,7 @@
                 {% endif %}
                 <a class="nav-link {% if request.endpoint == 'scouting.index' %}active{% endif %}" href="{{ url_for('scouting.index') }}"><i class="fas fa-clipboard"></i><span>Scouting Dashboard</span></a>
                 <a class="nav-link {% if request.endpoint == 'scouting.scouting_form' %}active{% endif %}" href="{{ url_for('scouting.scouting_form') }}"><i class="fas fa-rocket"></i><span>Start Scouting</span></a>
+                <a class="nav-link {% if request.endpoint == 'scouting.qualitative_scouting' %}active{% endif %}" href="{{ url_for('scouting.qualitative_scouting') }}"><i class="fas fa-star"></i><span>Qualitative Scouting</span></a>
                 <a class="nav-link {% if request.endpoint == 'pit_scouting.index' %}active{% endif %}" href="{{ url_for('pit_scouting.index') }}"><i class="fas fa-wrench"></i><span>Pit Scouting</span></a>
                 <a class="nav-link {% if request.endpoint and request.endpoint.startswith('scouting_alliances') %}active{% endif %}" href="{{ url_for('scouting_alliances.dashboard') }}"><i class="fas fa-users"></i><span>Scouting Alliances</span></a>
                 <a class="nav-link {% if request.endpoint == 'scouting.list_data' %}active{% endif %}" href="{{ url_for('scouting.list_data') }}"><i class="fas fa-list"></i><span>All Data</span></a>

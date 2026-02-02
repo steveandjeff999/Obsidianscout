@@ -47,7 +47,7 @@ USE_WAITRESS = False # Change this to False to use Flask development server with
 
 # Toggle file-based logging of all mobile API requests/responses.
 # Set to True to enable writing incoming / outgoing mobile API traffic to a file.
-MOBILE_API_LOG_TO_FILE = True  # Toggle this to True to enable logging
+MOBILE_API_LOG_TO_FILE = False  # Toggle this to True to enable logging
 # Path to the log file (relative to the script directory by default)
 MOBILE_API_LOG_FILE = os.path.join(script_dir, 'instance', 'mobile_api_requests.log')
 # Maximum number of characters to write for bodies; larger payloads will be truncated.
