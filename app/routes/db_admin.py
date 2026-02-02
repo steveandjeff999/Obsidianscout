@@ -10,6 +10,8 @@ from flask_login import login_required, current_user
 from app import db
 from app.utils.database_manager import concurrent_db_manager
 from app.utils.concurrent_models import with_concurrent_db
+# Instance DB helpers for multiple .db file management
+from app.utils.instance_db import list_instance_db_files, backup_db_file, set_journal_mode
 from datetime import datetime, timezone
 import json
 import os
@@ -39,9 +41,16 @@ def database_status():
         # Get connection pool stats
         pool_stats = concurrent_db_manager.get_connection_stats()
         
+        # Enumerate instance .db files for the admin interface
+        try:
+            db_files = list_instance_db_files()
+        except Exception:
+            db_files = []
+
         return render_template('admin/database_status.html',
                              db_info=db_info,
-                             pool_stats=pool_stats)
+                             pool_stats=pool_stats,
+                             db_files=db_files)
     except Exception as e:
         logger.error(f"Error getting database status: {e}")
         flash(f'Error retrieving database status: {str(e)}', 'error')
@@ -56,12 +65,66 @@ def api_database_status():
     
     try:
         db_info = concurrent_db_manager.get_database_info()
-        pool_stats = concurrent_db_manager.get_connection_stats()
+        try:
+            db_files = list_instance_db_files()
+        except Exception:
+            db_files = []
+
+        # Map files to binds and enrich with crsqlite info when possible
+        from flask import current_app as flask_current_app
+        binds = flask_current_app.config.get('SQLALCHEMY_BINDS', {}) or {}
+        default_uri = flask_current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        bind_map = {}
+        # Build mapping from filename -> bind_key (or 'default')
+        def _basename_of_uri(uri):
+            try:
+                if uri.startswith('sqlite:///'):
+                    return os.path.basename(uri[10:])
+            except Exception:
+                pass
+            return None
+
+        default_basename = _basename_of_uri(default_uri)
+        for k,v in binds.items():
+            bname = _basename_of_uri(v)
+            if bname:
+                bind_map[bname] = k
+        # Attach crsqlite info and pool stats per file/bind
+        pool_stats_map = {}
+        # Always include default engine stats
+        pool_stats_map['default'] = concurrent_db_manager.get_connection_stats()
+
+        for f in db_files:
+            name = f.get('name')
+            bind_key = bind_map.get(name)
+            if not bind_key and name == default_basename:
+                bind_key = 'default'
+            if bind_key:
+                try:
+                    info = concurrent_db_manager.get_database_info(bind_key if bind_key != 'default' else None)
+                    f['crsqlite_version'] = info.get('crsqlite_version')
+                    f['concurrent_writes'] = info.get('concurrent_writes')
+                except Exception:
+                    f['crsqlite_version'] = None
+                    f['concurrent_writes'] = None
+
+                # Add pool stats for this bind key
+                try:
+                    key = bind_key if bind_key != 'default' else 'default'
+                    pool_stats_map[key] = concurrent_db_manager.get_connection_stats(None if key=='default' else key)
+                except Exception:
+                    pool_stats_map[bind_key] = {
+                        'pool_size': 'N/A', 'checked_in': 'N/A', 'checked_out': 'N/A', 'overflow': 'N/A'
+                    }
+            else:
+                f['crsqlite_version'] = None
+                f['concurrent_writes'] = None
         
         return jsonify({
             'success': True,
             'database_info': db_info,
-            'pool_stats': pool_stats
+            'pool_stats': pool_stats_map,
+            'db_files': db_files
         })
     except Exception as e:
         logger.error(f"Error getting database status via API: {e}")
@@ -109,30 +172,68 @@ def enable_wal_mode():
 @db_admin_bp.route('/test-concurrent', methods=['POST'])
 @login_required
 def test_concurrent_operations():
-    """Test concurrent database operations"""
+    """Test concurrent database operations across all configured databases"""
     if not current_user.has_role('superadmin'):
         return jsonify({'error': 'Super Admin access required'}), 403
     
+    results = {}
     try:
-        # Test concurrent reads
-        @with_concurrent_db(readonly=True)
-        def test_read():
-            from app.models import User
-            return User.concurrent_count()
-        
-        # Execute tests
-        user_count = test_read()
-        
+        from flask import current_app as flask_current_app
+        # Build list of binds including default
+        binds = {'default': flask_current_app.config.get('SQLALCHEMY_DATABASE_URI')}
+        binds.update(flask_current_app.config.get('SQLALCHEMY_BINDS', {}) or {})
+
+        for bind_key, uri in binds.items():
+            bind_label = bind_key or 'default'
+            try:
+                # Try to obtain engine
+                try:
+                    engine = db.get_engine(flask_current_app._get_current_object(), bind=(None if bind_key == 'default' else bind_key))
+                except Exception:
+                    engine = db.engine
+
+                # Simple read test
+                read_ok = False
+                try:
+                    with engine.connect() as conn:
+                        _ = conn.execute(db.text('SELECT 1')).scalar()
+                        read_ok = True
+                except Exception as e:
+                    read_ok = False
+
+                # Simple write test using TEMP table (connection-local)
+                write_ok = False
+                try:
+                    with engine.connect() as conn:
+                        conn.execute(db.text('CREATE TEMP TABLE IF NOT EXISTS temp_concurrent_test (id INTEGER)'))
+                        conn.execute(db.text('INSERT INTO temp_concurrent_test (id) VALUES (1)'))
+                        # No commit required for temp table in this connection; it will be cleaned up
+                        write_ok = True
+                except Exception as e:
+                    write_ok = False
+
+                # Check crsqlite status for this bind
+                try:
+                    db_info = concurrent_db_manager.get_database_info(bind_key if bind_key != 'default' else None)
+                    crs = db_info.get('concurrent_writes')
+                except Exception:
+                    crs = None
+
+                results[bind_label] = {
+                    'read_ok': read_ok,
+                    'write_ok': write_ok,
+                    'concurrent_writes': crs
+                }
+            except Exception as e:
+                results[bind_label] = {'error': str(e)}
+
         return jsonify({
             'success': True,
-            'message': 'Concurrent read test completed',
-            'results': {
-                'user_count': user_count
-            }
+            'message': 'Concurrent tests completed',
+            'results': results
         })
-        
     except Exception as e:
-        logger.error(f"Error testing concurrent operations: {e}")
+        logger.error(f"Error testing concurrent operations across binds: {e}")
         return jsonify({
             'success': False,
             'error': f'Concurrent test failed: {str(e)}'
@@ -893,6 +994,116 @@ def clear_database():
         }), 500
 
 # Add error handlers
+@db_admin_bp.route('/api/files')
+@login_required
+def api_database_files():
+    """Return JSON list of .db files in instance folder"""
+    if not current_user.has_role('superadmin'):
+        return jsonify({'error': 'Super Admin access required'}), 403
+    try:
+        files = list_instance_db_files()
+        return jsonify({'success': True, 'files': files})
+    except Exception as e:
+        logger.error(f"Error listing instance DB files: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@db_admin_bp.route('/files/backup', methods=['POST'])
+@login_required
+def backup_database_file():
+    """Backup a selected .db file (creates timestamped copy in instance/backup)"""
+    if not current_user.has_role('superadmin'):
+        return jsonify({'error': 'Super Admin access required'}), 403
+    data = request.get_json() or request.form
+    filename = data.get('filename')
+    if not filename:
+        return jsonify({'success': False, 'error': 'No filename provided'}), 400
+    try:
+        backup_path = backup_db_file(filename)
+        flash(f'Backup created: {backup_path}', 'success')
+        return jsonify({'success': True, 'backup': backup_path})
+    except Exception as e:
+        logger.exception(f"Error creating backup for {filename}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@db_admin_bp.route('/files/set-journal', methods=['POST'])
+@login_required
+def set_journal():
+    """Set PRAGMA journal_mode for a given DB file"""
+    if not current_user.has_role('superadmin'):
+        return jsonify({'error': 'Super Admin access required'}), 403
+    data = request.get_json() or request.form
+    filename = data.get('filename')
+    mode = (data.get('mode') or 'wal').strip()
+    if not filename:
+        return jsonify({'success': False, 'error': 'No filename provided'}), 400
+    try:
+        result = set_journal_mode(filename, mode)
+        flash(f'Journal mode set to {result} for {filename}', 'success')
+        return jsonify({'success': True, 'mode': result})
+    except Exception as e:
+        logger.exception(f"Error setting journal mode for {filename}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@db_admin_bp.route('/files/enable-crsqlite', methods=['POST'])
+@login_required
+def enable_crsqlite():
+    """Enable/load CR-SQLite extension for a given DB file or bind"""
+    if not current_user.has_role('superadmin'):
+        return jsonify({'error': 'Super Admin access required'}), 403
+    data = request.get_json() or request.form
+    filename = data.get('filename')
+    bind_key = data.get('bind_key')
+
+    # Map filename to bind if provided but bind_key not given
+    if not bind_key and filename:
+        from flask import current_app as flask_current_app
+        binds = flask_current_app.config.get('SQLALCHEMY_BINDS', {}) or {}
+        default_uri = flask_current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        def _basename_of_uri(uri):
+            try:
+                if uri.startswith('sqlite:///'):
+                    return os.path.basename(uri[10:])
+            except Exception:
+                pass
+            return None
+        default_basename = _basename_of_uri(default_uri)
+        for k,v in binds.items():
+            bname = _basename_of_uri(v)
+            if bname and bname == filename:
+                bind_key = k
+                break
+        if not bind_key and filename == default_basename:
+            bind_key = None
+
+    # Now attempt to enable
+    try:
+        result = concurrent_db_manager.enable_crsqlite_on_bind(bind_key)
+        # Return diagnostics (message, loaded flag, probe_value) so UI can show why it may still be unavailable
+        msg = result.get('message', 'Unknown result')
+        if result.get('success'):
+            flash(f"CR-SQLite enabled on {filename or bind_key or 'default'}: {msg}", 'success')
+            return jsonify({
+                'success': True,
+                'message': msg,
+                'loaded': result.get('loaded'),
+                'probe_value': result.get('probe_value')
+            })
+        else:
+            logger.warning(f"CR-SQLite enable for {filename or bind_key or 'default'} - success=False: {msg}")
+            return jsonify({
+                'success': False,
+                'error': msg,
+                'loaded': result.get('loaded'),
+                'probe_value': result.get('probe_value')
+            }), 500
+    except Exception as e:
+        logger.exception(f"Error enabling CR-SQLite for {filename or bind_key}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @db_admin_bp.errorhandler(404)
 def not_found(error):
     return jsonify({'error': 'Endpoint not found'}), 404
