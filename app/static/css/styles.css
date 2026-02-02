@@ -502,8 +502,9 @@ body {
 /* Rating Star System */
 .rating-container {
     display: flex;
-    flex-direction: row-reverse;
-    justify-content: flex-end;
+    gap: 0.5rem;
+    justify-content: center;
+    align-items: center;
 }
 
 .rating-star {
@@ -513,10 +514,10 @@ body {
     margin-right: 5px;
 }
 
+/* Use explicit hover/active/hovered classes instead of sibling selectors so JS controls visual state */
 .rating-star:hover,
-.rating-star:hover ~ .rating-star,
 .rating-star.active,
-.rating-star.active ~ .rating-star {
+.rating-star.hover {
     color: var(--warning-color, #ffc107);
 }
 

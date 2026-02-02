@@ -1142,6 +1142,74 @@ class StrategyDrawing(db.Model):
         self.data_json = json.dumps(value)
 
 
+class QualitativeScoutingData(db.Model):
+    """Model to store qualitative scouting observations for entire alliances in a match"""
+    __tablename__ = 'qualitative_scouting_data'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    match_id = db.Column(db.Integer, db.ForeignKey('match.id'), nullable=False)
+    scouting_team_number = db.Column(db.Integer, nullable=True)
+    scout_name = db.Column(db.String(50), nullable=False)
+    scout_id = db.Column(db.Integer, nullable=True)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    # Alliance being scouted ('red', 'blue', or 'both')
+    alliance_scouted = db.Column(db.String(10), nullable=False)
+    
+    # JSON data for team notes and rankings
+    # Structure: {
+    #   'red': {
+    #     'team_1234': {'notes': 'text', 'ranking': 3},
+    #     'team_5678': {'notes': 'text', 'ranking': 1},
+    #     ...
+    #   },
+    #   'blue': {
+    #     'team_9012': {'notes': 'text', 'ranking': 2},
+    #     ...
+    #   }
+    # }
+    data_json = db.Column(db.Text, nullable=False)
+    
+    # Relationships
+    match = db.relationship('Match', backref=db.backref('qualitative_scouting_data', lazy=True))
+    
+    @property
+    def scout(self):
+        try:
+            return User.query.get(self.scout_id) if self.scout_id else None
+        except Exception:
+            return None
+    
+    def __repr__(self):
+        return f"<QualitativeScoutingData Match {self.match_id} Alliance {self.alliance_scouted}>"
+    
+    @property
+    def data(self):
+        """Get data as a Python dictionary"""
+        try:
+            return json.loads(self.data_json)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    
+    @data.setter
+    def data(self, value):
+        """Set data from a Python dictionary"""
+        self.data_json = json.dumps(value)
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'match_id': self.match_id,
+            'scouting_team_number': self.scouting_team_number,
+            'scout_name': self.scout_name,
+            'scout_id': self.scout_id,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'alliance_scouted': self.alliance_scouted,
+            'data': self.data
+        }
+
+
 # ======== SCOUTING ALLIANCE MODELS ========
 
 class ScoutingAlliance(db.Model):

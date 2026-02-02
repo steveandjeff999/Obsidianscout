@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+{% import '_help_icon.html' as help %}
+
+{% block title %}Qualitative Scouting Data{% endblock %}
+
+{% block heading %}Qualitative Scouting Data{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h2 class="mb-0">Qualitative Scouting Data</h2>
+            <p class="text-muted mb-0">{{ total_entries }} total entries</p>
+        </div>
+        <div>
+            <a href="{{ url_for('scouting.qualitative_scouting') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>New Entry
+            </a>
+        </div>
+    </div>
+
+    {% if entries_by_event %}
+        {% for event_code, entries in entries_by_event.items() %}
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-trophy me-2"></i>{{ event_code }}
+                    <span class="badge bg-light text-primary ms-2">{{ entries|length }} entries</span>
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Match</th>
+                                <th>Alliance</th>
+                                <th>Teams Ranked</th>
+                                <th>Scout</th>
+                                <th>Timestamp</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in entries %}
+                            <tr>
+                                <td>
+                                    <span class="badge {% if entry.match.match_type == 'Qualification' %}bg-primary{% elif entry.match.match_type == 'Playoff' %}bg-danger{% else %}bg-secondary{% endif %}">
+                                        {{ entry.match.match_type }}
+                                    </span>
+                                    Match {{ entry.match.match_number }}
+                                </td>
+                                <td>
+                                    <span class="badge {% if entry.alliance_scouted == 'red' %}bg-danger{% elif entry.alliance_scouted == 'blue' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                        {{ entry.alliance_scouted|title }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% set data = entry.data %}
+                                    {% set ranked_count = 0 %}
+                                    {% if entry.alliance_scouted == 'red' or entry.alliance_scouted == 'both' %}
+                                        {% for team_key, team_data in data.red.items() %}
+                                            {% if team_data.ranking %}
+                                                {% set ranked_count = ranked_count + 1 %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
+                                    {% if entry.alliance_scouted == 'blue' or entry.alliance_scouted == 'both' %}
+                                        {% for team_key, team_data in data.blue.items() %}
+                                            {% if team_data.ranking %}
+                                                {% set ranked_count = ranked_count + 1 %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
+                                    <span class="badge bg-info">{{ ranked_count }} teams</span>
+                                </td>
+                                <td>{{ entry.scout_name }}</td>
+                                <td>
+                                    <small>{{ entry.timestamp.strftime('%m/%d/%Y %H:%M') if entry.timestamp else '' }}</small>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('scouting.view_qualitative_data', entry_id=entry.id) }}" class="btn btn-primary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{{ url_for('scouting.qualitative_qr_code', entry_id=entry.id) }}" class="btn btn-success">
+                                            <i class="fas fa-qrcode"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-info" onclick="showQuickView({{ entry.id }})">
+                                            <i class="fas fa-info-circle"></i>
+                                        </button>
+                                        <form action="{{ url_for('scouting.delete_qualitative_data', entry_id=entry.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this entry?');">
+                                            <button type="submit" class="btn btn-danger">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="fas fa-star fa-4x text-muted mb-3"></i>
+                <h4>No Qualitative Scouting Data</h4>
+                <p class="text-muted">Start by creating your first qualitative scouting entry.</p>
+                <a href="{{ url_for('scouting.qualitative_scouting') }}" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>Create First Entry
+                </a>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Quick View Modal -->
+<div class="modal fade" id="quickViewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Quick View</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="quickViewContent">
+                <div class="text-center">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showQuickView(entryId) {
+    const modal = new bootstrap.Modal(document.getElementById('quickViewModal'));
+    const content = document.getElementById('quickViewContent');
+    
+    // Show loading
+    content.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+    modal.show();
+    
+    // Fetch entry data
+    fetch(`{{ url_for('scouting.view_qualitative_data', entry_id=0) }}`.replace('0', entryId))
+        .then(response => response.text())
+        .then(html => {
+            // Extract just the card body content
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const cardBody = doc.querySelector('.card-body');
+            if (cardBody) {
+                // Remove action buttons
+                const actionButtons = cardBody.querySelector('.text-center.mt-4');
+                if (actionButtons) actionButtons.remove();
+                content.innerHTML = cardBody.innerHTML;
+            } else {
+                content.innerHTML = '<p class="text-danger">Error loading data</p>';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            content.innerHTML = '<p class="text-danger">Error loading data</p>';
+        });
+}
+</script>
+
+<style>
+.dark-mode .table {
+    color: #e6e6e6;
+}
+
+.dark-mode .table-hover tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+</style>
+{% endblock %}
+
